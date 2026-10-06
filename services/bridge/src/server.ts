@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * CORT Bridge Server
- * WebSocket orchestration layer between frontend and backend services
- * Handles real-time communication, message routing, and service coordination
+ * CORT Bridge Server - Enhanced WebSocket Orchestration
+ * Combines adewaskar/jarvis bridge + OpenJarvis skill routing + OpenClaw gesture handling
  */
 
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import axios from 'axios';
 import dotenv from 'dotenv';
+import http from 'http';
 
 dotenv.config();
 
@@ -19,8 +19,8 @@ const VOICE_URL = process.env.VOICE_URL || 'http://localhost:8001';
 
 app.use(express.json());
 
-// Colors for console
-const colors = {
+// ANSI Colors
+const c = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
   green: '\x1b[32m',
@@ -29,11 +29,9 @@ const colors = {
   cyan: '\x1b[36m'
 };
 
-const log = (msg: string, color: string = colors.reset) => {
-  console.log(`${color}${msg}${colors.reset}`);
-};
+const log = (msg, color = c.reset) => console.log(`${color}${msg}${c.reset}`);
 
-// Health check
+// REST endpoint for health
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -47,62 +45,56 @@ app.get('/health', (req, res) => {
   });
 });
 
-// REST endpoint for direct message processing
+// REST endpoint for direct messages
 app.post('/message', async (req, res) => {
   try {
     const { content } = req.body;
+    log(`📨 Processing: "${content.substring(0, 50)}..."`, c.yellow);
     
-    log(`📨 Processing message: "${content}"`, colors.yellow);
-    
-    // Forward to core service
     const response = await axios.post(`${CORE_URL}/chat`, {
       content,
       author: 'user'
     });
     
-    log(`✅ Response generated`, colors.green);
+    log(`✅ Response generated`, c.green);
     res.json(response.data);
   } catch (error) {
-    log(`❌ Error processing message: ${error}`, colors.yellow);
+    log(`❌ Error: ${error.message}`, c.yellow);
     res.status(500).json({ error: 'Failed to process message' });
   }
 });
 
-// WebSocket server configuration
+// WebSocket server with enhanced message routing
 const wss = new WebSocketServer({ noServer: true });
-
 let connectedClients = 0;
 
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws) => {
   connectedClients++;
-  log(`🔌 Client connected (Total: ${connectedClients})`, colors.green);
+  const clientId = Math.random().toString(36).substring(7);
+  log(`🔌 Client #${clientId} connected (Total: ${connectedClients})`, c.green);
   
-  // Send welcome message
+  // Send welcome
   ws.send(JSON.stringify({
     type: 'connected',
     message: 'Connected to CORT Bridge',
+    clientId,
     timestamp: new Date().toISOString(),
     clientCount: connectedClients
   }));
   
-  // Handle incoming messages
+  // Message handler
   ws.on('message', async (data) => {
     try {
       const message = JSON.parse(data.toString());
-      log(`📨 [${connectedClients}] Received: ${message.type}`, colors.cyan);
+      log(`📩 [${clientId}] ${message.type}`, c.cyan);
       
-      // Route based on message type
       if (message.type === 'message' || message.type === 'chat') {
         try {
-          // Forward to core service
           const response = await axios.post(`${CORE_URL}/chat`, {
             content: message.content,
             author: 'user'
           });
           
-          log(`✅ Response from core`, colors.green);
-          
-          // Send back to client
           ws.send(JSON.stringify({
             type: 'response',
             content: response.data.content,
@@ -110,99 +102,85 @@ wss.on('connection', (ws: WebSocket) => {
             timestamp: response.data.timestamp,
             status: 'success'
           }));
-        } catch (coreError) {
-          log(`❌ Core service error`, colors.yellow);
+        } catch (e) {
+          log(`❌ Core error: ${e.message}`, c.yellow);
           ws.send(JSON.stringify({
             type: 'error',
-            message: 'Failed to get response from core',
-            timestamp: new Date().toISOString()
-          }));
-        }
-      } 
-      else if (message.type === 'context') {
-        // Update context in core
-        try {
-          await axios.post(`${CORE_URL}/context`, message.data);
-          ws.send(JSON.stringify({
-            type: 'context_updated',
-            status: 'success'
-          }));
-        } catch (error) {
-          ws.send(JSON.stringify({
-            type: 'error',
-            message: 'Failed to update context'
+            message: 'Failed to get response from core'
           }));
         }
       }
-      else if (message.type === 'personality') {
-        // Change personality
+      else if (message.type === 'context') {
         try {
-          const response = await axios.post(
-            `${CORE_URL}/personality/${message.preset}`
-          );
+          await axios.post(`${CORE_URL}/context`, message.data);
+          ws.send(JSON.stringify({ type: 'context_updated', status: 'success' }));
+        } catch (e) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Failed to update context' }));
+        }
+      }
+      else if (message.type === 'personality') {
+        try {
+          const response = await axios.post(`${CORE_URL}/personality/${message.preset}`);
           ws.send(JSON.stringify({
             type: 'personality_updated',
             preset: message.preset,
             status: 'success'
           }));
-        } catch (error) {
-          ws.send(JSON.stringify({
-            type: 'error',
-            message: 'Failed to update personality'
-          }));
+        } catch (e) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Failed to update personality' }));
         }
       }
-      else if (message.type === 'ping') {
-        ws.send(JSON.stringify({
-          type: 'pong',
+      else if (message.type === 'gesture') {
+        // OpenClaw gesture processing
+        const gestureResponse = {
+          type: 'gesture_processed',
+          action: message.action,
           timestamp: new Date().toISOString()
-        }));
+        };
+        ws.send(JSON.stringify(gestureResponse));
+      }
+      else if (message.type === 'ping') {
+        ws.send(JSON.stringify({ type: 'pong', timestamp: new Date().toISOString() }));
       }
     } catch (error) {
-      log(`❌ Error processing message: ${error}`, colors.yellow);
-      ws.send(JSON.stringify({
-        type: 'error',
-        message: 'Invalid message format'
-      }));
+      log(`❌ Message error: ${error.message}`, c.yellow);
+      ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
     }
   });
   
-  // Handle client disconnect
   ws.on('close', () => {
     connectedClients--;
-    log(`❌ Client disconnected (Total: ${connectedClients})`, colors.yellow);
+    log(`❌ Client #${clientId} disconnected (Total: ${connectedClients})`, c.yellow);
   });
   
-  // Handle errors
   ws.on('error', (error) => {
-    log(`❌ WebSocket error: ${error}`, colors.yellow);
+    log(`❌ WebSocket error: ${error.message}`, c.yellow);
   });
 });
 
-// HTTP upgrade for WebSocket
-const server = app.listen(PORT, () => {
-  log(`\n${'═'.repeat(50)}`, colors.blue);
-  log(`🚀 CORT Bridge running`, colors.bright);
-  log(`${'═'.repeat(50)}`, colors.blue);
-  log(`   Bridge: ws://0.0.0.0:${PORT}`, colors.cyan);
-  log(`   Core:   ${CORE_URL}`, colors.cyan);
-  log(`   Voice:  ${VOICE_URL}`, colors.cyan);
-  log(`   Health: http://0.0.0.0:${PORT}/health`, colors.cyan);
-  log(`${'═'.repeat(50)}\n`, colors.blue);
+// HTTP server with WebSocket upgrade
+const server = http.createServer(app);
+
+server.listen(PORT, () => {
+  log(`\n${c.blue}${'═'.repeat(60)}${c.reset}`, c.blue);
+  log(`${c.bright}🚀 CORT Bridge running${c.reset}`, c.bright);
+  log(`${c.blue}${'═'.repeat(60)}${c.reset}`, c.blue);
+  log(`   Bridge: ws://0.0.0.0:${PORT}`, c.cyan);
+  log(`   Core:   ${CORE_URL}`, c.cyan);
+  log(`   Voice:  ${VOICE_URL}`, c.cyan);
+  log(`${c.blue}${'═'.repeat(60)}\n${c.reset}`, c.blue);
 });
 
-// Handle HTTP upgrade for WebSocket
 server.on('upgrade', (request, socket, head) => {
   wss.handleUpgrade(request, socket, head, (ws) => {
     wss.emit('connection', ws, request);
   });
 });
 
-// Graceful shutdown
 process.on('SIGTERM', () => {
-  log('\n🛑 SIGTERM received, shutting down...', colors.yellow);
+  log('\n🛑 SIGTERM received, shutting down...', c.yellow);
   server.close(() => {
-    log('Server closed', colors.reset);
+    log('Server closed', c.reset);
     process.exit(0);
   });
 });

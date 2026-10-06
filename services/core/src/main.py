@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 """
-CORT Core Service - Main LLM and Intelligence Engine
-Handles reasoning, memory, tool orchestration, and agent management
+CORT Core Service - Enhanced with Ollama Integration
+Combines OpenJarvis agents, adewaskar voice pipeline, and OpenClaw gesture foundation
 """
 
 import os
 import json
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from typing import Optional
+import asyncio
+import httpx
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
-import httpx
 
 app = FastAPI(
     title="CORT Core",
-    description="Cognitive Operating Reactive Technology - Core Intelligence Engine",
+    description="Cognitive Operating Reactive Technology - Integrated Intelligence Engine",
     version="0.1.0"
 )
 
-# CORS Configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,11 +30,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Models
+# ==================== MODELS ====================
+
 class Message(BaseModel):
     content: str
     author: str = "user"
-    timestamp: str = None
+    timestamp: Optional[str] = None
+    context: Optional[dict] = None
     
     def __init__(self, **data):
         super().__init__(**data)
@@ -45,6 +49,7 @@ class ResponseMessage(BaseModel):
     timestamp: str
     emotion: str = "neutral"
     status: str = "success"
+    thinking: Optional[str] = None
 
 class PersonalityConfig(BaseModel):
     name: str = "CORT"
@@ -52,164 +57,283 @@ class PersonalityConfig(BaseModel):
     verbose: bool = True
     language: str = "en"
 
-# Global state
+class OllamaConfig(BaseModel):
+    base_url: str = "http://localhost:11434"
+    model: str = "mistral"
+    temperature: float = 0.7
+    top_p: float = 0.9
+    top_k: int = 40
+
+class GestureData(BaseModel):
+    type: str  # "hand", "face", "pose"
+    landmarks: list
+    confidence: float
+
+# ==================== MEMORY & CONTEXT ====================
+
 class CORTMemory:
+    """Enhanced memory system inspired by OpenJarvis"""
+    
     def __init__(self):
         self.conversation_history = []
-        self.user_context = {}
+        self.user_context = {
+            "name": "User",
+            "location": "Unknown",
+            "time_zone": "UTC",
+            "current_task": None
+        }
         self.personality = PersonalityConfig()
-        self.active_tools = []
+        self.ollama_config = OllamaConfig()
         self.mood = "neutral"
+        self.active_skills = []
+        self.gesture_buffer = []
+        self.short_term_memory = []  # Last 5 interactions
+        self.long_term_memory = {}  # Persistent knowledge
     
-    def add_message(self, role: str, content: str):
-        self.conversation_history.append({
+    def add_message(self, role: str, content: str, emotion: str = "neutral"):
+        msg = {
             "role": role,
             "content": content,
-            "timestamp": datetime.now().isoformat()
-        })
+            "timestamp": datetime.now().isoformat(),
+            "emotion": emotion
+        }
+        self.conversation_history.append(msg)
+        self.short_term_memory.append(msg)
+        
+        # Keep only last 5 in short-term
+        if len(self.short_term_memory) > 5:
+            self.short_term_memory.pop(0)
+        
+        return msg
     
     def get_context(self):
         return {
             "history_length": len(self.conversation_history),
             "mood": self.mood,
             "personality": self.personality.dict(),
-            "context": self.user_context
+            "user_context": self.user_context,
+            "active_skills": self.active_skills,
+            "short_term_memory": self.short_term_memory[-3:]
         }
+    
+    def build_system_prompt(self) -> str:
+        """Build system prompt with personality and context"""
+        tone_map = {
+            "professional": "You are CORT, a professional AI assistant. Be precise, helpful, and concise.",
+            "friendly": "You are CORT, a warm AI companion. Be engaging, conversational, and personable.",
+            "technical": "You are CORT, a technical expert. Provide detailed, accurate technical information.",
+            "creative": "You are CORT, a creative AI. Be imaginative, poetic, and inspiring."
+        }
+        
+        base_prompt = tone_map.get(self.personality.tone, tone_map["friendly"])
+        
+        context_info = f"""
+Current context:
+- User: {self.user_context.get('name', 'User')}
+- Time: {datetime.now().strftime('%H:%M:%S')}
+- Current mood: {self.mood}
+- Previous interactions: {len(self.short_term_memory)}
+"""
+        
+        return f"{base_prompt}\n{context_info}"
 
 memory = CORTMemory()
 
-# Personality Presets
+# ==================== PERSONALITY PRESETS ====================
+
 PERSONALITY_PRESETS = {
     "professional": {
-        "system_prompt": "You are CORT, a professional AI assistant. Be concise, helpful, and direct.",
-        "response_style": "formal"
+        "system_prompt": "You are CORT, a professional AI assistant. Be precise, helpful, and concise.",
+        "response_style": "formal",
+        "emoji_style": "minimal"
     },
     "friendly": {
-        "system_prompt": "You are CORT, a friendly AI companion. Be warm, engaging, and conversational.",
-        "response_style": "casual"
+        "system_prompt": "You are CORT, a warm AI companion. Be engaging, conversational, and personable.",
+        "response_style": "casual",
+        "emoji_style": "moderate"
     },
     "technical": {
-        "system_prompt": "You are CORT, a technical AI expert. Provide detailed, accurate technical information.",
-        "response_style": "technical"
+        "system_prompt": "You are CORT, a technical expert. Provide detailed, accurate technical information with code examples when relevant.",
+        "response_style": "technical",
+        "emoji_style": "minimal"
     },
     "creative": {
-        "system_prompt": "You are CORT, a creative AI assistant. Be imaginative, poetic, and inspiring.",
-        "response_style": "artistic"
+        "system_prompt": "You are CORT, a creative AI. Be imaginative, poetic, and inspiring. Use metaphors and creative language.",
+        "response_style": "artistic",
+        "emoji_style": "abundant"
     }
 }
 
-# Mock LLM Response Generator (will integrate with Ollama)
-def generate_response(prompt: str, personality: str = "friendly") -> dict:
-    """
-    Generate response from LLM.
-    TODO: Integrate with Ollama for real inference
-    """
-    
-    # Simple response templates for MVP
-    responses = {
-        "hello": "Hi there! I'm CORT, your personal AI assistant. How can I help you today?",
-        "time": f"The current time is {datetime.now().strftime('%H:%M:%S')}",
-        "date": f"Today is {datetime.now().strftime('%A, %B %d, %Y')}",
-        "help": "I can help with: conversation, information, tasks, and much more. Just ask!",
-        "joke": "Why did the AI go to school? To improve its neural networks! 😄",
-        "default": f"That's an interesting question! Let me think about '{prompt}' for a moment. In a full deployment, I would use a local LLM (like Ollama with Llama 3.1) to generate a meaningful response."
-    }
-    
-    prompt_lower = prompt.lower()
-    
-    # Simple keyword matching for MVP
-    for key, response in responses.items():
-        if key in prompt_lower:
-            return {
-                "content": response,
-                "emotion": "happy",
-                "confidence": 0.95
-            }
-    
-    return {
-        "content": responses["default"],
-        "emotion": "thoughtful",
-        "confidence": 0.7
-    }
+# ==================== OLLAMA INTEGRATION ====================
 
-# Routes
+class OllamaEngine:
+    """Interface to Ollama for local LLM inference"""
+    
+    def __init__(self, config: OllamaConfig):
+        self.config = config
+        self.client = httpx.Client(timeout=120.0)
+    
+    def is_available(self) -> bool:
+        """Check if Ollama is running"""
+        try:
+            response = self.client.get(f"{self.config.base_url}/api/tags")
+            return response.status_code == 200
+        except:
+            return False
+    
+    def list_models(self) -> list:
+        """Get available models from Ollama"""
+        try:
+            response = self.client.get(f"{self.config.base_url}/api/tags")
+            if response.status_code == 200:
+                data = response.json()
+                return [model["name"] for model in data.get("models", [])]
+        except:
+            pass
+        return []
+    
+    def generate(self, prompt: str, system: Optional[str] = None) -> str:
+        """Generate response from Ollama"""
+        try:
+            payload = {
+                "model": self.config.model,
+                "prompt": prompt,
+                "system": system or memory.build_system_prompt(),
+                "stream": False,
+                "temperature": self.config.temperature,
+                "top_p": self.config.top_p,
+                "top_k": self.config.top_k
+            }
+            
+            response = self.client.post(
+                f"{self.config.base_url}/api/generate",
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                return result.get("response", "").strip()
+        except Exception as e:
+            print(f"Ollama error: {e}")
+        
+        return None
+
+ollama = OllamaEngine(memory.ollama_config)
+
+# ==================== EMOTION DETECTION ====================
+
+def detect_emotion_from_text(text: str) -> str:
+    """Simple emotion detection from text content"""
+    text_lower = text.lower()
+    
+    if any(word in text_lower for word in ["sad", "sorry", "bad", "wrong"]):
+        return "sad"
+    elif any(word in text_lower for word in ["excited", "wow", "amazing", "great", "love"]):
+        return "excited"
+    elif any(word in text_lower for word in ["hmm", "think", "consider", "analyze"]):
+        return "thoughtful"
+    elif any(word in text_lower for word in ["laugh", "haha", "funny", "joke"]):
+        return "happy"
+    elif any(word in text_lower for word in ["what", "how", "why", "question"]):
+        return "curious"
+    
+    return "neutral"
+
+# ==================== API ROUTES ====================
 
 @app.get("/health")
 async def health():
     """Health check endpoint"""
+    ollama_status = ollama.is_available()
+    available_models = ollama.list_models() if ollama_status else []
+    
     return {
         "status": "ok",
         "service": "cort-core",
         "version": "0.1.0",
         "timestamp": datetime.now().isoformat(),
+        "ollama": {
+            "available": ollama_status,
+            "base_url": memory.ollama_config.base_url,
+            "current_model": memory.ollama_config.model,
+            "available_models": available_models
+        },
         "memory_state": memory.get_context()
     }
 
 @app.post("/chat")
 async def chat(message: Message):
     """
-    Process a message and return a response
+    Process a message and return a response using Ollama
+    Combines OpenJarvis memory + adewaskar personality + local LLM
     """
-    # Store in memory
     memory.add_message(message.author, message.content)
     
-    # Generate response
-    response_data = generate_response(message.content)
+    # Check if Ollama is available
+    if not ollama.is_available():
+        return ResponseMessage(
+            content="I notice Ollama isn't running. Please start it with: ollama serve\n\nFor now, I can chat without it, but responses will be limited.",
+            emotion="neutral",
+            timestamp=datetime.now().isoformat(),
+            status="warning"
+        )
     
-    # Create response message
-    response = ResponseMessage(
-        content=response_data["content"],
-        emotion=response_data.get("emotion", "neutral"),
-        timestamp=datetime.now().isoformat()
-    )
+    # Generate response using Ollama
+    response_text = ollama.generate(message.content)
+    
+    if not response_text:
+        response_text = f"I understood your message: '{message.content}'. However, I'm having trouble generating a response right now. Please try again."
+    
+    # Detect emotion from response
+    emotion = detect_emotion_from_text(response_text)
+    memory.mood = emotion
     
     # Store in memory
-    memory.add_message("cort", response.content)
-    memory.mood = response.emotion
+    memory.add_message("cort", response_text, emotion)
     
-    return response
+    return ResponseMessage(
+        content=response_text,
+        emotion=emotion,
+        timestamp=datetime.now().isoformat(),
+        status="success"
+    )
 
 @app.get("/memory")
 async def get_memory():
-    """
-    Retrieve current memory state
-    """
+    """Retrieve current memory state"""
     return {
-        "conversation_history": memory.conversation_history[-10:],  # Last 10 messages
+        "conversation_history": memory.conversation_history[-20:],
         "total_messages": len(memory.conversation_history),
         "context": memory.user_context,
         "mood": memory.mood,
-        "personality": memory.personality.dict()
+        "personality": memory.personality.dict(),
+        "short_term_memory": memory.short_term_memory
     }
 
 @app.post("/memory/clear")
 async def clear_memory():
-    """
-    Clear conversation history
-    """
+    """Clear conversation history"""
     memory.conversation_history = []
-    return {"status": "memory cleared"}
+    memory.short_term_memory = []
+    return {"status": "memory cleared", "timestamp": datetime.now().isoformat()}
 
 @app.post("/personality/{preset}")
 async def set_personality(preset: str):
-    """
-    Set personality from preset
-    """
+    """Set personality from preset (inspired by OpenJarvis skills)"""
     if preset not in PERSONALITY_PRESETS:
-        return {"error": f"Unknown preset: {preset}"}
+        raise HTTPException(status_code=404, detail=f"Unknown preset: {preset}")
     
     memory.personality.tone = preset
     return {
         "status": "personality updated",
         "preset": preset,
-        "config": PERSONALITY_PRESETS[preset]
+        "config": PERSONALITY_PRESETS[preset],
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/personalities")
 async def list_personalities():
-    """
-    List available personality presets
-    """
+    """List available personality presets"""
     return {
         "available": list(PERSONALITY_PRESETS.keys()),
         "current": memory.personality.tone,
@@ -218,38 +342,69 @@ async def list_personalities():
 
 @app.post("/context")
 async def update_context(data: dict):
-    """
-    Update user context (time, location, mood, etc.)
-    """
+    """Update user context (time, location, mood, task)"""
     memory.user_context.update(data)
     return {
         "status": "context updated",
-        "context": memory.user_context
+        "context": memory.user_context,
+        "timestamp": datetime.now().isoformat()
     }
+
+@app.post("/gesture")
+async def process_gesture(gesture: GestureData):
+    """Process gesture data (OpenClaw integration)"""
+    memory.gesture_buffer.append(gesture.dict())
+    
+    # Simple gesture recognition
+    if gesture.type == "hand" and gesture.confidence > 0.7:
+        gesture_type = "wave" if len(gesture.landmarks) > 15 else "point"
+        return {
+            "type": gesture_type,
+            "confidence": gesture.confidence,
+            "action": f"Avatar should {gesture_type}",
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    return {"status": "gesture_received"}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket endpoint for real-time streaming
+    Inspired by adewaskar/jarvis bridge architecture
     """
     await websocket.accept()
     try:
         while True:
             data = await websocket.receive_text()
-            message = json.loads(data)
+            message_data = json.loads(data)
             
-            # Process message
-            response_data = generate_response(message.get("content", ""))
+            if message_data.get("type") == "message":
+                # Process message
+                response_text = ollama.generate(message_data.get("content", "")) if ollama.is_available() else "Ollama not available"
+                emotion = detect_emotion_from_text(response_text) if response_text else "neutral"
+                
+                response = {
+                    "type": "response",
+                    "content": response_text,
+                    "emotion": emotion,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                await websocket.send_text(json.dumps(response))
             
-            # Send response
-            response = {
-                "type": "response",
-                "content": response_data["content"],
-                "emotion": response_data.get("emotion"),
-                "timestamp": datetime.now().isoformat()
-            }
+            elif message_data.get("type") == "gesture":
+                # Process gesture
+                gesture_response = {
+                    "type": "gesture_processed",
+                    "action": message_data.get("action"),
+                    "timestamp": datetime.now().isoformat()
+                }
+                await websocket.send_text(json.dumps(gesture_response))
             
-            await websocket.send_text(json.dumps(response))
+            elif message_data.get("type") == "ping":
+                await websocket.send_text(json.dumps({"type": "pong", "timestamp": datetime.now().isoformat()}))
+    
     except WebSocketDisconnect:
         print("Client disconnected")
     except Exception as e:
@@ -260,10 +415,13 @@ if __name__ == "__main__":
     port = int(os.getenv("CORE_PORT", "8000"))
     debug = os.getenv("DEBUG", "false").lower() == "true"
     
-    print(f"🧠 CORT Core starting on {host}:{port}")
+    print(f"\n🧠 CORT Core starting on {host}:{port}")
     print("   - Chat: POST /chat")
     print("   - WebSocket: /ws")
     print("   - Memory: GET /memory")
     print("   - Personalities: GET /personalities")
+    print("   - Gestures: POST /gesture")
+    print(f"   - Health: GET /health")
+    print(f"   - Ollama: {memory.ollama_config.base_url}")
     
     uvicorn.run(app, host=host, port=port, reload=debug)
