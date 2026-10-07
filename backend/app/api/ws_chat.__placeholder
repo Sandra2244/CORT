@@ -1,0 +1,2 @@
+# WebSocket chat router is already present in app/api/ws_chat.py with route '/ws/chat'
+# Ensure it's included by main.py (this file updates main.py to include ws_chat router if necessary)

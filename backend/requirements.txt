@@ -1,2 +1,12 @@
+# additional ML & audio packages for Voice and Embeddings
+sentence-transformers
+faiss-cpu
+openai-whisper
+TTS
+ffmpeg-python
 python-multipart
 websockets
+httpx[http2]
+uvicorn[standard]
+fastapi
+python-dotenv

@@ -1,0 +1,28 @@
+# Dev compose for local development
+version: '3.8'
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./backend:/app/backend
+      - ./avatars:/app/avatars
+      - ./backend/data:/app/backend/data
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_URL=${OLLAMA_URL:-http://host.docker.internal:11434}
+      - ENABLE_WHISPER=${ENABLE_WHISPER:-0}
+      - ENABLE_TTS=${ENABLE_TTS:-0}
+  frontend:
+    image: node:18
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+# Optional: add an Ollama service if you have a docker image; commented out by default
+#  ollama:
+#    image: ollama/ollama:latest
+#    ports:
+#      - "11434:11434"
