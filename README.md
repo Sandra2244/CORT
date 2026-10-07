@@ -1,2 +1,10 @@
-# CORT
-CORT: Cognitive Operating Reactive Time - A futuristic, multi-platform AI assistant inspired by Cortana (Halo). Hybrid architecture with Python backend, Node.js bridge, and TypeScript/Three.js holographic UI. Voice-first, gesture-aware, modular skills system.
+# CORT - Scaffold
+
+This scaffold provides a minimal, modular starting point for CORT: a FastAPI backend that can proxy to a local Ollama instance, and a React + TypeScript frontend with a holographic Three.js scene.
+
+Goals in this branch:
+- Startable locally (backend + frontend)
+- Modular structure for avatar, voice, personality, memory, LLM
+- Futuristic UI placeholder (holographic sphere) to extend later
+
+See README.md for instructions.

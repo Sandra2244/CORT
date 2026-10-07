@@ -1,0 +1,4 @@
+fastapi
+uvicorn[standard]
+httpx[http2]
+python-dotenv
