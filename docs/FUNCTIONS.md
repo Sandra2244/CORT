@@ -1,0 +1,80 @@
+# Funciones de CORT
+
+Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil · **M** media · **D** difícil / depende del sistema.
+
+## Núcleo
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 1 | Chat con LLM local (Ollama) | ✅ | F |
+| 2 | Memoria de conversación (sesión) | ✅ | F |
+| 3 | Memoria persistente (SQLite + resúmenes) | 🔨 | M |
+| 4 | Comandos locales rápidos (intents) | ✅ | F |
+| 5 | Búsqueda web | ⬜ | F |
+| 6 | Resumen de documentos | ⬜ | F |
+| 7 | Recordatorios y tareas | ⬜ | F |
+| 8 | Traducción | ⬜ | F |
+| 9 | Clima | ⬜ | F |
+| 10 | Generación/explicación de código | ⬜ | F |
+
+## Voz y audio
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 11 | Wake word ("Hey CORT") | ⬜ | M |
+| 12 | Voz a texto (Whisper local) | ⬜ | M |
+| 13 | Texto a voz (Piper / Kokoro) | ⬜ | M |
+| 14 | Interrumpir mientras habla (barge-in) | ⬜ | M |
+| 15 | Volumen del sistema | ⬜ | M (por SO) |
+| 16 | Ecualizador del sistema | ⬜ | D (Windows: Equalizer APO; Android: solo dentro de tu propio reproductor) |
+| 17 | Normalizar decibeles de lo que se reproduce | ⬜ | D (en tu reproductor: fácil; global: depende del SO) |
+| 18 | Control de reproductor (play/pausa/siguiente) | ⬜ | M (MPRIS/Windows media keys/Android MediaSession) |
+| 19 | Control de audífonos Bluetooth (conectar/desconectar, batería) | ⬜ | M |
+| 20 | Reconocer canción | ⬜ | M (requiere servicio externo) |
+| 21 | Detección de emoción en la voz | ⬜ | D |
+| 22 | Cambio de voz/personaje | ⬜ | M |
+
+## Avatar
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 23 | Orbe/partículas holográficas reactivas | ✅ | F |
+| 24 | Atuendo por hora y temperatura (lógica) | ✅ | F |
+| 25 | Cargar modelo VRM (three-vrm) | ⬜ | M |
+| 26 | Cambiar atuendo en el VRM | ⬜ | M |
+| 27 | Lip-sync con el audio | ⬜ | M |
+| 28 | Parpadeo y mirada | ⬜ | M |
+| 29 | Expresiones según estado afectivo | ⬜ | M |
+| 30 | Shader holográfico (scanlines, fresnel) | ⬜ | M |
+| 31 | HUD (hora, clima, estado del sistema) | ⬜ | F |
+| 32 | Burbuja flotante siempre visible (overlay transparente) | ⬜ | M (Electron en PC; Android requiere permiso de superposición) |
+
+## Gestos y visión
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 33 | Detectar mano/gestos con cámara (MediaPipe) | ⬜ | M |
+| 34 | Detectar rostro/presencia | ⬜ | F |
+| 35 | Mirada del usuario | ⬜ | D |
+| 36 | Describir lo que ve la cámara (modelo de visión) | ⬜ | M |
+| 37-44 | Arrastrar, rotar, escalar, pellizcar, deslizar, tocar, doble toque, inclinar | ⬜ | F (táctil/ratón); inclinar = acelerómetro |
+
+## Control de dispositivos
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 45 | Abrir/cerrar aplicaciones | ⬜ | M |
+| 46 | Brillo de pantalla | ⬜ | M |
+| 47 | Captura de pantalla | ⬜ | F |
+| 48 | Reproducir vídeo cuadro por cuadro (en tu reproductor) | ⬜ | M |
+| 49 | Leer notificaciones | ⬜ | D (Android: permiso especial) |
+| 50 | Enviar SMS / llamar | ⬜ | D (Android; iOS no lo permite) |
+| 51 | Modo "no molestar" por contexto | ⬜ | M |
+
+## Sensores y contexto
+| # | Función | Est. | Viab. |
+|---|---|---|---|
+| 52 | Temperatura (API o sensor ESP32) | ⬜ | F |
+| 53 | Luz ambiente | ⬜ | M |
+| 54 | Ruido ambiente (dB) | ⬜ | F |
+| 55 | Ubicación | ⬜ | F |
+| 56 | Estado de red/Bluetooth | ⬜ | F |
+| 57 | MQTT con ESP32/RPi | ⬜ | M |
+| 58 | Sugerencias por rutina ("son las 7, ¿café?") | ⬜ | M |
+| 59 | Aprender preferencias | ⬜ | M |
+| 60 | Agentes en paralelo ("fragmentos") | ⬜ | M |
