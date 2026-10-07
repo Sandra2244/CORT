@@ -1,0 +1,102 @@
+import sys, pathlib, tempfile, unittest
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from cort_core.memory.store import MemoryStore
+from cort_core.memory.facts import extract
+
+
+class TestStore(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = pathlib.Path(self.tmp.name) / "memory.db"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_remember_and_recall(self):
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        self.assertIn("El usuario se llama Sandra", store.recall("¿cómo me llamo?"))
+
+    def test_persists_across_reopen(self):
+        """Criterio del ROADMAP: la memoria sobrevive a reiniciar el proceso."""
+        first = MemoryStore(self.db)
+        first.remember("El usuario estudia ingeniería")
+        first.close()
+        reopened = MemoryStore(self.db)
+        self.assertIn("El usuario estudia ingeniería", reopened.recall("qué estudio"))
+
+    def test_does_not_duplicate(self):
+        store = MemoryStore(self.db)
+        a = store.remember("Al usuario le gusta el café")
+        b = store.remember("Al usuario le gusta el café")
+        self.assertEqual(a, b)
+        self.assertEqual(len(store.all()), 1)
+
+    def test_recall_empty_when_nothing_matches(self):
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        self.assertEqual([], store.recall("cuánto es dos más dos"))
+
+    def test_recall_ignores_stopwords(self):
+        """Palabras funcionales como 'como' o 'que' no deben traerse recuerdos al azar."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        self.assertEqual([], store.recall("y eso como que"))
+
+    def test_creates_missing_parent_dir(self):
+        nested = pathlib.Path(self.tmp.name) / "a" / "b" / "memory.db"
+        store = MemoryStore(nested)
+        store.remember("prueba")
+        self.assertTrue(nested.exists())
+
+    def test_name_survives_restart(self):
+        """Criterio literal del ROADMAP fase 1: CORT recuerda tu nombre tras reiniciar."""
+        first = MemoryStore(self.db)
+        for fact in extract("hola, me llamo Sandra"):
+            first.remember(fact)
+        first.close()
+        reopened = MemoryStore(self.db)
+        self.assertEqual("Sandra", reopened.name_of_user())
+
+    def test_name_is_none_without_facts(self):
+        self.assertIsNone(MemoryStore(self.db).name_of_user())
+
+    def test_rejects_empty_fact(self):
+        store = MemoryStore(self.db)
+        with self.assertRaises(ValueError):
+            store.remember("   ")
+
+
+class TestFacts(unittest.TestCase):
+    def test_name(self):
+        self.assertEqual(["El usuario se llama Sandra"], extract("Hola, me llamo Sandra"))
+
+    def test_name_variant(self):
+        self.assertEqual(["El usuario se llama Ana"], extract("mi nombre es Ana"))
+
+    def test_preserves_capitalization(self):
+        """El regex va con re.I pero captura del texto original: no se pierde 'Sandra'."""
+        self.assertEqual(["El usuario se llama SANDRA"], extract("ME LLAMO SANDRA"))
+
+    def test_studies(self):
+        self.assertEqual(["El usuario estudia ingeniería de software"],
+                         extract("estudio ingeniería de software."))
+
+    def test_stops_at_punctuation(self):
+        """Un hecho termina en el primer signo: no se arrastra el resto de la frase."""
+        self.assertEqual(["El usuario estudia ingeniería"],
+                         extract("estudio ingeniería, y trabajo en paralelo"))
+
+    def test_preference(self):
+        self.assertEqual(["Al usuario le gusta el café"], extract("me gusta el café"))
+
+    def test_nothing_to_extract(self):
+        self.assertEqual([], extract("qué tiempo hace hoy"))
+
+    def test_multiple_facts(self):
+        self.assertEqual(2, len(extract("me llamo Sandra y me gusta el café")))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -2,63 +2,63 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-07**, hecha ejecutando comandos, no recordándolos.
+> Última verificación: **2026-10-07**, ejecutando comandos, no recordándolos.
 
 ## Fase actual
-**FASE 0 — cerrada y verificada hoy.** → Siguiente: **FASE 1 (memoria persistente con SQLite)**.
+**FASE 1 (memoria SQLite) — cerrada y verificada hoy.** → Siguiente: **FASE 1.1 (poda de memoria)** o **FASE 2 (voz)**, pero la Fase 2 tiene un problema de hardware que hay que resolver antes (ver abajo).
+
+## Respaldo
+Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada).
+- Rama **`cort-local-verified`** ← esta carpeta. Es la única que está verificada ejecutándola.
+- Rama **`main`** ← lo que subió Copilot en octubre. Contiene humo: ver "Hallazgo" abajo.
+- Rama **`scaffold/fastapi-ollama-frontend`** ← 50 archivos, más avanzada, de la que se trasplantó la memoria.
+- **No hay merge todavía.** Las tres historias son independientes (`git merge-base` = vacío). Fusionar es decisión consciente, no un push.
 
 ## Qué existe y está verificado funcionando
 | Cosa | Evidencia |
 |---|---|
-| `services/core/cort_core/{server,brain,intents,outfit}.py` | `python -m py_compile` OK |
-| 8 pruebas de lógica pura | `make test` → `Ran 8 tests ... OK` |
-| Core arrancando | `make dev` → escucha en `127.0.0.1:8765`, `/docs` devuelve 200 |
-| Habla por WebSocket | Cliente real: saludo + `state` con atuendo, respuesta en modo eco en ~0.3 s |
-| Intents locales | "sube el volumen" → `{"type":"intent","action":"volume","delta":10}` sin pasar por el LLM |
-| UI del orbe | `apps/web/index.html`: partículas, scanlines, se reconecta solo, respeta `prefers-reduced-motion` |
-| Repo git | `git init` hecho, commit inicial `1c46dc5`. **Sin remoto todavía.** |
+| Core `server/brain/intents/outfit` + `memory/` | compila, `make dev` escucha en `127.0.0.1:8765` |
+| **25 pruebas** | `make test` → `Ran 25 tests ... OK` |
+| WebSocket completo | saludo, `state` con atuendo, modo eco en ~0.3 s, intents sin LLM |
+| **Memoria persistente (Fase 1)** | Proceso 1: "me llamo Sandra" → guarda `El usuario se llama Sandra`. Se mata el proceso. Proceso 2: saluda **"Hola de nuevo, Sandra."** y "¿cómo me llamo?" → **"Te llamas Sandra."** sin pasar por el LLM |
+| UI del orbe | `apps/web/index.html`, se reconecta sola, respeta `prefers-reduced-motion` |
 
-## Qué NO existe (aunque otros documentos y chats lo daban por hecho)
-- `apps/desktop/` — nada de Electron, ventana transparente ni overlay.
-- `services/voice/`, `services/vision/`, `services/audio/`, `services/sensors/` — no existen.
-- `packages/` (shared, protocol, ui-components) — no existe.
-- `scripts/context-pack.py` — no existe; el método de relevo entre IAs no tenía herramienta.
-- `upstream/` está **vacío**: `scripts/upstreams.txt` aún tiene URLs con `REEMPLAZAR`.
-- `LICENSE` — no hay, pese a que el README del repo GitHub habla de MIT.
+## Qué NO existe (aunque otros documentos y chats lo dieron por hecho)
+`apps/desktop/` (Electron/overlay) · `services/voice`, `vision`, `audio`, `sensors` · `packages/` · `scripts/context-pack.py` · `upstream/` vacío (URLs con `REEMPLAZAR`).
+`LICENSE` sí existe, pero **en las ramas remotas, no en esta carpeta**.
 
-## Correcciones hechas en esta sesión
-1. **`Makefile` inservible en Linux**: usaba `python` (no existe en Debian) → `setup`, `dev`, `test` y `web` fallaban con `Error 127`. Ahora usa la ruta absoluta del interprete del venv.
-2. **Dependencias nunca instaladas**: no había `.venv`. Creado e instalado (fastapi 0.142.3, uvicorn 0.54.0, httpx 0.28.1).
-3. **Modelo fantasma**: `.env.example` y `brain.py` pedían `qwen2.5:3b`, que no está descargado. Cambiado a `qwen2.5:0.5b`, que sí existe en `~/.ollama`.
-4. **`.env` no lo lee nadie**: ningún módulo carga el archivo. Mientras no se arregle, la configuración se pasa con variables de entorno (`CORT_MODEL=... make dev`). Apuntado como deuda, no arreglado a propósito para no añadir dependencias sin discutir.
+## Hallazgo: el servicio de voz del remoto era humo
+`origin/main:services/voice/src/main.py` (143 líneas) define `/stt`, `/tts`, `/wake-word/detect`, `/vad/detect` y **no hace ni una llamada real** a Whisper, Piper o cualquier motor: la única aparición de "piper" es un string en un diccionario de config. Parece un servicio que funciona; devuelve `ok` a todo.
+**No transplantar sin reescribir.** Lo aprovechable de esa rama es `services/core/src/main.py` (personalidad, endpoints) y la **`scaffold`**: `backend/app/services/memory.py` (trasplantada hoy) y sus adaptadores STT/TTS, que sí intentan llamar a los motores.
 
-## Limitaciones reales de esta máquina (importan para planificar)
-- **RAM: 1,8 GiB total, ~340 MiB disponibles. Sin GPU.** Ollama tiene 9,2 GB descargados con 4 modelos
-  (`qwen2.5:0.5b`, `qwen3:0.6b`, `qwen3.5:2b`, `airaos-local`) y **4 blobs `-partial`** = descargas cortadas a medias.
-  Con esta RAM, los modelos medianos no van a caber: el trabajo local serio tiene que ser con 0.5b/0.6b, o delegando en una API.
-- Las fases de avatar VRM, MediaPipe y generación de vídeo son **muy exigentes** para este hardware.
-  No son imposibles, pero hay que probarlas antes de comprometerlas en el roadmap.
+## Transplante hecho hoy
+Origen: `origin/scaffold:.../backend/app/services/memory.py` (código propio, MIT).
+Destino: `services/core/cort_core/memory/{store,facts}.py`.
+Correcciones aplicadas al copiar:
+1. La versión original creaba la carpeta de la BD **en el momento del `import`** → los tests no se podían aislar. Ahora la ruta se inyecta por el constructor.
+2. Sin `created_at` ni deduplicación → añadidos (`content UNIQUE`).
+3. Búsqueda `LIKE '%término%'` no encontraba "llama" al preguntar "llamo" → búsqueda por raíces de 4 letras con lista de stopwords.
+4. Se **descartó faiss + sentence-transformers**: piden ~1,5 GiB de RAM y esta máquina tiene 1,8 GiB en total, sin GPU.
 
-## Material de referencia YA en disco (no hace falta clonar)
-| Ruta | Qué es | Licencia |
-|---|---|---|
-| `~/Documentos/jarvis/` | **adewaskar/JARVIS** completo: React+Vite+Three.js+GLSL (el holograma), voz (Porcupine wake word, VAD, Kokoro TTS), `lib/hands.ts` con MediaPipe. Su `bridge/` va atado al SDK de Claude → no reutilizable tal cual | **MIT** (copiable con atribución) |
-| `~/Documentos/bases o proyectos git /OpenJarvis-main/` | Cerebro, memoria, agentes, ejemplos (ojo: la carpeta tiene un espacio al final del nombre) | **Apache-2.0** |
-| `~/Documentos/Referencias AIRA/fullstack-agent-main.zip` | jaredrhod (memoria/visualizador/gestos) | **AGPL-3.0 → NO copiar código**: arrastraría a CORT a AGPL. Solo leer ideas |
+## Limitaciones reales de esta máquina (marcan el roadmap entero)
+- **1,8 GiB de RAM, ~340 MiB libres, sin GPU.** Ningún modelo de Ollama mediano cabe. Hay 9,2 GB descargados en `~/.ollama` con 4 modelos (`qwen2.5:0.5b`, `qwen3:0.6b`, `qwen3.5:2b`, `airaos-local`) y **4 blobs `-partial`** = descargas interrumpidas.
+- El server de Ollama **no arranca solo**; hay que lanzar `ollama serve`. CORT funciona sin él (modo eco).
+- Consecuencia: las fases **2 (voz)**, **3 (VRM)**, **6 (MediaPipe)** y la generación de vídeo van a ir muy justas o no van a ser viables aquí. Antes de comprometerlas hay que medir. Regla 10 de `AGENTS.md`: decirlo, no simularlo.
+- Material de referencia **ya en disco** (no hace falta clonar): `~/Documentos/jarvis/` = adewaskar/JARVIS, **MIT**, con React+Three.js+GLSL, voz real (Porcupine, VAD, Kokoro) y `src/lib/hands.ts` con MediaPipe. Su `bridge/` va atado al SDK de Claude → no reutilizable tal cual. `~/Documentos/bases o proyectos git /OpenJarvis-main/` = **Apache-2.0**. `fullstack-agent-main.zip` = **AGPL-3.0 → no copiar código** (arrastraría a CORT a AGPL), solo leer ideas.
 
-Existencia comprobada por API de GitHub: `adewaskar/jarvis`, `jaredrhod/{fullstack-agent,ai-visualizer,ai-memory-vault,barehands}`, `open-jarvis/OpenJarvis`, `openclaw/openclaw`.
+## Deuda conocida
+- **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_MODEL=qwen3:0.6b make dev`.
+- El README local sigue prometiendo un alcance que el código no tiene.
+- `scripts/upstreams.txt` conserva URLs con `REEMPLAZAR`; ya se conocen las reales (ver arriba).
 
 ## Siguiente paso exacto
-**FASE 1 — memoria persistente (SQLite), con pruebas primero:**
-1. Crear `services/core/cort_core/memory/store.py` con `add/get` y tabla `memories`.
-2. Crear `services/core/tests/test_memory.py`: *al reiniciar el proceso, CORT recuerda el nombre del usuario.*
-3. `make test` en verde → actualizar `docs/FUNCTIONS.md` (función 3: 🔨 → ✅) y `docs/ROADMAP.md`.
-4. Commit: `feat(memory): store SQLite persistente con pruebas`.
-
-Después, para tener cerebro real: arrancar `ollama serve` y probar con `qwen2.5:0.5b` (con 340 MiB libres irá lento; es una prueba, no una producción).
+**FASE 1.1 — poda de memoria** (corta y segura en esta máquina):
+1. `MemoryStore.prune(max_rows=…)` y un test que meta 300 recuerdos y compruebe que `recall` sigue devolviendo lo relevante.
+2. Decidir política: borrar los más antiguos o resumirlos con el LLM.
+Alternativa si prefieres algo visible: transplantar el **holograma de `~/Documentos/jarvis`** (MIT) a `apps/web/`, que es lo más espectacular por sesión.
 
 ## Registro de sesiones
 | Fecha | Quién | Qué hizo |
 |---|---|---|
 | 2026-10-06 | Gemini/Claude web | Generó docs y estructura teórica. Describió carpetas (desktop, voz, sensores, STATUS) que nunca creó |
-| 2026-10-07 | **Qoder** | `git init` + commit de seguridad, reparó Makefile, creó venv, instaló dependencias, verificó core end-to-end por WebSocket, corrigió el modelo fantasma, escribió este STATUS |
+| 2026-10-07 | **Qoder** | `git init`, reparó Makefile, venv+deps, core verificado por WebSocket, creó STATUS.md, respaldó a GitHub como `cort-local-verified`, **transplantó la memoria SQLite y cerró la Fase 1** (25 pruebas OK) |

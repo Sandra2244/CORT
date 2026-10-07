@@ -7,7 +7,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 |---|---|---|---|
 | 1 | Chat con LLM local (Ollama) | ✅ | F |
 | 2 | Memoria de conversación (sesión) | ✅ | F |
-| 3 | Memoria persistente (SQLite + resúmenes) | 🔨 | M |
+| 3 | Memoria persistente (SQLite: hechos del usuario y búsqueda por raíces) | ✅ | M |
 | 4 | Comandos locales rápidos (intents) | ✅ | F |
 | 5 | Búsqueda web | ⬜ | F |
 | 6 | Resumen de documentos | ⬜ | F |
