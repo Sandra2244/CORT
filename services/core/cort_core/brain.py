@@ -2,7 +2,7 @@ import os
 import httpx
 
 OLLAMA_URL = os.getenv("CORT_OLLAMA_URL", "http://localhost:11434")
-MODEL = os.getenv("CORT_MODEL", "qwen2.5:3b")
+MODEL = os.getenv("CORT_MODEL", "qwen2.5:0.5b")
 SYSTEM = ("Eres CORT, un asistente personal sereno, curioso y directo. "
           "Responde en el idioma del usuario, breve y útil.")
 
