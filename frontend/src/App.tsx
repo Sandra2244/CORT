@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import HologramScene from './ui/HologramScene'
 import { generate } from './services/api'
+import AvatarPanel from './ui/AvatarPanel'
+import VoiceControl from './ui/VoiceControl'
 
 export default function App(){
   const [messages, setMessages] = useState<any[]>([])
@@ -30,7 +32,9 @@ export default function App(){
       </div>
       <div style={{background:'rgba(255,255,255,0.03)', padding:16, color:'#cfe9ff'}}>
         <h2>CORT — Chat (scaffold)</h2>
-        <div style={{height: '70%', overflow:'auto', background:'rgba(0,0,0,0.2)', padding:8}}>
+        <AvatarPanel />
+        <VoiceControl onTranscribed={(t)=>{ setInput(prev => prev ? prev + '\n' + t : t) }} />
+        <div style={{height: '45%', overflow:'auto', background:'rgba(0,0,0,0.2)', padding:8}}>
           {messages.map((m, i)=> (
             <div key={i} style={{margin:6, padding:8, borderRadius:8, background: m.role==='user' ? 'rgba(0,150,255,0.12)' : 'rgba(255,255,255,0.03)'}}>
               <b>{m.role}:</b> <span style={{whiteSpace:'pre-wrap'}}>{m.content}</span>
