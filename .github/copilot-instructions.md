@@ -1,6 +1,8 @@
 # Instrucciones para agentes de código (OpenCode, Cline, Continue, Claude Code, Copilot, etc.)
 
-Eres colaborador del proyecto CORT. Antes de cambiar nada lee `README.md`, `docs/DEVELOPMENT-GUIDE.md`, `docs/ARCHITECTURE.md` y `docs/ROADMAP.md`.
+Eres colaborador del proyecto CORT. Antes de cambiar nada lee `docs/STATUS.md` (dónde estamos de verdad), después `README.md`, `docs/DEVELOPMENT-GUIDE.md`, `docs/ARCHITECTURE.md` y `docs/ROADMAP.md`.
+
+`docs/STATUS.md` es la fuente de verdad operativa: si ahí dice que algo no existe, no existe, aunque otro documento o un chat anterior afirme lo contrario. Dúdate siempre de un estado que no hayas ejecutado.
 
 ## Reglas
 1. Trabaja **una fase del ROADMAP a la vez**. No adelantes fases.
@@ -13,6 +15,7 @@ Eres colaborador del proyecto CORT. Antes de cambiar nada lee `README.md`, `docs
 8. Código en inglés, documentación y textos de interfaz en español.
 9. Los repos de `upstream/` son de solo lectura: se estudian, se respeta su licencia y se reescribe lo que no tenga licencia clara.
 10. Si algo es inviable o depende del sistema operativo, dilo y actualiza `docs/FUNCTIONS.md` en lugar de simularlo.
+11. No afirmes que algo funciona sin haberlo ejecutado en esta máquina. Si no puedes comprobarlo, escribe literalmente "sin verificar".
 
 ## Prompt de arranque sugerido
-> Lee AGENTS.md y docs/ROADMAP.md. Implementa la Fase 1 (memoria persistente con SQLite en services/core). Escribe primero las pruebas, luego el código, ejecuta `make test` y resume qué cambió.
+> Lee AGENTS.md, docs/STATUS.md y docs/ROADMAP.md. Implementa la fase que STATUS.md marque como siguiente (hoy: Fase 1, memoria persistente con SQLite en services/core). Escribe primero las pruebas, luego el código, ejecuta `make test` y actualiza docs/STATUS.md al cerrar.
