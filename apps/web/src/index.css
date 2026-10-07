@@ -1,0 +1,168 @@
+:root {
+  --bg: #02040c;
+  --ink: #dff2ff;
+  --dim: #5d86a0;
+  --tint: #5ce1ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(circle at 50% 42%, #0a1430 0%, var(--bg) 62%);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.scene {
+  position: fixed;
+  inset: 0;
+}
+
+/* Líneas de barrido: el motivo del holograma de Cortana. */
+.scan {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(120, 220, 255, 0.045) 2px 3px);
+}
+
+.hud {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 auto;
+  max-width: 680px;
+  width: 100%;
+  padding: 14px 16px 18px;
+  background: linear-gradient(to top, rgba(6, 16, 34, 0.82), rgba(6, 16, 34, 0));
+  backdrop-filter: blur(6px);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+}
+
+.status em {
+  color: var(--tint);
+  font-style: normal;
+  text-transform: lowercase;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.dot.on {
+  color: var(--tint);
+  background: var(--tint);
+}
+
+.dot.off {
+  color: #ff5a7a;
+  background: #ff5a7a;
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 38vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.log p {
+  margin: 0;
+  max-width: 85%;
+  padding: 8px 12px;
+  line-height: 1.45;
+  background: rgba(8, 24, 48, 0.62);
+  border-left: 2px solid var(--tint);
+}
+
+.log .me {
+  align-self: flex-end;
+  border-left: 0;
+  border-right: 2px solid #a479ff;
+  text-align: right;
+}
+
+form {
+  display: flex;
+  gap: 8px;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+}
+
+button {
+  padding: 0 18px;
+  font: inherit;
+  font-weight: 600;
+  color: #02131f;
+  background: var(--tint);
+  border: 0;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
+}
+
+@media (max-width: 520px) {
+  .log p {
+    max-width: 92%;
+    font-size: 0.95rem;
+  }
+}
+
+/* El halo del texto y las líneas de barrido son decoración: si el usuario pide
+   movimiento reducido, se quitan, pero el reactor sigue respirando. */
+@media (prefers-reduced-motion: reduce) {
+  .scan {
+    display: none;
+  }
+
+  .log p,
+  .status {
+    text-shadow: none;
+  }
+}

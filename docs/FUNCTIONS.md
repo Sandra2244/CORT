@@ -5,7 +5,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 ## Núcleo
 | # | Función | Est. | Viab. |
 |---|---|---|---|
-| 1 | Chat con LLM local (Ollama) | ✅ | F |
+| 1 | Chat con LLM local (Ollama) | ⚠️ | F — **el código funciona, la máquina no**: medido a 0,53 tokens/s, una respuesta tarda ~2 min. Ver STATUS.md |
 | 2 | Memoria de conversación (sesión) | ✅ | F |
 | 3 | Memoria persistente (SQLite: hechos del usuario y búsqueda por raíces) | ✅ | M |
 | 4 | Comandos locales rápidos (intents) | ✅ | F |
@@ -35,15 +35,15 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 ## Avatar
 | # | Función | Est. | Viab. |
 |---|---|---|---|
-| 23 | Orbe/partículas holográficas reactivas | ✅ | F |
+| 23 | Orbe/partículas holográficas reactivas | ✅ | F — reactor GLSL de anillo erosionado + 4000 puntos, paleta Cortana, reacciona a `thinking` y a atuendo. 18 fps sin GPU |
 | 24 | Atuendo por hora y temperatura (lógica) | ✅ | F |
 | 25 | Cargar modelo VRM (three-vrm) | ⬜ | M |
 | 26 | Cambiar atuendo en el VRM | ⬜ | M |
 | 27 | Lip-sync con el audio | ⬜ | M |
 | 28 | Parpadeo y mirada | ⬜ | M |
 | 29 | Expresiones según estado afectivo | ⬜ | M |
-| 30 | Shader holográfico (scanlines, fresnel) | ⬜ | M |
-| 31 | HUD (hora, clima, estado del sistema) | ⬜ | F |
+| 30 | Shader holográfico (scanlines, fresnel) | 🔨 | M — hecho: bloom, aberración cromática, ruido, viñeta y scanlines CSS. Falta: fresnel sobre malla (nada de esto tiene geometría que iluminar todavía) |
+| 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo y chat. Falta: reloj, clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`), estado del sistema |
 | 32 | Burbuja flotante siempre visible (overlay transparente) | ⬜ | M (Electron en PC; Android requiere permiso de superposición) |
 
 ## Gestos y visión

@@ -15,8 +15,8 @@
                        └────┬───────────┘
                             │ eventos (WebSocket)
                  ┌──────────▼──────────┐
-                 │ apps/web (y desktop)│  JS/TS · Canvas/Three.js
-                 │ avatar · HUD · chat │
+                 │ apps/web (y desktop)│  React 19 · Vite · Three.js r185
+                 │ reactor · HUD · chat│  GLSL + post-proceso
                  └─────────────────────┘
 ```
 
@@ -38,7 +38,7 @@ Los tipos nuevos se añaden aquí primero y luego al código.
 (`intent` ya se emitía desde `server.py` pero no estaba documentado: se añade aquí en cumplimiento de la regla 5 de `AGENTS.md`.)
 
 ## Módulos de `services/core/cort_core`
-- `brain.py` — habla con Ollama; si no está disponible, modo eco.
+- `brain.py` — habla con Ollama. Timeout configurable con `CORT_LLM_TIMEOUT_S` (180 s) y tope de salida con `CORT_LLM_MAX_TOKENS`. Distingue "Ollama no está" de "el modelo no terminó a tiempo": confundirlos hace depurar un servidor caído que no existe. Si Ollama no responde, modo eco.
 - `intents.py` — comandos locales rápidos ("sube el volumen") sin gastar LLM.
 - `memory/store.py` — SQLite persistente en `services/core/data/memory.db` (fuera de git: son datos personales). `remember`, `recall`, `name_of_user`, `all`.
 - `memory/facts.py` — convierte frases del usuario ("me llamo X", "estudio Y") en hechos almacenables.
@@ -46,3 +46,18 @@ Los tipos nuevos se añaden aquí primero y luego al código.
 - `server.py` — FastAPI + WebSocket. Por cada mensaje: guarda los hechos detectados, y si el texto pregunta por la identidad del usuario responde desde la memoria (sin LLM); si no, inyecta los recuerdos relevantes como mensaje de sistema antes de llamar a `brain.think`.
 
 La memoria es SQLite con búsqueda por raíces de 4 letras, no embeddings: `sentence-transformers` + `faiss` (como en la rama remota `scaffold`) piden ~1,5 GiB de RAM y el equipo de desarrollo tiene 1,8 GiB en total. Cambiar esto es un cambio de arquitectura que se documenta aquí antes de programarse.
+
+## Módulos de `apps/web` (React + Vite + Three)
+Transplantado de `~/Documentos/jarvis` (**MIT**, ver `apps/web/CREDITS.md`). Sin `zustand` ni `drei` a propósito: menos dependencias y menos RAM en una máquina de 1,8 GiB.
+
+- `cort/palette.ts` — la paleta azul/violeta estilo Cortana. Cada atuendo tiene su `core` y su `hot`; `THINKING_HOT` es el magenta que toma el anillo mientras el core procesa. **Un solo sitio** define el color: si el HUD y el orbe discreparan, la interfaz parecería rota.
+- `cort/connection.ts` — el WebSocket. Mantiene dos cosas distintas y esa separación es el diseño entero:
+  - un *snapshot* inmutable para React, vía `useSyncExternalStore`;
+  - un objeto **mutable** `target` (color, hot, spin, open) que la escena persigue con `lerp` cada frame.
+  Si el color se entregara por estado de React, cambiar de atuendo parpadearía en vez de respirar, y la escena entera se reconciliaría 60 veces por segundo.
+- `scene/Core.tsx` — el reactor. **Un solo quad mirando a cámara** con un shader de coordenadas polares: la geometría no dibuja nada, todo es función de radio y ángulo (anillo erosionado por fbm, polvo, barrido radar, líneas concentricas). Por eso el borde es turbulencia real por píxel y no una malla deformada.
+- `scene/Particles.tsx` — 4000 puntos en una cáscara que se expande con el volumen.
+- `scene/Scene.tsx` — `EffectComposer` con Bloom + aberración cromática + ruido + viñeta. Eso, y no la geometría, es lo que convierte líneas aditivas en "holograma". `multisampling={0}`: no hay una sola arista poligonal que suavizar.
+- `ui/Hud.tsx` — estado, registro de mensajes y entrada de texto.
+
+El reactor mide **18 fps sin GPU** en el equipo de desarrollo. Cualquier añadido (más partículas, un segundo paso de blur, un avatar VRM) se nota en ese número.
