@@ -1,4 +1,5 @@
-import sys, pathlib, tempfile, unittest
+import importlib
+import os, sys, pathlib, tempfile, unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cort_core.memory.store import MemoryStore
@@ -170,6 +171,38 @@ class TestFacts(unittest.TestCase):
 
     def test_multiple_facts(self):
         self.assertEqual(2, len(extract("me llamo Sandra y me gusta el café")))
+
+
+class TestDbPathOverride(unittest.TestCase):
+    """`CORT_MEMORY_DB` decide qué cabeza usa un CORT: una demo no escribe encima
+    de la memoria real de nadie, y ésa es la única forma de enseñar la interfaz
+    con un saludo neutro sin moverle a nadie su base de datos."""
+
+    def setUp(self):
+        from cort_core.memory import store as store_module
+        self.module = store_module
+        self.original = os.environ.get("CORT_MEMORY_DB")
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        if self.original is None:
+            os.environ.pop("CORT_MEMORY_DB", None)
+        else:
+            os.environ["CORT_MEMORY_DB"] = self.original
+        importlib.reload(self.module)
+
+    def _reload(self):
+        importlib.reload(self.module)
+        return self.module.DB_PATH
+
+    def test_env_var_wins(self):
+        os.environ["CORT_MEMORY_DB"] = "/tmp/memoria-demo.db"
+        self.assertEqual(pathlib.Path("/tmp/memoria-demo.db"), self._reload())
+
+    def test_default_is_the_project_data_folder(self):
+        os.environ.pop("CORT_MEMORY_DB", None)
+        self.assertEqual("memory.db", self._reload().name)
+        self.assertEqual("data", self._reload().parent.name)
 
 
 if __name__ == "__main__":

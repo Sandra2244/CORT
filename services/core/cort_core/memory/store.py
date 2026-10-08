@@ -3,12 +3,18 @@
 Solo biblioteca estándar: la alternativa (sentence-transformers + faiss, como en la rama
 scaffold) necesita ~1,5 GiB de RAM y esta máquina no la tiene.
 """
+import os
 import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parents[2] / "data" / "memory.db"
+# `CORT_MEMORY_DB` permite levantar otro CORT con otra cabeza: una demo, una
+# segunda persona en el mismo PC, o una base vacía para una captura. Sin esto la
+# única alternativa sería moverle a nadie su memory.db de en medio, y eso no se
+# hace ni para sacar una foto.
+DB_PATH = Path(os.getenv("CORT_MEMORY_DB")
+               or Path(__file__).resolve().parents[2] / "data" / "memory.db")
 
 # Palabras que aparecen en cualquier frase y no identifican un recuerdo.
 _STOP = {"como", "cual", "cuando", "donde", "porque", "para", "pero", "este", "esta",
