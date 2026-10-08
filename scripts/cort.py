@@ -270,7 +270,34 @@ def stream(prefix: str, pipe, color: bool) -> None:
     pipe.close()
 
 
+def load_dotenv() -> list[str]:
+    """Lee `.env` **con el mismo código que el core**, no con una copia.
+
+    El lanzador no puede `import cort_core` (esa carpeta no está en el `PYTHONPATH`
+    y el lanzador no instala nada), así que se carga el módulo por su archivo. Lo
+    que se evita aquí es el fallo clásico: dos parsers de `.env` que discrepan y
+    un puerto que el lanzador cree uno y el servidor otro.
+    """
+    import importlib.util
+
+    module = CORE / "cort_core" / "env.py"
+    if not module.is_file():
+        return []
+    try:
+        spec = importlib.util.spec_from_file_location("cort_dotenv", module)
+        env_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(env_module)
+        return env_module.load_env()
+    except (OSError, RuntimeError, AttributeError):
+        return []
+
+
 def main() -> int:
+    # Antes que nada: `--port` toma su valor por defecto del entorno, y el entorno
+    # puede venir del `.env`. Si se lee tarde, el lanzador comprueba un puerto
+    # mientras el core escucha en otro.
+    added_keys = load_dotenv()
+
     ap = argparse.ArgumentParser(description="Arranca CORT (core + interfaz + navegador).")
     ap.add_argument("--port", type=int, default=int(os.getenv("CORT_PORT", "8765")))
     ap.add_argument("--web-port", type=int, default=8780, help="puerto del servidor estático")
@@ -291,6 +318,11 @@ def main() -> int:
 
     if not args.quiet:
         print(banner(color))
+        if added_keys:
+            # Sólo los NOMBRES de las variables, nunca sus valores: una terminal
+            # de arranque acaba en una captura, y una captura acaba en un chat.
+            some = ", ".join(added_keys[:6]) + (" …" if len(added_keys) > 6 else "")
+            print(paint(f" {DIM}.env → {some}{RESET}", color))
 
     if args.demo:
         os.environ["CORT_MEMORY_DB"] = demo_db_path(os.environ)

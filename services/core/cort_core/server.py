@@ -3,6 +3,12 @@ import re
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
+
+# El `.env` se lee **antes** del resto de los imports del paquete: `memory/store.py`
+# fija su `DB_PATH` al importarse, y una ruta leída después llegaría tarde.
+from .env import load_env
+load_env()
+
 from .actions import perform
 from .brain import think
 from .intents import match_intent
