@@ -21,6 +21,7 @@ La licencia MIT de CORT cubre **el código de este repositorio**. No reclama nad
 | `fullstack-agent` (jaredrhod) | **AGPL-3.0** | **Ninguna línea copiada, a propósito.** Tomar código AGPL obligaría a publicar CORT bajo AGPL; de ese repo se leyeron ideas de arquitectura y nada más |
 | Rama `scaffold/fastapi-ollama-frontend` de este repo | propia | La memoria SQLite, **reescrita**: ruta de la base de datos inyectable, `created_at`, deduplicación, búsqueda por raíces de 4 letras, poda con el nombre protegido |
 | [FastAPI](https://fastapi.tiangolo.com) · [uvicorn](https://www.uvicorn.org) · [React](https://react.dev) · [Vite](https://vite.dev) · [Three.js](https://threejs.org) · [Ollama](https://ollama.com) | MIT / Apache-2.0 / ISC | Dependencias de terceros por sus propios términos. No son de CORT y no se distribuyen aquí |
+| **Los iconos de la PWA** (`apps/web/public/icons/`) | **MIT, propia** | Dibujados con código en este repo (PIL: un anillo con el `#3fd8ff` y el `#8f5cff` de `palette.ts` sobre el `#02040c` de la interfaz). **No salen de ningún pack de iconos ni de un juego**: ni un asset de Halo, ni una fuente con licencia aparte |
 | **Cortana**, Halo y Microsoft | — | **Inspiración estética y de concepto nada más.** CORT no está afiliado, patrocinado ni autorizado por Microsoft. El nombre, la paleta y el holograma son un homenaje; los assets concretos son todos generados en este repo (shader GLSL y CSS), no extraídos de ningún juego |
 
 ## Cómo se mantiene esto al día

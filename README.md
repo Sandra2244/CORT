@@ -4,7 +4,7 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.4.0`** · rama `cort-local-verified` · 122 pruebas en verde.
+**Prototipo actual: `v0.4.1`** · rama `cort-local-verified` · 122 pruebas en verde.
 
 ![CORT: reactor holográfico, panel de telemetría, HUD con reloj](docs/assets/prototipo-v0.4.0.png)
 
@@ -25,7 +25,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 📊 | **Panel de telemetría**: cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó la última vez, si las acciones del sistema están encendidas. Con el kill switch puesto el panel dice «apagadas» en vez de fingir. Y **reloj** en el cabezal del HUD | `test_status` (9) y `test_protocol` (8), y cliente real contra el core: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido en el navegador: `00:25:04 → 00:25:07` en 2,1 s |
 | 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, y una terminal con banner y barras de estado (core · interfaz · ollama · memoria) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida a archivo |
 | 🎨 | **Atuendo por hora y temperatura**, igual que el holograma de Cortana | Pruebas de lógica |
-| 📱 | **Interfaz preparada para táctil** (pulsaciones de 48 px, sin auto-zoom, `safe-area`) | Escrita, **sin verificar en un móvil real** |
+| 📱 | **Interfaz preparada para táctil y para instalarse** (pulsaciones de 48 px, sin auto-zoom, `safe-area`, `manifest.webmanifest` con `display: standalone` e iconos) | El manifiesto, servido y medido: `200 application/manifest+json`, JSON válido y consola del navegador sin un solo aviso. Lo táctil y el botón «añadir a pantalla de inicio»: **sin verificar en un móvil real** — hace falta abrir el lanzador a la LAN y HTTPS, y eso es una decisión de seguridad, no de código |
 
 Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM y gestos con cámara. Motivos concretos en [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) y [`docs/STATUS.md`](docs/FUNCTIONS.md).
 
