@@ -23,10 +23,10 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 12 | Voz a texto (Whisper local) | ⬜ | M |
 | 13 | Texto a voz (Piper / Kokoro) | ⬜ | M |
 | 14 | Interrumpir mientras habla (barge-in) | ⬜ | M |
-| 15 | Volumen del sistema | ⬜ | M (por SO) |
-| 16 | Ecualizador del sistema | ⬜ | D (Windows: Equalizer APO; Android: solo dentro de tu propio reproductor) |
+| 15 | Volumen del sistema | 🔨 | M (por SO) — **el código está y corre**: `wpctl set-volume` por la capa de permisos, con el nivel leído antes y después. Verificado de extremo a extremo por WebSocket. **Sin comprobar el efecto audible**: el único chip de audio de este portátil es HDMI (`Intel Valleyview2 HDMI`), su perfil está en `off` y el puerto reporta *not available*, así que el sink por defecto es *Dummy Output* y PipeWire acepta la orden con returncode 0 sin mover nada. CORT lo dice («sigue en 100 %, ¿salida en Dummy?») en vez de mentir. En un PC con altavoces reales es una línea de configuración, no de código |
+| 16 | Ecualizador del sistema | ⬜ | D (Windows: Equalizer APO; Android: solo dentro de tu propio reproductor). Hoy `intents.py` lo reconoce y `actions.py` **lo rechaza por escrito** con `glitch`: no está en la lista cerrada |
 | 17 | Normalizar decibeles de lo que se reproduce | ⬜ | D (en tu reproductor: fácil; global: depende del SO) |
-| 18 | Control de reproductor (play/pausa/siguiente) | ⬜ | M (MPRIS/Windows media keys/Android MediaSession) |
+| 18 | Control de reproductor (play/pausa/siguiente) | 🔨 | M — tecla `XF86Audio*` con `xdotool`, en la lista cerrada y probada por argv. **Sin verificar en un reproductor de verdad**: no hay ninguno sonando en esta máquina (ver 15), y una tecla XF86 la escucha quien esté reproduciendo, no CORT |
 | 19 | Control de audífonos Bluetooth (conectar/desconectar, batería) | ⬜ | M |
 | 20 | Reconocer canción | ⬜ | M (requiere servicio externo) |
 | 21 | Detección de emoción en la voz | ⬜ | D |

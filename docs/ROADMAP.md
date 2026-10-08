@@ -9,7 +9,7 @@ Cada fase termina con algo que corre y una prueba. No avances si la anterior no 
 | 1.1 ✅ | Poda de la memoria (que no crezca sin límite) | Cerrado 2026-10-07: con 302 recuerdos, `prune(keep=200)` deja 201 y `context_for` responde en **1-4 ms** (techo: 1 s). La **poda por resumen con el LLM se descarta**: medido a ~1,3 tokens/s, resumir costaría minutos. El nombre del usuario nunca se poda |
 | 2 ⚠️ | Voz: Whisper + Piper + wake word | Dices "Hey CORT" y responde hablando. **Revisar viabilidad: la máquina tiene 1,8 GiB de RAM y sin GPU** |
 | 3 | Avatar VRM + shader holográfico + lip-sync | Un VRM habla con la boca sincronizada |
-| 4 | Control de PC: volumen, reproductor, apps | "Sube el volumen" cambia el volumen real |
+| 4 🔨 | Control de PC: volumen, reproductor, apps | "Sube el volumen" cambia el volumen real. **Empezado con capa de permisos** (`actions.py`: lista cerrada, argv fijo, `CORT_SYSTEM_ACTIONS=0`) y verificado por WebSocket contra el core. **El criterio no puede cerrarse en este portátil**: su único chip de audio es HDMI, el puerto está `not available` y el sink es *Dummy Output*, que acepta la orden con returncode 0 sin mover el nivel — CORT ya lo detecta y lo dice, hace falta un altavoz real encima para cerrar la fase |
 | 5 | Audio: ecualizador y normalizador en tu reproductor | Se aplica a una pista local |
 | 6 | Gestos con MediaPipe | Mano levantada despierta a CORT |
 | 7 | Sensores ESP32 + MQTT | La temperatura real cambia el atuendo |

@@ -5,7 +5,7 @@
 > Última verificación: **2026-10-07**, ejecutando comandos, no recordándolos.
 
 ## Fase actual
-**Efectos de un solo disparo verificados en el navegador. La capa táctil está escrita, pero sin verificar en un móvil real.** → Siguiente: decidir el **alcance de red** para el Samsung A16 (el core sigue atado a `127.0.0.1` a propósito) — sin esa decisión el CSS táctil no se puede comprobar de verdad — y el HUD de paneles (`Blades.tsx`, MIT). La **Fase 2 (voz)** y la **3 (VRM)** siguen pendientes de una decisión de hardware, no de código: 2 núcleos a 1,46 GHz.
+**Fase 4 empezada: CORT ya ejecuta en vez de decir «entendido»**, y la verificación en vivo enseñó dos cosas que leer el código no enseñaba (el `returncode` de `wpctl` miente, y este portátil no tiene por dónde sacar audio). Efectos del holograma verificados en el navegador; la capa táctil está escrita, **sin verificar en un móvil real**. → Siguiente: decidir el **alcance de red** para el Samsung A16 (el core sigue atado a `127.0.0.1` a propósito) y el HUD de paneles (`Blades.tsx`, MIT). La **Fase 2 (voz)** y la **3 (VRM)** siguen pendientes de una decisión de hardware, no de código: 2 núcleos a 1,46 GHz.
 
 ## Respaldo
 Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada).
@@ -18,7 +18,7 @@ Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed2
 | Cosa | Evidencia |
 |---|---|
 | Core `server/brain/intents/outfit` + `memory/` | compila, `make dev` escucha en `127.0.0.1:8765` |
-| **46 pruebas** | `make test` → `Ran 46 tests ... OK` (tarda ~40 s: la poda mete 300 recuerdos de verdad). Quedan `ResourceWarning` por bases de datos sin cerrar al morir el intérprete: ruido, no fallos |
+| **67 pruebas** | `make test` → `Ran 67 tests ... OK` (tarda ~40 s: la poda mete 300 recuerdos de verdad). Repartidas en `test_logic` 8, `test_brain` 10, `test_memory` 24, `test_protocol` 6, `test_actions` 19. Quedan `ResourceWarning` por bases de datos sin cerrar al morir el intérprete: ruido, no fallos |
 | **Poda de memoria (Fase 1.1)** | 302 recuerdos → `prune(keep=200)` deja 201, y `context_for` responde en **1-4 ms** (criterio del roadmap: <1 s). Conectada al arranque del core. Verificado: tras arrancar con la poda, el saludo sigue siendo "Hola de nuevo, Sandra." |
 | WebSocket completo | saludo, `state` con atuendo, modo eco en ~0.3 s, intents sin LLM |
 | **Chat con Ollama (función 1)** | Por WebSocket real contra el core: "¿qué sabes de mí hasta ahora?" → **"Sandra, …"**. La memoria llega al modelo. Lento: 48–66 s por turno con el modelo caliente |
@@ -27,7 +27,8 @@ Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed2
 | **Interfaz holográfica (React+Three)** | Capturas de pantalla reales a `localhost:5173`: anillo azul/violeta Cortana, polvo de 4000 puntos, bloom. **18 fps sin GPU.** `make web-build` → `✓ built`. Enviar "me llamo Sandra y estudio ingeniería" por la UI escribió `El usuario estudia ingeniería` en SQLite |
 | Reacción a estados | Con `thinking=true` el anillo pasó a magenta y la cabecera a "CORT procesando"; al terminar volvió a azul |
 | **Efectos (`Effects.tsx`, MIT)** | Medido en el navegador con un `MutationObserver` puesto **antes** de hacer clic: 1 aparición, clases `fx-play fx-pulse`, 2 nodos `.fx-wave`, `animation-duration: .9s`, y `--accent: #93a0ff` — que es el color `ui` del atuendo `casual` en `palette.ts`. La onda sale del mismo sitio que el anillo, no de un color fijo. **El primer intento de medirlo dio `false` y era falso**: el pulso dura 900 ms y mi sonda llegó tarde |
-| **Protocolo WebSocket** | `services/core/tests/test_protocol.py` (4 pruebas) mueve el `TestClient` de Starlette de verdad: saludo al conectar, `intent → effect → assistant_message` en ese orden, y que un `kind` desconocido no llega a pintarse |
+| **Protocolo WebSocket** | `services/core/tests/test_protocol.py` (6 pruebas) mueve el `TestClient` de Starlette de verdad: saludo al conectar, `intent → effect → assistant_message` en ese orden, y que un `kind` desconocido no llega a pintarse. El ejecutor va sustituido por un fake: la suite **no le mueve el audio a Sandra** |
+| **Acciones reales (capa de permisos)** | `actions.py` ejecuta `wpctl`/`xdotool` con argv fijo. **Verificado de extremo a extremo con el core levantado y un websocket de verdad**: "baja el volumen" → intent → comando real → lectura del nivel → `effect` → mensaje. 19 pruebas nuevas en `test_actions.py`, tres de ellas ejecutando mandos reales inofensivos (`true`, `false`, un binario que no existe) |
 
 ## Qué NO existe (aunque otros documentos y chats lo dieron por hecho)
 `apps/desktop/` (Electron/overlay) · `services/voice`, `vision`, `audio`, `sensors` · `packages/` · `scripts/context-pack.py` · `upstream/` vacío (URLs con `REEMPLAZAR`).
@@ -49,6 +50,7 @@ Correcciones aplicadas al copiar:
 ## Limitaciones reales de esta máquina (marcan el roadmap entero)
 - **2 núcleos a 1,46 GHz, 1,8 GiB de RAM, sin GPU, y swap de 2 GiB que se llena.** El límite no es sólo la memoria: el número de núcleos es lo que deja la generación en ~1,3 tokens/s. Ningún modelo de más de ~700 MiB cabe. Hay 4 modelos en `~/.ollama` (`qwen2.5:0.5b` 379 MiB, `qwen3:0.6b` 498, `airaos-local` 718, `qwen3.5:2b` 2614) y **4 blobs `-partial`** = descargas interrumpidas.
 - El server de Ollama **no arranca solo**; hay que lanzar `ollama serve`. CORT funciona sin él (modo eco).
+- **No hay por dónde salir con audio.** Único chip de sonido: `HDA Intel PCH` = *Intel Valleyview2 HDMI*, perfiles sólo HDMI, `Active Profile: off`, y el puerto `hdmi-output-0` reporta **not available**. El sink por defecto es *Dummy Output*, que acepta cualquier `set-volume` con returncode 0 y no mueve el nivel. Consecuencia directa sobre **Fase 2 (CORT hablando), 5 (ecualizador) y la función 15 (volumen)**: el código puede estar bien y no se oye nada. Hay que conectar algo por HDMI, unos auriculares Bluetooth, o llevar CORT a otro equipo para medirlo de verdad.
 - Consecuencia: las fases **2 (voz)**, **3 (VRM)**, **6 (MediaPipe)** y la generación de vídeo van a ir muy justas o no van a ser viables aquí. Antes de comprometerlas hay que medir. Regla 10 de `AGENTS.md`: decirlo, no simularlo.
 - Material de referencia **ya en disco** (no hace falta clonar): `~/Documentos/jarvis/` = adewaskar/JARVIS, **MIT**, con React+Three.js+GLSL, voz real (Porcupine, VAD, Kokoro) y `src/lib/hands.ts` con MediaPipe. Su `bridge/` va atado al SDK de Claude → no reutilizable tal cual. `~/Documentos/bases o proyectos git /OpenJarvis-main/` = **Apache-2.0**. `fullstack-agent-main.zip` = **AGPL-3.0 → no copiar código** (arrastraría a CORT a AGPL), solo leer ideas.
 
@@ -104,6 +106,25 @@ Lo que cambió al adaptar:
 
 Ahora, **para ser exacto: ese fallo no se había manifestado con el servidor real.** `uvicorn.run(app, …)` en el `__main__` monta el bucle asíncrono en el mismo hilo que hizo el `import`, así que los websockets de `make dev` siempre usaban la conexión desde su propio hilo —y de hecho memoria y saludos funcionaron por WebSocket real antes del arreglo. Lo que la prueba destapó es una **fragilidad latente**, no una caída en curso: el día que alguien corra el core con un runner que sí separe hilos, o lo importe desde un hilo secundario, la primera escritura revienta. El mensaje de commit que acompañó al arreglo dice «el asistente nunca habría respondido»; **eso es una exageración mía**, y queda corregida aquí, que es donde se consulta el estado.
 
+## Fase 4 empezada: la capa de permisos, y lo que reveló
+`intents.py` decía «Entendido: volume» y **no tocaba el volumen**. Eso es justo lo que la regla 10 prohíbe, así que ahora hay `actions.py` (lista cerrada, argv fijo, `asyncio.create_subprocess_exec`, `CORT_SYSTEM_ACTIONS=0` para apagarla) y el core informa del resultado.
+
+Medido con el core levantado y un websocket de verdad, no con simulacro:
+
+```
+>>> baja el volumen
+    effect: glitch
+    dijo: No pude: el mando obedeció pero el nivel sigue en 100 % (¿salida de audio en Dummy?).
+>>> activa el ecualizador
+    effect: glitch
+    dijo: No pude: la acción «equalizer» no está en la lista permitida.
+```
+
+Tres cosas se supieron sólo por ejecutarlo:
+1. **La tubería funciona.** Texto → intent → comando real → lectura del nivel → efecto + mensaje. Todo por el protocolo de siempre, sin tipos nuevos.
+2. **El `returncode` mentía.** `wpctl set-volume` devuelve **0** sobre el sink *Dummy Output* sin cambiar nada. La primera versión del código reportaba «Volumen al 100 %» con el nivel intacto, y la prueba en vivo la desenmascaró. Ahora se lee antes y después, y si el número no se movió CORT lo dice. **El fallo de la primera versión era mío y lo encontró una ejecución, no una lectura del código.**
+3. **Este portátil no tiene por dónde sacar audio** (ver Limitaciones). La función 15 queda 🔨: código hecho y verificado el comportamiento; efecto audible, imposible de verificar aquí.
+
 ## Deuda conocida
 - **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_LLM_CHAIN=qwen3:0.6b make dev`. `.env.example` documenta las que existen de verdad.
 - El README local sigue prometiendo un alcance que el código no tiene.
@@ -112,14 +133,14 @@ Ahora, **para ser exacto: ese fallo no se había manifestado con el servidor rea
 - `node_modules/` de `apps/web` ocupa **144 MB**; `dist/` queda ignorado en git.
 - **El rescate de `context_for` puede meter ruido.** Medido con 300 recuerdos de prueba: "¿qué sabes de mí?" se trae 5 "Preferencia NNN" que no vienen al caso, porque son simplemente los más recientes. Con la base real (2 hechos) no pasa; con cientos, sí. Es un cambio consciente: ruido en el prompt antes que prompt vacío, pero habría que afinarlo (p. ej. priorizar el nombre y las preferencias declaradas).
 - **`history[-20:]` en `server.py`** manda hasta 20 turnos al prompt. Con ~1,3 tokens/s eso es tiempo de más; bajarlo es una línea, pero cambia cuánto recuerda CORT dentro de una misma conversación.
-- **"Apareció un `hola` suelto en el log al cargar la página" — explicado, no reproducido.** Leyendo `connection.ts`: una entrada `from:'user'` sólo la añade `send()`, que sólo corre al enviar el formulario; ningún mensaje del servidor puede escribirla. O sea que era mi propia prueba anterior, conservada por el Fast Refresh de Vite (el estado del módulo `connection.ts` sobrevive a los cambios de componente; sólo una recarga real lo pondría a `msgs: []`). No lo doy por cerrado con una captura: **no lo volví a cargar en el navegador**, y no lo hice porque el zram está al **99 %** (915 de 925 MiB) y reiniciar Vite + core + navegador es exactamente la carga que congeló el PC. Se comprobó en la siguiente sesión que arranque limpia.
+- **"Apareció un `hola` suelto en el log al cargar la página" — explicado, no reproducido.** Leyendo `connection.ts`: una entrada `from:'user'` sólo la añade `send()`, que sólo corre al enviar el formulario; ningún mensaje del servidor puede escribirla. O sea que era mi propia prueba anterior, conservada por el Fast Refresh de Vite (el estado del módulo `connection.ts` sobrevive a los cambios de componente; sólo una recarga real lo pondría a `msgs: []`). No lo doy por cerrado con una captura: **no lo volví a cargar en el navegador**, y no lo hice porque el zram está al **99 %** (915 de 925 MiB) y reiniciar Vite + core + navegador es exactamente la carga que congeló el PC. Queda por confirmar al arrancar la próxima sesión.
 
 ## Siguiente paso exacto
-Efectos verificados y `Orbits` descartado con motivo. Lo que queda de holograma y de móvil, por orden:
-1. **Decisión de red** (es de Sandra, no de código): abrir el core a la LAN para probar la interfaz táctil en el Samsung A16, o dejarlo en `127.0.0.1` y conformarse con probar el CSS desde el modo móvil del navegador de escritorio. Abrirlo expose el control del PC a todo el WiFi.
-2. **`Blades.tsx`** (MIT): paneles laterales del HUD. Es el transplant que más se acerca a lo que ella pidió y no depende de ningún puente.
-3. **`src/lib/hands.ts`** (gestos MediaPipe): medir antes de prometer — 2 núcleos, y MediaPipe en CPU es una carga del tamaño de Ollama.
-4. **Productor de imágenes** para que `Orbits` deje de ser código muerto (captura de pantalla, Fase 4).
+1. **Que alguien la oiga.** Antes de seguir con audio (Fase 2 voz, Fase 5 ecualizador, función 15 audible) hace falta una salida de audio real: auriculares Bluetooth, altavoces por HDMI, u otro equipo. Sin eso nada de sonido es verificable, y la regla 11 no permite darlo por hecho.
+2. **Decisión de red** (es de Sandra, no de código): abrir el core a la LAN para probar la interfaz táctil en el Samsung A16, o dejarlo en `127.0.0.1` y conformarse con probar el CSS desde el modo móvil del navegador de escritorio. Abrirlo expone el control del PC a todo el WiFi.
+3. **`Blades.tsx`** (MIT): paneles laterales del HUD. Es el transplant que más se acerca a lo que ella pidió y no depende de ningún puente.
+4. **Más acciones en la lista cerrada**: brillo (`gsettings` sí está, `ddcutil` no) y captura de pantalla (función 47), que es además el productor que necesita `Orbits` para dejar de ser código muerto.
+5. **`src/lib/hands.ts`** (gestos MediaPipe): medir antes de prometer — 2 núcleos, y MediaPipe en CPU es una carga del tamaño de Ollama.
 
 ## Registro de sesiones
 | Fecha | Quién | Qué hizo |
@@ -130,3 +151,4 @@ Efectos verificados y `Orbits` descartado con motivo. Lo que queda de holograma 
 | 2026-10-07 (tarde) | **Qoder** | Integró Ollama de verdad: cadena de sustitución, guarda de tamaño por RAM, `keep_alive`. Corrigió su propia medición anterior (estaba contaminada) y encontró que **"¿qué sabes de mí?" no inyectaba contexto** — arreglado con `context_for`, verificado antes/después. 38 pruebas. **Dejó que la máquina se congelara al medir; ella tuvo que apagarla. Regla nueva: una carga pesada cada vez.** |
 | 2026-10-07 (noche) | **Qoder** | Cerró la **FASE 1.1**: `prune()` protege el nombre siempre, conectada al arranque del core, criterio del roadmap medido (1-4 ms con 300 recuerdos). 42 pruebas. Todo verificado sin tocar Ollama. |
 | 2026-10-07 (madrugada) | **Qoder** | Trasplantó **`Effects.tsx`** (MIT) y le conectó el mensaje `effect` del core: pulso verificado en el navegador con `MutationObserver` y `--accent` saliéndose de la misma paleta que el anillo. Añadió la **capa táctil** (sin probar en móvil, dicho está). Escribió `test_protocol.py` (46 pruebas) y **descartó `Orbits.tsx` con motivo**: sin productor de imágenes sería código muerto. Corrigió su propio comentario del bug de SQLite: era una **fragilidad latente**, no una caída real, y el mensaje de commit lo había exagerado. **No arrancó nada pesado más**: el zram está al 99 % y la máquina ya se congeló una vez por hacer justo eso. |
+| 2026-10-07 (madrugada II) | **Qoder** | **Empezó la Fase 4** con `actions.py`: capa de permisos de lista cerrada, argv fijo, kill switch, y el nivel leído antes y después. Levantó el core y le habló por WebSocket de verdad — y **así descubrió que su primera versión mentía**: `wpctl` devuelve 0 sobre *Dummy Output* sin mover el volumen. Y lo de *Dummy* no es un detalle: **este portátil sólo saca audio por HDMI, y el puerto está `not available`**, así que Fase 2 (voz), Fase 5 (ecualizador) y la función 15 audible no se pueden verificar aquí con nada. 67 pruebas. Todo lo de audio queda 🔨 con la limitación escrita, no simulada. |
