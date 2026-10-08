@@ -286,5 +286,51 @@ class TestDemoNoTocaLaBaseReal(unittest.TestCase):
                 store_module.MemoryStore(store_module.DB_PATH).close()
 
 
+class TestRed(unittest.TestCase):
+    """`--lan`: la única bandera que abre CORT a otro aparato.
+
+    Se prueba sobre todo lo contrario: que **sin** la bandera nada se publica.
+    Un valor por defecto equivocado aquí sería dejar el core —sin contraseña ni
+    TLS— escuchando en todas las interfases de la máquina.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load()
+
+    def test_serve_static_sin_host_escucha_solo_en_loopback(self):
+        srv = self.m.serve_static(Path("."), 0)
+        try:
+            self.assertEqual(srv.server_address[0], "127.0.0.1")
+        finally:
+            srv.shutdown()
+
+    def test_serve_static_con_host_se_publica(self):
+        srv = self.m.serve_static(Path("."), 0, "0.0.0.0")
+        try:
+            self.assertEqual(srv.server_address[0], "0.0.0.0")
+        finally:
+            srv.shutdown()
+
+    def test_la_ip_de_red_es_una_v4_o_nada(self):
+        # En una máquina sin red la sonda devuelve None, y la barra se pinta en
+        # rojo en vez de imprimir una dirección inventada que no abre.
+        ip = self.m.lan_address()
+        if ip is not None:
+            parts = ip.split(".")
+            self.assertEqual(len(parts), 4)
+            self.assertTrue(all(p.isdigit() and 0 <= int(p) <= 255 for p in parts), ip)
+
+    def test_sonda_de_red_que_explota_no_tumba_el_arranque(self):
+        class Boom:
+            def connect(self, *_):
+                raise OSError("sin ruteo")
+            def close(self):
+                pass
+
+        with mock.patch.object(self.m.socket, "socket", return_value=Boom()):
+            self.assertIsNone(self.m.lan_address())
+
+
 if __name__ == "__main__":
     unittest.main()

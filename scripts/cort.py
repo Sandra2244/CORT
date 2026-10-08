@@ -255,9 +255,9 @@ class StaticHandler(http.server.SimpleHTTPRequestHandler):
         pass  # El ruido de cada .js lo tapa la terminal; aquí no aporta nada.
 
 
-def serve_static(directory: Path, port: int) -> http.server.ThreadingHTTPServer:
+def serve_static(directory: Path, port: int, host: str = "127.0.0.1") -> http.server.ThreadingHTTPServer:
     handler = lambda *a, **kw: StaticHandler(*a, directory=str(directory), **kw)  # noqa: E731
-    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), handler)
+    srv = http.server.ThreadingHTTPServer((host, port), handler)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     return srv
 
@@ -292,6 +292,24 @@ def load_dotenv() -> list[str]:
         return []
 
 
+def lan_address() -> str | None:
+    """La IP que la red ve de esta máquina, o None si no tiene red.
+
+    Se pregunta al socket de salida en vez de enumerar interfases: `connect` a
+    una IP pública no envía ningún paquete, sólo hace que el kernel elija la
+    interfase correcta. Así se evita imprimir la `127.0.0.1` o la dirección de
+    un túnel VPN que el teléfono nunca va a alcanzar.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
 def main() -> int:
     # Antes que nada: `--port` toma su valor por defecto del entorno, y el entorno
     # puede venir del `.env`. Si se lee tarde, el lanzador comprueba un puerto
@@ -306,6 +324,8 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true", help="sin banner ni salida de los hijos")
     ap.add_argument("--demo", action="store_true",
                     help="memoria de usar y tirar: no escribe en la base real")
+    ap.add_argument("--lan", action="store_true",
+                    help="publica la interfaz en la red local (para abrir CORT desde el móvil)")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
 
@@ -341,6 +361,11 @@ def main() -> int:
                 proc.kill()
 
     env = {**os.environ, "CORT_PORT": str(args.port)}
+    # Con `--lan` el core pasa a escuchar en todas las interfases. Se lo dice por
+    # entorno y no por un argumento nuevo: `server.py` ya lee `CORT_HOST`, así que
+    # el lanzador no tiene que saber cómo se arranca uvicorn.
+    if args.lan:
+        env["CORT_HOST"] = "0.0.0.0"
     out = subprocess.DEVNULL if args.quiet else subprocess.PIPE
     core = subprocess.Popen([str(core_python()), "-m", "cort_core.server"],
                             cwd=CORE, env=env, stdout=out, stderr=subprocess.STDOUT,
@@ -360,7 +385,9 @@ def main() -> int:
     mode = pick_web_mode(args.serve)
     url = f"http://127.0.0.1:{args.port}"
     if mode == "dist":
-        serve_static(WEB / "dist", args.web_port)
+        # Con `--lan` el servidor estático también se publica: de nada sirve un
+        # core accesible si la página sigue escuchando sólo para esta máquina.
+        serve_static(WEB / "dist", args.web_port, "0.0.0.0" if args.lan else "127.0.0.1")
         url = f"http://127.0.0.1:{args.web_port}"
     else:
         if not (WEB / "node_modules").exists():
@@ -393,6 +420,17 @@ def main() -> int:
         if audio is not None:
             ok_audio, note_audio = audio_note(*audio)
             print(bar("audio", ok_audio, color, note_audio))
+        if args.lan:
+            # La IP que hay que escribir en el teléfono. Si no se imprime, el
+            # `--lan` no sirve: la usuaria no puede adivinar su propia dirección.
+            ip = lan_address()
+            # Vite en dev escucha sólo en 127.0.0.1 y publicarlo exige otra
+            # bandera suya (`--host`): con `--serve dev` el `--lan` dejaría el
+            # core accesible y la página no, que es la peor combinación.
+            notes = {"dist": f"el móvil abre http://{ip}:{args.web_port} — sin contraseña ni HTTPS",
+                     "dev": "interfaz en modo dev: el móvil verá el core, pero no la página — usa --serve dist"}
+            print(bar("red", ip is not None and mode == "dist", color,
+                      notes[mode] if ip else "sin IP de red: el teléfono no podrá entrar"))
         print()
         print(paint(f" {CYAN}{BOLD}CORT en línea{RESET}   Ctrl+C para cerrar todo.", color))
         print(paint(f" {DIM}{'─' * 58}{RESET}", color))
