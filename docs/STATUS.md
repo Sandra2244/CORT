@@ -14,6 +14,19 @@ Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed2
 - Rama **`scaffold/fastapi-ollama-frontend`** ← 50 archivos, más avanzada, de la que se trasplantó la memoria.
 - **No hay merge todavía.** Las tres historias son independientes (`git merge-base` = vacío). Fusionar es decisión consciente, no un push.
 
+## El corte que se muestra: prototipo `v0.1.0`
+Lo que ve cualquiera que entre al repo debe ser **una sola cosa**: el prototipo verificado. Para eso está:
+- `README.md` reescrito como presentación (sólo filas ejecutadas, límites de hardware, créditos, licencia).
+- `LICENSE` — **MIT**, © 2026 Sandra Lopez y Askher Vargas.
+- `CREDITS.md` (raíz) — autoría y qué debe a terceros, con la decisión explícita de **no** copiar nada AGPL.
+- `docs/assets/prototipo-v0.1.0.png` — captura real del reactor, tomada en esta máquina (no un mockup).
+- Etiqueta **`v0.1.0`** sobre `cort-local-verified`.
+
+**Lo que falta del lado de GitHub y no se puede hacer con git a secas** (verificado: `gh` está instalado pero **sin sesión iniciada**, así que no hay API):
+1. Poner `cort-local-verified` como **rama por defecto** → es lo que hace que el README y la portada sean el prototipo.
+2. Crear la **Release** `v0.1.0` apuntando a la etiqueta.
+3. Que las otras dos ramas dejen de estorbar. **No se borran**: `scaffold/…` es fuente de transplante y `main` guarda el `services/voice` de Copilot que STATUS documenta como humo pero que sigue siendo referencia. Lo seguro es renombrarlas a `archive/…` (desaparecen de la lista visible, el contenido sigue intacto) o archivar el repo. Antes de tocar nada de esto hace falta `gh auth login` de ella y su visto bueno explícito, porque cambiar ramas remotas es visible para quien más use el repo.
+
 ## Qué existe y está verificado funcionando
 | Cosa | Evidencia |
 |---|---|
@@ -127,7 +140,7 @@ Tres cosas se supieron sólo por ejecutarlo:
 
 ## Deuda conocida
 - **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_LLM_CHAIN=qwen3:0.6b make dev`. `.env.example` documenta las que existen de verdad.
-- El README local sigue prometiendo un alcance que el código no tiene.
+- ~~El README local seguía prometiendo un alcance que el código no tiene.~~ **Reescrito el 2026-10-07** como presentación del prototipo: sólo filas verificadas, límites de hardware escritos, créditos de autoría y licencia MIT. Ahora es la cara pública y la regla 12 de `AGENTS.md` obliga a mantenerla al día en el mismo commit que cierra una fase.
 - `scripts/upstreams.txt` conserva URLs con `REEMPLAZAR`; ya se conocen las reales (ver arriba).
 - **El móvil todavía no puede hablar con el core.** Vite escucha en la red (`http://192.168.100.171:5173`) pero el core se ató a `127.0.0.1` a propósito. Abrirlo a la red local es una decisión de seguridad consciente (cualquiera en tu WiFi podría controlar el PC), no un flag que se pone sin pensarlo.
 - `node_modules/` de `apps/web` ocupa **144 MB**; `dist/` queda ignorado en git.

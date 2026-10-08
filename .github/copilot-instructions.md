@@ -16,6 +16,7 @@ Eres colaborador del proyecto CORT. Antes de cambiar nada lee `docs/STATUS.md` (
 9. Los repos de `upstream/` son de solo lectura: se estudian, se respeta su licencia y se reescribe lo que no tenga licencia clara.
 10. Si algo es inviable o depende del sistema operativo, dilo y actualiza `docs/FUNCTIONS.md` en lugar de simularlo.
 11. No afirmes que algo funciona sin haberlo ejecutado en esta máquina. Si no puedes comprobarlo, escribe literalmente "sin verificar".
+12. La cara pública del prototipo es `README.md`. Al cerrar una fase se actualiza **en el mismo commit** junto con `CREDITS.md` (autores y terceros) y `LICENSE` (año y titulares): si una fila nueva de "qué hace hoy" no está verificada, no va al README.
 
 ## Prompt de arranque sugerido
-> Lee AGENTS.md, docs/STATUS.md y docs/ROADMAP.md. Implementa la fase que STATUS.md marque como siguiente (hoy: Fase 1, memoria persistente con SQLite en services/core). Escribe primero las pruebas, luego el código, ejecuta `make test` y actualiza docs/STATUS.md al cerrar.
+> Lee AGENTS.md, docs/STATUS.md y docs/ROADMAP.md. Implementa la fase que STATUS.md marque como siguiente (hoy: Fase 4, control del sistema a través de `actions.py`, y Fase 8 por la parte de táctil). Escribe primero las pruebas, luego el código, ejecuta `make test` y actualiza docs/STATUS.md y README.md al cerrar.
