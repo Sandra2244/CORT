@@ -31,6 +31,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 20 | Reconocer canción | ⬜ | M (requiere servicio externo) |
 | 21 | Detección de emoción en la voz | ⬜ | D |
 | 22 | Cambio de voz/personaje | ⬜ | M |
+| 63 | Sonda de audio en el arranque (diagnosticar si hay a dónde hablar y de dónde escuchar) | ✅ | F — `audio_probe()` en `scripts/cort.py` lee `wpctl status`, recorta **sólo la sección `Audio`** y pinta la quinta barra. Medido hoy en esta máquina: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s) — sin esto no hay voz que verificar`. El recorte es el punto: en `Video → Sources` hay dos cámaras, y leer el texto entero diría que hay micrófono. 9 pruebas en `test_launcher.py`. **En Windows y macOS la sonda es otra y aquí no se ha escrito: sin `wpctl` la barra se calla en vez de mentir** |
 
 ## Avatar
 | # | Función | Est. | Viab. |

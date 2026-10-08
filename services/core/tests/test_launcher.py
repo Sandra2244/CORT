@@ -160,6 +160,102 @@ class TestBarraDeMemoria(unittest.TestCase):
         self.assertIn("(demo)", note)
 
 
+AUDIO_STATUS = """
+Audio
+ ├─ Devices:
+ │      49. Audio Interno                       [alsa]
+ │
+ ├─ Sinks:
+ │  *   35. Dummy Output                        [vol: 1.00]
+ │
+ ├─ Sources:
+ │
+ ├─ Filters:
+ │
+ └─ Streams:
+
+Video
+ ├─ Devices:
+ │      58. USB 2.0 Camera                      [v4l2]
+ │
+ ├─ Sinks:
+ │
+ ├─ Sources:
+ │  *   60. USB 2.0 Camera (V4L2)
+ │      63. Built-in Front Camera
+ │
+ └─ Streams:
+"""
+
+
+class TestBarraDeAudio(unittest.TestCase):
+    """La quinta barra: lo que `wpctl status` dice de verdad en esta máquina.
+
+    El fixture es la salida medida aquí (1.8 GiB, sin altavoz ni micro), recortada
+    a las secciones `Audio` y `Video`. La cabecera de `wpctl` y su apartado
+    `Clients:` van fuera a propósito: imprimen `usuario@maquina` y un test no es
+    el sitio para publicar el nombre de nadie.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load()
+
+    def test_lo_que_mide_el_analisis_son_los_sinks_y_sources_de_audio(self):
+        sinks, sources = self.m.parse_wpctl(AUDIO_STATUS)
+        self.assertEqual(sinks, ["Dummy Output"])
+        self.assertEqual(sources, [])
+
+    def test_las_camaras_no_cuentan_como_microfono(self):
+        # El tropiezo real: `Video → Sources` tiene dos cámaras. Un análisis que
+        # lea el texto entero diría «2 entrada(s)» y mentiría sobre el micrófono.
+        sinks, sources = self.m.parse_wpctl(AUDIO_STATUS)
+        self.assertFalse([s for s in sources + sinks if "Camera" in s])
+
+    def test_un_texto_sin_seccion_de_audio_no_inventa_dispositivos(self):
+        self.assertEqual(self.m.parse_wpctl("PipeWire 1.4.5\n └─ Clients:\n"), ([], []))
+
+    def test_lo_que_hay_delante_de_audio_no_se_confunde_con_sinks(self):
+        con_clientes = (
+            "PipeWire 'pipewire-0' [1.4.5, usuario@maquina, cookie:1]\n"
+            " └─ Clients:\n"
+            "        33. pipewire            [1.4.5, usuario@maquina, pid:2906]\n"
+            "        34. xfce4-plugin        [1.4.5, usuario@maquina, pid:2663]\n"
+            + AUDIO_STATUS
+        )
+        sinks, sources = self.m.parse_wpctl(con_clientes)
+        self.assertEqual(sinks, ["Dummy Output"])
+        self.assertEqual(sources, [])
+
+    def test_dummy_output_no_es_un_altavoz(self):
+        ok, note = self.m.audio_note(["Dummy Output"], [])
+        self.assertFalse(ok, "aquí es donde la barra tiene que salir en rojo")
+        self.assertIn("ninguna real", note)
+        self.assertIn("sin esto no hay voz", note)
+
+    def test_altavoz_y_micro_a_la_vez_si_ponen_la_barra_en_verde(self):
+        ok, note = self.m.audio_note(["Audio Interno HDA"], ["Auriculares USB"])
+        self.assertTrue(ok)
+        self.assertIn("Audio Interno HDA", note)
+        self.assertNotIn("sin esto no hay voz", note)
+
+    def test_altavoz_sin_micro_tampoco_es_voz(self):
+        # Falta la mitad de la escucha: `ok` es `reales and sources`, no sólo
+        # que haya a dónde hablar.
+        ok, _ = self.m.audio_note(["Audio Interno HDA"], [])
+        self.assertFalse(ok)
+
+    def test_sin_wpctl_la_barra_se_calla_en_lugar_de_mentir(self):
+        with mock.patch.object(self.m.shutil, "which", return_value=None):
+            self.assertIsNone(self.m.audio_probe())
+
+    def test_wpctl_que_falla_no_rompe_el_arranque(self):
+        with mock.patch.object(self.m.shutil, "which", return_value="/usr/bin/wpctl"), \
+             mock.patch.object(self.m.subprocess, "run",
+                               side_effect=OSError("sin demonio de sonido")):
+            self.assertIsNone(self.m.audio_probe())
+
+
 class TestDemoNoTocaLaBaseReal(unittest.TestCase):
     """`--demo` existe para que una captura no escriba en la memoria de Sandra."""
 

@@ -22,6 +22,7 @@ import http.server
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -142,6 +143,76 @@ def models_available() -> list[str]:
             return [m["name"] for m in json.load(res).get("models", [])]
     except (urllib.error.URLError, OSError, KeyError, ValueError):
         return []
+
+
+# `wpctl status` imprime secciones anidadas. Las entradas de dispositivo van
+# numeradas (" *   35. Dummy Output   [vol: 1.00]"), y las cabeceras no.
+_ENTRY = re.compile(r"^\s*[*!_]?\s*\d+\.\s+(.+?)\s*(?:\[[^\]]*\]\s*)?$")
+
+
+def parse_wpctl(text: str) -> tuple[list[str], list[str]]:
+    """Devuelve (salidas, entradas) de audio desde la salida de `wpctl status`.
+
+    Recorta **sólo la sección `Audio`** a propósito: `Video` tiene sus propios
+    apartados `Sinks:` y `Sources:`, y sus fuentes son las cámaras. Medido en
+    esta máquina: dos cámaras en `Video → Sources` y **ninguna** entrada en
+    `Audio → Sources`. Leer el texto entero diría que hay micrófono, y ahí es
+    donde un «te escucho» sería una mentira.
+    """
+    audio = re.search(r"^\s*Audio\s*$", text, re.M)
+    if not audio:
+        return [], []
+    rest = text[audio.end():]
+    video = re.search(r"^\s*Video\s*$", rest, re.M)
+    chunk = rest[: video.start()] if video else rest
+
+    buckets: dict[str, list[str]] = {}
+    current: list[str] | None = None
+    for raw in chunk.splitlines():
+        line = re.sub(r"[│├└─]", "", raw).strip()
+        if not line:
+            continue
+        if line.endswith(":"):
+            current = buckets.setdefault(line[:-1], [])
+            continue
+        m = _ENTRY.match(line)
+        if m and current is not None:
+            current.append(m.group(1))
+    return buckets.get("Sinks", []), buckets.get("Sources", [])
+
+
+def audio_probe() -> tuple[list[str], list[str]] | None:
+    """(salidas, entradas) reales, o None si este SO no tiene `wpctl`.
+
+    None no se pinta como «sin audio»: en Windows y macOS la sonda es otra y
+    aquí no se ha escrito. Silenciar la barra es la única salida honesta.
+    """
+    if not shutil.which("wpctl"):
+        return None
+    try:
+        out = subprocess.run(["wpctl", "status"], capture_output=True, text=True,
+                             timeout=2, errors="replace").stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return parse_wpctl(out)
+
+
+def audio_note(sinks: list[str], sources: list[str]) -> tuple[bool, str]:
+    """Punto de estado y texto para la barra de audio.
+
+    Un sink llamado *Dummy Output* no es un altavoz: es lo que PipeWire pone
+    cuando no hay ningún dispositivo de salida. Contarlo como salida diría
+    «audio listo» en una máquina muda — y ya se vio que `wpctl set-volume`
+    responde 0 sobre él sin mover nada.
+    """
+    reales = [s for s in sinks if "dummy" not in s.lower()]
+    salida = ", ".join(reales[:2]) if reales else (
+        "ninguna real (Dummy Output)" if sinks else "ninguna")
+    ok = bool(reales and sources)
+    texto = f"{len(reales)} salida(s): {salida} · {len(sources)} entrada(s)"
+    if not ok:
+        texto += " — sin esto no hay voz que verificar"
+    return ok, texto
 
 
 def memory_note(db: Path, count: int | None, demo: bool = False) -> tuple[bool, str]:
@@ -286,6 +357,10 @@ def main() -> int:
         print(bar("ollama", bool(models), color,
                   ", ".join(models[:4]) if models else "apagado — CORT responde en modo eco"))
         print(bar("memoria", ready_mem, color, mem_note))
+        audio = audio_probe()
+        if audio is not None:
+            ok_audio, note_audio = audio_note(*audio)
+            print(bar("audio", ok_audio, color, note_audio))
         print()
         print(paint(f" {CYAN}{BOLD}CORT en línea{RESET}   Ctrl+C para cerrar todo.", color))
         print(paint(f" {DIM}{'─' * 58}{RESET}", color))
