@@ -104,7 +104,15 @@ export function Hud() {
         {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
             no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un
             dato que no pidió nadie. */}
-        {s.clima && <em> · {s.clima.city} {s.clima.temp_c.toFixed(0)}°</em>}
+        {s.clima && (
+          <em>
+            {' · '}
+            {/* El cabezal va en minúsculas por estilo, pero el nombre de una
+                ciudad no es estilo: es un nombre propio. Esta parte escapa de
+                la conversión para que Bogotá siga escribiéndose Bogotá. */}
+            <span className="city">{s.clima.city}</span> {s.clima.temp_c.toFixed(0)}°
+          </em>
+        )}
         <Clock />
       </header>
 

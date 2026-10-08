@@ -78,6 +78,12 @@ body {
   text-transform: lowercase;
 }
 
+/* Bogotá, Medellín, Buenos Aires: un nombre propio no se escribe en minúsculas
+   por mucho que el cabezal vaya estilizado en ellas. */
+.status .city {
+  text-transform: none;
+}
+
 .dot {
   width: 8px;
   height: 8px;
