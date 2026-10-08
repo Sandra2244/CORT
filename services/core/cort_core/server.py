@@ -49,6 +49,10 @@ async def ws(sock: WebSocket):
             intent = match_intent(text)
             if intent:
                 await sock.send_json({"type": "intent", **intent})
+                # La onda marca el momento en que algo se ejecutó de verdad, no
+                # cualquier mensaje: un holograma que parpadea todo el tiempo no
+                # comunica nada.
+                await sock.send_json({"type": "effect", "kind": "pulse"})
                 await sock.send_json({"type": "assistant_message", "text": f"Entendido: {intent['action']}.", "mood": "calm"})
                 continue
             if WHO_AM_I.search(text):

@@ -41,6 +41,7 @@ export function Hud() {
           placeholder="Escribe a CORT"
           aria-label="Mensaje a CORT"
           autoComplete="off"
+          enterKeyHint="send"
         />
         <button type="submit" disabled={!s.online}>Enviar</button>
       </form>

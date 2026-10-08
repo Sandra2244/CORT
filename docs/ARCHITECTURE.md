@@ -33,9 +33,12 @@ Mensajes JSON por WebSocket `ws://localhost:8765/ws`:
 {"type":"assistant_message","text":"...","mood":"calm"}
 {"type":"state","outfit":"casual","mood":"calm","thinking":false}
 {"type":"intent","action":"volume","delta":10}
+{"type":"effect","kind":"pulse"}
 ```
 Los tipos nuevos se añaden aquí primero y luego al código.
 (`intent` ya se emitía desde `server.py` pero no estaba documentado: se añade aquí en cumplimiento de la regla 5 de `AGENTS.md`.)
+
+`effect` es **puntuación, no estado**: un destello, una onda, un rasguño. `kind` es uno de `glitch · pulse · scan · shake · flash`. No se guarda en ningún sitio ni se reenvía al conectar; si el cliente no lo ve, da igual. Lo emite el core cuando algo ocurre de verdad —hoy, cuando un `intent` se ejecuta—, no en cada mensaje: un holograma que parpadea todo el tiempo no comunica nada.
 
 ## Módulos de `services/core/cort_core`
 - `brain.py` — habla con Ollama a través de una **cadena de sustitución** (`CORT_LLM_CHAIN`): prueba los modelos en orden y usa el primero que responda. Antes de intentarlo pide `/api/tags` y **descarta por tamaño** lo que no cabe en RAM (`CORT_LLM_MAX_MODEL_MIB`, 700 MiB) — cargar `qwen3.5:2b` en esta máquina la congeló. Manda `keep_alive=30m` en cada petición: sin él Ollama descarga el modelo y la siguiente conversación paga 113 s de carga. Timeout en `CORT_LLM_TIMEOUT_S`. Distingue "Ollama no está" de "la cadena no respondió": confundirlos hace depurar un servidor caído que no existe. Si nada funciona, modo eco.

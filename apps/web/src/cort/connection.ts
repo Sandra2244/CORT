@@ -3,11 +3,26 @@ import { DEFAULT_OUTFIT, SPIN, THINKING_HOT, palette, type Outfit } from './pale
 
 export type Msg = { from: 'user' | 'cort'; text: string }
 
+/** Puntuación, no estado: ver el protocolo en docs/ARCHITECTURE.md. */
+export type UiEffect = 'glitch' | 'pulse' | 'scan' | 'shake' | 'flash'
+
+/**
+ * Los cinco se validan contra una lista en vez de fiarse del core. Un `kind`
+ * escrito mal no debe colgar la capa de efectos entera: simplemente no dispara.
+ */
+const EFFECTS = new Set<string>(['glitch', 'pulse', 'scan', 'shake', 'flash'])
+
 export type Snapshot = {
   online: boolean
   outfit: Outfit
   thinking: boolean
   msgs: Msg[]
+  /**
+   * `at` es la marca de tiempo del mensaje, y existe sólo para que repetir el
+   * mismo efecto vuelva a dispararlo: sin una clave que cambie, React no
+   * remontaría el nodo y la animación CSS no tendría de dónde arrancar.
+   */
+  effect: { kind: UiEffect; at: number } | null
 }
 
 /**
@@ -15,7 +30,13 @@ export type Snapshot = {
  * `useSyncExternalStore` compara por referencia: mutarlo in situ haría que la
  * interfaz no se repintara.
  */
-let snapshot: Snapshot = { online: false, outfit: DEFAULT_OUTFIT, thinking: false, msgs: [] }
+let snapshot: Snapshot = {
+  online: false,
+  outfit: DEFAULT_OUTFIT,
+  thinking: false,
+  msgs: [],
+  effect: null,
+}
 const listeners = new Set<() => void>()
 
 function set(patch: Partial<Snapshot>) {
@@ -68,6 +89,7 @@ function open() {
     if (m.type === 'state') applyState(m)
     if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
+    if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
   }
 }
 

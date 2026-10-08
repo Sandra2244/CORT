@@ -166,3 +166,208 @@ button:focus-visible {
     text-shadow: none;
   }
 }
+
+/* ─── Efectos de un disparo ───────────────────────────────────────────────
+   Transplantados de adewaskar/JARVIS (MIT). Van al final del archivo porque
+   el bloque de movimiento reducido de abajo tiene que poder sobreescribir a
+   éstos. */
+
+.fx {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-play {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.fx-flash {
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--accent) 55%, transparent),
+    transparent 72%
+  );
+  animation: fxFlash 480ms ease-out both;
+}
+
+@keyframes fxFlash {
+  0%   { opacity: 0 }
+  12%  { opacity: 1 }
+  100% { opacity: 0 }
+}
+
+.fx-scan::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 16vh;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--accent) 26%, transparent) 55%,
+    color-mix(in srgb, var(--accent) 80%, #fff) 92%,
+    transparent
+  );
+  animation: fxScan 900ms cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes fxScan {
+  from { transform: translateY(-20vh) }
+  to   { transform: translateY(120vh) }
+}
+
+/* Centrado en el reactor, no en la ventana: la cámara lo pone algo por encima
+   del medio, y una onda que falla su origen por 2vh se lee como un fallo de
+   render, no como un efecto. */
+.fx-wave {
+  position: absolute;
+  top: calc(50% - 2vh);
+  left: 50%;
+  width: 40vmin;
+  height: 40vmin;
+  margin: -20vmin 0 0 -20vmin;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 44px color-mix(in srgb, var(--accent) 60%, transparent),
+    inset 0 0 44px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: fxWave 900ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.fx-wave:nth-child(2) { animation-delay: 150ms }
+
+@keyframes fxWave {
+  from { transform: scale(0.22); opacity: 0.95 }
+  to   { transform: scale(3.4);  opacity: 0 }
+}
+
+/* Las rodajas desplazan lo que hay *detrás* en vez de pintarlo: backdrop-filter
+   muestrea la escena viva, así que el desgarro le ocurre al reactor mismo. El
+   timing es por pasos porque un glitch que suaviza es una cortinilla. */
+.fx-slice {
+  position: absolute;
+  left: -8%;
+  width: 116%;
+  opacity: 0;
+  -webkit-backdrop-filter: hue-rotate(90deg) saturate(1.9) contrast(1.08);
+  backdrop-filter: hue-rotate(90deg) saturate(1.9) contrast(1.08);
+  animation: fxTear 620ms steps(1, end) both;
+}
+
+.fx-glitch .fx-slice:nth-child(1) { top: 21%; height: 7%; animation-delay: 0ms }
+.fx-glitch .fx-slice:nth-child(2) { top: 45%; height: 4%; animation-delay: 90ms }
+.fx-glitch .fx-slice:nth-child(3) { top: 67%; height: 9%; animation-delay: 40ms }
+
+@keyframes fxTear {
+  0%, 100% { transform: translateX(0);      opacity: 0 }
+  10%      { transform: translateX(-3.5%);  opacity: 1 }
+  30%      { transform: translateX(2.6%);   opacity: 1 }
+  55%      { transform: translateX(-1.4%);  opacity: 1 }
+  80%      { transform: translateX(0.8%);   opacity: 1 }
+}
+
+.fx-glitch::before,
+.fx-glitch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: fxChroma 620ms steps(2, end) both;
+}
+
+.fx-glitch::before { background: rgba(255, 40, 90, 0.13) }
+.fx-glitch::after  { background: rgba(40, 220, 255, 0.13); animation-direction: reverse }
+
+@keyframes fxChroma {
+  0%, 100% { opacity: 0; transform: translateX(0) }
+  15%      { opacity: 1; transform: translateX(-7px) }
+  45%      { opacity: 1; transform: translateX(5px) }
+  75%      { opacity: 1; transform: translateX(-2px) }
+}
+
+/* 'shake' va en la raíz del HUD, no en esta capa: el marco entero recibe el
+   golpe como un solo cuerpo, y la escena 3D —que es otra capa— se queda quieta.
+   Eso es lo que lo vende a "le han dado a los instrumentos". */
+.hud.fx-shaking {
+  animation: fxShake 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+@keyframes fxShake {
+  0%, 100% { transform: translate(0, 0) }
+  12%      { transform: translate(-11px, 5px) }
+  26%      { transform: translate(9px, -6px) }
+  42%      { transform: translate(-7px, -3px) }
+  58%      { transform: translate(6px, 4px) }
+  74%      { transform: translate(-3px, 2px) }
+  88%      { transform: translate(2px, -1px) }
+}
+
+/* ─── Táctil (Samsung A16 y cualquier pantalla con dedo) ──────────────────
+   Se decide por `pointer: coarse`, no por ancho: hay tablets anchas de dedo y
+   monitores estrechos de ratón. */
+button,
+input {
+  /* Quita el retardo de toque y el zoom por doble toque, que en un HUD con
+     botones cerca del borde se traga pulsaciones. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (pointer: coarse) {
+  /* 44x44 es el mínimo que un dedo acierta sin mirar. Con el ratón los botones
+     pueden ser más pequeños y aquí no se tocan. */
+  button {
+    min-width: 64px;
+    padding: 0 22px;
+  }
+
+  button,
+  input {
+    min-height: 48px;
+  }
+
+  input {
+    /* Por debajo de 16 px, al enfocar el campo el navegador de móvil hace zoom
+       solo y el HUD se sale por arriba. */
+    font-size: 16px;
+  }
+
+  .hud {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .log {
+    /* Sin esto, arrastrar el registro hacia arriba dispara el refresco de
+       página y corta la lectura a media frase. */
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    max-height: 30dvh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Lo que molesta es el desplazamiento, así que ése se va; los efectos siguen
+     disparando, como un fundido simple del mismo color en el mismo sitio. */
+  .hud.fx-shaking { animation: none }
+  .fx-slice,
+  .fx-wave,
+  .fx-scan::before,
+  .fx-glitch::before,
+  .fx-glitch::after {
+    animation-name: fxFade;
+    animation-timing-function: ease-out;
+  }
+}
+
+@keyframes fxFade {
+  0%   { opacity: 0 }
+  25%  { opacity: 0.7 }
+  100% { opacity: 0 }
+}
