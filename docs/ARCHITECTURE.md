@@ -38,9 +38,9 @@ Los tipos nuevos se añaden aquí primero y luego al código.
 (`intent` ya se emitía desde `server.py` pero no estaba documentado: se añade aquí en cumplimiento de la regla 5 de `AGENTS.md`.)
 
 ## Módulos de `services/core/cort_core`
-- `brain.py` — habla con Ollama. Timeout configurable con `CORT_LLM_TIMEOUT_S` (180 s) y tope de salida con `CORT_LLM_MAX_TOKENS`. Distingue "Ollama no está" de "el modelo no terminó a tiempo": confundirlos hace depurar un servidor caído que no existe. Si Ollama no responde, modo eco.
+- `brain.py` — habla con Ollama a través de una **cadena de sustitución** (`CORT_LLM_CHAIN`): prueba los modelos en orden y usa el primero que responda. Antes de intentarlo pide `/api/tags` y **descarta por tamaño** lo que no cabe en RAM (`CORT_LLM_MAX_MODEL_MIB`, 700 MiB) — cargar `qwen3.5:2b` en esta máquina la congeló. Manda `keep_alive=30m` en cada petición: sin él Ollama descarga el modelo y la siguiente conversación paga 113 s de carga. Timeout en `CORT_LLM_TIMEOUT_S`. Distingue "Ollama no está" de "la cadena no respondió": confundirlos hace depurar un servidor caído que no existe. Si nada funciona, modo eco.
 - `intents.py` — comandos locales rápidos ("sube el volumen") sin gastar LLM.
-- `memory/store.py` — SQLite persistente en `services/core/data/memory.db` (fuera de git: son datos personales). `remember`, `recall`, `name_of_user`, `all`.
+- `memory/store.py` — SQLite persistente en `services/core/data/memory.db` (fuera de git: son datos personales). `remember`, `recall`, `context_for`, `name_of_user`, `all`. `context_for` es el que se usa para armar el prompt: si la pregunta no comparte raíces con ningún recuerdo, devuelve los más recientes en vez de nada, porque un prompt sin contexto hace que el modelo niegue que te conoce.
 - `memory/facts.py` — convierte frases del usuario ("me llamo X", "estudio Y") en hechos almacenables.
 - `outfit.py` — atuendo según hora y temperatura.
 - `server.py` — FastAPI + WebSocket. Por cada mensaje: guarda los hechos detectados, y si el texto pregunta por la identidad del usuario responde desde la memoria (sin LLM); si no, inyecta los recuerdos relevantes como mensaje de sistema antes de llamar a `brain.think`.

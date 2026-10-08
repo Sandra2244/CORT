@@ -5,7 +5,7 @@
 > Última verificación: **2026-10-07**, ejecutando comandos, no recordándolos.
 
 ## Fase actual
-**Transplante del holograma (UI) — cerrado y verificado en el navegador hoy.** → Siguiente: **FASE 1.1 (poda de memoria)**, o decidir qué se hace con el LLM, que hoy es inviable en esta máquina (ver "El LLM medido").
+**Ollama integrado y respondiendo de verdad; holograma transplantado y verificado.** → Siguiente: **FASE 1.1 (poda de memoria)**, que además es lo que limita el tamaño del prompt y por tanto la latencia. Después: `Orbits.tsx` + gestos del repo MIT, e **interfaz táctil** para el móvil.
 
 ## Respaldo
 Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada).
@@ -18,8 +18,10 @@ Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed2
 | Cosa | Evidencia |
 |---|---|
 | Core `server/brain/intents/outfit` + `memory/` | compila, `make dev` escucha en `127.0.0.1:8765` |
-| **25 pruebas** | `make test` → `Ran 25 tests ... OK` |
+| **38 pruebas** | `make test` → `Ran 38 tests ... OK` |
 | WebSocket completo | saludo, `state` con atuendo, modo eco en ~0.3 s, intents sin LLM |
+| **Chat con Ollama (función 1)** | Por WebSocket real contra el core: "¿qué sabes de mí hasta ahora?" → **"Sandra, …"**. La memoria llega al modelo. Lento: 48–66 s por turno con el modelo caliente |
+| **Guarda de memoria del LLM** | Con el Ollama de verdad: detecta los 4 modelos instalados y descarta `qwen3.5:2b` (2614 MiB) y `airaos-local` (718) por no caber. 10 pruebas con `httpx.MockTransport`, sin encender modelos |
 | **Memoria persistente (Fase 1)** | Proceso 1: "me llamo Sandra" → guarda `El usuario se llama Sandra`. Se mata el proceso. Proceso 2: saluda **"Hola de nuevo, Sandra."** y "¿cómo me llamo?" → **"Te llamas Sandra."** sin pasar por el LLM |
 | **Interfaz holográfica (React+Three)** | Capturas de pantalla reales a `localhost:5173`: anillo azul/violeta Cortana, polvo de 4000 puntos, bloom. **18 fps sin GPU.** `make web-build` → `✓ built`. Enviar "me llamo Sandra y estudio ingeniería" por la UI escribió `El usuario estudia ingeniería` en SQLite |
 | Reacción a estados | Con `thinking=true` el anillo pasó a magenta y la cabecera a "CORT procesando"; al terminar volvió a azul |
@@ -42,25 +44,34 @@ Correcciones aplicadas al copiar:
 4. Se **descartó faiss + sentence-transformers**: piden ~1,5 GiB de RAM y esta máquina tiene 1,8 GiB en total, sin GPU.
 
 ## Limitaciones reales de esta máquina (marcan el roadmap entero)
-- **1,8 GiB de RAM, ~340 MiB libres, sin GPU.** Ningún modelo de Ollama mediano cabe. Hay 9,2 GB descargados en `~/.ollama` con 4 modelos (`qwen2.5:0.5b`, `qwen3:0.6b`, `qwen3.5:2b`, `airaos-local`) y **4 blobs `-partial`** = descargas interrumpidas.
+- **2 núcleos a 1,46 GHz, 1,8 GiB de RAM, sin GPU, y swap de 2 GiB que se llena.** El límite no es sólo la memoria: el número de núcleos es lo que deja la generación en ~1,3 tokens/s. Ningún modelo de más de ~700 MiB cabe. Hay 4 modelos en `~/.ollama` (`qwen2.5:0.5b` 379 MiB, `qwen3:0.6b` 498, `airaos-local` 718, `qwen3.5:2b` 2614) y **4 blobs `-partial`** = descargas interrumpidas.
 - El server de Ollama **no arranca solo**; hay que lanzar `ollama serve`. CORT funciona sin él (modo eco).
 - Consecuencia: las fases **2 (voz)**, **3 (VRM)**, **6 (MediaPipe)** y la generación de vídeo van a ir muy justas o no van a ser viables aquí. Antes de comprometerlas hay que medir. Regla 10 de `AGENTS.md`: decirlo, no simularlo.
 - Material de referencia **ya en disco** (no hace falta clonar): `~/Documentos/jarvis/` = adewaskar/JARVIS, **MIT**, con React+Three.js+GLSL, voz real (Porcupine, VAD, Kokoro) y `src/lib/hands.ts` con MediaPipe. Su `bridge/` va atado al SDK de Claude → no reutilizable tal cual. `~/Documentos/bases o proyectos git /OpenJarvis-main/` = **Apache-2.0**. `fullstack-agent-main.zip` = **AGPL-3.0 → no copiar código** (arrastraría a CORT a AGPL), solo leer ideas.
 
-## El LLM medido: inviable como conversación en esta máquina
-No es una impresión, son tres peticiones cronometradas contra `qwen2.5:0.5b` con el servidor ya caliente:
+## El LLM medido: funciona, pero lento, y la primera medición estaba contaminada
+Aviso sobre este documento: una versión anterior de esta sección decía "0,53 tokens/s, inviable". **Era una medición mal tomada** — estaba el navegador WebGL + Vite + el core + el agente peleando por la memoria, con el zram al 99 %. Números nuevos, en las condiciones que indica cada uno:
 
-| prompt | tokens de salida | tiempo |
-|---|---|---|
-| 32 | 11 | 145 s |
-| 40 (24 cacheados) | 36 | 93 s |
-| ~60 con contexto de memoria | — | >180 s, agotó el timeout |
+| condición | tiempo por turno |
+|---|---|
+| Modelo recién cargado (primer turno tras `ollama serve`) | **~3 min** |
+| Modelo caliente, sólo Ollama + core + agente | **48–66 s** |
+| Modelo caliente, sin nada más abierto | **11–15 s** |
+| Evaluación del prompt (50 tokens), caliente | **0,9 s** (en frío: 113 s) |
 
-**~0,53 tokens/s reales, sin GPU.** La segunda petición descarta el *thrashing*: el modelo ya estaba cargado. Con estos números una respuesta normal tarda dos minutos, y encima `qwen2.5:0.5b` contestó tonterías ("CORT es un término de la medicina… clavícula").
+Traducción: **la máquina real es de 2 núcleos a 1,46 GHz**, no sólo "1,8 GiB de RAM". Genera a ~1,3 tokens/s, así que un turno normal cuesta entre 15 y 60 s. Se puede usar, no es una conversación fluida.
 
-Arreglado en `brain.py`: el `except Exception` de antes convertía "el modelo va lento" en "Ollama no responde", que es un diagnóstico falso. Ahora el timeout es configurable (`CORT_LLM_TIMEOUT_S`, 180 s) y el tiempo agotado se reporta aparte. Verificado llamando a `think()` de verdad.
+Lo que sí se sacó en claro y ya está implementado en `brain.py`:
+1. **`keep_alive=30m` en cada petición.** Es la diferencia entre 0,9 s y 113 s en el prompt: sin él Ollama descarga el modelo a los 5 minutos y cada conversación vuelve a pagarlo entero.
+2. **Cadena de sustitución** `CORT_LLM_CHAIN`: habla el primero que responda; si uno se cae o se pasa de tiempo, sigue el siguiente.
+3. **Guarda de memoria**: ningún modelo entra en la cadena si en disco pesa más de `CORT_LLM_MAX_MODEL_MIB` (700). Con los datos reales de esta máquina descarta `qwen3.5:2b` (2614 MiB) y `airaos-local` (718 MiB), y deja `qwen2.5:0.5b` (379) y `qwen3:0.6b` (498).
+4. Timeout y "sin servidor" se reportan aparte. El `except` del bucle de la cadena se tragaba el `ConnectError` y lo llamaba "la cadena no respondió" — el mismo diagnóstico falso otra vez, ahora con test.
 
-Consecuencia para el roadmap: lo que responde en <0,6 s y ya funciona es la **ruta local** (intents + memoria + `WHO_AM_I`). El LLM es opcional aquí; para usarlo en condiciones hace falta otro equipo en la red (`CORT_OLLAMA_URL` ya lo permite) o conformarse con esa latencia. Regla 10: esto es un no-se-puede, no un "ya casi".
+**El incidente:** mientras hacía estas mediciones dejé Ollama + navegador + Vite + el core a la vez y **el PC de Sandra se congeló; tuvo que apagar y encender**. No se perdió trabajo (estaba hecho `commit` + `push`), pero no se repite: una sola carga pesada cada vez, `free -m` antes de lanzar nada, y verificar con `httpx.MockTransport` en vez de encender modelos.
+
+**Y un bug real que salió de medir, no de leer el código:** "¿qué sabes de mí?" no comparte ninguna raíz de 4 letras con "El usuario se llama Sandra", así que `recall()` devolvía vacío y el modelo contestaba —con razón— que no te conocía. Arreglado con `context_for()`, que si nada coincide mete los recuerdos más recientes (tope 6). Verificado antes/después en la máquina real: ahora responde "Sandra".
+
+Consecuencia para el roadmap: la **ruta local** (intents + memoria + `WHO_AM_I`) sigue siendo lo que responde en menos de 0,6 s. El LLM ya vale, pero para conversación fluida hace falta otro equipo en la red (`CORT_OLLAMA_URL` ya lo permite).
 
 ## Transplante del holograma (hecho hoy)
 Origen: `~/Documentos/jarvis/` = **adewaskar/JARVIS, licencia MIT** → copiable con atribución, que está en `apps/web/CREDITS.md`.
@@ -74,7 +85,7 @@ Adaptaciones:
 Bug encontrado al verificar (no estaba en el original): `connect()` reprogramaba el reintento desde `onclose` incluso al cerrar a propósito, así que React StrictMode abría **dos** websockets y el log salía duplicado. Arreglado con comprobación de identidad (`if (sock !== s) return`) y verificado: el saludo aparece una sola vez.
 
 ## Deuda conocida
-- **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_MODEL=qwen3:0.6b make dev`.
+- **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_LLM_CHAIN=qwen3:0.6b make dev`. `.env.example` documenta las que existen de verdad.
 - El README local sigue prometiendo un alcance que el código no tiene.
 - `scripts/upstreams.txt` conserva URLs con `REEMPLAZAR`; ya se conocen las reales (ver arriba).
 - **El móvil todavía no puede hablar con el core.** Vite escucha en la red (`http://192.168.100.171:5173`) pero el core se ató a `127.0.0.1` a propósito. Abrirlo a la red local es una decisión de seguridad consciente (cualquiera en tu WiFi podría controlar el PC), no un flag que se pone sin pensarlo.
@@ -95,3 +106,4 @@ Después de eso, lo que queda del holograma pedido:
 | 2026-10-06 | Gemini/Claude web | Generó docs y estructura teórica. Describió carpetas (desktop, voz, sensores, STATUS) que nunca creó |
 | 2026-10-07 | **Qoder** | `git init`, reparó Makefile, venv+deps, core verificado por WebSocket, creó STATUS.md, respaldó a GitHub como `cort-local-verified`, **transplantó la memoria SQLite y cerró la Fase 1** (25 pruebas OK) |
 | 2026-10-07 | **Qoder** | **Transplantó el holograma** (MIT, adewaskar/JARVIS) a `apps/web` como React+Vite+Three con paleta Cortana; verificado con capturas del navegador a 18 fps; arregló el doble websocket de StrictMode y el diagnóstico falso de `brain.py`; midió el LLM y documentó que es inviable conversar con él en esta máquina |
+| 2026-10-07 (tarde) | **Qoder** | Integró Ollama de verdad: cadena de sustitución, guarda de tamaño por RAM, `keep_alive`. Corrigió su propia medición anterior (estaba contaminada) y encontró que **"¿qué sabes de mí?" no inyectaba contexto** — arreglado con `context_for`, verificado antes/después. 38 pruebas. **Dejó que la máquina se congelara al medir; ella tuvo que apagarla. Regla nueva: una carga pesada cada vez.** |

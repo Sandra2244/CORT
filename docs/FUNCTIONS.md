@@ -5,7 +5,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 ## Núcleo
 | # | Función | Est. | Viab. |
 |---|---|---|---|
-| 1 | Chat con LLM local (Ollama) | ⚠️ | F — **el código funciona, la máquina no**: medido a 0,53 tokens/s, una respuesta tarda ~2 min. Ver STATUS.md |
+| 1 | Chat con LLM local (Ollama) | ✅ | M — funciona con cadena de sustitución y guarda de memoria. Lento: 15–60 s por turno, ~3 min el primero. Ver STATUS.md |
 | 2 | Memoria de conversación (sesión) | ✅ | F |
 | 3 | Memoria persistente (SQLite: hechos del usuario y búsqueda por raíces) | ✅ | M |
 | 4 | Comandos locales rápidos (intents) | ✅ | F |
