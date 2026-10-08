@@ -17,6 +17,7 @@ Eres colaborador del proyecto CORT. Antes de cambiar nada lee `docs/STATUS.md` (
 10. Si algo es inviable o depende del sistema operativo, dilo y actualiza `docs/FUNCTIONS.md` en lugar de simularlo.
 11. No afirmes que algo funciona sin haberlo ejecutado en esta máquina. Si no puedes comprobarlo, escribe literalmente "sin verificar".
 12. La cara pública del prototipo es `README.md`. Al cerrar una fase se actualiza **en el mismo commit** junto con `CREDITS.md` (autores y terceros) y `LICENSE` (año y titulares): si una fila nueva de "qué hace hoy" no está verificada, no va al README.
+13. La pila es **Python + React + Ollama, todo en local**, y no se cambia de lenguaje por una sugerencia externa. Las decisiones de plataforma (escritorio, móvil, voz, C++/Java) están medidas y justificadas en `docs/PLATFORM.md`: para alterar una hay que traer un número nuevo de esta máquina, no una opinión.
 
 ## Prompt de arranque sugerido
-> Lee AGENTS.md, docs/STATUS.md y docs/ROADMAP.md. Implementa la fase que STATUS.md marque como siguiente (hoy: Fase 4, control del sistema a través de `actions.py`, y Fase 8 por la parte de táctil). Escribe primero las pruebas, luego el código, ejecuta `make test` y actualiza docs/STATUS.md y README.md al cerrar.
+> Lee AGENTS.md, docs/STATUS.md y docs/ROADMAP.md. Implementa la fase que STATUS.md marque como siguiente (hoy: Fase 4 sigue abierta por el audio, así que lo que avanza es **Fase 8/9 por la parte que no cuesta RAM** —PWA servida, HUD— y lo que queda es **decidir la red** y **conectar un altavoz/micrófono**; mira `docs/PLATFORM.md` antes de prometer nada). Escribe primero las pruebas, luego el código, ejecuta `make test` y actualiza docs/STATUS.md y README.md al cerrar.
