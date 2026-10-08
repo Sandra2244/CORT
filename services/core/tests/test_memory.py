@@ -44,6 +44,34 @@ class TestStore(unittest.TestCase):
         store.remember("El usuario se llama Sandra")
         self.assertEqual([], store.recall("y eso como que"))
 
+    def test_context_rescues_a_question_with_no_root_in_common(self):
+        """El fallo real: '¿qué sabes de mí?' no comparte raíz con 'se llama Sandra',
+        así que recall devuelve vacío y el modelo contestaba que no conocía al
+        usuario teniendo los datos delante."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        store.remember("El usuario estudia ingeniería")
+        self.assertEqual([], store.recall("¿qué sabes de mí?"))
+        self.assertEqual(["El usuario se llama Sandra", "El usuario estudia ingeniería"],
+                         store.context_for("¿qué sabes de mí?"))
+
+    def test_context_prefers_matches_over_recent(self):
+        """Con coincidencias no se diluye el recuerdo relevante metiendo todo."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        store.remember("Al usuario le gusta el café")
+        self.assertEqual(["Al usuario le gusta el café"],
+                         store.context_for("qué bebida me gusta"))
+
+    def test_context_is_bounded(self):
+        """Cada token de contexto se paga en el prompt, y evaluar el prompt es lo
+        caro de esta máquina: el rescate no puede crecer sin techo."""
+        store = MemoryStore(self.db)
+        for i in range(20):
+            store.remember(f"Dato número {i}")
+        self.assertEqual(6, len(store.context_for("¿qué sabes de mí?")))
+        self.assertEqual(["Dato número 19"], store.context_for("¿qué sabes de mí?", limit=1))
+
     def test_creates_missing_parent_dir(self):
         nested = pathlib.Path(self.tmp.name) / "a" / "b" / "memory.db"
         store = MemoryStore(nested)

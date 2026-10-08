@@ -73,6 +73,19 @@ class MemoryStore:
         return [row["content"] for row in
                 self.conn.execute("SELECT content FROM memories ORDER BY id")]
 
+    def context_for(self, query: str, limit: int = 6) -> list[str]:
+        """
+        Lo que se mete en el prompt.
+
+        `recall` coincide por raíces de 4 letras, así que "¿qué sabes de mí?" no
+        encuentra "El usuario se llama Sandra": no comparten ninguna raíz. Sin
+        ese rescate la pregunta llegaba al modelo sin contexto y CORT contestaba
+        —con razón— que no sabía nada del usuario. Si nada coincide, mejor
+        entregar los recuerdos más recientes que no entregar nada. El `limit`
+        importa: evaluar el prompt es lo caro de esta máquina.
+        """
+        return self.recall(query) or self.all()[-limit:]
+
     def name_of_user(self) -> str | None:
         row = self.conn.execute(
             "SELECT content FROM memories WHERE content LIKE 'El usuario se llama%' "

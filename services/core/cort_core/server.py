@@ -51,7 +51,7 @@ async def ws(sock: WebSocket):
                 continue
             history.append({"role": "user", "content": text})
             await sock.send_json(state(thinking=True))
-            relevant = memory.recall(text)
+            relevant = memory.context_for(text)
             context = [{"role": "system", "content": "Datos del usuario: " + "; ".join(relevant)}] if relevant else []
             reply = await think([*context, *history[-20:]])
             history.append({"role": "assistant", "content": reply})
