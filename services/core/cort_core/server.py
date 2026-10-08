@@ -10,7 +10,15 @@ from .memory.store import MemoryStore
 from .outfit import pick_outfit
 
 app = FastAPI(title="CORT core")
+
+# Cuántos recuerdos se conservan. No es sólo higiene del disco: `context_for`
+# puede llegar a meter los más recientes en el prompt, y evaluar el prompt es lo
+# caro de esta máquina (2 núcleos). Sin techo, la base de datos se haría grande y
+# cada turno más lento.
+MEMORY_KEEP = int(os.getenv("CORT_MEMORY_KEEP", "200"))
+
 memory = MemoryStore()
+memory.prune(keep=MEMORY_KEEP)
 
 WHO_AM_I = re.compile(r"\b(cómo|como)\s+me\s+llamo\b|\b¿?qui[ée]n\s+soy\b|\bmi nombre\b", re.I)
 

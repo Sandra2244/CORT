@@ -96,6 +96,52 @@ class TestStore(unittest.TestCase):
             store.remember("   ")
 
 
+class TestPrune(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = pathlib.Path(self.tmp.name) / "memory.db"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_drops_the_oldest(self):
+        store = MemoryStore(self.db)
+        for i in range(10):
+            store.remember(f"Dato número {i}")
+        self.assertEqual(4, store.prune(keep=6))
+        self.assertEqual([f"Dato número {i}" for i in range(4, 10)], store.all())
+
+    def test_never_prunes_the_name(self):
+        """El nombre es casi siempre el recuerdo más antiguo, y es del que dependen
+        el saludo y '¿cómo me llamo?'. Podarlo sería olvidar lo único imprescindible."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        for i in range(10):
+            store.remember(f"Dato número {i}")
+        store.prune(keep=3)
+        self.assertEqual("Sandra", store.name_of_user())
+
+    def test_recall_survives_a_full_roadmap_case(self):
+        """Criterio del ROADMAP: tras 300 recuerdos, seguir encontrando lo relevante."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        for i in range(300):
+            store.remember(f"Preferencia {i} del usuario")
+        store.remember("El usuario estudia ingeniería")
+        store.prune(keep=50)
+        self.assertIn("El usuario estudia ingeniería", store.recall("¿qué estudio?"))
+        self.assertEqual("Sandra", store.name_of_user())
+        self.assertLessEqual(len(store.all()), 51)
+
+    def test_prune_is_idempotent(self):
+        store = MemoryStore(self.db)
+        for i in range(5):
+            store.remember(f"Dato número {i}")
+        store.prune(keep=5)
+        self.assertEqual(0, store.prune(keep=5))
+        self.assertEqual(5, len(store.all()))
+
+
 class TestFacts(unittest.TestCase):
     def test_name(self):
         self.assertEqual(["El usuario se llama Sandra"], extract("Hola, me llamo Sandra"))

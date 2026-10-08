@@ -93,5 +93,28 @@ class MemoryStore:
         ).fetchone()
         return row["content"].split(" ", 4)[-1] if row else None
 
+    def prune(self, keep: int = 100) -> int:
+        """
+        Borra los recuerdos más antiguos dejando los `keep` recientes.
+
+        Dos cosas que no son obvias:
+
+        - La fila del nombre **nunca** se borra. De ella dependen el saludo al
+          conectar y la respuesta a "¿cómo me llamo?"; podarla por ser la más
+          antigua sería precisamente olvidar lo único que no se puede olvidar.
+          Por eso el total tras podar puede ser keep + 1.
+        - Se poda por `id`, no por `created_at`: los ids son únicos y crecen, así
+          que el orden es estable aunque dos hechos se guarden en el mismo segundo.
+        """
+        cur = self.conn.execute(
+            """DELETE FROM memories
+               WHERE id NOT IN (SELECT id FROM memories ORDER BY id DESC LIMIT ?)
+                 AND content NOT LIKE 'El usuario se llama%'""",
+            (keep,),
+        )
+        self.conn.commit()
+        return cur.rowcount
+
+
     def close(self):
         self.conn.close()

@@ -5,7 +5,7 @@
 > Última verificación: **2026-10-07**, ejecutando comandos, no recordándolos.
 
 ## Fase actual
-**Ollama integrado y respondiendo de verdad; holograma transplantado y verificado.** → Siguiente: **FASE 1.1 (poda de memoria)**, que además es lo que limita el tamaño del prompt y por tanto la latencia. Después: `Orbits.tsx` + gestos del repo MIT, e **interfaz táctil** para el móvil.
+**FASE 1.1 (poda de memoria) cerrada, y Ollama respondiendo de verdad.** → Siguiente: `Orbits.tsx` + gestos del repo MIT, e **interfaz táctil** para el móvil. La **Fase 2 (voz)** y la **3 (VRM)** siguen pendientes de una decisión de hardware, no de código: 2 núcleos a 1,46 GHz.
 
 ## Respaldo
 Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada).
@@ -18,7 +18,8 @@ Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed2
 | Cosa | Evidencia |
 |---|---|
 | Core `server/brain/intents/outfit` + `memory/` | compila, `make dev` escucha en `127.0.0.1:8765` |
-| **38 pruebas** | `make test` → `Ran 38 tests ... OK` |
+| **42 pruebas** | `make test` → `Ran 42 tests ... OK` (tarda ~46 s: la poda mete 300 recuerdos de verdad) |
+| **Poda de memoria (Fase 1.1)** | 302 recuerdos → `prune(keep=200)` deja 201, y `context_for` responde en **1-4 ms** (criterio del roadmap: <1 s). Conectada al arranque del core. Verificado: tras arrancar con la poda, el saludo sigue siendo "Hola de nuevo, Sandra." |
 | WebSocket completo | saludo, `state` con atuendo, modo eco en ~0.3 s, intents sin LLM |
 | **Chat con Ollama (función 1)** | Por WebSocket real contra el core: "¿qué sabes de mí hasta ahora?" → **"Sandra, …"**. La memoria llega al modelo. Lento: 48–66 s por turno con el modelo caliente |
 | **Guarda de memoria del LLM** | Con el Ollama de verdad: detecta los 4 modelos instalados y descarta `qwen3.5:2b` (2614 MiB) y `airaos-local` (718) por no caber. 10 pruebas con `httpx.MockTransport`, sin encender modelos |
@@ -90,13 +91,11 @@ Bug encontrado al verificar (no estaba en el original): `connect()` reprogramaba
 - `scripts/upstreams.txt` conserva URLs con `REEMPLAZAR`; ya se conocen las reales (ver arriba).
 - **El móvil todavía no puede hablar con el core.** Vite escucha en la red (`http://192.168.100.171:5173`) pero el core se ató a `127.0.0.1` a propósito. Abrirlo a la red local es una decisión de seguridad consciente (cualquiera en tu WiFi podría controlar el PC), no un flag que se pone sin pensarlo.
 - `node_modules/` de `apps/web` ocupa **144 MB**; `dist/` queda ignorado en git.
+- **El rescate de `context_for` puede meter ruido.** Medido con 300 recuerdos de prueba: "¿qué sabes de mí?" se trae 5 "Preferencia NNN" que no vienen al caso, porque son simplemente los más recientes. Con la base real (2 hechos) no pasa; con cientos, sí. Es un cambio consciente: ruido en el prompt antes que prompt vacío, pero habría que afinarlo (p. ej. priorizar el nombre y las preferencias declaradas).
+- **`history[-20:]` en `server.py`** manda hasta 20 turnos al prompt. Con ~1,3 tokens/s eso es tiempo de más; bajarlo es una línea, pero cambia cuánto recuerda CORT dentro de una misma conversación.
 
 ## Siguiente paso exacto
-**FASE 1.1 — poda de memoria** (corta y segura en esta máquina):
-1. `MemoryStore.prune(max_rows=…)` y un test que meta 300 recuerdos y compruebe que `recall` sigue devolviendo lo relevante.
-2. Política: **borrar los más antiguos**. Descartado "resumirlos con el LLM" tras medir los 0,53 tok/s de arriba — un resumen costaría minutos.
-
-Después de eso, lo que queda del holograma pedido:
+Fase 1.1 cerrada. Lo que queda del holograma pedido:
 - **`Orbits.tsx`** y los gesto-hands (`src/lib/hands.ts`) del repo MIT, que aún no se han traído.
 - **Interfaz táctil** para el Samsung A16: la UI actual es de ratón (input de texto + botón). Botones grandes y gestos es trabajo propio, no un transplant.
 
@@ -107,3 +106,4 @@ Después de eso, lo que queda del holograma pedido:
 | 2026-10-07 | **Qoder** | `git init`, reparó Makefile, venv+deps, core verificado por WebSocket, creó STATUS.md, respaldó a GitHub como `cort-local-verified`, **transplantó la memoria SQLite y cerró la Fase 1** (25 pruebas OK) |
 | 2026-10-07 | **Qoder** | **Transplantó el holograma** (MIT, adewaskar/JARVIS) a `apps/web` como React+Vite+Three con paleta Cortana; verificado con capturas del navegador a 18 fps; arregló el doble websocket de StrictMode y el diagnóstico falso de `brain.py`; midió el LLM y documentó que es inviable conversar con él en esta máquina |
 | 2026-10-07 (tarde) | **Qoder** | Integró Ollama de verdad: cadena de sustitución, guarda de tamaño por RAM, `keep_alive`. Corrigió su propia medición anterior (estaba contaminada) y encontró que **"¿qué sabes de mí?" no inyectaba contexto** — arreglado con `context_for`, verificado antes/después. 38 pruebas. **Dejó que la máquina se congelara al medir; ella tuvo que apagarla. Regla nueva: una carga pesada cada vez.** |
+| 2026-10-07 (noche) | **Qoder** | Cerró la **FASE 1.1**: `prune()` protege el nombre siempre, conectada al arranque del core, criterio del roadmap medido (1-4 ms con 300 recuerdos). 42 pruebas. Todo verificado sin tocar Ollama. |

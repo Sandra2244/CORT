@@ -6,7 +6,7 @@ Cada fase termina con algo que corre y una prueba. No avances si la anterior no 
 |---|---|---|
 | 0 ✅ | Repo, docs, core + UI orbe | `make test` pasa; el chat responde (modo eco o Ollama) |
 | 1 ✅ | Memoria persistente (SQLite) | Cerrado 2026-10-07: matar el proceso y levantarlo; CORT saluda "Hola de nuevo, Sandra" y responde "¿cómo me llamo?" sin LLM |
-| 1.1 ⬜ | Resumen y poda de la memoria (que no crezca sin límite) | 300 recuerdos siguen respondiendo en menos de 1 s |
+| 1.1 ✅ | Poda de la memoria (que no crezca sin límite) | Cerrado 2026-10-07: con 302 recuerdos, `prune(keep=200)` deja 201 y `context_for` responde en **1-4 ms** (techo: 1 s). La **poda por resumen con el LLM se descarta**: medido a ~1,3 tokens/s, resumir costaría minutos. El nombre del usuario nunca se poda |
 | 2 ⚠️ | Voz: Whisper + Piper + wake word | Dices "Hey CORT" y responde hablando. **Revisar viabilidad: la máquina tiene 1,8 GiB de RAM y sin GPU** |
 | 3 | Avatar VRM + shader holográfico + lip-sync | Un VRM habla con la boca sincronizada |
 | 4 | Control de PC: volumen, reproductor, apps | "Sube el volumen" cambia el volumen real |

@@ -7,7 +7,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 |---|---|---|---|
 | 1 | Chat con LLM local (Ollama) | ✅ | M — funciona con cadena de sustitución y guarda de memoria. Lento: 15–60 s por turno, ~3 min el primero. Ver STATUS.md |
 | 2 | Memoria de conversación (sesión) | ✅ | F |
-| 3 | Memoria persistente (SQLite: hechos del usuario y búsqueda por raíces) | ✅ | M |
+| 3 | Memoria persistente (SQLite: hechos del usuario, raíces de 4 letras, poda con el nombre protegido) | ✅ | M |
 | 4 | Comandos locales rápidos (intents) | ✅ | F |
 | 5 | Búsqueda web | ⬜ | F |
 | 6 | Resumen de documentos | ⬜ | F |
