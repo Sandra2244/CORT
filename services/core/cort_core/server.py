@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 from datetime import datetime
@@ -16,8 +17,16 @@ from .memory.facts import extract
 from .memory.store import MemoryStore
 from .outfit import pick_outfit
 from .status import build as status_payload
+from . import weather
 
 app = FastAPI(title="CORT core")
+
+
+@app.on_event("startup")
+async def _start_weather() -> None:
+    # Con `CORT_CITY` sin configurar `keep_updating` sale al instante: sin ciudad
+    # no sale ni una petición de la máquina, y así quiere seguir CORT por defecto.
+    app.state.weather = asyncio.create_task(weather.keep_updating())
 
 # Cuántos recuerdos se conservan. No es sólo higiene del disco: `context_for`
 # puede llegar a meter los más recientes en el prompt, y evaluar el prompt es lo
@@ -31,9 +40,17 @@ memory.prune(keep=MEMORY_KEEP)
 WHO_AM_I = re.compile(r"\b(cómo|como)\s+me\s+llamo\b|\b¿?qui[ée]n\s+soy\b|\bmi nombre\b", re.I)
 
 def state(thinking=False):
-    temp = float(os.getenv("CORT_CITY_TEMP_C", "22"))  # TODO: reemplazar por API de clima/sensor
-    return {"type": "state", "outfit": pick_outfit(datetime.now().hour, temp),
-            "mood": "calm", "thinking": thinking}
+    # El clima se lee de la caché, nunca se pide aquí: `state()` corre dentro del
+    # bucle del WebSocket y una petición HTTP bloqueante pararía a todos los
+    # clientes mientras el servicio de turno contesta.
+    clima = weather.snapshot()
+    temp = float(os.getenv("CORT_CITY_TEMP_C", "22")) if clima is None else clima["temp_c"]
+    frame = {"type": "state", "outfit": pick_outfit(datetime.now().hour, temp),
+             "mood": "calm", "thinking": thinking}
+    if clima is not None:
+        frame["city"] = clima["city"]
+        frame["temp_c"] = clima["temp_c"]
+    return frame
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
@@ -98,4 +115,8 @@ async def ws(sock: WebSocket):
         pass
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("CORT_PORT", "8765")))
+    # 127.0.0.1 por defecto, y no 0.0.0.0: el core no tiene autenticación ni TLS.
+    # Publicarlo en la red es decisión explícita de quien arranca (`cort.py --lan`),
+    # no un regalo del valor por defecto.
+    uvicorn.run(app, host=os.getenv("CORT_HOST", "127.0.0.1"),
+                port=int(os.getenv("CORT_PORT", "8765")))
