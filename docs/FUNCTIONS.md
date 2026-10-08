@@ -43,7 +43,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 28 | Parpadeo y mirada | ⬜ | M |
 | 29 | Expresiones según estado afectivo | ⬜ | M |
 | 30 | Shader holográfico (scanlines, fresnel) | 🔨 | M — hecho: bloom, aberración cromática, ruido, viñeta y scanlines CSS. Falta: fresnel sobre malla (nada de esto tiene geometría que iluminar todavía) |
-| 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo y chat. Falta: reloj, clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`), estado del sistema |
+| 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo, chat y **estado del sistema** (`Telemetry.tsx`, visto en el navegador): recuerdos sobre el techo, modelo que contestó la última vez y si la capa de permisos está encendida. Falta: reloj y clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`) |
 | 32 | Burbuja flotante siempre visible (overlay transparente) | ⬜ | M (Electron en PC; Android requiere permiso de superposición) |
 | 61 | Efectos de un solo disparo en el holograma (`glitch · pulse · scan · shake · flash`) | ✅ | F — transplantado de `Effects.tsx` (MIT), atribuido en `apps/web/CREDITS.md`. El core emite `{"type":"effect","kind":"pulse"}` al ejecutar un intent. Verificado en el navegador con `MutationObserver`: onda de 0,9 s con el color del atuendo. Hoy **sólo lo dispara un intent**; ningún error lo usa todavía |
 

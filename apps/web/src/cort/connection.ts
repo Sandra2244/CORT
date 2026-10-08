@@ -12,11 +12,41 @@ export type UiEffect = 'glitch' | 'pulse' | 'scan' | 'shake' | 'flash'
  */
 const EFFECTS = new Set<string>(['glitch', 'pulse', 'scan', 'shake', 'flash'])
 
+/**
+ * Telemetría del core: lo que CORT puede afirmar de sí mismo. `brain` es null
+ * hasta que el LLM interviene, y `ollama` lo es hasta el primer intento — un
+ * panel que invente "eco" antes de haberlo probado está mintiendo.
+ */
+export type Status = {
+  memories: number
+  keep: number
+  brain: string | null
+  ollama: boolean | null
+  actions: boolean
+}
+
+/**
+ * Se valida campo a campo en vez de colgar el objeto tal cual: un número que
+ * llegara como texto se metería en el panel y lo siguiente que se vería sería
+ * `12 / 200` convertido en `NaN`. Aquí lo desconocido vuelve a su valor neutro.
+ */
+function readStatus(m: any): Status {
+  const num = (v: unknown, fallback: number) => (Number.isFinite(v) ? (v as number) : fallback)
+  return {
+    memories: num(m.memories, 0),
+    keep: num(m.keep, 0),
+    brain: typeof m.brain === 'string' ? m.brain : null,
+    ollama: m.ollama === true || m.ollama === false ? m.ollama : null,
+    actions: Boolean(m.actions),
+  }
+}
+
 export type Snapshot = {
   online: boolean
   outfit: Outfit
   thinking: boolean
   msgs: Msg[]
+  status: Status | null
   /**
    * `at` es la marca de tiempo del mensaje, y existe sólo para que repetir el
    * mismo efecto vuelva a dispararlo: sin una clave que cambie, React no
@@ -35,6 +65,7 @@ let snapshot: Snapshot = {
   outfit: DEFAULT_OUTFIT,
   thinking: false,
   msgs: [],
+  status: null,
   effect: null,
 }
 const listeners = new Set<() => void>()
@@ -81,12 +112,16 @@ function open() {
   // así que cada mensaje del log se ve duplicado.
   s.onclose = () => {
     if (sock !== s) return
-    set({ online: false })
+    // `status: null` porque los números eran de un core que ya no contesta:
+    // dejarlos en pantalla sería seguir afirmando "12 recuerdos" sin tenerlo
+    // comprobado. Al reconectar, el core vuelve a enviarlos.
+    set({ online: false, status: null })
     timer = window.setTimeout(open, 3000)
   }
   s.onmessage = (e) => {
     const m = JSON.parse(e.data)
     if (m.type === 'state') applyState(m)
+    if (m.type === 'status') set({ status: readStatus(m) })
     if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })

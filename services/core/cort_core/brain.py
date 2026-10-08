@@ -25,6 +25,20 @@ KEEP_ALIVE = os.getenv("CORT_LLM_KEEP_ALIVE", "30m")
 SYSTEM = ("Eres CORT, un asistente personal sereno, curioso y directo. "
           "Responde en el idioma del usuario, breve y útil.")
 
+# Lo que hizo el último `think()`. `status.py` lo lee para que el panel de la
+# interfaz nombre el modelo que respondió de verdad, no el que la cadena
+# preferiría usar: con `qwen3:0.6b` fuera por tamaño, decir "qwen3" sería mentira.
+_last: dict = {"model": None, "ollama": None}
+
+
+def last_model() -> str | None:
+    return _last["model"]
+
+
+def last_reachable() -> bool | None:
+    """None = todavía no se ha intentado. No se afirma nada de Ollama sin haberlo probado."""
+    return _last["ollama"]
+
 
 async def _sizes(client: httpx.AsyncClient) -> dict[str, float]:
     """Nombre -> tamaño en MiB de lo que hay descargado. Vacío si no hay server."""
@@ -79,17 +93,22 @@ async def think(history: list[dict], client: httpx.AsyncClient | None = None) ->
             # pero el fallo final se reporta distinto (ver abajo).
             sizes = {}
             reachable = False
+        _last["ollama"] = reachable
         for model in candidates(CHAIN, sizes):
             try:
-                return await _ask(client, model, messages)
+                answer = await _ask(client, model, messages)
             except Exception:
                 # Timeout o error: el siguiente de la cadena puede ser más
                 # pequeño y sí responder a tiempo.
                 continue
+            _last["model"] = model
+            return answer
+        _last["model"] = None
         if not reachable:
             return f"[modo eco: Ollama no responde] Dijiste: {last}"
         return f"[ningún modelo de la cadena respondió] Dijiste: {last}"
     except Exception:
+        _last["model"] = None
         return f"[modo eco: Ollama no responde] Dijiste: {last}"
     finally:
         if own:

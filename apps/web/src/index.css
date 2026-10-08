@@ -84,6 +84,49 @@ body {
   background: #ff5a7a;
 }
 
+/* Telemetría: lo que el core comprueba de sí mismo. Arriba a la derecha y
+   fuera del HUD de abajo, para no tapar ni el registro ni el reactor. */
+.telemetry {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: grid;
+  gap: 5px;
+  min-width: 176px;
+  padding: 10px 12px;
+  color: var(--dim);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  background: linear-gradient(to bottom, rgba(6, 16, 34, 0.78), rgba(6, 16, 34, 0.34));
+  border: 1px solid rgba(120, 190, 230, 0.2);
+  border-left: 2px solid var(--tint);
+  backdrop-filter: blur(6px);
+  /* Informativo: si un día hay que pulsar algo aquí, es que esto cambió de sitio. */
+  pointer-events: none;
+}
+
+.tl-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+/* Sólo la etiqueta va en minúsculas. El valor no: «eco · sin Ollama» pierde el
+   nombre propio si se lo aplicamos al row entero, y Ollama se escribe así. */
+.tl-row span {
+  text-transform: lowercase;
+}
+
+.tl-row b {
+  color: var(--tint);
+  font-weight: 600;
+}
+
+.telemetry .tl-warn {
+  color: #ff8fa6;
+}
+
 .log {
   display: flex;
   flex-direction: column;
@@ -349,6 +392,21 @@ input {
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
     max-height: 30dvh;
+  }
+
+  .telemetry {
+    /* En 360 px de ancho un panel de 176 px tapa media escena. Aquí lo que
+       importa es que se lea, no que sobre. */
+    top: 8px;
+    right: 8px;
+    gap: 3px;
+    min-width: 0;
+    padding: 7px 9px;
+    font-size: 0.68rem;
+  }
+
+  .tl-row {
+    gap: 10px;
   }
 }
 

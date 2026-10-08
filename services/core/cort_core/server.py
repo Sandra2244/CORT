@@ -9,6 +9,7 @@ from .intents import match_intent
 from .memory.facts import extract
 from .memory.store import MemoryStore
 from .outfit import pick_outfit
+from .status import build as status_payload
 
 app = FastAPI(title="CORT core")
 
@@ -37,6 +38,9 @@ async def ws(sock: WebSocket):
     await sock.send_json({"type": "assistant_message",
                           "text": f"Hola de nuevo, {name}." if name else "Hola, soy CORT.",
                           "mood": "calm"})
+    # Después del saludo, no antes: `count()` es una lectura al disco, y lo
+    # primero que debe notar quien abre la página es que CORT contesta.
+    await sock.send_json(status_payload(memory, MEMORY_KEEP))
     try:
         while True:
             msg = await sock.receive_json()
@@ -58,6 +62,9 @@ async def ws(sock: WebSocket):
                 await sock.send_json({"type": "assistant_message",
                                       "text": said if ok else f"No pude: {said}.",
                                       "mood": "calm"})
+                # Los hechos de un mensaje se guardan antes de mirar los intents,
+                # así que el contador puede haber cambiado incluso sin LLM.
+                await sock.send_json(status_payload(memory, MEMORY_KEEP))
                 continue
             if WHO_AM_I.search(text):
                 # Se responde desde la memoria, sin LLM: funciona aunque Ollama no esté.
@@ -73,6 +80,9 @@ async def ws(sock: WebSocket):
             history.append({"role": "assistant", "content": reply})
             await sock.send_json({"type": "assistant_message", "text": reply, "mood": "calm"})
             await sock.send_json(state())
+            # Después de `think()` es cuando `brain.last_model()` tiene algo que
+            # decir: el panel nombra el modelo que acaba de contestar.
+            await sock.send_json(status_payload(memory, MEMORY_KEEP))
     except WebSocketDisconnect:
         pass
 

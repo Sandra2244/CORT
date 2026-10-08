@@ -85,6 +85,14 @@ class MemoryStore:
         return [row["content"] for row in
                 self.conn.execute("SELECT content FROM memories ORDER BY id")]
 
+    def count(self) -> int:
+        """Cuántos recuerdos hay, sin traerlos.
+
+        El panel de la interfaz pregunta esto en cada turno. `len(self.all())`
+        daría el mismo número leyendo la base entera para enseñar un dígito.
+        """
+        return int(self.conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0])
+
     def context_for(self, query: str, limit: int = 6) -> list[str]:
         """
         Lo que se mete en el prompt.

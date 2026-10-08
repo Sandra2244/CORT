@@ -40,6 +40,11 @@ def volume_argv(delta: int) -> list[str]:
     return ["wpctl", "set-volume", "-l", "1.0", SINK, step]
 
 
+def screenshot_argv(path: Path) -> list[str]:
+    """`scrot -o <ruta>`: la ruta la elegimos nosotros, nunca el texto del usuario."""
+    return ["scrot", "-o", str(path)]
+
+
 def shot_path(now: datetime) -> Path:
     """Nombre de la captura, generado por nosotros.
 
@@ -48,10 +53,6 @@ def shot_path(now: datetime) -> Path:
     un nombre repetido no es un fallo que se vea.
     """
     return SHOTS_DIR / f"cort-{now:%Y%m%d-%H%M%S-%f}.png"
-
-
-def screenshot_argv(path: Path) -> list[str]:
-    return ["scrot", "-o", str(path)]
 
 
 async def spawn(argv: list[str]) -> tuple[int, str]:

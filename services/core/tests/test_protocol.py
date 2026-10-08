@@ -46,22 +46,46 @@ class TestProtocol(unittest.TestCase):
         self.client = TestClient(app)
 
     def handshake(self, ws):
-        types = [ws.receive_json()["type"] for _ in range(2)]
-        self.assertEqual(["state", "assistant_message"], types)
+        """Tres marcos al conectar: el estado del holograma, el saludo y la
+        telemetría. El orden es el que la interfaz necesita: el orbe se colorea
+        antes de que llegue texto que leer. Devuelve los mensajes por si el test
+        quiere mirar algún campo."""
+        got = [ws.receive_json() for _ in range(3)]
+        self.assertEqual(["state", "assistant_message", "status"], [m["type"] for m in got])
+        return got
+
+    def turn(self, ws, text):
+        """Un turno de acción: envía y lee los cuatro marcos que produce.
+        Devuelve los mensajes en orden, terminando por el `status` nuevo."""
+        ws.send_json({"type": "user_message", "text": text})
+        got = [ws.receive_json() for _ in range(4)]
+        self.assertEqual(["intent", "effect", "assistant_message", "status"],
+                         [m["type"] for m in got])
+        return got
 
     def test_connect_gives_state_then_greeting(self):
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)
+
+    def test_the_status_frame_carries_the_telemetry_the_panel_paints(self):
+        """La interfaz pinta estos campos sin comprobarlos, así que tienen que
+        estar y ser del tipo que espera. `brain` puede venir en null —aquí aún
+        no se ha preguntado al modelo—, pero la clave existe."""
+        with self.client.websocket_connect("/ws") as ws:
+            s = self.handshake(ws)[2]
+        self.assertEqual("status", s["type"])
+        for key in ("memories", "keep", "brain", "ollama", "actions"):
+            self.assertIn(key, s)
+        self.assertIsInstance(s["memories"], int)
+        self.assertIsInstance(s["actions"], bool)
 
     def test_intent_emits_an_effect(self):
         """El pulso es lo que hace visible que algo se ejecutó. Si el orden se
         rompe, el HUD puede animarse antes de que exista el intent."""
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)
-            ws.send_json({"type": "user_message", "text": "sube el volumen"})
-            got = [ws.receive_json() for _ in range(3)]
+            got = self.turn(ws, "sube el volumen")
 
-        self.assertEqual(["intent", "effect", "assistant_message"], [m["type"] for m in got])
         self.assertEqual("pulse", got[1]["kind"])
 
     def test_the_reply_carries_the_number_the_command_returned(self):
@@ -69,18 +93,16 @@ class TestProtocol(unittest.TestCase):
         después de cambiarlo. Un texto fijo taparía un mando que no hace nada."""
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)
-            ws.send_json({"type": "user_message", "text": "sube el volumen"})
-            msgs = [ws.receive_json() for _ in range(3)]
-        self.assertEqual("Volumen al 45 %.", msgs[-1]["text"])
+            msgs = self.turn(ws, "sube el volumen")
+        self.assertEqual("Volumen al 45 %.", msgs[2]["text"])
 
     def test_a_failed_action_shows_as_a_tear_not_a_wave(self):
         with mock.patch.object(actions, "spawn", failing_spawn):
             with self.client.websocket_connect("/ws") as ws:
                 self.handshake(ws)
-                ws.send_json({"type": "user_message", "text": "sube el volumen"})
-                msgs = [ws.receive_json() for _ in range(3)]
+                msgs = self.turn(ws, "sube el volumen")
         self.assertEqual("glitch", msgs[1]["kind"])
-        self.assertIn("wpctl: no hay sink", msgs[-1]["text"])
+        self.assertIn("wpctl: no hay sink", msgs[2]["text"])
 
     def test_effect_kind_is_one_the_ui_can_play(self):
         """El cliente valida `kind` contra su propia lista y descarta lo que no
@@ -88,9 +110,7 @@ class TestProtocol(unittest.TestCase):
         playable = {"glitch", "pulse", "scan", "shake", "flash"}
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)
-            ws.send_json({"type": "user_message", "text": "sube el volumen"})
-            kinds = {m["kind"] for m in (ws.receive_json() for _ in range(3))
-                     if m["type"] == "effect"}
+            kinds = {m["kind"] for m in self.turn(ws, "sube el volumen") if "kind" in m}
         self.assertTrue(kinds <= playable, f"kinds fuera del protocolo: {kinds - playable}")
 
     def test_ignored_message_gets_no_reply(self):
