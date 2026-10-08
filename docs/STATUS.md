@@ -5,14 +5,15 @@
 > Última verificación: **2026-10-07**, ejecutando comandos, no recordándolos.
 
 ## Fase actual
-**Fase 4 empezada: CORT ya ejecuta en vez de decir «entendido»**, y la verificación en vivo enseñó dos cosas que leer el código no enseñaba (el `returncode` de `wpctl` miente, y este portátil no tiene por dónde sacar audio). Efectos del holograma verificados en el navegador; la capa táctil está escrita, **sin verificar en un móvil real**. → Siguiente: decidir el **alcance de red** para el Samsung A16 (el core sigue atado a `127.0.0.1` a propósito) y el HUD de paneles (`Blades.tsx`, MIT). La **Fase 2 (voz)** y la **3 (VRM)** siguen pendientes de una decisión de hardware, no de código: 2 núcleos a 1,46 GHz.
+**Fase 4 empezada: CORT ya ejecuta en vez de decir «entendido»**, y la verificación en vivo enseñó dos cosas que leer el código no enseñaba (el `returncode` de `wpctl` miente, y este portátil no tiene por dónde sacar audio). **Fase 8 empezada: CORT se enciende de un doble clic** con una terminal que dice algo (`scripts/cort.py`, banner + cuatro barras de estado), verificada por consola en los tres modos. Efectos del holograma verificados en el navegador; la capa táctil está escrita, **sin verificar en un móvil real**. → Siguiente: decidir el **alcance de red** para el Samsung A16 (el core sigue atado a `127.0.0.1` a propósito) y el HUD de paneles (`Blades.tsx`, MIT). La **Fase 2 (voz)** y la **3 (VRM)** siguen pendientes de una decisión de hardware, no de código: 2 núcleos a 1,46 GHz.
 
 ## Respaldo
-Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada).
-- Rama **`cort-local-verified`** ← esta carpeta. Es la única que está verificada ejecutándola.
-- Rama **`main`** ← lo que subió Copilot en octubre. Contiene humo: ver "Hallazgo" abajo.
-- Rama **`scaffold/fastapi-ollama-frontend`** ← 50 archivos, más avanzada, de la que se trasplantó la memoria.
-- **No hay merge todavía.** Las tres historias son independientes (`git merge-base` = vacío). Fusionar es decisión consciente, no un push.
+Repo: `git@github.com:Sandra2244/CORT.git` (funciona con la clave `~/.ssh/id_ed25519`, verificada). Estado del remoto, comprobado con `git ls-remote` el 2026-10-07:
+- Rama **`cort-local-verified`** ← esta carpeta. Es la única que está verificada ejecutándola. Etiqueta **`v0.1.0`** ya en el remoto.
+- Rama **`main`** ← lo que subió Copilot en octubre. Contiene humo: ver "Hallazgo" abajo. **Sigue siendo la rama por defecto de GitHub**, y por eso no se puede borrar ni renombrar todavía.
+- Rama `scaffold/fastapi-ollama-frontend` → **borrada del remoto** el 2026-10-07, con el visto bueno explícito de Sandra («bórralas del remoto»). Antes de borrarla quedó respaldada dos veces: refs locales `backup/scaffold-2026-10-07` y `backup/main-octubre`, y un `git bundle` verificable fuera del repo en `../respaldo-ramas-cort-2026-10-07.bundle`. Con `git fetch` cualquiera recupera las dos historias si hiciera falta.
+- **No hay merge todavía.** Las historias son independientes (`git merge-base` = vacío). Fusionar es decisión consciente, no un push.
+- **Lo que falta y necesita autenticación en GitHub:** `gh` está instalado pero **sin sesión iniciada** y no hay token en el entorno, así que desde aquí no se puede (1) cambiar la rama por defecto a `cort-local-verified`, ni (2) crear la Release `v0.1.0`. Son dos clics en Settings → Branches y en Draft a new release, o un `gh auth login`. No se hace por cuenta propia: cambia lo que ve todo el mundo.
 
 ## El corte que se muestra: prototipo `v0.1.0`
 Lo que ve cualquiera que entre al repo debe ser **una sola cosa**: el prototipo verificado. Para eso está:
@@ -23,15 +24,15 @@ Lo que ve cualquiera que entre al repo debe ser **una sola cosa**: el prototipo 
 - Etiqueta **`v0.1.0`** sobre `cort-local-verified`.
 
 **Lo que falta del lado de GitHub y no se puede hacer con git a secas** (verificado: `gh` está instalado pero **sin sesión iniciada**, así que no hay API):
-1. Poner `cort-local-verified` como **rama por defecto** → es lo que hace que el README y la portada sean el prototipo.
-2. Crear la **Release** `v0.1.0` apuntando a la etiqueta.
-3. Que las otras dos ramas dejen de estorbar. **No se borran**: `scaffold/…` es fuente de transplante y `main` guarda el `services/voice` de Copilot que STATUS documenta como humo pero que sigue siendo referencia. Lo seguro es renombrarlas a `archive/…` (desaparecen de la lista visible, el contenido sigue intacto) o archivar el repo. Antes de tocar nada de esto hace falta `gh auth login` de ella y su visto bueno explícito, porque cambiar ramas remotas es visible para quien más use el repo.
+1. Poner `cort-local-verified` como **rama por defecto** → es lo que hace que el README y la portada sean el prototipo. Mientras `main` sea la por defecto, no se puede borrar ni renombrar.
+2. Crear la **Release** `v0.1.0` apuntando a la etiqueta (la etiqueta ya está subida).
+3. Después de 1, `main` puede quedar como `archive/copilot-octubre` o borrarse: su contenido está en `backup/main-octubre` y en el bundle (ver Respaldo). `scaffold/…` ya se borró el 2026-10-07.
 
 ## Qué existe y está verificado funcionando
 | Cosa | Evidencia |
 |---|---|
 | Core `server/brain/intents/outfit` + `memory/` | compila, `make dev` escucha en `127.0.0.1:8765` |
-| **67 pruebas** | `make test` → `Ran 67 tests ... OK` (tarda ~40 s: la poda mete 300 recuerdos de verdad). Repartidas en `test_logic` 8, `test_brain` 10, `test_memory` 24, `test_protocol` 6, `test_actions` 19. Quedan `ResourceWarning` por bases de datos sin cerrar al morir el intérprete: ruido, no fallos |
+| **89 pruebas** | `make test` → `Ran 89 tests ... OK` (tarda ~44 s: la poda mete 300 recuerdos de verdad). Repartidas en `test_logic` 8, `test_brain` 10, `test_memory` 26, `test_protocol` 6, `test_actions` 19, `test_launcher` 20. Quedan `ResourceWarning` por bases de datos sin cerrar al morir el intérprete: ruido, no fallos |
 | **Poda de memoria (Fase 1.1)** | 302 recuerdos → `prune(keep=200)` deja 201, y `context_for` responde en **1-4 ms** (criterio del roadmap: <1 s). Conectada al arranque del core. Verificado: tras arrancar con la poda, el saludo sigue siendo "Hola de nuevo, Sandra." |
 | WebSocket completo | saludo, `state` con atuendo, modo eco en ~0.3 s, intents sin LLM |
 | **Chat con Ollama (función 1)** | Por WebSocket real contra el core: "¿qué sabes de mí hasta ahora?" → **"Sandra, …"**. La memoria llega al modelo. Lento: 48–66 s por turno con el modelo caliente |
@@ -138,6 +139,26 @@ Tres cosas se supieron sólo por ejecutarlo:
 2. **El `returncode` mentía.** `wpctl set-volume` devuelve **0** sobre el sink *Dummy Output* sin cambiar nada. La primera versión del código reportaba «Volumen al 100 %» con el nivel intacto, y la prueba en vivo la desenmascaró. Ahora se lee antes y después, y si el número no se movió CORT lo dice. **El fallo de la primera versión era mío y lo encontró una ejecución, no una lectura del código.**
 3. **Este portátil no tiene por dónde sacar audio** (ver Limitaciones). La función 15 queda 🔨: código hecho y verificado el comportamiento; efecto audible, imposible de verificar aquí.
 
+## Lanzador de doble clic y terminal de marca (lo pedido el 2026-10-07)
+`scripts/cort.py` es una sola puerta para todo: `make launch`, `make dev`, `CORT.desktop` (Linux) y `cort.bat` (Windows) llaman al mismo script. Bash no: un `.sh` no abre consola al doble-click en XFCE sin `x-terminal-emulator`, así que el lanzador es **Python con la biblioteca estándar** y el `.desktop` sólo lo invoca.
+
+Lo que se verificó ejecutándolo, no escribiéndolo:
+
+| Comprobación | Resultado |
+|---|---|
+| `--serve dist` (por defecto) | core en `127.0.0.1:8765`, interfaz servida por él mismo en `127.0.0.1:8780`, `curl` → **http=200, 674 bytes**. No levanta Vite: ~120 MB de RAM ahorrados |
+| `--serve dev` | arranca `npm run dev`, la consola muestra las líneas de Vite **etiquetadas** (`[web] VITE v8.3.3 ready in 5796 ms`) y el URL de red `http://192.168.100.171:5173` |
+| `--quiet` | log de **0 bytes** y los dos puertos escuchando: existe la variante silenciosa |
+| WebSocket | en ambas corridas el core registró `connection open` de la pestaña que ya estaba abierta |
+| RAM durante el arranque | disponible entre **317 y 397 MB**, sin zram en picos; la máquina nunca dejó de responder |
+| `--help`, `pick_web_mode`, `npm_command`, `memory_count`, `memory_note` | 20 pruebas nuevas en `tests/test_launcher.py` |
+
+**Dos fallos que sólo salieron al ejecutarlo** (y que una lectura del código no habría visto):
+1. **Las cuatro barras de estado salían en blanco.** `paint(text, False)` devolvía `""` en vez del texto sin códigos: con la salida redirigida —o con `--no-color`— la terminal no pintaba nada. Ahora `paint` quita los escapes con una expresión regular y conserva el texto.
+2. **Aunque se pintaran, se perdían.** Con stdout redirigido a archivo Python escribe de bloque en bloque; el proceso, al recibir la señal de cierre, se llevaba las barras sin llegar a escribirlas. Se forzó `line_buffering` y el log quedó completo.
+
+**Sin verificar:** el doble clic real en el escritorio (hay que instalar el `.desktop` y hacer el clic), `cort.bat` en Windows, y macOS. `CORT.desktop` lleva rutas absolutas a esta máquina; `scripts/install-desktop.sh` las regenera si el repo se mueve.
+
 ## Deuda conocida
 - **Ningún módulo carga `.env`.** La configuración se pasa con variables de entorno: `CORT_LLM_CHAIN=qwen3:0.6b make dev`. `.env.example` documenta las que existen de verdad.
 - ~~El README local seguía prometiendo un alcance que el código no tiene.~~ **Reescrito el 2026-10-07** como presentación del prototipo: sólo filas verificadas, límites de hardware escritos, créditos de autoría y licencia MIT. Ahora es la cara pública y la regla 12 de `AGENTS.md` obliga a mantenerla al día en el mismo commit que cierra una fase.
@@ -146,14 +167,17 @@ Tres cosas se supieron sólo por ejecutarlo:
 - `node_modules/` de `apps/web` ocupa **144 MB**; `dist/` queda ignorado en git.
 - **El rescate de `context_for` puede meter ruido.** Medido con 300 recuerdos de prueba: "¿qué sabes de mí?" se trae 5 "Preferencia NNN" que no vienen al caso, porque son simplemente los más recientes. Con la base real (2 hechos) no pasa; con cientos, sí. Es un cambio consciente: ruido en el prompt antes que prompt vacío, pero habría que afinarlo (p. ej. priorizar el nombre y las preferencias declaradas).
 - **`history[-20:]` en `server.py`** manda hasta 20 turnos al prompt. Con ~1,3 tokens/s eso es tiempo de más; bajarlo es una línea, pero cambia cuánto recuerda CORT dentro de una misma conversación.
+- **El doble clic no se ha pulsado.** El lanzador está verificado por consola en los tres modos; falta instalar el `.desktop` en el menú y comprobar que XFCE abre la terminal al hacer clic (y que no tilda el archivo de "no fiable"). Windows y macOS: sin verificar.
 - **"Apareció un `hola` suelto en el log al cargar la página" — explicado, no reproducido.** Leyendo `connection.ts`: una entrada `from:'user'` sólo la añade `send()`, que sólo corre al enviar el formulario; ningún mensaje del servidor puede escribirla. O sea que era mi propia prueba anterior, conservada por el Fast Refresh de Vite (el estado del módulo `connection.ts` sobrevive a los cambios de componente; sólo una recarga real lo pondría a `msgs: []`). No lo doy por cerrado con una captura: **no lo volví a cargar en el navegador**, y no lo hice porque el zram está al **99 %** (915 de 925 MiB) y reiniciar Vite + core + navegador es exactamente la carga que congeló el PC. Queda por confirmar al arrancar la próxima sesión.
 
 ## Siguiente paso exacto
-1. **Que alguien la oiga.** Antes de seguir con audio (Fase 2 voz, Fase 5 ecualizador, función 15 audible) hace falta una salida de audio real: auriculares Bluetooth, altavoces por HDMI, u otro equipo. Sin eso nada de sonido es verificable, y la regla 11 no permite darlo por hecho.
-2. **Decisión de red** (es de Sandra, no de código): abrir el core a la LAN para probar la interfaz táctil en el Samsung A16, o dejarlo en `127.0.0.1` y conformarse con probar el CSS desde el modo móvil del navegador de escritorio. Abrirlo expone el control del PC a todo el WiFi.
-3. **`Blades.tsx`** (MIT): paneles laterales del HUD. Es el transplant que más se acerca a lo que ella pidió y no depende de ningún puente.
-4. **Más acciones en la lista cerrada**: brillo (`gsettings` sí está, `ddcutil` no) y captura de pantalla (función 47), que es además el productor que necesita `Orbits` para dejar de ser código muerto.
-5. **`src/lib/hands.ts`** (gestos MediaPipe): medir antes de prometer — 2 núcleos, y MediaPipe en CPU es una carga del tamaño de Ollama.
+1. **Dos clics en GitHub, con su cuenta** (no se pueden hacer desde aquí sin `gh auth login`): poner `cort-local-verified` como rama por defecto y publicar la Release `v0.1.0`. Hasta eso, el README que se ve por defecto sigue siendo el de Copilot.
+2. **Pulsar el doble clic de verdad**: `./scripts/install-desktop.sh --desktop` y abrir CORT desde el Escritorio. El lanzador está verificado por consola; lo que falta es que XFCE muestre la terminal al hacer clic.
+3. **Que alguien la oiga.** Antes de seguir con audio (Fase 2 voz, Fase 5 ecualizador, función 15 audible) hace falta una salida de audio real: auriculares Bluetooth, altavoces por HDMI, u otro equipo. Sin eso nada de sonido es verificable, y la regla 11 no permite darlo por hecho.
+4. **Decisión de red** (es de Sandra, no de código): abrir el core a la LAN para probar la interfaz táctil en el Samsung A16, o dejarlo en `127.0.0.1` y conformarse con probar el CSS desde el modo móvil del navegador de escritorio. Abrirlo expone el control del PC a todo el WiFi. **El lanzador ya imprime el URL de red (`http://192.168.100.171:5173`) cuando corre Vite, pero el core sigue en `127.0.0.1`: desde el móvil se vería la interfaz muda.**
+5. **`Blades.tsx`** (MIT): paneles laterales del HUD. Es el transplant que más se acerca a lo que ella pidió y no depende de ningún puente.
+6. **Más acciones en la lista cerrada**: brillo (`gsettings` sí está, `ddcutil` no) y captura de pantalla (función 47), que es además el productor que necesita `Orbits` para dejar de ser código muerto.
+7. **`src/lib/hands.ts`** (gestos MediaPipe): medir antes de prometer — 2 núcleos, y MediaPipe en CPU es una carga del tamaño de Ollama.
 
 ## Registro de sesiones
 | Fecha | Quién | Qué hizo |
@@ -165,3 +189,5 @@ Tres cosas se supieron sólo por ejecutarlo:
 | 2026-10-07 (noche) | **Qoder** | Cerró la **FASE 1.1**: `prune()` protege el nombre siempre, conectada al arranque del core, criterio del roadmap medido (1-4 ms con 300 recuerdos). 42 pruebas. Todo verificado sin tocar Ollama. |
 | 2026-10-07 (madrugada) | **Qoder** | Trasplantó **`Effects.tsx`** (MIT) y le conectó el mensaje `effect` del core: pulso verificado en el navegador con `MutationObserver` y `--accent` saliéndose de la misma paleta que el anillo. Añadió la **capa táctil** (sin probar en móvil, dicho está). Escribió `test_protocol.py` (46 pruebas) y **descartó `Orbits.tsx` con motivo**: sin productor de imágenes sería código muerto. Corrigió su propio comentario del bug de SQLite: era una **fragilidad latente**, no una caída real, y el mensaje de commit lo había exagerado. **No arrancó nada pesado más**: el zram está al 99 % y la máquina ya se congeló una vez por hacer justo eso. |
 | 2026-10-07 (madrugada II) | **Qoder** | **Empezó la Fase 4** con `actions.py`: capa de permisos de lista cerrada, argv fijo, kill switch, y el nivel leído antes y después. Levantó el core y le habló por WebSocket de verdad — y **así descubrió que su primera versión mentía**: `wpctl` devuelve 0 sobre *Dummy Output* sin mover el volumen. Y lo de *Dummy* no es un detalle: **este portátil sólo saca audio por HDMI, y el puerto está `not available`**, así que Fase 2 (voz), Fase 5 (ecualizador) y la función 15 audible no se pueden verificar aquí con nada. 67 pruebas. Todo lo de audio queda 🔨 con la limitación escrita, no simulada. |
+| 2026-10-07 (mañana) | **Qoder** | **Corte de presentación `v0.1.0`**: README reescrito como presentación del prototipo (sólo filas ejecutadas), `LICENSE` MIT a nombre de **Sandra Lopez y Askher Vargas**, `CREDITS.md` con la regla de no copiar nada AGPL, captura nueva **sin su nombre** porque el repo es público, y regla 12 en `AGENTS.md`/`CLAUDE.md`/`copilot-instructions.md`: README, créditos y licencia se actualizan en el mismo commit que cierra una fase. Respaldo del remoto ordenado con su visto bueno: `scaffold/…` **borrada** tras respaldarla en refs locales y en un `git bundle` verificable; `main` no se puede tocar mientras sea la rama por defecto, y eso necesita `gh auth login` (instalado, sin sesión). |
+| 2026-10-07 (media tarde) | **Qoder** | **Empezó la Fase 8 por el arranque**: `scripts/cort.py` (doble clic + terminal con banner y cuatro barras de estado), `CORT.desktop`, `cort.bat`, `scripts/install-desktop.sh` y `make launch` / `make demo`. Ejecutado en los tres modos: `dist` (8765 + 8780, `curl` 200), `dev` (Vite etiquetado `[web]`, URL de red impreso) y `--quiet` (0 bytes, puertos abiertos). **Dos fallos que sólo aparecerían corriendo**: `paint` devolvía `""` sin color y las barras salían en blanco, y con la salida redirigida se perdían por el búfer de bloque. 20 pruebas nuevas en `test_launcher.py` → **89 en verde**. Windows y el clic real en el escritorio: sin verificar. |

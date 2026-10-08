@@ -13,6 +13,16 @@ setup:
 dev:
 	cd $(CORE) && $(PY) -m cort_core.server
 
+# El mismo arranque que el doble clic, pero en la terminal que ya tienes abierta:
+# core + interfaz + navegador, con las barras de estado y Ctrl+C que cierra todo.
+launch:
+	$(PY) scripts/cort.py
+
+# Una prueba sin tocar la memoria real: la base se va a /tmp y se puede llenar
+# de "hola" sin consecuencias.
+demo:
+	$(PY) scripts/cort.py --demo
+
 web-deps:
 	cd $(WEB) && npm install
 

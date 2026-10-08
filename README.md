@@ -4,7 +4,7 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.1.0`** · rama `cort-local-verified` · 67 pruebas en verde.
+**Prototipo actual: `v0.1.0`** · rama `cort-local-verified` · 89 pruebas en verde.
 
 ![CORT: reactor holográfico y HUD](docs/assets/prototipo-v0.1.0.png)
 
@@ -22,6 +22,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
 | ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito | Verificado por WebSocket contra `pipewire` |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar | `MutationObserver` en el navegador |
+| 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, y una terminal con banner y barras de estado (core · interfaz · ollama · memoria) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida a archivo |
 | 🎨 | **Atuendo por hora y temperatura**, igual que el holograma de Cortana | Pruebas de lógica |
 | 📱 | **Interfaz preparada para táctil** (pulsaciones de 48 px, sin auto-zoom, `safe-area`) | Escrita, **sin verificar en un móvil real** |
 
@@ -33,14 +34,37 @@ Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM, gestos 
 
 ```bash
 make setup     # crea el venv e instala las dependencias del core
-make test      # 67 pruebas
-make dev       # core en http://127.0.0.1:8765   (WebSocket en /ws)
-
-make web-deps  # primera vez: npm ci en apps/web
-make web       # interfaz en http://localhost:5173
+make test      # 89 pruebas
+make launch    # TODO: core + interfaz + navegador, con terminal de marca
 ```
 
-Abre `http://localhost:5173` y escribe. **Sin Ollama CORT sigue funcionando** en modo eco: la interfaz, la memoria y los intents no dependen del modelo.
+`make launch` es lo que hace el doble clic: levanta el core, sirve la interfaz y
+abre el navegador. Si `apps/web/dist` está construido (`make web-build`) se sirve
+desde ahí y no se gasta los ~120 MB que cuesta Vite en modo desarrollo. `Ctrl+C`
+cierra los dos procesos. Otras puertas del mismo lanzador:
+
+```bash
+make dev       # solo el core, en http://127.0.0.1:8765   (WebSocket en /ws)
+make demo      # como make launch, pero con memoria de usar y tirar en /tmp
+make web-deps  # primera vez: npm install en apps/web
+make web       # interfaz en http://localhost:5173, con recarga en caliente
+```
+
+### Doble clic
+
+- **Linux (XFCE/GNOME/KDE):** `./scripts/install-desktop.sh` escribe `CORT.desktop`
+  en la raíz del proyecto —con la ruta absoluta de *esta* máquina, por eso ese
+  archivo está en `.gitignore`— y lo instala en el menú. Con `--desktop` además
+  lo pone en el Escritorio ya marcado como confiable. Doble clic y aparece la
+  terminal con las barras.
+- **Windows:** `cort.bat`. Busca el `.venv` del proyecto y, si no está, avisa en
+  vez de cerrar la ventana sin decir nada.
+  **Sin verificar en Windows real**: se escribió siguiendo el comportamiento de
+  `cmd`, pero aquí solo hay Linux.
+
+Abre `http://localhost:5173` (o el puerto 8780 si usas `make launch` con `dist`
+construido) y escribe. **Sin Ollama CORT sigue funcionando** en modo eco: la
+interfaz, la memoria y los intents no dependen del modelo.
 
 Para que responda un modelo local:
 

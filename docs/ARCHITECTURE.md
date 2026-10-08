@@ -53,6 +53,15 @@ Lo que la hace una capa de permisos y no un `subprocess` suelto:
 4. **El resultado se comprueba, no se supone.** Se mira el `returncode`, y en el volumen **se lee el nivel antes y después**: lo que CORT afirma es la diferencia que PipeWire aplicó, no la que se pidió. No es un detalle — medido en el portátil de desarrollo, con el sink en *Dummy Output* `wpctl set-volume` responde 0 y el nivel no se mueve; un filtro por `returncode` habría dicho «hecho» ante una nada. Cuando el nivel no cambia, CORT lo dice y el holograma se rasga en vez de ondular.
 5. **Todo lo demás se declara fuera de la lista.** `equalizer` y cualquier acción no contemplada responden «no está en la lista permitida» con `glitch`, en vez de fingir un «entendido».
 
+## Arranque (`scripts/cort.py`) — una sola puerta, dos modos
+El lanzador es **la única** forma soportada de encender CORT entero, y el doble clic (`CORT.desktop`, `cort.bat`) no hace más que llamarlo. Sin dependencias y sin framework de terminal: ANSI directo con la biblioteca estándar.
+
+- **Decide cómo servir la interfaz**: si existe `apps/web/dist/index.html` lo sirve él, con un servidor estático de la estándar en `127.0.0.1:8780`; si no, arranca `npm run dev` y usa el 5173. No es un capricho: Vite en desarrollo son ~120 MB de RAM y un watcher de archivos, y en esta máquina eso es el 7 % de la memoria. `--serve dist|dev` anula la decisión.
+- **Comprueba en vez de suponer**: el core se da por vivo cuando el puerto 8765 acepta una conexión, no cuando el proceso arranca. Y las barras de estado dicen lo que se midió —si Ollama no responde, la barra dice «apagado» en rojo, no omite la línea.
+- **`--demo`** apunta `CORT_MEMORY_DB` a una base en `/tmp`. Es la única forma segura de enseñar CORT a alguien: sin esa bandera, una conversación de prueba deja recuerdos escritos en la memoria real.
+- **Ctrl+C cierra todo**: los hijos se terminan desde el lanzador, no se dejan huérfanos. Con la salida redirigida a un archivo `stdout` pasa a búfer de línea; si no, las barras se quedaban en memoria y el log acababa en blanco justo en la parte que interesa.
+- Sin color cuando no hay terminal (`sys.stdout.isatty()` falso) o con `--no-color`: se quitan los códigos de escape **conservando el texto**.
+
 ## Módulos de `services/core/cort_core`
 - `brain.py` — habla con Ollama a través de una **cadena de sustitución** (`CORT_LLM_CHAIN`): prueba los modelos en orden y usa el primero que responda. Antes de intentarlo pide `/api/tags` y **descarta por tamaño** lo que no cabe en RAM (`CORT_LLM_MAX_MODEL_MIB`, 700 MiB) — cargar `qwen3.5:2b` en esta máquina la congeló. Manda `keep_alive=30m` en cada petición: sin él Ollama descarga el modelo y la siguiente conversación paga 113 s de carga. Timeout en `CORT_LLM_TIMEOUT_S`. Distingue "Ollama no está" de "la cadena no respondió": confundirlos hace depurar un servidor caído que no existe. Si nada funciona, modo eco.
 - `intents.py` — comandos locales rápidos ("sube el volumen") sin gastar LLM. Devuelve una acción estructurada; **no ejecuta nada**.

@@ -8,3 +8,7 @@ node_modules/
 data/
 *.db
 dist/
+# CORT.desktop lleva rutas absolutas de la máquina donde se instaló (lo escribe
+# scripts/install-desktop.sh). El repo es público: ahí no va el nombre de carpeta
+# de nadie.
+CORT.desktop
