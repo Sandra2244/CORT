@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
+from .actions import perform
 from .brain import think
 from .intents import match_intent
 from .memory.facts import extract
@@ -49,11 +50,14 @@ async def ws(sock: WebSocket):
             intent = match_intent(text)
             if intent:
                 await sock.send_json({"type": "intent", **intent})
-                # La onda marca el momento en que algo se ejecutó de verdad, no
-                # cualquier mensaje: un holograma que parpadea todo el tiempo no
+                ok, said = await perform(intent)
+                # La onda marca el momento en que algo se ejecutó de verdad y el
+                # rasgón cuando no: un holograma que parpadea todo el tiempo no
                 # comunica nada.
-                await sock.send_json({"type": "effect", "kind": "pulse"})
-                await sock.send_json({"type": "assistant_message", "text": f"Entendido: {intent['action']}.", "mood": "calm"})
+                await sock.send_json({"type": "effect", "kind": "pulse" if ok else "glitch"})
+                await sock.send_json({"type": "assistant_message",
+                                      "text": said if ok else f"No pude: {said}.",
+                                      "mood": "calm"})
                 continue
             if WHO_AM_I.search(text):
                 # Se responde desde la memoria, sin LLM: funciona aunque Ollama no esté.
