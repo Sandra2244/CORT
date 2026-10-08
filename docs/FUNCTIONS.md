@@ -45,6 +45,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 30 | Shader holográfico (scanlines, fresnel) | 🔨 | M — hecho: bloom, aberración cromática, ruido, viñeta y scanlines CSS. Falta: fresnel sobre malla (nada de esto tiene geometría que iluminar todavía) |
 | 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo y chat. Falta: reloj, clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`), estado del sistema |
 | 32 | Burbuja flotante siempre visible (overlay transparente) | ⬜ | M (Electron en PC; Android requiere permiso de superposición) |
+| 61 | Efectos de un solo disparo en el holograma (`glitch · pulse · scan · shake · flash`) | ✅ | F — transplantado de `Effects.tsx` (MIT), atribuido en `apps/web/CREDITS.md`. El core emite `{"type":"effect","kind":"pulse"}` al ejecutar un intent. Verificado en el navegador con `MutationObserver`: onda de 0,9 s con el color del atuendo. Hoy **sólo lo dispara un intent**; ningún error lo usa todavía |
 
 ## Gestos y visión
 | # | Función | Est. | Viab. |
@@ -53,7 +54,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 34 | Detectar rostro/presencia | ⬜ | F |
 | 35 | Mirada del usuario | ⬜ | D |
 | 36 | Describir lo que ve la cámara (modelo de visión) | ⬜ | M |
-| 37-44 | Arrastrar, rotar, escalar, pellizcar, deslizar, tocar, doble toque, inclinar | ⬜ | F (táctil/ratón); inclinar = acelerómetro |
+| 37-44 | Arrastrar, rotar, escalar, pellizcar, deslizar, tocar, doble toque, inclinar | ⬜ | F (táctil/ratón); inclinar = acelerómetro. **Base táctil ya escrita** (pulsaciones de 48 px, `font-size:16px` contra el auto-zoom, `viewport-fit=cover` + `env(safe-area-inset-bottom)`, `enterKeyHint="send"`): eso hace que se *pueda* tocar, no que los gestos existan. Ninguno de esos selectores se ha ejecutado en un móvil real |
 
 ## Control de dispositivos
 | # | Función | Est. | Viab. |

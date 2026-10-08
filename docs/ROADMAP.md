@@ -13,5 +13,5 @@ Cada fase termina con algo que corre y una prueba. No avances si la anterior no 
 | 5 | Audio: ecualizador y normalizador en tu reproductor | Se aplica a una pista local |
 | 6 | Gestos con MediaPipe | Mano levantada despierta a CORT |
 | 7 | Sensores ESP32 + MQTT | La temperatura real cambia el atuendo |
-| 8 | Móvil (PWA → Capacitor) | CORT abre en tu Android conectado al core |
+| 8 🔨 | Móvil (PWA → Capacitor) | CORT abre en tu Android conectado al core. **Empezado por la única parte que no cuesta RAM: la capa táctil** (48 px, `font-size:16px`, `safe-area`, `enterKeyHint`) — sin verificar en un móvil real. **Está bloqueada por una decisión, no por código**: el core escucha en `127.0.0.1` a propósito, y abrirlo a la LAN expone el control del PC a todo el WiFi |
 | 9 | Pulido: overlay, atuendos, README con vídeo | Demo de 60 s para TikTok |

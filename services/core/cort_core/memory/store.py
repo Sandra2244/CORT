@@ -30,10 +30,11 @@ class MemoryStore:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         # check_same_thread=False: el store se construye al importar el módulo,
-        # en el hilo principal, pero FastAPI atiende websockets en otro. Con el
-        # valor por defecto la primera conexión real lanza ProgrammingError.
-        # Sigue siendo seguro porque el acceso está serializado por el bucle
-        # asíncrono — no hay dos hilos escribiendo a la vez.
+        # en el hilo principal, y la conexión no puede usarse desde otro hilo con
+        # el valor por defecto — falla en la primera consulta. Hoy el bucle
+        # asíncrono de uvicorn corre en ese mismo hilo, pero el test de protocolo
+        # (TestClient) la atiende en uno de portal distinto. La desactivación es
+        # segura mientras el acceso siga viniendo de un solo hilo a la vez.
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute(
