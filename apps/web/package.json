@@ -1,7 +1,7 @@
 {
   "name": "cort-web",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CORT — presencia holográfica. Interfaz web conectada al core por WebSocket.",
   "type": "module",
   "engines": {

@@ -29,6 +29,23 @@ MEDIA_KEYS = {"play": "XF86AudioPlay", "pause": "XF86AudioPause", "next": "XF86A
 
 TIMEOUT_S = float(os.getenv("CORT_ACTION_TIMEOUT_S", "5"))
 
+#: Cuánto hay que esperar a que una aplicación aparezca en la lista de procesos.
+#: No es un capricho: `thunar` tarda ~0,3 s en estar visible en esta máquina de
+#: dos núcleos, y comprobar antes diría "no arrancó" habiendo arrancado.
+SETTLE_S = float(os.getenv("CORT_LAUNCH_SETTLE_S", "0.8"))
+
+#: La lista cerrada de lo que CORT puede abrir. argv fijos, sin texto del usuario
+#: dentro, igual que `volume_argv` y `screenshot_argv`. Son las dos apps que
+#: existen en el equipo de desarrollo (medido con `command -v`); en Windows no
+#: hay ni una, y el fallo que produce está dicho abajo en vez de simulado.
+APPS = {
+    "archivos": ["thunar"],
+    "terminal": ["xfce4-terminal"],
+}
+
+#: Cómo se nombra cada app en la frase que CORT devuelve.
+APP_NOMBRE = {"archivos": "el gestor de archivos", "terminal": "la terminal"}
+
 
 def enabled() -> bool:
     return os.getenv("CORT_SYSTEM_ACTIONS", "1") != "0"
@@ -43,6 +60,32 @@ def volume_argv(delta: int) -> list[str]:
 def screenshot_argv(path: Path) -> list[str]:
     """`scrot -o <ruta>`: la ruta la elegimos nosotros, nunca el texto del usuario."""
     return ["scrot", "-o", str(path)]
+
+
+def pgrep_argv(name: str) -> list[str]:
+    """Cuántos procesos hay con ese nombre exacto.
+
+    `-x`, no `-f`: con `-f` valdría que cualquier comando mencionara la app en
+    sus argumentos para contarla como abierta. `-c` cuenta y no hay que parsear
+    una lista de pids.
+    """
+    return ["pgrep", "-c", "-x", name]
+
+
+async def launch_detached(argv: list[str]) -> None:
+    """Arranca y suelta: una GUI vive minutos, y `spawn` la estaría esperando.
+
+    `start_new_session` es lo que hace que cerrar CORT con `Ctrl+C` no se lleve
+    por delante el gestor de archivos que acabas de abrir: sin eso la app muere
+    con el grupo de procesos del lanzador.
+    """
+    await asyncio.create_subprocess_exec(
+        *argv,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+        start_new_session=True,
+    )
 
 
 def shot_path(now: datetime) -> Path:
@@ -88,6 +131,16 @@ def _percent(out: str) -> str | None:
 async def _level(runner) -> str | None:
     code, out = await runner(["wpctl", "get-volume", SINK])
     return _percent(out) if code == 0 else None
+
+
+async def _count(runner, name: str) -> int:
+    """Cuántos procesos hay con ese nombre. `pgrep -c` responde 1 y sale con
+    código 1 cuando no hay ninguno: ahí el número sí es el cero, no un fallo."""
+    code, out = await runner(pgrep_argv(name))
+    try:
+        return int(out.split()[0])
+    except (ValueError, IndexError):
+        return 0
 
 
 async def perform(intent: dict, runner=None) -> tuple[bool, str]:
@@ -155,5 +208,32 @@ async def perform(intent: dict, runner=None) -> tuple[bool, str]:
         if size < 1024:
             return False, f"la captura está vacía ({size} bytes)"
         return True, f"Captura guardada en «{path.name}» ({size // 1024} KB, en {path.parent})."
+
+    if action == "launch":
+        app = intent.get("app")
+        argv = APPS.get(app)
+        if not argv:
+            return False, f"la aplicación «{app}» no está en la lista permitida"
+        name = argv[0]
+        # Se cuenta antes y después por el mismo motivo que con el volumen: el
+        # arranque no devuelve un número que diga si la ventana existe. Y si la
+        # app ya estaba abierta, CORT no puede atribuirse mérito de abrirla.
+        before = await _count(runner, name)
+        try:
+            await launch_detached(argv)
+        except FileNotFoundError:
+            return False, f"{name} no está instalado en esta máquina"
+        except OSError as err:
+            return False, f"no pude lanzar {name}: {err.strerror or err}"
+        await asyncio.sleep(SETTLE_S)
+        after = await _count(runner, name)
+        if after > before:
+            return True, f"Abriendo {APP_NOMBRE[app]}."
+        if after > 0:
+            # «en marcha» y no «abierta»: el adjetivo tendría que concordar con
+            # cada app («el gestor ... abierto», «la terminal ... abierta») y
+            # esa tabla de géneros es un fallo buscando otra frase.
+            return True, f"{APP_NOMBRE[app].capitalize()} ya estaba en marcha."
+        return False, f"{name} no llegó a arrancar"
 
     return False, f"la acción «{action}» no está en la lista permitida"

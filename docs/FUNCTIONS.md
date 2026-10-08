@@ -43,7 +43,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | 28 | Parpadeo y mirada | ⬜ | M |
 | 29 | Expresiones según estado afectivo | ⬜ | M |
 | 30 | Shader holográfico (scanlines, fresnel) | 🔨 | M — hecho: bloom, aberración cromática, ruido, viñeta y scanlines CSS. Falta: fresnel sobre malla (nada de esto tiene geometría que iluminar todavía) |
-| 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo, chat y **estado del sistema** (`Telemetry.tsx`, visto en el navegador): recuerdos sobre el techo, modelo que contestó la última vez y si la capa de permisos está encendida. Falta: reloj y clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`) |
+| 31 | HUD (hora, clima, estado del sistema) | 🔨 | F — hecho: conexión, atuendo, chat, **estado del sistema** (`Telemetry.tsx`, visto en el navegador: recuerdos sobre el techo, modelo que contestó la última vez, capa de permisos encendida o apagada) y **reloj** en el cabezal (`Clock()` en `Hud.tsx`, medido en el navegador: `00:25:04 → 00:25:07` en 2,1 s; es un temporizador propio alineado al segundo, no un fotograma más del bucle de Three.js). Falta: clima real (hoy `CORT_CITY_TEMP_C` es un `TODO`) |
 | 32 | Burbuja flotante siempre visible (overlay transparente) | ⬜ | M (Electron en PC; Android requiere permiso de superposición) |
 | 61 | Efectos de un solo disparo en el holograma (`glitch · pulse · scan · shake · flash`) | ✅ | F — transplantado de `Effects.tsx` (MIT), atribuido en `apps/web/CREDITS.md`. El core emite `{"type":"effect","kind":"pulse"}` al ejecutar un intent. Verificado en el navegador con `MutationObserver`: onda de 0,9 s con el color del atuendo. Hoy **sólo lo dispara un intent**; ningún error lo usa todavía |
 
@@ -59,7 +59,7 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 ## Control de dispositivos
 | # | Función | Est. | Viab. |
 |---|---|---|---|
-| 45 | Abrir/cerrar aplicaciones | ⬜ | M |
+| 45 | Abrir/cerrar aplicaciones | 🔨 | F. **Abrir, verificado de extremo a extremo**: "abre la terminal" por WebSocket → `intent: launch` → `effect: pulse` → *«Abriendo la terminal.»*, y `pgrep -c -x xfce4-terminal` pasó de 0 a 1. Repetido con el gestor de archivos (`thunar`, 0→1), y a la segunda vez CORT dice «ya estaba en marcha» en vez de atribuirse un proceso que no creó. **Dos apps de una tabla cerrada**, no "cualquier cosa": el argv no lleva texto del usuario. **Cerrar** sigue ⬜ —matar procesos por nombre es la clase de mando que borra de más si la lista se ensancha— |
 | 46 | Brillo de pantalla | ⬜ | **D en Linux sin root**, medido hoy: `/sys/class/backlight/intel_backlight/brightness` es `root:root 644` sin ACL de sesión, y `brightnessctl`/`xbacklight` no están instalados. Volver a escribir el valor que ya tenía devolvió *Permiso denegado*. Se puede con una regla de udev o con `sudo` — decisión de ella, no de código—; mientras tanto no se escribe un mando que no va a obedecer |
 | 47 | Captura de pantalla | ✅ | F. **Verificado de extremo a extremo**: "haz una captura de pantalla" por WebSocket → `scrot` → PNG real de 140 265 bytes (1366×768) en disco, y CORT dice el archivo y su tamaño. Como con el volumen, se comprueba el archivo *después* de mandarlo: el `returncode` no basta |
 | 48 | Reproducir vídeo cuadro por cuadro (en tu reproductor) | ⬜ | M |

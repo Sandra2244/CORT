@@ -122,6 +122,11 @@ function open() {
     const m = JSON.parse(e.data)
     if (m.type === 'state') applyState(m)
     if (m.type === 'status') set({ status: readStatus(m) })
+    // El saludo es por conexión, y el log sobrevive a las reconexiones: sin el
+    // `msgs.length === 0` cada reintento del WebSocket añadiría un «Hola, soy
+    // CORT.» nuevo a una conversación que ya está en curso.
+    if (m.type === 'greeting' && snapshot.msgs.length === 0)
+      set({ msgs: [{ from: 'cort', text: m.text }] })
     if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })

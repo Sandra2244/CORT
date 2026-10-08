@@ -49,9 +49,15 @@ class TestProtocol(unittest.TestCase):
         """Tres marcos al conectar: el estado del holograma, el saludo y la
         telemetría. El orden es el que la interfaz necesita: el orbe se colorea
         antes de que llegue texto que leer. Devuelve los mensajes por si el test
-        quiere mirar algún campo."""
+        quiere mirar algún campo.
+
+        El saludo es `greeting`, no `assistant_message`: la interfaz lo pinta
+        sólo sobre un registro vacío, porque una reconexión no es una
+        presentación. Si volviera a viajar como mensaje normal, cada reintento
+        del WebSocket añadiría un «Hola, soy CORT.» a la conversación en curso
+        — cuatro reinicios, cuatro saludos, medido en el navegador."""
         got = [ws.receive_json() for _ in range(3)]
-        self.assertEqual(["state", "assistant_message", "status"], [m["type"] for m in got])
+        self.assertEqual(["state", "greeting", "status"], [m["type"] for m in got])
         return got
 
     def turn(self, ws, text):
@@ -66,6 +72,14 @@ class TestProtocol(unittest.TestCase):
     def test_connect_gives_state_then_greeting(self):
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)
+
+    def test_the_greeting_is_text_a_person_can_read(self):
+        """Viaja en su propio marco, así que hay que comprobar que sigue diciendo
+        algo: un `greeting` sin `text` pintaría una burbuja vacía al abrir."""
+        with self.client.websocket_connect("/ws") as ws:
+            g = self.handshake(ws)[1]
+        self.assertIsInstance(g["text"], str)
+        self.assertTrue(g["text"].strip())
 
     def test_the_status_frame_carries_the_telemetry_the_panel_paints(self):
         """La interfaz pinta estos campos sin comprobarlos, así que tienen que

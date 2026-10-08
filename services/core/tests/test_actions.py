@@ -277,5 +277,113 @@ class TestReadback(unittest.TestCase):
         self.assertIsNone(actions._percent("no default sink"))
 
 
+class CountingRunner:
+    """Responde a `pgrep -c` con los números pactados, en orden de llamada.
+
+    Con 0 procesos `pgrep` imprime "0" y sale con código 1: el fake imita las
+    dos cosas, porque un fake que siempre devolviera 0 mezclaría "no hay nadie"
+    con "no sé".
+    """
+
+    def __init__(self, counts):
+        self.counts = list(counts)
+        self.calls: list[list[str]] = []
+
+    async def __call__(self, argv):
+        self.calls.append(list(argv))
+        n = self.counts.pop(0) if self.counts else 0
+        return (0, str(n)) if n else (1, "0")
+
+
+class TestAbrirAplicaciones(unittest.IsolatedAsyncioTestCase):
+    """`launch` es la acción más peligrosa de la lista: pone ventanas en el
+    escritorio de Sandra. Aquí nada se ejecuta —el lanzador va sustituido— y lo
+    que se comprueba es la tabla cerrada y la lectura del proceso después.
+    """
+
+    def setUp(self):
+        self.lanzadas: list[list[str]] = []
+
+        async def fake_launch(argv):
+            self.lanzadas.append(list(argv))
+
+        patcher = mock.patch.object(actions, "launch_detached", fake_launch)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        # El reposo de 0,8 s existe porque una GUI tarda en aparecer; en los
+        # tests no hay GUI que esperar.
+        settle = mock.patch.object(actions, "SETTLE_S", 0.0)
+        settle.start()
+        self.addCleanup(settle.stop)
+
+    async def test_lo_que_se_lanza_es_exactamente_la_tabla(self):
+        ok, said = await actions.perform({"action": "launch", "app": "archivos"},
+                                         runner=CountingRunner([0, 1]))
+        self.assertTrue(ok, said)
+        self.assertEqual([["thunar"]], self.lanzadas)
+
+    async def test_lo_que_no_esta_en_la_tabla_no_se_lanza_ni_se_intenta(self):
+        runner = CountingRunner([])
+        ok, said = await actions.perform({"action": "launch", "app": "juegos"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertIn("no está en la lista", said)
+        self.assertEqual([], self.lanzadas)
+        self.assertEqual([], runner.calls, "ni siquiera se preguntó por el proceso")
+
+    async def test_la_prueba_de_que_abrio_es_un_proceso_mas(self):
+        """El returncode de un lanzador no dice nada: lo que cuenta es que
+        aparezca alguien nuevo en la lista de procesos."""
+        ok, said = await actions.perform({"action": "launch", "app": "terminal"},
+                                         runner=CountingRunner([0, 1]))
+        self.assertTrue(ok, said)
+        self.assertIn("Abriendo", said)
+
+    async def test_ya_estaba_abierta_no_es_un_exito_que_se_atribuya(self):
+        ok, said = await actions.perform({"action": "launch", "app": "archivos"},
+                                         runner=CountingRunner([2, 2]))
+        self.assertTrue(ok)
+        self.assertIn("ya estaba en marcha", said)
+        self.assertTrue(said.startswith("El"), "la frase va en mayúscula: es lo que lee Sandra")
+
+    async def test_sin_proceso_nuevo_no_hay_exito(self):
+        ok, said = await actions.perform({"action": "launch", "app": "archivos"},
+                                         runner=CountingRunner([0, 0]))
+        self.assertFalse(ok)
+        self.assertIn("no llegó a arrancar", said)
+
+    async def test_un_binario_que_no_existe_se_dice_como_lo_que_es(self):
+        async def missing(argv):
+            raise FileNotFoundError(2, "No such file")
+
+        with mock.patch.object(actions, "launch_detached", missing):
+            ok, said = await actions.perform({"action": "launch", "app": "archivos"},
+                                             runner=CountingRunner([0]))
+        self.assertFalse(ok)
+        self.assertIn("no está instalado", said)
+
+    async def test_el_kill_switch_tambien_cubre_las_apps(self):
+        runner = CountingRunner([])
+        restore = with_env(CORT_SYSTEM_ACTIONS="0")
+        self.addCleanup(restore)
+        ok, said = await actions.perform({"action": "launch", "app": "archivos"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertIn("apagadas", said)
+        self.assertEqual([], self.lanzadas)
+
+    def test_pgrep_pide_el_nombre_exacto(self):
+        """Con `-f` bastaría que algún proceso mencionara "thunar" en sus
+        argumentos para contar una ventana que no existe."""
+        self.assertEqual(["pgrep", "-c", "-x", "thunar"], actions.pgrep_argv("thunar"))
+
+    def test_la_tabla_no_deja_pasar_texto_ajeno(self):
+        for nombre, argv in actions.APPS.items():
+            self.assertIsInstance(argv, list)
+            self.assertTrue(argv, nombre)
+            for pieza in argv:
+                self.assertIsInstance(pieza, str)
+                self.assertNotIn("%s", pieza)
+                self.assertNotIn("{", pieza)
+
+
 if __name__ == "__main__":
     unittest.main()

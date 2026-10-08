@@ -35,7 +35,12 @@ async def ws(sock: WebSocket):
     history: list[dict] = []
     name = memory.name_of_user()
     await sock.send_json(state())
-    await sock.send_json({"type": "assistant_message",
+    # `greeting` y no `assistant_message`: el saludo es lo que CORT dice al
+    # *presentarse*, y una reconexión no es una presentación. Medido en el
+    # navegador: la pestaña que sobrevive a varios reinicios del core muestra el
+    # reintento cada tres segundos, y acumuló cuatro «Hola, soy CORT.» seguidos.
+    # La interfaz sólo pinta éste si el registro está vacío.
+    await sock.send_json({"type": "greeting",
                           "text": f"Hola de nuevo, {name}." if name else "Hola, soy CORT.",
                           "mood": "calm"})
     # Después del saludo, no antes: `count()` es una lectura al disco, y lo

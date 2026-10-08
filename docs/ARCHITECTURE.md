@@ -31,6 +31,7 @@ Mensajes JSON por WebSocket `ws://localhost:8765/ws`:
 ```json
 {"type":"user_message","text":"hola"}
 {"type":"assistant_message","text":"...","mood":"calm"}
+{"type":"greeting","text":"Hola, soy CORT.","mood":"calm"}
 {"type":"state","outfit":"casual","mood":"calm","thinking":false}
 {"type":"intent","action":"volume","delta":10}
 {"type":"effect","kind":"pulse"}
@@ -38,6 +39,8 @@ Mensajes JSON por WebSocket `ws://localhost:8765/ws`:
 ```
 Los tipos nuevos se añaden aquí primero y luego al código.
 (`intent` ya se emitía desde `server.py` pero no estaba documentado: se añade aquí en cumplimiento de la regla 5 de `AGENTS.md`.)
+
+`greeting` es el saludo y viaja **separado** de `assistant_message` por un motivo medido: el core lo manda en cada conexión, y el cliente reconecta a los tres segundos cuando el servidor se cae o se reinicia. Como `assistant_message` que fuera, cada reintento habría añadido un «Hola, soy CORT.» más a una conversación ya empezada —cuatro, en la captura que lo destapó—. El cliente lo pinta **sólo si el registro está vacío**: presentarse está bien al abrir la página, no al recuperar el cable.
 
 `status` es **lo que CORT puede afirmar de sí mismo**: recuentos y hechos medidos en el proceso, no adornos. Se manda al conectar —después del saludo— y al cerrar cada turno, tanto si pasó por el LLM como si fue un atajo de `intents`. Sale de `status.py`, que lee tres cosas y nada más: `memory.count()` (un `SELECT COUNT(*)`, no la base entera), `brain.last_model()` y `brain.last_reachable()`, `actions.enabled()`. Los tres campos de `brain` son `null` hasta que `think()` se ejecuta de verdad: el panel no puede nombrar un modelo que todavía no habló. El cliente valida cada campo antes de pintarlo (`readStatus` en `connection.ts`) porque el panel muestra lo que recibe sin comprobarlo.
 
@@ -49,12 +52,13 @@ Un `intent` ya no es un "entendido": ejecuta. Y ejecuta **sólo lo que está en 
 - `volume` → `wpctl get-volume`, luego `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 10%+`, luego `wpctl get-volume` otra vez.
 - `media` (play/pause/next) → `xdotool key XF86Audio*`.
 - `screenshot` → `scrot -o <ruta>`. La ruta la genera `shot_path()` con la marca de tiempo y microsegundos —**nunca** con el texto de la orden—, en `~/Imágenes/CORT` o donde diga `CORT_SHOTS_DIR`. Después de mandar el comando se mira el archivo: si no aparece o pesa menos de 1 KiB, no cuenta como éxito.
+- `launch` → una de las dos entradas de la tabla `APPS` (`archivos` → `thunar`, `terminal` → `xfce4-terminal`), arrancada **desprendida del lanzador** (`start_new_session`) para que cerrar CORT no se lleve por delante la ventana que acabas de abrir. El argv no lleva argumentos: la tabla es cerrada y lo que el usuario dice solo selecciona una de sus claves. La prueba es un `pgrep -c -x <nombre>` antes y otro después —el reposo intermedio lo fija `CORT_LAUNCH_SETTLE_S`—: si hay un proceso más, se abrió; si había alguno y sigue habiendo el mismo, CORT dice «ya estaba en marcha» en vez de atribuirse el mérito.
 
 Lo que la hace una capa de permisos y no un `subprocess` suelto:
 1. **El argv es una lista fija, ejecutada con `asyncio.create_subprocess_exec`.** No hay `shell=True`, y en los argumentos no entra ni el texto del usuario ni la salida del LLM: sólo un `delta` entero que sale de *nuestra* tabla de patrones en `intents.py`, y una clave de tecla de una constante. El texto de la orden se separa del identificador de destino por comas, nunca por concatenación.
 2. **El LLM no tiene herramientas.** `brain.py` devuelve texto y ese texto se pinta; no se interpreta ni se ejecuta. Pedirle "borra la carpeta tal" no borra nada, porque no hay camino del modelo al shell. Si algún día lo hay, ese camino es este módulo y su lista.
 3. **Se puede apagar sin tocar código**: `CORT_SYSTEM_ACTIONS=0` deja el asistente mudo pero inofensivo. Es también lo que hace que la suite de pruebas no le mueva el volumen a Sandra.
-4. **El resultado se comprueba, no se supone.** Se mira el `returncode`, y en el volumen **se lee el nivel antes y después**: lo que CORT afirma es la diferencia que PipeWire aplicó, no la que se pidió. No es un detalle — medido en el portátil de desarrollo, con el sink en *Dummy Output* `wpctl set-volume` responde 0 y el nivel no se mueve; un filtro por `returncode` habría dicho «hecho» ante una nada. Cuando el nivel no cambia, CORT lo dice y el holograma se rasga en vez de ondular.
+4. **El resultado se comprueba, no se supone.** Se mira el `returncode`, y en el volumen **se lee el nivel antes y después**: lo que CORT afirma es la diferencia que PipeWire aplicó, no la que se pidió. No es un detalle — medido en el portátil de desarrollo, con el sink en *Dummy Output* `wpctl set-volume` responde 0 y el nivel no se mueve; un filtro por `returncode` habría dicho «hecho» ante una nada. Cuando el nivel no cambia, CORT lo dice y el holograma se rasga en vez de ondular. La misma regla gobierna los otros dos mandos: la captura se **mira en disco** y la app se **cuenta en la lista de procesos**, porque un lanzador que devuelve 0 no prueba que haya ventana.
 5. **Todo lo demás se declara fuera de la lista.** `equalizer` y cualquier acción no contemplada responden «no está en la lista permitida» con `glitch`, en vez de fingir un «entendido». El **brillo** tampoco está, y no por olvido: en esta máquina el archivo de control es `root:root 644` sin ACL de sesión, así que el mando fallaría siempre (medido).
 
 ## Arranque (`scripts/cort.py`) — una sola puerta, dos modos
@@ -89,7 +93,7 @@ Transplantado de `~/Documentos/jarvis` (**MIT**, ver `apps/web/CREDITS.md`). Sin
 - `scene/Core.tsx` — el reactor. **Un solo quad mirando a cámara** con un shader de coordenadas polares: la geometría no dibuja nada, todo es función de radio y ángulo (anillo erosionado por fbm, polvo, barrido radar, líneas concentricas). Por eso el borde es turbulencia real por píxel y no una malla deformada.
 - `scene/Particles.tsx` — 4000 puntos en una cáscara que se expande con el volumen.
 - `scene/Scene.tsx` — `EffectComposer` con Bloom + aberración cromática + ruido + viñeta. Eso, y no la geometría, es lo que convierte líneas aditivas en "holograma". `multisampling={0}`: no hay una sola arista poligonal que suavizar.
-- `ui/Hud.tsx` — estado, registro de mensajes y entrada de texto.
+- `ui/Hud.tsx` — estado, registro de mensajes y entrada de texto. El `Clock()` del cabezal tiene su propio temporizador (`setTimeout` hasta el siguiente segundo exacto, luego `setInterval`) en vez de vivir en el `Snapshot`: colgado del estado global, cada segundo del mundo obligaría a reconciliar el HUD entero. `font-variant-numeric: tabular-nums` para que los dígitos no bailen al cambiar.
 - `ui/Telemetry.tsx` — el panel de arriba a la derecha: recuerdos, cerebro y estado de la capa de permisos, pintados del tinte del atuendo. Escrito sin dependencias nuevas a propósito — ni `zustand` ni `framer-motion` — porque aquí cada librería son megas de RAM que el reactor deja de tener. No se pinta hasta que llega el primer `status`.
 - `ui/Effects.tsx` — la capa de un solo disparo. Vive **fuera** de `.hud` y cuelga a pantalla completa mientras suena algo; al terminar se desmonta, así que una sesión sin efectos no tiene ningún nodo decorativo en el DOM. Repite el `key` con la marca de tiempo del mensaje para que cinco `flash` seguidos sean cinco destellos y no uno que se re-aplica.
 

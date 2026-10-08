@@ -55,10 +55,21 @@ body {
 .status {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   color: var(--dim);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
+}
+
+/* La hora del HUD. `tabular-nums` no es capricho: con cifras proporcionales el
+   reloj baila un par de píxeles cada segundo y el cabezal entero respira. */
+.clock {
+  margin-left: auto;
+  color: var(--tint);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
 }
 
 .status em {

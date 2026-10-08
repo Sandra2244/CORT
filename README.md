@@ -4,9 +4,9 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.3.0`** · rama `cort-local-verified` · 108 pruebas en verde.
+**Prototipo actual: `v0.4.0`** · rama `cort-local-verified` · 122 pruebas en verde.
 
-![CORT: reactor holográfico, panel de telemetría y HUD](docs/assets/prototipo-v0.3.0.png)
+![CORT: reactor holográfico, panel de telemetría, HUD con reloj](docs/assets/prototipo-v0.4.0.png)
 
 ---
 
@@ -20,14 +20,14 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 💬 | **Chat por WebSocket** contra un core Python/FastAPI | Cliente real + pruebas de protocolo |
 | 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"* | Probado matando y reiniciando el proceso |
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
-| ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito; hace una **captura de pantalla** con `scrot` y **comprueba el archivo** antes de decir que la hizo | Verificado por WebSocket contra `pipewire` y contra disco: PNG real de 1366×768 |
+| ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito; hace una **captura de pantalla** con `scrot` y **comprueba el archivo** antes de decir que la hizo; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra `pipewire`, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar | `MutationObserver` en el navegador |
-| 📊 | **Panel de telemetría**: cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó la última vez, si las acciones del sistema están encendidas. Con el kill switch puesto el panel dice «apagadas» en vez de fingir | 108 pruebas (`test_status` 9, `test_protocol` 7) y cliente real contra el core: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}` |
+| 📊 | **Panel de telemetría**: cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó la última vez, si las acciones del sistema están encendidas. Con el kill switch puesto el panel dice «apagadas» en vez de fingir. Y **reloj** en el cabezal del HUD | `test_status` (9) y `test_protocol` (8), y cliente real contra el core: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido en el navegador: `00:25:04 → 00:25:07` en 2,1 s |
 | 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, y una terminal con banner y barras de estado (core · interfaz · ollama · memoria) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida a archivo |
 | 🎨 | **Atuendo por hora y temperatura**, igual que el holograma de Cortana | Pruebas de lógica |
 | 📱 | **Interfaz preparada para táctil** (pulsaciones de 48 px, sin auto-zoom, `safe-area`) | Escrita, **sin verificar en un móvil real** |
 
-Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM, gestos con cámara y control de apps. Motivos concretos en [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) y [`docs/STATUS.md`](docs/FUNCTIONS.md).
+Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM y gestos con cámara. Motivos concretos en [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) y [`docs/STATUS.md`](docs/FUNCTIONS.md).
 
 ---
 
@@ -35,7 +35,7 @@ Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM, gestos 
 
 ```bash
 make setup     # crea el venv e instala las dependencias del core
-make test      # 108 pruebas
+make test      # 122 pruebas
 make launch    # TODO: core + interfaz + navegador, con terminal de marca
 ```
 
@@ -79,7 +79,7 @@ Configuración por variables de entorno (no hay cargador de `.env` todavía): [`
 
 ## La interfaz
 
-Un solo cuadro de mando: el reactor en el centro, el chat abajo y arriba a la derecha **lo que CORT sabe de sí mismo** —recuerdos guardados sobre el techo que tiene, el modelo que contestó la última vez, si la capa de permisos está encendida—. Todo el color sale de **un único sitio** (`apps/web/src/cort/palette.ts`), así que la onda, el HUD, el panel y el anillo nunca discuten. El estado viaja por WebSocket en dos capas deliberadamente separadas —un snapshot inmutable para React y un objeto mutable que la escena persigue con `lerp`—, que es lo que hace que cambiar de atuendo **respire** en vez de parpadear.
+Un solo cuadro de mando: el reactor en el centro, el chat abajo con su **reloj**, y arriba a la derecha **lo que CORT sabe de sí mismo** —recuerdos guardados sobre el techo que tiene, el modelo que contestó la última vez, si la capa de permisos está encendida—. Todo el color sale de **un único sitio** (`apps/web/src/cort/palette.ts`), así que la onda, el HUD, el panel y el anillo nunca discuten. El estado viaja por WebSocket en dos capas deliberadamente separadas —un snapshot inmutable para React y un objeto mutable que la escena persigue con `lerp`—, que es lo que hace que cambiar de atuendo **respire** en vez de parpadear.
 
 Sin `zustand`, sin `@react-three/drei`, sin framework de UI. Cada dependencia es memoria en una máquina que no tiene.
 
