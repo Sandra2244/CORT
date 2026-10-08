@@ -4,7 +4,7 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.4.1`** · rama `cort-local-verified` · 122 pruebas en verde.
+**Prototipo actual: `v0.4.2`** · rama `cort-local-verified` · 124 pruebas en verde.
 
 ![CORT: reactor holográfico, panel de telemetría, HUD con reloj](docs/assets/prototipo-v0.4.0.png)
 
@@ -18,7 +18,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 |---|---|---|
 | 🔮 | **Reactor holográfico**: anillo de plasma en GLSL, polvo de 4000 puntos, bloom, aberración cromática, líneas de barrido. Paleta azul/violeta Cortana, cinco atuendos | Capturas reales a `localhost:5173`; **18 fps sin GPU** |
 | 💬 | **Chat por WebSocket** contra un core Python/FastAPI | Cliente real + pruebas de protocolo |
-| 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"* | Probado matando y reiniciando el proceso |
+| 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"*. Y al armar el prompt **rescata por contenido, no por fecha**: con 303 recuerdos de prueba los tres datos del usuario van delante, no los seis más recientes | Probado matando y reiniciando el proceso; 28 pruebas de memoria, una cronometrada en 2,42 ms |
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
 | ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito; hace una **captura de pantalla** con `scrot` y **comprueba el archivo** antes de decir que la hizo; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra `pipewire`, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar | `MutationObserver` en el navegador |
@@ -35,7 +35,7 @@ Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM y gestos
 
 ```bash
 make setup     # crea el venv e instala las dependencias del core
-make test      # 122 pruebas
+make test      # 124 pruebas
 make launch    # TODO: core + interfaz + navegador, con terminal de marca
 ```
 

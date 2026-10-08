@@ -73,6 +73,44 @@ class TestStore(unittest.TestCase):
         self.assertEqual(6, len(store.context_for("¿qué sabes de mí?")))
         self.assertEqual(["Dato número 19"], store.context_for("¿qué sabes de mí?", limit=1))
 
+    def test_el_rescate_prioriza_lo_declarado_sobre_lo_reciente(self):
+        """El criterio era "los más recientes" y medido era ruido: con 50
+        "Preferencia NNN" escritos después del nombre, ésos tapaban al nombre.
+        Ahora el orden lo dice el contenido, no la fecha."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+        store.remember("Al usuario le gusta el café")
+        for i in range(50):
+            store.remember(f"Preferencia {i}")
+        ctx = store.context_for("¿qué sabes de mí?")
+        self.assertEqual(["El usuario se llama Sandra", "Al usuario le gusta el café"], ctx[:2])
+        self.assertEqual([f"Preferencia {i}" for i in (49, 48, 47, 46)], ctx[2:])
+
+    def test_el_rescate_cabe_una_consulta_y_no_vaciar_la_base(self):
+        """`all()[-limit:]` leía todos los recuerdos para quedarse con seis. Con
+        el techo en 200 da igual; con el `context_for` preguntando en cada turno
+        no. Se spy-ea la conexión: si vuelve a haber un escaneo sin `LIMIT`, esto
+        lo pilla."""
+        store = MemoryStore(self.db)
+        store.remember("El usuario se llama Sandra")
+
+        class Proxy:
+            def __init__(self, conn):
+                self.conn = conn
+                self.sql: list[str] = []
+
+            def execute(self, statement, *args, **kwargs):
+                self.sql.append(statement)
+                return self.conn.execute(statement, *args, **kwargs)
+
+        proxy = Proxy(store.conn)
+        store.conn = proxy
+        store.context_for("¿qué sabes de mí?")
+        rescate = [s for s in proxy.sql if "CASE" in s]
+        self.assertEqual(1, len(rescate))
+        self.assertIn("LIMIT", rescate[0])
+        self.assertNotIn("SELECT content FROM memories ORDER BY id", proxy.sql)
+
     def test_creates_missing_parent_dir(self):
         nested = pathlib.Path(self.tmp.name) / "a" / "b" / "memory.db"
         store = MemoryStore(nested)

@@ -100,11 +100,34 @@ class MemoryStore:
         `recall` coincide por raíces de 4 letras, así que "¿qué sabes de mí?" no
         encuentra "El usuario se llama Sandra": no comparten ninguna raíz. Sin
         ese rescate la pregunta llegaba al modelo sin contexto y CORT contestaba
-        —con razón— que no sabía nada del usuario. Si nada coincide, mejor
-        entregar los recuerdos más recientes que no entregar nada. El `limit`
-        importa: evaluar el prompt es lo caro de esta máquina.
+        —con razón— que no sabía nada del usuario.
+
+        El rescate **ya no es "los más recientes"**, que era lo que sonaba bien y
+        medido resultó ruido: con 300 recuerdos de prueba "¿qué sabes de mí?" se
+        traía cinco "Preferencia NNN" por ser los últimos y dejaba fuera el nombre.
+        Ahora ordena por **qué dice** el recuerdo: primero cómo se llama la
+        persona, después lo declarado como hecho propio (`El usuario …`,
+        `Al usuario …`), y se rellena con el resto del más nuevo al más viejo.
+
+        Una sola consulta con `CASE`, y no `all()` cortado en Python: leer la base
+        entera para quedarse con seis filas es justo lo que `count()` evita. El
+        `limit` importa: evaluar el prompt es lo caro de esta máquina.
         """
-        return self.recall(query) or self.all()[-limit:]
+        hits = self.recall(query)
+        if hits:
+            return hits
+        rows = self.conn.execute(
+            """SELECT content FROM memories
+               ORDER BY CASE
+                          WHEN content LIKE 'El usuario se llama%' THEN 0
+                          WHEN content LIKE 'El usuario %' OR content LIKE 'Al usuario %' THEN 1
+                          ELSE 2
+                        END,
+                        id DESC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [row["content"] for row in rows]
 
     def name_of_user(self) -> str | None:
         row = self.conn.execute(
