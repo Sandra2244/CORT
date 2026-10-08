@@ -46,6 +46,9 @@ function Rig() {
     drive.hot.lerp(target.hot, k)
     drive.spin += (target.spin - drive.spin) * Math.min(1, dt * 2)
     drive.open += (target.open - drive.open) * Math.min(1, dt * 1.6)
+    // El tamaño que pidió la usuaria, perseguido igual que el color: un salto
+    // directo se vería como un tirón, y esto es un holograma que respira.
+    drive.scale += (target.zoom - drive.scale) * Math.min(1, dt * 3)
 
     // Sin micrófono todavía: el nivel es una respiración, y pensar la agita.
     const idle = 0.05 + (target.spin > 1 ? 0.22 : 0)

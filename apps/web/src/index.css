@@ -201,6 +201,106 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+/* ─── Tamaño del reactor ──────────────────────────────────────────────────
+   Va dentro del HUD, entre el cabezal y el registro: en el teléfono el borde
+   izquierdo de la pantalla cae justo debajo del pulgar, y un panel flotante
+   taparía el orbe que se está redimensionando. */
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 44 px: el mínimo táctil. Un slider de 20 px se ve fino y no se acierta. */
+  min-height: 44px;
+}
+
+.zoom-label {
+  color: var(--dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  flex-shrink: 0;
+}
+
+.zoom-value {
+  color: var(--tint);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  /* Ancho fijo para que el «100%» y el «50%» no muevan el slider al arrastrar. */
+  min-width: 3.2em;
+  text-align: right;
+}
+
+.zoom-btn {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--tint);
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+}
+
+/* El `input` global de arriba (flex:1, fondo, borde) está pensado para el campo
+   de texto; un slider con ese fondo parece un botón roto. Aquí se anula y se
+   pinta el rastro como un hilo de luz, que es lo que combina con el holograma. */
+.zoom-slider {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.zoom-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, rgba(120, 190, 230, 0.25), var(--tint));
+}
+
+.zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  /* El rastro mide 2 px y el cursor 16: sin este desfase el thumb queda
+     desplazado medio centímetro del hilo que representa su valor. */
+  margin-top: -7px;
+  border-radius: 50%;
+  background: var(--tint);
+  box-shadow: 0 0 12px var(--tint);
+}
+
+.zoom-slider::-moz-range-track {
+  height: 2px;
+  background: linear-gradient(to right, rgba(120, 190, 230, 0.25), var(--tint));
+}
+
+.zoom-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--tint);
+  box-shadow: 0 0 12px var(--tint);
+}
+
+@media (max-width: 520px) {
+  /* En el teléfono el registro vale más que la cifra: el porcentaje se cae y
+     el slider recupera los píxeles que ocupaba. */
+  .zoom-value {
+    display: none;
+  }
+
+  .zoom-label {
+    display: none;
+  }
+}
+
 @media (max-width: 520px) {
   .log p {
     max-width: 92%;

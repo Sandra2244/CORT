@@ -99,6 +99,10 @@ export function Particles({ drive }: { drive: Drive }) {
     if (!mat.current || !pts.current) return
     const u = mat.current.uniforms
     pts.current.visible = drive.visible
+    // El polvo crece con el anillo: si sólo se escalara el reactor, al agrandar
+    // el orbe la cáscara de puntos se quedaría corta y el holograma se vería
+    // desmontado.
+    pts.current.scale.setScalar(drive.scale)
     u.uIntensity.value = drive.intensity
     u.uTime.value = state.clock.elapsedTime
     u.uLevel.value += (drive.level - u.uLevel.value) * Math.min(1, dt * 6)

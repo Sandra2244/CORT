@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getSnapshot, send, subscribe } from '../cort/connection'
+import { getSnapshot, send, setZoom, subscribe, target, zoomLimits } from '../cort/connection'
 import { palette } from '../cort/palette'
 
 /**
@@ -36,6 +36,47 @@ function Clock() {
   )
 }
 
+/**
+ * El tamaño del reactor.
+ *
+ * Mueve `target.zoom`, no estado de React: el orbe lo persigue con lerp en el
+ * bucle de la escena, así que al arrastrar crece en vez de saltar, y el slider
+ * no reconcilia el registro de mensajes 60 veces por segundo. Aquí sólo hay un
+ * número local para que la cifra «128%» se vea.
+ *
+ * Botones ± además del slider: en el teléfono el pulgar no acierta con un
+ * cursor de 2 px, y un botón de 44 px siempre se toca.
+ */
+function ZoomControl() {
+  const [zoom, setZoomUi] = useState(target.zoom)
+
+  function apply(factor: number) {
+    // `setZoom` recorta al margen y devuelve el valor ya válido: la UI pinta el
+    // recortado, no el que se pidió. Si no, el slider quedaría mentiroso al
+    // llegar al fondo.
+    setZoomUi(setZoom(factor))
+  }
+
+  return (
+    <div className="zoom">
+      <span className="zoom-label">tamaño</span>
+      <button type="button" className="zoom-btn" aria-label="reducir el reactor" onClick={() => apply(zoom - 0.2)}>−</button>
+      <input
+        className="zoom-slider"
+        type="range"
+        min={zoomLimits.min}
+        max={zoomLimits.max}
+        step={0.02}
+        value={zoom}
+        onChange={(e) => apply(Number(e.target.value))}
+        aria-label="tamaño del reactor"
+      />
+      <button type="button" className="zoom-btn" aria-label="agrandar el reactor" onClick={() => apply(zoom + 0.2)}>+</button>
+      <span className="zoom-value">{Math.round(zoom * 100)}%</span>
+    </div>
+  )
+}
+
 export function Hud() {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
@@ -60,8 +101,14 @@ export function Hud() {
         <span className={`dot ${s.online ? 'on' : 'off'}`} />
         {s.online ? (s.thinking ? 'CORT procesando' : 'CORT en línea') : 'Sin conexión con el core — ejecuta: make dev'}
         {s.online && <em> · atuendo {s.outfit}</em>}
+        {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
+            no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un
+            dato que no pidió nadie. */}
+        {s.clima && <em> · {s.clima.city} {s.clima.temp_c.toFixed(0)}°</em>}
         <Clock />
       </header>
+
+      <ZoomControl />
 
       <div className="log" ref={log} role="log" aria-live="polite">
         {s.msgs.map((m, i) => (

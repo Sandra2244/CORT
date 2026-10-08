@@ -48,6 +48,12 @@ export type Snapshot = {
   msgs: Msg[]
   status: Status | null
   /**
+   * Clima medido por el core, o `null` si no hay ciudad configurada. Se pinta
+   * sólo con datos reales: un `0°` inventado en el cabezal sería el mismo error
+   * que el panel de telemetría evita con `brain: null` hasta que alguien hable.
+   */
+  clima: { city: string; temp_c: number } | null
+  /**
    * `at` es la marca de tiempo del mensaje, y existe sólo para que repetir el
    * mismo efecto vuelva a dispararlo: sin una clave que cambie, React no
    * remontaría el nodo y la animación CSS no tendría de dónde arrancar.
@@ -66,6 +72,7 @@ let snapshot: Snapshot = {
   thinking: false,
   msgs: [],
   status: null,
+  clima: null,
   effect: null,
 }
 const listeners = new Set<() => void>()
@@ -92,11 +99,33 @@ export const target = {
   hot: new THREE.Color(palette[DEFAULT_OUTFIT].hot),
   spin: SPIN.idle,
   open: 0,
+  /**
+   * Tamaño del reactor que pide la usuaria, 1 = el de siempre. Vive aquí y no
+   * en estado de React por el mismo motivo que el color: la escena lo persigue
+   * con lerp cada frame, así que el orbe **crece** en vez de saltar. Y mover el
+   * slider no reconcilia el HUD 60 veces por segundo en una máquina de 2 núcleos.
+   */
+  zoom: 1,
 }
 
-// El core escucha en 127.0.0.1; si se abre la web desde otro equipo de la red,
-// location.hostname ya apunta a esa máquina y no hace falta reescribir la URL.
-const WS_URL = `ws://${location.hostname || '127.0.0.1'}:8765/ws`
+/** El margen que el shader aguanta sin que el anillo se salga del cuadro. */
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2
+
+export function setZoom(factor: number) {
+  if (!Number.isFinite(factor)) return target.zoom
+  target.zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, factor))
+  return target.zoom
+}
+
+export const zoomLimits = { min: ZOOM_MIN, max: ZOOM_MAX }
+
+// El core escucha en 127.0.0.1; si se abre la web desde otro equipo de la red
+// (`cort.py --lan`), `location.hostname` ya apunta a esa máquina y no hace falta
+// reescribir la URL. El `wss` no es una promesa de HTTPS: es para que, si algún
+// día la interfaz se sirve con certificado, el navegador no bloquee el cable por
+// mezclar protocolos con un error que no se entiende.
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8765/ws`
 
 let sock: WebSocket | null = null
 let timer: number | undefined
@@ -145,7 +174,7 @@ export function connect() {
   }
 }
 
-function applyState(m: { outfit?: string; thinking?: boolean }) {
+function applyState(m: { outfit?: string; thinking?: boolean; city?: string; temp_c?: number }) {
   const outfit = (m.outfit ?? DEFAULT_OUTFIT) as Outfit
   const tint = palette[outfit] ?? palette[DEFAULT_OUTFIT]
   const thinking = Boolean(m.thinking)
@@ -153,7 +182,12 @@ function applyState(m: { outfit?: string; thinking?: boolean }) {
   target.hot.set(thinking ? THINKING_HOT : tint.hot)
   target.spin = thinking ? SPIN.thinking : SPIN.idle
   target.open = 1.6
-  set({ online: true, outfit, thinking })
+  // `Number.isFinite` y no `if (m.temp_c)`: 0 °C es un clima real, y con la
+  // comprobación a secas el HUD lo pintaría como "sin ciudad".
+  const clima = Number.isFinite(m.temp_c) && typeof m.city === 'string'
+    ? { city: m.city, temp_c: m.temp_c as number }
+    : null
+  set({ online: true, outfit, thinking, clima })
 }
 
 export function send(text: string) {
