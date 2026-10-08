@@ -45,13 +45,14 @@ Un `intent` ya no es un "entendido": ejecuta. Y ejecuta **sólo lo que está en 
 
 - `volume` → `wpctl get-volume`, luego `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 10%+`, luego `wpctl get-volume` otra vez.
 - `media` (play/pause/next) → `xdotool key XF86Audio*`.
+- `screenshot` → `scrot -o <ruta>`. La ruta la genera `shot_path()` con la marca de tiempo y microsegundos —**nunca** con el texto de la orden—, en `~/Imágenes/CORT` o donde diga `CORT_SHOTS_DIR`. Después de mandar el comando se mira el archivo: si no aparece o pesa menos de 1 KiB, no cuenta como éxito.
 
 Lo que la hace una capa de permisos y no un `subprocess` suelto:
 1. **El argv es una lista fija, ejecutada con `asyncio.create_subprocess_exec`.** No hay `shell=True`, y en los argumentos no entra ni el texto del usuario ni la salida del LLM: sólo un `delta` entero que sale de *nuestra* tabla de patrones en `intents.py`, y una clave de tecla de una constante. El texto de la orden se separa del identificador de destino por comas, nunca por concatenación.
 2. **El LLM no tiene herramientas.** `brain.py` devuelve texto y ese texto se pinta; no se interpreta ni se ejecuta. Pedirle "borra la carpeta tal" no borra nada, porque no hay camino del modelo al shell. Si algún día lo hay, ese camino es este módulo y su lista.
 3. **Se puede apagar sin tocar código**: `CORT_SYSTEM_ACTIONS=0` deja el asistente mudo pero inofensivo. Es también lo que hace que la suite de pruebas no le mueva el volumen a Sandra.
 4. **El resultado se comprueba, no se supone.** Se mira el `returncode`, y en el volumen **se lee el nivel antes y después**: lo que CORT afirma es la diferencia que PipeWire aplicó, no la que se pidió. No es un detalle — medido en el portátil de desarrollo, con el sink en *Dummy Output* `wpctl set-volume` responde 0 y el nivel no se mueve; un filtro por `returncode` habría dicho «hecho» ante una nada. Cuando el nivel no cambia, CORT lo dice y el holograma se rasga en vez de ondular.
-5. **Todo lo demás se declara fuera de la lista.** `equalizer` y cualquier acción no contemplada responden «no está en la lista permitida» con `glitch`, en vez de fingir un «entendido».
+5. **Todo lo demás se declara fuera de la lista.** `equalizer` y cualquier acción no contemplada responden «no está en la lista permitida» con `glitch`, en vez de fingir un «entendido». El **brillo** tampoco está, y no por olvido: en esta máquina el archivo de control es `root:root 644` sin ACL de sesión, así que el mando fallaría siempre (medido).
 
 ## Arranque (`scripts/cort.py`) — una sola puerta, dos modos
 El lanzador es **la única** forma soportada de encender CORT entero, y el doble clic (`CORT.desktop`, `cort.bat`) no hace más que llamarlo. Sin dependencias y sin framework de terminal: ANSI directo con la biblioteca estándar.

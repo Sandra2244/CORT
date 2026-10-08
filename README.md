@@ -4,7 +4,7 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.1.0`** · rama `cort-local-verified` · 89 pruebas en verde.
+**Prototipo actual: `v0.2.0`** · rama `cort-local-verified` · 98 pruebas en verde.
 
 ![CORT: reactor holográfico y HUD](docs/assets/prototipo-v0.1.0.png)
 
@@ -20,7 +20,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 💬 | **Chat por WebSocket** contra un core Python/FastAPI | Cliente real + pruebas de protocolo |
 | 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"* | Probado matando y reiniciando el proceso |
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
-| ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito | Verificado por WebSocket contra `pipewire` |
+| ⚡ | **Acciones reales en el sistema** a través de una capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después** para no fingir un éxito; hace una **captura de pantalla** con `scrot` y **comprueba el archivo** antes de decir que la hizo | Verificado por WebSocket contra `pipewire` y contra disco: PNG real de 1366×768 |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar | `MutationObserver` en el navegador |
 | 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, y una terminal con banner y barras de estado (core · interfaz · ollama · memoria) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida a archivo |
 | 🎨 | **Atuendo por hora y temperatura**, igual que el holograma de Cortana | Pruebas de lógica |
@@ -34,7 +34,7 @@ Lo que **todavía no está**, dicho en vez de simulado: voz, avatar VRM, gestos 
 
 ```bash
 make setup     # crea el venv e instala las dependencias del core
-make test      # 89 pruebas
+make test      # 98 pruebas
 make launch    # TODO: core + interfaz + navegador, con terminal de marca
 ```
 

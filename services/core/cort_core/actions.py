@@ -13,8 +13,14 @@ audio real de esta máquina.
 import asyncio
 import os
 import re
+from datetime import datetime
+from pathlib import Path
 
 SINK = "@DEFAULT_AUDIO_SINK@"
+
+#: Donde caen las capturas. `~/Imágenes` es el XDG Pictures de esta máquina
+#: (medido con `xdg-user-dir PICTURES`); con `CORT_SHOTS_DIR` se cambia.
+SHOTS_DIR = Path(os.getenv("CORT_SHOTS_DIR") or Path.home() / "Imágenes" / "CORT")
 
 #: Los únicos reproductores que se manejan por tecla. `playerctl` no está
 #: instalado en el equipo de desarrollo, y una tecla XF86 la escucha el que
@@ -32,6 +38,20 @@ def volume_argv(delta: int) -> list[str]:
     """`10%+` / `10%-`, y `-l 1.0` para que subir no pase del tope."""
     step = f"{abs(int(delta))}%" + ("+" if int(delta) > 0 else "-")
     return ["wpctl", "set-volume", "-l", "1.0", SINK, step]
+
+
+def shot_path(now: datetime) -> Path:
+    """Nombre de la captura, generado por nosotros.
+
+    La marca de tiempo lleva microsegundos para que dos órdenes en el mismo
+    segundo no se pisen: `-o` de scrot sobreescribe, y perder una captura por
+    un nombre repetido no es un fallo que se vea.
+    """
+    return SHOTS_DIR / f"cort-{now:%Y%m%d-%H%M%S-%f}.png"
+
+
+def screenshot_argv(path: Path) -> list[str]:
+    return ["scrot", "-o", str(path)]
 
 
 async def spawn(argv: list[str]) -> tuple[int, str]:
@@ -114,5 +134,25 @@ async def perform(intent: dict, runner=None) -> tuple[bool, str]:
         if code != 0:
             return False, f"no pude enviar la tecla: {out or f'xdotool devolvió {code}'}"
         return True, f"Enviar {key}."
+
+    if action == "screenshot":
+        path = shot_path(datetime.now())
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as err:
+            return False, f"no puedo escribir en {path.parent}: {err.strerror or err}"
+        code, out = await runner(screenshot_argv(path))
+        if code != 0:
+            return False, f"no pude tomar la captura: {out or f'scrot devolvió {code}'}"
+        # La misma lección que con el volumen: el returncode no es la prueba de
+        # que algo ocurriera. Sin archivo no hay captura, por muy bien que le
+        # haya ido al mando.
+        try:
+            size = path.stat().st_size
+        except OSError:
+            return False, f"scrot respondió bien y {path.name} no apareció"
+        if size < 1024:
+            return False, f"la captura está vacía ({size} bytes)"
+        return True, f"Captura guardada en «{path.name}» ({size // 1024} KB, en {path.parent})."
 
     return False, f"la acción «{action}» no está en la lista permitida"

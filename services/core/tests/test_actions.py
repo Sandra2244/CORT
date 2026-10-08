@@ -1,7 +1,10 @@
 import os
 import pathlib
 import sys
+import tempfile
 import unittest
+from datetime import datetime
+from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
@@ -77,6 +80,23 @@ class TestArgv(unittest.TestCase):
         """El delta viene de la tabla de `intents.py`, no del texto del usuario."""
         self.assertEqual(actions.volume_argv(3)[5], "3%+")
 
+    def test_the_screenshot_argv_is_a_fixed_three_piece(self):
+        path = pathlib.Path("/tmp/donde-sea/cort-una.png")
+        self.assertEqual(actions.screenshot_argv(path), ["scrot", "-o", str(path)])
+
+    def test_nobody_can_park_a_command_in_a_capture_name(self):
+        """El nombre lo genera `shot_path`, no el texto que se escribe."""
+        name = actions.shot_path(datetime(2026, 10, 7, 23, 30, 5, 123456))
+        self.assertEqual(name.name, "cort-20261007-233005-123456.png")
+        joined = " ".join(actions.screenshot_argv(name))
+        for bad in (";", "|", "&", "$", "`", "\n", ".."):
+            self.assertNotIn(bad, joined.replace(str(actions.SHOTS_DIR), ""))
+
+    def test_two_captures_in_the_same_second_do_not_overwrite_each_other(self):
+        a = actions.shot_path(datetime(2026, 10, 7, 23, 30, 5, 1))
+        b = actions.shot_path(datetime(2026, 10, 7, 23, 30, 5, 2))
+        self.assertNotEqual(a, b)
+
 
 class TestVolume(unittest.IsolatedAsyncioTestCase):
     async def test_the_level_it_reports_is_the_one_it_read_back(self):
@@ -133,6 +153,76 @@ class TestMedia(unittest.IsolatedAsyncioTestCase):
     async def test_unknown_command_is_refused(self):
         runner = FakeRunner()
         ok, _ = await actions.perform({"action": "media", "cmd": "eject"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertEqual(runner.calls, [])
+
+
+class TestScreenshot(unittest.IsolatedAsyncioTestCase):
+    """La captura es la única acción cuya prueba se puede leer de verdad.
+
+    El volumen no se puede verificar en este portátil (no hay salida de audio),
+    pero un archivo sí: existe, tiene tamaño, y se puede borrar.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.shots = pathlib.Path(self.tmp.name) / "capturas"
+        patcher = mock.patch.object(actions, "SHOTS_DIR", self.shots)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    class _Scrot:
+        """Fake que se comporta como scrot en las cuatro variantes que importan."""
+
+        def __init__(self, code=0, out="", write=b"\x89PNG" + b"0" * 4096):
+            self.code, self.out, self.write = code, out, write
+            self.calls = []
+
+        async def __call__(self, argv):
+            self.calls.append(list(argv))
+            if self.code == 0 and self.write is not None:
+                pathlib.Path(argv[-1]).write_bytes(self.write)
+            return self.code, self.out
+
+    async def test_a_real_file_behind_the_command_is_what_makes_it_a_success(self):
+        runner = self._Scrot()
+        ok, said = await actions.perform({"action": "screenshot"}, runner=runner)
+        self.assertTrue(ok)
+        self.assertIn("Captura guardada", said)
+        self.assertIn("4 KB", said)
+        self.assertEqual(len(list(self.shots.iterdir())), 1)
+
+    async def test_it_creates_the_folder_it_needs(self):
+        self.assertFalse(self.shots.exists())
+        await actions.perform({"action": "screenshot"}, runner=self._Scrot())
+        self.assertTrue(self.shots.is_dir())
+
+    async def test_zero_and_no_file_is_not_a_success(self):
+        """El returncode otra vez mintiendo: scrot dice 0 y no escribió nada."""
+        runner = self._Scrot(write=None)
+        ok, said = await actions.perform({"action": "screenshot"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertIn("no apareció", said)
+
+    async def test_an_empty_image_is_reported_as_empty(self):
+        runner = self._Scrot(write=b"")
+        ok, said = await actions.perform({"action": "screenshot"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertIn("vacía (0 bytes)", said)
+
+    async def test_a_failing_scrot_says_why(self):
+        runner = self._Scrot(code=1, out="scrot: Can't open X display")
+        ok, said = await actions.perform({"action": "screenshot"}, runner=runner)
+        self.assertFalse(ok)
+        self.assertIn("Can't open X display", said)
+        self.assertEqual(list(self.shots.iterdir()), [])
+
+    async def test_the_kill_switch_takes_the_capture_off_the_table_too(self):
+        restore = with_env(CORT_SYSTEM_ACTIONS="0")
+        self.addCleanup(restore)
+        runner = self._Scrot()
+        ok, _ = await actions.perform({"action": "screenshot"}, runner=runner)
         self.assertFalse(ok)
         self.assertEqual(runner.calls, [])
 

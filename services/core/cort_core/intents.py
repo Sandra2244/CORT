@@ -5,6 +5,7 @@ import re
 _PATTERNS = [
     (r"\b(sube|aumenta)\b.*\bvolumen\b", {"action": "volume", "delta": +10}),
     (r"\b(baja|reduce)\b.*\bvolumen\b", {"action": "volume", "delta": -10}),
+    (r"\b(captura|capturar|pantallazo|screenshot)\b", {"action": "screenshot"}),
     (r"\b(pausa|pausar)\b", {"action": "media", "cmd": "pause"}),
     (r"\b(reproduce|continúa|continua|play)\b", {"action": "media", "cmd": "play"}),
     (r"\bsiguiente\b", {"action": "media", "cmd": "next"}),

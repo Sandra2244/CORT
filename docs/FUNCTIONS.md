@@ -60,8 +60,8 @@ Estado: ✅ hecho · 🔨 siguiente · ⬜ pendiente. Viabilidad: **F** fácil �
 | # | Función | Est. | Viab. |
 |---|---|---|---|
 | 45 | Abrir/cerrar aplicaciones | ⬜ | M |
-| 46 | Brillo de pantalla | ⬜ | M |
-| 47 | Captura de pantalla | ⬜ | F |
+| 46 | Brillo de pantalla | ⬜ | **D en Linux sin root**, medido hoy: `/sys/class/backlight/intel_backlight/brightness` es `root:root 644` sin ACL de sesión, y `brightnessctl`/`xbacklight` no están instalados. Volver a escribir el valor que ya tenía devolvió *Permiso denegado*. Se puede con una regla de udev o con `sudo` — decisión de ella, no de código—; mientras tanto no se escribe un mando que no va a obedecer |
+| 47 | Captura de pantalla | ✅ | F. **Verificado de extremo a extremo**: "haz una captura de pantalla" por WebSocket → `scrot` → PNG real de 140 265 bytes (1366×768) en disco, y CORT dice el archivo y su tamaño. Como con el volumen, se comprueba el archivo *después* de mandarlo: el `returncode` no basta |
 | 48 | Reproducir vídeo cuadro por cuadro (en tu reproductor) | ⬜ | M |
 | 49 | Leer notificaciones | ⬜ | D (Android: permiso especial) |
 | 50 | Enviar SMS / llamar | ⬜ | D (Android; iOS no lo permite) |
