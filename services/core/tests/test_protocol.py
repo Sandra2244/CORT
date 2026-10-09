@@ -164,6 +164,102 @@ class TestProtocol(unittest.TestCase):
         self.assertEqual("intent", m["type"])
 
 
+
+class TestPlan(unittest.TestCase):
+    """El bucle *planificar → actuar → comprobar* por el lado del protocolo.
+
+    Dos cosas se sostienen aquí: que un mensaje con dos órdenes produce **dos**
+    pasos ejecutados y verificados uno por uno, y que el plan no le habla a
+    Ollama — si le hablara, la prueba tardaría entre 15 y 60 segundos en esta
+    máquina en lugar de milisegundos, y el LLM no tiene manos.
+
+    No hay marco nuevo en el protocolo: cada paso usa el `intent` y el `effect`
+    que la interfaz ya entiende, y el cierre es un `assistant_message` más. Ver
+    `docs/ARCHITECTURE.md`.
+    """
+
+    def setUp(self):
+        LEVELS[:] = ["1.00", "0.45"]
+        patcher = mock.patch.object(actions, "spawn", fake_spawn)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.client = TestClient(app)
+
+    def handshake(self, ws):
+        got = [ws.receive_json() for _ in range(3)]
+        self.assertEqual(["state", "greeting", "status"], [m["type"] for m in got])
+        return got
+
+    def plan(self, ws, text, marcos):
+        ws.send_json({"type": "user_message", "text": text})
+        return [ws.receive_json() for _ in range(marcos)]
+
+    def turn(self, ws, text):
+        """Un turno de **un solo** paso: los cuatro marcos de siempre."""
+        ws.send_json({"type": "user_message", "text": text})
+        got = [ws.receive_json() for _ in range(4)]
+        self.assertEqual(["intent", "effect", "assistant_message", "status"],
+                         [m["type"] for m in got])
+        return got
+
+    def test_dos_ordenes_dos_pasos_y_un_cierre(self):
+        with self.client.websocket_connect("/ws") as ws:
+            self.handshake(ws)
+            got = self.plan(ws, "sube el volumen y pausa la música", 6)
+        self.assertEqual(["intent", "effect", "intent", "effect",
+                          "assistant_message", "status"], [m["type"] for m in got])
+        self.assertEqual(["volume", "media"], [m["action"] for m in got if m["type"] == "intent"])
+        self.assertEqual({m["kind"] for m in got if m["type"] == "effect"}, {"pulse"})
+        self.assertEqual("2 de 2 pasos hechos: subir el volumen, pausar la reproducción",
+                         got[4]["text"])
+
+    def test_el_plan_nunca_le_pide_nada_al_modelo(self):
+        async def no_llamar(messages):
+            raise AssertionError("el plan llamó al LLM")
+
+        with mock.patch("cort_core.server.think", no_llamar):
+            with self.client.websocket_connect("/ws") as ws:
+                self.handshake(ws)
+                got = self.plan(ws, "baja el volumen y pausa la música", 6)
+        self.assertEqual(6, len(got))
+
+    def test_un_paso_que_no_se_comprueba_no_se_cuenta_como_hecho(self):
+        """`xdotool` falla y el volumen no: el resumen tiene que decir **1 de 2**
+        y nombrar el que no fue con su motivo. Un «hecho» que tapó un paso caído
+        es justo lo que la Fase 4 lleva evitando desde el principio."""
+        async def solo_el_volumen(argv):
+            if "xdotool" in argv:
+                return 127, "xdotool: no existe"
+            return await fake_spawn(argv)
+
+        with mock.patch.object(actions, "spawn", solo_el_volumen):
+            with self.client.websocket_connect("/ws") as ws:
+                self.handshake(ws)
+                got = self.plan(ws, "sube el volumen y pausa la música", 6)
+        self.assertEqual(["pulse", "glitch"], [m["kind"] for m in got if m["type"] == "effect"])
+        self.assertEqual("1 de 2 pasos hechos: subir el volumen. "
+                         "No pude: pausar la reproducción (no pude enviar la tecla: "
+                         "xdotool: no existe)", got[4]["text"])
+
+    def test_una_sola_orden_sigue_por_el_camino_de_siempre(self):
+        """La no-regresión del corte: con un paso no hay resumen, hay la frase que
+        devolvió la acción. Si esto cambiara, «sube el volumen» dejaría de decir
+        el nivel al que llegó."""
+        with self.client.websocket_connect("/ws") as ws:
+            self.handshake(ws)
+            got = self.turn(ws, "sube el volumen")
+        self.assertEqual("Volumen al 45 %.", got[2]["text"])
+
+    def test_la_mitad_de_un_mensaje_no_es_un_plan(self):
+        """«¿qué hora es y sube el volumen»»: un solo paso ejecutable, así que no
+        se anuncia como plan ni se le quita la respuesta al LLM de un plumazo."""
+        with self.client.websocket_connect("/ws") as ws:
+            self.handshake(ws)
+            got = self.turn(ws, "¿qué hora es y sube el volumen?")
+        self.assertEqual("intent", got[0]["type"])
+
+
+
 async def failing_spawn(argv):
     return 1, "wpctl: no hay sink"
 

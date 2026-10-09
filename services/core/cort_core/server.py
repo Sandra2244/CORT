@@ -23,6 +23,7 @@ from . import weather
 from . import avatars
 from . import audit
 from . import initiative
+from . import planner
 from . import security
 from . import timer
 
@@ -296,6 +297,29 @@ async def ws(sock: WebSocket):
                 await sock.send_json({"type": "assistant_message",
                                       "text": f"Cuenta atrás de {timer.texto(segundos)}.",
                                       "mood": "calm"})
+                continue
+            pasos = planner.pasos(text)
+            if planner.es_plan(pasos):
+                # **Planificar → actuar → comprobar**, sobre la misma lista
+                # cerrada de siempre: cada paso sale de `intents.py`, se ejecuta
+                # por `actions.perform` y sólo cuenta como hecho si `perform`
+                # midió el cambio. No hay marco nuevo en el protocolo —la
+                # interfaz ya pinta el `intent` de cada paso y ya sabe tocar
+                # `pulse` y `glitch`—, así que un cliente viejo ve los dos pasos
+                # igual que veía uno; lo único que no mostraría es el resumen,
+                # que viaja como un `assistant_message` más. Ver
+                # `docs/ARCHITECTURE.md`.
+                hechos = []
+                for paso in pasos:
+                    await sock.send_json({"type": "intent", **paso})
+                    ok, said = await perform(paso)
+                    await sock.send_json({"type": "effect", "kind": "pulse" if ok else "glitch"})
+                    hechos.append((planner.etiqueta(paso), ok, "" if ok else said))
+                await sock.send_json({"type": "assistant_message",
+                                      "text": planner.resumen(hechos), "mood": "calm"})
+                # El contador de recuerdos puede haber cambiado igual que en el
+                # camino de un paso: los hechos del mensaje se guardaron antes.
+                await sock.send_json(status_payload(memory, MEMORY_KEEP))
                 continue
             intent = match_intent(text)
             if intent:

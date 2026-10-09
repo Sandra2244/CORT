@@ -1,8 +1,8 @@
 # CORT
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.8.0-6f4ff2?style=flat-square">
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-284%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.9.0-6f4ff2?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-316%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -14,7 +14,7 @@
 
 No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.8.0`** · rama **`main`** · **284 pruebas en verde** (ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.9.0`** · rama **`main`** · **316 pruebas en verde** (ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja](docs/assets/prototipo-v0.6.0.png)
 
@@ -68,8 +68,8 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 
 1. El cliente manda `{"type":"user_message","text":…}`.
 2. `memory/facts.py` extrae hechos declarables («me llamo Sandra» → `El usuario se llama Sandra`) y `memory/store.py` los guarda **antes** de cualquier otra cosa.
-3. `intents.py` mira si la frase es una orden local («baja el volumen»). Si lo es, **no se gasta el LLM**.
-4. Si es una orden, `actions.py` la ejecuta por la lista cerrada de permisos y **comprueba el resultado en el mundo** (nivel de volumen, archivo en disco, recuento de procesos).
+3. `intents.py` mira si la frase es una orden local («baja el volumen»). Si lo es, **no se gasta el LLM**. Y si son **varias** («sube el volumen y haz una captura»), `planner.py` la parte en pasos —todos salen de la misma tabla; lo que no está en ella no se convierte en paso—.
+4. Si es una orden, `actions.py` la ejecuta por la lista cerrada de permisos y **comprueba el resultado en el mundo** (nivel de volumen, archivo en disco, recuento de procesos). Con varios pasos se hace uno detrás de otro, cada uno con su comprobación.
 5. Si no, `brain.py` pregunta a Ollama con los recuerdos relevantes metidos como mensaje de sistema.
 6. Vienen `assistant_message`, un `effect` (`pulse` si la acción fue, `glitch` si falló) y un `status` con lo que CORT puede afirmar de sí mismo.
 
@@ -81,6 +81,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Cerebro (LLM)** | `cort_core/brain.py` | Cadena de sustitución (`CORT_LLM_CHAIN`): usa el primer modelo que responda. Pide `/api/tags` y **descarta por tamaño** lo que no cabe en RAM (`CORT_LLM_MAX_MODEL_MIB`, 700 MiB) — cargar el de 2,6 GB congeló la máquina. Distingue «Ollama no está» de «la cadena no respondió». Sin modelo, modo eco |
 | **Memoria persistente** | `cort_core/memory/{store,facts}.py` | SQLite con búsqueda por raíces de 4 letras (no embeddings: esos piden ~1,5 GiB). `remember · recall · context_for · prune · name_of_user · count`. `prune` protege la fila del nombre, de la que depende el saludo. `context_for` rescata **por contenido, no por fecha** |
 | **Intenciones** | `cort_core/intents.py` | Patrones locales para órdenes de sistema. Devuelve una acción estructurada y **no ejecuta nada** — separar las dos cosas es lo que hace auditable el permiso |
+| **Planificador** | `cort_core/planner.py` | La mitad que faltaba del cerebro: `pasos()` divide el mensaje en órdenes, `etiqueta()` las nombra en español y `resumen()` cuenta **lo que se comprobó**. No tiene ninguna vía al sistema: no arma comandos, sólo maneja acciones que ya salieron de la tabla cerrada (`test_planner.py` le lee el propio fuente para comprobarlo) |
 | **Capa de permisos** | `cort_core/actions.py` | Convierte esa acción en un comando real **de una lista cerrada**, con argv fijo, verificación del resultado y apagador global. Es la frontera entre «CORT entendió» y «CORT lo hizo» |
 | **Puerta de red** | `cort_core/security.py` | Cinco funciones puras que deciden quién puede hablarle a CORT cuando el puerto asoma a la Wi-Fi: sin `CORT_LAN_TOKEN` **no se abre** (el lanzador y el propio módulo de arranque se niegan con código 1), en `127.0.0.1` no se pide nada, el vecino de bucle invertido entra sin llave aunque esté publicado, y la comparación es de **tiempo constante**. El WebSocket se rechaza **antes de `accept()`** para no regalar un lazo abierto con su tarea de iniciativa |
 | **Telemetría** | `cort_core/status.py` | Lee tres cosas y nada más: cuántos recuerdos hay, qué modelo habló la última vez y si los permisos están encendidos. Si un valor no se puede medir manda `null`, no un adorno |
@@ -96,7 +97,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Voz** | `apps/web/src/ui/Voz.tsx` | Habla con `speechSynthesis` y escucha con `SpeechRecognition`: **cero dependencias, cero RAM del core, y el mismo código en el portátil que en el Android**. Elige la mejor voz en español puntuando las instaladas (`Natural` > `online` > resto, región primero), limpia el markdown y los emojis que el sintetizador deletrea, parte por oraciones para que haya pausas, y **cierra el micrófono mientras CORT habla** para no oírse a sí misma |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | 257, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` | 316, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
@@ -172,13 +173,13 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 
 | Grupo | Funciones | Hechas | En curso | Pendientes |
 |---|---|---|---|---|
-| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco, cuenta atrás, llave de red, bitácora de rechazos…) | 14 | 9 | 1 | 4 |
+| Núcleo (chat, memoria, intents, acciones en cadena, clima, configuración, atuendos en disco, cuenta atrás, llave de red, bitácora de rechazos…) | 15 | 10 | 1 | 4 |
 | Voz y audio (wake word, STT, TTS, volumen, reproductor, sonda de audio…) | 13 | 2 | 4 | 7 |
 | Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 8 | 4 | 5 |
 | Gestos y visión (desenfoque con cámara, arrastrar paneles, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 1 | 11 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| **Total** | **74** | **23** | **11** | **40** |
+| **Total** | **75** | **24** | **11** | **40** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «38-44» son siete funciones, no una).
 
@@ -193,6 +194,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 🔮 | **Reactor holográfico**: anillo de plasma en GLSL, polvo de 4000 puntos, bloom, aberración cromática, líneas de barrido. Paleta azul/violeta Cortana, cinco atuendos | Capturas reales a `localhost:5173`; **18 fps sin GPU** |
 | 💬 | **Chat por WebSocket** contra un core Python/FastAPI | Cliente real + 8 pruebas de protocolo |
 | 🗣️ | **Voz**: CORT lee en voz alta cada respuesta con las voces del sistema (`speechSynthesis`, puntuando las *Natural* y la región `es-CO/MX/US/419`), y hay un botón «hablarle» que abre el micrófono | **Oída en el video que grabó la dueña del proyecto** (2026-10-09): se la ve contestando en voz alta. **Sin verificar en esta máquina**, y está dicho: su único sink es *Dummy Output* y `arecord -l` no lista ninguna captura, así que el micrófono nunca probó aquí. Cero dependencias y cero RAM del core: el mismo archivo corre en el portátil y en el Android |
+| 🧩 | **Un mensaje, varias cosas**: «sube el volumen, haz una captura y pausa la música» ya no se resuelve con la primera orden y punto: se parte en pasos, se ejecutan uno por uno **por la misma lista cerrada de siempre**, y el cierre cuenta lo que se midió — «2 de 3 pasos hechos: … No pude: …» | **Medido en vivo el 2026-10-09** con el ejecutor real y la memoria en `/tmp` (sin Ollama ni navegador): 8 marcos en **2,30 s**, tres `intent` con su efecto, y el paso del volumen **rechazado** porque `wpctl` devolvió 0 sin mover el nivel en el sink *Dummy Output*; el de la captura dejó un PNG de 161 KB en disco. 27 pruebas en `test_planner.py` + 5 de protocolo. No hay marco nuevo en el protocolo ni herramientas para el LLM |
 | 🔑 | **Llave de red**: el puerto no se abre a la Wi-Fi sin `CORT_LAN_TOKEN`, y publicado, el WebSocket se rechaza con **4401 antes de `accept()`** y un archivo de atuendo responde **401 antes de tocar el disco** | 25 pruebas en `test_security.py` + 4 en `test_launcher.py`: matriz de `es_local`, token recortado, arranque rechazado por subprocess (código 1), `autorizado` en sus cuatro casos, lazo rechazado sin llave y aceptado con ella, y el orden 401→404. En local (`127.0.0.1`) nada cambia: no se pide nada |
 | 🧾 | **Bitácora de rechazos**: cada puerta que CORT cerró queda escrita con hora, motivo y dirección de quien la pidió, y se lee en la terminal con `make rechazos` | **Medido en vivo el 2026-10-09**: core publicado en `0.0.0.0`, tiros de `curl` contra la IP real de la Wi-Fi (`192.168.100.xxx`) → `401` sin llave, `401` con llave mala, `404` de `notas.txt` teniendo la buena, `200` del PNG legítimo, `403` en el apretón de manos del WebSocket sin token, y **cuatro líneas en el registro** (`acceso-sin-llave`, `llave-incorrecta`, `extension-no-permitida`, `acceso-sin-llave WS /ws`) **comprobadas sin la llave dentro** con `grep`. 20 pruebas en `test_audit.py` + 6 nuevas en `test_avatars.py`: `\n` en el detalle no fabrica una línea, un motivo fuera de la lista cerrada no se escribe, la carpeta de destino cae en `data/` (ignorada por git), un disco que no escribe devuelve `False` y no revienta nada, y el archivo se recorta conservando lo más nuevo |
 | 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"*. Y al armar el prompt **rescata por contenido, no por fecha**: con 303 recuerdos de prueba los tres datos del usuario van delante, no los seis más recientes | Probado matando y reiniciando el proceso; 28 pruebas de memoria, una cronometrada en 2,42 ms |
@@ -229,9 +231,9 @@ Medido, no supuesto:
 ```
 CORT/
 ├── services/core/
-│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · initiative · timer · security · audit · env
+│   ├── cort_core/            # el cerebro: server · brain · intents · planner · actions · avatars · status · outfit · weather · initiative · timer · security · audit · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 284 pruebas, biblioteca estándar
+│   ├── tests/                # 316 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db y rechazos.jsonl — fuera de git: son datos de la casa
 │   └── requirements.txt
 ├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui —incluido Voz.tsx— · public/)
@@ -423,10 +425,10 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 284 pruebas, ~68-120 s en esta máquina (según carga)
+make test      # 316 pruebas, ~68-120 s en esta máquina (según carga)
 ```
 
-Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie. Las 29 anteriores son de red: matriz de direcciones locales, el arranque rechazado por subprocess, el WebSocket cerrado con 4401 antes del `accept()` y el 401 que llega **antes** de tocar el disco. Las 27 últimas son de la bitácora (`test_audit.py` 20, `test_avatars.py` 6 y una en `test_security.py`): que el secreto no se cuele en el registro, que un `\n` no fabrique una línea, que un motivo inventado no se escriba, y que un disco lleno no tumbe al servidor.
+Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie. Las 29 anteriores son de red: matriz de direcciones locales, el arranque rechazado por subprocess, el WebSocket cerrado con 4401 antes del `accept()` y el 401 que llega **antes** de tocar el disco. Las 27 anteriores son de la bitácora (`test_audit.py` 20, `test_avatars.py` 6 y una en `test_security.py`): que el secreto no se cuele en el registro, que un `\n` no fabrique una línea, que un motivo inventado no se escriba, y que un disco lleno no tumbe al servidor. Las 32 últimas son del planificador (`test_planner.py` 27 y cinco nuevas de protocolo en `TestPlan`): que «x y z» dé los pasos en el orden en que se dijeron, que un tramo sin verbo herede el anterior, que cien órdenes pegadas se topen en cuatro, que `rm -rf /` no produzca ningún paso, y que un plan de dos pasos **nunca le pregunte a Ollama**.
 
 Y si usas `--lan`, hay una comprobación más que ninguna otra app te da:
 
@@ -483,7 +485,7 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/STATUS.md`](docs/STATUS.md) | **Fuente de verdad operativa**: qué funciona de verdad, qué se intentó y falló, qué deuda hay |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, protocolo, capa de permisos, módulos de `apps/web` — con el por qué de cada decisión |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Nueve fases, cada una con su criterio de "listo" |
-| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 73 funciones con estado y viabilidad por sistema operativo |
+| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 75 funciones con estado y viabilidad por sistema operativo |
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |
 | [`docs/DEVELOPMENT-GUIDE.md`](docs/DEVELOPMENT-GUIDE.md) | Método de trabajo |
