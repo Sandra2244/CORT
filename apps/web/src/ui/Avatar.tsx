@@ -53,9 +53,11 @@ export function Avatar({ nombre, onFallo }: { nombre: string; onFallo: () => voi
  * Sólo se abre cuando la bandeja está abierta, y sólo entonces pide la lista al
  * core: mientras nadie la pida, CORT no lee la carpeta de avatares de nadie.
  *
- * Los `.vrm` salen listados pero **no se pueden poner**: son modelos 3D y aquí no
- * hay cargador. Esconderlos sería mentir sobre lo que hay en el disco; hacerlos
- * clicables sería un botón que no hace nada. Se muestran como lo que son.
+ * Hay dos tipos de mosaico. Las **imágenes** se eligen con su miniatura; los
+ * **VRM** se eligen con un recuandro de texto, porque una vista previa de una
+ * malla costaría renderizarla, y aquí se carga el modelo entero para poder
+ * proyectarlo. Un botón gris que no hace nada sería peor: es lo que eran antes,
+ * y se acabó cuando el cargador 3D empezó a funcionar.
  */
 export function Atuendos({ visible, elegido, onElegir }: {
   visible: boolean
@@ -113,11 +115,23 @@ export function Atuendos({ visible, elegido, onElegir }: {
       )}
 
       {modelos.length > 0 && (
-        <p className="atuendos-nota">
-          {modelos.length} modelo(s) 3D (.vrm) {modelos.length === 1 ? 'encontrado' : 'encontrados'}:
-          {' '}{modelos.map((m) => m.nombre).join(', ')}. Todavía no se proyectan en pantalla — falta el
-          cargador 3D y hay que medirlo en esta máquina.
-        </p>
+        <div className="atuendos-mosaico" role="group" aria-label="cuerpos 3D disponibles">
+          {modelos.map((i) => (
+            <button
+              key={i.nombre}
+              type="button"
+              className={`atuendo atuendo-3d ${elegido === i.nombre ? 'activo' : ''}`}
+              onClick={() => onElegir(elegido === i.nombre ? null : i.nombre)}
+              aria-pressed={elegido === i.nombre}
+              title={`${i.nombre} · ${(i.bytes / 1024 / 1024).toFixed(1)} MB · cuerpo 3D`}
+            >
+              {/* Sin miniatura: la cara del botón dice lo que es, y el peso
+                  también — son archivos de 16 a 21 MB, y elegirlos a ciegas no. */}
+              <span className="atuendo-3d-marca">3D</span>
+              <span>{i.nombre.replace(/\.[a-z]+$/i, '')}</span>
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

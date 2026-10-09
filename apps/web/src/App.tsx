@@ -5,6 +5,7 @@ import { Effects } from './ui/Effects'
 import { Telemetry } from './ui/Telemetry'
 import { Bandeja } from './ui/Bandeja'
 import { Avatar } from './ui/Avatar'
+import { Temporizador } from './ui/Temporizador'
 import { connect, setOrbeVisible } from './cort/connection'
 
 export default function App() {
@@ -28,6 +29,14 @@ export default function App() {
 
   useEffect(() => setOrbeVisible(atuendo === null), [atuendo])
 
+  /**
+   * Un `.vrm` se proyecta dentro del canvas del reactor; una imagen se pinta
+   * encima como capa HTML. Dos mundos distintos para dos formas de cuerpo, y la
+   * distinción la decide la extensión del archivo que ella eligió, no un botón
+   * nuevo que habría que explicar.
+   */
+  const esModelo = atuendo !== null && /\.vrm$/i.test(atuendo)
+
   useEffect(() => {
     function teclas(e: KeyboardEvent) {
       if (e.key === 'Escape') setAbierto(false)
@@ -38,12 +47,16 @@ export default function App() {
 
   return (
     <>
-      <Scene />
+      <Scene atuendo={atuendo} onFallo={() => setAtuendo(null)} />
       <div className="scan" aria-hidden="true" />
-      {atuendo && <Avatar nombre={atuendo} onFallo={() => setAtuendo(null)} />}
+      {!esModelo && atuendo && <Avatar nombre={atuendo} onFallo={() => setAtuendo(null)} />}
       <Telemetry oculto={!abierto} />
       <Hud abierto={abierto} atuendo={atuendo} onAtuendo={setAtuendo} />
       <Bandeja abierto={abierto} onToggle={() => setAbierto((v) => !v)} />
+      {/* Va siempre montada y no se pinta casi nunca: devuelve `null` mientras no
+          haya cuenta atrás. El temporizador no es un panel que se abre, es un
+          número que aparece cuando se pide. */}
+      <Temporizador />
       <Effects />
     </>
   )

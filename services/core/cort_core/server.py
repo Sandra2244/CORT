@@ -22,6 +22,7 @@ from .status import build as status_payload
 from . import weather
 from . import avatars
 from . import initiative
+from . import timer
 
 app = FastAPI(title="CORT core")
 
@@ -117,6 +118,24 @@ async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
         return
 
 
+async def _correr_cuenta(sock: WebSocket, segundos: int) -> None:
+    """La única tarea que el temporizador tiene: existe mientras cuenta.
+
+    Es un `Task` por conexión y **una sola a la vez**: en reposo no hay reloj, ni
+    `setInterval`, ni memoria reservada, que es lo que pidió la dueña del proyecto.
+    Al acabar avisa por el log; si se cancela, `CancelledError` se propaga sin
+    limpiar nada, porque no hay estado que limpiar.
+    """
+    try:
+        await timer.correr(lambda cuadro: sock.send_json(cuadro), segundos)
+    except (WebSocketDisconnect, RuntimeError):
+        # El lazo se cerró a mitad de la cuenta: el `finally` de la conexión ya
+        # habrá cancelado esta tarea. No hay a quién avisar.
+        return
+    await sock.send_json({"type": "effect", "kind": "pulse"})
+    await sock.send_json({"type": "assistant_message", "text": "Se acabó el tiempo.", "mood": "calm"})
+
+
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
     await sock.accept()
@@ -128,6 +147,10 @@ async def ws(sock: WebSocket):
     # bucle sin atar un `nonlocal` a dos sitios a la vez.
     actividad = {"ultimo": time.monotonic()}
     tarea = asyncio.create_task(_cuidar_iniciativa(sock, actividad))
+    # La cuenta atrás en marcha, o `None`. Un solo hueco y no una lista: dos
+    # temporizadores a la vez se verían como dos reloles peleando en la pantalla,
+    # y en esta máquina cada uno es una tarea y cuadros por segundo.
+    cuenta: dict = {"tarea": None}
     await sock.send_json(state())
     # `greeting` y no `assistant_message`: el saludo es lo que CORT dice al
     # *presentarse*, y una reconexión no es una presentación. Medido en el
@@ -159,6 +182,34 @@ async def ws(sock: WebSocket):
             actividad["ultimo"] = time.monotonic()
             for fact in extract(text):
                 memory.remember(fact)
+            # El temporizador se mira **antes** que los intents locales y que el
+            # LLM: «pon un temporizador de 5 minutos» no es una orden al sistema
+            # (no pasa por `actions`, no ejecuta nada) y preguntarle a Ollama por
+            # una cuenta atrás costaría 15-60 s de CPU en esta máquina.
+            en_marcha = cuenta["tarea"] is not None and not cuenta["tarea"].done()
+            if en_marcha and timer.quiere_cancelar(text):
+                # Solo se interfiere si hay algo que cancelar: «cancela» dicho
+                # sin temporizador sigue su camino normal, hacia el LLM.
+                cuenta["tarea"].cancel()
+                cuenta["tarea"] = None
+                await sock.send_json({"type": "timer", "estado": "cancela",
+                                      "restante": 0, "total": 0})
+                await sock.send_json({"type": "assistant_message",
+                                      "text": "Temporizador cancelado.", "mood": "calm"})
+                continue
+            segundos = timer.parse(text)
+            if segundos:
+                if en_marcha:
+                    await sock.send_json({"type": "assistant_message",
+                                          "text": "Ya hay una cuenta atrás en marcha; "
+                                                  "di «cancela el temporizador» y empiezo otra.",
+                                          "mood": "calm"})
+                    continue
+                cuenta["tarea"] = asyncio.create_task(_correr_cuenta(sock, segundos))
+                await sock.send_json({"type": "assistant_message",
+                                      "text": f"Cuenta atrás de {timer.texto(segundos)}.",
+                                      "mood": "calm"})
+                continue
             intent = match_intent(text)
             if intent:
                 await sock.send_json({"type": "intent", **intent})
@@ -205,6 +256,10 @@ async def ws(sock: WebSocket):
         # CORT hablando hacia una pestaña que ya no está — y una tarea por cada
         # pestaña abierta y cerrada, acumulada de por vida.
         tarea.cancel()
+        # Lo mismo con la cuenta atrás: sin esto, un temporizador de una hora
+        # seguiría enviando cuadros a una conexión cerrada durante una hora.
+        if cuenta["tarea"] is not None:
+            cuenta["tarea"].cancel()
 
 if __name__ == "__main__":
     # 127.0.0.1 por defecto, y no 0.0.0.0: el core no tiene autenticación ni TLS.

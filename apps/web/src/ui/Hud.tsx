@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getSnapshot, send, setZoom, subscribe, target, zoomLimits } from '../cort/connection'
+import { getSnapshot, send, setZoom, subscribe } from '../cort/connection'
 import { iniciarCamara, type Muestra } from '../cort/defocus'
 import { Atuendos } from './Avatar'
 import { palette } from '../cort/palette'
@@ -39,73 +39,6 @@ function Clock() {
 }
 
 /**
- * El tamaño del reactor.
- *
- * Mueve `target.zoom`, no estado de React: el orbe lo persigue con lerp en el
- * bucle de la escena, así que al arrastrar crece en vez de saltar, y el slider
- * no reconcilia el registro de mensajes 60 veces por segundo. Aquí sólo hay un
- * número local para que la cifra «128%» se vea.
- *
- * Botones ± además del slider: en el teléfono el pulgar no acierta con un
- * cursor de 2 px, y un botón de 44 px siempre se toca.
- *
- * Con la cámara activa el deslizador **obedece y se lee**, no se pelea: lo que
- * pinta es el valor que sale del gesto, porque un control que sigue mostrando
- * 100 % mientras el orbe se encoge es un control mentiroso.
- */
-function ZoomControl({ zoomCamara }: { zoomCamara: number | null }) {
-  const [zoom, setZoomUi] = useState(target.zoom)
-
-  function apply(factor: number) {
-    // `setZoom` recorta al margen y devuelve el valor ya válido: la UI pinta el
-    // recortado, no el que se pidió. Si no, el slider quedaría mentiroso al
-    // llegar al fondo.
-    setZoomUi(setZoom(factor))
-  }
-
-  // `zoomCamara` llega 5 veces por segundo con el gesto: manda sobre el estado
-  // local, porque el orbe ya se está moviendo con ese valor.
-  const mostrado = zoomCamara ?? zoom
-  const movido = zoomCamara !== null
-
-  return (
-    <div className="zoom">
-      <span className="zoom-label">{movido ? 'tamaño · cámara' : 'tamaño'}</span>
-      <button
-        type="button"
-        className="zoom-btn"
-        aria-label="reducir el reactor"
-        disabled={movido}
-        onClick={() => apply(mostrado - 0.2)}
-      >
-        −
-      </button>
-      <input
-        className="zoom-slider"
-        type="range"
-        min={zoomLimits.min}
-        max={zoomLimits.max}
-        step={0.02}
-        value={mostrado}
-        disabled={movido}
-        onChange={(e) => apply(Number(e.target.value))}
-        aria-label="tamaño del reactor"
-      />
-      <button
-        type="button"
-        className="zoom-btn"
-        aria-label="agrandar el reactor"
-        disabled={movido}
-        onClick={() => apply(mostrado + 0.2)}
-      >
-        +
-      </button>
-      <span className="zoom-value">{Math.round(mostrado * 100)}%</span>
-    </div>
-  )
-}
-
-/**
  * El porqué del texto de error, en orden de lo que pasa de verdad: primero el
  * navegador no da contexto seguro, luego el usuario no dio permiso, y al final la
  * cámara está ocupada.
@@ -135,8 +68,13 @@ function explicarError(e: unknown): string {
  * El botón es la única puerta. La cámara se abre al pulsarlo y se **cierra**
  * volviendo a pulsarlo: parar las pistas del stream es lo que apaga el LED, y el
  * cleanup del efecto cubre el caso de cerrar la pestaña con la cámara encendida.
+ *
+ * No hay deslizador de tamaño al lado, y es a propósito: quien manda sobre el
+ * reactor es la cámara. El valor lo aplica `defocus.ts` con `setZoom` cinco veces
+ * por segundo, sin pasar por el estado de React, y un control que se quedara
+ * quieto mientras el orbe se encoge sería un control mentiroso.
  */
-function GestoCamara({ onZoom }: { onZoom: (zoom: number | null) => void }) {
+function GestoCamara() {
   const [m, setM] = useState<Muestra | null>(null)
   const [error, setError] = useState<string | null>(null)
   const parar = useRef<(() => void) | null>(null)
@@ -154,21 +92,16 @@ function GestoCamara({ onZoom }: { onZoom: (zoom: number | null) => void }) {
       parar.current()
       parar.current = null
       setM(null)
-      onZoom(null)
       // Sin la cámara mirando no hay quién mueva el reactor: vuelve a su tamaño
-      // natural, que es el valor desde el que el deslizador de nuevo obedece.
+      // natural.
       setZoom(1)
       return
     }
     try {
-      parar.current = await iniciarCamara((nueva) => {
-        setM(nueva)
-        onZoom(nueva.zoom)
-      })
+      parar.current = await iniciarCamara(setM)
     } catch (e) {
       parar.current = null
       setM(null)
-      onZoom(null)
       setError(explicarError(e))
     }
   }
@@ -193,6 +126,16 @@ function GestoCamara({ onZoom }: { onZoom: (zoom: number | null) => void }) {
           enfoque {Math.round((m?.relacion ?? 1) * 100)} %
         </span>
       )}
+      {/* Sin pulsar todavía: la pregunta que ella hizo —«¿y cómo le pido el
+          permiso?»— merece estar escrita antes del fallo y no después. El
+          navegador lo pide él solo al pulsar; lo que no se adivina es dónde se
+          cambia si se negó una vez. */}
+      {!activa && !error && (
+        <p className="gesto-nota">
+          al pulsar, el navegador pregunta arriba a la izquierda: <b>permitir</b>. Si dijo que no una vez,
+          se corrige en el candado o el icono de la dirección → <b>Permisos → Cámara</b>.
+        </p>
+      )}
       {error && <p className="gesto-aviso">{error}</p>}
     </div>
   )
@@ -205,7 +148,6 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
 }) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
-  const [zoomCamara, setZoomCamara] = useState<number | null>(null)
   const log = useRef<HTMLDivElement>(null)
   const tint = palette[s.outfit] ?? palette.work
 
@@ -243,8 +185,7 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
       </header>
 
       <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
-        <ZoomControl zoomCamara={zoomCamara} />
-        <GestoCamara onZoom={setZoomCamara} />
+        <GestoCamara />
         <Atuendos visible={abierto} elegido={atuendo} onElegir={onAtuendo} />
 
         <div className="log" ref={log} role="log" aria-live="polite">

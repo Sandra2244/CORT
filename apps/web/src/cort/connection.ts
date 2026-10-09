@@ -52,6 +52,15 @@ function readStatus(m: any): Status {
   }
 }
 
+/**
+ * Cuenta atrás en marcha, o `null`. **No hay reloj en el navegador**: este
+ * objeto se escribe sólo cuando llega un cuadro del core, así que en reposo no
+ * hay ningún `setInterval` contando, ni un nodo que repintar, ni memoria viva.
+ * Y si el core se cae, la cuenta se apaga con él — un temporizador que sigue
+ * contando sin servidor es un reloj que miente.
+ */
+export type Crono = { restante: number; total: number; estado: 'corre' | 'termina' }
+
 export type Snapshot = {
   online: boolean
   outfit: Outfit
@@ -76,6 +85,7 @@ export type Snapshot = {
    * remontaría el nodo y la animación CSS no tendría de dónde arrancar.
    */
   effect: { kind: UiEffect; at: number } | null
+  crono: Crono | null
 }
 
 /**
@@ -92,6 +102,7 @@ let snapshot: Snapshot = {
   clima: null,
   avatars: null,
   effect: null,
+  crono: null,
 }
 const listeners = new Set<() => void>()
 
@@ -184,7 +195,7 @@ function open() {
     // `status: null` porque los números eran de un core que ya no contesta:
     // dejarlos en pantalla sería seguir afirmando "12 recuerdos" sin tenerlo
     // comprobado. Al reconectar, el core vuelve a enviarlos.
-    set({ online: false, status: null })
+    set({ online: false, status: null, crono: null })
     timer = window.setTimeout(open, 3000)
   }
   s.onmessage = (e) => {
@@ -206,6 +217,14 @@ function open() {
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
     if (m.type === 'avatars')
       set({ avatars: Array.isArray(m.items) ? m.items.filter((i: any) => typeof i?.nombre === 'string') : [] })
+    // El temporizador viaja como cuadro propio y no como mensaje de texto: lo
+    // que pinta es un número que baja, no una frase. `cancela` borra el nodo,
+    // `termina` lo deja en cero para que la interfaz pueda avisar y apagarse.
+    if (m.type === 'timer') {
+      const restante = Number.isFinite(m.restante) ? m.restante : 0
+      if (m.estado === 'cancela') set({ crono: null })
+      else set({ crono: { restante, total: Number.isFinite(m.total) ? m.total : restante, estado: m.estado === 'termina' ? 'termina' : 'corre' } })
+    }
   }
 }
 

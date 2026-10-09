@@ -207,18 +207,11 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
-/* ─── Tamaño del reactor ──────────────────────────────────────────────────
-   Va dentro del HUD, entre el cabezal y el registro: en el teléfono el borde
-   izquierdo de la pantalla cae justo debajo del pulgar, y un panel flotante
-   taparía el orbe que se está redimensionando. */
-.zoom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* 44 px: el mínimo táctil. Un slider de 20 px se ve fino y no se acierta. */
-  min-height: 44px;
-}
-
+/* ─── Etiquetita de los controles ────────────────────────────────────────
+   El deslizador de tamaño **ya no existe**: el tamaño del reactor lo manda la
+   cámara y un mando que se queda quieto mientras el orbe se mueve es un mando
+   que miente. Se conserva la etiqueta porque el selector de atuendos la usa, y
+   se conserva también oculta por debajo de 520 px, que es lo que hacía antes. */
 .zoom-label {
   color: var(--dim);
   font-size: 0.7rem;
@@ -227,81 +220,7 @@ button:focus-visible {
   flex-shrink: 0;
 }
 
-.zoom-value {
-  color: var(--tint);
-  font-size: 0.78rem;
-  font-variant-numeric: tabular-nums;
-  /* Ancho fijo para que el «100%» y el «50%» no muevan el slider al arrastrar. */
-  min-width: 3.2em;
-  text-align: right;
-}
-
-.zoom-btn {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  flex-shrink: 0;
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--tint);
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.28);
-}
-
-/* El `input` global de arriba (flex:1, fondo, borde) está pensado para el campo
-   de texto; un slider con ese fondo parece un botón roto. Aquí se anula y se
-   pinta el rastro como un hilo de luz, que es lo que combina con el holograma. */
-.zoom-slider {
-  flex: 1;
-  min-width: 0;
-  height: 44px;
-  padding: 0;
-  margin: 0;
-  background: transparent;
-  border: 0;
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-}
-
-.zoom-slider::-webkit-slider-runnable-track {
-  height: 2px;
-  background: linear-gradient(to right, rgba(120, 190, 230, 0.25), var(--tint));
-}
-
-.zoom-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  /* El rastro mide 2 px y el cursor 16: sin este desfase el thumb queda
-     desplazado medio centímetro del hilo que representa su valor. */
-  margin-top: -7px;
-  border-radius: 50%;
-  background: var(--tint);
-  box-shadow: 0 0 12px var(--tint);
-}
-
-.zoom-slider::-moz-range-track {
-  height: 2px;
-  background: linear-gradient(to right, rgba(120, 190, 230, 0.25), var(--tint));
-}
-
-.zoom-slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--tint);
-  box-shadow: 0 0 12px var(--tint);
-}
-
 @media (max-width: 520px) {
-  /* En el teléfono el registro vale más que la cifra: el porcentaje se cae y
-     el slider recupera los píxeles que ocupaba. */
-  .zoom-value {
-    display: none;
-  }
-
   .zoom-label {
     display: none;
   }
@@ -518,6 +437,22 @@ button:focus-visible {
   line-height: 1.4;
 }
 
+/* La explicación del permiso, antes de que falle nada: es la pregunta que se
+   hizo la dueña del proyecto («¿y cómo le pido el permiso?») y merece estar a la
+   vista en vez de salir sólo cuando ya es un error rojo. */
+.gesto-nota {
+  margin: 0;
+  flex: 1 1 100%;
+  color: var(--dim);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.gesto-nota b {
+  color: var(--tint);
+  font-weight: 600;
+}
+
 /* ─── El cuerpo holográfico ───────────────────────────────────────────────
    Un atuendo de disco proyectado sobre el fondo. La transparencia la pone el
    propio PNG (sus archivos se llaman «sin fondo» justo por eso), así que la
@@ -686,6 +621,30 @@ button:focus-visible {
   color: var(--dim);
   font-size: 0.72rem;
   line-height: 1.5;
+}
+
+/* Un cuerpo 3D no tiene miniatura: la cara del botón es texto, y la marca dice
+   lo que es para que no se confunda con un atuendo de imagen que no cargó. */
+.atuendo-3d {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 108px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.6rem;
+  text-align: center;
+}
+
+.atuendo-3d-marca {
+  display: block !important;
+  margin: 0 !important;
+  color: var(--tint) !important;
+  font-size: 1.15rem !important;
+  letter-spacing: 0.18em !important;
+  text-shadow: 0 0 12px var(--tint);
 }
 
 /* En el teléfono la esquina es más ancha: el pulgar no acierta con un botón de
@@ -894,6 +853,100 @@ input {
 
   .tl-row {
     gap: 10px;
+  }
+}
+
+/*
+ * La cuenta atrás. No es una tarjeta más: es un anillo con un número encima,
+ * sujeto arriba a la izquierda, lejos del HUD (abajo) y de la telemetría (arriba
+ * a la derecha), para que al leerla no se tape nada.
+ *
+ * Sin `backdrop-filter`: lo que sostiene este panel son un `<circle>` de SVG y
+ * dos líneas de texto, y un desenfoque cuesta un búfer por capa — que es justo
+ * lo que no se puede pagar una máquina de 1,8 GiB con un canvas WebGL detrás.
+ */
+.crono {
+  position: fixed;
+  z-index: 3;
+  top: 16px;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px 10px 10px;
+  border: 1px solid rgba(120, 220, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(6, 16, 34, 0.62);
+  box-shadow: 0 0 24px rgba(92, 225, 255, 0.12);
+  /* No se toca: el temporizador se manda diciéndoselo a CORT. Con esto fuera, un
+     panel encima del orbe robaría el gesto de arrastrar la escena. */
+  pointer-events: none;
+}
+
+.crono-anillo {
+  width: 46px;
+  height: 46px;
+  flex: none;
+}
+
+.crono-guia {
+  fill: none;
+  stroke: rgba(120, 220, 255, 0.14);
+  stroke-width: 3;
+}
+
+.crono-marca {
+  fill: none;
+  stroke: var(--tint);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.crono-datos {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.crono-tiempo {
+  /* `tabular-nums` para que el número no baile: sin ello el `1` de «1:05» es más
+     estrecho que el `0` de «1:04» y la fila entera se corre cada segundo. */
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-size: 1.45rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 14px rgba(92, 225, 255, 0.55);
+}
+
+.crono-nombre {
+  color: var(--dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+
+/* Terminar es un estado que hay que ver, no un parpadeo: el anillo se queda
+   entero, cambia el color y el panel se apaga solo seis segundos después. */
+.crono-listo {
+  border-color: rgba(120, 220, 255, 0.5);
+}
+
+.crono-listo .crono-tiempo {
+  color: var(--tint);
+}
+
+@media (max-width: 520px) {
+  .crono {
+    /* En el teléfono el pulgar vive abajo y arriba a la derecha está la
+       telemetría: el centro de arriba es lo único que no tapa nada. */
+    top: 10px;
+    left: 50%;
+    translate: -50% 0;
+    padding: 8px 14px 8px 8px;
+  }
+
+  .crono-tiempo {
+    font-size: 1.25rem;
   }
 }
 

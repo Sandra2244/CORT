@@ -4,7 +4,7 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.6.0`** · rama `cort-local-verified` · **205 pruebas en verde** · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.6.0`** · rama `cort-local-verified` · **226 pruebas en verde** · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja](docs/assets/prototipo-v0.6.0.png)
 
@@ -65,11 +65,11 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Gestos de cámara** | `apps/web/src/cort/defocus.ts` | Desenfocar con los dedos delante de la webcam encoge el orbe y enfocar lo devuelve. Sin modelos ni dependencias: 64×48 píxeles a 5 muestras por segundo, gris BT.601 y **varianza del Laplaciano** — el criterio con el que cualquier cámara decide si ya enfocó. La cámara la abre un botón de la usuaria y apagarla detiene las pistas del stream |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | 205, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable y los atuendos con un directorio de mentira en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` | 226, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable y los atuendos con un directorio de mentira en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
-`ws://127.0.0.1:8765/ws`, JSON plano: **diez tipos**, dos entrantes y ocho salientes. Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
+`ws://127.0.0.1:8765/ws`, JSON plano: **once tipos**, dos entrantes y nueve salientes. Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
 
 | Tipo | Dirección | Lleva | Quién lo pinta |
 |---|---|---|---|
@@ -83,6 +83,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | `status` | core → cliente | `memories`, `keep`, `brain`, `ollama`, `actions`, `iniciativa` | panel de telemetría |
 | `avatars` | core → cliente | `items`: `nombre`, `mime`, `bytes` (lista vacía si no hay `CORT_AVATAR_DIR`) | mosaico táctil de atuendos. Los bytes no van por aquí: se cargan con `<img>` desde `GET /avatars/{nombre}` |
 | `proactive` | core → cliente | `text`, `mood`, `clave` | el chat, **sin que nadie haya preguntado**: es la iniciativa, y `clave` es el tema ya dicho en esta conexión para que no suene a alarma. No lleva orden ninguna — sale de `initiative.py`, que no importa `actions` y no puede ejecutar nada |
+| `timer` | core → cliente | `restante`, `total`, `estado` ∈ `corre · termina · cancela` | el anillo de cuenta atrás (`ui/Temporizador.tsx`). **Un cuadro por segundo y sólo mientras hay cuenta atrás**: no hay temporizador en el navegador, así que si el core se apaga el número se apaga con él. Sale de `timer.py`, que no importa `actions` ni `subprocess` y no puede ejecutar nada. Se pide en texto («pon un temporizador de 5 minutos») y se cancela igual |
 
 ## Seguridad y permisos
 
@@ -95,6 +96,7 @@ Lo que hace a esto una capa de permisos y no un `subprocess` suelto:
 5. **El resultado se comprueba, no se supone:** el nivel se lee antes y después, la captura se mira en disco, la app se cuenta con `pgrep`. Un `returncode` 0 no es una prueba.
 6. **Datos personales fuera de git.** La base vive en `services/core/data/` (ignorada), `.env` está ignorado, y las claves no se suben nunca. Para enseñar CORT a otra persona existe `--demo`.
 7. **La iniciativa habla, no actúa.** `initiative.py` no importa `actions` ni `subprocess`, y lo que devuelve `sugerir()` es una `Sugerencia` con dos campos de texto. Hay una prueba que lo comprueba leyendo el árbol de sintaxis del módulo (`test_initiative.py`), porque un `import` añadido en un merge no se ve en ninguna otra prueba. Se apaga con `CORT_INITIATIVE=0`.
+8. **El temporizador tampoco toca nada.** `timer.py` cuenta segundos y devuelve números; la cuenta atrás se pinta en la interfaz y no ejecuta un mando, no suena y no escribe en disco. Su lista de `import`s está cerrada por prueba en `test_timer.py` (`__future__, asyncio, re, typing`), y la tarea muere al cancelar ella o al cerrarse la conexión — no queda reloj corriendo hacia una pestaña que ya no está.
 
 ## Funciones
 
@@ -102,13 +104,13 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 
 | Grupo | Funciones | Hechas | En curso | Pendientes |
 |---|---|---|---|---|
-| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco…) | 12 | 7 | 0 | 5 |
+| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco, cuenta atrás…) | 12 | 7 | 1 | 4 |
 | Voz y audio (wake word, STT, TTS, volumen, reproductor…) | 13 | 1 | 2 | 10 |
-| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 7 | 3 | 7 |
+| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 7 | 4 | 6 |
 | Gestos y visión (desenfoque con cámara, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 0 | 12 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| **Total** | **72** | **19** | **6** | **47** |
+| **Total** | **72** | **19** | **8** | **45** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «37-44» son ocho funciones, no una).
 
@@ -155,9 +157,9 @@ Medido, no supuesto:
 ```
 CORT/
 ├── services/core/
-│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · env
+│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · initiative · timer · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 205 pruebas, biblioteca estándar
+│   ├── tests/                # 226 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db — fuera de git: son datos personales
 │   └── requirements.txt
 ├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui · public/)
@@ -325,7 +327,7 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 205 pruebas, ~64 s en esta máquina
+make test      # 226 pruebas, ~55 s en esta máquina
 ```
 
 Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie.

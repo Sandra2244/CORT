@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { Bloom, ChromaticAberration, EffectComposer, Noise, Vignette } from '@react-three/postprocessing'
 import { BlendFunction } from 'postprocessing'
 import * as THREE from 'three'
 import { Core } from './Core'
 import { Particles } from './Particles'
-import { target } from '../cort/connection'
+import { Vrm } from './Vrm'
+import { getSnapshot, setOrbeVisible, subscribe, target } from '../cort/connection'
 
 /**
  * Todo lo que la escena anima por frame, en un único objeto mutable.
@@ -76,7 +77,12 @@ function Rig() {
   )
 }
 
-export function Scene() {
+export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: () => void }) {
+  const s = useSyncExternalStore(subscribe, getSnapshot)
+  // Un VRM se pinta **dentro del mismo canvas** que el reactor y no en un segundo
+  // WebGL: dos contextos en esta máquina son dos colas de GPU, dos búferes y una
+  // tasa de imágenes a la mitad. El orbe ya se apaga solo con `target.visible`.
+  const vrm = atuendo && /\.vrm$/i.test(atuendo) ? atuendo : null
   return (
     <Canvas
       className="scene"
@@ -85,6 +91,19 @@ export function Scene() {
       dpr={[1, 2]}
     >
       <Rig />
+      {vrm && (
+        <Vrm
+          key={vrm}
+          nombre={vrm}
+          outfit={s.outfit}
+          onFallo={() => {
+            // Se vuelve al reactor sin dejar el cuerpo a medio cargar: el orbe
+            // manda otro aviso y la usuaria ve que CORT sigue ahí.
+            setOrbeVisible(true)
+            onFallo()
+          }}
+        />
+      )}
       {/*
         multisampling={0} a propósito: no hay una sola arista poligonal que
         suavizar, todo es blob aditivo, puntos y líneas ya difuminados por bloom.
