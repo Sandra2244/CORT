@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, send, setZoom, subscribe } from '../cort/connection'
 import { iniciarCamara, type Muestra } from '../cort/defocus'
+import { useArrastre } from '../cort/arrastre'
 import { Atuendos } from './Avatar'
 import { palette } from '../cort/palette'
 
@@ -150,6 +151,7 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLDivElement>(null)
   const tint = palette[s.outfit] ?? palette.work
+  const { pos, tirando, agarrar, reiniciar, nodo, desplazado } = useArrastre<HTMLDivElement>()
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -164,47 +166,70 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
   }
 
   return (
-    <div className="hud" style={{ ['--tint' as string]: tint.ui }}>
-      <header className="status">
-        <span className={`dot ${s.online ? 'on' : 'off'}`} />
-        {s.online ? (s.thinking ? 'CORT procesando' : 'CORT en línea') : 'Sin conexión con el core — ejecuta: make dev'}
-        {s.online && <em> · atuendo {s.outfit}</em>}
-        {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
-            no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un
-            dato que no pidió nadie. */}
-        {s.clima && (
-          <em>
-            {' · '}
-            {/* El cabezal va en minúsculas por estilo, pero el nombre de una
-                ciudad no es estilo: es un nombre propio. Esta parte escapa de
-                la conversión para que Bogotá siga escribiéndose Bogotá. */}
-            <span className="city">{s.clima.city}</span> {s.clima.temp_c.toFixed(0)}°
-          </em>
-        )}
-        <Clock />
-      </header>
+    // Dos nodos y dos transformaciones, no una. El marco lleva el desplazamiento
+    // que la usuaria arrastra y el HUD lleva el temblor del efecto `shake`: en un
+    // solo elemento la animación CSS escribe `transform` cada cuadro y el
+    // desplazamiento del arrastre volvería al sitio original a media arrancada.
+    <div
+      className={`hud-marco ${tirando ? 'tirando' : ''}`}
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+    >
+      <div className="hud" ref={nodo} style={{ ['--tint' as string]: tint.ui }}>
+        <span className="asa" aria-hidden="true" onPointerDown={agarrar} />
+        <header className="status" onPointerDown={agarrar}>
+          <span className={`dot ${s.online ? 'on' : 'off'}`} />
+          {s.online ? (s.thinking ? 'CORT procesando' : 'CORT en línea') : 'Sin conexión con el core — ejecuta: make dev'}
+          {s.online && <em> · atuendo {s.outfit}</em>}
+          {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
+              no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un
+              dato que no pidió nadie. */}
+          {s.clima && (
+            <em>
+              {' · '}
+              {/* El cabezal va en minúsculas por estilo, pero el nombre de una
+                  ciudad no es estilo: es un nombre propio. Esta parte escapa de
+                  la conversión para que Bogotá siga escribiéndose Bogotá. */}
+              <span className="city">{s.clima.city}</span> {s.clima.temp_c.toFixed(0)}°
+            </em>
+          )}
+          <Clock />
+          {/* Aparece sólo si el panel está movido: un botón que recoloca algo que
+              ya está recolocado es ruido en la barra. */}
+          {desplazado && (
+            <button
+              type="button"
+              className="hud-colocar"
+              onClick={reiniciar}
+              aria-label="Devolver el panel a su sitio"
+              title="Devolver el panel a su sitio"
+            >
+              ⤾
+            </button>
+          )}
+        </header>
 
-      <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
-        <GestoCamara />
-        <Atuendos visible={abierto} elegido={atuendo} onElegir={onAtuendo} />
+        <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
+          <GestoCamara />
+          <Atuendos visible={abierto} elegido={atuendo} onElegir={onAtuendo} />
 
-        <div className="log" ref={log} role="log" aria-live="polite">
-          {s.msgs.map((m, i) => (
-            <p key={i} className={m.from === 'user' ? 'me' : 'cort'}>{m.text}</p>
-          ))}
+          <div className="log" ref={log} role="log" aria-live="polite">
+            {s.msgs.map((m, i) => (
+              <p key={i} className={m.from === 'user' ? 'me' : 'cort'}>{m.text}</p>
+            ))}
+          </div>
+
+          <form onSubmit={submit}>
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Escribe a CORT"
+              aria-label="Mensaje a CORT"
+              autoComplete="off"
+              enterKeyHint="send"
+            />
+            <button type="submit" disabled={!s.online}>Enviar</button>
+          </form>
         </div>
-
-        <form onSubmit={submit}>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Escribe a CORT"
-            aria-label="Mensaje a CORT"
-            autoComplete="off"
-            enterKeyHint="send"
-          />
-          <button type="submit" disabled={!s.online}>Enviar</button>
-        </form>
       </div>
     </div>
   )

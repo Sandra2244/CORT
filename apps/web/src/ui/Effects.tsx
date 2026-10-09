@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe, type UiEffect } from '../cort/connection'
 import { palette } from '../cort/palette'
 
@@ -18,8 +18,9 @@ import { palette } from '../cort/palette'
  * de cero, donde re-aplicar la misma clase a un elemento vivo no haría nada.
  *
  * 'shake' es la excepción. Sacudir el marco significa mover el HUD entero, y
- * esta capa no lo posee, así que se lo presta: la clase va al ancestro `.hud`
- * durante la animación y se quita al terminar, también al desmontar.
+ * esta capa no lo posee —es su hermana, no su hijo—, así que se lo busca por
+ * clase: la clase va al nodo `.hud` durante la animación y se quita al terminar,
+ * también al desmontar.
  */
 
 /** Lo que duran los keyframes de cada efecto. En paso con index.css. */
@@ -35,7 +36,6 @@ export function Effects() {
   const snapshot = useSyncExternalStore(subscribe, getSnapshot)
   const effect = snapshot.effect
   const [live, setLive] = useState<UiEffect | null>(null)
-  const root = useRef<HTMLDivElement | null>(null)
 
   const kind = effect?.kind
   const at = effect?.at ?? 0
@@ -51,7 +51,11 @@ export function Effects() {
 
   useEffect(() => {
     if (!live || live !== 'shake') return
-    const hud = root.current?.closest('.hud')
+    // `querySelector`, no `closest`: esta capa es hermana del HUD, no está dentro
+    // de él, y `closest` sube ancestros — nunca lo habría encontrado. Con eso el
+    // temblor se montaba y se desmontaba sin mover nada, y pasaba por funcionando
+    // porque el resto de los efectos sí aterrizan.
+    const hud = document.querySelector('.hud')
     if (!hud) return
     hud.classList.add('fx-shaking')
     const done = setTimeout(() => hud.classList.remove('fx-shaking'), DURATION.shake)
@@ -71,7 +75,6 @@ export function Effects() {
   return (
     <div
       className="fx"
-      ref={root}
       aria-hidden="true"
       style={{ ['--accent' as string]: tint.ui }}
     >

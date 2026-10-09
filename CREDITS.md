@@ -16,7 +16,7 @@ La licencia MIT de CORT cubre **el código de este repositorio**. No reclama nad
 
 | Origen | Licencia | Estado en CORT |
 |---|---|---|
-| [adewaskar/JARVIS](https://github.com/adewaskar/jarvis) | **MIT** | **Código copiado y adaptado**: el reactor GLSL, las partículas, la cadena de post-proceso y la capa de efectos de un solo disparo. La atribución es obligación de la licencia, no cortesía: está documentada módulo a módulo en [`apps/web/CREDITS.md`](apps/web/CREDITS.md) |
+| [adewaskar/JARVIS](https://github.com/adewaskar/jarvis) | **MIT** | **Código copiado y adaptado**: el reactor GLSL, las partículas, la cadena de post-proceso, la capa de efectos de un solo disparo, el filtro 1€ de suavizado (`apps/web/src/lib/oneEuro.ts`) y el patrón de arrastre de paneles (`apps/web/src/cort/arrastre.ts`, al que CORT añade los topes). La atribución es obligación de la licencia, no cortesía: está documentada módulo a módulo en [`apps/web/CREDITS.md`](apps/web/CREDITS.md) |
 | [OpenJarvis](https://github.com/open-jarvis/OpenJarvis) | **Apache-2.0** | **Sólo ideas y estructura**. Ningún archivo copiado. Si se copia código, se arrastra la nota de licencia de Apache |
 | `fullstack-agent` (jaredrhod) | **AGPL-3.0** | **Ninguna línea copiada, a propósito.** Tomar código AGPL obligaría a publicar CORT bajo AGPL; de ese repo se leyeron ideas de arquitectura y nada más |
 | Rama `scaffold/fastapi-ollama-frontend` de este repo | propia | La memoria SQLite, **reescrita**: ruta de la base de datos inyectable, `created_at`, deduplicación, búsqueda por raíces de 4 letras, poda con el nombre protegido |

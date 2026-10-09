@@ -37,10 +37,20 @@ body {
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(120, 220, 255, 0.045) 2px 3px);
 }
 
-.hud {
+/*
+ * El marco es lo que se mueve al arrastrar; el HUD de dentro es lo que tiembla
+ * con el efecto `shake`. Dos nodos porque dos `transform` distintos: si el
+ * desplazamiento y la sacudida vivieran en el mismo elemento, la animación CSS
+ * escribiría `transform` cada cuadro y el panel se soltaría de los dedos a media
+ * arrancada.
+ */
+.hud-marco {
   position: fixed;
   inset: auto 0 0 0;
   z-index: 2;
+}
+
+.hud {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -52,6 +62,32 @@ body {
   backdrop-filter: blur(6px);
 }
 
+/*
+ * El asa. Sin `backdrop-filter` y sin caja: una barra de luz sobre el borde del
+ * panel, que es lo que dice «esto se mueve» en una interfaz táctil sin robarle
+ * ni un píxel de lectura a la pantalla. `touch-action: none` es lo que permite
+ * arrastrar con el dedo en vez de deslizar la página.
+ */
+.asa {
+  align-self: center;
+  width: 46px;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(to right, transparent, var(--tint), transparent);
+  opacity: 0.55;
+  cursor: grab;
+  touch-action: none;
+}
+
+.hud-marco.tirando {
+  user-select: none;
+}
+
+.hud-marco.tirando .asa,
+.hud-marco.tirando .status {
+  cursor: grabbing;
+}
+
 .status {
   display: flex;
   align-items: center;
@@ -60,6 +96,25 @@ body {
   color: var(--dim);
   font-size: 0.85rem;
   letter-spacing: 0.02em;
+  /* La barra de estado es también barra de arrastre: sin `touch-action: none` un
+     dedo desliza la página y no mueve el panel. */
+  cursor: grab;
+  touch-action: none;
+}
+
+/* Recolocar el panel después de moverlo. 44 px es lo mínimo que acierta un dedo
+   sin mirar, y aquí manda la clase aunque el bloque táctil de abajo pida 64 px
+   de ancho: en una barra de estado un botón así de gordo empuja el reloj. */
+.hud-colocar {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--tint);
+  background: rgba(6, 16, 34, 0.5);
+  border: 1px solid rgba(120, 190, 230, 0.25);
+  border-radius: 10px;
 }
 
 /* La hora del HUD. `tabular-nums` no es capricho: con cifras proporcionales el
