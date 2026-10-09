@@ -22,6 +22,7 @@ import http.server
 import json
 import os
 import re
+import secrets
 import shutil
 import socket
 import subprocess
@@ -348,6 +349,19 @@ def lan_address() -> str | None:
         s.close()
 
 
+def rechazo_de_red(lan: bool, token: str | None) -> str | None:
+    """El motivo por el que `--lan` no debe abrir el puerto, o `None` si se puede.
+
+    Función aparte y sin `print` porque es la única decisión de seguridad que
+    toma el lanzador, y tiene que poder probarse sin arrancar un servidor. El
+    criterio es el mismo que el del core (`cort_core/security.py`), y si algún
+    día discrepan gana el del core: él es el que está escuchando.
+    """
+    if not lan or (token or "").strip():
+        return None
+    return "--lan cancelado: no hay CORT_LAN_TOKEN en el .env."
+
+
 def main() -> int:
     # Antes que nada: `--port` toma su valor por defecto del entorno, y el entorno
     # puede venir del `.env`. Si se lee tarde, el lanzador comprueba un puerto
@@ -385,6 +399,23 @@ def main() -> int:
     if args.demo:
         os.environ["CORT_MEMORY_DB"] = demo_db_path(os.environ)
     db = Path(os.getenv("CORT_MEMORY_DB", DATA / "memory.db"))
+
+    token = (os.getenv("CORT_LAN_TOKEN") or "").strip()
+    motivo = rechazo_de_red(args.lan, token)
+    if motivo:
+        # `--lan` sin llave no se abre, y el lanzador se niega en vez de levantar
+        # el puerto "y ya veremos". El motivo es concreto: por ese WebSocket se
+        # puede cambiar el volumen, abrir aplicaciones y capturar la pantalla de
+        # esta máquina. Quien lo publica sin secreto le está prestando el PC a
+        # todo el Wi-Fi, y eso no puede ser consecuencia de una variable que
+        # nadie puso.
+        print(paint(f"\n{RED}{motivo}{RESET}", color))
+        print(paint(f" {DIM}Añade esta línea a {ROOT / '.env'} —o cambia el secreto por uno "
+                    f"tuyo, de unos 20 caracteres— y vuelve a arrancar:{RESET}", color))
+        print(paint(f"   {CYAN}CORT_LAN_TOKEN={secrets.token_urlsafe(18)}{RESET}", color))
+        print(paint(f" {DIM}Sin eso el core sigue en 127.0.0.1: arráncalo sin --lan si el "
+                    f"teléfono no hace falta.{RESET}", color))
+        return 1
 
     children: list[subprocess.Popen] = []
 
@@ -467,7 +498,8 @@ def main() -> int:
             # Vite en dev escucha sólo en 127.0.0.1 y publicarlo exige otra
             # bandera suya (`--host`): con `--serve dev` el `--lan` dejaría el
             # core accesible y la página no, que es la peor combinación.
-            notes = {"dist": f"el móvil abre http://{ip}:{args.web_port} — sin contraseña ni HTTPS",
+            notes = {"dist": f"el móvil abre http://{ip}:{args.web_port}/?token={token} — "
+                             "sin HTTPS: la llave viaja en claro por tu Wi-Fi",
                      "dev": "interfaz en modo dev: el móvil verá el core, pero no la página — usa --serve dist"}
             print(bar("red", ip is not None and mode == "dist", color,
                       notes[mode] if ip else "sin IP de red: el teléfono no podrá entrar"))

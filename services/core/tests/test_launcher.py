@@ -331,6 +331,24 @@ class TestRed(unittest.TestCase):
         with mock.patch.object(self.m.socket, "socket", return_value=Boom()):
             self.assertIsNone(self.m.lan_address())
 
+    def test_lan_sin_token_se_niega(self):
+        """El lanzador no abre el puerto si no hay secreto: por ese cable se
+        cambia el volumen, se abren apps y se captura la pantalla."""
+        motivo = self.m.rechazo_de_red(True, "")
+        self.assertIsNotNone(motivo)
+        self.assertIn("CORT_LAN_TOKEN", motivo)
+
+    def test_lan_con_token_se_puede(self):
+        self.assertIsNone(self.m.rechazo_de_red(True, "un-secreto"))
+
+    def test_un_token_de_solo_espacios_no_es_un_secreto(self):
+        self.assertIsNotNone(self.m.rechazo_de_red(True, "   "))
+
+    def test_sin_lan_no_se_pide_nada(self):
+        """En `127.0.0.1` no hay a quién autorizar: exigir token ahí sería un
+        paso de más para la dueña del portátil, y rompería el doble clic."""
+        self.assertIsNone(self.m.rechazo_de_red(False, ""))
+
 
 class TestBarraDeCamara(unittest.TestCase):
     """La sonda de vídeo: qué se ve, y si esta usuaria puede abrirlo."""

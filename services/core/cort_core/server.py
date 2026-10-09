@@ -3,7 +3,7 @@ import os
 import re
 import time
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 import uvicorn
 
@@ -22,6 +22,7 @@ from .status import build as status_payload
 from . import weather
 from . import avatars
 from . import initiative
+from . import security
 from . import timer
 
 app = FastAPI(title="CORT core")
@@ -64,8 +65,23 @@ def state(thinking=False):
         frame["temp_c"] = clima["temp_c"]
     return frame
 
+def autorizada(conexion) -> bool:
+    """Si este lazo puede abrirse: local, o trayendo el token de la red.
+
+    Un solo criterio para el WebSocket y para `GET /avatars/{nombre}`, que es lo
+    que evita que una de las dos puertas se quede abierta por descuido. El host y
+    el token se leen **en cada petición** y no al importar el módulo: así cambiar
+    el `.env` no exige reinventar el servidor, y así las pruebas los ponen y los
+    quitan sin recargar nada.
+    """
+    peer = conexion.client.host if conexion.client else None
+    return security.autorizado(security.host_de_escucha(), peer,
+                               security.token_configurado(),
+                               conexion.query_params.get("token"))
+
+
 @app.get("/avatars/{nombre}")
-async def get_avatar(nombre: str):
+async def get_avatar(nombre: str, solicitud: Request):
     """
     Los bytes de un atuendo, sólo si `CORT_AVATAR_DIR` está activado y el nombre
     es un archivo de esa carpeta.
@@ -85,7 +101,19 @@ async def get_avatar(nombre: str):
     con `fetch` hacia `GLTFLoader`, y **medido el 2026-10-09** el navegador lo
     cortó con `blocked by CORS policy` — el cuerpo 3D no se cargaba **en ningún
     arranque real**, tampoco en el de la usuaria.
+
+    Desde que el core puede escuchar en la red (`--lan` con `CORT_LAN_TOKEN`) el
+    token se pide **aquí también**: esta ruta es la única que devuelve archivos,
+    y la carpeta de atuendos es la que tiene las fotos y los modelos de una
+    persona. Va por `?token=` porque la piden un `<img>` y un `fetch` del
+    navegador, y ninguno de los dos puede mandar una cabecera propia.
     """
+    if not autorizada(solicitud):
+        # 401 y no 404: aquí lo que falta no es el archivo, es la llave, y un
+        # cliente que no la tiene necesita saberlo para pedírsela a quien lo
+        # arrancó. La existencia del nombre no se revela igual: se comprueba el
+        # token **antes** de tocar el disco.
+        raise HTTPException(status_code=401, detail="falta el token de la red")
     ruta = avatars.ruta_segura(nombre)
     if ruta is None:
         # 404 y no 403: un 403 confirmaría que el nombre existe en algún sitio.
@@ -148,6 +176,13 @@ async def _correr_cuenta(sock: WebSocket, segundos: int) -> None:
 
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
+    # El candado va **antes** de `accept()`: cerrar después de aceptar sería
+    # regalarle a cualquiera un lazo abierto, una tarea de iniciativa y un
+    # saludo hasta el `finally`. Cerrando antes Starlette responde 403 al
+    # apretón de manos y del otro lado no se abre nada.
+    if not autorizada(sock):
+        await sock.close(code=4401)
+        return
     await sock.accept()
     history: list[dict] = []
     name = memory.name_of_user()
@@ -284,5 +319,12 @@ if __name__ == "__main__":
     # 127.0.0.1 por defecto, y no 0.0.0.0: el core no tiene autenticación ni TLS.
     # Publicarlo en la red es decisión explícita de quien arranca (`cort.py --lan`),
     # no un regalo del valor por defecto.
-    uvicorn.run(app, host=os.getenv("CORT_HOST", "127.0.0.1"),
-                port=int(os.getenv("CORT_PORT", "8765")))
+    host = os.getenv("CORT_HOST", "127.0.0.1")
+    motivo = security.rechazo_de_arranque(host, security.token_configurado())
+    if motivo:
+        # Se niega y sale con código 1: el lanzador ya avisa de que el core murió
+        # y la usuaria lee el motivo en la terminal. Un servidor que arranca
+        # "aunque le falte el token" es justo el que nadie nota abierto.
+        print(f"CORT no arranca: {motivo}", flush=True)
+        raise SystemExit(1)
+    uvicorn.run(app, host=host, port=int(os.getenv("CORT_PORT", "8765")))

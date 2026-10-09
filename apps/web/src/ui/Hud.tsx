@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getSnapshot, send, setZoom, subscribe } from '../cort/connection'
+import { getSnapshot, pintaFaltaDeLlave, send, setZoom, subscribe } from '../cort/connection'
 import { iniciarCamara, type Muestra } from '../cort/defocus'
 import { useArrastre } from '../cort/arrastre'
 import { Atuendos } from './Avatar'
@@ -179,7 +179,15 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
         <span className="asa" aria-hidden="true" onPointerDown={agarrar} />
         <header className="status" onPointerDown={agarrar}>
           <span className={`dot ${s.online ? 'on' : 'off'}`} />
-          {s.online ? (s.thinking ? 'CORT procesando' : 'CORT en línea') : 'Sin conexión con el core — ejecuta: make dev'}
+          {s.online
+            ? (s.thinking ? 'CORT procesando' : 'CORT en línea')
+            : pintaFaltaDeLlave()
+              // El rechazo del core por no traer llave llega al navegador como un
+              // `403` sin motivo legible: si la página se abrió desde otro equipo
+              // y no trae `?token=`, eso es exactamente lo que pasó, y decirlo
+              // ahorra la tarde que iría a buscar un core que sí está levantado.
+              ? 'Falta la llave de la red — abre la dirección que imprime cort.py --lan'
+              : 'Sin conexión con el core — ejecuta: make dev'}
           {s.online && <em> · atuendo {s.outfit}</em>}
           {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
               no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un

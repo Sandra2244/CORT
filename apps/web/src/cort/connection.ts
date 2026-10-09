@@ -167,8 +167,41 @@ export function setOrbeVisible(visible: boolean) {
 // abrir CORT desde el teléfono con `--lan` las miniaturas salgan también.
 const ORIGEN_CORE = `${location.protocol === 'https:' ? 'https' : 'http'}://${location.hostname || '127.0.0.1'}:8765`
 
+/**
+ * La llave de la red, si la página la trae en la dirección: `?token=…` es lo que
+ * imprime `cort.py --lan`, y es lo único que distingue a la dueña de CORT de
+ * cualquiera que esté en el mismo Wi-Fi.
+ *
+ * Va por la URL y no por una cabecera porque los dos clientes que hay que
+ * contentar no pueden mandar cabeceras: el `WebSocket` del navegador no admite
+ * `Authorization`, y un `<img>` de una miniatura tampoco. Un `fetch` sí podría,
+ * pero no se cambia el transporte de tres componentes para esconder un secreto
+ * que de todas formas viaja en claro hasta que haya TLS.
+ *
+ * Vacío en `127.0.0.1`, y así debe ser: el core no pide lo que no tiene puesto.
+ */
+const TOKEN = new URLSearchParams(location.search).get('token') ?? ''
+
+/** La dirección de la máquina que sirve la página, o `''` si es el propio equipo. */
+const REMOTO = !['127.0.0.1', 'localhost', '[::1]', '::1', ''].includes(location.hostname)
+
+function conToken(url: string) {
+  if (!TOKEN) return url
+  return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(TOKEN)}`
+}
+
+/**
+ * Si el cable se cayó y todo apunta a que fue la llave: la página se abrió desde
+ * otra máquina y no trae `?token=`. Lo usa el aviso del cabezal para decir
+ * «falta la llave» en vez de dejar a la usuaria buscando un core que sí está
+ * levantado — el 403 del WebSocket no llega al navegador con motivo legible—.
+ */
+export function pintaFaltaDeLlave() {
+  return REMOTO && !TOKEN
+}
+
 export function avatarUrl(nombre: string) {
-  return `${ORIGEN_CORE}/avatars/${encodeURIComponent(nombre)}`
+  return conToken(`${ORIGEN_CORE}/avatars/${encodeURIComponent(nombre)}`)
 }
 
 // El core escucha en 127.0.0.1; si se abre la web desde otro equipo de la red
@@ -176,7 +209,7 @@ export function avatarUrl(nombre: string) {
 // reescribir la URL. El `wss` no es una promesa de HTTPS: es para que, si algún
 // día la interfaz se sirve con certificado, el navegador no bloquee el cable por
 // mezclar protocolos con un error que no se entiende.
-const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8765/ws`
+const WS_URL = conToken(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname || '127.0.0.1'}:8765/ws`)
 
 let sock: WebSocket | null = null
 let timer: number | undefined
