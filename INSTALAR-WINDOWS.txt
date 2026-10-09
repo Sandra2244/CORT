@@ -1,0 +1,38 @@
+CORT - instalacion en Windows (8 GB de RAM)
+============================================
+
+1) Instala (si no los tienes):
+   - Python 3.11 o superior: python.org (marca "Add python.exe to PATH")
+   - Node.js LTS: nodejs.org (deja DESMARCADA la casilla de herramientas extra)
+   - Ollama: ollama.com/download
+
+2) Descarga los modelos (en cmd):
+   ollama pull llama3.2:3b
+   ollama pull qwen2.5:0.5b
+
+3) Abre cmd DENTRO de esta carpeta (escribe cmd en la barra de direcciones
+   del Explorador y pulsa Enter) y pega, una linea a la vez:
+
+   py -m venv .venv
+   .venv\Scripts\python -m pip install -r services\core\requirements.txt
+   copy .env.example .env
+   cd apps\web
+   npm install
+   npm run build
+   cd ..\..
+
+4) Configura (una linea a la vez, con el espacio antes de >>):
+
+   echo. >> .env
+   echo CORT_LLM_CHAIN=llama3.2:3b,qwen2.5:0.5b >> .env
+   echo CORT_LLM_MAX_MODEL_MIB=3000 >> .env
+   echo CORT_LLM_KEEP_ALIVE=10m >> .env
+   echo CORT_SYSTEM_ACTIONS=0 >> .env
+
+   (opcional) tu ciudad para el clima:
+   echo CORT_CITY=Bogota >> .env
+
+5) Enciende: doble clic en cort.bat  (Ollama debe estar abierto).
+
+Voz: abre el panel de la esquina y usa "que me hable" y "hablarle".
+Usa Microsoft Edge o Chrome. Escuchar necesita internet.

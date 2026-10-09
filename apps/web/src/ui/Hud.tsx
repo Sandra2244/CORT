@@ -3,6 +3,7 @@ import { getSnapshot, send, setZoom, subscribe } from '../cort/connection'
 import { iniciarCamara, type Muestra } from '../cort/defocus'
 import { useArrastre } from '../cort/arrastre'
 import { Atuendos } from './Avatar'
+import { Voz } from './Voz'
 import { palette } from '../cort/palette'
 
 /**
@@ -210,6 +211,7 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
 
         <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
           <GestoCamara />
+          <Voz />
           <Atuendos visible={abierto} elegido={atuendo} onElegir={onAtuendo} />
 
           <div className="log" ref={log} role="log" aria-live="polite">
