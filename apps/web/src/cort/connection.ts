@@ -26,6 +26,13 @@ export type Status = {
   brain: string | null
   ollama: boolean | null
   actions: boolean
+  /**
+   * Si CORT tiene permiso de hablar primero (`CORT_INITIATIVE`). Se pinta como
+   * lo que es: un hecho del proceso, medido en el core, no una decoración del
+   * panel. Se lee con `!== false` porque su valor por defecto es «encendida», y
+   * un marco viejo sin el campo no debe hacer creer que está apagada.
+   */
+  iniciativa: boolean
 }
 
 /**
@@ -41,6 +48,7 @@ function readStatus(m: any): Status {
     brain: typeof m.brain === 'string' ? m.brain : null,
     ollama: m.ollama === true || m.ollama === false ? m.ollama : null,
     actions: Boolean(m.actions),
+    iniciativa: m.iniciativa !== false,
   }
 }
 
@@ -189,6 +197,11 @@ function open() {
     if (m.type === 'greeting' && snapshot.msgs.length === 0)
       set({ msgs: [{ from: 'cort', text: m.text }] })
     if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+    // `proactive` es lo mismo dicho por su cuenta: viaja separado porque el core
+    // decide cuándo (iniciativa, regla determinista, sin LLM) y para que alguien
+    // pueda apagarlo con `CORT_INITIATIVE=0` sin tocar cómo se pinta un mensaje.
+    if (m.type === 'proactive' && typeof m.text === 'string')
+      set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
     if (m.type === 'avatars')

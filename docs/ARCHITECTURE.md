@@ -32,7 +32,7 @@ Lo que **se evaluó y no entró**, con números de esta máquina en [`docs/PLATF
 - **Java**: en esta máquina existe `java` pero **no `javac`** — JRE sin JDK, no se compila.
 
 ## Protocolo (v0)
-Mensajes JSON por WebSocket `ws://localhost:8765/ws` — **nueve tipos: dos entrantes (`user_message`, `list_avatars`) y siete salientes**:
+Mensajes JSON por WebSocket `ws://localhost:8765/ws` — **diez tipos: dos entrantes (`user_message`, `list_avatars`) y ocho salientes**:
 ```json
 {"type":"user_message","text":"hola"}
 {"type":"list_avatars"}
@@ -41,8 +41,9 @@ Mensajes JSON por WebSocket `ws://localhost:8765/ws` — **nueve tipos: dos entr
 {"type":"state","outfit":"casual","mood":"calm","thinking":false}
 {"type":"intent","action":"volume","delta":10}
 {"type":"effect","kind":"pulse"}
-{"type":"status","memories":18,"keep":200,"brain":"qwen2.5:0.5b","ollama":true,"actions":true}
+{"type":"status","memories":18,"keep":200,"brain":"qwen2.5:0.5b","ollama":true,"actions":true,"iniciativa":true}
 {"type":"avatars","items":[{"nombre":"casual.png","mime":"image/png","bytes":16384}]}
+{"type":"proactive","text":"Son las 7 de la mañana. ¿Empezamos con café?","mood":"calm","clave":"cafete"}
 ```
 Y por HTTP, en el mismo origen del core: `GET /avatars/{nombre}` → el archivo (`FileResponse` con su `media_type`), o **404** si no está dentro de la carpeta declarada.
 Los tipos nuevos se añaden aquí primero y luego al código.
@@ -56,7 +57,13 @@ Los tipos nuevos se añaden aquí primero y luego al código.
 
 `list_avatars` → `avatars` es el **inventario de su carpeta de atuendos** (`CORT_AVATAR_DIR`), y su diseño está dividido a propósito en dos transportes. La **lista** viaja por el WebSocket: la página vive en `:8780` y el core en `:8765`, así que un `fetch` desde la página obligaría a **declarar CORS en un core que no tiene autenticación** — cualquier pestaña del navegador podría pedirle la lista de esa carpeta. Por el canal ya abierto, en cambio, sólo la ve quien se conectó como cliente. Los **bytes** viajan por HTTP (`GET /avatars/{nombre}`) porque un `<img>` **no necesita CORS**, y mandar 16 MB por un marco de texto sería una forma cara de llegar a lo mismo. La lista es vacía si la variable no existe: **el core no adivina ninguna carpeta**, y el selector lo dice en pantalla en vez de pintar figuras inventadas. El control de evasión no es una cadena: se **resuelve** la ruta y se compara con `relative_to()` la raíz (`startswith` se cuela con `/atuendos2`), y lo que queda fuera responde **404 en vez de 403** para no revelar que algo existe.
 
-## Capa de permisos (`actions.py`) — regla 6 de `AGENTS.md`
+`proactive` es **la iniciativa**: CORT dice algo sin que se lo pidan, y es el único marco que el core manda por su cuenta. Sale de `initiative.py`, que no es un agente: compara tres números —la hora, la temperatura **medida** (nunca `CORT_CITY_TEMP_C`, que es un valor de reserva) y cuántos recuerdos hay— contra una lista de reglas, y devuelve una `Sugerencia` con dos campos de texto. **No importa `actions`, no tiene `subprocess`, y una prueba lo comprueba leyendo el AST del módulo**, que es el único sitio donde se vería un `import` colado en un merge: todas las demás pruebas pasarían igual.
+
+Cuatro cosas lo convierten en compañero y no en alarma: **una regla por tema y por conexión** (`dichas` vive en el lazo, así que el mismo aviso no suena dos veces), **cortesía** (`CORT_INITIATIVE_QUIET_S` de 90 s sin mensajes y un marcador `ocupada` que silencia el reloj mientras un turno está en camino —con Ollama tardando 15-60 s medidos, un «¿café?» delante de la respuesta es el fallo que esa bandera cierra—), **muerte con la conexión** (`asyncio.create_task` al aceptar, `tarea.cancel()` en el `finally`; dejarla suelta sería una tarea acumulada por pestaña abierta y cerrada), y **apagador** (`CORT_INITIATIVE=0`, y `CORT_INITIATIVE_INTERVAL_S=0` tampoco arranca: un `while True` sin dormir en 2 núcleos no es un intervalo corto, es un congelador).
+
+Y no usa el LLM a propósito: evaluar el prompt cuesta **0,9 s con el modelo caliente y 113 s en frío**, y esto se mira cada treinta segundos. El texto sale de una plantilla.
+
+
 Un `intent` ya no es un "entendido": ejecuta. Y ejecuta **sólo lo que está en una lista cerrada**:
 
 - `volume` → `wpctl get-volume`, luego `wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 10%+`, luego `wpctl get-volume` otra vez.

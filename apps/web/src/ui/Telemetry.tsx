@@ -65,6 +65,10 @@ export function Telemetry({ oculto = false }: { oculto?: boolean }) {
         <span>acciones</span>
         <b className={st.actions ? undefined : 'tl-warn'}>{st.actions ? 'activas' : 'apagadas'}</b>
       </div>
+      <div className="tl-row">
+        <span>iniciativa</span>
+        <b className={st.iniciativa ? undefined : 'tl-warn'}>{st.iniciativa ? 'puede hablar primero' : 'sólo responde'}</b>
+      </div>
     </aside>
   )
 }

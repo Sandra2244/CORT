@@ -104,6 +104,14 @@ class TestPaquete(unittest.TestCase):
         with mock.patch.dict(os.environ, {"CORT_SYSTEM_ACTIONS": "0"}):
             self.assertIs(False, status.build(self.store, keep=200)["actions"])
 
+    def test_si_puede_hablar_primero_tambien_se_ve(self):
+        """Cada interruptor del panel se apaga por su cuenta: si a la iniciativa le
+        faltara su cuadro, un CORT que sólo responde parecería un corte de red."""
+        with mock.patch.dict(os.environ, {"CORT_INITIATIVE": "0"}):
+            self.assertIs(False, status.build(self.store, keep=200)["iniciativa"])
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIs(True, status.build(self.store, keep=200)["iniciativa"])
+
     def test_sin_haber_preguntado_al_modelo_no_se_inventa_uno(self):
         with mock.patch.object(brain, "_last", {"model": None, "ollama": None}):
             s = status.build(self.store, keep=200)

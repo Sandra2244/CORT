@@ -3,14 +3,14 @@
 El panel de la interfaz enseña hechos medidos, no etiquetas decorativas: un
 holograma que dice "en línea" porque sí no informa de nada. Cada valor sale de
 este proceso —cuántos recuerdos hay en la base, qué modelo contestó la última
-vez, si la capa de permisos está encendida.
+vez, si la capa de permisos está encendida, si tiene permiso de hablar primero.
 
 No hay reloj ni latido: el estado se manda al conectar y después de cada turno,
 que es cuando algo puede haber cambiado. Un número que se queda quieto mientras
 nada ocurre es exactamente tan cierto como uno que anda solo.
 """
 
-from . import actions, brain
+from . import actions, brain, initiative
 
 
 def build(memory, keep: int) -> dict:
@@ -23,4 +23,5 @@ def build(memory, keep: int) -> dict:
         "brain": brain.last_model(),
         "ollama": brain.last_reachable(),
         "actions": actions.enabled(),
+        "iniciativa": initiative.enabled(),
     }
