@@ -72,16 +72,26 @@ async def get_avatar(nombre: str):
 
     Es el único endpoint de archivos: el **listado** viaja por el WebSocket, no
     por HTTP. La página se sirve en `:8780` y el core escucha en `:8765`, así que
-    un `fetch` al listado necesitaría CORS declarado — y declarar CORS en un core
-    sin autenticación sería regalarle a cualquier pestaña del navegador la lista
-    de lo que hay en esa carpeta. Una etiqueta `<img>` no necesita CORS y por eso
-    los bytes sí pueden salir por HTTP.
+    un `fetch` al listado necesitaría CORS declarado — y declararlo en toda la API
+    sería regalarle a cualquier pestaña del navegador algo que leer.
+
+    Los bytes salen por HTTP con `Access-Control-Allow-Origin: *` **en esta ruta y
+    en ninguna más**. No es una concesión nueva: el WebSocket ya acepta cualquier
+    origen (no hay cookies ni sesión que robar, y un lazo no lo protege CORS), así
+    que quien alcanza `:8765` ya puede pedir este archivo escribiendo la URL. El
+    CORS abierto cambia de sitio el riesgo cero y no lo aumenta.
+
+    Lo que sí cambió: un `.vrm` no se puede colgar de una etiqueta `<img>`. Se lee
+    con `fetch` hacia `GLTFLoader`, y **medido el 2026-10-09** el navegador lo
+    cortó con `blocked by CORS policy` — el cuerpo 3D no se cargaba **en ningún
+    arranque real**, tampoco en el de la usuaria.
     """
     ruta = avatars.ruta_segura(nombre)
     if ruta is None:
         # 404 y no 403: un 403 confirmaría que el nombre existe en algún sitio.
         raise HTTPException(status_code=404, detail="atuendo no disponible")
-    return FileResponse(ruta, media_type=avatars.tipo_de(ruta))
+    return FileResponse(ruta, media_type=avatars.tipo_de(ruta),
+                        headers={"Access-Control-Allow-Origin": "*"})
 
 
 async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
@@ -245,6 +255,15 @@ async def ws(sock: WebSocket):
                 actividad["ocupada"] = False
             history.append({"role": "assistant", "content": reply})
             await sock.send_json({"type": "assistant_message", "text": reply, "mood": "calm"})
+            # **La respuesta se siente, no sólo se lee.** El temblor va en el marco
+            # del HUD (`arrastre.ts` lo separó a propósito: el `shake` escribe
+            # `transform` y el arrastre también) y es lo que pidió la dueña del
+            # proyecto: «el orbe responde y vibra al responder». Sale **después** del
+            # mensaje y no antes, para que la sacudida coincida con el texto que ya
+            # está en pantalla y no con un vacío que anuncia algo. El saludo
+            # (`greeting`) **no** la dispara: se emite en cada reconexión y una
+            # pantalla que tiembla al levantar el servidor es ruido, no respuesta.
+            await sock.send_json({"type": "effect", "kind": "shake"})
             await sock.send_json(state())
             # Después de `think()` es cuando `brain.last_model()` tiene algo que
             # decir: el panel nombra el modelo que acaba de contestar.

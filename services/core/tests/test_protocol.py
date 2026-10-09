@@ -127,6 +127,31 @@ class TestProtocol(unittest.TestCase):
             kinds = {m["kind"] for m in self.turn(ws, "sube el volumen") if "kind" in m}
         self.assertTrue(kinds <= playable, f"kinds fuera del protocolo: {kinds - playable}")
 
+    def test_una_respuesta_sacude_la_pantalla(self):
+        """Hasta hoy `shake` estaba **arreglado y muerto** a la vez: el cliente lo
+        sabía tocar, pero el core sólo mandaba `pulse` y `glitch`, así que nunca
+        llegaba. Se pide una respuesta que no sea una orden y se compran dos cosas:
+        que el efecto venga y que venga **después** del texto — una animación que
+        se dispara antes de que exista la respuesta es un aviso, no una reacción.
+        El saludo también queda comprobado por omisión: `handshake()` exige tres
+        marcos y ninguno es `effect`, así que reconectar no hace temblar la
+        pantalla."""
+        with self.client.websocket_connect("/ws") as ws:
+            self.handshake(ws)
+            ws.send_json({"type": "user_message", "text": "hola cort"})
+            vistos = []
+            while True:
+                vistos.append(ws.receive_json())
+                tipos = [m["type"] for m in vistos]
+                if "assistant_message" in tipos and vistos[-1]["type"] == "effect":
+                    break
+                if len(vistos) > 12:
+                    self.fail(f"demasiados marcos para un turno: {tipos}")
+        tipos = [m["type"] for m in vistos]
+        i = tipos.index("assistant_message")
+        self.assertEqual("effect", tipos[i + 1])
+        self.assertEqual("shake", vistos[i + 1]["kind"])
+
     def test_ignored_message_gets_no_reply(self):
         with self.client.websocket_connect("/ws") as ws:
             self.handshake(ws)

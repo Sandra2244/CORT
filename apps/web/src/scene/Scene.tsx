@@ -88,7 +88,9 @@ export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: (
       className="scene"
       camera={{ position: [0, 0, 6.2], fov: 45 }}
       gl={{ antialias: true, alpha: true }}
-      dpr={[1, 2]}
+      // Con cuerpo 3D se fija `dpr` a 1: en un móvil con pantalla de 2x eso es
+      // **la cuarta parte de píxeles** que rellenar, y aquí no hay GPU que ayude.
+      dpr={vrm ? 1 : [1, 2]}
     >
       <Rig />
       {vrm && (
@@ -108,14 +110,24 @@ export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: (
         multisampling={0} a propósito: no hay una sola arista poligonal que
         suavizar, todo es blob aditivo, puntos y líneas ya difuminados por bloom.
         En 1,8 GiB de RAM este ahorro de búfer no es cosmético.
+
+        Y con un cuerpo 3D montado la cadena **se quita entera**. Medido el
+        2026-10-09: el orbe solo va a 18 fps, y con el `.vrm` encima más los cuatro
+        pases de postproceso la pantalla cayó a **0,7 fps** (un cuadro cada metro
+        y pico de segundo). Cuatro pasadas a pantalla completa sobre software
+        rasterizer no las paga esta máquina; el filo de Fresnel del material ya
+        brilla por sí solo, así que lo que se pierde es el halo del orbe, que
+        estaba apagado de todos modos.
       */}
-      <EffectComposer multisampling={0}>
-        {/* El bloom es lo que convierte líneas aditivas en "holograma". */}
-        <Bloom intensity={1.15} luminanceThreshold={0.22} luminanceSmoothing={0.85} mipmapBlur radius={0.72} />
-        <ChromaticAberration offset={new THREE.Vector2(0.0009, 0.0012)} radialModulation={false} modulationOffset={0} />
-        <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />
-        <Vignette eskil={false} offset={0.22} darkness={0.95} />
-      </EffectComposer>
+      {!vrm && (
+        <EffectComposer multisampling={0}>
+          {/* El bloom es lo que convierte líneas aditivas en "holograma". */}
+          <Bloom intensity={1.15} luminanceThreshold={0.22} luminanceSmoothing={0.85} mipmapBlur radius={0.72} />
+          <ChromaticAberration offset={new THREE.Vector2(0.0009, 0.0012)} radialModulation={false} modulationOffset={0} />
+          <Noise opacity={0.035} blendFunction={BlendFunction.OVERLAY} />
+          <Vignette eskil={false} offset={0.22} darkness={0.95} />
+        </EffectComposer>
+      )}
     </Canvas>
   )
 }

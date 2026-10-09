@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import type { VRM } from '@pixiv/three-vrm'
+import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import { avatarUrl } from '../cort/connection'
 import { palette, type Outfit } from '../cort/palette'
 
@@ -40,6 +40,13 @@ type Utilerias = (typeof import('@pixiv/three-vrm'))['VRMUtils']
 
 /** Altura objetivo en la escena: lo que ve la cámara a z=0 con fov 45 son ~5,1 unidades. */
 const ALTURA = 3.4
+
+/**
+ * Cuánto se bajan los brazos desde la pose en T del `.vrm` (radianes). 1,2 es el
+ * número que salió de la barrida: deja el húmero a lo largo del cuerpo con los
+ * dedos separados de la cadera. A π/2 (1,57) el brazo se clava contra el muslo.
+ */
+const BRAZOS = 1.2
 
 /**
  * El tinte del atuendo, en la misma paleta que el reactor: si el cuerpo fuera de
@@ -143,8 +150,49 @@ export function Vrm({ nombre, outfit, onFallo }: { nombre: string; outfit: Outfi
           }
           vrm.current = modelo
 
+          // Sonda de medición: con `?sonda` en la URL el modelo queda a mano desde
+          // la consola, que es como se barrió el eje de los brazos en vez de
+          // adivinarlo. Sin el parámetro no se publica ningún objeto global.
+          if (new URLSearchParams(window.location.search).has('sonda')) {
+            ;(window as unknown as Record<string, unknown>).__cort_vrm = modelo
+          }
+
           // Un VRM 0..x mira hacia -Z; sin girarlo, CORT da la espalda.
           VRMUtils.rotateVRM0(modelo)
+          // **Postura, no adorno:** un `.vrm` llega en T y una chica flotando con
+          // los brazos en cruz es un maniquí de tienda, no Cortana.
+          //
+          // Se escribe el hueso **crudo** y se apaga la copia que lo borraba.
+          // `VRMHumanoid.update()` no hace nada más que copiar el esqueleto
+          // normalizado sobre el crudo — es la única línea de su cuerpo, leída en
+          // la fuente de `@pixiv/three-vrm` —, así que con
+          // `autoUpdateHumanBones = false` lo que se escribe aquí es lo que se
+          // pinta, sin trabajo por frame. Medido con `?sonda` sobre
+          // `avatar CORT base.vrm`: escribiendo en el **normalizado** la rotación
+          // leía `[0, 0, 0]` poco después y el cuerpo seguía en cruz; escribiendo
+          // en el crudo la muñeca izquierda pasó de `[1,117 · y 0,96]` a
+          // `[0,547 · y 0,126]` y la derecha, en espejo, de `[-1,117 · 0,96]` a
+          // `[-0,547 · 0,126]`. Aquí no se pierde nada al apagar la copia: CORT no
+          // hace retargeting ni reproduce animaciones, sólo sostiene una pose.
+          //
+          // Ni el eje ni el signo se adivinaron: se barrieron los seis
+          // (x, y, z × ±) midiendo la muñeca en el mundo. Sólo el **Z** baja el
+          // brazo; x e y lo llevan adelante o atrás (`dy ≈ 0`). Y el reposo no es
+          // simétrico — el izquierdo arranca en `z = +0,141`, el derecho en
+          // `z = -0,141` —, por eso el giro se **suma sobre el reposo** en vez de
+          // sustituirlo. Codos y muñecas se quedan como vienen: lo que se veía mal
+          // era la cruz, y esa ya está resuelta.
+          const humano = modelo.humanoid
+          if (humano) {
+            humano.autoUpdateHumanBones = false
+            for (const [hueso, giro] of [
+              ['leftUpperArm', -BRAZOS],
+              ['rightUpperArm', BRAZOS],
+            ] as const) {
+              const nodo = humano.getRawBoneNode(hueso as VRMHumanBoneName)
+              if (nodo) nodo.rotation.z += giro
+            }
+          }
           // Estas dos podas quitan vértices y huesos que no usa ninguna malla. No
           // son limpieza estética: en una máquina sin GPU cada vértice y cada
           // articulación es trabajo por frame.
@@ -165,32 +213,53 @@ export function Vrm({ nombre, outfit, onFallo }: { nombre: string; outfit: Outfi
           modelo.scene.traverse((obj) => {
             const malla = obj as THREE.Mesh
             if (!malla.isMesh) return
-            const vieja = malla.material as THREE.Material & { color?: THREE.Color; map?: THREE.Texture | null }
-            const nueva = new THREE.MeshStandardMaterial({
-              color: vieja.color ? vieja.color.clone() : new THREE.Color(1, 1, 1),
-              map: vieja.map ?? null,
-              transparent: true,
-              depthWrite: false,
-              side: THREE.DoubleSide,
-              roughness: 1,
-              metalness: 0,
-            })
-            nueva.onBeforeCompile = (shader) => {
-              shader.vertexShader = shader.vertexShader
-                .replace('void main() {', `${HOLO_VERTEX}\nvoid main() {`)
-                .replace('#include <skinning_vertex>', HOLO_VERTEX_MAIN)
-              shader.fragmentShader = shader.fragmentShader.replace(
-                'void main() {',
-                `${HOLO_FRAGMENT}\nvoid main() {`,
-              )
-              shader.fragmentShader = shader.fragmentShader.replace(
-                '#include <dithering_fragment>',
-                `#include <dithering_fragment>\n${HOLO_FRAGMENT_MAIN}`,
-              )
-              Object.assign(shader.uniforms, reloj)
+            const parchear = (vieja: THREE.Material) => {
+              const origen = vieja as THREE.Material & {
+                color?: THREE.Color
+                map?: THREE.Texture | null
+              }
+              // Tres cosas de `three` construyen el macro `MAP_UV` como
+              // `'uv' + texture.channel`. Las texturas que entrega
+              // `@pixiv/three-vrm@3.5.5` no traen `channel` numérico, el macro sale
+              // literalmente `uvundefined`, el navegador **no compila el programa**
+              // y el cuerpo queda invisible: medido el 2026-10-09 con
+              // `'uvundefined' : undeclared identifier` y 259 avisos por cuadro de
+              // `useProgram: program not valid`. Se normaliza en el único sitio
+              // donde CORT decide qué textura entra en el material nuevo.
+              const mapa = origen.map ?? null
+              if (mapa && typeof mapa.channel !== 'number') mapa.channel = 0
+              const nueva = new THREE.MeshStandardMaterial({
+                color: origen.color ? origen.color.clone() : new THREE.Color(1, 1, 1),
+                map: mapa,
+                transparent: true,
+                depthWrite: false,
+                side: THREE.DoubleSide,
+                roughness: 1,
+                metalness: 0,
+              })
+              nueva.onBeforeCompile = (shader) => {
+                shader.vertexShader = shader.vertexShader
+                  .replace('void main() {', `${HOLO_VERTEX}\nvoid main() {`)
+                  .replace('#include <skinning_vertex>', HOLO_VERTEX_MAIN)
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  'void main() {',
+                  `${HOLO_FRAGMENT}\nvoid main() {`,
+                )
+                shader.fragmentShader = shader.fragmentShader.replace(
+                  '#include <dithering_fragment>',
+                  `#include <dithering_fragment>\n${HOLO_FRAGMENT_MAIN}`,
+                )
+                Object.assign(shader.uniforms, reloj)
+              }
+              vieja.dispose?.()
+              return nueva
             }
-            malla.material = nueva
-            vieja.dispose?.()
+            // Una malla puede traer varios materiales (cara, ropa, pelo). Si se le
+            // pone uno solo, los `groups` de la geometría apuntarían al índice
+            // equivocado y media cara vestiría el color de la otra.
+            malla.material = Array.isArray(malla.material)
+              ? malla.material.map(parchear)
+              : parchear(malla.material)
           })
 
           // Escala por caja dinámica: los VRM traen alturas distintas y un

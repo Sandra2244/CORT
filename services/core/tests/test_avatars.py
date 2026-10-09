@@ -144,6 +144,17 @@ class TestEndpoint(unittest.TestCase):
                 self.assertEqual(r.headers["content-type"], "image/png")
                 self.assertTrue(r.content.startswith(b"\x89PNG"))
 
+    def test_los_bytes_son_legibles_desde_otra_origen(self):
+        """El `.vrm` se carga con `fetch`, no con `<img>`: sin esta cabecera el
+        navegador la corta y el cuerpo 3D no aparece **en ningún arranque real**."""
+        with ConDirectorio():
+            with TestClient(app) as cliente:
+                r = cliente.get("/avatars/aira_default.png")
+                self.assertEqual(r.headers["access-control-allow-origin"], "*")
+                # Y el permiso es sólo para lo que se sirve: un 404 no abre nada.
+                self.assertNotIn("access-control-allow-origin",
+                                 cliente.get("/avatars/no-existe.vrm").headers)
+
     def test_404_tambien_para_traversal_codificada(self):
         with ConDirectorio():
             with TestClient(app) as cliente:
