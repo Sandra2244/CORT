@@ -1,14 +1,41 @@
 # CORT
 
+<p align="center">
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.7.0-6f4ff2?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-257%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
+  <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
+  <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
+  <img alt="Sin nube" src="https://img.shields.io/badge/cerebro-Ollama%20local-orange?style=flat-square">
+  <img alt="Plataformas" src="https://img.shields.io/badge/Linux%20·%20Windows%20·%20Android%20(PWA)-informational?style=flat-square">
+</p>
+
 **C**ognitive **O**perating **R**eactive **T**echnology — un asistente personal holográfico, **local-first**, inspirado en Cortana (*Halo*).
 
-No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
+No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.6.0`** · rama `cort-local-verified` · **226 pruebas en verde** · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.7.0`** · rama **`main`** · **257 pruebas en verde** (ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja](docs/assets/prototipo-v0.6.0.png)
 
+> **Descargar / probar:** [`git clone https://github.com/Sandra2244/CORT.git`](https://github.com/Sandra2244/CORT) ·
+> [ZIP de la última versión](https://github.com/Sandra2244/CORT/archive/refs/heads/main.zip) ·
+> [Instalación paso a paso ↓](#instalación)
+
 ---
+
+## Índice
+
+| | | |
+|---|---|---|
+| [Arquitectura](#arquitectura) | [Voz](#voz) | [Instalación](#instalación) |
+| [Componentes](#componentes) | [Funciones](#funciones) | [Si algo no arranca](#si-algo-no-arranca) |
+| [Protocolo WebSocket](#protocolo-websocket) | [Qué hace hoy, y cómo se sabe](#qué-hace-hoy-y-cómo-se-sabe) | [Cómo colaborar](#cómo-colaborar) |
+| [La red y su llave](#la-red-y-su-llave) | [Plataforma y hardware](#plataforma-pc-móvil-y-por-qué-no-cjava) | [Créditos y licencia](#créditos) |
+| [Seguridad y permisos](#seguridad-y-permisos) | [Estructura del repositorio](#estructura-del-repositorio) | [Documentación](#documentación) |
+
+---
+
 
 ## Arquitectura
 
@@ -33,7 +60,8 @@ Tres capas, un protocolo, y todo en la misma máquina. Ningún dato sale del equ
                                      │
                                sistema real
 
-   * voz: diseñada y bloqueada por hardware en esta máquina — ver Funciones
+   * voz: la del navegador — habla y escucha sin gastar RAM del core; escuchar
+     necesita internet (ver [Voz](#voz))
 ```
 
 Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`):
@@ -54,6 +82,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Memoria persistente** | `cort_core/memory/{store,facts}.py` | SQLite con búsqueda por raíces de 4 letras (no embeddings: esos piden ~1,5 GiB). `remember · recall · context_for · prune · name_of_user · count`. `prune` protege la fila del nombre, de la que depende el saludo. `context_for` rescata **por contenido, no por fecha** |
 | **Intenciones** | `cort_core/intents.py` | Patrones locales para órdenes de sistema. Devuelve una acción estructurada y **no ejecuta nada** — separar las dos cosas es lo que hace auditable el permiso |
 | **Capa de permisos** | `cort_core/actions.py` | Convierte esa acción en un comando real **de una lista cerrada**, con argv fijo, verificación del resultado y apagador global. Es la frontera entre «CORT entendió» y «CORT lo hizo» |
+| **Puerta de red** | `cort_core/security.py` | Cinco funciones puras que deciden quién puede hablarle a CORT cuando el puerto asoma a la Wi-Fi: sin `CORT_LAN_TOKEN` **no se abre** (el lanzador y el propio módulo de arranque se niegan con código 1), en `127.0.0.1` no se pide nada, el vecino de bucle invertido entra sin llave aunque esté publicado, y la comparación es de **tiempo constante**. El WebSocket se rechaza **antes de `accept()`** para no regalar un lazo abierto con su tarea de iniciativa |
 | **Telemetría** | `cort_core/status.py` | Lee tres cosas y nada más: cuántos recuerdos hay, qué modelo habló la última vez y si los permisos están encendidos. Si un valor no se puede medir manda `null`, no un adorno |
 | **Atuendo** | `cort_core/outfit.py` | El color del holograma según hora y temperatura, igual que el de Cortana |
 | **Atuendos en disco** | `cort_core/avatars.py` | El catálogo de archivos que la usuaria pone en `CORT_AVATAR_DIR`: lista, sirve y **no se fía de ninguna ruta ajena**. Tres guardas, en este orden: nombre contra una expresión cerrada, `resolve()` + `relative_to()` sobre la raíz (no `startswith`, que se cuela con `/raiz-otra`), y extensión dentro de un mapa cerrado. Fuera de esa carpeta responde 404 —no 403, para no revelar que algo existe— |
@@ -64,13 +93,14 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Estado y conexión** | `apps/web/src/cort/{connection,palette}.ts` | Dos capas deliberadamente separadas: un *snapshot* inmutable para React (`useSyncExternalStore`) y un objeto mutable que la escena persigue con `lerp`. Por eso cambiar de atuendo **respira** en vez de parpadear, y por eso el orbe **crece** en vez de saltar. Un solo archivo define todo el color |
 | **Interfaz** | `apps/web/src/ui/{Hud,Telemetry,Effects,Bandeja,Avatar,Temporizador}.tsx` + `cort/arrastre.ts` | Chat con reloj, clima medido en el cabezal, **bandeja que se guarda en la esquina**, **panel que se arrastra con el dedo o con el ratón** y topes para que no se pierda fuera de la pantalla, cuenta atrás que sólo existe mientras se pide, panel de «lo que CORT sabe de sí mismo», capa de efectos de un solo disparo y **proyección del cuerpo con atuendo**. El tamaño del reactor no tiene deslizador: lo manda la cámara. Escritos **sin** `zustand`, `drei` ni `framer-motion`: cada dependencia es RAM que esta máquina no tiene |
 | **Gestos de cámara** | `apps/web/src/cort/defocus.ts` + `lib/oneEuro.ts` | Desenfocar con los dedos delante de la webcam encoge el orbe y enfocar lo devuelve. Sin modelos ni dependencias: 64×48 píxeles a 5 muestras por segundo, gris BT.601 y **varianza del Laplaciano** — el criterio con el que cualquier cámara decide si ya enfocó. Lo que suaviza esa señal es un **filtro 1€** (MIT, transplantado y **reajustado midiendo**): menos temblor con la mano quieta y la mitad de retardo moviéndola, que un factor fijo no puede dar las dos cosas a la vez. La cámara la abre un botón de la usuaria y apagarla detiene las pistas del stream |
+| **Voz** | `apps/web/src/ui/Voz.tsx` | Habla con `speechSynthesis` y escucha con `SpeechRecognition`: **cero dependencias, cero RAM del core, y el mismo código en el portátil que en el Android**. Elige la mejor voz en español puntuando las instaladas (`Natural` > `online` > resto, región primero), limpia el markdown y los emojis que el sintetizador deletrea, parte por oraciones para que haya pausas, y **cierra el micrófono mientras CORT habla** para no oírse a sí misma |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | 228, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable y los atuendos con un directorio de mentira en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` | 257, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
-`ws://127.0.0.1:8765/ws`, JSON plano: **once tipos**, dos entrantes y nueve salientes. Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
+`ws://127.0.0.1:8765/ws`, JSON plano: **once tipos**, dos entrantes y nueve salientes. Cuando el core está publicado en la red, el lazo y la ruta de archivos piden además `?token=…` (ver [La red y su llave](#la-red-y-su-llave)). Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
 
 | Tipo | Dirección | Lleva | Quién lo pinta |
 |---|---|---|---|
@@ -86,6 +116,36 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | `proactive` | core → cliente | `text`, `mood`, `clave` | el chat, **sin que nadie haya preguntado**: es la iniciativa, y `clave` es el tema ya dicho en esta conexión para que no suene a alarma. No lleva orden ninguna — sale de `initiative.py`, que no importa `actions` y no puede ejecutar nada |
 | `timer` | core → cliente | `restante`, `total`, `estado` ∈ `corre · termina · cancela` | el anillo de cuenta atrás (`ui/Temporizador.tsx`). **Un cuadro por segundo y sólo mientras hay cuenta atrás**: no hay temporizador en el navegador, así que si el core se apaga el número se apaga con él. Sale de `timer.py`, que no importa `actions` ni `subprocess` y no puede ejecutar nada. Se pide en texto («pon un temporizador de 5 minutos») y se cancela igual |
 
+## Voz
+
+CORT **habla y escucha**, y lo hace con lo que ya trae el navegador: `apps/web/src/ui/Voz.tsx`. No hay un servicio de voz que levantar, no hay un modelo que descargar, y el mismo archivo corre en el portátil de 1,8 GiB y en un teléfono.
+
+Dos botones en la bandeja (la esquina que abre el panel):
+
+| Botón | Qué hace | Qué necesita |
+|---|---|---|
+| **«que me hable»** | Lee en voz alta cada respuesta de CORT. Elige la mejor voz en español que haya en el sistema — primero las *Natural* de Edge, luego por región (`es-CO`, `es-MX`…) —, quita el markdown y los emojis que el sintetizador deletrea y parte por oraciones para que haya pausas | Altavoz o auriculares. Nada más |
+| **«hablarle»** | Abre el micrófono y conversa: escucha, manda lo dicho al core, **cierra el micrófono mientras CORT responde** (si no, se oiría a sí misma) y lo reabre al terminar | Permiso de micrófono **e internet**: en Chrome y Edge el reconocimiento lo hace un servicio en línea |
+
+Lo dicho, sin adornos: **hablar es local; escuchar no lo es todavía.** El reconocimiento de `SpeechRecognition` es un servicio de Google (Chrome) o de Microsoft (Edge), así que la muestra de audio sale de la máquina mientras se transcribe. Está escrito aquí, en el aviso de la propia interfaz y en `docs/ARCHITECTURE.md`, porque un proyecto que se llama *local-first* tiene que decir dónde no lo es.
+
+**Por qué no Whisper local, medido:** `faster-whisper` pide un modelo de 74 MB (`tiny`) a 1,5 GB (`base`) y esta máquina tiene **1,8 GiB de RAM en total** con Ollama ya ocupando parte de ella. No es «lento»: es congelar el equipo, que ya se congeló una vez por intentar un modelo de 2,6 GB. El camino real pasa por `services/voice` en otro equipo o por un modelo cuantizado cuando quepa, y está anotado como deuda en `docs/STATUS.md`, no como promesa.
+
+**Lo que sigue abierto:** el *wake word* («Oye CORT», función 11) pide un motor de escucha permanente y hoy no lo hay; el **lip-sync** del cuerpo 3D (función 27) necesita casar el `SpeechSynthesis` con los morph targets de la boca, que es trabajo de interfaz y no de hardware; y una voz elegible por la usuaria (función 22) está a un selector de distancia.
+
+## La red y su llave
+
+El core escucha en `127.0.0.1`, y así se queda por defecto: **por ese WebSocket se cambia el volumen, se abren aplicaciones y se captura la pantalla**. Publicarlo en la Wi-Fi para abrirlo desde el teléfono (`--lan`) sin más sería prestarle el PC a todo el que esté conectado al router.
+
+Así que la red tiene una condición, escrita en `cort_core/security.py`:
+
+1. **Sin `CORT_LAN_TOKEN` no se abre el puerto.** Ni el lanzador (`cort.py --lan`) ni el módulo de arranque (`python -m cort_core.server` con `CORT_HOST=0.0.0.0`): los dos se niegan, salen con código 1 y **imprimen la línea exacta que falta**, con un secreto generado para copiar. Un puerto abierto por olvido de una variable es el caso que esta regla cierra.
+2. **En local no se pide nada.** No hay a quién autorizar en `127.0.0.1`, y exigir una llave ahí sería un paso de más para la dueña del portátil. Publicado el puerto, el bucle invertido **sigue** entrando sin llave: el portátil puede estar en `--lan` para el teléfono y seguir abriéndose a sí mismo como siempre.
+3. **La llave viaja por la URL** (`?token=…`), que es lo que imprime el lanzador ya puesto en la dirección del móvil. No es una cabecera porque el `WebSocket` del navegador y un `<img>` de una miniatura no pueden mandar una `Authorization`.
+4. **Se compara en tiempo constante y antes de tocar el disco.** Un archivo pedido desde la red sin llave responde **401**, no 404, para no confirmar qué nombres existen; y el WebSocket se cierra con **4401 antes de `accept()`**, para no regalar un lazo abierto con su tarea de iniciativa y su saludo.
+
+Y lo que **no** es: un túnel cifrado. Sin TLS el secreto va en claro por la Wi-Fi, así que protege de quien pasa por ahí, no de quien escucha el aire. La barra de red lo dice en la misma línea donde imprime la dirección, y HTTPS en la LAN sigue siendo la salida de verdad (función 66 y `docs/PLATFORM.md`).
+
 ## Seguridad y permisos
 
 Lo que hace a esto una capa de permisos y no un `subprocess` suelto:
@@ -98,6 +158,7 @@ Lo que hace a esto una capa de permisos y no un `subprocess` suelto:
 6. **Datos personales fuera de git.** La base vive en `services/core/data/` (ignorada), `.env` está ignorado, y las claves no se suben nunca. Para enseñar CORT a otra persona existe `--demo`.
 7. **La iniciativa habla, no actúa.** `initiative.py` no importa `actions` ni `subprocess`, y lo que devuelve `sugerir()` es una `Sugerencia` con dos campos de texto. Hay una prueba que lo comprueba leyendo el árbol de sintaxis del módulo (`test_initiative.py`), porque un `import` añadido en un merge no se ve en ninguna otra prueba. Se apaga con `CORT_INITIATIVE=0`.
 8. **El temporizador tampoco toca nada.** `timer.py` cuenta segundos y devuelve números; la cuenta atrás se pinta en la interfaz y no ejecuta un mando, no suena y no escribe en disco. Su lista de `import`s está cerrada por prueba en `test_timer.py` (`__future__, asyncio, re, typing`), y la tarea muere al cancelar ella o al cerrarse la conexión — no queda reloj corriendo hacia una pestaña que ya no está.
+9. **Y la red tiene llave.** El punto 6 protegía los datos dentro del equipo; `security.py` protege el equipo desde fuera: sin `CORT_LAN_TOKEN` el puerto no se abre, y con él puesto cada lazo y cada archivo se autorizan antes de tocar disco. Está en [La red y su llave](#la-red-y-su-llave) con lo que **no** cubre (TLS) dicho delante.
 
 ## Funciones
 
@@ -105,17 +166,17 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 
 | Grupo | Funciones | Hechas | En curso | Pendientes |
 |---|---|---|---|---|
-| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco, cuenta atrás…) | 12 | 7 | 1 | 4 |
-| Voz y audio (wake word, STT, TTS, volumen, reproductor…) | 13 | 1 | 2 | 10 |
-| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 8 | 3 | 6 |
+| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco, cuenta atrás, llave de red…) | 13 | 8 | 1 | 4 |
+| Voz y audio (wake word, STT, TTS, volumen, reproductor, sonda de audio…) | 13 | 2 | 4 | 7 |
+| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 8 | 4 | 5 |
 | Gestos y visión (desenfoque con cámara, arrastrar paneles, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 1 | 11 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| **Total** | **72** | **20** | **8** | **44** |
+| **Total** | **73** | **23** | **10** | **40** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «38-44» son siete funciones, no una).
 
-Lo que **todavía no está**, dicho en vez de simulado: **voz**. El motivo es de hardware y está medido en esta máquina — sin micrófono ni salida de audio real, sink en *Dummy Output* —, no es «falta de código». El **cuerpo 3D (VRM)** sí está desde este corte: se carga, se pinta y ya no va en cruz; lo que sigue abierto es su rendimiento (7 fps con el cuerpo, frente a 18 del reactor) y los detalles de pose que no se han medido. El gesto de cámara **sí** está y funciona; lo que no se ha podido probar aquí es el dedo humano delante del objetivo. Ver [`docs/STATUS.md`](docs/STATUS.md) y [`docs/PLATFORM.md`](docs/PLATFORM.md).
+Lo que **todavía no está**, dicho en vez de simulado: **escuchar** (función 12) va como 🔨 con el motivo delante — el botón de micrófono está escrito y montado, pero `arecord -l` no lista ningún dispositivo de captura en esta máquina, así que aquí nadie lo ha oído funcionar; y el reconocimiento del navegador es además un servicio en línea, con lo que *oír* sin internet sigue pendiente. **Hablar** (13) sí está, verificado oyéndolo en el video que grabó la dueña del proyecto. El **lip-sync** del cuerpo 3D (27), el *wake word* (11) y el overlay siempre visible (32) tampoco están. El **cuerpo 3D (VRM)** sí está desde este corte: se carga, se pinta y ya no va en cruz; lo que sigue abierto es su rendimiento (7 fps con el cuerpo, frente a 18 del reactor) y los detalles de pose que no se han medido. El gesto de cámara **sí** está y funciona; lo que no se ha podido probar aquí es el dedo humano delante del objetivo. Ver [`docs/STATUS.md`](docs/STATUS.md) y [`docs/PLATFORM.md`](docs/PLATFORM.md).
 
 ## Qué hace hoy, y cómo se sabe
 
@@ -125,6 +186,8 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 |---|---|---|
 | 🔮 | **Reactor holográfico**: anillo de plasma en GLSL, polvo de 4000 puntos, bloom, aberración cromática, líneas de barrido. Paleta azul/violeta Cortana, cinco atuendos | Capturas reales a `localhost:5173`; **18 fps sin GPU** |
 | 💬 | **Chat por WebSocket** contra un core Python/FastAPI | Cliente real + 8 pruebas de protocolo |
+| 🗣️ | **Voz**: CORT lee en voz alta cada respuesta con las voces del sistema (`speechSynthesis`, puntuando las *Natural* y la región `es-CO/MX/US/419`), y hay un botón «hablarle» que abre el micrófono | **Oída en el video que grabó la dueña del proyecto** (2026-10-09): se la ve contestando en voz alta. **Sin verificar en esta máquina**, y está dicho: su único sink es *Dummy Output* y `arecord -l` no lista ninguna captura, así que el micrófono nunca probó aquí. Cero dependencias y cero RAM del core: el mismo archivo corre en el portátil y en el Android |
+| 🔑 | **Llave de red**: el puerto no se abre a la Wi-Fi sin `CORT_LAN_TOKEN`, y publicado, el WebSocket se rechaza con **4401 antes de `accept()`** y un archivo de atuendo responde **401 antes de tocar el disco** | 25 pruebas en `test_security.py` + 4 en `test_launcher.py`: matriz de `es_local`, token recortado, arranque rechazado por subprocess (código 1), `autorizado` en sus cuatro casos, lazo rechazado sin llave y aceptado con ella, y el orden 401→404. En local (`127.0.0.1`) nada cambia: no se pide nada |
 | 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"*. Y al armar el prompt **rescata por contenido, no por fecha**: con 303 recuerdos de prueba los tres datos del usuario van delante, no los seis más recientes | Probado matando y reiniciando el proceso; 28 pruebas de memoria, una cronometrada en 2,42 ms |
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
 | ⚡ | **Acciones reales en el sistema** a través de la capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después**; hace una **captura de pantalla** con `scrot` y **comprueba el archivo**; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra PipeWire, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
@@ -151,7 +214,7 @@ Medido, no supuesto:
 
 - **2 núcleos a 1,46 GHz · 1,8 GiB de RAM · sin GPU.** El reactor va a **18 fps**. El LLM genera a **~1,3 tokens/s**: un turno normal cuesta 15-60 s.
 - **Nada de más de ~700 MiB entra en la cadena de modelos.** Cargar uno de 2,6 GB **congeló la máquina**.
-- **Sin salida de audio usable y sin micrófono**: el único chip es HDMI y el puerto está `not available`, así que el sink es *Dummy Output*, y `arecord -l` no encuentra ninguna entrada de **audio**. **La cámara sí existe y sí funciona**: `Chicony USB Camera` en `/dev/video0` y `/dev/video1`, accesibles para esta usuaria (grupo `video`), y ya se usa en el gesto de desenfoque. Por eso la voz es Fase 2 y no "un modelo más": aquí no se puede oír ni escuchar.
+- **Sin salida de audio usable y sin micrófono**: el único chip es HDMI y el puerto está `not available`, así que el sink es *Dummy Output*, y `arecord -l` no encuentra ninguna entrada de **audio**. **La cámara sí existe y sí funciona**: `Chicony USB Camera` en `/dev/video0` y `/dev/video1`, accesibles para esta usuaria (grupo `video`), y ya se usa en el gesto de desenfoque. Por eso la voz que **se escribió** es la del navegador —cero RAM del core, y se comprueba en cualquier otro equipo—, mientras que en este portátil no hay ni por dónde oírla ni con qué escucharla: la función 12 queda 🔨 con esa razón escrita, no simulada.
 - Consecuencia de método: **se mide antes de prometer**. Cualquier fila nueva de esta tabla entra con su evidencia o dice «sin verificar».
 
 ## Estructura del repositorio
@@ -159,12 +222,12 @@ Medido, no supuesto:
 ```
 CORT/
 ├── services/core/
-│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · initiative · timer · env
+│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · initiative · timer · security · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 226 pruebas, biblioteca estándar
+│   ├── tests/                # 257 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db — fuera de git: son datos personales
 │   └── requirements.txt
-├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui · public/)
+├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui —incluido Voz.tsx— · public/)
 ├── scripts/                  # cort.py (lanzador) · install-desktop.sh
 ├── docs/                     # STATUS · ARCHITECTURE · ROADMAP · FUNCTIONS · PLATFORM · VISION
 ├── upstream/                 # referencias de terceros: solo lectura, con licencia
@@ -279,7 +342,7 @@ make web      # interfaz en modo desarrollo con recarga en caliente (~120 MB má
 
 ### Paso 5 · Configurar (opcional, pero Ollama vive aquí)
 
-Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzador lo hacen con el mismo parser, para que no puedan discrepar en qué puerto están—. Una variable exportada en la terminal gana sobre la del archivo, y `CORT_DOTENV=0` anula el archivo entero (es lo que usan las pruebas). Las variables están explicadas en [`.env.example`](.env.example); las cinco que importan el primer día:
+Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzador lo hacen con el mismo parser, para que no puedan discrepar en qué puerto están—. Una variable exportada en la terminal gana sobre la del archivo, y `CORT_DOTENV=0` anula el archivo entero (es lo que usan las pruebas). Las variables están explicadas en [`.env.example`](.env.example); las seis que importan el primer día:
 
 | Variable | Qué cambia |
 |---|---|
@@ -288,6 +351,7 @@ Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzad
 | `CORT_SYSTEM_ACTIONS` | `0` apaga la capa de permisos: sigue hablando, pero no toca el sistema |
 | `CORT_MEMORY_DB` | otra ruta para `memory.db`, para experimentar sin escribir encima de la memoria real |
 | `CORT_AVATAR_DIR` | la carpeta de atuendos que ve el mosaico táctil. **Sin esta variable el selector sale vacío y el reactor no se apaga nunca**: los modelos VRM y las imágenes no van en el repositorio porque pesan 16-21 MB cada uno, tienen licencia de terceros y son datos personales |
+| `CORT_LAN_TOKEN` | **sólo hace falta si vas a usar `--lan`** (paso 7). Vacío = el portátil no abre el puerto a la Wi-Fi: el lanzador se niega y sale con código 1. No se sube nunca a git |
 
 Para que conteste un modelo local en vez del modo eco:
 
@@ -314,17 +378,35 @@ El core **no adivina ninguna carpeta**: sin la variable, el mosaico de atuendos 
 
 ### Paso 7 · CORT en el teléfono
 
-Portátil y móvil, en **la misma red Wi-Fi**.
+Portátil y móvil, en **la misma red Wi-Fi**. Dos pasos, y el primero es una línea en el `.env`:
 
 ```bash
+# .env — el lanzador te genera uno si lo necesitas
+CORT_LAN_TOKEN=un-secreto-tuyo-de-unos-20-caracteres
+
 python3 scripts/cort.py --lan
 ```
 
-La barra de **red** —la séptima, sólo con `--lan`— imprime la dirección que hay que escribir en el móvil, por ejemplo `http://192.168.100.xxx:8780`, porque adivinar la propia IP no es un paso razonable. Sin `--lan` todo escucha sólo en `127.0.0.1`, y así queda por defecto: **el core no tiene contraseña ni HTTPS**, así que publicarlo es decisión explícita de quien lo arranca y dura lo que dura ese proceso.
+**Sin esa variable el puerto no se abre**, y el lanzador lo dice en vez de arrancar a medias (salida ejecutada en esta máquina):
 
-Verificado en esta red: con `--lan` el core y la interfaz quedaron escuchando en `0.0.0.0`, la página contestó `200` desde la IP de red y un WebSocket abierto contra esa IP saludó y respondió. **Sin verificar en un móvil físico**: hace falta el teléfono delante.
+```text
+--lan cancelado: no hay CORT_LAN_TOKEN en el .env.
+ Añade esta línea a …/CORT/.env —o cambia el secreto por uno tuyo, de unos 20 caracteres— y vuelve a arrancar:
+   CORT_LAN_TOKEN=SF8PsVQ4uFCmyWpMMSaWGi5f
+ Sin eso el core sigue en 127.0.0.1: arráncalo sin --lan si el teléfono no hace falta.
+```
 
-Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`) y manifiesto para instalarla como aplicación. Lo que no arregla: **la cámara y el micrófono desde una pestaña exigen un origen seguro**, y por `http://192.168.x.x:8780` el navegador los bloquea —el botón de gesto lo dice en el propio aviso, no se queda mudo—. La voz está además bloqueada por hardware en este portátil con o sin teléfono. HTTPS en la LAN es la única salida real y sigue siendo una decisión pendiente (ver «Cómo colaborar»).
+Con la llave puesta, la barra de **red** —la séptima, sólo con `--lan`— imprime la dirección **ya con el token**, porque adivinar la propia IP no es un paso razonable. Salida medida aquí:
+
+```text
+ ● red          el móvil abre http://192.168.100.xxx:8780/?token=… — sin HTTPS: la llave viaja en claro por tu Wi-Fi
+```
+
+Esa URL es la que se escribe en el teléfono. Sin `--lan` todo escucha sólo en `127.0.0.1` y no se pide ninguna llave: **por ese WebSocket se cambia el volumen, se abren aplicaciones y se captura la pantalla**, así que publicarlo es decisión explícita de quien lo arranca y dura lo que dura ese proceso. El por qué de cada regla está en [La red y su llave](#la-red-y-su-llave).
+
+Verificado en esta red, con el core escuchando en `0.0.0.0` y dos archivos de atuendo de prueba en disco: `GET http://192.168.100.xxx:8765/avatars/p.png` sin llave → **401**; con `?token=…` → **200**; con la llave mal → **401**; y el mismo `GET` por `127.0.0.1` sin llave → **200** (en local no se pide nada). Antes de este corte, `--lan` ya había dejado el core y la interfaz escuchando en `0.0.0.0`, la página contestando `200` desde la IP de red y un WebSocket abierto contra esa IP saludando y respondiendo. **Sin verificar en un móvil físico**: hace falta el teléfono delante.
+
+Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`) y manifiesto para instalarla como aplicación. Lo que no arregla: **la cámara y el micrófono desde una pestaña exigen un origen seguro**, y por `http://192.168.x.x:8780` el navegador los bloquea —el botón de gesto lo dice en el propio aviso, no se queda mudo—. **Hablar** con la voz del navegador sí funciona en cuanto haya altavoz o auriculares (es lo que se oye en el video de la dueña); **escuchar** pide además micrófono y un origen seguro. HTTPS en la LAN es la única salida real y sigue siendo una decisión pendiente (ver «Cómo colaborar»).
 
 **Mientras tanto, para poder probar los sensores ya** hay dos caminos que no requieren certificado:
 
@@ -334,10 +416,10 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 226 pruebas, ~55 s en esta máquina
+make test      # 257 pruebas, ~78 s en esta máquina
 ```
 
-Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie.
+Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie. Las 29 últimas son de red: matriz de direcciones locales, el arranque rechazado por subprocess, el WebSocket cerrado con 4401 antes del `accept()` y el 401 que llega **antes** de tocar el disco.
 
 ### Si algo no arranca
 
@@ -350,6 +432,9 @@ Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV
 | «Sin conexión con el core» en el cabezal | el core no está o el puerto no es 8765 | `make launch` (no `make dev`, que no sirve interfaz); si cambiaste `CORT_PORT`, el navegador necesita el mismo puerto |
 | `El core murió al arrancar (código 1)` | el puerto está ocupado por otro CORT | `pkill -f cort_core.server` y volver a arrancar |
 | El móvil no abre la dirección | `--lan` no usado, otra red Wi-Fi, o el cortafuegos | arrancar con `--lan`; `sudo ufw status` si hay cortafuegos |
+| `--lan cancelado: no hay CORT_LAN_TOKEN en el .env.` | es la puerta de red funcionando, no un fallo: publicado el puerto sin secreto, cualquier dispositivo del Wi-Fi podría cambiarle el volumen al portátil o abrirle aplicaciones | pegar la línea `CORT_LAN_TOKEN=…` que el propio lanzador imprime en el `.env` y volver a arrancar |
+| El cabezal dice «Falta la llave de la red» | la página se abrió desde la IP de red **sin** `?token=`, o con una llave que no es la del `.env` | usar la URL completa que imprime la barra de red (lleva el token pegado); si la escribiste a mano, añádele `?token=…` |
+| CORT no suena | el navegador no tiene a dónde hablar: sin altavoz ni auriculares el sink es *Dummy Output* y no hay voz que oír | conectar auriculares o altavoz y darle a «que me hable»; en Edge/Chrome las voces *Natural* son las que suenan mejor |
 | La barra de audio dice `ninguna real (Dummy Output)` | el portátil no tiene salida de audio conectada | conectar altavoz o auriculares; sin eso la voz no es verificable, y CORT no finge oírla |
 | El botón de la cámara se queda en rojo | dos causas distintas y el aviso las separa: origen no seguro o permiso denegado | por `http://` en la LAN el navegador **no da** la cámara (no es un bug de CORT): pruébala en `127.0.0.1`. Si el aviso dice «permiso denegado», concederlo desde el icono de la barra de dirección |
 | La barra de cámara dice `sin /dev/video*` | la sonda del lanzador es Linux (`wpctl` tiene su equivalente; `/dev/video*` no existe en Windows ni macOS) | en Linux, añadir la usuaria al grupo `video` y volver a entrar; en otro SO la barra se pinta honestamente ausente |
@@ -364,7 +449,7 @@ Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV
 3. **Prueba primero, código después, `make test` al final.** Nada se da por hecho por estar escrito en un chat.
 4. **No se afirma sin ejecutar.** Si no puedes comprobarlo, escribe literalmente **"sin verificar"**.
 5. Las decisiones de plataforma (escritorio, móvil, voz, lenguaje) están en [`docs/PLATFORM.md`](docs/PLATFORM.md): para cambiar una hay que traer un número de esta máquina.
-6. Se trabaja sobre la rama **`cort-local-verified`**. `main` es historia de terceros y no se toca.
+6. **Se trabaja sobre `main`**, la rama pública y única. Desde el corte `v0.7.0` el código verificado en español *es* `main`; las ramas de trabajo se abren a partir de ella y se mergedeán con su prueba ejecutada delante. El historial de la rama `cort-local-verified` está conservado dentro de `main` (merge `27bccb9`), y la propia rama ya no se publica.
 
 Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata a más cara):
 
@@ -374,7 +459,8 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 - **Clima en el teléfono**: `--lan` ya funciona; falta abrir la interfaz desde un móvil físico y mirar si el reactor táctil se deja arrastrar con el pulgar, y si el gesto de desenfoque se comporta con la cámara trasera.
 - **Memoria**: `remember()` deduplica sensible a mayúsculas — «Me llamo X» y «me llamo X» crean dos filas. Está anotado como deuda en `docs/STATUS.md`.
 - **Acciones**: instalar `playerctl` convierte la función 18 (reproductor) en algo verificable con un «después» comprobable.
-- **Voz (Fase 2)**: bloqueada hasta tener altavoz o auriculares **y** micrófono. El código existe en el roadmap y no se simula.
+- **Voz, lo que queda**: **hablar ya está** (función 13, oída en el video de la dueña) y **escuchar tiene el código pero no el micrófono** (función 12, 🔨: `arecord -l` no lista ninguna captura en esta máquina). Faltan, en orden de coste: un **selector de voz** (22), el **barge-in** para interrumpirla (14), el **lip-sync** del cuerpo 3D (27) — casar `speechSynthesis` con los morph targets de la boca, trabajo de interfaz — y el **wake word** (11), que pide un motor de escucha permanente. Whisper local sigue ⬜ por RAM medida, no por ganas.
+- **Seguridad de red, lo que queda**: el token ya cierra el puerto sin llave (`security.py`, función 73). Lo siguiente es **TLS en la LAN**, que además desbloquea cámara y micrófono en el teléfono, y una **llave que no viaje en la URL** si algún día se expone fuera del Wi-Fi de casa. El «base y proyección contra malware» que pide la dueña tiene aquí su primera capa: la lista cerrada de mandos ya impide que un texto del modelo ejecute nada; le falta un registro de intentos rechazados para poder decir *quién* lo intentó.
 
 ## Documentación
 
@@ -383,7 +469,7 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/STATUS.md`](docs/STATUS.md) | **Fuente de verdad operativa**: qué funciona de verdad, qué se intentó y falló, qué deuda hay |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, protocolo, capa de permisos, módulos de `apps/web` — con el por qué de cada decisión |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Nueve fases, cada una con su criterio de "listo" |
-| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 72 funciones con estado y viabilidad por sistema operativo |
+| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 73 funciones con estado y viabilidad por sistema operativo |
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |
 | [`docs/DEVELOPMENT-GUIDE.md`](docs/DEVELOPMENT-GUIDE.md) | Método de trabajo |
