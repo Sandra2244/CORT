@@ -104,3 +104,33 @@ def ruta_segura(nombre: str, base: Path | None = None) -> Path | None:
 
 def tipo_de(ruta: Path) -> str:
     return EXTENSIONES[ruta.suffix.lower()]
+
+
+def rechazo(nombre: str, base: Path | None = None) -> str | None:
+    """**Por qué** este nombre no se sirve, o `None` si lo único que pasa es que
+    el archivo no está.
+
+    La diferencia importa ahora que un rechazo se apunta en una bitácora
+    (`cort_core/audit.py`): `notas.txt` y `casual.png` (sin el `casual.png` en el
+    disco) dan el mismo 404, pero sólo el primero es alguien probando qué saca.
+    Llamar «intento» a una errata de la usuaria llenaría el registro de ruido y
+    dejaría de servir para nada.
+
+    Mismo orden que `ruta_segura`, para no contradecirla: primero la forma, luego
+    la extensión, y al final la resolución. Las dos primeras son propiedades del
+    nombre y se pueden afirmar sin tocar el disco; la tercera necesita la raíz, y
+    si no hay `CORT_AVATAR_DIR` puesto no hay nada que decir.
+    """
+    if not isinstance(nombre, str) or not NOMBRE_VALIDO.match(nombre):
+        return "ruta-rechazada"
+    if Path(nombre).suffix.lower() not in EXTENSIONES:
+        return "extension-no-permitida"
+    base = base or raiz()
+    if base is None:
+        return None
+    candidato = (base / nombre).resolve()
+    try:
+        candidato.relative_to(base.resolve())
+    except ValueError:
+        return "archivo-fuera-de-la-carpeta"
+    return None

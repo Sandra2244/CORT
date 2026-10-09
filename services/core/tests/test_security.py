@@ -19,10 +19,29 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+# **Antes** de importar el servidor: este módulo rechaza lazos y archivos a propósito,
+# y desde `v0.8.0` cada rechazo se apunta en la bitácora. Sin esta línea las pruebas de
+# red escribirían `testclient` y `arranque-sin-llave` **en el registro real de la
+# usuaria** (`services/core/data/rechazos.jsonl`), que es justo el archivo que tiene
+# que ser de fiar. `make test` pone la variable también por su cuenta; esta línea es
+# para quien corre `unittest` a mano.
+os.environ.setdefault("CORT_AUDIT_LOG",
+                      str(pathlib.Path(tempfile.gettempdir()) / "cort-pruebas-rechazos.jsonl"))
+
 from fastapi.testclient import TestClient
 
 from cort_core import security
 from cort_core.server import app
+
+
+class TestRegistroDePruebaFueraDelReal(unittest.TestCase):
+    def test_la_bitacora_que_escriben_estas_pruebas_no_es_la_de_la_usuaria(self):
+        """Un registro de rechazos sólo vale si es de fiar; si las pruebas de red le
+        llenan el archivo de `testclient` y `arranque-sin-llave` falsos, deja de
+        serlo. Esta prueba vigila el `setdefault` de arriba."""
+        from cort_core import audit
+        self.assertTrue(str(audit.ruta_de_bitacora()).startswith(tempfile.gettempdir()),
+                        f"la bitácora de pruebas cae en {audit.ruta_de_bitacora()}")
 
 
 class TestEsLocal(unittest.TestCase):

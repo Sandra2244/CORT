@@ -190,5 +190,63 @@ class TestListadoPorWebSocket(unittest.TestCase):
                     self.assertEqual(cuadro["items"], [])
 
 
+class TestRechazoConNombre(unittest.TestCase):
+    """`rechazo()` dice **por qué** un nombre no se sirve, o `None` si lo único
+    que pasa es que el archivo no está. Es la línea que separa una errata de la
+    usuaria de alguien probando qué saca, y lo que lee la bitácora de `audit.py`.
+    """
+
+    def test_lo_que_intenta_salir_de_la_carpeta(self):
+        for nombre in ("../aira_default.png", "..%2f..%2fetc%2fpasswd", "a/b.png",
+                       "", " aire.png", ".oculta.png", "x" * 200 + ".png",
+                       "nul\x00.png"):
+            self.assertEqual("ruta-rechazada", avatars.rechazo(nombre), nombre)
+
+    def test_lo_que_pide_un_archivo_que_cort_no_sirve(self):
+        for nombre in ("notas.txt", "run.py", "pagina.html", "sin_extension"):
+            self.assertEqual("extension-no-permitida", avatars.rechazo(nombre), nombre)
+
+    def test_un_nombre_bien_que_no_existe_no_es_un_intento(self):
+        """La bitácora tiene que callar aquí: puede ser que la usuaria escribiera
+        mal el nombre de su propio atuendo."""
+        with ConDirectorio():
+            self.assertIsNone(avatars.rechazo("no-esta.png"))
+            self.assertIsNone(avatars.rechazo("Aira pijama sin fondo.png"))
+            self.assertIsNone(avatars.rechazo("aira_base.vrm"))
+
+    def test_sin_carpeta_activada_no_hay_nada_que_decir(self):
+        """Sin `CORT_AVATAR_DIR` no hay carpeta de la que salirse: el 404 es el
+        funcionamiento normal, no un intento."""
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(avatars.rechazo("secreto.png"))
+            self.assertEqual("ruta-rechazada", avatars.rechazo("../secreto.png"))
+
+    def test_la_fuga_por_enlace_simbolico_tiene_nombre(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp) / "atuendos"
+            base.mkdir()
+            fuera = pathlib.Path(tmp) / "fuera"
+            fuera.mkdir()
+            (fuera / "vecino.png").write_bytes(b"\x89PNG")
+            (base / "vecino.png").symlink_to(fuera / "vecino.png")
+            self.assertEqual("archivo-fuera-de-la-carpeta",
+                             avatars.rechazo("vecino.png", base))
+            # Y lo importante: el nombre tiene motivo **porque** no se sirve.
+            self.assertIsNone(avatars.ruta_segura("vecino.png", base))
+
+    def test_rechazo_y_ruta_segura_no_se_contradicen(self):
+        """Si `ruta_segura` no sirve un nombre y `rechazo` no le encuentra motivo,
+        el archivo no puede estar en la carpeta. Las dos funciones leen las mismas
+        tablas; si algún día se separan, esto lo grita aquí y no en la bitácora."""
+        with ConDirectorio() as d:
+            nombres = ["aira_default.png", "notas.txt", ".oculta.png", "../x.png",
+                       "a/b.png", "subdir", "no-esta.png", "aira_base.vrm",
+                       "Aira pijama sin fondo.png", "sin_extension"]
+            for nombre in nombres:
+                if avatars.ruta_segura(nombre, d.raiz) is None:
+                    if avatars.rechazo(nombre, d.raiz) is None:
+                        self.assertFalse((d.raiz / nombre).is_file(), nombre)
+
+
 if __name__ == "__main__":
     unittest.main()

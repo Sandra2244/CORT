@@ -21,6 +21,7 @@ from .outfit import pick_outfit
 from .status import build as status_payload
 from . import weather
 from . import avatars
+from . import audit
 from . import initiative
 from . import security
 from . import timer
@@ -65,6 +66,28 @@ def state(thinking=False):
         frame["temp_c"] = clima["temp_c"]
     return frame
 
+def _de_fuera(conexion) -> bool:
+    """True si este pedido no viene de esta misma máquina.
+
+    Un solo criterio para dos cosas que deben coincidir: pedir la llave y apuntar
+    los intentos. Si algún día se separan, la bitácora empezaría a llamar «intento»
+    a las erratas de la propia usuaria.
+    """
+    peer = conexion.client.host if conexion.client else None
+    return not (security.es_local(security.host_de_escucha()) or security.es_local(peer))
+
+
+def _detalle(conexion) -> str:
+    """Qué se pidió, **sin la consulta**.
+
+    `?token=` es justo lo que un atacante escribiría en una URL para que se le
+    guardara: una bitácora con el query dentro es un archivo de secretos. Por eso
+    se toma sólo el camino.
+    """
+    metodo = "WS" if isinstance(conexion, WebSocket) else "GET"
+    return f"{metodo} {conexion.url.path}"
+
+
 def autorizada(conexion) -> bool:
     """Si este lazo puede abrirse: local, o trayendo el token de la red.
 
@@ -73,11 +96,19 @@ def autorizada(conexion) -> bool:
     el token se leen **en cada petición** y no al importar el módulo: así cambiar
     el `.env` no exige reinventar el servidor, y así las pruebas los ponen y los
     quitan sin recargar nada.
+
+    Cuando dice que no, lo apunta en la bitácora antes de responder: un rechazo sin
+    registro es un portero que olvida.
     """
+    host = security.host_de_escucha()
     peer = conexion.client.host if conexion.client else None
-    return security.autorizado(security.host_de_escucha(), peer,
-                               security.token_configurado(),
-                               conexion.query_params.get("token"))
+    token = security.token_configurado()
+    recibido = conexion.query_params.get("token")
+    if security.autorizado(host, peer, token, recibido):
+        return True
+    audit.registrar("acceso-sin-llave" if not (recibido or "").strip() else "llave-incorrecta",
+                    peer, _detalle(conexion))
+    return False
 
 
 @app.get("/avatars/{nombre}")
@@ -117,6 +148,17 @@ async def get_avatar(nombre: str, solicitud: Request):
     ruta = avatars.ruta_segura(nombre)
     if ruta is None:
         # 404 y no 403: un 403 confirmaría que el nombre existe en algún sitio.
+        if _de_fuera(solicitud):
+            # Con la llave en la mano y pidiendo algo que CORT no sirve nunca
+            # (`..`, un `.txt`, un enlace que asoma fuera de la carpeta), el 404
+            # es el mismo, pero el motivo **no** lo es: eso va a la bitácora. Un
+            # nombre que simplemente no está no se apunta —podría ser una errata
+            # de la propia usuaria, y llenar el registro de erratas lo inservible.
+            motivo = avatars.rechazo(nombre)
+            if motivo:
+                audit.registrar(motivo,
+                                solicitud.client.host if solicitud.client else "",
+                                _detalle(solicitud))
         raise HTTPException(status_code=404, detail="atuendo no disponible")
     return FileResponse(ruta, media_type=avatars.tipo_de(ruta),
                         headers={"Access-Control-Allow-Origin": "*"})
@@ -326,5 +368,9 @@ if __name__ == "__main__":
         # y la usuaria lee el motivo en la terminal. Un servidor que arranca
         # "aunque le falte el token" es justo el que nadie nota abierto.
         print(f"CORT no arranca: {motivo}", flush=True)
+        # Y queda apuntado: «alguien intentó publicar este core sin llave» es la
+        # clase de cosa que se quiere poder leer al día siguiente, no sólo ver
+        # pasar por la terminal.
+        audit.registrar("arranque-sin-llave", host, motivo)
         raise SystemExit(1)
     uvicorn.run(app, host=host, port=int(os.getenv("CORT_PORT", "8765")))

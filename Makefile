@@ -57,9 +57,18 @@ web-build:
 
 # `CORT_DOTENV=0` no es un adorno: el core ahora lee `.env`, y un `.env` con una
 # `CORT_MEMORY_DB` personal desviaría la suite a la base de datos de quien
-# programa. Las pruebas nunca leen el archivo de nadie.
+# programa. Las pruebas nunca leen el archivo de nadie. `CORT_AUDIT_LOG` va por el
+# mismo motivo con la bitácora nueva: las pruebas de red **sí** rechazan lazos a
+# propósito, y esas líneas falsa no pueden acabar en `data/rechazos.jsonl`, que es
+# el registro que la usuaria lee para saber si alguien probó su puerta.
 test:
-	cd $(CORE) && CORT_DOTENV=0 $(PY) -m unittest discover -s tests -v
+	cd $(CORE) && CORT_DOTENV=0 CORT_AUDIT_LOG=$${TMPDIR:-/tmp}/cort-make-test-rechazos.jsonl $(PY) -m unittest discover -s tests -v
 
-.PHONY: setup install doctor dev launch web web-deps web-build demo test
+# Quién intentó lo que CORT no dejó: lee el registro real, en la carpeta que
+# ignora `.gitignore`. Aquí **sí** se lee el `.env` (sin `CORT_DOTENV=0`), porque
+# lo que se busca es la bitácora de esta máquina, no una base de pruebas.
+rechazos:
+	cd $(CORE) && $(PY) -m cort_core.audit
+
+.PHONY: setup install doctor dev launch web web-deps web-build demo test rechazos
 
