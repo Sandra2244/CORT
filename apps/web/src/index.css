@@ -327,6 +327,376 @@ button:focus-visible {
   }
 }
 
+/* ─── Bandeja guardada ────────────────────────────────────────────────────
+   La pantalla por defecto es el reactor. Todo lo demás vive dentro de
+   `.cuerpo`, que se pliega con `opacity` + `transform`: animar `height` o
+   `max-height` obliga a recalcular el layout en cada frame, y aquí eso son
+   milisegundos que el orbe deja de tener. `visibility` al final del tiempo
+   saca los campos del orden de tabulación cuando ya no se ven. */
+.cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+}
+
+.cuerpo.cerrado {
+  opacity: 0;
+  transform: translateY(22px) scaleY(0.94);
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 200ms ease, transform 220ms ease, visibility 0s linear 200ms;
+}
+
+/* La esquina táctil. Va en el vértice inferior derecho, recortada en diagonal
+   para que se lea como un pliegue del holograma y no como un botón de web. */
+.esquina {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 44px;
+  padding: 0 16px 0 18px;
+  color: var(--tint);
+  font: inherit;
+  font-size: 0.74rem;
+  letter-spacing: 0.16em;
+  text-transform: lowercase;
+  background: linear-gradient(225deg, rgba(10, 26, 52, 0.92), rgba(10, 26, 52, 0.42));
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-right: 0;
+  border-bottom: 0;
+  border-top-left-radius: 14px;
+  backdrop-filter: blur(6px);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: box-shadow 240ms ease, color 240ms ease;
+}
+
+/* El barrido de luz: una línea que recorre el borde y se apaga. Es lo que hace
+   que abrir la bandeja parezca revelado de holograma y no un div que aparece.
+   Un pseudo con `transform` animado, sin librería y sin repintar el layout. */
+.esquina::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(140, 230, 255, 0.5) 50%, transparent 65%);
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  opacity: 0;
+}
+
+.esquina:hover,
+.esquina:focus-visible {
+  box-shadow: 0 0 22px rgba(92, 225, 255, 0.28);
+  outline: none;
+}
+
+.esquina:hover::after,
+.esquina:focus-visible::after {
+  animation: barrido-esquina 900ms ease-out;
+}
+
+@keyframes barrido-esquina {
+  from { background-position: 130% 0; opacity: 0.9 }
+  to   { background-position: -30% 0; opacity: 0 }
+}
+
+.esquina-flecha {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.esquina.abierta {
+  color: var(--dim);
+}
+
+/* Cuántos mensajes llegaron con la bandeja cerrada. Se pinta sólo si hay, para
+   que un «0» no se confunda con un contador siempre encendido. */
+.esquina-aviso {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  color: #04101f;
+  background: var(--tint);
+  box-shadow: 0 0 12px var(--tint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* Con la bandeja guardada la telemetría también se guarda: si no, el panel de
+   arriba sería justo la mitad de la interfaz que se suponía que ya no estaba. */
+.telemetry.oculto {
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+/* La esquina vive en el vértice inferior derecho, encima de todo lo demás, así
+   que el botón de enviar le cede sitio: solaparse con un control es peor que un
+   campo algo más corto. */
+.hud form {
+  padding-right: 132px;
+}
+
+/* ─── Gestos con la cámara ────────────────────────────────────────────────
+   La cámara no se abre sola: manda siempre este botón, y su estado se ve
+   porque un LED encendido sin explicación en la pantalla es una pregunta. */
+.gesto {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.gesto-btn {
+  padding: 0 14px;
+  min-height: 44px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Activa = el borde late y el texto toma el tinte: el estado se entiende de
+   un vistazo, sin leer la etiqueta. */
+.gesto-btn.on {
+  color: #04101f;
+  background: var(--tint);
+  border-color: var(--tint);
+  box-shadow: 0 0 18px var(--tint);
+  animation: pulso-camara 2.4s ease-in-out infinite;
+}
+
+@keyframes pulso-camara {
+  0%, 100% { box-shadow: 0 0 12px var(--tint) }
+  50% { box-shadow: 0 0 26px var(--tint) }
+}
+
+.gesto-medida {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rastro de nitidez: se llena de izquierda a derecha según lo enfocada que está
+   la imagen, o sea según lo lejos que tengan los dedos del objetivo. */
+.gesto-barra {
+  width: 74px;
+  height: 3px;
+  background: linear-gradient(to right, var(--tint) var(--r, 100%), rgba(120, 190, 230, 0.22) var(--r, 100%));
+  box-shadow: 0 0 8px rgba(92, 225, 255, 0.5);
+}
+
+.gesto-aviso {
+  margin: 0;
+  flex: 1 1 100%;
+  color: #ff8fa6;
+  font-size: 0.74rem;
+  line-height: 1.4;
+}
+
+/* ─── El cuerpo holográfico ───────────────────────────────────────────────
+   Un atuendo de disco proyectado sobre el fondo. La transparencia la pone el
+   propio PNG (sus archivos se llaman «sin fondo» justo por eso), así que la
+   imagen se compone normal: mezclar en `screen` —lo primero que se ocurre para
+   un holograma— borra lo oscuro, y con un vestido negro no queda ni figura.
+   El halo lo dan dos `drop-shadow`, uno cian y uno violeta, y el tinte va
+   encima con `soft-light` para que el **color de la ropa se siga viendo**. */
+.avatar {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: end center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.avatar.lista {
+  opacity: 1;
+}
+
+.avatar img {
+  max-height: 88vh;
+  max-width: 92vw;
+  object-fit: contain;
+  /* `brightness` subido y `saturate` ajustado: los sprites llevan ropa oscura
+     sobre un fondo casi negro, y proyectados tal cual se leen como una mancha.
+     Un solo `drop-shadow`, medido: con dos la proyección baja de 26 a 22 fps en
+     esta máquina y el segundo halo no se aprecia en pantalla. */
+  filter: brightness(1.28) saturate(1.12)
+    drop-shadow(0 0 22px rgba(110, 170, 255, 0.6));
+  animation: avatar-flotar 7s ease-in-out infinite;
+}
+
+/* El tinte azul-morado de Cortana, sin borrar la ropa. */
+.avatar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(160deg, rgba(63, 216, 255, 0.16), rgba(143, 92, 255, 0.2));
+  mix-blend-mode: soft-light;
+}
+
+/* La línea de barrido que recorre la figura: el motivo del holograma, ahora
+   sobre el cuerpo en vez de sobre el reactor. */
+.avatar-linea {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 16vh;
+  background: linear-gradient(to bottom, transparent, rgba(140, 230, 255, 0.09) 62%, rgba(140, 230, 255, 0.3));
+  animation: avatar-barrido 5.5s linear infinite;
+}
+
+.avatar.procesando img {
+  filter: brightness(1.18) saturate(1.25) drop-shadow(0 0 34px rgba(255, 92, 224, 0.5));
+  animation-duration: 3.4s;
+}
+
+.avatar-nombre {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  color: var(--dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+
+@keyframes avatar-flotar {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-1.6vh) }
+}
+
+@keyframes avatar-barrido {
+  from { transform: translateY(-18vh) }
+  to   { transform: translateY(104vh) }
+}
+
+/* ─── El mosaico táctil de atuendos ───────────────────────────────────────
+   En fila con desplazamiento horizontal en vez de rejilla: en el teléfono una
+   fila de 74 px se alcanza con el pulgar, y en el portátil se ven seis de golpe. */
+.atuendos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.atuendos-cabecalzo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.atuendos-mosaico {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+}
+
+.atuendo {
+  flex: 0 0 auto;
+  width: 76px;
+  padding: 4px;
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.22);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.atuendo img {
+  display: block;
+  width: 100%;
+  height: 88px;
+  object-fit: contain;
+  filter: saturate(1.08);
+}
+
+.atuendo span {
+  display: block;
+  margin-top: 3px;
+  color: var(--dim);
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.atuendo:hover,
+.atuendo:focus-visible {
+  outline: none;
+  border-color: var(--tint);
+}
+
+.atuendo.activo {
+  border-color: var(--tint);
+  box-shadow: 0 0 16px rgba(92, 225, 255, 0.35);
+}
+
+.atuendo.activo span {
+  color: var(--tint);
+}
+
+.atuendos-volver {
+  padding: 6px 10px;
+  min-height: 34px;
+  color: var(--tint);
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  background: transparent;
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.atuendos-nota {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+/* En el teléfono la esquina es más ancha: el pulgar no acierta con un botón de
+   texto fino apoyado en el borde físico de la pantalla. */
+@media (pointer: coarse) {
+  .esquina {
+    padding: 0 22px 0 24px;
+    min-height: 52px;
+  }
+}
+
 /* ─── Efectos de un disparo ───────────────────────────────────────────────
    Transplantados de adewaskar/JARVIS (MIT). Van al final del archivo porque
    el bloque de movimiento reducido de abajo tiene que poder sobreescribir a
@@ -538,6 +908,35 @@ input {
   .fx-glitch::after {
     animation-name: fxFade;
     animation-timing-function: ease-out;
+  }
+
+  /* La bandeja se sigue abriendo y cerrando — es estado, no adorno — pero sin
+     el deslizamiento, y el LED de la cámara deja de latir. */
+  .cuerpo,
+  .cuerpo.cerrado {
+    transform: none;
+    transition: opacity 120ms linear;
+  }
+
+  .esquina::after,
+  .esquina:hover::after,
+  .esquina:focus-visible::after {
+    animation: none;
+  }
+
+  .gesto-btn.on {
+    animation: none;
+  }
+
+  /* La proyección sigue ahí — es la interfaz — pero quieta: flotar y barrer es
+     lo que marea, no lo que informa. */
+  .avatar img,
+  .avatar-linea {
+    animation: none;
+  }
+
+  .avatar.procesando img {
+    animation: none;
   }
 }
 

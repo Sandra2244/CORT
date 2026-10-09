@@ -4,9 +4,9 @@
 
 No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.5.0`** · rama `cort-local-verified` · **160 pruebas en verde** · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.6.0`** · rama `cort-local-verified` · **179 pruebas en verde** · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
-![CORT: reactor holográfico azul/violeta, telemetría, clima medido en el cabezal, control de tamaño del orbe y reloj](docs/assets/prototipo-v0.5.0.png)
+![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja](docs/assets/prototipo-v0.6.0.png)
 
 ---
 
@@ -15,7 +15,7 @@ No una maqueta: un orbe de shader que respira, una memoria que sobrevive al apag
 Tres capas, un protocolo, y todo en la misma máquina. Ningún dato sale del equipo salvo que tú configures un modelo remoto (no es el caso).
 
 ```
-        Usuario (voz* · teclado · táctil)
+        Usuario (voz* · teclado · táctil · cámara)
                      │
    ┌─────────────────▼──────────────────┐
    │  apps/web   React 19 · Vite · TS   │  interfaz: reactor GLSL, HUD, chat,
@@ -25,7 +25,7 @@ Tres capas, un protocolo, y todo en la misma máquina. Ningún dato sale del equ
    ┌─────────────────┴──────────────────┐
    │  services/core   Python 3.13       │  FastAPI + websockets, sin framework
    │  brain · intents · actions ·       │  de app: un módulo por responsabilidad
-   │  memory · status · outfit          │
+   │  memory · status · outfit · avatars│
    └───▲──────────────▲─────────────▲───┘
        │              │             │
    Ollama        SQLite         capa de permisos
@@ -49,35 +49,39 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 
 | Componente | Archivo(s) | Qué hace |
 |---|---|---|
-| **Servidor y protocolo** | `services/core/cort_core/server.py` | FastAPI + WebSocket. Reparte los seis marcos que salen del core (y escucha el `user_message` que entra), arma el prompt con memoria y decide si el turno pasa por el modelo o por un atajo local. Toda llamada al sistema va en `await` sobre `asyncio.create_subprocess_exec`: un `subprocess.run` bloqueante pararía el bucle que atiende a los demás clientes |
+| **Servidor y protocolo** | `services/core/cort_core/server.py` | FastAPI + WebSocket. Reparte los siete marcos que salen del core (y escucha los dos que entran: `user_message` y `list_avatars`), sirve los archivos de atuendo por `GET /avatars/{nombre}`, arma el prompt con memoria y decide si el turno pasa por el modelo o por un atajo local. Toda llamada al sistema va en `await` sobre `asyncio.create_subprocess_exec`: un `subprocess.run` bloqueante pararía el bucle que atiende a los demás clientes |
 | **Cerebro (LLM)** | `cort_core/brain.py` | Cadena de sustitución (`CORT_LLM_CHAIN`): usa el primer modelo que responda. Pide `/api/tags` y **descarta por tamaño** lo que no cabe en RAM (`CORT_LLM_MAX_MODEL_MIB`, 700 MiB) — cargar el de 2,6 GB congeló la máquina. Distingue «Ollama no está» de «la cadena no respondió». Sin modelo, modo eco |
 | **Memoria persistente** | `cort_core/memory/{store,facts}.py` | SQLite con búsqueda por raíces de 4 letras (no embeddings: esos piden ~1,5 GiB). `remember · recall · context_for · prune · name_of_user · count`. `prune` protege la fila del nombre, de la que depende el saludo. `context_for` rescata **por contenido, no por fecha** |
 | **Intenciones** | `cort_core/intents.py` | Patrones locales para órdenes de sistema. Devuelve una acción estructurada y **no ejecuta nada** — separar las dos cosas es lo que hace auditable el permiso |
 | **Capa de permisos** | `cort_core/actions.py` | Convierte esa acción en un comando real **de una lista cerrada**, con argv fijo, verificación del resultado y apagador global. Es la frontera entre «CORT entendió» y «CORT lo hizo» |
 | **Telemetría** | `cort_core/status.py` | Lee tres cosas y nada más: cuántos recuerdos hay, qué modelo habló la última vez y si los permisos están encendidos. Si un valor no se puede medir manda `null`, no un adorno |
 | **Atuendo** | `cort_core/outfit.py` | El color del holograma según hora y temperatura, igual que el de Cortana |
+| **Atuendos en disco** | `cort_core/avatars.py` | El catálogo de archivos que la usuaria pone en `CORT_AVATAR_DIR`: lista, sirve y **no se fía de ninguna ruta ajena**. Tres guardas, en este orden: nombre contra una expresión cerrada, `resolve()` + `relative_to()` sobre la raíz (no `startswith`, que se cuela con `/raiz-otra`), y extensión dentro de un mapa cerrado. Fuera de esa carpeta responde 404 —no 403, para no revelar que algo existe— |
 | **Clima** | `cort_core/weather.py` | Open-Meteo sin clave de API: resuelve la ciudad una vez, refresca cada 15 min y **sirve caché**, nunca una petición dentro del bucle del WebSocket. Si el servicio falla devuelve la última foto y deja de afirmarla pasados tres TTL. Sin `CORT_CITY` no sale ningún paquete de la máquina |
 | **Configuración** | `cort_core/env.py` | El lector de `.env`: un solo parser para el core y el lanzador, para que no puedan discrepar en qué puerto están. Una variable exportada gana; `CORT_DOTENV=0` anula el archivo (lo usan las pruebas) |
 | **Reactor holográfico** | `apps/web/src/scene/{Core,Particles,Scene}.tsx` | Un solo quad con shader de coordenadas polares (anillo erosionado por fbm, polvo, barrido radar) + Bloom, aberración cromática, ruido y viñeta. **18 fps sin GPU**, y los mismos a 200 % de tamaño |
 | **Estado y conexión** | `apps/web/src/cort/{connection,palette}.ts` | Dos capas deliberadamente separadas: un *snapshot* inmutable para React (`useSyncExternalStore`) y un objeto mutable que la escena persigue con `lerp`. Por eso cambiar de atuendo **respira** en vez de parpadear, y por eso el orbe **crece** en vez de saltar. Un solo archivo define todo el color |
-| **Interfaz** | `apps/web/src/ui/{Hud,Telemetry,Effects}.tsx` | Chat con reloj, clima medido en el cabezal, control de tamaño del reactor, panel de «lo que CORT sabe de sí mismo» y capa de efectos de un solo disparo. Escritos **sin** `zustand`, `drei` ni `framer-motion`: cada dependencia es RAM que esta máquina no tiene |
+| **Interfaz** | `apps/web/src/ui/{Hud,Telemetry,Effects,Bandeja,Avatar}.tsx` | Chat con reloj, clima medido en el cabezal, control de tamaño del reactor, **bandeja que se guarda en la esquina**, panel de «lo que CORT sabe de sí mismo», capa de efectos de un solo disparo y **proyección del cuerpo con atuendo**. Escritos **sin** `zustand`, `drei` ni `framer-motion`: cada dependencia es RAM que esta máquina no tiene |
+| **Gestos de cámara** | `apps/web/src/cort/defocus.ts` | Desenfocar con los dedos delante de la webcam encoge el orbe y enfocar lo devuelve. Sin modelos ni dependencias: 64×48 píxeles a 5 muestras por segundo, gris BT.601 y **varianza del Laplaciano** — el criterio con el que cualquier cámara decide si ya enfocó. La cámara la abre un botón de la usuaria y apagarla detiene las pistas del stream |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
-| **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **seis barras de estado** (core · interfaz · ollama · memoria · **audio** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | 160, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport` y el ejecutor de acciones con un `runner` inyectable: **la suite no le mueve el audio, no le escribe la memoria a nadie y no hace una sola petición a internet** |
+| **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
+| **Pruebas** | `services/core/tests/` | 179, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable y los atuendos con un directorio de mentira en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
-`ws://127.0.0.1:8765/ws`, JSON plano: **siete tipos**, uno entrante y seis salientes. Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
+`ws://127.0.0.1:8765/ws`, JSON plano: **nueve tipos**, dos entrantes y siete salientes. Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
 
 | Tipo | Dirección | Lleva | Quién lo pinta |
 |---|---|---|---|
 | `user_message` | cliente → core | `text` | — |
+| `list_avatars` | cliente → core | — (lo dispara abrir el selector de atuendos) | — |
 | `state` | core → cliente | `outfit`, `mood`, `thinking`, y `city` + `temp_c` **solo si el clima está medido** | reactor y HUD |
 | `greeting` | core → cliente | `text`, `mood` | el chat, **sólo si el registro está vacío** (viaja separado de `assistant_message` porque el core lo manda en cada reconexión) |
 | `assistant_message` | core → cliente | `text`, `mood` | el chat |
 | `intent` | core → cliente | `action`, `delta`/`app` | trazabilidad de la orden |
 | `effect` | core → cliente | `kind` ∈ `glitch · pulse · scan · shake · flash` | capa de efectos (no se guarda: es puntuación, no estado) |
 | `status` | core → cliente | `memories`, `keep`, `brain`, `ollama`, `actions` | panel de telemetría |
+| `avatars` | core → cliente | `items`: `nombre`, `mime`, `bytes` (lista vacía si no hay `CORT_AVATAR_DIR`) | mosaico táctil de atuendos. Los bytes no van por aquí: se cargan con `<img>` desde `GET /avatars/{nombre}` |
 
 ## Seguridad y permisos
 
@@ -96,17 +100,17 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 
 | Grupo | Funciones | Hechas | En curso | Pendientes |
 |---|---|---|---|---|
-| Núcleo (chat, memoria, intents, clima, configuración…) | 11 | 6 | 0 | 5 |
+| Núcleo (chat, memoria, intents, clima, configuración, atuendos en disco…) | 12 | 7 | 0 | 5 |
 | Voz y audio (wake word, STT, TTS, volumen, reproductor…) | 13 | 1 | 2 | 10 |
-| Avatar y HUD (partículas, VRM, atuendo, tamaño, overlay, efectos, móvil) | 15 | 6 | 2 | 7 |
-| Gestos y visión (MediaPipe, rostro, descripción de cámara) | 4 | 0 | 0 | 4 |
+| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 7 | 3 | 7 |
+| Gestos y visión (desenfoque con cámara, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 0 | 12 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
-| Sensores y contexto (temperatura, red, MQTT, preferencias) | 9 | 0 | 0 | 9 |
-| **Total** | **59** | **14** | **5** | **40** |
+| Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 1 | 0 | 9 |
+| **Total** | **72** | **18** | **6** | **48** |
 
-Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila.
+Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «37-44» son ocho funciones, no una).
 
-Lo que **todavía no está**, dicho en vez de simulado: **voz**, **avatar VRM** y **gestos con cámara**. Los tres motivos son de hardware y están medidos en esta máquina (sin dispositivo de captura, sink en *Dummy Output*, 2 núcleos a 1,46 GHz), no son «falta de código». Ver [`docs/PLATFORM.md`](docs/PLATFORM.md).
+Lo que **todavía no está**, dicho en vez de simulado: **voz** y **cuerpo 3D (VRM)**. Los dos motivos son de hardware y están medidos en esta máquina — sin micrófono ni salida de audio real, sink en *Dummy Output*, 2 núcleos a 1,46 GHz, ~286 MiB libres con el reactor pintando a 17-26 fps —, no son «falta de código». El gesto de cámara **sí** está y funciona; lo que no se ha podido probar aquí es el dedo humano delante del objetivo. Ver [`docs/PLATFORM.md`](docs/PLATFORM.md).
 
 ## Qué hace hoy, y cómo se sabe
 
@@ -121,9 +125,12 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | ⚡ | **Acciones reales en el sistema** a través de la capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después**; hace una **captura de pantalla** con `scrot` y **comprueba el archivo**; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra PipeWire, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar | `MutationObserver` en el navegador |
 | 📊 | **Panel de telemetría**: cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó, si las acciones están encendidas. Con el apagador puesto el panel dice «apagadas» en vez de fingir. Y **reloj** en el cabezal del HUD | `test_status` (9) y `test_protocol` (8), y cliente real: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido: `00:25:04 → 00:25:07` en 2,1 s |
-| 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, terminal con banner y **seis barras** (core · interfaz · ollama · memoria · **audio** · red) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida. La barra de audio, ejecutada hoy: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s)`. La de red, con `--lan` y las dos direcciones escuchando en `0.0.0.0`. **Sin verificar el doble clic en el escritorio XFCE** (lo maneja a mano Sandra) |
+| 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, terminal con banner y **siete barras** (core · interfaz · ollama · memoria · **audio** · **cámara** · red) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida. La barra de audio, ejecutada hoy: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s)`. La de red, con `--lan` y las dos direcciones escuchando en `0.0.0.0`. **Sin verificar el doble clic en el escritorio XFCE** (lo maneja a mano Sandra) |
 | 🎨 | **Atuendo por hora y temperatura real**: el reactor elige color según el cielo de la ciudad, y **se puede agrandar de un arrastre** (50 % a 200 %) | `pick_outfit` con las tres temperaturas de corte probadas; el tamaño, medido en el navegador: 18 fps a 100 % y los mismos 18 a 200 % |
 | 🌦️ | **Clima por Open-Meteo** (sin clave): la ciudad del `.env` se resuelve una vez, se refresca cada 15 min y se sirve de caché para no bloquear el WebSocket. Sin `CORT_CITY` no sale ningún paquete | 9 pruebas con HTTP simulado + una medición real: `Bogotá → 17,7 °C, código 3` |
+| 🤳 | **Gesto de cámara**: desenfocar con los dedos delante de la webcam encoge el orbe; enfocar lo devuelve a su tamaño. La cámara la abre un botón y apagarla detiene las pistas | Medido en el navegador con un stream real de imagen nítida y desenfocada: **100 % → 51 % al desenfocar, de vuelta al 100 %, 17 fps con el análisis activo** (18 sin él). Con dedos humanos: sin verificar (el navegador de pruebas negó el permiso) |
+| 🧍 | **Cuerpo proyectado con atuendo**: al elegir un archivo de su carpeta el reactor se apaga y aparece CORT en azul/morado semitransparente; al volver al reactor **la conexión no se toca** | Servido y probado en el navegador con sus propios PNG: catálogo por WebSocket, miniaturas cargadas desde `:8765`, y el cabezal diciendo «CORT en línea» con el avatar puesto. **26 fps** con un halo (22 con dos, 29 sin halo — por eso uno). El VRM 3D: listado pero **sin proyectar** |
+| 📥 | **La pantalla es el reactor**: la bandeja (registro, telemetría, controles) está guardada y se abre desde la esquina, con el dedo o con el ratón; los mensajes que llegan con ella cerrada se cuentan en el propio tirador | Probado en el navegador: `abierto ↔ cerrado`, `aria-hidden`, `opacity` 1→0, aviso contando el saludo. En un móvil físico: **sin verificar** |
 | 📱 | **Interfaz preparada para táctil y para instalarse** (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`, `manifest.webmanifest` con `display: standalone` e iconos), y **`--lan` para abrirla desde otro aparato** | El manifiesto, servido y medido: `200 application/manifest+json`, JSON válido y consola sin avisos. `--lan` probado en la red: `0.0.0.0:8780` dio `200` y un WebSocket contra la IP de red saludó y respondió. Lo del móvil físico: **sin verificar** |
 
 ## Plataforma: PC, móvil y por qué no C++/Java
@@ -138,7 +145,7 @@ Medido, no supuesto:
 
 - **2 núcleos a 1,46 GHz · 1,8 GiB de RAM · sin GPU.** El reactor va a **18 fps**. El LLM genera a **~1,3 tokens/s**: un turno normal cuesta 15-60 s.
 - **Nada de más de ~700 MiB entra en la cadena de modelos.** Cargar uno de 2,6 GB **congeló la máquina**.
-- **Sin salida de audio usable**: el único chip es HDMI y el puerto está `not available`, así que el sink es *Dummy Output*. Y **no hay ningún dispositivo de captura** (`arecord -l` vacío; las dos entradas que PipeWire lista bajo `Video` son cámaras). Por eso la voz es Fase 2 y no "un modelo más": aquí no se puede oír ni escuchar.
+- **Sin salida de audio usable y sin micrófono**: el único chip es HDMI y el puerto está `not available`, así que el sink es *Dummy Output*, y `arecord -l` no encuentra ninguna entrada de **audio**. **La cámara sí existe y sí funciona**: `Chicony USB Camera` en `/dev/video0` y `/dev/video1`, accesibles para esta usuaria (grupo `video`), y ya se usa en el gesto de desenfoque. Por eso la voz es Fase 2 y no "un modelo más": aquí no se puede oír ni escuchar.
 - Consecuencia de método: **se mide antes de prometer**. Cualquier fila nueva de esta tabla entra con su evidencia o dice «sin verificar».
 
 ## Estructura del repositorio
@@ -146,9 +153,9 @@ Medido, no supuesto:
 ```
 CORT/
 ├── services/core/
-│   ├── cort_core/            # el cerebro: server · brain · intents · actions · status · outfit · weather · env
+│   ├── cort_core/            # el cerebro: server · brain · intents · actions · avatars · status · outfit · weather · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 160 pruebas, biblioteca estándar
+│   ├── tests/                # 179 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db — fuera de git: son datos personales
 │   └── requirements.txt
 ├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui · public/)
@@ -172,6 +179,7 @@ CORT/
 | **GNU make** | un solo sitio donde viven las recetas | `make -v` | 4.4.1 |
 | **git** | bajar el repositorio | `git --version` | opcional: también vale descargar el ZIP |
 | **Ollama** *(opcional)* | que conteste un modelo local | `ollama -v` | **sin Ollama CORT sigue funcionando** en modo eco |
+| **Cámara web** *(opcional)* | el gesto de desenfoque que agranda y encoge el orbe | la abre un botón del HUD pidiendo permiso al navegador | `Chicony USB Camera` en `/dev/video0` y `/dev/video1`, accesibles para esta usuaria (grupo `video`) |
 
 En Debian y Ubuntu el módulo `venv` no viene con el intérprete: viene en un paquete aparte, y su ausencia es el fallo más común en esta máquina.
 
@@ -242,14 +250,15 @@ Cualquier línea que diga `FALTA` lleva al lado el comando que la arregla.
 make launch
 ```
 
-Levanta el core, sirve la interfaz y abre el navegador. La terminal pinta cinco barras de estado:
+Levanta el core, sirve la interfaz y abre el navegador. La terminal pinta seis barras de estado —siete con `--lan`, que añade la de red—:
 
 ```text
  ● core         ws://127.0.0.1:8765/ws
  ● interfaz     http://127.0.0.1:8780   (dist)
  ● ollama       apagado — CORT responde en modo eco
- ● memoria      2 recuerdos en memory.db
+ ● memoria      0 recuerdos en cort-demo.db  (demo)
  ● audio        0 salida(s): ninguna real (Dummy Output) · 0 entrada(s) — sin esto no hay voz que verificar
+ ● camara       2 cámara(s): video0, video1 · la abre el navegador desde la página, con permiso tuyo
 ```
 
 **`Ctrl+C` cierra las dos cosas** —el lanzador mata al hijo antes de salir, no deja procesos sueltos—.
@@ -264,7 +273,7 @@ make web      # interfaz en modo desarrollo con recarga en caliente (~120 MB má
 
 ### Paso 5 · Configurar (opcional, pero Ollama vive aquí)
 
-Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzador lo hacen con el mismo parser, para que no puedan discrepar en qué puerto están—. Una variable exportada en la terminal gana sobre la del archivo, y `CORT_DOTENV=0` anula el archivo entero (es lo que usan las pruebas). Las variables están explicadas en [`.env.example`](.env.example); las cuatro que importan el primer día:
+Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzador lo hacen con el mismo parser, para que no puedan discrepar en qué puerto están—. Una variable exportada en la terminal gana sobre la del archivo, y `CORT_DOTENV=0` anula el archivo entero (es lo que usan las pruebas). Las variables están explicadas en [`.env.example`](.env.example); las cinco que importan el primer día:
 
 | Variable | Qué cambia |
 |---|---|
@@ -272,6 +281,7 @@ Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzad
 | `CORT_CITY` | la ciudad del clima. **Vacío = no sale ni una petición a internet** |
 | `CORT_SYSTEM_ACTIONS` | `0` apaga la capa de permisos: sigue hablando, pero no toca el sistema |
 | `CORT_MEMORY_DB` | otra ruta para `memory.db`, para experimentar sin escribir encima de la memoria real |
+| `CORT_AVATAR_DIR` | la carpeta de atuendos que ve el mosaico táctil. **Sin esta variable el selector sale vacío y el reactor no se apaga nunca**: los modelos VRM y las imágenes no van en el repositorio porque pesan 16-21 MB cada uno, tienen licencia de terceros y son datos personales |
 
 Para que conteste un modelo local en vez del modo eco:
 
@@ -281,6 +291,15 @@ ollama pull qwen2.5:0.5b         # 379 MiB: el único que cabe sin congelar esta
 ```
 
 y en `.env`, `CORT_LLM_CHAIN=qwen2.5:0.5b`. **Un modelo de más de ~700 MiB ni se intenta**: el guard de RAM lo descarta antes de cargarlo, porque uno de 2,6 GB congeló esta máquina (medido).
+
+Para vestir a CORT con sus propios archivos (PNG, JPG, WebP o VRM):
+
+```bash
+# en .env, y reiniciar
+CORT_AVATAR_DIR=/ruta/a/su/carpeta/de/atuendos
+```
+
+El core **no adivina ninguna carpeta**: sin la variable, el mosaico de atuendos sale vacío y lo dice en pantalla en vez de mostrar figuras inventadas. Los archivos nunca se suben a git —por eso existe la variable— y sólo se sirve lo que esté *dentro* de esa carpeta: una ruta que intente salirse responde 404, igual que una extensión que no esté en la lista cerrada (probado en `tests/test_avatars.py`: 15 pruebas con un directorio de mentira en `tempfile`).
 
 ### Paso 6 · El doble clic, para no volver a abrir una terminal
 
@@ -295,16 +314,16 @@ Portátil y móvil, en **la misma red Wi-Fi**.
 python3 scripts/cort.py --lan
 ```
 
-La sexta barra de la terminal imprime la dirección que hay que escribir en el móvil —por ejemplo `http://192.168.100.171:8780`—, porque adivinar la propia IP no es un paso razonable. Sin `--lan` todo escucha sólo en `127.0.0.1`, y así queda por defecto: **el core no tiene contraseña ni HTTPS**, así que publicarlo es decisión explícita de quien lo arranca y dura lo que dura ese proceso.
+La barra de **red** —la séptima, sólo con `--lan`— imprime la dirección que hay que escribir en el móvil, por ejemplo `http://192.168.100.xxx:8780`, porque adivinar la propia IP no es un paso razonable. Sin `--lan` todo escucha sólo en `127.0.0.1`, y así queda por defecto: **el core no tiene contraseña ni HTTPS**, así que publicarlo es decisión explícita de quien lo arranca y dura lo que dura ese proceso.
 
 Verificado en esta red: con `--lan` el core y la interfaz quedaron escuchando en `0.0.0.0`, la página contestó `200` desde la IP de red y un WebSocket abierto contra esa IP saludó y respondió. **Sin verificar en un móvil físico**: hace falta el teléfono delante.
 
-Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`) y manifiesto para instalarla como aplicación. Lo que no arregla: el micrófono desde una pestaña exige HTTPS, y la voz está bloqueada por hardware en este portátil con o sin teléfono.
+Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`) y manifiesto para instalarla como aplicación. Lo que no arregla: **la cámara y el micrófono desde una pestaña exigen un origen seguro**, y por `http://192.168.x.x:8780` el navegador los bloquea —el botón de gesto lo dice en el propio aviso, no se queda mudo—. La voz está además bloqueada por hardware en este portátil con o sin teléfono. HTTPS en la LAN es la única salida real y sigue siendo una decisión pendiente (ver «Cómo colaborar»).
 
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 160 pruebas, ~58 s en esta máquina
+make test      # 179 pruebas, ~59 s en esta máquina
 ```
 
 Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie.
@@ -321,6 +340,9 @@ Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV
 | `El core murió al arrancar (código 1)` | el puerto está ocupado por otro CORT | `pkill -f cort_core.server` y volver a arrancar |
 | El móvil no abre la dirección | `--lan` no usado, otra red Wi-Fi, o el cortafuegos | arrancar con `--lan`; `sudo ufw status` si hay cortafuegos |
 | La barra de audio dice `ninguna real (Dummy Output)` | el portátil no tiene salida de audio conectada | conectar altavoz o auriculares; sin eso la voz no es verificable, y CORT no finge oírla |
+| El botón de la cámara se queda en rojo | dos causas distintas y el aviso las separa: origen no seguro o permiso denegado | por `http://` en la LAN el navegador **no da** la cámara (no es un bug de CORT): pruébala en `127.0.0.1`. Si el aviso dice «permiso denegado», concederlo desde el icono de la barra de dirección |
+| La barra de cámara dice `sin /dev/video*` | la sonda del lanzador es Linux (`wpctl` tiene su equivalente; `/dev/video*` no existe en Windows ni macOS) | en Linux, añadir la usuaria al grupo `video` y volver a entrar; en otro SO la barra se pinta honestamente ausente |
+| El mosaico de atuendos sale vacío | no hay `CORT_AVATAR_DIR`, o la carpeta no existe | escribir la ruta en `.env` y reiniciar; el selector lo dice en pantalla en vez de mostrar figuras inventadas |
 | Tarda muchísimo en responder | Ollama cargando el modelo en una máquina de 2 núcleos | normal: ~1,3 tokens/s medidos. `make demo` con el apagador de acciones para probar sin esperar |
 
 
@@ -335,11 +357,13 @@ Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV
 
 Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata a más cara):
 
-- **Clima en el teléfono**: `--lan` ya funciona; falta abrir la interfaz desde un móvil físico y mirar si el reactor táctil se deja arrastrar con el pulgar.
+- **Cuerpo 3D (VRM)**: los archivos ya se listan y se sirven con ruta segura; falta el **cargador** (`@pixiv/three-vrm` o similar) y medirlo aquí — 2 núcleos, sin GPU, ~286 MiB libres con el reactor pintando. Es el siguiente ticket grande y no se simula.
+- **Una figura por atuendo**: sus sprites son láminas multipo se (1280×720 con seis posturas), así que la proyección se ve como varias figuras pequeñas. Segregar una postura por archivo —o recortar la lámina— es trabajo de assets, no de código.
+- **HTTPS en la LAN**: mientras no lo haya, ni la cámara ni el micrófono del navegador se activan desde el teléfono, y el botón de gesto lo dice en vez de fallar en silencio. Es una decisión de seguridad de Sandra, no un ticket de código.
+- **Clima en el teléfono**: `--lan` ya funciona; falta abrir la interfaz desde un móvil físico y mirar si el reactor táctil se deja arrastrar con el pulgar, y si el gesto de desenfoque se comporta con la cámara trasera.
 - **Memoria**: `remember()` deduplica sensible a mayúsculas — «Me llamo X» y «me llamo X» crean dos filas. Está anotado como deuda en `docs/STATUS.md`.
 - **Acciones**: instalar `playerctl` convierte la función 18 (reproductor) en algo verificable con un «después» comprobable.
 - **Voz (Fase 2)**: bloqueada hasta tener altavoz o auriculares **y** micrófono. El código existe en el roadmap y no se simula.
-- **HTTPS en la LAN**: mientras no lo haya, el micrófono del navegador no se activa y el `--lan` es de confianza local. Es una decisión de seguridad de Sandra, no un ticket de código.
 
 ## Documentación
 
@@ -348,7 +372,7 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/STATUS.md`](docs/STATUS.md) | **Fuente de verdad operativa**: qué funciona de verdad, qué se intentó y falló, qué deuda hay |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, protocolo, capa de permisos, módulos de `apps/web` — con el por qué de cada decisión |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Nueve fases, cada una con su criterio de "listo" |
-| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 55 funciones con estado y viabilidad por sistema operativo |
+| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 72 funciones con estado y viabilidad por sistema operativo |
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |
 | [`docs/DEVELOPMENT-GUIDE.md`](docs/DEVELOPMENT-GUIDE.md) | Método de trabajo |

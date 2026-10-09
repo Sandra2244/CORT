@@ -3,6 +3,9 @@ import { DEFAULT_OUTFIT, SPIN, THINKING_HOT, palette, type Outfit } from './pale
 
 export type Msg = { from: 'user' | 'cort'; text: string }
 
+/** Un archivo de atuendo en el disco de la usuaria (`CORT_AVATAR_DIR`). */
+export type Avatar = { nombre: string; mime: string; bytes: number }
+
 /** Puntuación, no estado: ver el protocolo en docs/ARCHITECTURE.md. */
 export type UiEffect = 'glitch' | 'pulse' | 'scan' | 'shake' | 'flash'
 
@@ -54,6 +57,12 @@ export type Snapshot = {
    */
   clima: { city: string; temp_c: number } | null
   /**
+   * Catálogo de atuendos en disco, o `null` si aún no se ha pedido. Se pide sólo
+   * cuando la usuaria abre el selector: mientras no lo abra, el core no lee su
+   * carpeta, y un listado en cada conexión sería curiosear por defecto.
+   */
+  avatars: Avatar[] | null
+  /**
    * `at` es la marca de tiempo del mensaje, y existe sólo para que repetir el
    * mismo efecto vuelva a dispararlo: sin una clave que cambie, React no
    * remontaría el nodo y la animación CSS no tendría de dónde arrancar.
@@ -73,6 +82,7 @@ let snapshot: Snapshot = {
   msgs: [],
   status: null,
   clima: null,
+  avatars: null,
   effect: null,
 }
 const listeners = new Set<() => void>()
@@ -106,6 +116,13 @@ export const target = {
    * slider no reconcilia el HUD 60 veces por segundo en una máquina de 2 núcleos.
    */
   zoom: 1,
+  /**
+   * Si el reactor se pinta. Con el avatar delante el orbe estorba — dos focos de
+   * luz en la misma pantalla se apagan el uno al otro —, pero **el core no se
+   * entera**: apagar la capa visual no apaga a CORT, que sigue escuchando por el
+   * WebSocket con la misma conexión abierta.
+   */
+  visible: true,
 }
 
 /** El margen que el shader aguanta sin que el anillo se salga del cuadro. */
@@ -119,6 +136,21 @@ export function setZoom(factor: number) {
 }
 
 export const zoomLimits = { min: ZOOM_MIN, max: ZOOM_MAX }
+
+/** Mostrar o esconder el reactor sin tocar la conexión ni el estado del core. */
+export function setOrbeVisible(visible: boolean) {
+  target.visible = visible
+}
+
+// El core y la página viven en puertos distintos (8765 y 8780), así que una
+// imagen de atuendo necesita el origen completo. `location.hostname` en vez de
+// 127.0.0.1 a secas: es el mismo truco del WebSocket, y es lo que hace que al
+// abrir CORT desde el teléfono con `--lan` las miniaturas salgan también.
+const ORIGEN_CORE = `${location.protocol === 'https:' ? 'https' : 'http'}://${location.hostname || '127.0.0.1'}:8765`
+
+export function avatarUrl(nombre: string) {
+  return `${ORIGEN_CORE}/avatars/${encodeURIComponent(nombre)}`
+}
 
 // El core escucha en 127.0.0.1; si se abre la web desde otro equipo de la red
 // (`cort.py --lan`), `location.hostname` ya apunta a esa máquina y no hace falta
@@ -159,6 +191,8 @@ function open() {
     if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
+    if (m.type === 'avatars')
+      set({ avatars: Array.isArray(m.items) ? m.items.filter((i: any) => typeof i?.nombre === 'string') : [] })
   }
 }
 
@@ -194,4 +228,10 @@ export function send(text: string) {
   if (!sock || sock.readyState !== WebSocket.OPEN) return
   sock.send(JSON.stringify({ type: 'user_message', text }))
   set({ msgs: [...snapshot.msgs, { from: 'user', text }] })
+}
+
+/** Pedir al core la lista de atuendos que hay en disco. Va por el cable abierto. */
+export function pedirAvatares() {
+  if (!sock || sock.readyState !== WebSocket.OPEN) return
+  sock.send(JSON.stringify({ type: 'list_avatars' }))
 }

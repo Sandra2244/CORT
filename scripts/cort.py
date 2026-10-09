@@ -182,16 +182,19 @@ def parse_wpctl(text: str) -> tuple[list[str], list[str]]:
 
 
 def audio_probe() -> tuple[list[str], list[str]] | None:
-    """(salidas, entradas) reales, o None si este SO no tiene `wpctl`.
+    """(salidas, entradas) reales, o None si la sonda no puede afirmar nada.
 
-    None no se pinta como «sin audio»: en Windows y macOS la sonda es otra y
-    aquí no se ha escrito. Silenciar la barra es la única salida honesta.
+    None hay en dos casos, y los dos callan la barra en vez de mentir: este SO no
+    tiene `wpctl` (Windows y macOS piden otra sonda que aquí no está escrita), o
+    `wpctl status` no contestó a tiempo. Lo segundo se vio en esta máquina: con
+    el core arrancando, los dos segundos de margen no dieron abasto y la barra de
+    audio desapareció de un arranque que promete siete. De ahí el margen de 5 s.
     """
     if not shutil.which("wpctl"):
         return None
     try:
         out = subprocess.run(["wpctl", "status"], capture_output=True, text=True,
-                             timeout=2, errors="replace").stdout
+                             timeout=5, errors="replace").stdout
     except (OSError, subprocess.SubprocessError):
         return None
     return parse_wpctl(out)
@@ -213,6 +216,41 @@ def audio_note(sinks: list[str], sources: list[str]) -> tuple[bool, str]:
     if not ok:
         texto += " — sin esto no hay voz que verificar"
     return ok, texto
+
+
+def camera_probe() -> list[tuple[str, bool]]:
+    """Las cámaras de vídeo del sistema como `(nombre, se_puede_abrir)`.
+
+    Se mira `/dev/video*` y además el permiso real de esta usuaria: un
+    `/dev/video0` que no se puede abrir es exactamente el mismo problema que no
+    tener cámara, y decir «1 cámara» cuando luego el navegador no puede encenderla
+    es el tipo de mentira que hace perder una tarde.
+    """
+    cams: list[tuple[str, bool]] = []
+    for dev in sorted(Path("/dev").glob("video*")):
+        try:
+            usable = os.access(dev, os.R_OK | os.W_OK)
+        except OSError:
+            usable = False
+        cams.append((dev.name, usable))
+    return cams
+
+
+def camera_note(cams: list[tuple[str, bool]]) -> tuple[bool, str]:
+    """Punto de estado y texto para la barra de cámara.
+
+    El aviso final no es relleno: quien abre la cámara es el navegador con
+    `getUserMedia`, no el core. Que CORT la vea no quita el permiso que Chrome
+    pide en la propia página, y conviene decirlo antes de que se busque el fallo
+    en el sitio equivocado.
+    """
+    if not cams:
+        return False, "sin /dev/video*: en Windows y macOS hace falta otra sonda (aún no escrita)"
+    nombres = ", ".join(n for n, _ in cams)
+    bloqueadas = [n for n, ok in cams if not ok]
+    if bloqueadas:
+        return False, f"{len(cams)} cámara(s): {nombres} — sin permiso en {', '.join(bloqueadas)}; añade tu usuario al grupo `video`"
+    return True, f"{len(cams)} cámara(s): {nombres} · la abre el navegador desde la página, con permiso tuyo"
 
 
 def memory_note(db: Path, count: int | None, demo: bool = False) -> tuple[bool, str]:
@@ -420,6 +458,8 @@ def main() -> int:
         if audio is not None:
             ok_audio, note_audio = audio_note(*audio)
             print(bar("audio", ok_audio, color, note_audio))
+        ok_cam, note_cam = camera_note(camera_probe())
+        print(bar("camara", ok_cam, color, note_cam))
         if args.lan:
             # La IP que hay que escribir en el teléfono. Si no se imprime, el
             # `--lan` no sirve: la usuaria no puede adivinar su propia dirección.

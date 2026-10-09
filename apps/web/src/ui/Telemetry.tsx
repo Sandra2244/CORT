@@ -37,7 +37,7 @@ function brainLabel(brain: string | null, ollama: boolean | null): string {
   return 'sin probar'
 }
 
-export function Telemetry() {
+export function Telemetry({ oculto = false }: { oculto?: boolean }) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   if (!s.status) return null
   const st = s.status
@@ -47,7 +47,12 @@ export function Telemetry() {
   const tint = palette[s.outfit] ?? palette.work
 
   return (
-    <aside className="telemetry" aria-label="Estado del sistema" style={{ ['--tint' as string]: tint.ui }}>
+    <aside
+      className={`telemetry ${oculto ? 'oculto' : ''}`}
+      aria-hidden={oculto}
+      aria-label="Estado del sistema"
+      style={{ ['--tint' as string]: tint.ui }}
+    >
       <div className="tl-row">
         <span>recuerdos</span>
         <b>{memories(st.memories, st.keep)}</b>

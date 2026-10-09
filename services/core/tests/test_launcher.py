@@ -332,5 +332,40 @@ class TestRed(unittest.TestCase):
             self.assertIsNone(self.m.lan_address())
 
 
+class TestBarraDeCamara(unittest.TestCase):
+    """La sonda de vídeo: qué se ve, y si esta usuaria puede abrirlo."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load()
+
+    def test_sin_dispositivos_es_sonda_incompleta_no_camara_rota(self):
+        # En Windows y macOS no existe `/dev/video*`. La barra lo dice como lo que
+        # es — que aquí falta esa sonda — y no como un fallo de hardware.
+        ok, texto = self.m.camera_note([])
+        self.assertFalse(ok)
+        self.assertIn("Windows", texto)
+
+    def test_camara_presente_y_accesible(self):
+        ok, texto = self.m.camera_note([("video0", True)])
+        self.assertTrue(ok)
+        self.assertIn("1 cámara(s): video0", texto)
+        # Que la abra el navegador va en la propia barra: sin ese aviso, quien lea
+        # «ok» irá a buscar el permiso al core, que no tiene ninguno que dar.
+        self.assertIn("navegador", texto)
+
+    def test_camara_sin_permiso_no_cuenta_como_camara(self):
+        ok, texto = self.m.camera_note([("video0", False)])
+        self.assertFalse(ok)
+        self.assertIn("grupo `video`", texto, "el aviso tiene que decir qué hacer, no sólo que falla")
+
+    def test_probe_ordena_y_comprueba_acceso(self):
+        v0 = Path("/dev/video0")
+        v1 = Path("/dev/video1")
+        with mock.patch.object(self.m.Path, "glob", return_value=iter([v1, v0])), \
+             mock.patch.object(self.m.os, "access", side_effect=[True, False]):
+            self.assertEqual(self.m.camera_probe(), [("video0", True), ("video1", False)])
+
+
 if __name__ == "__main__":
     unittest.main()

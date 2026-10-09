@@ -2,7 +2,8 @@ import asyncio
 import os
 import re
 from datetime import datetime
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
 import uvicorn
 
 # El `.env` se lee **antes** del resto de los imports del paquete: `memory/store.py`
@@ -18,6 +19,7 @@ from .memory.store import MemoryStore
 from .outfit import pick_outfit
 from .status import build as status_payload
 from . import weather
+from . import avatars
 
 app = FastAPI(title="CORT core")
 
@@ -52,6 +54,26 @@ def state(thinking=False):
         frame["temp_c"] = clima["temp_c"]
     return frame
 
+@app.get("/avatars/{nombre}")
+async def get_avatar(nombre: str):
+    """
+    Los bytes de un atuendo, sólo si `CORT_AVATAR_DIR` está activado y el nombre
+    es un archivo de esa carpeta.
+
+    Es el único endpoint de archivos: el **listado** viaja por el WebSocket, no
+    por HTTP. La página se sirve en `:8780` y el core escucha en `:8765`, así que
+    un `fetch` al listado necesitaría CORS declarado — y declarar CORS en un core
+    sin autenticación sería regalarle a cualquier pestaña del navegador la lista
+    de lo que hay en esa carpeta. Una etiqueta `<img>` no necesita CORS y por eso
+    los bytes sí pueden salir por HTTP.
+    """
+    ruta = avatars.ruta_segura(nombre)
+    if ruta is None:
+        # 404 y no 403: un 403 confirmaría que el nombre existe en algún sitio.
+        raise HTTPException(status_code=404, detail="atuendo no disponible")
+    return FileResponse(ruta, media_type=avatars.tipo_de(ruta))
+
+
 @app.websocket("/ws")
 async def ws(sock: WebSocket):
     await sock.accept()
@@ -72,6 +94,12 @@ async def ws(sock: WebSocket):
     try:
         while True:
             msg = await sock.receive_json()
+            if msg.get("type") == "list_avatars":
+                # Se pide aquí y no con `fetch` por el motivo escrito en el
+                # endpoint: el listado no necesita CORS si viaja por el cable que
+                # la usuaria ya abrió, y así no hay que declarar orígenes.
+                await sock.send_json({"type": "avatars", "items": avatars.listar()})
+                continue
             if msg.get("type") != "user_message":
                 continue
             text = msg.get("text", "").strip()

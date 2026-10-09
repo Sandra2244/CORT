@@ -49,6 +49,10 @@ function Rig() {
     // El tamaño que pidió la usuaria, perseguido igual que el color: un salto
     // directo se vería como un tirón, y esto es un holograma que respira.
     drive.scale += (target.zoom - drive.scale) * Math.min(1, dt * 3)
+    // El orbe se esconde cuando el avatar toma la pantalla. Es un booleano y no
+    // un fundido: fundir un ShaderMaterial querría un uniform más por partícula,
+    // y aquí 1 fps valen.
+    drive.visible = target.visible
 
     // Sin micrófono todavía: el nivel es una respiración, y pensar la agita.
     const idle = 0.05 + (target.spin > 1 ? 0.22 : 0)
