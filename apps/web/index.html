@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover es lo que hace que env(safe-area-inset-bottom) valga
+         algo: sin él el navegador ya recorta el área, y el pie del HUD queda
+         pegado a la barra de gestos del teléfono. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#02040c" />
+    <!-- La PWA sin servicio de trabajo: `display: standalone` y los iconos
+         bastan para que Android la añada a la pantalla de inicio como app.
+         El `apple-touch-icon` va aparte porque iOS no mira el manifiesto para
+         el icono. No se cachea nada a propósito: lo único que puede contestar
+         es el core en :8765, y una interfaz vieja servida sin conexión es peor
+         que la que ahora dice «sin conexión con el core». -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/cort-192.png" />
+    <link rel="apple-touch-icon" href="/icons/cort-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>CORT</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

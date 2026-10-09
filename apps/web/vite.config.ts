@@ -5,17 +5,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: '0.0.0.0',
-    strictPort: false,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://localhost:8787',
-        ws: true,
-      }
-    }
-  }
+    // host true = escucha también en la red local, para abrir CORT desde el teléfono.
+    // Solo sirve de verdad si el core deja de estar atado a 127.0.0.1 (ver docs/STATUS.md).
+    host: true,
+  },
 })

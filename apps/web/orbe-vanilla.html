@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CORT</title>
+<style>
+  :root { --bg:#02060f; --cyan:#4fd8ff; --violet:#8a6bff; --ink:#d8f4ff; --dim:#5d86a0; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--ink); font-family:"Segoe UI",system-ui,sans-serif; }
+  body { display:grid; grid-template-rows:1fr auto; overflow:hidden; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; z-index:0; }
+  .scan { position:fixed; inset:0; z-index:1; pointer-events:none;
+    background:repeating-linear-gradient(to bottom, transparent 0 2px, rgba(79,216,255,.05) 2px 3px); }
+  #log { position:relative; z-index:2; align-self:end; max-width:640px; width:100%; margin:0 auto;
+    padding:16px; overflow-y:auto; max-height:40vh; display:flex; flex-direction:column; gap:8px; }
+  .m { padding:8px 12px; border-left:2px solid var(--cyan); background:rgba(10,30,50,.55); line-height:1.4; max-width:85%; }
+  .m.u { align-self:flex-end; border-left:0; border-right:2px solid var(--violet); }
+  #bar { position:relative; z-index:2; display:flex; gap:8px; max-width:640px; width:100%; margin:0 auto; padding:0 16px 16px; }
+  input { flex:1; background:rgba(10,30,50,.7); border:1px solid #1d4a66; color:var(--ink); padding:12px; font:inherit; }
+  input:focus-visible, button:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+  button { background:var(--cyan); color:#02131f; border:0; padding:0 18px; font:inherit; font-weight:600; cursor:pointer; }
+  #status { position:fixed; top:14px; left:16px; z-index:2; color:var(--dim); font-size:.85rem; }
+  @media (prefers-reduced-motion: reduce) { .scan { display:none; } }
+</style>
+</head>
+<body>
+<canvas id="c" aria-hidden="true"></canvas><div class="scan"></div>
+<div id="status">Conectando…</div>
+<div id="log" role="log" aria-live="polite"></div>
+<form id="bar"><input id="t" autocomplete="off" placeholder="Escribe a CORT" aria-label="Mensaje"><button>Enviar</button></form>
+<script>
+const $ = id => document.getElementById(id);
+const OUTFIT_HUE = { night:[138,107,255], hoodie:[110,170,255], light:[120,240,255], work:[79,216,255], casual:[79,216,255] };
+let tint = OUTFIT_HUE.work, thinking = false;
+
+// --- Esfera de partículas con respiración (placeholder del avatar VRM) ---
+const cv = $("c"), g = cv.getContext("2d");
+const N = 700, pts = Array.from({length:N}, (_, i) => {
+  const y = 1 - 2*(i+.5)/N, r = Math.sqrt(1-y*y), a = i*2.39996;
+  return [Math.cos(a)*r, y, Math.sin(a)*r];
+});
+function frame(t) {
+  const w = cv.width = innerWidth, h = cv.height = innerHeight;
+  g.clearRect(0,0,w,h);
+  const R = Math.min(w,h)*.26*(1+.03*Math.sin(t/900)+(thinking?.04*Math.sin(t/120):0));
+  const ay = t/(thinking?900:2600), ca=Math.cos(ay), sa=Math.sin(ay);
+  for (const [x,y,z] of pts) {
+    const X = x*ca+z*sa, Z = -x*sa+z*ca, k = (Z+1.4)/2.4;
+    g.fillStyle = `rgba(${tint[0]},${tint[1]},${tint[2]},${.15+.7*k})`;
+    g.fillRect(w/2+X*R, h*.4+y*R, 1+1.8*k, 1+1.8*k);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// --- Conexión con el core ---
+function add(text, me) { const d = document.createElement("div"); d.className = "m"+(me?" u":""); d.textContent = text; $("log").append(d); d.scrollIntoView(); }
+function connect() {
+  const ws = new WebSocket("ws://127.0.0.1:8765/ws");
+  ws.onopen = () => $("status").textContent = "CORT en línea";
+  ws.onclose = () => { $("status").textContent = "Sin conexión con el core. Ejecuta: make dev"; setTimeout(connect, 3000); };
+  ws.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "assistant_message") add(m.text, false);
+    if (m.type === "state") { thinking = m.thinking; tint = OUTFIT_HUE[m.outfit] || tint; $("status").textContent = `CORT en línea · atuendo: ${m.outfit}`; }
+  };
+  $("bar").onsubmit = ev => { ev.preventDefault(); const v = $("t").value.trim(); if (!v || ws.readyState !== 1) return;
+    add(v, true); ws.send(JSON.stringify({type:"user_message", text:v})); $("t").value = ""; };
+}
+connect();
+</script>
+</body>
+</html>

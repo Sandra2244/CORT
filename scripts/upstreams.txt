@@ -1,0 +1,4 @@
+# nombre|url   (REEMPLAZA con las URLs reales y verificadas)
+openjarvis|https://github.com/REEMPLAZAR/OpenJarvis.git
+openclaw|https://github.com/REEMPLAZAR/openclaw.git
+adewaskar-jarvis|https://github.com/adewaskar/JARVIS.git
