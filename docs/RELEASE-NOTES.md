@@ -16,6 +16,64 @@ falta borrar ni recrear ninguna. Las cinco páginas están en
 Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el
 entorno, ni `~/.config/gh`.
 
+**La lista de tareas para cortar la siguiente (v0.11.0), en orden** — el orden importa porque el
+pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
+
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.11.0\` — …` escrita (ya está, en
+   `cort-local-verified`), con su línea **Zip** — la prueba `test_cada_etiqueta_del_documento_tiene_su_nota`
+   la exige y `make test` lo recuerda.
+2. La rama se revisa y **se fusiona a `main`** (pull request → merge). Sin este paso la Release
+   saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
+3. Se etiqueta el commit de `main`: `git tag v0.11.0 && git push origin v0.11.0`. Ahí se dispara
+   `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
+   esa es el acta «.zip como proyecto profesional» sin construir nada.
+4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
+   justificado en `docs/PLATFORM.md`—: se construyen en un PC Windows con la receta de
+   `packaging/` y se adjuntan a la Release ya abierta con `gh release upload v0.11.0 <archivo>`.
+   Nunca hace falta tocar nada de datos: la Release son artefactos nuevos; el historial, los
+   recuerdos y el `.env` de quien usa CORT viven fuera del repo y una actualización no los borra.
+
+---
+
+## `v0.11.0` — la cara por capas y el avatar CORT con vida
+
+La cara que proponía `docs/REDESIGN-UI.md` (analizada frame a frame contra los videos de
+referencia de la dueña) **se ejecuta y se porta sobre `main`**, y el `.vrm` deja de ser una foto
+pegada: sale del reactor, respira y parpadea. Nada de lo que trajo `main` se pierde en el camino —
+la llave de la red, las 327 pruebas y el pipeline de Release siguen donde estaban—.
+
+- **Tres capas en vez de riel**: en reposo sólo quedan el reactor, el reloj y una esquina; la
+  respuesta vive 8 segundos como subtítulo; y las herramientas entran en **un único `<dialog>`**
+  de cinco pestañas (voz · cámara · atuendos · sistema · ayuda). `ui/Riel.tsx` y `cort/paneles.ts`
+  se van, y con ellos sus 17 pruebas —retiradas junto al módulo que probaban, no reescritas de
+  relleno—; `make test-web` sale del Makefile con nota de despedida.
+- **Teclado re-escrito en la cara nueva**: `1`–`5` abren cada pestaña, `/` salta al campo, `?`
+  lista las teclas, `Esc` despide el modal; nada con `Ctrl`/`Meta`/`Alt` y nada mientras se
+  escribe, salvo `Escape`.
+- **El avatar CORT se materializa**: uniforme `uMateria` (cortina de alfa + filo fresnel durante
+  1,8 s), la figura **sube desde el zócalo** y crece de 0,86 a 1 —no aparece de golpe—; brazos,
+  cadera, cuello y cabeza en reposo animado; **parpadeo cada 2,4–5,4 s** y media sonrisa vía el
+  `expressionManager` de three-vrm; y **tres tamaños** (pequeño · medio · grande) elegibles desde
+  atuendos. Todo con las dependencias que ya estaban: ninguna nueva.
+- **Se habla desde la propia bandeja**: escribir «activa la cámara» (o «activa el micrófono»,
+  «cambia el atuendo», «estado») abre su panel además de enviar el mensaje —los gestos con la
+  cámara ya se pueden probar sin buscar el botón—.
+- **La llave de la red sigue viva en la cara nueva**: `pintaFaltaDeLlave` está cableado en el Hud
+  y en el panel de sistema, y el aviso dice «abre la dirección que imprime `cort.py --lan`».
+- Un detalle mentiroso corregido: con sólo `.vrm` en el catálogo la interfaz decía «no hay
+  atuendos que mostrar». Ahora el vacío se decide entre imágenes **y** modelos.
+- **Medido en este árbol portado**: `npx tsc --noEmit` limpio, `npm run build` limpio y
+  `make test` → **Ran 327 tests, OK**.
+
+**Sin verificar aquí** (y así lo firma la regla 11, porque la dueña pidió cerrar el navegador ese
+día): la pantalla portada en el navegador, la materialización con un `.vrm` real de los ocho
+conectados, el parpadeo, los fps con cuerpo puesto, el teclado y los comandos de la bandeja. La
+caminata con animaciones oficiales exige archivos `.vrma` que aún no existen (función 78), y la
+mascota que sale de la ventana pide Electron/Tauri, medido y descartado para esta máquina
+(función 79).
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.11.0.zip`
+
 ---
 
 ## `v0.10.1` — las pruebas dejan de depender del apodo de tu carpeta
