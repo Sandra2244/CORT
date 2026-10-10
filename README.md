@@ -2,6 +2,7 @@
 
 <p align="center">
   <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.1-6f4ff2?style=flat-square">
+  <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-5%20publicadas-2ea44f?style=flat-square"></a>
   <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-344%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
@@ -21,7 +22,8 @@ No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memor
 *La imagen es el corte `v0.6.0` y se queda a propósito: muestra el reactor ocupando la pantalla, que es lo que sigue siendo.* Desde `v0.10.0` la esquina inferior derecha se convirtió en **seis hilos en el borde derecho** (uno por panel), y el `⌃ mensajes` de la foto ya no está. Sacar una portada nueva requiere la ventana de navegador delante con el core levantado; eso está dicho en [`docs/STATUS.md`](docs/STATUS.md) en vez de pasar de largo.
 
 > **Descargar / probar:** [`git clone https://github.com/Sandra2244/CORT.git`](https://github.com/Sandra2244/CORT) ·
-> [ZIP de la última versión](https://github.com/Sandra2244/CORT/archive/refs/heads/main.zip) ·
+> [ZIP de `v0.10.1`](https://github.com/Sandra2244/CORT/archive/refs/tags/v0.10.1.zip) ·
+> [las cinco Release publicadas](https://github.com/Sandra2244/CORT/releases) ·
 > [Instalación paso a paso ↓](#instalación)
 
 ---
@@ -492,7 +494,7 @@ make rechazos  # quién intentó lo que CORT no dejó, y desde dónde
 4. **No se afirma sin ejecutar.** Si no puedes comprobarlo, escribe literalmente **"sin verificar"**.
 5. Las decisiones de plataforma (escritorio, móvil, voz, lenguaje) están en [`docs/PLATFORM.md`](docs/PLATFORM.md): para cambiar una hay que traer un número de esta máquina.
 6. **Se trabaja sobre `main`**, la rama pública y única. Desde el corte `v0.7.0` el código verificado en español *es* `main`; las ramas de trabajo se abren a partir de ella y se mergedeán con su prueba ejecutada delante. El historial de la rama `cort-local-verified` está conservado dentro de `main` (merge `27bccb9`), y la propia rama ya no se publica.
-7. **Soltar una versión no necesita sesión de `gh`**: se escribe la nota en `docs/RELEASE-NOTES.md` (una sección `## \`v0.x.y\` — título`), se empuja la etiqueta (`git tag -a v0.x.y -m '…' && git push origin v0.x.y`) y el pipeline `.github/workflows/publicar-release.yml` crea la página de Release con ESA nota, recortada por `scripts/nota_release.py`. El pipeline es **idempotente**: si la etiqueta ya tiene su página, la omite; si no tiene sección, publica con notas generadas en vez de una página muda. Y como un `push` de etiqueta busca el YAML en el commit de esa etiqueta —las cinco primeras nacieron sin pipeline—, el mismo trabajo se hace empujando `main`: el recorrido lee la lista de etiquetas con nota escrita y abre las que falten. Por eso no hace falta borrar ni recrear ninguna etiqueta, y por eso se puede lanzar también a mano desde *Actions → publicar-release → Run workflow*, escribiendo la etiqueta.
+7. **Soltar una versión no necesita sesión de `gh`**: se escribe la nota en `docs/RELEASE-NOTES.md` (una sección `## \`v0.x.y\` — título`), se empuja la etiqueta (`git tag -a v0.x.y -m '…' && git push origin v0.x.y`) y el pipeline `.github/workflows/publicar-release.yml` crea la página de Release con ESA nota, recortada por `scripts/nota_release.py`. El pipeline es **idempotente**: si la etiqueta ya tiene su página, la omite; si no tiene sección, publica con notas generadas en vez de una página muda. Y como un `push` de etiqueta busca el YAML en el commit de esa etiqueta —las cinco primeras nacieron sin pipeline—, el mismo trabajo se hace empujando `main`: el recorrido lee la lista de etiquetas con nota escrita y abre las que falten. Por eso no hace falta borrar ni recrear ninguna etiqueta, y por eso se puede lanzar también a mano desde *Actions → publicar-release → Run workflow*, escribiendo la etiqueta. **Así salieron las cinco páginas que ya están en [`Sandra2244/CORT/releases`](https://github.com/Sandra2244/CORT/releases)**: un solo `push` de `main` el 2026-10-09 abrió `v0.7.0` … `v0.10.1` con su nota y su ZIP, comprobado después sin credenciales por la API pública.
 
 Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata a más cara):
 

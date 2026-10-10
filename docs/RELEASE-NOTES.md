@@ -9,9 +9,12 @@ que no tenga sección se publica con notas generadas antes que con una página m
 
 Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada
 una resuelve a su commit. Nacieron **antes** de este pipeline, y como un `push` de etiqueta busca su
-YAML en el commit de esa etiqueta, quien las convierte en Release es el disparo por `main` — no hace
-falta borrar ni recrear ninguna. Sigue sin poder crearse una Release por API desde esta máquina: no
-hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el entorno, ni `~/.config/gh`.
+YAML en el commit de esa etiqueta, quien las convirtió en Release fue el disparo por `main` — no hizo
+falta borrar ni recrear ninguna. Las cinco páginas están en
+[github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases) desde el
+2026-10-09, comprobado con `curl` a la API pública sin credenciales. Sigue sin poder crearse una
+Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el
+entorno, ni `~/.config/gh`.
 
 ---
 
