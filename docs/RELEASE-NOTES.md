@@ -1,9 +1,13 @@
 # Notas de las Release
 
-Texto listo para pegar en GitHub (*Releases → Draft a new release → la etiqueta ya creada*).
-Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada
-una resuelve a su commit; lo que falta es la página de Release, y eso necesita la sesión de la dueña
-del repositorio — desde esta máquina no se crea por API (`gh` sin sesión iniciada, medido tres veces).
+Texto listo para pegar en GitHub — y desde este corte, **listo para que lo pegue la máquina**:
+`.github/workflows/publicar-release.yml` lee la sección de la etiqueta que empujaste y abre la página
+de Release con ese texto (`scripts/nota_release.py`, con sus 7 pruebas en `test_nota_release.py`). Las
+etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada una
+resuelve a su commit; las que nacieron antes del pipeline se convierten en Release desde
+*Actions → publicar-release → Run workflow*, escribiendo la etiqueta. Sigue sin poder crearse por API
+desde esta máquina: no hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el entorno, ni
+`~/.config/gh`.
 
 ---
 

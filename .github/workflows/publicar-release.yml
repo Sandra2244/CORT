@@ -1,0 +1,76 @@
+# Publicar la página de Release cuando se empuja una etiqueta.
+#
+# Por qué existe: desde esta máquina no se puede crear una Release por API — no
+# hay sesión de `gh` (medido tres veces), no hay `GH_TOKEN`/`GITHUB_TOKEN` en el
+# entorno y no hay `~/.config/gh`. Lo que sí se puede es empujar por SSH, y
+# GitHub Actions corre con su propio token efímero (`github.token`), así que el
+# trabajo de escribir la página lo hace el pipeline con la nota que **ya está
+# redactada a mano** en `docs/RELEASE-NOTES.md` (recortada por
+# `scripts/nota_release.py`, con sus pruebas en `test_nota_release.py`).
+#
+# Además de `push: tags`, trae `workflow_dispatch`: con eso las etiquetas que ya
+# estaban publicadas antes de este archivo se convierten en Release desde la
+# pestaña *Actions → publicar-release → Run workflow*, escribiendo la etiqueta.
+# Son tres clics en la web y no requieren instalar nada.
+name: publicar-release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: "Etiqueta ya publicada que quieres convertir en Release (p. ej. v0.10.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.etiqueta || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el commit de la etiqueta
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.etiqueta || github.ref_name }}
+
+      - name: Recortar la nota de docs/RELEASE-NOTES.md
+        id: nota
+        env:
+          ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Devuelve 2 si la etiqueta no tiene sección: en ese caso la Release se
+          # publica con notas generadas antes que con una página vacía y muda.
+          if python3 scripts/nota_release.py "$ETIQUETA" nota.md titulo.txt; then
+            echo "existe=si" >> "$GITHUB_OUTPUT"
+            echo "titulo=$(cat titulo.txt)" >> "$GITHUB_OUTPUT"
+          else
+            echo "existe=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publicar la Release (o dejar la que ya está)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
+          CON_NOTA: ${{ steps.nota.outputs.existe }}
+          TITULO: ${{ steps.nota.outputs.titulo }}
+        run: |
+          set -euo pipefail
+          if gh release view "$ETIQUETA" >/dev/null 2>&1; then
+            echo "La Release de $ETIQUETA ya existe: no la piso."
+            exit 0
+          fi
+          if [ "$CON_NOTA" = "si" ]; then
+            gh release create "$ETIQUETA" --title "$TITULO" --notes-file nota.md
+          else
+            gh release create "$ETIQUETA" --generate-notes
+          fi
+          gh release view "$ETIQUETA" --json tagName,name,url
