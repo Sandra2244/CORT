@@ -36,7 +36,7 @@ resultado es **un riel de seis hilos en el borde derecho, uno por panel, y uno c
   26 % de opacidad; cualquier movimiento los despierta. Es **un `setTimeout` rearmado**, no un
   reloj contando, y el despertar por `pointermove` va recortado a 250 ms para no reconciliar el
   árbol a 60 Hz en dos núcleos.
-- **Las primeras pruebas de JavaScript del repo, sin instalar nada**: `make test-web` transpira
+- **Las primeras pruebas de JavaScript del repo, sin instalar nada**: `make test-web` transpila
   `paneles.ts` con el paquete `typescript` que **ya estaba** en `devDependencies` y lo ejecuta con
   `node --test`. **17 pruebas** que fijan lo que de verdad se rompe (atajos mientras se escribe,
   teclas con modificador, el segundo exacto del apagado). Van separadas de `make test` porque las
