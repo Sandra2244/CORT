@@ -1,239 +1,131 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getSnapshot, pintaFaltaDeLlave, send, setZoom, subscribe } from '../cort/connection'
-import { iniciarCamara, type Muestra } from '../cort/defocus'
-import { useArrastre } from '../cort/arrastre'
+import { getSnapshot, pintaFaltaDeLlave, send, subscribe } from '../cort/connection'
 import { palette } from '../cort/palette'
+import { useArrastre } from '../cort/arrastre'
+import type { Pestana } from './Panel'
 
 /**
- * La línea de abajo: el cabezal y el campo de mensaje.
+ * La conversación (capa L2 abierta).
  *
- * Desde este corte esta barra **no guarda paneles**: guarda dos líneas finas —la
- * de estado y la de escritura— que son siempre la cara de CORT, y punto. Los
- * paneles (registro, telemetría, voz, atuendos, cámara, teclas) viven en el riel
- * de la derecha, en `ui/Riel.tsx`, y se expanden uno a la vez. Es el patrón que
- * sale de `docs/REFERENCIAS.md`: en los videos el HUD es un hilo de un renglón en
- * el borde que se ensancha al apuntarle, no un cuadro con todo dentro.
+ * Rediseño por capas (docs/REDESIGN-UI.md, R1/R2): este panel **antes** era la
+ * cara entera — cabezal con estado, atuendo, ciudad y clima, el riel de botones
+ * de cámara/voz/atuendos con sus párrafos de manual, el registro y el
+ * formulario. Hoy sólo es el registro y el formulario: el estado viaja en el
+ * color del anillo (y en el puntito de `Cabecera`), las herramientas se mudaron
+ * al modal `Panel`, y la línea que CORT dice en voz alta la subtitula
+ * `Respuesta` sin necesidad de abrir nada.
+ *
+ * Lo que se conserva tal cual porque ya estaba medido y bien:
+ * - el arrastre con sujeción (`useArrastre`) y los dos nodos (`hud-marco` para
+ *   el desplazamiento, `hud` para el temblor del efecto `shake`),
+ * - el registro con auto-scroll,
+ * - `aria-hidden` + `visibility` en retardo cuando está guardado, para que los
+ *   campos ocultos no sigan en el orden de tabulación.
  */
-
-/**
- * La hora, en el borde del HUD.
- *
- * Va en su propio componente, con su propio estado, y no en el snapshot del
- * WebSocket: si la hora viajara por ahí, cada segundo se reconciliaría el HUD
- * entero —registro de mensajes incluido— en una máquina de dos núcleos. Así sólo
- * se repinta este nodo.
- *
- * El arranque se alinea con el siguiente cambio de segundo. Un `setInterval` a
- * secas nace cuando nace el componente, y el reloj se queda mirando el valor
- * viejo hasta 999 ms: parece parado, y es justo lo que no debe parecer.
- */
-function Clock() {
-  const [now, setNow] = useState(() => new Date())
-
-  useEffect(() => {
-    let tick = 0
-    const align = window.setTimeout(() => {
-      setNow(new Date())
-      tick = window.setInterval(() => setNow(new Date()), 1000)
-    }, 1000 - (Date.now() % 1000))
-    return () => {
-      clearTimeout(align)
-      clearInterval(tick)
-    }
-  }, [])
-
-  return (
-    <time className="clock" aria-label="hora" dateTime={now.toISOString()}>
-      {now.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })}
-    </time>
-  )
-}
-
-/**
- * El porqué del texto de error, en orden de lo que pasa de verdad: primero el
- * navegador no da contexto seguro, luego el usuario no dio permiso, y al final la
- * cámara está ocupada.
- *
- * Van separados a propósito. Decir «necesitas HTTPS» cuando el contexto sí era
- * seguro y quien negó el acceso fue el navegador manda a la usuaria a arreglar
- * algo que no está roto.
- */
-function explicarError(e: unknown): string {
-  const nombre = (e as { name?: string })?.name ?? ''
-  if (!window.isSecureContext) {
-    return 'la cámara está bloqueada por no ser un origen seguro: por la red con `http://` el navegador no la da, aunque CORT responda'
-  }
-  if (nombre === 'NotAllowedError' || nombre === 'PermissionDeniedError') {
-    return 'el navegador negó el permiso de cámara — se concede en el icono de la dirección'
-  }
-  if (nombre === 'SecurityError') return 'el navegador bloqueó la cámara por seguridad'
-  if (nombre === 'NotReadableError') return 'otra aplicación está usando la cámara'
-  if (nombre === 'NotFoundError' || nombre === 'OverconstrainedError') return 'no se encontró ninguna cámara'
-  return `no se pudo abrir la cámara (${nombre || 'error desconocido'})`
-}
-
-/**
- * Gestos con la cámara: desenfocar con los dedos encoge el orbe, enfocar lo
- * devuelve a su tamaño.
- *
- * El botón es la única puerta. La cámara se abre al pulsarlo y se **cierra**
- * volviendo a pulsarlo: parar las pistas del stream es lo que apaga el LED, y el
- * cleanup del efecto cubre el caso de cerrar la pestaña con la cámara encendida.
- *
- * No hay deslizador de tamaño al lado, y es a propósito: quien manda sobre el
- * reactor es la cámara. El valor lo aplica `defocus.ts` con `setZoom` cinco veces
- * por segundo, sin pasar por el estado de React, y un control que se quedara
- * quieto mientras el orbe se encoge sería un control mentiroso.
- *
- * Lo exporta para que el riel lo monte en su propio panel: sigue siendo el mismo
- * botón, la misma cámara y el mismo `cleanup`, sólo cambia de sitio en pantalla.
- */
-export function GestoCamara() {
-  const [m, setM] = useState<Muestra | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const parar = useRef<(() => void) | null>(null)
-
-  useEffect(() => {
-    return () => {
-      parar.current?.()
-      parar.current = null
-    }
-  }, [])
-
-  async function alternar() {
-    setError(null)
-    if (parar.current) {
-      parar.current()
-      parar.current = null
-      setM(null)
-      // Sin la cámara mirando no hay quién mueva el reactor: vuelve a su tamaño
-      // natural.
-      setZoom(1)
-      return
-    }
-    try {
-      parar.current = await iniciarCamara(setM)
-    } catch (e) {
-      parar.current = null
-      setM(null)
-      setError(explicarError(e))
-    }
-  }
-
-  const activa = m !== null
-
-  return (
-    <div className="gesto">
-      <button
-        type="button"
-        className={`chip gesto-btn ${activa ? 'on' : ''}`}
-        onClick={alternar}
-        aria-pressed={activa}
-      >
-        {activa ? 'cámara activa' : 'gestos con la cámara'}
-      </button>
-      {activa && (
-        <span className="gesto-medida">
-          <span className="gesto-barra" style={{ ['--r' as string]: `${Math.round((m?.relacion ?? 1) * 100)}%` }} aria-hidden="true" />
-          {/* `nitidez` cruda no es legible para una persona: lo que importa es
-              qué tan cerca está del mejor enfoque que CORT ha visto. */}
-          enfoque {Math.round((m?.relacion ?? 1) * 100)} %
-        </span>
-      )}
-      {/* Sin pulsar todavía: la pregunta que ella hizo —«¿y cómo le pido el
-          permiso?»— merece estar escrita antes del fallo y no después. El
-          navegador lo pide él solo al pulsar; lo que no se adivina es dónde se
-          cambia si se negó una vez. */}
-      {!activa && !error && (
-        <p className="gesto-nota">
-          al pulsar, el navegador pregunta arriba a la izquierda: <b>permitir</b>. Si dijo que no una vez,
-          se corrige en el candado o el icono de la dirección → <b>Permisos → Cámara</b>.
-        </p>
-      )}
-      {error && <p className="gesto-aviso">{error}</p>}
-    </div>
-  )
-}
-
-export function Hud({ cara, atenuado }: { cara: boolean; atenuado: boolean }) {
+export function Hud({ abierto, invocar, onAbrirPanel }: {
+  abierto: boolean
+  /** Contador que sube cuando alguien invocó la entrada (tap al núcleo o `Ctrl+/`). */
+  invocar: number
+  onAbrirPanel: (pestana?: Pestana) => void
+}) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
+  const log = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
   const tint = palette[s.outfit] ?? palette.work
   const { pos, tirando, agarrar, reiniciar, nodo, desplazado } = useArrastre<HTMLDivElement>()
+
+  useEffect(() => {
+    log.current?.scrollTo({ top: log.current.scrollHeight })
+  }, [s.msgs.length])
+
+  // La invocación pide el cursor puesto: quien toca el núcleo o pulsa Ctrl+/
+  // quiere escribir, no mirar un campo vacío.
+  useEffect(() => {
+    if (abierto && invocar > 0) input.current?.focus()
+  }, [abierto, invocar])
+
+  /**
+   * Comandos locales escritos en la propia bandeja, como en las referencias
+   * (el señor de `fullstack-agent` invoca la cámara hablando): la frase abre su
+   * pestaña del modal **además** de viajar al core, para que quede en el
+   * registro y CORT pueda comentarla. No reemplaza al modelo — le ahorra a la
+   * usuaria buscar el botón con el dedo.
+   */
+  const LOCALES: [RegExp, Pestana][] = [
+    [/(?:activa|abre|enciende|prende)\s+(?:la\s+|mi\s+)?c[áa]mara/i, 'camara'],
+    [/(?:activa|abre)\s+(?:el\s+|la\s+)?(?:micr[oó]fono|voz)/i, 'voz'],
+    [/(?:cambia|pon|muestra|elige)\s+(?:el\s+|mi\s+)?atuendo/i, 'atuendos'],
+    [/(?:estado|diagn[oó]stico|sistema)/i, 'sistema'],
+  ]
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
+    const local = LOCALES.find(([re]) => re.test(text))
+    if (local) onAbrirPanel(local[1])
     send(text)
     setDraft('')
   }
 
   return (
-    // Dos nodos y dos transformaciones, no una. El marco lleva el desplazamiento
-    // que la usuaria arrastra y el HUD lleva el temblor del efecto `shake`: en un
-    // solo elemento la animación CSS escribe `transform` cada cuadro y el
-    // desplazamiento del arrastre volvería al sitio original a media arrancada.
     <div
-      className={`hud-marco ${tirando ? 'tirando' : ''} ${cara ? '' : 'guardada'} ${atenuado ? 'atenuada' : ''}`}
+      className={`hud-marco ${tirando ? 'tirando' : ''}`}
       style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
     >
       <div className="hud" ref={nodo} style={{ ['--tint' as string]: tint.ui }}>
         <span className="asa" aria-hidden="true" onPointerDown={agarrar} />
-        <header className="status" onPointerDown={agarrar}>
-          <span className={`dot ${s.online ? 'on' : 'off'}`} />
-          {s.online
-            ? (s.thinking ? 'CORT procesando' : 'CORT en línea')
-            : pintaFaltaDeLlave()
-              // El rechazo del core por no traer llave llega al navegador como un
-              // `403` sin motivo legible: si la página se abrió desde otro equipo
-              // y no trae `?token=`, eso es exactamente lo que pasó, y decirlo
-              // ahorra la tarde que iría a buscar un core que sí está levantado.
-              ? 'Falta la llave de la red — abre la dirección que imprime cort.py --lan'
-              : 'Sin conexión con el core — ejecuta: make dev'}
-          {s.online && <em> · atuendo {s.outfit}</em>}
-          {/* El clima sólo se pinta si el core lo midió: sin CORT_CITY en el .env
-              no hay ciudad, y una pantalla que pusiera «—°» estaría inventando un
-              dato que no pidió nadie. */}
-          {s.clima && (
-            <em>
-              {' · '}
-              {/* El cabezal va en minúsculas por estilo, pero el nombre de una
-                  ciudad no es estilo: es un nombre propio. Esta parte escapa de
-                  la conversión para que Bogotá siga escribiéndose Bogotá. */}
-              <span className="city">{s.clima.city}</span> {s.clima.temp_c.toFixed(0)}°
-            </em>
-          )}
-          <Clock />
-          {/* Aparece sólo si el panel está movido: un botón que recoloca algo que
-              ya está recolocado es ruido en la barra. */}
-          {desplazado && (
-            <button
-              type="button"
-              className="hud-colocar"
-              onClick={reiniciar}
-              aria-label="Devolver el panel a su sitio"
-              title="Devolver el panel a su sitio"
-            >
-              ⤾
-            </button>
-          )}
-        </header>
+        <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
+          <header className="status" onPointerDown={agarrar}>
+            {!s.online && (
+              <span className="status-aviso">
+                {pintaFaltaDeLlave()
+                  // El rechazo del core por no traer llave llega al navegador como un
+                  // `403` sin motivo legible (heredado de `v0.10`): si la página se
+                  // abrió desde otro equipo y no trae `?token=`, eso es exactamente
+                  // lo que pasó, y decirlo ahorra buscar un core que sí está arriba.
+                  ? 'falta la llave de la red — abre la dirección que imprime cort.py --lan'
+                  : 'sin conexión con el core — ejecuta: make dev'}
+              </span>
+            )}
+            <span className="status-herramientas">
+              {desplazado && (
+                <button
+                  type="button"
+                  className="hud-colocar"
+                  onClick={reiniciar}
+                  aria-label="Devolver el panel a su sitio"
+                  title="Devolver el panel a su sitio"
+                >
+                  ⤾
+                </button>
+              )}
+              <button type="button" className="hud-ajustes" onClick={() => onAbrirPanel()}>
+                ajustes
+              </button>
+            </span>
+          </header>
 
-        <form onSubmit={submit}>
-          {/* El `id` es el destino del atajo `/`: el riel necesita poder traer el
-              cursor hasta aquí sin conocer el componente. */}
-          <input
-            id="cort-campo"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Escribe a CORT — con dos órdenes en la frase las hace las dos"
-            aria-label="Mensaje a CORT"
-            autoComplete="off"
-            enterKeyHint="send"
-          />
-          <button type="submit" disabled={!s.online}>Enviar</button>
-        </form>
+          <div className="log" ref={log} role="log" aria-live="polite">
+            {s.msgs.map((m, i) => (
+              <p key={i} className={m.from === 'user' ? 'me' : 'cort'}>{m.text}</p>
+            ))}
+          </div>
+
+          <form onSubmit={submit}>
+            <input
+              ref={input}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="Escribe a CORT"
+              aria-label="Mensaje a CORT"
+              autoComplete="off"
+              enterKeyHint="send"
+            />
+            <button type="submit" disabled={!s.online}>Enviar</button>
+          </form>
+        </div>
       </div>
     </div>
   )

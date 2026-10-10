@@ -77,7 +77,14 @@ function Rig() {
   )
 }
 
-export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: () => void }) {
+export function Scene({ atuendo, tamaño = 1, onFallo, onInvocar }: {
+  atuendo: string | null
+  /** R7+: tamaño del `avatar CORT` elegido en la pestaña de atuendos. */
+  tamaño?: number
+  onFallo: () => void
+  /** R5: tocar la zona del núcleo invoca la entrada (ver `App.tsx`). */
+  onInvocar?: () => void
+}) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   // Un VRM se pinta **dentro del mismo canvas** que el reactor y no en un segundo
   // WebGL: dos contextos en esta máquina son dos colas de GPU, dos búferes y una
@@ -88,6 +95,17 @@ export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: (
       className="scene"
       camera={{ position: [0, 0, 6.2], fov: 45 }}
       gl={{ antialias: true, alpha: true }}
+      onPointerDown={(e) => {
+        // El gesto pertenece al centro, no a la pantalla entera: tocar un borde
+        // no debe abrir la conversación mientras se mira el reactor. El rango
+        // (20 %..80 % / 15 %..85 %) deja fuera la esquina de la bandeja y el
+        // reloj de arriba. `e.nativeEvent` porque dentro del canvas R3F entrega
+        // su propio evento sintético.
+        const { clientX, clientY } = e.nativeEvent
+        const x = clientX / window.innerWidth
+        const y = clientY / window.innerHeight
+        if (x > 0.2 && x < 0.8 && y > 0.15 && y < 0.85) onInvocar?.()
+      }}
       // Con cuerpo 3D se fija `dpr` a 1: en un móvil con pantalla de 2x eso es
       // **la cuarta parte de píxeles** que rellenar, y aquí no hay GPU que ayude.
       dpr={vrm ? 1 : [1, 2]}
@@ -98,6 +116,7 @@ export function Scene({ atuendo, onFallo }: { atuendo: string | null; onFallo: (
           key={vrm}
           nombre={vrm}
           outfit={s.outfit}
+          tamaño={tamaño}
           onFallo={() => {
             // Se vuelve al reactor sin dejar el cuerpo a medio cargar: el orbe
             // manda otro aviso y la usuaria ve que CORT sigue ahí.

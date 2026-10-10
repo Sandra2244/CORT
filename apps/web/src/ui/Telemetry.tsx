@@ -10,14 +10,17 @@ import { palette } from '../cort/palette'
  * del sistema están apagadas o cuántos recuerdos hay guardados se ve sin abrir
  * una consola.
  *
- * Desde el corte del riel este componente **ya no se posiciona solo**: antes era
- * un `position: fixed` arriba a la derecha, y ahora es una fila más del panel
- * que expande el hilo `telemetría`. La caja, el borde y el sitio los pone
- * `ui/Riel.tsx`; aquí sólo están las mediciones.
+ * Rediseño por capas (R1/R2): **ya no vive en la esquina de la pantalla** — un
+ * panel de diagnóstico operativo no es cara pública. Ahora es la pestaña
+ * «sistema» del modal, y `Panel` le añade las filas de atuendo y clima que
+ * antes viajaban por el cabezal.
  *
  * Sin dependencias nuevas —ni zustand ni framer-motion—: esta máquina tiene
  * 1,8 GiB de RAM y cada librería es memoria que el reactor deja de tener para
  * sí.
+ *
+ * No se pinta hasta que llega el primer `status`. Con el core apagado el panel
+ * no tiene nada que decir, y un cuadro de ceros sería peor que ningún cuadro.
  */
 
 /** El techo de recuerdos lo pone el core (`CORT_MEMORY_KEEP`); si mandara 0, «12 / 0» sería un bug suyo convertido en texto. */
@@ -41,9 +44,6 @@ function brainLabel(brain: string | null, ollama: boolean | null): string {
 
 export function Telemetry() {
   const s = useSyncExternalStore(subscribe, getSnapshot)
-  // No se pinta hasta que llega el primer `status`: con el core apagado el panel
-  // no tiene nada que decir, y un cuadro de ceros sería peor que ningún cuadro.
-  // Lo que sí dice el riel en ese caso es el aviso de «sin conexión».
   if (!s.status) return null
   const st = s.status
   // El tinte viene del atuendo, como en el HUD: el panel es parte del mismo
@@ -52,8 +52,9 @@ export function Telemetry() {
   const tint = palette[s.outfit] ?? palette.work
 
   return (
-    <aside
+    <div
       className="telemetry"
+      role="group"
       aria-label="Estado del sistema"
       style={{ ['--tint' as string]: tint.ui }}
     >
@@ -73,6 +74,6 @@ export function Telemetry() {
         <span>iniciativa</span>
         <b className={st.iniciativa ? undefined : 'tl-warn'}>{st.iniciativa ? 'puede hablar primero' : 'sólo responde'}</b>
       </div>
-    </aside>
+    </div>
   )
 }

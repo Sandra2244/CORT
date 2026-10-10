@@ -247,12 +247,8 @@ export function Voz() {
         {escucha ? 'escuchando…' : 'hablarle'}
       </button>
       {escucha && oyendo && <span className="gesto-medida">{oyendo}</span>}
-      {!habla && !escucha && !error && (
-        <p className="gesto-nota">
-          <b>que me hable</b> lee en voz alta lo que CORT responde. <b>hablarle</b> abre el micrófono y
-          conversa: el navegador pide permiso la primera vez, y el reconocimiento necesita internet.
-        </p>
-      )}
+      {/* El párrafo que explicaba qué hace cada botón se mudó a la pestaña
+          «ayuda» del modal (rediseño R2): en la cara no se leen manuales. */}
       {error && <p className="gesto-aviso">{error}</p>}
     </div>
   )

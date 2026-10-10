@@ -28,6 +28,99 @@ body {
   inset: 0;
 }
 
+/* ─── La cara (capa L1) ───────────────────────────────────────────────────
+   Rediseño R1: en reposo hay tres cosas — reactor, reloj y la esquina. Este
+   reloj es el antiguo `Clock()` del HUD mudado arriba: componente con su propio
+   temporizador alineado al segundo para que la hora no reconcilie el árbol cada
+   1000 ms en una máquina de dos núcleos. `tabular-nums` no es capricho: con
+   cifras proporcionales el reloj baila un par de píxeles cada segundo.
+
+   Va centrado arriba porque arriba está libre desde que la telemetría se mudó
+   al modal, y `pointer-events: none` porque es puro dato: nada que pulsar. */
+.reloj {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+  color: var(--tint);
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 14px rgba(92, 225, 255, 0.35);
+}
+
+/* ─── El subtítulo (capa L2) ──────────────────────────────────────────────
+   Lo que CORT dijo, una línea flotando sobre el pecho del reactor, que se
+   despide sola a los ocho segundos. Es la respuesta a la pantalla de chat que
+   tapaba la cara (docs/REDESIGN-UI.md, diagnóstico de las referencias).
+
+   `translate` para centrar y `transform` para animar son propiedades
+   separadas a propósito: si la entrada usara la misma, el -50% se caería con
+   ella y el subtítulo aparecería pegado a la izquierda. */
+.respuesta {
+  position: fixed;
+  left: 50%;
+  bottom: 24vh;
+  translate: -50% 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: min(680px, 92vw);
+  animation: respuesta-aparece 320ms ease-out both;
+}
+
+@keyframes respuesta-aparece {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+/* La frase entera es un botón: tocarla abre la conversación completa. Contra
+   el `button` de etiqueta de arriba hay que escribir los tres rechazos —
+   `text-transform`, fondo sólido, color oscuro — porque un subtítulo no es un
+   botón de envío. */
+.respuesta-cuerpo {
+  flex: 1;
+  padding: 8px 14px;
+  color: var(--tint);
+  font: inherit;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  text-align: center;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  background: rgba(4, 12, 26, 0.52);
+  border: 0;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+  text-shadow: 0 0 18px rgba(92, 225, 255, 0.4);
+  cursor: pointer;
+}
+
+/* La ✕ es pequeña aun en el teléfono: el bloque táctil de abajo agranda todos
+   los `button`, y la clase le gana al elemento por especificidad. */
+.respuesta-cerrar {
+  flex: none;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 4px 8px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.85rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.respuesta-cerrar:hover {
+  color: var(--tint);
+}
+
 /* Líneas de barrido: el motivo del holograma de Cortana. */
 .scan {
   position: fixed;
@@ -48,7 +141,6 @@ body {
   position: fixed;
   inset: auto 0 0 0;
   z-index: 2;
-  transition: opacity 320ms ease;
 }
 
 .hud {
@@ -58,12 +150,9 @@ body {
   margin: 0 auto;
   max-width: 680px;
   width: 100%;
-  /* El sitio del riel: la barra de abajo llega hasta el borde, y solaparse con
-     un control es peor que un campo algo más corto. */
-  padding: 14px 50px 18px 16px;
+  padding: 14px 16px 18px;
   background: linear-gradient(to top, rgba(6, 16, 34, 0.82), rgba(6, 16, 34, 0));
   backdrop-filter: blur(6px);
-  transition: transform 240ms ease;
 }
 
 /*
@@ -108,7 +197,7 @@ body {
 
 /* Recolocar el panel después de moverlo. 44 px es lo mínimo que acierta un dedo
    sin mirar, y aquí manda la clase aunque el bloque táctil de abajo pida 64 px
-   de ancho: en una barra de estado un botón así de gordo empuja el reloj. */
+   de ancho: en una barra de estado un botón así de gordo empuja todo lo demás. */
 .hud-colocar {
   min-width: 44px;
   min-height: 44px;
@@ -121,25 +210,52 @@ body {
   border-radius: 10px;
 }
 
-/* La hora del HUD. `tabular-nums` no es capricho: con cifras proporcionales el
-   reloj baila un par de píxeles cada segundo y el cabezal entero respira. */
-.clock {
-  margin-left: auto;
-  color: var(--tint);
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.06em;
+/* El aviso de cable suelto. Vive en la barra de estado de la bandeja — que es
+   donde alguien que va a arreglar algo la necesita — y no en la cara: R1 dejó
+   el estado de conexión en el puntito de `Cabecera`. */
+.status-aviso {
+  color: #ff8fa6;
+  font-size: 0.78rem;
 }
 
-.status em {
-  color: var(--tint);
-  font-style: normal;
+/* La única fila de mandos que queda en el HUD: los controles de superficie,
+   arrimados a la derecha para que el aviso ocupe el resto de la línea. */
+.status-herramientas {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* La puerta del modal (L3). fantasma como los botones de gesto: en una barra
+   de estado un botón relleno de cian grita más que la conversación que hay
+   debajo, que es lo importante. */
+.hud-ajustes {
+  padding: 0 14px;
+  min-height: 44px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
   text-transform: lowercase;
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hud-ajustes:hover,
+.hud-ajustes:focus-visible {
+  color: var(--tint);
+  border-color: var(--tint);
 }
 
 /* Bogotá, Medellín, Buenos Aires: un nombre propio no se escribe en minúsculas
-   por mucho que el cabezal vaya estilizado en ellas. */
-.status .city {
+   por mucho que el interfaz vaya estilizado en ellas. Se ancla como `.tl-row
+   .city` porque la regla de abajo `.tl-row span` va en minúsculas y le ganaría
+   en especificidad a un `.city` pelado. */
+.tl-row .city {
   text-transform: none;
 }
 
@@ -160,22 +276,23 @@ body {
   background: #ff5a7a;
 }
 
-/* Telemetría: lo que el core comprueba de sí mismo.
-   Desde el corte del riel ya no es un cuadro fijo arriba a la derecha —eso era
-   media interfaz siempre abierta—: son cuatro filas dentro del panel que expande
-   el hilo `telemetría`. La caja, el desenfoque y el sitio los pone `.panel`;
-   aquí sólo queda la lectura, con su borde de tinte para que se sepa de dónde
-   sale cada número. */
+/* Telemetría: lo que el core comprueba de sí mismo. R2 la bajó de la esquina
+   fija al modal — en reposo la cara no lleva paneles informativos —, así que
+   aquí es un bloque **estático** dentro de la pestaña «sistema»: sin posición,
+   sin `pointer-events: none` (aquí sí se puede seleccionar texto) y a ancho
+   completo. */
 .telemetry {
   display: grid;
   gap: 5px;
-  padding: 2px 0 2px 10px;
+  width: 100%;
+  padding: 10px 12px;
   color: var(--dim);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   letter-spacing: 0.03em;
+  background: rgba(6, 16, 34, 0.5);
+  border: 1px solid rgba(120, 190, 230, 0.2);
   border-left: 2px solid var(--tint);
-  /* Informativo: si un día hay que pulsar algo aquí, es que esto cambió de sitio. */
-  pointer-events: none;
+  border-radius: 8px;
 }
 
 .tl-row {
@@ -301,254 +418,65 @@ button:focus-visible {
   }
 }
 
-/* ─── El riel de la derecha: seis hilos, un panel ─────────────────────────
-   Sale del análisis de `docs/REFERENCIAS.md`. En los cuatro videos de interfaz
-   que se miraron fotograma a fotograma el HUD nunca es un cuadro grande: son
-   **líneas finas apiladas en un borde**, una se ensancha cuando se le apunta y
-   las demás vuelven a su trazo. Antes CORT tenía una esquina que abría mensajes,
-   telemetría, voz, atuendos y cámara todos a la vez: la sobrecarga que la dueña
-   del proyecto pidió quitar («no sobrecargar de paneles, que se oculten»).
+/* ─── Bandeja guardada ────────────────────────────────────────────────────
+   La pantalla por defecto es el reactor. Todo lo demás vive dentro de
+   `.cuerpo`, que se pliega con `opacity` + `transform` + `max-height`. El
+   `max-height` entró en el rediseño por un motivo medido en pantalla: sólo con
+   `visibility: hidden` el cuerpo plegado **seguía ocupando su hueco**, y el
+   degradado y el desenfoque del `.hud` —pensados para leer el chat— cortaban
+   a media altura el reactor, que ahora es la cara entera. Animar el alto
+   recalcula layout, sí, pero solo durante los 220 ms del pliegue; el reposo no
+   cuesta un cuadro. `visibility` al final del tiempo saca los campos del orden
+   de tabulación cuando ya no se ven. */
+.cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 70vh;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), max-height 280ms ease, visibility 0s;
+}
 
-   Con `backdrop-filter` en el panel y no en los hilos: los seis se ven siempre,
-   el que está abierto es uno solo, y cada capa de desenfoque cuesta un búfer en
-   una máquina de 1,8 GiB con un canvas WebGL detrás. */
-.riel {
+.cuerpo.cerrado {
+  opacity: 0;
+  transform: translateY(22px) scaleY(0.94);
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+  transition: opacity 200ms ease, transform 220ms ease, max-height 220ms ease, visibility 0s linear 200ms;
+}
+
+/* El punto de entrada (R1/R5). Antes era una solapa con texto («⌃ mensajes»);
+   las referencias no letreron la esquina: pintan un indicio. Un círculo de 46
+   px con un núcleo que late — se ve vivo sin ocupar una palabra — y el contador
+   cuando hay algo que leer. */
+.esquina {
   position: fixed;
-  right: 0;
-  top: 50%;
+  right: 14px;
+  bottom: 14px;
   z-index: 4;
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  padding: 4px 0;
-  transform: translateY(-50%);
-  opacity: 1;
-  transition: opacity 320ms ease;
-}
-
-/* El hilo en reposo es un número y un trazo de luz: 30 px anchos por 30 de alto.
-   La etiqueta no ocupa sitio — flota a la izquierda y aparece al apuntar —, y eso
-   no es tacañería de diseño: con las seis etiquetas siempre pintadas el riel medía
-   628 px en una ventana de 521 y el primer panel se quedaba **fuera de la
-   pantalla**. Medido en el navegador, y por eso está así. */
-.hilo {
-  position: relative;
-  display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  width: 30px;
-  height: 30px;
-  padding: 0 4px 0 6px;
-  color: var(--dim);
-  font: inherit;
-  background: transparent;
-  border: 0;
-  border-right: 2px solid rgba(120, 190, 230, 0.22);
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  color: var(--tint);
+  background: radial-gradient(circle, rgba(10, 26, 52, 0.88), rgba(10, 26, 52, 0.38));
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 50%;
+  backdrop-filter: blur(6px);
   cursor: pointer;
   touch-action: manipulation;
-  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  transition: box-shadow 240ms ease, color 240ms ease;
 }
 
-.hilo::before {
-  content: '';
-  width: 2px;
-  height: 12px;
-  background: currentColor;
-  box-shadow: 0 0 9px var(--tint);
-}
-
-/* El número es la tecla, y la tecla es el mapa: se ve siempre para que `?` no sea
-   la única puerta. */
-.hilo-numero {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  opacity: 0.75;
-  font-variant-numeric: tabular-nums;
-}
-
-.hilo-nombre {
-  position: absolute;
-  right: 34px;
-  top: 50%;
-  translate: 0 -50%;
-  padding-right: 2px;
-  color: var(--tint);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: lowercase;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 160ms ease;
-}
-
-.hilo:hover,
-.hilo:focus-visible {
-  color: var(--tint);
-  background-color: rgba(10, 26, 52, 0.66);
-  border-right-color: var(--tint);
-  outline: none;
-}
-
-.hilo:hover .hilo-nombre,
-.hilo:focus-visible .hilo-nombre {
-  opacity: 1;
-}
-
-/* El que está expandido es el único que se rellena: luz por dentro y etiqueta
-   encendida, para que «dónde estoy» se entienda sin leer nada. */
-.hilo.abierto {
-  color: var(--tint);
-  background-color: rgba(92, 225, 255, 0.14);
-  border-right-color: var(--tint);
-  box-shadow: 0 0 18px rgba(92, 225, 255, 0.22);
-}
-
-.hilo.abierto::before {
-  height: 18px;
-}
-
-/* La etiqueta del hilo abierto **no** se queda puesta: el panel que acaba de
-   abrirse lleva su nombre en el cabezal, y las dos palabras a la vez se
-   pisaban — la del riel caía justo encima del borde del panel. Se ve al pasar el
-   cursor o al llegar con `Tab`, que es cuando todavía no hay panel que la repita. */
-
-/* Cuántos mensajes llegaron con el registro guardado. Hereda la regla de la
-   esquina anterior: se pinta sólo si hay, porque un «0» fijo se lee como un
-   contador encendido y no como un aviso. **Sustituye** al número de la tecla en
-   el propio hilo —dos marcas en una casilla de 30 px se pisaban, y se vio en la
-   captura—; la tecla sigue estando dicha en el `aria-label`. */
-.hilo-aviso {
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 9px;
-  color: #04101f;
-  background: var(--tint);
-  box-shadow: 0 0 12px var(--tint);
-  font-size: 0.62rem;
-  font-weight: 700;
-  line-height: 17px;
-  text-align: center;
-  letter-spacing: 0;
-}
-
-/* Nadie toca nada y no hay ningún panel abierto: la cara se aparta y deja el
-   reactor solo. Es el patrón 4 de las referencias —mientras la mano trabaja, el
-   HUD se apaga— y con `prefers-reduced-motion` ni siquiera ocurre. */
-.riel.atenuado,
-.hud-marco.atenuada {
-  opacity: 0.26;
-}
-
-/* `H`: la cara entera se guarda. El riel se queda a media luz porque es la única
-   puerta que queda sin teclado. */
-.hud-marco.guardada {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 220ms ease, visibility 0s linear 220ms;
-}
-
-.hud-marco.guardada .hud {
-  transform: translateY(18px);
-}
-
-.riel.cara-apagada .hilo {
-  opacity: 0.55;
-}
-
-.riel.cara-apagada .hilo.abierto,
-.riel.cara-apagada .hilo:hover {
-  opacity: 1;
-}
-
-/* El panel que expande el hilo: a la izquierda del riel, apoyado abajo para no
-   tapar nunca el reactor, que es lo que se está mirando. */
-.panel {
-  position: fixed;
-  right: 38px;
-  bottom: 112px;
-  z-index: 3;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: min(420px, calc(100vw - 74px));
-  max-height: min(62vh, 460px);
-  padding: 12px 14px 14px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: linear-gradient(to top, rgba(6, 16, 34, 0.9), rgba(6, 16, 34, 0.66));
-  border: 1px solid rgba(120, 190, 230, 0.22);
-  border-right: 2px solid var(--tint);
-  backdrop-filter: blur(7px);
-  animation: panel-abrir 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@keyframes panel-abrir {
-  from { opacity: 0; transform: translate(14px, 8px) }
-  to   { opacity: 1; transform: none }
-}
-
-.panel-cabezal {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.panel-titulo {
-  color: var(--tint);
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
-  text-transform: lowercase;
-}
-
-.panel-aviso {
-  margin: 0;
-  color: #ff8fa6;
-  font-size: 0.72rem;
-  line-height: 1.45;
-}
-
-/* Dentro del panel el registro manda en la altura: el techo de `38vh` es de la
-   barra de abajo, y aquí ya lo sujeta `max-height` del panel. */
-.panel .log {
-  max-height: none;
-}
-
-/* ─── Los botones ──────────────────────────────────────────────────────────
-   Antes de esto había dos botones de relleno plano (`Enviar` sólido y el resto
-   sin forma) y una etiqueta suelta. `.chip` es la única cara de control del HUD:
-   borde de luz, texto fino y un barrido al pasar por encima — el mismo gesto de
-   revelado que tenía la esquina, ahora en todos los botones. */
-.chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 15px;
-  overflow: hidden;
-  color: var(--tint);
-  font: inherit;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: lowercase;
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.3);
-  border-radius: 999px;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: box-shadow 200ms ease, border-color 200ms ease, color 200ms ease;
-}
-
-.chip::after {
+/* El barrido de luz: una línea que recorre el borde y se apaga. Es lo que hace
+   que abrir la bandeja parezca revelado de holograma y no un div que aparece.
+   Un pseudo con `transform` animado, sin librería y sin repintar el layout. */
+.esquina::after {
   content: '';
   position: absolute;
   inset: -1px;
@@ -560,79 +488,70 @@ button:focus-visible {
   opacity: 0;
 }
 
-.chip:hover,
-.chip:focus-visible {
-  border-color: var(--tint);
-  box-shadow: 0 0 20px rgba(92, 225, 255, 0.24);
+.esquina:hover,
+.esquina:focus-visible {
+  box-shadow: 0 0 22px rgba(92, 225, 255, 0.28);
   outline: none;
 }
 
-.chip:hover::after,
-.chip:focus-visible::after {
-  animation: barrido-chip 900ms ease-out;
+.esquina:hover::after,
+.esquina:focus-visible::after {
+  animation: barrido-esquina 900ms ease-out;
 }
 
-@keyframes barrido-chip {
+@keyframes barrido-esquina {
   from { background-position: 130% 0; opacity: 0.9 }
   to   { background-position: -30% 0; opacity: 0 }
 }
 
-.chip:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+/* El núcleo: un punto de luz que respira. `currentColor` para que el estado
+   abierto lo apague sin otra regla, y el latido es lo único en movimiento de
+   la esquina — el botón ya no dice nada en palabras. */
+.esquina-nucleo {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 14px currentColor;
+  animation: nucleo-latido 3.2s ease-in-out infinite;
 }
 
-/* Estado encendido: el botón se rellena, porque un interruptor que no cambia de
-   color cuando está dado no es un interruptor, es un adorno. */
-.chip.on {
+@keyframes nucleo-latido {
+  0%, 100% { opacity: 0.5 }
+  50%      { opacity: 1 }
+}
+
+.esquina.abierta {
+  color: var(--dim);
+}
+
+/* Cuántos mensajes llegaron con la bandeja cerrada. Se pinta sólo si hay, para
+   que un «0» no se confunda con un contador siempre encendido. Va montado en
+   el borde del círculo, como una notificación de app. */
+.esquina-aviso {
+  position: absolute;
+  top: -7px;
+  right: -3px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
   color: #04101f;
   background: var(--tint);
-  border-color: var(--tint);
-  box-shadow: 0 0 18px var(--tint);
-}
-
-/* ─── La ayuda de teclado ──────────────────────────────────────────────────
-   El panel `teclas` (tecla `6`, o `?`). Se escribe la tecla en un `<kbd>` de
-   verdad y no en un párrafo: es la única forma de que la lista se lea de un
-   vistazo con el dedo ya en el teclado. */
-.ayuda {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.ayuda-fila {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: 0;
-  color: var(--dim);
-  font-size: 0.76rem;
-}
-
-.ayuda-fila span {
-  text-transform: lowercase;
-}
-
-kbd {
-  display: inline-block;
-  min-width: 22px;
-  padding: 2px 6px;
-  color: var(--tint);
-  background: rgba(8, 24, 48, 0.8);
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+  box-shadow: 0 0 12px var(--tint);
   font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 20px;
   text-align: center;
+  letter-spacing: 0;
 }
 
-.ayuda-nota {
-  margin: 4px 0 0;
-  color: var(--dim);
-  font-size: 0.72rem;
-  line-height: 1.55;
+/* La esquina vive en el vértice inferior derecho, encima de todo lo demás, así
+   que el botón de enviar le cede sitio: solaparse con un control es peor que un
+   campo algo más corto. Con `esquina` reducida a un punto de 46 px, 132 px de
+   reserva eran un agujero en el formulario por una amenaza que ya no existe. */
+.hud form {
+  padding-right: 64px;
 }
 
 /* ─── Gestos con la cámara ────────────────────────────────────────────────
@@ -646,10 +565,27 @@ kbd {
   min-height: 44px;
 }
 
-/* El botón es `.chip` (arriba, en «Los botones»): lo único que queda aquí es el
-   latido del estado encendido, porque un LED fijo en la pantalla se confunde con
-   un adorno y uno que late dice «esto está mirando». */
+.gesto-btn {
+  padding: 0 14px;
+  min-height: 44px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Activa = el borde late y el texto toma el tinte: el estado se entiende de
+   un vistazo, sin leer la etiqueta. */
 .gesto-btn.on {
+  color: #04101f;
+  background: var(--tint);
+  border-color: var(--tint);
+  box-shadow: 0 0 18px var(--tint);
   animation: pulso-camara 2.4s ease-in-out infinite;
 }
 
@@ -686,20 +622,112 @@ kbd {
   line-height: 1.4;
 }
 
-/* La explicación del permiso, antes de que falle nada: es la pregunta que se
-   hizo la dueña del proyecto («¿y cómo le pido el permiso?») y merece estar a la
-   vista en vez de salir sólo cuando ya es un error rojo. */
-.gesto-nota {
-  margin: 0;
-  flex: 1 1 100%;
-  color: var(--dim);
-  font-size: 0.72rem;
-  line-height: 1.45;
+/* ─── El modal de herramientas (capa L3) ──────────────────────────────────
+   R2: todo el riel —voz, cámara, atuendos, sistema y ayuda— es ahora UN
+   `<dialog>` centrado que aparece, cumple y desaparece. Nativo: el overlay,
+   la trampa de foco y el `Esc` los regala el navegador, que en una máquina de
+   1,8 GiB es la mejor librería de moda. Como se abre con `showModal()` vive
+   en la *top layer*: ningún `z-index` de la cara tiene que pelear con él. */
+.panel {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(560px, 92vw);
+  max-height: min(560px, 84vh);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0;
+  color: var(--ink);
+  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.97), rgba(6, 16, 34, 0.97));
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 0 48px rgba(92, 225, 255, 0.14);
 }
 
-.gesto-nota b {
+/* El fondo a oscuras es la única señal de que lo demás espera: sin botón de
+   cerrar flotando en la cara, cerrar es pulsar aquí o `Esc`. */
+.panel::backdrop {
+  background: rgba(2, 6, 14, 0.62);
+}
+
+.panel-cab {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 8px 10px 0;
+  background: rgba(7, 18, 36, 0.97);
+  border-bottom: 1px solid rgba(120, 190, 230, 0.18);
+}
+
+/* Pestañas como filo subrayado, no como botones: cinco cajas rellenas en una
+   cabecera de 44 px volverían a ser el riel con otro vestido. */
+.pestana {
+  padding: 10px 12px;
+  min-height: 40px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.pestana:hover {
+  color: var(--ink);
+}
+
+.pestana.activa {
+  color: var(--tint);
+  border-bottom-color: var(--tint);
+  text-shadow: 0 0 12px rgba(92, 225, 255, 0.5);
+}
+
+.panel-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+/* La pestaña «sistema»: telemetría + atuendo + clima, los datos que antes
+   viajaban por el cabezal del HUD. */
+.sistema {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* El manual, por fin fuera de la cara (R1): vive aquí y sólo se lee si alguien
+   lo pide. */
+.ayuda {
+  display: grid;
+  gap: 10px;
+  color: var(--dim);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.ayuda p {
+  margin: 0;
+}
+
+.ayuda b {
   color: var(--tint);
   font-weight: 600;
+}
+
+.ayuda code {
+  padding: 1px 5px;
+  color: var(--tint);
+  background: rgba(8, 24, 48, 0.72);
+  border-radius: 4px;
+  font-size: 0.95em;
 }
 
 /* ─── El cuerpo holográfico ───────────────────────────────────────────────
@@ -817,12 +845,21 @@ kbd {
   transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
+/* R4: la miniatura no aparece de golpe ni deja un hueco blanco mientras baja —
+   el `<img>` nace transparente y `Miniatura` le pone `.lista` cuando el
+   navegador ya la tiene decodificada. Un archivo roto ni se pinta. */
 .atuendo img {
   display: block;
   width: 100%;
   height: 88px;
   object-fit: contain;
   filter: saturate(1.08);
+  opacity: 0;
+  transition: opacity 260ms ease;
+}
+
+.atuendo img.lista {
+  opacity: 1;
 }
 
 .atuendo span {
@@ -849,6 +886,20 @@ kbd {
 
 .atuendo.activo span {
   color: var(--tint);
+}
+
+.atuendos-volver {
+  padding: 6px 10px;
+  min-height: 34px;
+  color: var(--tint);
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  background: transparent;
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .atuendos-nota {
@@ -882,20 +933,42 @@ kbd {
   text-shadow: 0 0 12px var(--tint);
 }
 
-/* En el teléfono el riel se ensancha: el pulgar no acierta con un trazo de 30 px
-   apoyado en el borde físico de la pantalla, y seis fallos al abrir la voz son
-   peor que un dedo de más tapando el borde del reactor. Con `pointer: coarse`
-   además no hay `hover`, así que la etiqueta se ve siempre en el hilo abierto —
-   que es justo el caso en el que alguien necesita saber qué tocó. */
-@media (pointer: coarse) {
-  .hilo {
-    width: 44px;
-    height: 44px;
-  }
+/* El tamaño del `avatar CORT`, debajo de la lista y sólo con un VRM puesto:
+   para una imagen no hay escala que elegir. Mismos botones chiquitos que las
+   pestañas para que el modal no introduzca un segundo lenguaje de control. */
+.tamanos {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
 
-  .hilo-nombre {
-    right: 48px;
-    font-size: 0.72rem;
+.tamano {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 999px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tamano.activo {
+  border-color: var(--tint);
+  color: var(--tint);
+  text-shadow: 0 0 10px var(--tint);
+}
+
+/* En el teléfono el pulgar no acierta con un punto de 46 px apoyado en el borde
+   físico de la pantalla: el círculo crece y se aparta del reborde seguro. */
+@media (pointer: coarse) {
+  .esquina {
+    width: 56px;
+    height: 56px;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
   }
 }
 
@@ -1083,24 +1156,16 @@ input {
     max-height: 30dvh;
   }
 
-  .panel {
-    /* En 360 px de ancho un panel de 420 px no cabe: lo que importa es que se
-       lea, no que sobre. Se apoya a la izquierda del riel —que con dedo mide
-       44 px— y ocupa el ancho entero menos eso. */
-    right: 52px;
-    bottom: 122px;
-    width: calc(100vw - 62px);
-    max-height: 52dvh;
-    padding: 10px 12px 12px;
-  }
-
-  .telemetry {
-    gap: 3px;
-    font-size: 0.68rem;
-  }
-
+  /* La telemetría ya no vive en la cara: viaja dentro del modal, donde el
+     ancho lo manda el dialog y no queda nada que encoger aquí. */
   .tl-row {
     gap: 10px;
+  }
+
+  .respuesta-cuerpo {
+    /* En el teléfono la frase se lee de un trazo: 16 px además evita que el
+       navegador haga zoom al pulsar la línea. */
+    font-size: 16px;
   }
 }
 
@@ -1184,9 +1249,22 @@ input {
 }
 
 @media (max-width: 520px) {
+  /* Con la cuenta atrás activa hay dos cosas arriba y el sitio libre arriba
+     del todo es uno: el reloj se va a la izquierda y deja el centro para el
+     cronómetro, que es urgente y manda más. */
+  .reloj {
+    left: 14px;
+    translate: none;
+    font-size: 0.95rem;
+  }
+
+  .respuesta {
+    bottom: 28vh;
+  }
+
   .crono {
-    /* En el teléfono el pulgar vive abajo y arriba a la derecha está la
-       telemetría: el centro de arriba es lo único que no tapa nada. */
+    /* Centro arriba: con la telemetría mudada al modal (R2) el único sitio que
+       queda libre de verdad es el medio del borde superior. */
     top: 10px;
     left: 50%;
     translate: -50% 0;
@@ -1211,19 +1289,34 @@ input {
     animation-timing-function: ease-out;
   }
 
-  /* El panel se sigue abriendo y cerrando — es estado, no adorno — pero sin
+  /* La bandeja se sigue abriendo y cerrando — es estado, no adorno — pero sin
      el deslizamiento, y el LED de la cámara deja de latir. */
-  .panel {
-    animation: none;
+  .cuerpo,
+  .cuerpo.cerrado {
+    transform: none;
+    transition: opacity 120ms linear;
   }
 
-  .chip:hover::after,
-  .chip:focus-visible::after {
+  .esquina::after,
+  .esquina:hover::after,
+  .esquina:focus-visible::after {
     animation: none;
   }
 
   .gesto-btn.on {
     animation: none;
+  }
+
+  /* El subtítulo se sigue levantando y despidiendo — es información, no adorno
+     — pero sin el desplazamiento de entrada, y el núcleo de la esquina deja de
+     latir: un punto quieto sigue siendo un punto. */
+  .respuesta {
+    animation: none;
+  }
+
+  .esquina-nucleo {
+    animation: none;
+    opacity: 1;
   }
 
   /* La proyección sigue ahí — es la interfaz — pero quieta: flotar y barrer es

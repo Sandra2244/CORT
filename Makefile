@@ -64,13 +64,12 @@ web-build:
 test:
 	cd $(CORE) && CORT_DOTENV=0 CORT_AUDIT_LOG=$${TMPDIR:-/tmp}/cort-make-test-rechazos.jsonl $(PY) -m unittest discover -s tests -v
 
-# Las pruebas de la cara. No hay navegador simulado: `scripts/pruebas-web.mjs`
-# transpila los módulos puros de `apps/web/src/cort` con el `typescript` que ya
-# es `devDependency` y los corre con el `node --test` que trae Node 20. Se mantiene
-# aparte de `test` a propósito: el core y sus pruebas son Python puro, y quien no
-# tenga Node instalado tiene que poder comprobar el cerebro igual.
-test-web:
-	node scripts/pruebas-web.mjs
+# Las pruebas de la cara vivían aquí (`make test-web`, 17 pruebas del riel y su
+# tabla de teclas). El rediseño por capas de `docs/REDESIGN-UI.md` (2026-10-10)
+# borró el riel —el módulo probado, `src/cort/paneles.ts`, ya no existe—, y con
+# él se fue el runner. La superficie nueva se comprobó en navegador real, capa
+# por capa, y eso está contado en `docs/STATUS.md`; si el modal crece lógica
+# pura otra vez, aquí vuelve a haber sitio para probarla.
 
 # Quién intentó lo que CORT no dejó: lee el registro real, en la carpeta que
 # ignora `.gitignore`. Aquí **sí** se lee el `.env` (sin `CORT_DOTENV=0`), porque
@@ -78,5 +77,5 @@ test-web:
 rechazos:
 	cd $(CORE) && $(PY) -m cort_core.audit
 
-.PHONY: setup install doctor dev launch web web-deps web-build demo test test-web rechazos
+.PHONY: setup install doctor dev launch web web-deps web-build demo test rechazos
 
