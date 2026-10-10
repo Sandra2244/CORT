@@ -1,9 +1,42 @@
 # Notas de las Release
 
 Texto listo para pegar en GitHub (*Releases → Draft a new release → la etiqueta ya creada*).
-Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0` y `v0.10.0` están publicadas en el remoto y cada una
-resuelve a su commit; lo que falta es la página de Release, y eso necesita la sesión de la dueña
-del repositorio — desde esta máquina no se crea por API (`gh` sin sesión iniciada, medido dos veces).
+Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada
+una resuelve a su commit; lo que falta es la página de Release, y eso necesita la sesión de la dueña
+del repositorio — desde esta máquina no se crea por API (`gh` sin sesión iniciada, medido tres veces).
+
+---
+
+## `v0.10.1` — las pruebas dejan de depender del apodo de tu carpeta
+
+Corte de parche, y lo provocó una comprobación honesta: se clonó `main` en una carpeta recién
+creada llamada `CORT-nueva` (mismo commit, mismo hash de build) y `make test` respondió
+`FAILED (failures=1)`. Nada estaba roto en CORT; lo estaba la manera de contarlo.
+
+- **`test_env.py` afirmaba `ROOT.name == "CORT"`** — o sea el nombre del directorio, no el
+  comportamiento. Quien clona con otro nombre, o quien baja el ZIP y se le queda en `CORT-main/`,
+  veía fallar la suite entera. Se cambió la afirmación de nombre por tres de **forma**: dentro de
+  `ROOT` tienen que estar `Makefile`, `AGENTS.md` y `services/core/cort_core/env.py`, y la raíz que
+  ve el cargador tiene que ser la que ven las pruebas, contada desde dos ficheros distintos. Al
+  escribirla falló (`parents[2]` en vez de `parents[3]`) — que es exactamente el error que esa
+  prueba existe para cazar.
+- **El techo de la prueba de red sube de 60 a 180 s.** `test_security.TestLanzadorNiegaRedSinToken`
+  arranca el lanzador de verdad (`python -m cort_core.server` con `CORT_HOST=0.0.0.0` y sin llave) y
+  espera que se niegue y salga con código 1. **Medido solo: 3,629 s**. En una máquina de dos núcleos
+  con el resto de la suite encima no daba terminado en 60 y saltaba `TimeoutExpired`, así que fallaba
+  por reloj y no por la guarda. La guarda sigue caducando: si alguien quitara el rechazo, el proceso
+  se quedaría escuchando y la prueba esperaría sus tres minutos.
+- **Medido en la copia con nombre distinto, que es el caso que estaba roto:** `make test` →
+  `Ran 316 tests in 94,240 s … OK` (exit code leído del log, no del aviso: un `| tail` en la tubería
+  devuelve el código del `tail`, y así se me colaron dos «completed exit code 0» que eran `FAILED`).
+  `test_security` aparte: 26 en verde.
+- Documentado: la nota en la fila de las pruebas de `docs/STATUS.md` y un párrafo en el **paso 1** del
+  README diciendo en voz alta que **la carpeta puede llamarse como quieras**.
+
+**Sin verificar aquí**: nada nuevo —es el mismo producto con dos pruebas corregidas—. La Release de
+GitHub y la prueba con el dedo en el teléfono siguen como estaban.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.10.1.zip`
 
 ---
 

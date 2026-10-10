@@ -1,7 +1,7 @@
 # CORT
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.0-6f4ff2?style=flat-square">
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.1-6f4ff2?style=flat-square">
   <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-333%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
@@ -14,7 +14,7 @@
 
 No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, **una cara que se aparta cuando dejas de tocarla** — seis hilos en un borde, uno cada vez, y se llega con el dedo, con el cursor o con el teclado —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.10.0`** · rama **`main`** · **333 pruebas en verde** (316 del core en Python + 17 de la interfaz en Node; ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.10.1`** · rama **`main`** · **333 pruebas en verde** (316 del core en Python + 17 de la interfaz en Node; ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja (captura del corte v0.6.0)](docs/assets/prototipo-v0.6.0.png)
 
@@ -281,8 +281,10 @@ En Windows: Python desde python.org marcando *«Add python.exe to PATH»*, y Nod
 
 ```bash
 git clone https://github.com/Sandra2244/CORT.git
-cd CORT
+cd CORT        # o en la carpeta que te dé la gana: ver nota abajo
 ```
+
+**La carpeta puede llamarse como quieras** (`CORT-main/` si bajas el ZIP, `CORT-nueva`, lo que sea). Desde `v0.10.1` ninguna prueba depende del nombre del directorio; antes fallaba la suite entera con un `AssertionError: 'CORT-nueva' != 'CORT'` que no era un fallo del producto, sino de una prueba que comprobaba el apodo de la carpeta.
 
 ### Paso 2 · Instalar
 

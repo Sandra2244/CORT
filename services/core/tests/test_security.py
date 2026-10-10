@@ -217,9 +217,15 @@ class TestLanzadorNiegaRedSinToken(unittest.TestCase):
         env = {**os.environ, "CORT_DOTENV": "0", "CORT_HOST": "0.0.0.0",
                "CORT_MEMORY_DB": str(pathlib.Path(tmp.name) / "prueba.db")}
         env.pop("CORT_LAN_TOKEN", None)
+        # Techo de 180 s, no de 60: medido el 2026-10-09, el proceso niega el
+        # arranque y sale en **3,6 s** solo, pero en una máquina de dos núcleos
+        # con el resto de la suite encima se pasó de 60 y la prueba explotó por
+        # `TimeoutExpired` — sin relación con lo que comprueba. Lo que sigue
+        # caducando es la guarda: si alguien quitara el `raise`, el lanzador se
+        # quedaría escuchando y la prueba esperaría sus tres minutos enteros.
         r = subprocess.run([sys.executable, "-m", "cort_core.server"],
                            cwd=here, env=env, capture_output=True, text=True,
-                           timeout=60)
+                           timeout=180)
         self.assertEqual(1, r.returncode, r.stdout + r.stderr)
         self.assertIn("CORT no arranca", r.stdout)
         self.assertIn("CORT_LAN_TOKEN", r.stdout)
