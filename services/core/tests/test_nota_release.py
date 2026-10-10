@@ -66,14 +66,27 @@ class TestRecorte(unittest.TestCase):
         self.assertIsNone(nota_release.buscar_seccion(DOC, "v0.9"))
 
 
+class TestLista(unittest.TestCase):
+    """El manifiesto que lee el pipeline al empujar `main`: qué etiquetas tienen
+    nota escrita, en el orden del documento."""
+
+    def test_dan_las_etiquetas_con_seccion_en_orden(self):
+        self.assertEqual(["v0.9.0", "v0.8.0"], nota_release.listar_etiquetas(DOC))
+
+    def test_ignora_lo_que_no_es_una_seccion(self):
+        sucio = "# Notas\n\n## `v1.0.0\n\n## otra cosa — sin acentos\n\n" + DOC
+        self.assertEqual(["v0.9.0", "v0.8.0"], nota_release.listar_etiquetas(sucio))
+
+    def test_un_documento_sin_secciones_da_lista_vacia(self):
+        self.assertEqual([], nota_release.listar_etiquetas("# solo párrafos\n"))
+
+
 class TestCableReal(unittest.TestCase):
     """La herramienta contra el documento de verdad, sin escribir en el repo."""
 
     def test_cada_etiqueta_del_documento_tiene_su_nota(self):
         texto = nota_release.NOTAS.read_text(encoding="utf-8")
-        etiquetas = [linea.split("`")[1]
-                     for linea in texto.splitlines()
-                     if linea.startswith(nota_release.PREFIJO)]
+        etiquetas = nota_release.listar_etiquetas(texto)
         self.assertGreaterEqual(len(etiquetas), 4, "el documento de notas se quedó corto")
         for etiqueta in etiquetas:
             encontrada = nota_release.buscar_seccion(texto, etiqueta)
@@ -82,6 +95,16 @@ class TestCableReal(unittest.TestCase):
             self.assertTrue(titulo, f"{etiqueta} sin título")
             self.assertGreater(len(cuerpo), 200, f"{etiqueta} con nota recortada")
             self.assertIn("Zip", cuerpo, f"{etiqueta} sin su línea de ZIP")
+
+    def test_listar_devuelve_cero_y_saca_cada_etiqueta(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(0, nota_release.main(["nota_release.py", "--list"]))
+        self.assertEqual(nota_release.listar_etiquetas(
+            nota_release.NOTAS.read_text(encoding="utf-8")),
+            buf.getvalue().split())
 
     def test_salida_del_script_y_codigo_al_no_estar(self):
         import tempfile

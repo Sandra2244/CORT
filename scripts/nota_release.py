@@ -7,6 +7,7 @@ está escrita a mano en el repo. Duplicarla en el YAML sería tener dos verdades
 la del documento y la del pipeline, y siempre se desincroniza una.
 
 Uso:  scripts/nota_release.py v0.10.1 cuerpo.md titulo.txt
+        scripts/nota_release.py --list            # las etiquetas con sección
 
 Devuelve 0 si la sección existe, 2 si no (y entonces el pipeline cae a
 `--generate-notes` en vez de publicar una Release vacía). Código en inglés no
@@ -25,6 +26,26 @@ NOTAS = RAIZ / "docs" / "RELEASE-NOTES.md"
 #   ## `v0.10.1` — las pruebas dejan de depender del apodo de tu carpeta
 PREFIJO = "## `"
 SEPARADOR = "\n---\n"
+
+
+def listar_etiquetas(texto: str) -> list[str]:
+    """Las etiquetas que tienen sección, en el orden del documento.
+
+    Existe porque el pipeline también se dispara al empujar `main`: ahí no hay
+    ninguna etiqueta en el evento que publicar, así que se publican **todas las
+    que tengan nota escrita**. `docs/RELEASE-NOTES.md` es el manifiesto; el
+    bucle del workflow omite las que ya tengan su página, así que empujar `main`
+    mil veces no crea ni duplica ni pisa nada.
+    """
+    etiquetas: list[str] = []
+    for linea in texto.splitlines():
+        if not linea.startswith(PREFIJO):
+            continue
+        cierre = linea.find("`", len(PREFIJO))
+        if cierre == -1:
+            continue
+        etiquetas.append(linea[len(PREFIJO):cierre])
+    return etiquetas
 
 
 def buscar_seccion(texto: str, etiqueta: str) -> tuple[str, str] | None:
@@ -50,6 +71,13 @@ def buscar_seccion(texto: str, etiqueta: str) -> tuple[str, str] | None:
 
 
 def main(argv: list[str]) -> int:
+    if len(argv) == 2 and argv[1] == "--list":
+        if not NOTAS.is_file():
+            print(f"no existe {NOTAS}", file=sys.stderr)
+            return 2
+        for etiqueta in listar_etiquetas(NOTAS.read_text(encoding="utf-8")):
+            print(etiqueta)
+        return 0
     if len(argv) != 4:
         print(__doc__, file=sys.stderr)
         return 64

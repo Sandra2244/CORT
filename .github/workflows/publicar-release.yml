@@ -1,4 +1,4 @@
-# Publicar la página de Release cuando se empuja una etiqueta.
+# Publicar la página de Release cuando se empuja una etiqueta (o `main`).
 #
 # Por qué existe: desde esta máquina no se puede crear una Release por API — no
 # hay sesión de `gh` (medido tres veces), no hay `GH_TOKEN`/`GITHUB_TOKEN` en el
@@ -8,69 +8,90 @@
 # redactada a mano** en `docs/RELEASE-NOTES.md` (recortada por
 # `scripts/nota_release.py`, con sus pruebas en `test_nota_release.py`).
 #
-# Además de `push: tags`, trae `workflow_dispatch`: con eso las etiquetas que ya
-# estaban publicadas antes de este archivo se convierten en Release desde la
-# pestaña *Actions → publicar-release → Run workflow*, escribiendo la etiqueta.
-# Son tres clics en la web y no requieren instalar nada.
+# Por qué también `push: branches: main`: un evento `push` de etiqueta busca el
+# YAML en el commit al que apunta esa etiqueta, y las cinco que ya estaban
+# publicadas (`v0.7.0` … `v0.10.1`) nacieron **antes** de este archivo — en su
+# árbol no hay workflow que disparar. `main` sí lo tiene, y el manifiesto de qué
+# publicar es `docs/RELEASE-NOTES.md`: al empujar la rama se recorre la lista y
+# se abre la página de cada etiqueta que todavía no la tenga.
+#
+# Es idempotente a propósito: `gh release view` manda al `continue`, así que
+# empujar `main` veinte veces no duplica ni pisa ninguna Release.
+#
+# Y trae `workflow_dispatch` para poder lanzarla a mano desde
+# *Actions → publicar-release → Run workflow*, escribiendo una etiqueta.
 name: publicar-release
 
 on:
   push:
     tags:
       - "v*"
+    branches:
+      - "main"
   workflow_dispatch:
     inputs:
       etiqueta:
-        description: "Etiqueta ya publicada que quieres convertir en Release (p. ej. v0.10.0)"
-        required: true
+        description: "Etiqueta ya publicada que quieres convertir en Release (p. ej. v0.10.0). Vacío: todas las que tengan nota escrita."
+        required: false
+        default: ""
         type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.event.inputs.etiqueta || github.ref_name }}
+  group: publicar-release
   cancel-in-progress: false
 
 jobs:
   publicar:
     runs-on: ubuntu-latest
     steps:
-      - name: Bajar el commit de la etiqueta
+      - name: Bajar la rama con las notas
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.etiqueta || github.ref_name }}
+          # Siempre la rama por defecto: es donde vive `docs/RELEASE-NOTES.md`
+          # completo y donde está este YAML. La etiqueta a publicar se pasa
+          # como dato, no como ref.
+          ref: ${{ github.event.repository.default_branch }}
 
-      - name: Recortar la nota de docs/RELEASE-NOTES.md
-        id: nota
-        env:
-          ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
-        run: |
-          set -euo pipefail
-          # Devuelve 2 si la etiqueta no tiene sección: en ese caso la Release se
-          # publica con notas generadas antes que con una página vacía y muda.
-          if python3 scripts/nota_release.py "$ETIQUETA" nota.md titulo.txt; then
-            echo "existe=si" >> "$GITHUB_OUTPUT"
-            echo "titulo=$(cat titulo.txt)" >> "$GITHUB_OUTPUT"
-          else
-            echo "existe=no" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publicar la Release (o dejar la que ya está)
+      - name: Publicar las Releases que no estén
         env:
           GH_TOKEN: ${{ github.token }}
-          ETIQUETA: ${{ github.event.inputs.etiqueta || github.ref_name }}
-          CON_NOTA: ${{ steps.nota.outputs.existe }}
-          TITULO: ${{ steps.nota.outputs.titulo }}
+          # Tres formas de entrar: escribiendo una etiqueta a mano, empujando un
+          # tag (`ref_type: tag` y `ref_name: v0.10.1`), o empujando `main`. En
+          # el último caso `ref_name` sería «main», que no es una etiqueta, así
+          # que sólo se usa cuando `ref_type` dice que de verdad es un tag.
+          FIJA: ${{ github.event.inputs.etiqueta }}
+          TIPO: ${{ github.event.ref_type }}
+          REF: ${{ github.event.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$ETIQUETA" >/dev/null 2>&1; then
-            echo "La Release de $ETIQUETA ya existe: no la piso."
+          if [ -n "${FIJA:-}" ]; then
+            lista="$FIJA"
+          elif [ "${TIPO:-}" = "tag" ]; then
+            lista="$REF"
+          else
+            lista="$(python3 scripts/nota_release.py --list)"
+          fi
+          if [ -z "$lista" ]; then
+            echo "No hay etiqueta que publicar (ni en el evento ni en las notas)."
             exit 0
           fi
-          if [ "$CON_NOTA" = "si" ]; then
-            gh release create "$ETIQUETA" --title "$TITULO" --notes-file nota.md
-          else
-            gh release create "$ETIQUETA" --generate-notes
-          fi
-          gh release view "$ETIQUETA" --json tagName,name,url
+          publicadas=0
+          omitidas=0
+          for etiqueta in $lista; do
+            if gh release view "$etiqueta" >/dev/null 2>&1; then
+              echo "· $etiqueta ya tiene página: no la piso."
+              omitidas=$((omitidas + 1))
+              continue
+            fi
+            if python3 scripts/nota_release.py "$etiqueta" nota.md titulo.txt; then
+              gh release create "$etiqueta" --title "$(cat titulo.txt)" --notes-file nota.md
+            else
+              # Etiqueta sin sección: mejor notas generadas que una página muda.
+              gh release create "$etiqueta" --generate-notes
+            fi
+            publicadas=$((publicadas + 1))
+          done
+          echo "Releases abiertas: $publicadas · ya existían: $omitidas"

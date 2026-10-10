@@ -1,13 +1,17 @@
 # Notas de las Release
 
 Texto listo para pegar en GitHub — y desde este corte, **listo para que lo pegue la máquina**:
-`.github/workflows/publicar-release.yml` lee la sección de la etiqueta que empujaste y abre la página
-de Release con ese texto (`scripts/nota_release.py`, con sus 7 pruebas en `test_nota_release.py`). Las
-etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada una
-resuelve a su commit; las que nacieron antes del pipeline se convierten en Release desde
-*Actions → publicar-release → Run workflow*, escribiendo la etiqueta. Sigue sin poder crearse por API
-desde esta máquina: no hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el entorno, ni
-`~/.config/gh`.
+`.github/workflows/publicar-release.yml` abre la página de Release con el texto de la sección que
+corresponda (`scripts/nota_release.py`, con sus 11 pruebas en `test_nota_release.py`). Se dispara
+empujando una etiqueta `v*`, empujando `main`, o a mano desde *Actions → publicar-release → Run
+workflow* escribiendo la etiqueta. Es idempotente: la etiqueta que ya tenga su página se omite, y la
+que no tenga sección se publica con notas generadas antes que con una página muda.
+
+Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada
+una resuelve a su commit. Nacieron **antes** de este pipeline, y como un `push` de etiqueta busca su
+YAML en el commit de esa etiqueta, quien las convierte en Release es el disparo por `main` — no hace
+falta borrar ni recrear ninguna. Sigue sin poder crearse una Release por API desde esta máquina: no
+hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el entorno, ni `~/.config/gh`.
 
 ---
 

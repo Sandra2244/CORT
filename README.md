@@ -2,7 +2,7 @@
 
 <p align="center">
   <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.1-6f4ff2?style=flat-square">
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-340%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-344%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -14,7 +14,7 @@
 
 No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, **una cara que se aparta cuando dejas de tocarla** — seis hilos en un borde, uno cada vez, y se llega con el dedo, con el cursor o con el teclado —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.10.1`** · rama **`main`** · **340 pruebas en verde** (323 del core en Python + 17 de la interfaz en Node; ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.10.1`** · rama **`main`** · **344 pruebas en verde** (327 del core en Python + 17 de la interfaz en Node; ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja (captura del corte v0.6.0)](docs/assets/prototipo-v0.6.0.png)
 
@@ -100,7 +100,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Voz** | `apps/web/src/ui/Voz.tsx` | Habla con `speechSynthesis` y escucha con `SpeechRecognition`: **cero dependencias, cero RAM del core, y el mismo código en el portátil que en el Android**. Elige la mejor voz en español puntuando las instaladas (`Natural` > `online` > resto, región primero), limpia el markdown y los emojis que el sintetizador deletrea, parte por oraciones para que haya pausas, y **cierra el micrófono mientras CORT habla** para no oírse a sí misma |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` · `apps/web/tests/` + `scripts/pruebas-web.mjs` | **340**: 323 en Python con la biblioteca estándar (`make test`) y 17 de la interfaz con `node --test` (`make test-web`). El ejecutor de pruebas web **no añade ni una dependencia**: transpila `cort/paneles.ts` con el paquete `typescript` que ya trae `apps/web` para `tsc` y lo ejecuta en un directorio temporal ignorado por git. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` · `apps/web/tests/` + `scripts/pruebas-web.mjs` | **344**: 327 en Python con la biblioteca estándar (`make test`) y 17 de la interfaz con `node --test` (`make test-web`). El ejecutor de pruebas web **no añade ni una dependencia**: transpila `cort/paneles.ts` con el paquete `typescript` que ya trae `apps/web` para `tsc` y lo ejecuta en un directorio temporal ignorado por git. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
@@ -237,7 +237,7 @@ CORT/
 ├── services/core/
 │   ├── cort_core/            # el cerebro: server · brain · intents · planner · actions · avatars · status · outfit · weather · initiative · timer · security · audit · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 323 pruebas, biblioteca estándar
+│   ├── tests/                # 327 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db y rechazos.jsonl — fuera de git: son datos de la casa
 │   └── requirements.txt
 ├── apps/web/                 # React 19 + Vite + Three.js
@@ -448,7 +448,7 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 323 pruebas del core, ~68-120 s en esta máquina (según carga)
+make test      # 327 pruebas del core, ~68-120 s en esta máquina (según carga)
 make test-web  # 17 pruebas de la interfaz, ~2 s (necesita `make web-deps` una vez)
 ```
 
@@ -492,7 +492,7 @@ make rechazos  # quién intentó lo que CORT no dejó, y desde dónde
 4. **No se afirma sin ejecutar.** Si no puedes comprobarlo, escribe literalmente **"sin verificar"**.
 5. Las decisiones de plataforma (escritorio, móvil, voz, lenguaje) están en [`docs/PLATFORM.md`](docs/PLATFORM.md): para cambiar una hay que traer un número de esta máquina.
 6. **Se trabaja sobre `main`**, la rama pública y única. Desde el corte `v0.7.0` el código verificado en español *es* `main`; las ramas de trabajo se abren a partir de ella y se mergedeán con su prueba ejecutada delante. El historial de la rama `cort-local-verified` está conservado dentro de `main` (merge `27bccb9`), y la propia rama ya no se publica.
-7. **Soltar una versión no necesita sesión de `gh`**: se escribe la nota en `docs/RELEASE-NOTES.md` (una sección `## \`v0.x.y\` — título`), se empuja la etiqueta (`git tag -a v0.x.y -m '…' && git push origin v0.x.y`) y el pipeline `.github/workflows/publicar-release.yml` crea la página de Release con ESA nota recortada por `scripts/nota_release.py`. Si la etiqueta ya tiene su Release, el pipeline no la pisa; si no tiene sección, publica con notas generadas en vez de una página muda. Las etiquetas publicadas **antes** de este pipeline se convierten en Release desde *Actions → publicar-release → Run workflow*, escribiendo la etiqueta.
+7. **Soltar una versión no necesita sesión de `gh`**: se escribe la nota en `docs/RELEASE-NOTES.md` (una sección `## \`v0.x.y\` — título`), se empuja la etiqueta (`git tag -a v0.x.y -m '…' && git push origin v0.x.y`) y el pipeline `.github/workflows/publicar-release.yml` crea la página de Release con ESA nota, recortada por `scripts/nota_release.py`. El pipeline es **idempotente**: si la etiqueta ya tiene su página, la omite; si no tiene sección, publica con notas generadas en vez de una página muda. Y como un `push` de etiqueta busca el YAML en el commit de esa etiqueta —las cinco primeras nacieron sin pipeline—, el mismo trabajo se hace empujando `main`: el recorrido lee la lista de etiquetas con nota escrita y abre las que falten. Por eso no hace falta borrar ni recrear ninguna etiqueta, y por eso se puede lanzar también a mano desde *Actions → publicar-release → Run workflow*, escribiendo la etiqueta.
 
 Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata a más cara):
 
@@ -518,7 +518,7 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |
 | [`docs/DEVELOPMENT-GUIDE.md`](docs/DEVELOPMENT-GUIDE.md) | Método de trabajo |
-| [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md) | El texto de cada Release, redactado a mano y listo para pegar — y de donde lo recorta el pipeline (`.github/workflows/publicar-release.yml`) al empujarse la etiqueta |
+| [`docs/RELEASE-NOTES.md`](docs/RELEASE-NOTES.md) | El texto de cada Release, redactado a mano y listo para pegar — y de donde lo recorta el pipeline (`.github/workflows/publicar-release.yml`) al empujarse la etiqueta o `main` |
 | [`docs/AI-COPILOT-GUIDE.md`](docs/AI-COPILOT-GUIDE.md) | Cómo repartir cuota entre copilotos |
 | [`AGENTS.md`](AGENTS.md) | Las reglas que cualquier agente de código debe leer antes de tocar nada |
 
