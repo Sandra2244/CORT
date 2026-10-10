@@ -12,3 +12,7 @@ dist/
 # scripts/install-desktop.sh). El repo es público: ahí no va el nombre de carpeta
 # de nadie.
 CORT.desktop
+# Directorio de paso de `make test-web`: los .mjs transpilados y sus pruebas. Se
+# borra solo al terminar; si el proceso se corta a media ejecución, que no aparezca
+# en `git status` como si fuera código del proyecto.
+.pruebas-web-tmp/

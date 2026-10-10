@@ -1,8 +1,8 @@
 # CORT
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.9.0-6f4ff2?style=flat-square">
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-316%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.0-6f4ff2?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-333%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -12,11 +12,13 @@
 
 **C**ognitive **O**perating **R**eactive **T**echnology — un asistente personal holográfico, **local-first**, inspirado en Cortana (*Halo*).
 
-No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
+No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, **una cara que se aparta cuando dejas de tocarla** — seis hilos en un borde, uno cada vez, y se llega con el dedo, con el cursor o con el teclado —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.9.0`** · rama **`main`** · **316 pruebas en verde** (ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.10.0`** · rama **`main`** · **333 pruebas en verde** (316 del core en Python + 17 de la interfaz en Node; ejecutadas, no contadas) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
-![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja](docs/assets/prototipo-v0.6.0.png)
+![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja (captura del corte v0.6.0)](docs/assets/prototipo-v0.6.0.png)
+
+*La imagen es el corte `v0.6.0` y se queda a propósito: muestra el reactor ocupando la pantalla, que es lo que sigue siendo.* Desde `v0.10.0` la esquina inferior derecha se convirtió en **seis hilos en el borde derecho** (uno por panel), y el `⌃ mensajes` de la foto ya no está. Sacar una portada nueva requiere la ventana de navegador delante con el core levantado; eso está dicho en [`docs/STATUS.md`](docs/STATUS.md) en vez de pasar de largo.
 
 > **Descargar / probar:** [`git clone https://github.com/Sandra2244/CORT.git`](https://github.com/Sandra2244/CORT) ·
 > [ZIP de la última versión](https://github.com/Sandra2244/CORT/archive/refs/heads/main.zip) ·
@@ -45,8 +47,8 @@ Tres capas, un protocolo, y todo en la misma máquina. Ningún dato sale del equ
         Usuario (voz* · teclado · táctil · cámara)
                      │
    ┌─────────────────▼──────────────────┐
-   │  apps/web   React 19 · Vite · TS   │  interfaz: reactor GLSL, HUD, chat,
-   │  Three.js r185 · post-proceso      │  telemetría, efectos, PWA
+   │  apps/web   React 19 · Vite · TS   │  interfaz: reactor GLSL, cuerpo 3D,
+   │  Three.js r185 · post-proceso      │  riel de paneles, voz, efectos, PWA
    └─────────────────▲──────────────────┘
                      │  WebSocket JSON (ws://127.0.0.1:8765/ws)
    ┌─────────────────┴──────────────────┐
@@ -92,12 +94,13 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Reactor holográfico** | `apps/web/src/scene/{Core,Particles,Scene}.tsx` | Un solo quad con shader de coordenadas polares (anillo erosionado por fbm, polvo, barrido radar) + Bloom, aberración cromática, ruido y viñeta. **18 fps sin GPU**, y los mismos a 200 % de tamaño |
 | **Cuerpo 3D (VRM)** | `apps/web/src/scene/Vrm.tsx` | Un `.vrm` montado **dentro del mismo canvas** del reactor (dos contextos WebGL en esta máquina son dos colas de GPU y la mitad de cuadros). Se le reemplaza el material por uno estándar parcheado con `onBeforeCompile` — el skinning y los morph targets los resuelve Three sólo si el programa sigue siendo el de `MeshStandardMaterial`—, se tiñe con la paleta del atuendo y se le baja el húmero de la pose en cruz escribiendo sobre el hueso **crudo** con `autoUpdateHumanBones = false`. El shader es propio: los dos repositorios que imitan este aspecto son AGPL-3.0 y su código no entra (regla 9) |
 | **Estado y conexión** | `apps/web/src/cort/{connection,palette}.ts` | Dos capas deliberadamente separadas: un *snapshot* inmutable para React (`useSyncExternalStore`) y un objeto mutable que la escena persigue con `lerp`. Por eso cambiar de atuendo **respira** en vez de parpadear, y por eso el orbe **crece** en vez de saltar. Un solo archivo define todo el color |
-| **Interfaz** | `apps/web/src/ui/{Hud,Telemetry,Effects,Bandeja,Avatar,Temporizador}.tsx` + `cort/arrastre.ts` | Chat con reloj, clima medido en el cabezal, **bandeja que se guarda en la esquina**, **panel que se arrastra con el dedo o con el ratón** y topes para que no se pierda fuera de la pantalla, cuenta atrás que sólo existe mientras se pide, panel de «lo que CORT sabe de sí mismo», capa de efectos de un solo disparo y **proyección del cuerpo con atuendo**. El tamaño del reactor no tiene deslizador: lo manda la cámara. Escritos **sin** `zustand`, `drei` ni `framer-motion`: cada dependencia es RAM que esta máquina no tiene |
+| **Interfaz** | `apps/web/src/ui/{Hud,Telemetry,Effects,Avatar,Temporizador}.tsx` + `cort/arrastre.ts` | **La línea de abajo**: cabezal con reloj, clima medido y estado del core, y el campo donde se le escribe a CORT. **El panel se arrastra con el dedo o con el ratón** y tiene topes para que nunca se pierda fuera de la pantalla. Cuenta atrás que sólo existe mientras se pide, capa de efectos de un solo disparo y **proyección del cuerpo con atuendo**. El tamaño del reactor no tiene deslizador: lo manda la cámara. Escritos **sin** `zustand`, `drei` ni `framer-motion`: cada dependencia es RAM que esta máquina no tiene |
+| **La cara: riel de paneles y teclado** | `apps/web/src/cort/paneles.ts` + `ui/Riel.tsx` | Seis **hilos de luz** en el borde derecho, cada uno con el número de su tecla, y **uno cada vez**: tocar, pasar el cursor o pulsar `Tab` expande un panel y guarda el anterior. El registro, la telemetría, la voz, los atuendos, la cámara y la ayuda de teclado viven ahí dentro y **en reposo no están en el DOM**. La interfaz se aparta sola doce segundos después del último gesto —baja al 26 % de opacidad— y despierta con cualquier movimiento; no lo hace con un panel abierto, con la cara apagada, con `prefers-reduced-motion` ni mientras se está escribiendo. `1`–`6` abren cada panel, `/` salta al campo, `Esc` guarda, `h` deja sólo el reactor y `?` lista las teclas en pantalla. `paneles.ts` es **lógica pura sin DOM** y es la que ejecutan las 17 pruebas de `apps/web/tests/` con `node --test`; `Riel.tsx` es el único sitio donde ese estado se encuentra con la pantalla. El diseño salió del análisis de los videos de referencia (`docs/REFERENCIAS.md`), no de copiarles un píxel |
 | **Gestos de cámara** | `apps/web/src/cort/defocus.ts` + `lib/oneEuro.ts` | Desenfocar con los dedos delante de la webcam encoge el orbe y enfocar lo devuelve. Sin modelos ni dependencias: 64×48 píxeles a 5 muestras por segundo, gris BT.601 y **varianza del Laplaciano** — el criterio con el que cualquier cámara decide si ya enfocó. Lo que suaviza esa señal es un **filtro 1€** (MIT, transplantado y **reajustado midiendo**): menos temblor con la mano quieta y la mitad de retardo moviéndola, que un factor fijo no puede dar las dos cosas a la vez. La cámara la abre un botón de la usuaria y apagarla detiene las pistas del stream |
 | **Voz** | `apps/web/src/ui/Voz.tsx` | Habla con `speechSynthesis` y escucha con `SpeechRecognition`: **cero dependencias, cero RAM del core, y el mismo código en el portátil que en el Android**. Elige la mejor voz en español puntuando las instaladas (`Natural` > `online` > resto, región primero), limpia el markdown y los emojis que el sintetizador deletrea, parte por oraciones para que haya pausas, y **cierra el micrófono mientras CORT habla** para no oírse a sí misma |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | 316, con la biblioteca estándar. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` · `apps/web/tests/` + `scripts/pruebas-web.mjs` | **333**: 316 en Python con la biblioteca estándar (`make test`) y 17 de la interfaz con `node --test` (`make test-web`). El ejecutor de pruebas web **no añade ni una dependencia**: transpira `cort/paneles.ts` con el paquete `typescript` que ya trae `apps/web` para `tsc` y lo ejecuta en un directorio temporal ignorado por git. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
@@ -175,11 +178,11 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 |---|---|---|---|---|
 | Núcleo (chat, memoria, intents, acciones en cadena, clima, configuración, atuendos en disco, cuenta atrás, llave de red, bitácora de rechazos…) | 15 | 10 | 1 | 4 |
 | Voz y audio (wake word, STT, TTS, volumen, reproductor, sonda de audio…) | 13 | 2 | 4 | 7 |
-| Avatar y HUD (partículas, VRM, atuendo, tamaño, bandeja, cuerpo proyectado, overlay, efectos, móvil) | 17 | 8 | 4 | 5 |
+| Avatar y HUD (partículas, VRM, atuendo, tamaño, riel de paneles, teclado de la cara, cuerpo proyectado, overlay, efectos, móvil) | 18 | 9 | 4 | 5 |
 | Gestos y visión (desenfoque con cámara, arrastrar paneles, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 1 | 11 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| **Total** | **75** | **24** | **11** | **40** |
+| **Total** | **76** | **25** | **11** | **40** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «38-44» son siete funciones, no una).
 
@@ -201,14 +204,15 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
 | ⚡ | **Acciones reales en el sistema** a través de la capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después**; hace una **captura de pantalla** con `scrot` y **comprueba el archivo**; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra PipeWire, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar y **sacudida del panel al responder** | `MutationObserver` en el navegador, medido de nuevo el 2026-10-09: tras «hola cort» el HUD pasó por `hud` → `hud fx-shaking` → `hud`, con la respuesta ya escrita en el log. El `shake` estaba **arreglado y sin productor** (el core sólo mandaba `pulse` y `glitch`); ahora lo manda en cada turno del modelo, con su prueba de orden en `test_protocol.py` |
-| 📊 | **Panel de telemetría**: cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó, si las acciones están encendidas. Con el apagador puesto el panel dice «apagadas» en vez de fingir. Y **reloj** en el cabezal del HUD | `test_status` (9) y `test_protocol` (8), y cliente real: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido: `00:25:04 → 00:25:07` en 2,1 s |
+| 📊 | **Panel de telemetría** —cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó, si las acciones están encendidas, si puede hablar primero—, ahora **dentro del hilo `2` del riel** en vez de fijo en una esquina. Con el apagador puesto dice «apagadas» en vez de fingir. Y **reloj** y **clima** en la línea de arriba, siempre visibles | `test_status` (10) y `test_protocol` (14), y cliente real: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido: `00:25:04 → 00:25:07` en 2,1 s. La telemetría se ve en el navegador abierta desde el riel el 2026-10-09 |
 | 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, terminal con banner y **siete barras** (core · interfaz · ollama · memoria · **audio** · **cámara** · red) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida. La barra de audio, ejecutada hoy: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s)`. La de red, con `--lan` y las dos direcciones escuchando en `0.0.0.0`. **Sin verificar el doble clic en el escritorio XFCE** (lo maneja a mano Sandra) |
 | 🎨 | **Atuendo por hora y temperatura real**: el reactor elige color según el cielo de la ciudad, y **se puede agrandar de un arrastre** (50 % a 200 %) | `pick_outfit` con las tres temperaturas de corte probadas; el tamaño, medido en el navegador: 18 fps a 100 % y los mismos 18 a 200 % |
 | 🌦️ | **Clima por Open-Meteo** (sin clave): la ciudad del `.env` se resuelve una vez, se refresca cada 15 min y se sirve de caché para no bloquear el WebSocket. Sin `CORT_CITY` no sale ningún paquete | 9 pruebas con HTTP simulado + una medición real: `Bogotá → 17,7 °C, código 3` |
 | 🤳 | **Gesto de cámara**: desenfocar con los dedos delante de la webcam encoge el orbe; enfocar lo devuelve a su tamaño. La cámara la abre un botón y apagarla detiene las pistas | Medido en el navegador con un stream real de imagen nítida y desenfocada: **100 % → 51 % al desenfocar, de vuelta al 100 %, 17 fps con el análisis activo** (18 sin él). Con dedos humanos: sin verificar (el navegador de pruebas negó el permiso) |
 | 🧍 | **Cuerpo proyectado con atuendo**: al elegir un archivo de su carpeta el reactor se apaga y aparece CORT en azul/morado semitransparente; al volver al reactor **la conexión no se toca** | Servido y probado en el navegador con sus propios PNG: catálogo por WebSocket, miniaturas cargadas desde `:8765`, y el cabezal diciendo «CORT en línea» con el avatar puesto. **26 fps** con un halo (22 con dos, 29 sin halo — por eso uno) |
 | 🧍‍♀️ | **Cuerpo 3D (VRM) dentro del mismo canvas**: los nueve archivos `avatar CORT *.vrm` se cargan con `@pixiv/three-vrm`, se les parchea el material estándar para volverlos holograma (banda de escaneo, borde por normal, sin escribir profundidad, teñidos del atuendo) y **ya no flotan en cruz**: el húmero gira 1,2 rad sobre su pose de reposo | Medido en el navegador con `?sonda` (el modelo queda en `window.__cort_vrm`): muñeca izquierda `[1,117 · y 0,96] → [0,547 · y 0,126]` y derecha espejo `[-1,117 · 0,96] → [-0,547 · 0,126]`, y captura con los brazos a lo largo del cuerpo. **7 fps** con el cuerpo puesto (18 con el reactor solo): por eso el `EffectComposer` y el `dpr` doble se apagan cuando hay VRM montado — con postproceso medido a **0,7 fps**, inutilizable. Dos fallos que estaban en el camino y se cerraron: el `.vrm` no podía leerse por `fetch` sin `Access-Control-Allow-Origin` en `GET /avatars/{nombre}` (prueba nueva en `test_avatars.py`), y sin `texture.channel = 0` el sombreador no compilaba (`uvundefined`, 259 avisos por frame) |
-| 📥 | **La pantalla es el reactor**: la bandeja (registro, telemetría, controles) está guardada y se abre desde la esquina, con el dedo o con el ratón; los mensajes que llegan con ella cerrada se cuentan en el propio tirador | Probado en el navegador: `abierto ↔ cerrado`, `aria-hidden`, `opacity` 1→0, aviso contando el saludo. En un móvil físico: **sin verificar** |
+| 📥 | **La pantalla es el reactor**: seis hilos de luz en el borde derecho, cada uno con su panel —registro, telemetría, voz, atuendos, cámara, ayuda—, y **uno cada vez**: al abrir uno se guarda el anterior. Con la cara limpia no hay caja ninguna tapando el orbe, y los mensajes que llegan sin abrir el hilo de mensajes se cuentan en el propio hilo | **Medido en el navegador** (2026-10-09) sobre `dist` con el core levantado y Ollama apagado: seis hilos con su número, `aria-expanded` al abrir, el panel que se sustituye al pasar a otro, contador de no-leídos dentro del hilo, y el riel y la barra bajando al 26 % a los doce segundos sin gesto. La lógica de ese estado es un módulo puro con **17 pruebas** (`make test-web`). En un móvil físico: **sin verificar** |
+| ⌨️ | **Se llega con tres manos**: con el dedo se toca el hilo, con el cursor basta pasar por encima, y con el teclado `1`–`6` abren cada panel, `/` salta al campo, `Esc` guarda, `h` apaga la cara y deja sólo el reactor, `?` lista las teclas. Al no haber actividad la interfaz **se aparta sola** y despierta con cualquier gesto | La tabla de teclas vive en una lista (`PANELES`) de la que se generan a la vez el riel, sus `aria-label` y el panel de ayuda, así que no puede desincronizarse de lo que el riel hace. **17 pruebas en Node** sobre el módulo de estado: que escribir en el campo no dispare atajos (sólo `Escape`), que ningún modificador (`Ctrl`/`Meta`/`Alt`) interfiera, que con un panel abierto o con `prefers-reduced-motion` nada se atenúe, y que el apagado ocurra en el segundo exacto y no antes. Vista en pantalla: pasar el cursor por `voz` sustituyó al panel de `teclas` sin un solo clic |
 | 📱 | **Interfaz preparada para táctil y para instalarse** (pulsaciones de 44-48 px, sin auto-zoom, `safe-area`, `manifest.webmanifest` con `display: standalone` e iconos), y **`--lan` para abrirla desde otro aparato** | El manifiesto, servido y medido: `200 application/manifest+json`, JSON válido y consola sin avisos. `--lan` probado en la red: `0.0.0.0:8780` dio `200` y un WebSocket contra la IP de red saludó y respondió. Lo del móvil físico: **sin verificar** |
 
 ## Plataforma: PC, móvil y por qué no C++/Java
@@ -236,9 +240,14 @@ CORT/
 │   ├── tests/                # 316 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db y rechazos.jsonl — fuera de git: son datos de la casa
 │   └── requirements.txt
-├── apps/web/                 # React 19 + Vite + Three.js (src/cort · scene · ui —incluido Voz.tsx— · public/)
-├── scripts/                  # cort.py (lanzador) · install-desktop.sh
-├── docs/                     # STATUS · ARCHITECTURE · ROADMAP · FUNCTIONS · PLATFORM · VISION
+├── apps/web/                 # React 19 + Vite + Three.js
+│   ├── src/cort/             # connection · palette · paneles · arrastre · defocus (lógica, sin DOM en paneles.ts)
+│   ├── src/scene/            # Core · Particles · Scene · Vrm (el orbe y el cuerpo, en un solo canvas)
+│   ├── src/ui/               # Hud · Riel · Telemetry · Voz · Avatar · Temporizador · Effects
+│   ├── tests/                # 17 pruebas de la cara (`node --test`)
+│   └── public/               # manifest.webmanifest + iconos de la PWA
+├── scripts/                  # cort.py (lanzador) · install-desktop.sh · pruebas-web.mjs
+├── docs/                     # STATUS · ARCHITECTURE · ROADMAP · FUNCTIONS · PLATFORM · REFERENCIAS · VISION
 ├── upstream/                 # referencias de terceros: solo lectura, con licencia
 ├── CORT.desktop · cort.bat   # doble clic en Linux y Windows
 ├── Makefile · AGENTS.md · CREDITS.md · LICENSE
@@ -287,7 +296,7 @@ Es el atajo de tres pasos que se pueden dar por separado si algo se rompe a mita
 |---|---|---|
 | `make setup` | crea el entorno aislado `.venv`, instala `fastapi`, `uvicorn[standard]` y `httpx`, y **copia `.env.example` a `.env`** si no existía | `.venv/` y `services/core/` |
 | `make web-deps` | `npm install` | `apps/web/node_modules/` |
-| `make web-build` | comprueba tipos con `tsc --noEmit` y genera la interfaz final con Vite | `apps/web/dist/` — 6,03 s de build medidos aquí |
+| `make web-build` | comprueba tipos con `tsc --noEmit` y genera la interfaz final con Vite | `apps/web/dist/` — 7,22 s de build medidos aquí (1 290 kB, gzip 358 kB) |
 
 **Sin `make`** (Windows, o donde no esté instalado):
 
@@ -340,6 +349,18 @@ Levanta el core, sirve la interfaz y abre el navegador. La terminal pinta seis b
 ```
 
 **`Ctrl+C` cierra las dos cosas** —el lanzador mata al hijo antes de salir, no deja procesos sueltos—.
+
+**Cómo se maneja la cara, en tres manos.** La pantalla es el reactor; lo demás son seis hilos en el borde derecho, cada uno con el número de su tecla:
+
+| | Dedo | Cursor | Teclado |
+|---|---|---|---|
+| abrir un panel | tocar el hilo | pasar por encima | `1` mensajes · `2` telemetría · `3` voz · `4` atuendos · `5` cámara · `6` teclas |
+| escribir a CORT | tocar el campo de abajo | idem | `/` salta al campo |
+| guardar lo abierto | tocar el mismo hilo, o el botón `guardar` del panel | idem | `Esc` |
+| apartar la interfaz | esperar doce segundos sin tocar nada: el riel y la barra bajan al 26 % y cualquier gesto los despierta | idem | `h` apaga la cara del todo y deja sólo el reactor (`h` otra vez la devuelve) |
+| qué tecla hace qué | abrir el hilo `6` | idem | `?` |
+
+Dos cosas que son a propósito: con el **cursor** basta pasar por encima (no hace falta clic para leer), y con el **dedo** no —en una pantalla táctil no existe el `hover`, y fingirlo haría que el panel se abriera al deslizar el dedo hacia otra cosa—. Y mientras se está escribiendo en el campo **ninguna tecla manda sobre la interfaz**: un `h` dentro de una frase es una `h`, y sólo `Escape` sale de ahí.
 
 Otros tres arranques útiles:
 
@@ -425,10 +446,13 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 316 pruebas, ~68-120 s en esta máquina (según carga)
+make test      # 316 pruebas del core, ~68-120 s en esta máquina (según carga)
+make test-web  # 17 pruebas de la interfaz, ~2 s (necesita `make web-deps` una vez)
 ```
 
-Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie. Las 29 anteriores son de red: matriz de direcciones locales, el arranque rechazado por subprocess, el WebSocket cerrado con 4401 antes del `accept()` y el 401 que llega **antes** de tocar el disco. Las 27 anteriores son de la bitácora (`test_audit.py` 20, `test_avatars.py` 6 y una en `test_security.py`): que el secreto no se cuele en el registro, que un `\n` no fabrique una línea, que un motivo inventado no se escriba, y que un disco lleno no tumbe al servidor. Las 32 últimas son del planificador (`test_planner.py` 27 y cinco nuevas de protocolo en `TestPlan`): que «x y z» dé los pasos en el orden en que se dijeron, que un tramo sin verbo herede el anterior, que cien órdenes pegadas se topen en cuatro, que `rm -rf /` no produzca ningún paso, y que un plan de dos pasos **nunca le pregunte a Ollama**.
+`make test-web` es la suite de la **cara**: el riel de paneles, sus teclas y su apagado por inactividad. Va separada de `make test` porque el core se prueba con Python puro y tiene que poder comprobarse en una máquina sin Node; y porque no instala nada —usa el `typescript` que ya trae `apps/web` para transpirar el módulo y lo ejecuta con `node --test`.
+
+Son de la biblioteca estándar de Python, no tocan la memoria real (`CORT_DOTENV=0`) ni le mueven el volumen a nadie. Las 29 anteriores son de red: matriz de direcciones locales, el arranque rechazado por subprocess, el WebSocket cerrado con 4401 antes del `accept()` y el 401 que llega **antes** de tocar el disco. Las 20 siguientes son de la bitácora (`test_audit.py`, más 6 en `test_avatars.py` y una en `test_security.py`): que el secreto no se cuele en el registro, que un `\n` no fabrique una línea, que un motivo inventado no se escriba, y que un disco lleno no tumbe al servidor. Las 27 últimas son del planificador (`test_planner.py` 27 y cinco nuevas de protocolo en `TestPlan`): que «x y z» dé los pasos en el orden en que se dijeron, que un tramo sin verbo herede el anterior, que cien órdenes pegadas se topen en cuatro, que `rm -rf /` no produzca ningún paso, y que un plan de dos pasos **nunca le pregunte a Ollama**.
 
 Y si usas `--lan`, hay una comprobación más que ninguna otra app te da:
 
@@ -469,6 +493,7 @@ make rechazos  # quién intentó lo que CORT no dejó, y desde dónde
 
 Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata a más cara):
 
+- **Interfaz, lo que queda por medir de lo ya escrito**: el **dedo sobre un teléfono físico** (los seis hilos se probaron con eventos sintéticos y con cursor), y **`Enter` para enviar** — el formulario está montado como `<form onSubmit>`, igual que antes del riel, y `form.requestSubmit()` envía y limpia el campo en la prueba; con `press_key "Enter"` desde el navegador automatizado no salió, así que esa tecla queda **sin verificar** en lugar de afirmada. Después, el escalón que sigue sin costar RAM: los **paneles laterales** de `Blades.tsx` (MIT) para el registro, y que un panel **proponga** algo en vez de esperar.
 - **Cuerpo 3D (VRM), lo que queda**: ya carga, ya es holograma y ya no está en cruz. Faltan tres cosas medidas: **7 fps** (la cadena de postproceso se apaga con él; recuperar bloom sin volver a 0,7 fps pide bajar partículas o resolución), **codos y muñecas** en su pose original (brazo rígido; el codo se barrió pero la medida no fue concluyente y no se publica un número sin medir), y **seguimiento de cabeza** hacia la cámara. Ninguna requiere hardware nuevo.
 - **Una figura por atuendo**: sus sprites son láminas con seis posturas (1280×720), así que la proyección 2D se ve como varias figuras pequeñas. Segregar una postura por archivo —o recortar la lámina— es trabajo de assets, no de código.
 - **HTTPS en la LAN**: mientras no lo haya, ni la cámara ni el micrófono del navegador se activan desde el teléfono, y el botón de gesto lo dice en vez de fallar en silencio. Es una decisión de seguridad de Sandra, no un ticket de código.
@@ -485,7 +510,8 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/STATUS.md`](docs/STATUS.md) | **Fuente de verdad operativa**: qué funciona de verdad, qué se intentó y falló, qué deuda hay |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, protocolo, capa de permisos, módulos de `apps/web` — con el por qué de cada decisión |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Nueve fases, cada una con su criterio de "listo" |
-| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 75 funciones con estado y viabilidad por sistema operativo |
+| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 76 funciones con estado y viabilidad por sistema operativo |
+| [`docs/REFERENCIAS.md`](docs/REFERENCIAS.md) | El análisis de los videos de interfaz que se usaron como referencia: seis patrones, qué se copió (distribución) y qué se descartó con su motivo — cero assets y cero líneas de terceros |
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |
 | [`docs/DEVELOPMENT-GUIDE.md`](docs/DEVELOPMENT-GUIDE.md) | Método de trabajo |

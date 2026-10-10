@@ -79,7 +79,7 @@ export function Atuendos({ visible, elegido, onElegir }: {
       <div className="atuendos-cabecalzo">
         <span className="zoom-label">atuendo</span>
         {elegido && (
-          <button type="button" className="atuendos-volver" onClick={() => onElegir(null)}>
+          <button type="button" className="chip" onClick={() => onElegir(null)}>
             volver al reactor
           </button>
         )}

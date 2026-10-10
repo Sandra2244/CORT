@@ -64,11 +64,19 @@ web-build:
 test:
 	cd $(CORE) && CORT_DOTENV=0 CORT_AUDIT_LOG=$${TMPDIR:-/tmp}/cort-make-test-rechazos.jsonl $(PY) -m unittest discover -s tests -v
 
+# Las pruebas de la cara. No hay navegador simulado: `scripts/pruebas-web.mjs`
+# transpila los módulos puros de `apps/web/src/cort` con el `typescript` que ya
+# es `devDependency` y los corre con el `node --test` que trae Node 20. Se mantiene
+# aparte de `test` a propósito: el core y sus pruebas son Python puro, y quien no
+# tenga Node instalado tiene que poder comprobar el cerebro igual.
+test-web:
+	node scripts/pruebas-web.mjs
+
 # Quién intentó lo que CORT no dejó: lee el registro real, en la carpeta que
 # ignora `.gitignore`. Aquí **sí** se lee el `.env` (sin `CORT_DOTENV=0`), porque
 # lo que se busca es la bitácora de esta máquina, no una base de pruebas.
 rechazos:
 	cd $(CORE) && $(PY) -m cort_core.audit
 
-.PHONY: setup install doctor dev launch web web-deps web-build demo test rechazos
+.PHONY: setup install doctor dev launch web web-deps web-build demo test test-web rechazos
 

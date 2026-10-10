@@ -2,9 +2,18 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, pintaFaltaDeLlave, send, setZoom, subscribe } from '../cort/connection'
 import { iniciarCamara, type Muestra } from '../cort/defocus'
 import { useArrastre } from '../cort/arrastre'
-import { Atuendos } from './Avatar'
-import { Voz } from './Voz'
 import { palette } from '../cort/palette'
+
+/**
+ * La línea de abajo: el cabezal y el campo de mensaje.
+ *
+ * Desde este corte esta barra **no guarda paneles**: guarda dos líneas finas —la
+ * de estado y la de escritura— que son siempre la cara de CORT, y punto. Los
+ * paneles (registro, telemetría, voz, atuendos, cámara, teclas) viven en el riel
+ * de la derecha, en `ui/Riel.tsx`, y se expanden uno a la vez. Es el patrón que
+ * sale de `docs/REFERENCIAS.md`: en los videos el HUD es un hilo de un renglón en
+ * el borde que se ensancha al apuntarle, no un cuadro con todo dentro.
+ */
 
 /**
  * La hora, en el borde del HUD.
@@ -75,8 +84,11 @@ function explicarError(e: unknown): string {
  * reactor es la cámara. El valor lo aplica `defocus.ts` con `setZoom` cinco veces
  * por segundo, sin pasar por el estado de React, y un control que se quedara
  * quieto mientras el orbe se encoge sería un control mentiroso.
+ *
+ * Lo exporta para que el riel lo monte en su propio panel: sigue siendo el mismo
+ * botón, la misma cámara y el mismo `cleanup`, sólo cambia de sitio en pantalla.
  */
-function GestoCamara() {
+export function GestoCamara() {
   const [m, setM] = useState<Muestra | null>(null)
   const [error, setError] = useState<string | null>(null)
   const parar = useRef<(() => void) | null>(null)
@@ -114,7 +126,7 @@ function GestoCamara() {
     <div className="gesto">
       <button
         type="button"
-        className={`gesto-btn ${activa ? 'on' : ''}`}
+        className={`chip gesto-btn ${activa ? 'on' : ''}`}
         onClick={alternar}
         aria-pressed={activa}
       >
@@ -143,20 +155,11 @@ function GestoCamara() {
   )
 }
 
-export function Hud({ abierto, atuendo, onAtuendo }: {
-  abierto: boolean
-  atuendo: string | null
-  onAtuendo: (nombre: string | null) => void
-}) {
+export function Hud({ cara, atenuado }: { cara: boolean; atenuado: boolean }) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
-  const log = useRef<HTMLDivElement>(null)
   const tint = palette[s.outfit] ?? palette.work
   const { pos, tirando, agarrar, reiniciar, nodo, desplazado } = useArrastre<HTMLDivElement>()
-
-  useEffect(() => {
-    log.current?.scrollTo({ top: log.current.scrollHeight })
-  }, [s.msgs.length])
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -172,7 +175,7 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
     // solo elemento la animación CSS escribe `transform` cada cuadro y el
     // desplazamiento del arrastre volvería al sitio original a media arrancada.
     <div
-      className={`hud-marco ${tirando ? 'tirando' : ''}`}
+      className={`hud-marco ${tirando ? 'tirando' : ''} ${cara ? '' : 'guardada'} ${atenuado ? 'atenuada' : ''}`}
       style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
     >
       <div className="hud" ref={nodo} style={{ ['--tint' as string]: tint.ui }}>
@@ -217,29 +220,20 @@ export function Hud({ abierto, atuendo, onAtuendo }: {
           )}
         </header>
 
-        <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
-          <GestoCamara />
-          <Voz />
-          <Atuendos visible={abierto} elegido={atuendo} onElegir={onAtuendo} />
-
-          <div className="log" ref={log} role="log" aria-live="polite">
-            {s.msgs.map((m, i) => (
-              <p key={i} className={m.from === 'user' ? 'me' : 'cort'}>{m.text}</p>
-            ))}
-          </div>
-
-          <form onSubmit={submit}>
-            <input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder="Escribe a CORT"
-              aria-label="Mensaje a CORT"
-              autoComplete="off"
-              enterKeyHint="send"
-            />
-            <button type="submit" disabled={!s.online}>Enviar</button>
-          </form>
-        </div>
+        <form onSubmit={submit}>
+          {/* El `id` es el destino del atajo `/`: el riel necesita poder traer el
+              cursor hasta aquí sin conocer el componente. */}
+          <input
+            id="cort-campo"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Escribe a CORT — con dos órdenes en la frase las hace las dos"
+            aria-label="Mensaje a CORT"
+            autoComplete="off"
+            enterKeyHint="send"
+          />
+          <button type="submit" disabled={!s.online}>Enviar</button>
+        </form>
       </div>
     </div>
   )

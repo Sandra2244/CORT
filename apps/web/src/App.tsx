@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { Effects } from './ui/Effects'
-import { Telemetry } from './ui/Telemetry'
-import { Bandeja } from './ui/Bandeja'
+import { Riel, usePaneles } from './ui/Riel'
 import { Avatar } from './ui/Avatar'
 import { Temporizador } from './ui/Temporizador'
 import { connect, setOrbeVisible } from './cort/connection'
@@ -12,12 +11,16 @@ export default function App() {
   useEffect(connect, [])
 
   /**
-   * La bandeja arranca **guardada**. La cara del proyecto es el reactor ocupando
-   * la pantalla entera, no un panel de texto: el registro, la telemetría y los
-   * controles se abren desde la esquina, con el dedo o con el ratón, y se cierran
-   * con `Esc`.
+   * La cara de CORT son **dos líneas y un riel**.
+   *
+   * El reactor ocupa la pantalla; abajo quedan el cabezal y el campo de mensaje,
+   * que son lo único siempre visible; y en el borde derecho, seis hilos de luz
+   * que se ensanchan uno a la vez. El estado de ese riel —qué hilo está abierto,
+   * si la cara está apagada con `H`, si ya se atenuó por inactividad— vive en
+   * `usePaneles()` y sus reglas puras en `cort/paneles.ts`, que es donde se
+   * prueban con `make test-web`.
    */
-  const [abierto, setAbierto] = useState(false)
+  const paneles = usePaneles()
 
   /**
    * El cuerpo de CORT: `null` = reactor; un nombre de archivo = proyección con
@@ -37,22 +40,13 @@ export default function App() {
    */
   const esModelo = atuendo !== null && /\.vrm$/i.test(atuendo)
 
-  useEffect(() => {
-    function teclas(e: KeyboardEvent) {
-      if (e.key === 'Escape') setAbierto(false)
-    }
-    window.addEventListener('keydown', teclas)
-    return () => window.removeEventListener('keydown', teclas)
-  }, [])
-
   return (
     <>
       <Scene atuendo={atuendo} onFallo={() => setAtuendo(null)} />
       <div className="scan" aria-hidden="true" />
       {!esModelo && atuendo && <Avatar nombre={atuendo} onFallo={() => setAtuendo(null)} />}
-      <Telemetry oculto={!abierto} />
-      <Hud abierto={abierto} atuendo={atuendo} onAtuendo={setAtuendo} />
-      <Bandeja abierto={abierto} onToggle={() => setAbierto((v) => !v)} />
+      <Hud cara={paneles.estado.cara} atenuado={paneles.atenuado} />
+      <Riel paneles={paneles} atuendo={atuendo} onAtuendo={setAtuendo} />
       {/* Va siempre montada y no se pinta casi nunca: devuelve `null` mientras no
           haya cuenta atrás. El temporizador no es un panel que se abre, es un
           número que aparece cuando se pide. */}

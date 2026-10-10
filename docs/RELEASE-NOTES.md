@@ -1,9 +1,59 @@
 # Notas de las Release
 
 Texto listo para pegar en GitHub (*Releases → Draft a new release → la etiqueta ya creada*).
-Las etiquetas `v0.7.0`, `v0.8.0` y `v0.9.0` están publicadas en el remoto y cada una resuelve
-a su commit; lo que falta es la página de Release, y eso necesita la sesión de la dueña del
-repositorio — desde esta máquina no se crea por API (`gh` sin sesión iniciada, medido dos veces).
+Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0` y `v0.10.0` están publicadas en el remoto y cada una
+resuelve a su commit; lo que falta es la página de Release, y eso necesita la sesión de la dueña
+del repositorio — desde esta máquina no se crea por API (`gh` sin sesión iniciada, medido dos veces).
+
+---
+
+## `v0.10.0` — la cara se aparta cuando deja de hacer falta
+
+Hasta ahora la pantalla de CORT tenía **un tirador que abría cinco paneles a la vez**. Esta
+versión la rediseña contra los videos de referencia que la dueña del proyecto aportó, y el
+resultado es **un riel de seis hilos en el borde derecho, uno por panel, y uno cada vez**.
+
+- **`docs/REFERENCIAS.md`** — el análisis, por escrito y por primera vez: siete clips, seis
+  fotogramas por clip en hojas de contacto, dos resultaron ser tutoriales de instalación y no
+  interfaz, y de los demás salen **seis patrones** (el reactor es la pantalla; los paneles son
+  hilos, no cajas; uno se abre y los demás se apartan; con el gesto la interfaz desaparece; la
+  entrada es una línea; se llega con tres manos). **Cero assets, cero fotogramas, cero líneas de
+  código de terceros en el repositorio**: lo que se copia es distribución, y está dicho en el doc.
+- **`cort/paneles.ts`** — todo el estado de la cara en **lógica pura, sin DOM**: seis paneles con
+  su etiqueta y su tecla en una sola lista, `alternar` que **sustituye** al panel abierto en vez
+  de acumular, y un apagado por inactividad que no atenúa nada si hay un panel abierto, si la cara
+  está apagada o si el sistema pide `prefers-reduced-motion`.
+- **`ui/Riel.tsx`** — seis hilos de luz con el número de su tecla; el panel se monta y se desmonta,
+  así que en reposo **no hay registro ni controles en el DOM**. El contador de mensajes sin leer
+  vive ahora dentro del hilo de mensajes.
+- **Se llega con tres manos**: el dedo toca el hilo; con el cursor basta pasar por encima
+  (filtrado por `pointerType === 'mouse'`, porque en una pantalla táctil el `hover` no existe y
+  fingirlo abriría paneles al deslizar); y el teclado es de primera clase — `1`–`6` abren cada
+  panel, `/` salta al campo, `Esc` guarda, `h` apaga la cara y deja sólo el reactor, `?` abre la
+  ayuda, que se genera de la misma lista que el riel, así que no puede desincronizarse.
+  **Mientras se escribe en el campo ninguna tecla manda sobre la interfaz**: sólo `Escape`.
+- **La interfaz se aparta sola**: doce segundos sin gesto y el riel con la barra de abajo bajan al
+  26 % de opacidad; cualquier movimiento los despierta. Es **un `setTimeout` rearmado**, no un
+  reloj contando, y el despertar por `pointermove` va recortado a 250 ms para no reconciliar el
+  árbol a 60 Hz en dos núcleos.
+- **Las primeras pruebas de JavaScript del repo, sin instalar nada**: `make test-web` transpira
+  `paneles.ts` con el paquete `typescript` que **ya estaba** en `devDependencies` y lo ejecuta con
+  `node --test`. **17 pruebas** que fijan lo que de verdad se rompe (atajos mientras se escribe,
+  teclas con modificador, el segundo exacto del apagado). Van separadas de `make test` porque las
+  316 de Python tienen que poder correr en una máquina sin Node.
+- `ui/Bandeja.tsx` **se elimina**; `ui/Hud.tsx` queda en una sola línea abajo, y `Telemetry.tsx`
+  pierde su prop `oculto` (si no hay panel abierto, no se monta).
+- **Sin marco nuevo en el protocolo** (el riel no habla con el core) y **sin dependencias nuevas**.
+- `make test` → **316 en verde**; `make test-web` → **17**; `npx tsc --noEmit` limpio;
+  `npm run build` limpio (1 289,96 kB, gzip 358,00 kB).
+
+**Sin verificar aquí**: el dedo sobre el teléfono físico (la pasada de navegador fue de cursor y
+teclado), el teclado del Android con `1`–`6`, y **`Enter` para enviar** — el `<form onSubmit>` no
+cambió con el riel y `form.requestSubmit()` envía y limpia el campo, pero con `press_key "Enter"`
+del navegador automatizado no disparó, así que esa tecla no se afirma. La portada del README sigue
+siendo la captura de `v0.6.0`, y el README lo dice: el tirador `⌃ mensajes` que se ve en ella ya no está.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.10.0.zip`
 
 ---
 

@@ -48,6 +48,7 @@ body {
   position: fixed;
   inset: auto 0 0 0;
   z-index: 2;
+  transition: opacity 320ms ease;
 }
 
 .hud {
@@ -57,9 +58,12 @@ body {
   margin: 0 auto;
   max-width: 680px;
   width: 100%;
-  padding: 14px 16px 18px;
+  /* El sitio del riel: la barra de abajo llega hasta el borde, y solaparse con
+     un control es peor que un campo algo más corto. */
+  padding: 14px 50px 18px 16px;
   background: linear-gradient(to top, rgba(6, 16, 34, 0.82), rgba(6, 16, 34, 0));
   backdrop-filter: blur(6px);
+  transition: transform 240ms ease;
 }
 
 /*
@@ -156,24 +160,20 @@ body {
   background: #ff5a7a;
 }
 
-/* Telemetría: lo que el core comprueba de sí mismo. Arriba a la derecha y
-   fuera del HUD de abajo, para no tapar ni el registro ni el reactor. */
+/* Telemetría: lo que el core comprueba de sí mismo.
+   Desde el corte del riel ya no es un cuadro fijo arriba a la derecha —eso era
+   media interfaz siempre abierta—: son cuatro filas dentro del panel que expande
+   el hilo `telemetría`. La caja, el desenfoque y el sitio los pone `.panel`;
+   aquí sólo queda la lectura, con su borde de tinte para que se sepa de dónde
+   sale cada número. */
 .telemetry {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 2;
   display: grid;
   gap: 5px;
-  min-width: 176px;
-  padding: 10px 12px;
+  padding: 2px 0 2px 10px;
   color: var(--dim);
   font-size: 0.76rem;
   letter-spacing: 0.03em;
-  background: linear-gradient(to bottom, rgba(6, 16, 34, 0.78), rgba(6, 16, 34, 0.34));
-  border: 1px solid rgba(120, 190, 230, 0.2);
   border-left: 2px solid var(--tint);
-  backdrop-filter: blur(6px);
   /* Informativo: si un día hay que pulsar algo aquí, es que esto cambió de sitio. */
   pointer-events: none;
 }
@@ -301,61 +301,254 @@ button:focus-visible {
   }
 }
 
-/* ─── Bandeja guardada ────────────────────────────────────────────────────
-   La pantalla por defecto es el reactor. Todo lo demás vive dentro de
-   `.cuerpo`, que se pliega con `opacity` + `transform`: animar `height` o
-   `max-height` obliga a recalcular el layout en cada frame, y aquí eso son
-   milisegundos que el orbe deja de tener. `visibility` al final del tiempo
-   saca los campos del orden de tabulación cuando ya no se ven. */
-.cuerpo {
+/* ─── El riel de la derecha: seis hilos, un panel ─────────────────────────
+   Sale del análisis de `docs/REFERENCIAS.md`. En los cuatro videos de interfaz
+   que se miraron fotograma a fotograma el HUD nunca es un cuadro grande: son
+   **líneas finas apiladas en un borde**, una se ensancha cuando se le apunta y
+   las demás vuelven a su trazo. Antes CORT tenía una esquina que abría mensajes,
+   telemetría, voz, atuendos y cámara todos a la vez: la sobrecarga que la dueña
+   del proyecto pidió quitar («no sobrecargar de paneles, que se oculten»).
+
+   Con `backdrop-filter` en el panel y no en los hilos: los seis se ven siempre,
+   el que está abierto es uno solo, y cada capa de desenfoque cuesta un búfer en
+   una máquina de 1,8 GiB con un canvas WebGL detrás. */
+.riel {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  padding: 4px 0;
+  transform: translateY(-50%);
+  opacity: 1;
+  transition: opacity 320ms ease;
+}
+
+/* El hilo en reposo es un número y un trazo de luz: 30 px anchos por 30 de alto.
+   La etiqueta no ocupa sitio — flota a la izquierda y aparece al apuntar —, y eso
+   no es tacañería de diseño: con las seis etiquetas siempre pintadas el riel medía
+   628 px en una ventana de 521 y el primer panel se quedaba **fuera de la
+   pantalla**. Medido en el navegador, y por eso está así. */
+.hilo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 30px;
+  height: 30px;
+  padding: 0 4px 0 6px;
+  color: var(--dim);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-right: 2px solid rgba(120, 190, 230, 0.22);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+
+.hilo::before {
+  content: '';
+  width: 2px;
+  height: 12px;
+  background: currentColor;
+  box-shadow: 0 0 9px var(--tint);
+}
+
+/* El número es la tecla, y la tecla es el mapa: se ve siempre para que `?` no sea
+   la única puerta. */
+.hilo-numero {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.hilo-nombre {
+  position: absolute;
+  right: 34px;
+  top: 50%;
+  translate: 0 -50%;
+  padding-right: 2px;
+  color: var(--tint);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.hilo:hover,
+.hilo:focus-visible {
+  color: var(--tint);
+  background-color: rgba(10, 26, 52, 0.66);
+  border-right-color: var(--tint);
+  outline: none;
+}
+
+.hilo:hover .hilo-nombre,
+.hilo:focus-visible .hilo-nombre {
+  opacity: 1;
+}
+
+/* El que está expandido es el único que se rellena: luz por dentro y etiqueta
+   encendida, para que «dónde estoy» se entienda sin leer nada. */
+.hilo.abierto {
+  color: var(--tint);
+  background-color: rgba(92, 225, 255, 0.14);
+  border-right-color: var(--tint);
+  box-shadow: 0 0 18px rgba(92, 225, 255, 0.22);
+}
+
+.hilo.abierto::before {
+  height: 18px;
+}
+
+/* La etiqueta del hilo abierto **no** se queda puesta: el panel que acaba de
+   abrirse lleva su nombre en el cabezal, y las dos palabras a la vez se
+   pisaban — la del riel caía justo encima del borde del panel. Se ve al pasar el
+   cursor o al llegar con `Tab`, que es cuando todavía no hay panel que la repita. */
+
+/* Cuántos mensajes llegaron con el registro guardado. Hereda la regla de la
+   esquina anterior: se pinta sólo si hay, porque un «0» fijo se lee como un
+   contador encendido y no como un aviso. **Sustituye** al número de la tecla en
+   el propio hilo —dos marcas en una casilla de 30 px se pisaban, y se vio en la
+   captura—; la tecla sigue estando dicha en el `aria-label`. */
+.hilo-aviso {
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  color: #04101f;
+  background: var(--tint);
+  box-shadow: 0 0 12px var(--tint);
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+  letter-spacing: 0;
+}
+
+/* Nadie toca nada y no hay ningún panel abierto: la cara se aparta y deja el
+   reactor solo. Es el patrón 4 de las referencias —mientras la mano trabaja, el
+   HUD se apaga— y con `prefers-reduced-motion` ni siquiera ocurre. */
+.riel.atenuado,
+.hud-marco.atenuada {
+  opacity: 0.26;
+}
+
+/* `H`: la cara entera se guarda. El riel se queda a media luz porque es la única
+   puerta que queda sin teclado. */
+.hud-marco.guardada {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease, visibility 0s linear 220ms;
+}
+
+.hud-marco.guardada .hud {
+  transform: translateY(18px);
+}
+
+.riel.cara-apagada .hilo {
+  opacity: 0.55;
+}
+
+.riel.cara-apagada .hilo.abierto,
+.riel.cara-apagada .hilo:hover {
+  opacity: 1;
+}
+
+/* El panel que expande el hilo: a la izquierda del riel, apoyado abajo para no
+   tapar nunca el reactor, que es lo que se está mirando. */
+.panel {
+  position: fixed;
+  right: 38px;
+  bottom: 112px;
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+  width: min(420px, calc(100vw - 74px));
+  max-height: min(62vh, 460px);
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: linear-gradient(to top, rgba(6, 16, 34, 0.9), rgba(6, 16, 34, 0.66));
+  border: 1px solid rgba(120, 190, 230, 0.22);
+  border-right: 2px solid var(--tint);
+  backdrop-filter: blur(7px);
+  animation: panel-abrir 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.cuerpo.cerrado {
-  opacity: 0;
-  transform: translateY(22px) scaleY(0.94);
-  pointer-events: none;
-  visibility: hidden;
-  transition: opacity 200ms ease, transform 220ms ease, visibility 0s linear 200ms;
+@keyframes panel-abrir {
+  from { opacity: 0; transform: translate(14px, 8px) }
+  to   { opacity: 1; transform: none }
 }
 
-/* La esquina táctil. Va en el vértice inferior derecho, recortada en diagonal
-   para que se lea como un pliegue del holograma y no como un botón de web. */
-.esquina {
-  position: fixed;
-  right: 0;
-  bottom: 0;
-  z-index: 4;
+.panel-cabezal {
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 0 16px 0 18px;
-  color: var(--tint);
-  font: inherit;
-  font-size: 0.74rem;
-  letter-spacing: 0.16em;
-  text-transform: lowercase;
-  background: linear-gradient(225deg, rgba(10, 26, 52, 0.92), rgba(10, 26, 52, 0.42));
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  border-right: 0;
-  border-bottom: 0;
-  border-top-left-radius: 14px;
-  backdrop-filter: blur(6px);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: box-shadow 240ms ease, color 240ms ease;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-/* El barrido de luz: una línea que recorre el borde y se apaga. Es lo que hace
-   que abrir la bandeja parezca revelado de holograma y no un div que aparece.
-   Un pseudo con `transform` animado, sin librería y sin repintar el layout. */
-.esquina::after {
+.panel-titulo {
+  color: var(--tint);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: lowercase;
+}
+
+.panel-aviso {
+  margin: 0;
+  color: #ff8fa6;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+/* Dentro del panel el registro manda en la altura: el techo de `38vh` es de la
+   barra de abajo, y aquí ya lo sujeta `max-height` del panel. */
+.panel .log {
+  max-height: none;
+}
+
+/* ─── Los botones ──────────────────────────────────────────────────────────
+   Antes de esto había dos botones de relleno plano (`Enviar` sólido y el resto
+   sin forma) y una etiqueta suelta. `.chip` es la única cara de control del HUD:
+   borde de luz, texto fino y un barrido al pasar por encima — el mismo gesto de
+   revelado que tenía la esquina, ahora en todos los botones. */
+.chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 15px;
+  overflow: hidden;
+  color: var(--tint);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.3);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: box-shadow 200ms ease, border-color 200ms ease, color 200ms ease;
+}
+
+.chip::after {
   content: '';
   position: absolute;
   inset: -1px;
@@ -367,61 +560,79 @@ button:focus-visible {
   opacity: 0;
 }
 
-.esquina:hover,
-.esquina:focus-visible {
-  box-shadow: 0 0 22px rgba(92, 225, 255, 0.28);
+.chip:hover,
+.chip:focus-visible {
+  border-color: var(--tint);
+  box-shadow: 0 0 20px rgba(92, 225, 255, 0.24);
   outline: none;
 }
 
-.esquina:hover::after,
-.esquina:focus-visible::after {
-  animation: barrido-esquina 900ms ease-out;
+.chip:hover::after,
+.chip:focus-visible::after {
+  animation: barrido-chip 900ms ease-out;
 }
 
-@keyframes barrido-esquina {
+@keyframes barrido-chip {
   from { background-position: 130% 0; opacity: 0.9 }
   to   { background-position: -30% 0; opacity: 0 }
 }
 
-.esquina-flecha {
-  font-size: 1rem;
-  line-height: 1;
+.chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
-.esquina.abierta {
-  color: var(--dim);
-}
-
-/* Cuántos mensajes llegaron con la bandeja cerrada. Se pinta sólo si hay, para
-   que un «0» no se confunda con un contador siempre encendido. */
-.esquina-aviso {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 10px;
+/* Estado encendido: el botón se rellena, porque un interruptor que no cambia de
+   color cuando está dado no es un interruptor, es un adorno. */
+.chip.on {
   color: #04101f;
   background: var(--tint);
-  box-shadow: 0 0 12px var(--tint);
+  border-color: var(--tint);
+  box-shadow: 0 0 18px var(--tint);
+}
+
+/* ─── La ayuda de teclado ──────────────────────────────────────────────────
+   El panel `teclas` (tecla `6`, o `?`). Se escribe la tecla en un `<kbd>` de
+   verdad y no en un párrafo: es la única forma de que la lista se lea de un
+   vistazo con el dedo ya en el teclado. */
+.ayuda {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.ayuda-fila {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.76rem;
+}
+
+.ayuda-fila span {
+  text-transform: lowercase;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 2px 6px;
+  color: var(--tint);
+  background: rgba(8, 24, 48, 0.8);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
   font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 20px;
   text-align: center;
-  letter-spacing: 0;
 }
 
-/* Con la bandeja guardada la telemetría también se guarda: si no, el panel de
-   arriba sería justo la mitad de la interfaz que se suponía que ya no estaba. */
-.telemetry.oculto {
-  opacity: 0;
-  transform: translateY(-10px);
-  transition: opacity 200ms ease, transform 200ms ease;
-}
-
-/* La esquina vive en el vértice inferior derecho, encima de todo lo demás, así
-   que el botón de enviar le cede sitio: solaparse con un control es peor que un
-   campo algo más corto. */
-.hud form {
-  padding-right: 132px;
+.ayuda-nota {
+  margin: 4px 0 0;
+  color: var(--dim);
+  font-size: 0.72rem;
+  line-height: 1.55;
 }
 
 /* ─── Gestos con la cámara ────────────────────────────────────────────────
@@ -435,27 +646,10 @@ button:focus-visible {
   min-height: 44px;
 }
 
-.gesto-btn {
-  padding: 0 14px;
-  min-height: 44px;
-  color: var(--dim);
-  font: inherit;
-  font-size: 0.76rem;
-  letter-spacing: 0.1em;
-  text-transform: lowercase;
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-/* Activa = el borde late y el texto toma el tinte: el estado se entiende de
-   un vistazo, sin leer la etiqueta. */
+/* El botón es `.chip` (arriba, en «Los botones»): lo único que queda aquí es el
+   latido del estado encendido, porque un LED fijo en la pantalla se confunde con
+   un adorno y uno que late dice «esto está mirando». */
 .gesto-btn.on {
-  color: #04101f;
-  background: var(--tint);
-  border-color: var(--tint);
-  box-shadow: 0 0 18px var(--tint);
   animation: pulso-camara 2.4s ease-in-out infinite;
 }
 
@@ -657,20 +851,6 @@ button:focus-visible {
   color: var(--tint);
 }
 
-.atuendos-volver {
-  padding: 6px 10px;
-  min-height: 34px;
-  color: var(--tint);
-  font: inherit;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  text-transform: lowercase;
-  background: transparent;
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
 .atuendos-nota {
   margin: 0;
   color: var(--dim);
@@ -702,12 +882,20 @@ button:focus-visible {
   text-shadow: 0 0 12px var(--tint);
 }
 
-/* En el teléfono la esquina es más ancha: el pulgar no acierta con un botón de
-   texto fino apoyado en el borde físico de la pantalla. */
+/* En el teléfono el riel se ensancha: el pulgar no acierta con un trazo de 30 px
+   apoyado en el borde físico de la pantalla, y seis fallos al abrir la voz son
+   peor que un dedo de más tapando el borde del reactor. Con `pointer: coarse`
+   además no hay `hover`, así que la etiqueta se ve siempre en el hilo abierto —
+   que es justo el caso en el que alguien necesita saber qué tocó. */
 @media (pointer: coarse) {
-  .esquina {
-    padding: 0 22px 0 24px;
-    min-height: 52px;
+  .hilo {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hilo-nombre {
+    right: 48px;
+    font-size: 0.72rem;
   }
 }
 
@@ -895,14 +1083,19 @@ input {
     max-height: 30dvh;
   }
 
+  .panel {
+    /* En 360 px de ancho un panel de 420 px no cabe: lo que importa es que se
+       lea, no que sobre. Se apoya a la izquierda del riel —que con dedo mide
+       44 px— y ocupa el ancho entero menos eso. */
+    right: 52px;
+    bottom: 122px;
+    width: calc(100vw - 62px);
+    max-height: 52dvh;
+    padding: 10px 12px 12px;
+  }
+
   .telemetry {
-    /* En 360 px de ancho un panel de 176 px tapa media escena. Aquí lo que
-       importa es que se lea, no que sobre. */
-    top: 8px;
-    right: 8px;
     gap: 3px;
-    min-width: 0;
-    padding: 7px 9px;
     font-size: 0.68rem;
   }
 
@@ -1018,17 +1211,14 @@ input {
     animation-timing-function: ease-out;
   }
 
-  /* La bandeja se sigue abriendo y cerrando — es estado, no adorno — pero sin
+  /* El panel se sigue abriendo y cerrando — es estado, no adorno — pero sin
      el deslizamiento, y el LED de la cámara deja de latir. */
-  .cuerpo,
-  .cuerpo.cerrado {
-    transform: none;
-    transition: opacity 120ms linear;
+  .panel {
+    animation: none;
   }
 
-  .esquina::after,
-  .esquina:hover::after,
-  .esquina:focus-visible::after {
+  .chip:hover::after,
+  .chip:focus-visible::after {
     animation: none;
   }
 
