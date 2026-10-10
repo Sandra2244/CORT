@@ -93,8 +93,23 @@ class TestLoad(unittest.TestCase):
     def test_el_archivo_que_busca_por_defecto_es_el_de_la_raiz(self):
         # Sin argumentos el cargador apunta a ROOT/.env; si ROOT no fuera la raíz
         # del repo, el lanzador y el core buscarían en sitios distintos.
-        self.assertEqual(ROOT.name, "CORT")
+        # Se comprueba la **forma** del directorio, no su nombre: quien baja el
+        # ZIP acaba en `CORT-main/` y quien clona lo llama como quiere. Medido el
+        # 2026-10-09 en una copia recién clonada en `CORT-nueva` — código idéntico
+        # commit por commit — donde exigir el nombre «CORT» tumbaba la suite
+        # entera con un fallo que no era del producto sino del apodo de la carpeta.
         self.assertTrue((ROOT / "Makefile").is_file(), f"ROOT apunta a {ROOT}")
+        self.assertTrue((ROOT / "AGENTS.md").is_file(), f"ROOT apunta a {ROOT}")
+        self.assertTrue(
+            (ROOT / "services" / "core" / "cort_core" / "env.py").is_file(),
+            f"ROOT apunta a {ROOT}",
+        )
+        # La raíz que ve el cargador y la que ven estas pruebas tienen que ser la
+        # misma, contada desde dos ficheros distintos: un índice `parents` mal
+        # puesto aquí sería exactamente el bug que esta prueba existe para cazar.
+        # (Y lo cazó: escrito `parents[2]` falló al ejecutarlo, cuando el índice
+        # correcto para llegar a la raíz desde `services/core/tests/` es `3`.)
+        self.assertEqual(ROOT, Path(__file__).resolve().parents[3])
 
 
 if __name__ == "__main__":
