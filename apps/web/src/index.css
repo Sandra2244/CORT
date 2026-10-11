@@ -299,6 +299,42 @@ body {
   background: #ff5a7a;
 }
 
+/* N9 (docs/TRANSPLANTE.md): el punto además respira con la fase. Los colores
+   de escucha y habla son un puerte directo del `phaseColor` de adewaskar/jarvis
+   (MIT, atribución allí): listening #19d8d2, speaking #3ef2a8. Para «piensa»
+   NO se copia su ámbar (#f0a93c) — reñiría con la paleta Cortana que manda en
+   `palette.ts` — y manda el magenta de esfuerzo de siempre (THINKING_HOT). */
+.dot.on.fase-escucha {
+  color: #19d8d2;
+  background: #19d8d2;
+}
+
+.dot.on.fase-piensa {
+  color: #ff5ce0;
+  background: #ff5ce0;
+}
+
+.dot.on.fase-habla {
+  color: #3ef2a8;
+  background: #3ef2a8;
+}
+
+/* Latido parejo para las tres fases activas: «legible desde el otro lado de la
+   habitación», la regla del visualizer. Reposo no late — en reposo la cara
+   respira con el reactor, no con el punto. */
+.dot.on.fase-escucha,
+.dot.on.fase-piensa,
+.dot.on.fase-habla {
+  animation: dot-fase 1.1s ease-in-out infinite;
+}
+
+@keyframes dot-fase {
+  50% {
+    transform: scale(1.4);
+    opacity: 0.7;
+  }
+}
+
 /* Telemetría: lo que el core comprueba de sí mismo. R2 la bajó de la esquina
    fija a la superficie modal — en reposo la cara no lleva paneles informativos
    —, y N1 la dejó en la ventana «sistema»: aquí es un bloque **estático**, sin
@@ -674,6 +710,34 @@ button:focus-visible {
      el patrón está; medir fps queda para la re-verificación en navegador. */
   backdrop-filter: blur(10px) saturate(1.3);
   overflow: hidden;
+  /* N9: llegada con ceremonia — la variante `materialise` de los paneles de
+     adewaskar/jarvis (MIT), en versión corta: 260 ms de fondo, escala y un
+     velo. El nodo se monta al entrar a la pila (`key={id}`), así que la
+     animación dispara sola en la apertura y no al reordenar la pila. El relleno
+     es `backwards` y no `both`: con `both` el `transform` del keyframe se
+     quedaría clavado después del final y anularía al del arrastre. */
+  animation: materialise 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
+}
+
+@keyframes materialise {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ventana,
+  .menu,
+  .dot.on {
+    animation: none;
+  }
 }
 
 .ventana-voz { left: 14px; top: 15vh }
@@ -809,6 +873,9 @@ button:focus-visible {
   box-shadow: 0 0 48px rgba(92, 225, 255, 0.14);
   backdrop-filter: blur(10px) saturate(1.3);
   overflow: hidden;
+  /* Misma ceremonia que las ventanas (N9): el menú se monta sólo cuando está
+     abierto, así que el `materialise` le dispara en cada apertura. */
+  animation: materialise 0.26s cubic-bezier(0.2, 0.9, 0.3, 1.15) backwards;
 }
 
 .menu.tirando {

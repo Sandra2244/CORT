@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { DEFAULT_OUTFIT, SPIN, THINKING_HOT, palette, type Outfit } from './palette'
+import { faseDe, type Fase } from './fase'
 
 export type Msg = { from: 'user' | 'cort'; text: string }
 
@@ -65,6 +66,12 @@ export type Snapshot = {
   online: boolean
   outfit: Outfit
   thinking: boolean
+  /**
+   * La fase que ve la usuaria (N9): mezcla del `thinking` del core con lo que
+   * la página sabe de sí misma (micrófono y voz, vía `setMicro`/`setTts`). Es
+   * **un hecho de la página, no del cable** — el protocolo no cambió una línea.
+   */
+  fase: Fase
   msgs: Msg[]
   status: Status | null
   /**
@@ -97,6 +104,7 @@ let snapshot: Snapshot = {
   online: false,
   outfit: DEFAULT_OUTFIT,
   thinking: false,
+  fase: 'reposo',
   msgs: [],
   status: null,
   clima: null,
@@ -126,7 +134,7 @@ export const getSnapshot = () => snapshot
 export const target = {
   color: new THREE.Color(palette[DEFAULT_OUTFIT].core),
   hot: new THREE.Color(palette[DEFAULT_OUTFIT].hot),
-  spin: SPIN.idle,
+  spin: SPIN.reposo,
   open: 0,
   /**
    * Tamaño del reactor que pide la usuaria, 1 = el de siempre. Vive aquí y no
@@ -159,6 +167,41 @@ export const zoomLimits = { min: ZOOM_MIN, max: ZOOM_MAX }
 /** Mostrar o esconder el reactor sin tocar la conexión ni el estado del core. */
 export function setOrbeVisible(visible: boolean) {
   target.visible = visible
+}
+
+/**
+ * Señales locales de voz (N9). Viven aquí y no en el snapshot porque son
+ * crudas: `habla` con tres frases en cola enciende y apaga el micrófono varias
+ * veces por turno, y la fase que se pinta es siempre la resolución de las tres
+ * señales juntas (`faseDe`), nunca una de ellas sola.
+ */
+const señales = { micro: false, tts: false }
+
+/** La escena persigue la fase: giro y alto brillante salen del mismo cálculo. */
+function pintarFase(fase: Fase) {
+  const tint = palette[snapshot.outfit] ?? palette[DEFAULT_OUTFIT]
+  target.spin = SPIN[fase]
+  target.hot.set(fase === 'piensa' ? THINKING_HOT : tint.hot)
+}
+
+/** Recalcular la fase tras cualquier cambio de señal; sólo avisa si cambió. */
+function sincronizarFase() {
+  const fase = faseDe({ micro: señales.micro, tts: señales.tts, core: snapshot.thinking })
+  if (fase === snapshot.fase) return
+  set({ fase })
+  pintarFase(fase)
+}
+
+/** El micrófono del navegador encendido/apagado — lo sabe `Voz.tsx`. */
+export function setMicro(v: boolean) {
+  señales.micro = Boolean(v)
+  sincronizarFase()
+}
+
+/** CORT hablando en voz alta — lo sabe `Voz.tsx` en `onstart`/`onend`. */
+export function setTts(v: boolean) {
+  señales.tts = Boolean(v)
+  sincronizarFase()
 }
 
 // El core y la página viven en puertos distintos (8765 y 8780), así que una
@@ -228,7 +271,10 @@ function open() {
     // `status: null` porque los números eran de un core que ya no contesta:
     // dejarlos en pantalla sería seguir afirmando "12 recuerdos" sin tenerlo
     // comprobado. Al reconectar, el core vuelve a enviarlos.
-    set({ online: false, status: null, crono: null })
+    set({ online: false, status: null, crono: null, thinking: false })
+    // La fase se apaga con el core: un reactor que sigue "pensando" sin cable
+    // es el mismo reloj que miente que era el `setInterval` sin servidor.
+    sincronizarFase()
     timer = window.setTimeout(open, 3000)
   }
   s.onmessage = (e) => {
@@ -278,15 +324,18 @@ function applyState(m: { outfit?: string; thinking?: boolean; city?: string; tem
   const tint = palette[outfit] ?? palette[DEFAULT_OUTFIT]
   const thinking = Boolean(m.thinking)
   target.color.set(tint.core)
-  target.hot.set(thinking ? THINKING_HOT : tint.hot)
-  target.spin = thinking ? SPIN.thinking : SPIN.idle
-  target.open = 1.6
   // `Number.isFinite` y no `if (m.temp_c)`: 0 °C es un clima real, y con la
   // comprobación a secas el HUD lo pintaría como "sin ciudad".
   const clima = Number.isFinite(m.temp_c) && typeof m.city === 'string'
     ? { city: m.city, temp_c: m.temp_c as number }
     : null
   set({ online: true, outfit, thinking, clima })
+  // El giro y el alto los decide la **fase**, no `thinking` a secas: si CORT
+  // está leyendo la respuesta en voz alta, mandar callar al magenta sería
+  // pintar el mismo hecho dos veces distinto. `pintarFase` se llama aunque la
+  // fase no cambie: el atuendo sí puede haberlo hecho en este cuadro.
+  sincronizarFase()
+  pintarFase(snapshot.fase)
 }
 
 export function send(text: string) {

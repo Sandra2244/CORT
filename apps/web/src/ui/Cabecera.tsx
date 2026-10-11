@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe } from '../cort/connection'
+import { FASE_TEXTO } from '../cort/fase'
 import { useArrastre } from '../cort/arrastre'
 
 /**
@@ -15,9 +16,11 @@ import { useArrastre } from '../cort/arrastre'
  * propiedades separadas a propósito: se componen y no se pisan.
  *
  * El puntito del lado derecho es el cable: verde-azulado si el core contesta,
- * rojo si no. Un punto y no una frase — «Sin conexión con el core — ejecuta:
- * make dev» sigue existiendo, pero dentro de la bandeja, que es donde alguien
- * que va a arreglar algo la necesita.
+ * rojo si no. Desde N9 el punto además **respira con la fase** (escucha,
+ * piensa, habla): color y latido salen de `Snapshot.fase`, y el `title` dice la
+ * palabra. Sigue siendo un punto y no una frase — «Sin conexión con el core —
+ * ejecuta: make dev» sigue existiendo, pero dentro de la bandeja, que es donde
+ * alguien que va a arreglar algo la necesita.
  *
  * Mismo `Clock()` de antes: componente con su propio temporizador, alineado al
  * segundo exacto y con `tabular-nums`. Si la hora viviera en el snapshot global,
@@ -57,7 +60,10 @@ export function Cabecera() {
       aria-label="hora y conexión — se agarra y se mueve"
     >
       <Reloj />
-      <span className={`dot ${s.online ? 'on' : 'off'}`} title={s.online ? 'CORT en línea' : 'sin conexión con el core'} />
+      <span
+        className={`dot ${s.online ? `on fase-${s.fase}` : 'off'}`}
+        title={s.online ? FASE_TEXTO[s.fase] : 'sin conexión con el core'}
+      />
       {desplazado && (
         <button
           type="button"

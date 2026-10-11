@@ -21,5 +21,11 @@ export const DEFAULT_OUTFIT: Outfit = 'work'
 /** Acento de esfuerzo: el orbe tira a magenta mientras CORT piensa. */
 export const THINKING_HOT = '#ff5ce0'
 
-/** Giro del reactor por estado, en multiplicadores sobre la animación base. */
-export const SPIN = { idle: 0.55, thinking: 2.8 }
+/**
+ * Giro del reactor por **fase** (N9), en multiplicadores sobre la animación
+ * base. La escalera es deliberada: reposo respira, escucha levanta un poco la
+ * oreja, habla se anima con la voz, y piensa es el torbellino de antes. La
+ * regla tomada del visualizer de referencia: cada estado tiene que leerse
+ * desde el otro lado de la habitación, no sólo ser distinto en la matemática.
+ */
+export const SPIN = { reposo: 0.55, escucha: 1.1, habla: 1.7, piensa: 2.8 }

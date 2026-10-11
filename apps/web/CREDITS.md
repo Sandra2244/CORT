@@ -66,3 +66,35 @@ que son **AGPL-3.0**, no se copió ninguna línea: de ahí viene la idea de que 
 paneles se puedan arrastrar y apilar, y nada de código. La distinción es la regla 9
 de `AGENTS.md`, no un detalle de estilo — copiar código AGPL obligaría a publicar
 CORT bajo AGPL.
+
+## N9 — la máquina de fases (madrugada del 2026-10-10)
+
+Dos procedencias distintas, y por eso se dicen aparte:
+
+**`src/cort/fase.ts`** — **idea AGPL reescrita, cero líneas copiadas.** La
+gramática `idle / listening / thinking / speaking` del `ai-visualizer` de
+jaredrhod y su regla de que cada estado se lea «desde el otro lado de la
+habitación». El archivo se escribió desde cero en español con otra prioridad
+deliberada (habla > piensa > escucha; la referencia no mezcla micrófono y TTS
+porque su estado viene de un solo emisor) y otra fuente de señales (aquí `core`
+llega por WebSocket y `micro`/`tts` los declara la propia página). El análisis
+completo, licencia por licencia, está en `docs/TRANSPLANTE.md`.
+
+**`src/index.css` (bloques `.dot.fase-*` y `@keyframes materialise`) y la
+estructura de `fase.ts`** — **copiadas y adaptadas de adewaskar/JARVIS (MIT)**,
+como permite la licencia y como manda la regla 9:
+
+1. Los dos colores de fase (`listening #19d8d2` → `escucha`, `speaking #3ef2a8`
+   → `habla`) salen del `phaseColor` de su `store.ts`. Para «piensa» **no** se
+   copió su ámbar `#f0a93c`: reñiría con la paleta Cortana que manda en
+   `palette.ts`, y ahí sigue el magenta de esfuerzo `#ff5ce0` que ya estaba.
+2. La llegada `materialise` de las ventanas y el menú es su variante de
+   `Panels.tsx`, reducida a una sola de las cinco que él ofrece (las otras
+   cuatro piden una gramática de gestos que aquí aún no existe) y con relleno
+   `backwards` en vez de `both`: con `both` el `transform` del keyframe se queda
+   clavado y anularía al del arrastre, un fallo que el original no puede tener
+   porque sus paneles no se mueven con el keyframe activo.
+3. La idea estructural del `store.ts` —tres señales crudas → una fase → un
+   color decidido en **un solo lugar**, compartido por la escena 3D y el HUD—
+   es suya; la implementación (`señales`, `sincronizarFase`, `pintarFase` en
+   `connection.ts`) es de aquí.

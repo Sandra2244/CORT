@@ -20,10 +20,25 @@ inviable sin APK / choca con una regla de seguridad**—, dicho en vez de simula
 > secciones (`ui/Menu.tsx`, tecla `m`, botón «menú» en la bandeja): cinco filas reales con su
 > tecla y cuatro filas «en camino» nombradas sin simular (agenda N2 · consola N3 · dispositivos
 > N7 · documentos N8); estado puro en `ventanas.menu` con **17 pruebas**; `Esc` ahora despide
-> primero el menú. Criterio nuevo anotado por la dueña: **el consumo objetivo es un Samsung
-> A16 (4 GB) y el PC del colaborador, no este portátil** — las medidas de fps hay que tomarlas
-> allí. Sigue el orden: **N2 (agenda que habla sola) → N3 (consola chat‑agente) →
-> N5 (mano, opcional y medido)**.
+> primero el menú. **N9 hecha la madrugada siguiente** — el pedido de la dueña
+> («que funcione como el JARVIS de jaredrhod, integrado, que la cara reaccione»)
+> se respondió leyendo los repos citados y escribiendo el análisis con su ley de
+> licencias en **`docs/TRANSPLANTE.md`**: de `ai-visualizer` (AGPL) se reescribió
+> la gramática de estados, y de adewaskar/jarvis (MIT) se puertaron el color de
+> fase y la llegada `materialise`. Resultado: `cort/fase.ts` puro con **10
+> pruebas** (27 en total), el punto del reloj respira en escucha/piensa/habla,
+> el reactor gira por fase y las ventanas se materializan al abrirse — sin
+> tocar el protocolo. Criterio nuevo anotado por la dueña: **el consumo objetivo
+> es un Samsung A16 (4 GB) y el PC del colaborador, no este portátil** — las
+> medidas de fps hay que tomarlas allí. Del mismo análisis salen tres
+> incrementos nuevos: **N10 modo sala** (pantalla completa, cursor oculto,
+> atenuado por inactividad — la parte honesta del «salvapantallas integrado»
+> que la web sí puede dar), **N11 escucha local** (VAD de energía + aplauso para
+> despertar, puerte MIT de `vad.ts`/`clap.ts`) y **N12 caparazón nativo** (Tauri
+> en la PC de Askher: autostart y orbe siempre-encima — lo que el navegador no
+> puede, dicho en vez de simulado). Sigue el orden: **N2 (agenda que habla sola)
+> → N3 (consola chat‑agente) → N10 (modo sala) → N5 (mano, opcional y medido)**;
+> N11 y N12 cuando el A16 y la PC del colaborador entren en el bucle.
 
 ## Los seis patrones que salen de los cuatro videos
 

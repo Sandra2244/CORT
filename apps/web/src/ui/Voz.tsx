@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getSnapshot, send, subscribe } from '../cort/connection'
+import { getSnapshot, send, setMicro, setTts, subscribe } from '../cort/connection'
 
 /**
  * Voz de CORT, hecha con lo que ya trae el navegador: nada que instalar y nada
@@ -12,6 +12,13 @@ import { getSnapshot, send, subscribe } from '../cort/connection'
  *
  * El micrófono es una conversación: escucha, manda lo dicho a CORT, calla
  * mientras CORT responde (si no, se oiría a sí mismo) y vuelve a escuchar.
+ *
+ * Desde N9 los dos interruptores además **avisan a la cara**: `setMicro` y
+ * `setTts` alimentan la máquina de fases (`cort/fase.ts`), y el puntito del
+ * cabezal y el giro del reactor dicen escucha/piensa/habla sin que el core
+ * tenga que enterarse — es un hecho de la página, no del cable. Se declara la
+ * **intención** (el botón encendido), no el `rec.start()` de cada respiración:
+ * entre reintentos hay 350 ms de silencio y la cara no debe parpadear en ellos.
  */
 
 const SR: any = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
@@ -126,6 +133,7 @@ export function Voz() {
   function apagarEscucha() {
     escuchaRef.current = false
     setEscucha(false)
+    setMicro(false)
     pararReconocimiento()
   }
 
@@ -140,6 +148,7 @@ export function Voz() {
       if (voz) u.voice = voz
       u.onstart = () => {
         hablandoRef.current = true
+        setTts(true)
         // Mientras CORT habla, el micrófono se cierra: no debe oírse a sí mismo.
         pararReconocimiento()
       }
@@ -147,6 +156,7 @@ export function Voz() {
         if (window.speechSynthesis.speaking || window.speechSynthesis.pending) return
         hablandoRef.current = false
         esperandoRef.current = false
+        setTts(false)
         if (escuchaRef.current) window.setTimeout(arrancarReconocimiento, 350)
       }
       window.speechSynthesis.speak(u)
@@ -181,6 +191,8 @@ export function Voz() {
     window.speechSynthesis?.getVoices()
     return () => {
       escuchaRef.current = false
+      setMicro(false)
+      setTts(false)
       pararReconocimiento()
       window.speechSynthesis?.cancel()
     }
@@ -201,6 +213,7 @@ export function Voz() {
     } else {
       window.speechSynthesis.cancel()
       hablandoRef.current = false
+      setTts(false)
     }
   }
 
@@ -222,6 +235,7 @@ export function Voz() {
     escuchaRef.current = true
     esperandoRef.current = false
     setEscucha(true)
+    setMicro(true)
     arrancarReconocimiento()
   }
 
