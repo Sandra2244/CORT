@@ -186,8 +186,9 @@ function Ayuda() {
         Se agarran de su barra superior —con el ratón o con el dedo— y se sueltan
         donde quieras; nunca se salen de la pantalla. <b>◐</b> cambia el vidrio
         (opaco · vidrio · bruma — transparente del todo); <b>✕</b> oculta la
-        ventana y su tecla la devuelve; <b>⤾</b> la devuelve a su sitio. El reloj
-        de arriba también se mueve agarrándolo.
+        ventana y su tecla la devuelve; <b>⤾</b> la devuelve a su sitio. Arriba,
+        la <b>barra de comandos</b> dice hora, fase y red; a la izquierda, el{' '}
+        <b>riel</b> enciende cada ventana con su glifo.
       </p>
       <p>
         <b>atajos</b> — <code>1</code> voz · <code>2</code> cámara ·{' '}

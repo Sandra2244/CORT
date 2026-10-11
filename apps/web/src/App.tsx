@@ -4,7 +4,9 @@ import { Hud } from './ui/Hud'
 import { Effects } from './ui/Effects'
 import { Bandeja } from './ui/Bandeja'
 import { Avatar } from './ui/Avatar'
-import { Cabecera } from './ui/Cabecera'
+import { Barra } from './ui/Barra'
+import { Riel } from './ui/Riel'
+import { Arranque } from './ui/Arranque'
 import { Menu } from './ui/Menu'
 import { Respuesta } from './ui/Respuesta'
 import { Ventanas } from './ui/Ventanas'
@@ -18,8 +20,9 @@ import { connect, setOrbeVisible, setZoom } from './cort/connection'
  * docs/REDESIGN-NUCLEO.md).
  *
  * ```text
- * L0 escena     fondo casi-negro con líneas de barrido       (siempre)
- * L1 cara       reactor/VRM + reloj arrastrable con su punto (siempre)
+ * L0 escena     fondo casi-negro + CARCASA de corchetes en las esquinas (siempre)
+ * L1 cara       reactor/VRM + BARRA DE MANDO (marca · punto de fase ·
+ *               reloj hh:mm:ss · fecha · red) + RIEL de secciones a la izq.
  * L2 voz        subtítulo de la última respuesta             (8 s, auto-cierre)
  * L2+ bandeja   registro completo + entrada                  (esquina / tap / Ctrl+/)
  * L3 ventanas   voz · cámara · atuendos · sistema · ayuda    (teclas 1–5, apilables)
@@ -27,12 +30,19 @@ import { connect, setOrbeVisible, setZoom } from './cort/connection'
  * L4 resultados temporizador arriba a la izquierda; la       (sólo cuando existen)
  *               captura y el clima viajan por el subtítulo
  * L5 efectos    pulso/glitch/scan — intactos                 (mandados por el core)
+ * telón         ARRANQUE: emblema de anillos hasta que abre  (sólo al abrir)
+ *               el cable, con tope honesto de 2,5 s
  * ```
  *
- * Regla madre: **en reposo, tres cosas — el reactor, el reloj y la esquina.**
- * Lo demás se invoca y se despide; ahora además se mueve: la pila de ventanas
- * vive en `cort/ventanas.ts` (pura, probada con `make test-web`) y el vidrio
- * regula cuánto reactor se ve a través de ella.
+ * Regla madre (CARETA v2, fase A — `docs/REDESIGN-CARETA.md`): **la pantalla
+ * entera es el HUD.** En reposo la cabina ya no son «tres cosas sueltas» sino
+ * un **marco**: la barra de mando arriba, el riel de secciones a la izquierda y
+ * los corchetes en las esquinas son cromo fijo — siempre visibles, `aria-hidden`
+ * cuando no aportan información—; el contenido (ventanas, bandeja, subtítulo)
+ * sigue invocándose y despidiéndose. El reloj flotante y agarrable de N1 se
+ * retiró con este cambio: su trabajo (ver la hora sin abrir nada) lo hace ahora
+ * la barra, y el arrastre vive en las ventanas y en la bandeja. La pila sigue
+ * siendo lógica pura en `cort/ventanas.ts` (probada con `make test-web`).
  */
 export default function App() {
   useEffect(connect, [])
@@ -139,8 +149,16 @@ export default function App() {
     <>
       <Scene atuendo={atuendo} tamaño={tamaño} onFallo={() => setAtuendo(null)} onInvocar={invocarEntrada} />
       <div className="scan" aria-hidden="true" />
+      {/* La carcasa (CARETA v2 fase A): corchetes en las cuatro esquinas de la
+          pantalla. Puro cromo de cabina, `aria-hidden` y `pointer-events: none`
+          — no es un panel, no se toca, no intercepta el arrastre de nada. */}
+      <div className="carcasa" aria-hidden="true">
+        <span className="carcasa-e sq" /><span className="carcasa-e sr" />
+        <span className="carcasa-e qi" /><span className="carcasa-e qr" />
+      </div>
       {!esModelo && atuendo && <Avatar nombre={atuendo} onFallo={() => setAtuendo(null)} />}
-      <Cabecera />
+      <Barra />
+      <Riel estado={ventanas} onAlternar={(id) => setVentanas((v) => alternar(v, id))} onMenu={() => setVentanas(toggleMenu)} />
       {/* El subtítulo no se pinta con la bandeja abierta: sería la misma frase
           dos veces, una encima de la otra. */}
       <Respuesta visible={!abierto} onAbrir={() => setAbierto(true)} />
@@ -174,6 +192,9 @@ export default function App() {
           número que aparece cuando se pide. */}
       <Temporizador />
       <Effects />
+      {/* El telón de arranque va al final del árbol y con el z-index más alto:
+          cubre la cabina entera y se levanta solo cuando el cable abre. */}
+      <Arranque />
     </>
   )
 }

@@ -73,7 +73,7 @@ export type Estado = {
   readonly menu: boolean
 }
 
-/** En reposo: ninguna ventana ni menú. La cara sigue siendo reactor, reloj y esquina. */
+/** En reposo: ninguna ventana ni menú abierta. La cara es reactor y cockpit. */
 export const reposo: Estado = { pilas: [], vidrio: VIDRIO_INICIAL, menu: false }
 
 /**

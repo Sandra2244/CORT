@@ -4,8 +4,9 @@ import { getSnapshot, subscribe } from '../cort/connection'
 /**
  * El punto de entrada.
  *
- * Regla del rediseño (R1): en reposo la pantalla tiene tres cosas — reactor,
- * reloj y ESTE botón. Antes era una pestaña con texto («⌃ mensajes»); ahora es
+ * Regla del rediseño (R1, revisitada por CARETA v2): en reposo la pantalla es
+ * cockpit — reactor, barra de comandos, riel, carcasa y ESTE botón. Antes era
+ * una pestaña con texto («⌃ mensajes»); ahora es
  * un punto de luz en la esquina, que es como lo pintan todas las referencias:
  * un indicio, no un letrero. El contador de mensajes llegados por leer sigue
  * ahí — es la única palabra que se permite, y sólo cuando hay algo que decir.

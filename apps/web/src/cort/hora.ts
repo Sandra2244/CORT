@@ -1,10 +1,12 @@
 /**
- * El reloj de la bandeja (N13 — bandeja viva).
+ * El reloj de la cara y de la bandeja (N13 — bandeja viva; CARETA v2 se lo
+ * llevó también a la barra de comandos).
  *
- * Vive aparte del reloj de la cara (`ui/Cabecera.tsx`) por dos motivos: la cara
- * se basta con `HH:MM` —segundos en la periferia visual serían ruido—, y la
- * bandeja abierta sí los pide: quien está escribiendo quiere ver el minuto a
- * minuto de su conversación, como en la barra de mando de las referencias.
+ * Vive en la lógica pura y no dentro de un componente por lo único que se
+ * puede probar con verdad: el formato. Desde la fase A la barra de arriba usa
+ * `hh:mm:ss` entero —el reloj grande es el cronómetro de la cara, no ruido— y
+ * la bandeja abierta lo sigue pidiendo: quien está escribiendo quiere ver el
+ * minuto a minuto de su conversación, como en las referencias.
  *
  * Se formatea a mano y no con `toLocaleTimeString`: el formato de la referencia
  * es fijo (`hh:mm:ss` en 24 h, `dd/mm/aaaa`), y una función que depende del

@@ -28,53 +28,327 @@ body {
   inset: 0;
 }
 
-/* ─── La cara (capa L1) ───────────────────────────────────────────────────
-   Rediseño R1: en reposo hay tres cosas — reactor, reloj y la esquina. Este
-   reloj es el antiguo `Clock()` del HUD mudado arriba: componente con su propio
-   temporizador alineado al segundo para que la hora no reconcilie el árbol cada
-   1000 ms en una máquina de dos núcleos. `tabular-nums` no es capricho: con
-   cifras proporcionales el reloj baila un par de píxeles cada segundo.
+/* ─── La cockpit (CARETA v2, fase A) ──────────────────────────────────────
+   Regla madre nueva (docs/REDESIGN-CARETA.md): **la pantalla entera es el
+   HUD**. El reloj flotante agarrable de N1 se retira — su hora vive ahora en
+   la barra de comandos de arriba, que ocupa el borde superior completo como
+   en TechEnClair y en los videos de JARVIS. El `hh:mm:ss` es enorme y está
+   centrado con `position: absolute` dentro de la barra: sigue siendo el
+   antiguo `Reloj()` con su temporizador propio alineado al segundo, porque
+   reconciliar el árbol entero cada 1000 ms en dos núcleos sigue siendo caro,
+   y `tabular-nums` sigue sin ser capricho: sin él las cifras bailan.
 
-   N1 lo soltó de su ancla: se agarra y se mueve como las ventanas (`useArrastre`
-   encima del propio div). Por eso `pointer-events` pasó de `none` a superficie
-   viva: `touch-action: none` para que el dedo arrastre el reloj y no la página,
-   y el `translate` de centrado sigue siendo propiedad separada del `transform`
-   del arrastre — se componen y no se pisan, la lección de `.respuesta`. */
-.reloj {
+   La barra es chrome, no capa de chat: `z-index` bajo las ventanas (30) para
+   que una pila apilada la tape si hace falta, pero sobre el reactor. */
+.barra {
   position: fixed;
-  top: 14px;
-  left: 50%;
-  translate: -50% 0;
-  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 10px 22px;
+  user-select: none;
+  background: rgba(2, 6, 16, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(92, 225, 255, 0.18);
+  color: var(--tint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Las esquinas de la propia barra: dos brackets luminosos a cada lado, el
+   gesto de carenado que los videos repiten (borda fina + esquina marcada). */
+.barra-izq {
   display: flex;
   align-items: center;
   gap: 10px;
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-  color: var(--tint);
-  font-size: 1.05rem;
+  min-width: 0;
+}
+
+.barra-der {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.barra-marca {
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  font-size: 0.9rem;
+  color: var(--ink);
+  text-shadow: 0 0 14px rgba(92, 225, 255, 0.45);
+  white-space: nowrap;
+}
+
+/* La palabra de la fase, al lado del punto que respira (`fase-${s.fase}`
+   viene de cort/fase.ts — los colores son los mismos de la bandeja). */
+.barra-fase {
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.barra-fase.fase-escucha {
+  color: #19d8d2;
+}
+
+.barra-fase.fase-piensa {
+  color: #ff5ce0;
+}
+
+.barra-fase.fase-habla {
+  color: #3ef2a8;
+}
+
+.barra-fase.fase-off {
+  color: var(--dim);
+}
+
+/* El reloj grande, columna central de la grid: su franja existe — con flex
+   puro la fase y la fecha le entraban a pisos, medido en el humo de esta
+   sesión. */
+.barra-reloj {
+  grid-column: 2;
+  font-size: 1.9rem;
+  font-weight: 300;
   letter-spacing: 0.08em;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 14px rgba(92, 225, 255, 0.35);
-}
-
-.reloj.tirando {
-  cursor: grabbing;
-}
-
-/* El ⤾ del reloj: miniatura del `hud-colocar`, mismo lenguaje — en una línea de
-   hora un botón de 44 px empujaría el centro de la pantalla. */
-.reloj-colocar {
-  min-height: 28px;
-  padding: 0 8px;
-  font-size: 0.85rem;
-  line-height: 1;
   color: var(--tint);
-  background: rgba(6, 16, 34, 0.5);
-  border: 1px solid rgba(120, 190, 230, 0.25);
-  border-radius: 8px;
+  text-shadow: 0 0 12px rgba(92, 225, 255, 0.28);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.barra-fecha {
+  font-size: 0.85rem;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+/* La píldora de red: la verdad del cable en una palabra, sin frase. */
+.barra-red {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 92, 120, 0.5);
+  color: #ff5c78;
+  background: rgba(255, 60, 90, 0.08);
+  white-space: nowrap;
+}
+
+.barra-red.on {
+  border-color: rgba(62, 242, 168, 0.45);
+  color: #3ef2a8;
+  background: rgba(62, 242, 168, 0.07);
+}
+
+/* ─── La carcasa (esquinas de pantalla) ───────────────────────────────────
+   Cuatro brackets fijos a ~10 px del borde, punteros atravesados: la
+   pantalla deja de ser una página y pasa a ser una cabina. Mismo truco de
+   dos bordes que en `.cuerpo`, pero a escala de viewport. */
+.carcasa {
+  position: fixed;
+  inset: 10px;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.carcasa-e {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 0 solid rgba(92, 225, 255, 0.5);
+}
+
+.carcasa-e.sq {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+
+.carcasa-e.sr {
+  top: 0;
+  right: 0;
+  border-top-width: 2px;
+  border-right-width: 2px;
+}
+
+.carcasa-e.qi {
+  bottom: 0;
+  left: 0;
+  border-bottom-width: 2px;
+  border-left-width: 2px;
+}
+
+.carcasa-e.qr {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+/* ─── El riel (izquierda) ─────────────────────────────────────────────────
+   El lanzador de siempre (teclas 1–5 y m), mudado de un menú central a una
+   columna de glifos al borde, como en los videos. No son botones nuevos:
+   llaman a las mismas acciones puras (`alternar`, `toggleMenu`), así que la
+   pila de ventanas no sabe ni le importa quién la movió. 44 px de diana
+   mínimo por la regla del A16 (ver N4). */
+.riel {
+  position: fixed;
+  left: 14px;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.riel-btn {
+  width: 46px;
+  height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 190, 230, 0.18);
+  background: rgba(6, 16, 34, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--dim);
   cursor: pointer;
+  transition: color 140ms, border-color 140ms, box-shadow 140ms;
+}
+
+.riel-btn:hover {
+  color: var(--tint);
+  border-color: rgba(92, 225, 255, 0.45);
+}
+
+.riel-btn.on {
+  color: var(--tint);
+  border-color: rgba(92, 225, 255, 0.65);
+  box-shadow: 0 0 16px rgba(92, 225, 255, 0.25);
+}
+
+.riel-glifo {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.riel-tecla {
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+
+.riel-sep {
+  width: 24px;
+  height: 1px;
+  background: rgba(120, 190, 230, 0.25);
+  margin: 4px 0;
+}
+
+/* ─── El telón de arranque ────────────────────────────────────────────────
+   Un anillo triple + el nombre mientras el WebSocket abre. Regla 11: NO es
+   una barra de progreso simulada — se despide cuando `snapshot.online` dice
+   la verdad (conexión real abierta) y, si el core no está, aguanta con el
+   pie honesto «núcleo local · en tu máquina» hasta el tope de 2,5 s y se
+   retira sin mentir. */
+.arranque {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: radial-gradient(circle at 50% 45%, #071026 0%, #02040c 70%);
+  transition: opacity 700ms ease;
+}
+
+.arranque.fuera {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.arranque-anillos {
+  position: relative;
+  width: 190px;
+  height: 190px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arranque-anillos .arranque-a {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(92, 225, 255, 0.45);
+  animation: arranque-girar linear infinite;
+}
+
+.arranque-anillos .a1 {
+  inset: 0;
+  animation-duration: 9s;
+}
+
+.arranque-anillos .a2 {
+  inset: 26px;
+  border-style: solid;
+  border-color: rgba(92, 225, 255, 0.22) transparent rgba(92, 225, 255, 0.22) transparent;
+  animation-duration: 3.2s;
+}
+
+.arranque-anillos .a3 {
+  inset: 52px;
+  animation-duration: 5s;
+  animation-direction: reverse;
+}
+
+.arranque-nucleo {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #eaffff 0%, var(--tint) 45%, rgba(92, 225, 255, 0) 75%);
+  box-shadow: 0 0 34px rgba(92, 225, 255, 0.6);
+}
+
+.arranque-nombre {
+  position: absolute;
+  bottom: -8px;
+  font-size: 0.8rem;
+  letter-spacing: 0.6em;
+  color: var(--tint);
+  text-shadow: 0 0 14px rgba(92, 225, 255, 0.5);
+}
+
+.arranque-pie {
+  font-size: 0.68rem;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+@keyframes arranque-girar {
+  to {
+    rotate: 360deg;
+  }
 }
 
 /* ─── El subtítulo (capa L2) ──────────────────────────────────────────────
@@ -435,8 +709,8 @@ body {
 }
 
 /* La hora, a la derecha del todo menos el chip de red: en la referencia el
-   reloj manda la barra, y `tabular-nums` es la misma lección del reloj de la
-   cara — sin cifras de ancho fijo el reloj baila cada segundo. */
+   reloj manda la barra, y `tabular-nums` es la misma lección del reloj grande
+   de arriba — sin cifras de ancho fijo el reloj baila cada segundo. */
 .hud-reloj {
   margin-left: auto;
   color: var(--tint);
@@ -1022,9 +1296,9 @@ button:focus-visible {
 
 /* ─── El menú de secciones (N4 de docs/REDESIGN-NUCLEO.md) ────────────────
    El lanzador del espacio de trabajo: una ventana de vidrio encima de la pila
-   (z 30) anclada debajo del reloj, arriba-centro. El centrado con `translate`
+   (z 30) anclada debajo de la barra, arriba-centro. El centrado con `translate`
    y el arrastre con `transform` son propiedades separadas a propósito —se
-   componen y no se pisan, la misma lección del reloj y del subtítulo—. Las
+   componen y no se pisan, la misma lección del subtítulo—. Las
    filas cumplen los 48 px de diana táctil (el A16 es el consumo objetivo);
    las filas «en camino» no son botones: `div` apagado con su nota, nombradas
    y no simuladas (regla 10). */
@@ -1112,7 +1386,7 @@ button:focus-visible {
   text-align: right;
 }
 
-/* En móvil el lanzador se apoya bajo el reloj de borde a borde, como las
+/* En móvil el lanzador se apoya bajo la barra de borde a borde, como las
    ventanas: el pulgar llega a todas las filas sin estirarse. */
 @media (max-width: 520px) {
   .menu.menu {
@@ -1611,7 +1885,8 @@ input {
 .crono {
   position: fixed;
   z-index: 3;
-  top: 16px;
+  /* Bajo la barra de comandos (CARETA v2): la franja de arriba ya es suya. */
+  top: 66px;
   left: 18px;
   display: flex;
   align-items: center;
@@ -1679,13 +1954,25 @@ input {
 }
 
 @media (max-width: 520px) {
-  /* Con la cuenta atrás activa hay dos cosas arriba y el sitio libre arriba
-     del todo es uno: el reloj se va a la izquierda y deja el centro para el
-     cronómetro, que es urgente y manda más. */
-  .reloj {
-    left: 14px;
-    translate: none;
-    font-size: 0.95rem;
+  /* Barra en el teléfono: el `hh:mm:ss` grande se encoge y la fecha y la fase
+     se apartan — en la pantalla del A16 el centro ya está justo con la marca
+     y el reloj, y el cronómetro no compite: se sienta debajo de la barra. */
+  .barra {
+    padding: 7px 12px;
+  }
+
+  .barra-marca {
+    font-size: 0.75rem;
+    letter-spacing: 0.18em;
+  }
+
+  .barra-fase,
+  .barra-fecha {
+    display: none;
+  }
+
+  .barra-reloj {
+    font-size: 1.2rem;
   }
 
   .respuesta {
@@ -1693,9 +1980,9 @@ input {
   }
 
   .crono {
-    /* Centro arriba: con la telemetría fuera de la cara (R2) el único sitio que
-       queda libre de verdad es el medio del borde superior. */
-    top: 10px;
+    /* Centro, pero colgado de la barra: arriba del todo ya no hay sitio libre
+       desde que la franja superior es del HUD. */
+    top: 54px;
     left: 50%;
     translate: -50% 0;
     padding: 8px 14px 8px 8px;
@@ -1734,6 +2021,12 @@ input {
   }
 
   .gesto-btn.on {
+    animation: none;
+  }
+
+  /* El telón de arranque se sigue despidiendo con la conexión real — es estado,
+     no adorno — pero sus anillos no giran: tres círculos quietos dicen lo mismo. */
+  .arranque-anillos .arranque-a {
     animation: none;
   }
 

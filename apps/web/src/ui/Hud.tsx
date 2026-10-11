@@ -13,7 +13,7 @@ import type { Seccion } from '../cort/ventanas'
  * cara entera — cabezal con estado, atuendo, ciudad y clima, el riel de botones
  * de cámara/voz/atuendos con sus párrafos de manual, el registro y el
  * formulario. Hoy sólo es el registro y el formulario: el estado viaja en el
- * color del anillo (y en el puntito de `Cabecera`), las herramientas se mudaron
+ * color del anillo (y en el punto de `Barra`), las herramientas se mudaron
  * a las ventanas de vidrio (`ui/Ventanas.tsx`, N1) —con el menú de secciones
  * (`ui/Menu.tsx`, N4) como puerta única— y la línea que CORT dice en voz alta
  * la subtitula `Respuesta` sin necesidad de abrir nada.
@@ -25,8 +25,8 @@ import type { Seccion } from '../cort/ventanas'
  * barra de mando con la fase, la hora con segundos, la fecha y el estado de la
  * red; cada fila del registro con su etiqueta de quién habló; corchetes en las
  * esquinas del marco; botón circular de envío; y una marca de agua al pie. El
- * reloj del cabezal no basta: está arriba, lejos del panel, y en `HH:MM` — la
- * conversación quiere el minuto a minuto junto a las filas.
+ * reloj de la barra no basta: está arriba, lejos del panel, y la conversación
+ * quiere el minuto a minuto junto a las filas.
  *
  * Lo que se conserva tal cual porque ya estaba medido y bien:
  * - el arrastre con sujeción (`useArrastre`) y los dos nodos (`hud-marco` para

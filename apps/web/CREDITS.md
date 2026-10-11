@@ -128,3 +128,20 @@ El reloj de la bandeja se formatea **a mano** (`padStart`), sin
 `toLocaleTimeString`, para que el formato sea fijo y las 7 pruebas de
 `hora.test.mjs` no mientan según el `locale` de la máquina. Y su `setInterval`
 sólo vive mientras la bandeja está abierta: en reposo, cero temporizadores.
+
+## CARETA v2 fase A — la pantalla entera es el HUD (2026-10-11)
+
+Tres diferencias respecto a la demo en vivo de Tech Enclair, que es la
+referencia que inspiró la cockpit (barra superior, reloj gigante, corchetes de
+marco). De su proyecto **no viaja ni una línea**: su licencia no es estándar
+(«open source» + reventa prohibida) y la regla 9 del repo manda reescribir.
+
+1. La **barra** de CORT no pinta un estado inventado: la fase la resuelve
+   `cort/fase.ts` sobre señales reales (micro/tts/thinking), el `hh:mm:ss`
+   sale de `cort/hora.ts` —formateado a mano, probado— y el chip de red es
+   `snapshot.online`, el estado del WebSocket.
+2. El **riel** izquierdo no es un menú nuevo: llama a `alternar`/`toggleMenu`
+   de la pila pura `cort/ventanas.ts`, la misma que mueven las teclas `1`–`5`.
+3. El **telón** no finge carga (regla 11): se levanta con la conexión real o a
+   los 2,5 s, con el pie «núcleo local · en tu máquina». `?telon=lento` (×100)
+   es sólo para poder verificarlo.
