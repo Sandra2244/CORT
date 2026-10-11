@@ -5,10 +5,11 @@ import { Effects } from './ui/Effects'
 import { Bandeja } from './ui/Bandeja'
 import { Avatar } from './ui/Avatar'
 import { Cabecera } from './ui/Cabecera'
+import { Menu } from './ui/Menu'
 import { Respuesta } from './ui/Respuesta'
 import { Ventanas } from './ui/Ventanas'
 import { Temporizador } from './ui/Temporizador'
-import { abrir, alternar, cerrar, cerrarTodo, esc, reposo, seccionPorTecla, siguienteVidrio } from './cort/ventanas'
+import { abrir, alternar, cerrar, cerrarMenu, cerrarTodo, esc, reposo, seccionPorTecla, siguienteVidrio, toggleMenu } from './cort/ventanas'
 import { connect, setOrbeVisible, setZoom } from './cort/connection'
 
 /**
@@ -22,6 +23,7 @@ import { connect, setOrbeVisible, setZoom } from './cort/connection'
  * L2 voz        subtítulo de la última respuesta             (8 s, auto-cierre)
  * L2+ bandeja   registro completo + entrada                  (esquina / tap / Ctrl+/)
  * L3 ventanas   voz · cámara · atuendos · sistema · ayuda    (teclas 1–5, apilables)
+ * L3+ menú    lanzador de secciones, puerta única            (`m` / botón «menú»; N4)
  * L4 resultados temporizador arriba a la izquierda; la       (sólo cuando existen)
  *               captura y el clima viajan por el subtítulo
  * L5 efectos    pulso/glitch/scan — intactos                 (mandados por el core)
@@ -78,8 +80,9 @@ export default function App() {
   }, [atuendo, esModelo])
 
   function invocarEntrada() {
-    // Invocar la entrada limpia la pila: quien invoca quiere escribir, no
-    // apartar ventanas de en medio. Las teclas 1–5 las devuelven.
+    // Invocar la entrada limpia la pila y el menú: quien invoca quiere escribir,
+    // no apartar ventanas ni lanzadores de en medio. Las teclas 1–5 y `m` los
+    // devuelven.
     setVentanas(cerrarTodo)
     setAbierto(true)
     setInvocar((n) => n + 1)
@@ -119,6 +122,12 @@ export default function App() {
         setVentanas((v) => abrir(v, 'ayuda'))
         return
       }
+      // N4: `m` abre y despide el menú de secciones — la puerta única del
+      // espacio de trabajo, para que el dedo no tenga que recordar las cinco.
+      if (e.key === 'm') {
+        setVentanas(toggleMenu)
+        return
+      }
       const id = seccionPorTecla(e.key)
       if (id) setVentanas((v) => alternar(v, id))
     }
@@ -139,17 +148,26 @@ export default function App() {
         abierto={abierto}
         invocar={invocar}
         onAbrirVentana={(id) => setVentanas((v) => abrir(v, id ?? 'voz'))}
+        onAbrirMenu={() => setVentanas(toggleMenu)}
       />
       <Bandeja abierto={abierto} onToggle={() => setAbierto((v) => !v)} />
       <Ventanas
         estado={ventanas}
         onTraer={(id) => setVentanas((v) => abrir(v, id))}
         onOcultar={(id) => setVentanas((v) => cerrar(v, id))}
-        onVidrio={() => setVentanas((v) => ({ pilas: v.pilas, vidrio: siguienteVidrio(v.vidrio) }))}
+        onVidrio={() => setVentanas((v) => ({ pilas: v.pilas, vidrio: siguienteVidrio(v.vidrio), menu: v.menu }))}
         atuendo={atuendo}
         onAtuendo={setAtuendo}
         tamaño={tamaño}
         onTamaño={setTamaño}
+      />
+      {/* El lanzador de N4 va encima de la pila (z 30) y por eso el `Esc` lo
+          despide primero; elegir una fila ya lo cierra solo (`abrir` limpia
+          `menu` en la pila pura). */}
+      <Menu
+        abierto={ventanas.menu}
+        onElegir={(id) => setVentanas((v) => abrir(v, id))}
+        onCerrar={() => setVentanas(cerrarMenu)}
       />
       {/* Va siempre montada y no se pinta casi nunca: devuelve `null` mientras no
           haya cuenta atrás. El temporizador no es un panel que se abre, es un

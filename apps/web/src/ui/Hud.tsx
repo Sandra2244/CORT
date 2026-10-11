@@ -12,8 +12,9 @@ import type { Seccion } from '../cort/ventanas'
  * de cámara/voz/atuendos con sus párrafos de manual, el registro y el
  * formulario. Hoy sólo es el registro y el formulario: el estado viaja en el
  * color del anillo (y en el puntito de `Cabecera`), las herramientas se mudaron
- * a las ventanas de vidrio (`ui/Ventanas.tsx`, N1) y la línea que CORT dice en
- * voz alta la subtitula `Respuesta` sin necesidad de abrir nada.
+ * a las ventanas de vidrio (`ui/Ventanas.tsx`, N1) —con el menú de secciones
+ * (`ui/Menu.tsx`, N4) como puerta única— y la línea que CORT dice en voz alta
+ * la subtitula `Respuesta` sin necesidad de abrir nada.
  *
  * Lo que se conserva tal cual porque ya estaba medido y bien:
  * - el arrastre con sujeción (`useArrastre`) y los dos nodos (`hud-marco` para
@@ -22,11 +23,13 @@ import type { Seccion } from '../cort/ventanas'
  * - `aria-hidden` + `visibility` en retardo cuando está guardado, para que los
  *   campos ocultos no sigan en el orden de tabulación.
  */
-export function Hud({ abierto, invocar, onAbrirVentana }: {
+export function Hud({ abierto, invocar, onAbrirVentana, onAbrirMenu }: {
   abierto: boolean
   /** Contador que sube cuando alguien invocó la entrada (tap al núcleo o `Ctrl+/`). */
   invocar: number
   onAbrirVentana: (seccion?: Seccion) => void
+  /** N4: el botón de la barra ya no abre «la ventana de siempre», abre el lanzador. */
+  onAbrirMenu: () => void
 }) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
@@ -101,8 +104,8 @@ export function Hud({ abierto, invocar, onAbrirVentana }: {
                   ⤾
                 </button>
               )}
-              <button type="button" className="hud-ajustes" onClick={() => onAbrirVentana()}>
-                ajustes
+              <button type="button" className="hud-ajustes" onClick={onAbrirMenu}>
+                menú
               </button>
             </span>
           </header>

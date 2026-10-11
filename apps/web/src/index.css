@@ -785,6 +785,108 @@ button:focus-visible {
   }
 }
 
+/* ─── El menú de secciones (N4 de docs/REDESIGN-NUCLEO.md) ────────────────
+   El lanzador del espacio de trabajo: una ventana de vidrio encima de la pila
+   (z 30) anclada debajo del reloj, arriba-centro. El centrado con `translate`
+   y el arrastre con `transform` son propiedades separadas a propósito —se
+   componen y no se pisan, la misma lección del reloj y del subtítulo—. Las
+   filas cumplen los 48 px de diana táctil (el A16 es el consumo objetivo);
+   las filas «en camino» no son botones: `div` apagado con su nota, nombradas
+   y no simuladas (regla 10). */
+.menu {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: 30;
+  width: min(360px, 88vw);
+  max-height: min(520px, 68vh);
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 14px;
+  box-shadow: 0 0 48px rgba(92, 225, 255, 0.14);
+  backdrop-filter: blur(10px) saturate(1.3);
+  overflow: hidden;
+}
+
+.menu.tirando {
+  user-select: none;
+}
+
+.menu-cuerpo {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+}
+
+.menu-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  background: rgba(6, 16, 34, 0.45);
+  border: 1px solid rgba(120, 190, 230, 0.18);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.menu-fila:hover,
+.menu-fila:focus-visible {
+  color: var(--tint);
+  border-color: rgba(120, 190, 230, 0.45);
+}
+
+.menu-etiqueta {
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+.menu-tecla {
+  color: var(--dim);
+  font-size: 0.78rem;
+  padding: 2px 9px;
+  border: 1px solid rgba(120, 190, 230, 0.25);
+  border-radius: 7px;
+}
+
+/* Las filas «en camino»: apagadas de verdad — sin cursor de puntero, sin
+   hover, y con la nota del plan en lugar de la tecla. */
+.menu-fila.en-camino {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.menu-nota {
+  color: var(--dim);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-align: right;
+}
+
+/* En móvil el lanzador se apoya bajo el reloj de borde a borde, como las
+   ventanas: el pulgar llega a todas las filas sin estirarse. */
+@media (max-width: 520px) {
+  .menu.menu {
+    left: 8px;
+    right: 8px;
+    top: 64px;
+    translate: none;
+    width: auto;
+    max-height: 62vh;
+  }
+}
+
 /* El cuerpo de la ventana «sistema»: telemetría + atuendo + clima, los datos
    que antes viajaban por el cabezal del HUD. */
 .sistema {

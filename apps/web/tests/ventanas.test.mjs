@@ -16,18 +16,21 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  PROXIMAS,
   SECCIONES,
   VIDRIOS,
   VIDRIO_INICIAL,
   abrir,
   alternar,
   cerrar,
+  cerrarMenu,
   cerrarTodo,
   esc,
   frente,
   reposo,
   seccionPorTecla,
   siguienteVidrio,
+  toggleMenu,
 } from './ventanas.mjs'
 
 test('las cinco secciones con su etiqueta y su tecla, en orden', () => {
@@ -36,11 +39,12 @@ test('las cinco secciones con su etiqueta y su tecla, en orden', () => {
   assert.deepEqual(SECCIONES.map((s) => s.etiqueta), ['voz', 'cámara', 'atuendos', 'sistema', 'ayuda'])
 })
 
-test('en reposo no hay ninguna ventana y el vidrio es el del medio', () => {
+test('en reposo no hay ninguna ventana, el vidrio es el del medio y el menú está cerrado', () => {
   assert.deepEqual(reposo.pilas, [])
   assert.equal(reposo.vidrio, VIDRIO_INICIAL)
   assert.equal(VIDRIO_INICIAL, 1)
   assert.equal(frente(reposo), null)
+  assert.equal(reposo.menu, false, 'N4: en reposo la cara es reactor, reloj y esquina — sin menú')
 })
 
 test('abrir apila al frente y abrir dos veces no duplica: trae al frente', () => {
@@ -110,9 +114,60 @@ test('la tecla manda su sección y nada más; el resto no es de ventanas', () =>
 
 test('las operaciones puras no tocan el estado anterior', () => {
   const st = abrir(abrir(reposo, 'voz'), 'ayuda')
-  const copia = { pilas: [...st.pilas], vidrio: st.vidrio }
+  const copia = { pilas: [...st.pilas], vidrio: st.vidrio, menu: st.menu }
   cerrar(st, 'voz')
   abrir(st, 'sistema')
   siguienteVidrio(st.vidrio)
-  assert.deepEqual(st, copia, 'el estado viejo sigue intacto tras cerrar, abrir y cyclear')
+  toggleMenu(st)
+  assert.deepEqual(st, copia, 'el estado viejo sigue intacto tras cerrar, abrir, cyclear y abrir el menú')
+})
+
+/* ---- N4: el menú de secciones ---- */
+
+test('toggleMenu abre y despide el lanzador sin tocar la pila', () => {
+  const st = abrir(reposo, 'voz')
+  const conMenu = toggleMenu(st)
+  assert.equal(conMenu.menu, true)
+  assert.deepEqual(conMenu.pilas, ['voz'], 'abrir el menú no oculta ni trae ventana alguna')
+  assert.equal(toggleMenu(conMenu).menu, false, 'la segunda pulsación lo despide')
+})
+
+test('elegir una sección del menú despide el lanzador (abrir con menu abierto)', () => {
+  const conMenu = toggleMenu(abrir(reposo, 'sistema'))
+  const tras = abrir(conMenu, 'ayuda')
+  assert.equal(tras.menu, false, 'el lanzador era la puerta: ya se pasó por ella')
+  assert.deepEqual(tras.pilas, ['sistema', 'ayuda'])
+})
+
+test('el Esc sobre el espacio de trabajo despide primero el menú y luego las ventanas', () => {
+  const conMenu = toggleMenu(abrir(abrir(reposo, 'voz'), 'ayuda'))
+  const tras1 = esc(conMenu)
+  assert.equal(tras1.menu, false, 'el menú es la capa más encima')
+  assert.deepEqual(tras1.pilas, ['voz', 'ayuda'], 'las ventanas siguen donde estaban')
+  assert.deepEqual(esc(tras1).pilas, ['voz'])
+  const tras3 = esc(esc(tras1))
+  assert.deepEqual(tras3.pilas, [])
+  assert.equal(esc(tras3), null, 'sin menú y sin ventanas, el Esc sigue bajando a la bandeja')
+})
+
+test('cerrarMenu no sacude el estado cuando ya estaba cerrado', () => {
+  const st = abrir(reposo, 'voz')
+  assert.equal(cerrarMenu(st), st, 'el mismo objeto: no hay cambio que anunciar')
+  assert.equal(cerrarMenu(toggleMenu(st)).menu, false)
+})
+
+test('cerrarTodo limpia ventanas y menú de un golpe, y no inventa cambios en vacío', () => {
+  const st = toggleMenu(abrir(abrir(reposo, 'voz'), 'camara'))
+  const limpio = cerrarTodo(st)
+  assert.deepEqual(limpio.pilas, [])
+  assert.equal(limpio.menu, false, 'invocar la entrada limpia también el lanzador')
+  assert.equal(cerrarTodo(reposo), reposo)
+})
+
+test('las secciones en camino están nombradas con su capa del plan y no son ventanas', () => {
+  assert.deepEqual(PROXIMAS.map((p) => p.id), ['agenda', 'consola', 'dispositivos', 'documentos'])
+  for (const p of PROXIMAS) {
+    assert.match(p.nota, /^en camino — N\d/, `${p.id}: regla 10 — se nombra, no se simula`)
+    assert.equal(SECCIONES.some((s) => s.id === p.id), false, `${p.id} no puede ser ventana y promesa a la vez`)
+  }
 })

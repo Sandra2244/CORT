@@ -193,9 +193,11 @@ function Ayuda() {
         <b>atajos</b> — <code>1</code> voz · <code>2</code> cámara ·{' '}
         <code>3</code> atuendos · <code>4</code> sistema · <code>5</code> ayuda
         (cada tecla abre y oculta SU ventana, pueden estar varias a la vez);{' '}
-        <code>/</code> o <code>Ctrl+/</code> abre la conversación con el cursor
-        listo; <code>Esc</code> despide primero la ventana del frente y luego la
-        bandeja; <code>?</code> trae esta ayuda.
+        <code>m</code> abre el <b>menú de secciones</b> —la puerta única, con las
+        que vienen rotuladas «en camino»—; <code>/</code> o <code>Ctrl+/</code>{' '}
+        abre la conversación con el cursor listo; <code>Esc</code> despide primero
+        el menú, luego la ventana del frente y al final la bandeja; <code>?</code>{' '}
+        trae esta ayuda.
       </p>
       <p>
         <b>gestos con la cámara</b> — desenfocar con los dedos delante del

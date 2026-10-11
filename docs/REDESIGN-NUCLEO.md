@@ -16,8 +16,14 @@ inviable sin APK / choca con una regla de seguridad**—, dicho en vez de simula
 > **Estado de ejecución (2026-10-10):** N1 **hecha y medida en navegador** — ventanas de
 > vidrio apilables con arrastre y sujeción, tres niveles de opacidad, reloj agarrable, pila
 > pura en `cort/ventanas.ts` con 11 pruebas (`make test-web` recuperado); función 82 en
-> `docs/FUNCTIONS.md`. Sigue el orden: **N4 (secciones) → N2 (agenda que habla sola) →
-> N3 (consola chat‑agente) → N5 (mano, opcional y medido)**.
+> `docs/FUNCTIONS.md`. **N4 hecha el mismo día (noche)** — el espacio de trabajo gana menú de
+> secciones (`ui/Menu.tsx`, tecla `m`, botón «menú» en la bandeja): cinco filas reales con su
+> tecla y cuatro filas «en camino» nombradas sin simular (agenda N2 · consola N3 · dispositivos
+> N7 · documentos N8); estado puro en `ventanas.menu` con **17 pruebas**; `Esc` ahora despide
+> primero el menú. Criterio nuevo anotado por la dueña: **el consumo objetivo es un Samsung
+> A16 (4 GB) y el PC del colaborador, no este portátil** — las medidas de fps hay que tomarlas
+> allí. Sigue el orden: **N2 (agenda que habla sola) → N3 (consola chat‑agente) →
+> N5 (mano, opcional y medido)**.
 
 ## Los seis patrones que salen de los cuatro videos
 
