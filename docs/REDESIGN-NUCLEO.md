@@ -40,6 +40,19 @@ inviable sin APK / choca con una regla de seguridad**—, dicho en vez de simula
 > → N3 (consola chat‑agente) → N10 (modo sala) → N5 (mano, opcional y medido)**;
 > N11 y N12 cuando el A16 y la PC del colaborador entren en el bucle.
 
+> **N13 — bandeja viva (2026-10-11, hecha y medida — función 85).** La dueña
+> pidió analizar más los videos para mejorar la **base**, y señaló a Tech
+> Enclair como la referencia más real. Se estudió su **demo web en vivo** en
+> el navegador (además de las 13 hojas de fotogramas del análisis v2, todo
+> documentado en `docs/TRANSPLANTE.md`); su licencia —«open source» con la
+> reventa prohibida, no estándar— quedó bajo la regla 9: **cero líneas
+> copiadas, gramática visual reescrita**. La bandeja ganó lo que le faltaba:
+> barra de mando (fase · reloj `hh:mm:ss` · fecha · red), filas del registro
+> con etiqueta de quién habló, corchetes en las esquinas del marco, botón
+> circular de envío, estado vacío diseñado y marca de agua. Lógica pura nueva
+> en `cort/hora.ts` con **7 pruebas** → `make test-web` **34 en verde**;
+> protocolo intacto (regla 5).
+
 ## Los seis patrones que salen de los cuatro videos
 
 1. **El núcleo es la cara, con paneles alrededor.** Un reactor/orbe holográfico vive en el

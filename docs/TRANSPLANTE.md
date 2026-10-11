@@ -115,6 +115,68 @@ pedestal, materializándose en vez de aparecer. Traducción a CORT:
 - Pedestal = un anillo de `Core.tsx` reutilizado bajo los pies; cero meshes
   nuevos si la escena lo evita.
 
+## Tech Enclair J.A.R.V.I.S. — la referencia más real, analizada en vivo (v2, 2026-10-11)
+
+La dueña del proyecto señaló a Tech Enclair (`www.techenclair.fr/pages/jarvis`,
+`github.com/mirasandalucia/TechEnClair`) como la referencia más cercana al
+original y la más funcional. Se estudió **la demo web en vivo**
+(`…/jarvis-demo/`) en el navegador, no sólo los videos.
+
+**Licencia — veredicto: ideas reescritas, cero líneas.** Su propio aviso legal
+dentro de la demo dice «100 % open-source y enteramente gratuito» **y a la vez**
+«no puede en ningún caso ser vendido ni monetizado; toda reventa estrictamente
+prohibida». Esa mezcla no es una licencia estándar (ni MIT, ni Apache, ni
+GPL): es un permiso verbal con condición. Por la regla 9 se trata como
+licencia no clara → **no viaja ni una línea**; viaja la gramática visual,
+reescrita en nuestro CSS.
+
+Lo que enseña su interfaz real (medido en pantalla, no adivinado):
+
+- **Barra de mando arriba**: corchetes en las esquinas, reloj digital gigante
+  `HH:MM:SS` en monoespaciada con resplandor, CPU/RAM a los lados y una línea
+  fina debajo `SYS_CLOCK · fecha · ONLINE`. El panel abierto **habla de sí
+  mismo**: fase, hora y red antes de hablar de ti.
+- **Botones circulares de vidrio** (micro / stop / emparejar): dianas de ~50 px
+  sin texto; el estado se dice con el color del aro, no con una etiqueta.
+- **Tipografía doble**: Inter para leer + monoespaciada (JetBrains Mono) para
+  todo lo que sea instrumento (reloj, telemetría, etiquetas).
+- **Filas de mensaje etiquetadas** (burbujas `eco-msg`) y **estado vacío con
+  presencia** (`--- °C`, `ACQUIRING…`): el hueco también se diseña.
+- **Marca de agua** al pie, mayúsculas muy espaciadas, casi invisible.
+
+## Lecciones densas del resto de los videos (análisis v2, 13 hojas de 9 fotogramas)
+
+- **`b2-90e21d` (Tech Enclair, HUD a pantalla completa)**: chat como panel
+  vertical que se desliza desde el borde derecho, con aro cian brillante y
+  vidrio oscuro; riel de iconos a la izquierda; panel con QR y botón rojo a la
+  derecha; etiqueta en corchete hexagonal arriba-centro.
+- **`b2-fb0569` (variante con orbe-átomo)**: mensajes como **barras resaltadas**
+  alternando claro/oscuro — la voz se reconoce por el bulto, no leyendo —;
+  reloj digital cian dentro de un corchete hexagonal; riel fino de iconos.
+- **`b2-ironman` (198 s)**: la lista de ficheros vive en el borde derecho en
+  monoespaciada (`NN — NOMBRE` + subetiqueta); al agarrar, la tarjeta **vuela**
+  de la lista, crece y se apila con desplazamiento; la activa lleva **marcas de
+  corchete en las esquinas**. Candidato directo para N8 (documentos).
+- **`b2-fd38b8`**: emblema de arranque — anillos concéntricos cian con el
+  nombre en letras espaciadas dentro del anillo, sobre negro.
+- **`b1-1000057225` (ULTRON, @scale.pulse.ai)**: arranque = palabra suelta en
+  negro («ULTRON») y luego el núcleo **se enciende** (orbe rojo con halo);
+  paneles laterales escasos y monoespaciados. El color del núcleo ES el estado.
+- **`b1-1000057320 (@pablicoia)`**: el móvil como mando de compañía (la flota
+  de teléfonos en el escritorio), y el anillo central cambia de azul a naranja
+  al cambiar de modo — la cara declara el modo con color, igual que N9.
+- **`b1-aira-41c7 (@ortegoaat)`**: paneles de pasos (`PASO 2…9`) como checklist
+  con icono + etiqueta + estado, anillo objetivo con la cara dentro — gramática
+  aprovechable para N2 (agenda) y para la ayuda.
+- **`b1-aira-sigan`**: pantalla tipo BIOS con checklist de arranque
+  (`inicializando núcleo neural… [OK]`) en monoespaciada cian antes de la
+  cara. **No lo imitamos**: CORT no debe simular arranques que no ocurren
+  (regla 11); si algún día existe, será un estado real del core por el cable.
+
+De aquí sale **N13 — bandeja viva** (ejecutada el 2026-10-11): barra de mando
+con fase/reloj/fecha/red, filas etiquetadas, corchetes de marco, envío circular
+y marca de agua — todo reescrito, sin tocar el protocolo (regla 5 intacta).
+
 ## Increments que salen de este análisis
 
 | # | Nombre | Fuente | Licencia | Estado |
@@ -123,6 +185,7 @@ pedestal, materializándose en vez de aparecer. Traducción a CORT:
 | **N10** | Modo sala: `F` pantalla completa, cursor oculto, atenuado por inactividad, despertar con gesto | filosofía de salvapantallas de ai-visualizer | idea reescrita | plan |
 | **N11** | Escucha local: VAD de energía + aplauso para despertar | `vad.ts` + `clap.ts` de adewaskar | MIT, puertado con atribución | plan |
 | **N12** | Caparazón nativo (Tauri): autostart, orbe siempre-encima, respuesta real en suspensión | el «integrado al SO» que la web no puede dar | — (honestidad: es el único camino) | se construye en la PC de Askher |
+| **N13** | Bandeja viva: barra de mando (fase · reloj `hh:mm:ss` · fecha · red), filas etiquetadas, corchetes de marco, envío circular, marca de agua | demo en vivo de Tech Enclair + barras de `b2-fb0569` | licencia no clara → **cero líneas, gramática reescrita** | **hecha y medida 2026-10-11 — función 85** |
 
 N9 no toca el protocolo WebSocket (regla 5 intacta): el core ya transmite
 `thinking`; el micrófono y el TTS los sabe `Voz.tsx` desde dentro. La fase es,

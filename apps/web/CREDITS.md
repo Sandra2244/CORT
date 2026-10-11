@@ -98,3 +98,33 @@ como permite la licencia y como manda la regla 9:
    color decidido en **un solo lugar**, compartido por la escena 3D y el HUD—
    es suya; la implementación (`señales`, `sincronizarFase`, `pintarFase` en
    `connection.ts`) es de aquí.
+
+## N13 — la bandeja viva (2026-10-11)
+
+**`src/cort/hora.ts`, los bloques `.hud-cab`/`.hud-reloj`/`.cuerpo::before`/
+`.enviar`/`.hud-pie` de `src/index.css` y el `Hud.tsx` nuevo** — **cero líneas
+copiadas.** La referencia es la **demo web en vivo de Tech Enclair J.A.R.V.I.S.**
+(`github.com/mirasandalucia/TechEnClair`), cuya licencia se declaró **no
+estándar**: su propio aviso dice «100 % open-source» y a la vez «reventa
+estrictamente prohibida», y esa condición comercial no es MIT ni Apache ni GPL.
+La regla 9 de `AGENTS.md` manda reescribir lo que no tenga licencia clara, así
+que de su interfaz no viaja expresión protegida alguna — sólo la **gramática
+visual**, que no es copyright (una barra con un reloj y unos corchetes no es
+una obra copiable), rehecha aquí con nuestros colores y nuestro idioma:
+
+1. La **barra de mando** (`.hud-cab`): su demo pone fase/reloj `HH:MM:SS`/
+   `SYS_CLOCK`/`ONLINE` en la cabecera; aquí la fase sale de `cort/fase.ts`
+   (N9) con sus tres colores, la hora de `cort/hora.ts`, y el chip de red es el
+   `online` del `Snapshot`. Ninguno de esos datos es decorativo: todos son
+   ciertos.
+2. Las **filas etiquetadas** (`.quien`): sus burbujas `eco-msg` distinguen la
+   voz de la usuaria de la del asistente; aquí cada `<p>` lleva `cort`/`tú` en
+   monoespaciada, y `remitente` cae al lado de CORT ante un origen desconocido.
+3. Los **corchetes de marco** (`.cuerpo::before/::after`) y el **botón circular
+   de envío** (`.enviar`, 46 px) imitan el *lenguaje* —esquina marcada, diana
+   redonda—, no sus píxeles: grosores, radios y colores son de esta paleta.
+
+El reloj de la bandeja se formatea **a mano** (`padStart`), sin
+`toLocaleTimeString`, para que el formato sea fijo y las 7 pruebas de
+`hora.test.mjs` no mientan según el `locale` de la máquina. Y su `setInterval`
+sólo vive mientras la bandeja está abierta: en reposo, cero temporizadores.

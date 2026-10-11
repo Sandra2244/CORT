@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, pintaFaltaDeLlave, send, subscribe } from '../cort/connection'
 import { palette } from '../cort/palette'
 import { useArrastre } from '../cort/arrastre'
+import { FASE_TEXTO } from '../cort/fase'
+import { fechaCorta, hhmmss, remitente } from '../cort/hora'
 import type { Seccion } from '../cort/ventanas'
 
 /**
@@ -15,6 +17,16 @@ import type { Seccion } from '../cort/ventanas'
  * a las ventanas de vidrio (`ui/Ventanas.tsx`, N1) —con el menú de secciones
  * (`ui/Menu.tsx`, N4) como puerta única— y la línea que CORT dice en voz alta
  * la subtitula `Respuesta` sin necesidad de abrir nada.
+ *
+ * N13 — bandeja viva (docs/TRANSPLANTE.md, la gramática visual de Tech
+ * Enclair reescrita: de su proyecto no viaja ni una línea, la licencia no es
+ * estándar). Lo que le faltaba a la bandeja era exactamente lo que las
+ * referencias le sobra: **que hable de sí misma mientras está abierta**. Una
+ * barra de mando con la fase, la hora con segundos, la fecha y el estado de la
+ * red; cada fila del registro con su etiqueta de quién habló; corchetes en las
+ * esquinas del marco; botón circular de envío; y una marca de agua al pie. El
+ * reloj del cabezal no basta: está arriba, lejos del panel, y en `HH:MM` — la
+ * conversación quiere el minuto a minuto junto a las filas.
  *
  * Lo que se conserva tal cual porque ya estaba medido y bien:
  * - el arrastre con sujeción (`useArrastre`) y los dos nodos (`hud-marco` para
@@ -37,6 +49,20 @@ export function Hud({ abierto, invocar, onAbrirVentana, onAbrirMenu }: {
   const input = useRef<HTMLInputElement>(null)
   const tint = palette[s.outfit] ?? palette.work
   const { pos, tirando, agarrar, reiniciar, nodo, desplazado } = useArrastre<HTMLDivElement>()
+
+  /**
+   * N13: la hora de la barra de mando. El `setInterval` **sólo existe mientras
+   * la bandeja está abierta** — en reposo este componente no tiene ningún
+   * temporizador vivo, la misma disciplina del `Temporizador` y del "no hay
+   * reloj que mienta sin servidor" de `connection.ts`.
+   */
+  const [ahora, setAhora] = useState(() => new Date())
+  useEffect(() => {
+    if (!abierto) return
+    setAhora(new Date())
+    const t = window.setInterval(() => setAhora(new Date()), 1000)
+    return () => clearInterval(t)
+  }, [abierto])
 
   useEffect(() => {
     log.current?.scrollTo({ top: log.current.scrollHeight })
@@ -80,6 +106,18 @@ export function Hud({ abierto, invocar, onAbrirVentana, onAbrirMenu }: {
       <div className="hud" ref={nodo} style={{ ['--tint' as string]: tint.ui }}>
         <span className="asa" aria-hidden="true" onPointerDown={agarrar} />
         <div className={`cuerpo ${abierto ? '' : 'cerrado'}`} aria-hidden={!abierto}>
+          {/* La barra de mando (N13): fase, hora con segundos, fecha y red. En
+              las referencias el panel abierto siempre dice algo de sí mismo
+              antes de decir nada de ti; aquí esos datos son todos ciertos —
+              la fase la resuelve `faseDe`, la hora es la del reloj de la
+              máquina, y el estado de red es el del cable, no un adorno. */}
+          <div className="hud-cab">
+            <span className={`hud-fase fase-${s.fase}`}>{FASE_TEXTO[s.fase]}</span>
+            <span className="hud-punto" aria-hidden="true">·</span>
+            <span className="hud-fecha">{fechaCorta(ahora)}</span>
+            <span className="hud-reloj" aria-hidden="true">{hhmmss(ahora)}</span>
+            <span className={`hud-red ${s.online ? 'on' : ''}`}>{s.online ? 'en línea' : 'sin core'}</span>
+          </div>
           <header className="status" onPointerDown={agarrar}>
             {!s.online && (
               <span className="status-aviso">
@@ -111,8 +149,18 @@ export function Hud({ abierto, invocar, onAbrirVentana, onAbrirMenu }: {
           </header>
 
           <div className="log" ref={log} role="log" aria-live="polite">
+            {s.msgs.length === 0 && (
+              // R4 pedía estados vacíos diseñados y la bandeja era la asignatura
+              // suspendida: un panel abierto en negro no invita, intimida. La
+              // línea dice qué hay detrás del cristal sin prometer nada falso —
+              // si el core no contesta, el aviso de arriba ya lo dice también.
+              <p className="vacia">aún no hay conversación — pulsa <kbd>/</kbd> y dile algo a CORT</p>
+            )}
             {s.msgs.map((m, i) => (
-              <p key={i} className={m.from === 'user' ? 'me' : 'cort'}>{m.text}</p>
+              <p key={i} className={`fila ${m.from === 'user' ? 'me' : 'cort'}`}>
+                <span className="quien" aria-hidden="true">{remitente(m.from)}</span>
+                <span className="texto">{m.text}</span>
+              </p>
             ))}
           </div>
 
@@ -126,8 +174,12 @@ export function Hud({ abierto, invocar, onAbrirVentana, onAbrirMenu }: {
               autoComplete="off"
               enterKeyHint="send"
             />
-            <button type="submit" disabled={!s.online}>Enviar</button>
+            {/* El botón de texto «Enviar» se volvió la flecha circular de las
+                referencias: 46 px de blanco fácil para el dedo, y la flecha se
+                entiende sin leer — la etiqueta completa vive en el `aria-label`. */}
+            <button type="submit" className="enviar" disabled={!s.online} aria-label="Enviar a CORT" title="Enviar a CORT">↑</button>
           </form>
+          <div className="hud-pie" aria-hidden="true">cort · local</div>
         </div>
       </div>
     </div>

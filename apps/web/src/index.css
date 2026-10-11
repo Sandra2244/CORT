@@ -401,6 +401,149 @@ body {
   text-align: right;
 }
 
+/* ─── N13 — la bandeja viva ───────────────────────────────────────────────
+   La gramática visual de la barra de mando de Tech Enclair, reescrita: de su
+   proyecto no viaja ni una línea de código — su licencia dice "open source"
+   pero prohíbe la reventa, que no es una licencia estándar, y la regla 9 del
+   repo manda reescribir lo que no tenga licencia clara (docs/TRANSPLANTE.md).
+   Lo que se transplantó es el lenguaje: panel que se abre y habla de sí mismo
+   —fase, hora con segundos, fecha, red—, filas con quién habló, corchetes en
+   las esquinas del marco, botón circular de envío y marca de agua al pie.
+   La tipografía monoespaciada es del sistema (no se añade ninguna fuente):
+   `ui-monospace` cae a Cascadia/JetBrains/DejaVu según la máquina. */
+.hud-cab {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  color: var(--dim);
+}
+
+/* La fase pinta con los mismos tres colores del punto de `Cabecera` (N9): un
+   hecho, un color, dos sitios — si algún día se separan, se separan a propósito. */
+.hud-fase {
+  text-transform: lowercase;
+}
+.hud-fase.fase-escucha { color: #19d8d2 }
+.hud-fase.fase-piensa { color: #ff5ce0 }
+.hud-fase.fase-habla { color: #3ef2a8 }
+
+.hud-punto {
+  opacity: 0.5;
+}
+
+/* La hora, a la derecha del todo menos el chip de red: en la referencia el
+   reloj manda la barra, y `tabular-nums` es la misma lección del reloj de la
+   cara — sin cifras de ancho fijo el reloj baila cada segundo. */
+.hud-reloj {
+  margin-left: auto;
+  color: var(--tint);
+  font-size: 0.92rem;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 12px rgba(92, 225, 255, 0.35);
+}
+
+.hud-red {
+  padding: 1px 8px;
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 999px;
+  font-size: 0.62rem;
+}
+.hud-red.on {
+  color: var(--tint);
+  border-color: rgba(92, 225, 255, 0.6);
+  box-shadow: 0 0 10px rgba(92, 225, 255, 0.2);
+}
+
+/* Cada fila del registro dice quién habló. La etiqueta va en su propia línea,
+   en monoespaciada mínima: en `b2-fb0569` las filas de chat se leen como
+   barras y la voz se reconoce por el borde y el bulto, no por leer el texto. */
+.log .fila {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.log .me {
+  align-items: flex-end;
+}
+.log .quien {
+  font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: lowercase;
+  color: var(--dim);
+}
+.log .cort .quien { color: var(--tint) }
+.log .me .quien { color: #a479ff }
+
+/* El estado vacío diseñado (R4, la asignatura que quedaba): borde discontinuo
+   —un hueco, no un panel— y la tecla escrita como tecla. */
+.log .vacia {
+  margin: 0;
+  padding: 10px 14px;
+  align-self: stretch;
+  max-width: none;
+  color: var(--dim);
+  font-size: 0.8rem;
+  text-align: center;
+  background: none;
+  border: 1px dashed rgba(120, 190, 230, 0.3);
+}
+.log .vacia kbd {
+  padding: 1px 6px;
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  font-size: 0.72rem;
+  color: var(--tint);
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(120, 190, 230, 0.28);
+  border-radius: 4px;
+}
+
+/* El envío circular: 46 px de diana para el dedo, fantasma hasta que toca
+   (los botones de gesto del video de Tech Enclair son exactamente esto). La
+   especificidad `.hud form .enviar` le gana al `button` global relleno. */
+.hud form .enviar {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--tint);
+  background: rgba(8, 24, 48, 0.72);
+  border: 1px solid rgba(92, 225, 255, 0.55);
+  box-shadow: 0 0 14px rgba(92, 225, 255, 0.12);
+  transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+.hud form .enviar:hover:not(:disabled),
+.hud form .enviar:focus-visible:not(:disabled) {
+  color: #02131f;
+  background: var(--tint);
+  box-shadow: 0 0 22px rgba(92, 225, 255, 0.45);
+}
+.hud form .enviar:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* La marca de agua, calcada de la cabecera de la demo: mayúsculas espaciadas,
+   casi invisible. `aria-hidden` en el JSX: es firma, no información. */
+.hud-pie {
+  font-family: ui-monospace, "Cascadia Mono", "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  font-size: 0.56rem;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--dim);
+  opacity: 0.5;
+}
+
 form {
   display: flex;
   gap: 8px;
@@ -489,6 +632,7 @@ button:focus-visible {
    cuesta un cuadro. `visibility` al final del tiempo saca los campos del orden
    de tabulación cuando ya no se ven. */
 .cuerpo {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -496,6 +640,33 @@ button:focus-visible {
   opacity: 1;
   transform: translateY(0);
   transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), max-height 280ms ease, visibility 0s;
+}
+
+/* Los corchetes de las esquinas (N13): la barra de mando de la referencia va
+   enmarcada así, y enmarcar la conversación es decirle al ojo «esto es un
+   instrumento», no «esto es un globo de texto». Dos pseudo-elementos bastan —
+   cada uno dibuja una esquina con dos bordes; `pointer-events: none` para que
+   no le roben el arrastre al cabezal. */
+.cuerpo::before,
+.cuerpo::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.cuerpo::before {
+  top: -2px;
+  left: -6px;
+  border-top: 1px solid var(--tint);
+  border-left: 1px solid var(--tint);
+}
+.cuerpo::after {
+  bottom: -2px;
+  right: -6px;
+  border-bottom: 1px solid var(--tint);
+  border-right: 1px solid var(--tint);
 }
 
 .cuerpo.cerrado {
