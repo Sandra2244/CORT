@@ -11,8 +11,8 @@ import { palette } from '../cort/palette'
  * una consola.
  *
  * Rediseño por capas (R1/R2): **ya no vive en la esquina de la pantalla** — un
- * panel de diagnóstico operativo no es cara pública. Ahora es la pestaña
- * «sistema» del modal, y `Panel` le añade las filas de atuendo y clima que
+ * panel de diagnóstico operativo no es cara pública. Ahora es la ventana
+ * «sistema», y `Ventanas` le añade las filas de atuendo y clima que
  * antes viajaban por el cabezal.
  *
  * Sin dependencias nuevas —ni zustand ni framer-motion—: esta máquina tiene

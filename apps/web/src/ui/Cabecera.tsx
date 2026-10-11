@@ -1,15 +1,18 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe } from '../cort/connection'
+import { useArrastre } from '../cort/arrastre'
 
 /**
- * La hora de CORT — y ahora **es** el cabezal.
+ * La hora de CORT — y ahora **se mueve**.
  *
- * Rediseño por capas (docs/REDESIGN-UI.md, R1): en reposo la pantalla tiene
- * exactamente tres cosas — el reactor, el reloj y un punto de entrada. Todo lo
- * que antes viajaba por la barra de estado (atuendo, ciudad, clima, el texto
- * «CORT en línea») se comunica de otra forma: el estado va en el COLOR del
- * anillo, que ya lo llevaba, y los datos se leen en la pestaña «sistema» del
- * modal. Lo que se queda aquí es lo único que alguien mira sin pedirlo: la hora.
+ * Rediseño R1 (docs/REDESIGN-UI.md): en reposo la pantalla tiene exactamente
+ * tres cosas — el reactor, el reloj y un punto de entrada. N1
+ * (docs/REDESIGN-NUCLEO.md) le añade una palabra a la tercera: el reloj, como
+ * en las referencias en video, **se agarra y se lleva** — quien pone un
+ * cronómetro encima del reactor puede apartar la hora con el dedo. La sujeción
+ * es la misma de siempre (`cort/arrastre.ts`), y `⤾` lo devuelve arriba al
+ * centro. `translate` (centrado) e `inline transform` (arrastre) siguen siendo
+ * propiedades separadas a propósito: se componen y no se pisan.
  *
  * El puntito del lado derecho es el cable: verde-azulado si el core contesta,
  * rojo si no. Un punto y no una frase — «Sin conexión con el core — ejecuta:
@@ -44,10 +47,28 @@ function Reloj() {
 
 export function Cabecera() {
   const s = useSyncExternalStore(subscribe, getSnapshot)
+  const { pos, tirando, agarrar, reiniciar, nodo, desplazado } = useArrastre<HTMLDivElement>()
   return (
-    <div className="reloj" aria-label="hora y conexión">
+    <div
+      ref={nodo}
+      className={`reloj${tirando ? ' tirando' : ''}`}
+      style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
+      onPointerDown={agarrar}
+      aria-label="hora y conexión — se agarra y se mueve"
+    >
       <Reloj />
       <span className={`dot ${s.online ? 'on' : 'off'}`} title={s.online ? 'CORT en línea' : 'sin conexión con el core'} />
+      {desplazado && (
+        <button
+          type="button"
+          className="reloj-colocar"
+          onClick={reiniciar}
+          aria-label="Devolver el reloj a su sitio"
+          title="Devolver el reloj a su sitio"
+        >
+          ⤾
+        </button>
+      )}
     </div>
   )
 }

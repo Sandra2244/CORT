@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, pintaFaltaDeLlave, send, subscribe } from '../cort/connection'
 import { palette } from '../cort/palette'
 import { useArrastre } from '../cort/arrastre'
-import type { Pestana } from './Panel'
+import type { Seccion } from '../cort/ventanas'
 
 /**
  * La conversación (capa L2 abierta).
@@ -12,8 +12,8 @@ import type { Pestana } from './Panel'
  * de cámara/voz/atuendos con sus párrafos de manual, el registro y el
  * formulario. Hoy sólo es el registro y el formulario: el estado viaja en el
  * color del anillo (y en el puntito de `Cabecera`), las herramientas se mudaron
- * al modal `Panel`, y la línea que CORT dice en voz alta la subtitula
- * `Respuesta` sin necesidad de abrir nada.
+ * a las ventanas de vidrio (`ui/Ventanas.tsx`, N1) y la línea que CORT dice en
+ * voz alta la subtitula `Respuesta` sin necesidad de abrir nada.
  *
  * Lo que se conserva tal cual porque ya estaba medido y bien:
  * - el arrastre con sujeción (`useArrastre`) y los dos nodos (`hud-marco` para
@@ -22,11 +22,11 @@ import type { Pestana } from './Panel'
  * - `aria-hidden` + `visibility` en retardo cuando está guardado, para que los
  *   campos ocultos no sigan en el orden de tabulación.
  */
-export function Hud({ abierto, invocar, onAbrirPanel }: {
+export function Hud({ abierto, invocar, onAbrirVentana }: {
   abierto: boolean
   /** Contador que sube cuando alguien invocó la entrada (tap al núcleo o `Ctrl+/`). */
   invocar: number
-  onAbrirPanel: (pestana?: Pestana) => void
+  onAbrirVentana: (seccion?: Seccion) => void
 }) {
   const s = useSyncExternalStore(subscribe, getSnapshot)
   const [draft, setDraft] = useState('')
@@ -48,11 +48,11 @@ export function Hud({ abierto, invocar, onAbrirPanel }: {
   /**
    * Comandos locales escritos en la propia bandeja, como en las referencias
    * (el señor de `fullstack-agent` invoca la cámara hablando): la frase abre su
-   * pestaña del modal **además** de viajar al core, para que quede en el
+   * ventana de vidrio **además** de viajar al core, para que quede en el
    * registro y CORT pueda comentarla. No reemplaza al modelo — le ahorra a la
    * usuaria buscar el botón con el dedo.
    */
-  const LOCALES: [RegExp, Pestana][] = [
+  const LOCALES: [RegExp, Seccion][] = [
     [/(?:activa|abre|enciende|prende)\s+(?:la\s+|mi\s+)?c[áa]mara/i, 'camara'],
     [/(?:activa|abre)\s+(?:el\s+|la\s+)?(?:micr[oó]fono|voz)/i, 'voz'],
     [/(?:cambia|pon|muestra|elige)\s+(?:el\s+|mi\s+)?atuendo/i, 'atuendos'],
@@ -64,7 +64,7 @@ export function Hud({ abierto, invocar, onAbrirPanel }: {
     const text = draft.trim()
     if (!text) return
     const local = LOCALES.find(([re]) => re.test(text))
-    if (local) onAbrirPanel(local[1])
+    if (local) onAbrirVentana(local[1])
     send(text)
     setDraft('')
   }
@@ -101,7 +101,7 @@ export function Hud({ abierto, invocar, onAbrirPanel }: {
                   ⤾
                 </button>
               )}
-              <button type="button" className="hud-ajustes" onClick={() => onAbrirPanel()}>
+              <button type="button" className="hud-ajustes" onClick={() => onAbrirVentana()}>
                 ajustes
               </button>
             </span>

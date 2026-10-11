@@ -7,13 +7,14 @@ import { iniciarCamara, type Muestra } from '../cort/defocus'
  * orbe, enfocar lo devuelve.
  *
  * Vivió dentro de `Hud.tsx` formando parte del riel; el rediseño (R2) lo trajo
- * acá adentro del modal de una pieza, sin cambiar nada del mecanismo: la cámara
+ * acá adentro de la ventana «cámara» (modal de una pieza en R2, vidrio suelto
+ * desde N1), sin cambiar nada del mecanismo: la cámara
  * se abre al pulsar y se cierra volviendo a pulsar — parar las pistas del stream
  * es lo que apaga el LED —, y el valor lo aplica `defocus.ts` con `setZoom`
  * cinco veces por segundo sin pasar por React.
  *
  * El párrafo que explicaba dónde se concede el permiso **ya no está**: se mudó a
- * la pestaña «ayuda» del modal. En la cara no se leen manuales; en la ayuda sí,
+ * la ventana «ayuda». En la cara no se leen manuales; en la ayuda sí,
  * y la pregunta de la dueña del proyecto («¿y cómo le pido el permiso?») sigue
  * contestada, apenas que en su sitio.
  */

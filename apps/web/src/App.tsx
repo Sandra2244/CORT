@@ -6,27 +6,31 @@ import { Bandeja } from './ui/Bandeja'
 import { Avatar } from './ui/Avatar'
 import { Cabecera } from './ui/Cabecera'
 import { Respuesta } from './ui/Respuesta'
-import { Panel, type Pestana } from './ui/Panel'
+import { Ventanas } from './ui/Ventanas'
 import { Temporizador } from './ui/Temporizador'
+import { abrir, alternar, cerrar, cerrarTodo, esc, reposo, seccionPorTecla, siguienteVidrio } from './cort/ventanas'
 import { connect, setOrbeVisible, setZoom } from './cort/connection'
 
 /**
- * Las capas de CORT (rediseño de docs/REDESIGN-UI.md, ejecutado 2026-10-10).
+ * Las capas de CORT (rediseño por capas de docs/REDESIGN-UI.md, ejecutado
+ * 2026-10-10; la capa L3 pasó de modal a **ventanas de vidrio** con N1 de
+ * docs/REDESIGN-NUCLEO.md).
  *
  * ```text
  * L0 escena     fondo casi-negro con líneas de barrido       (siempre)
- * L1 cara       reactor/VRM + reloj con su punto de cable    (siempre)
+ * L1 cara       reactor/VRM + reloj arrastrable con su punto (siempre)
  * L2 voz        subtítulo de la última respuesta             (8 s, auto-cierre)
  * L2+ bandeja   registro completo + entrada                  (esquina / tap / Ctrl+/)
- * L3 modal      voz · cámara · atuendos · sistema · ayuda    (desde la bandeja)
+ * L3 ventanas   voz · cámara · atuendos · sistema · ayuda    (teclas 1–5, apilables)
  * L4 resultados temporizador arriba a la izquierda; la       (sólo cuando existen)
  *               captura y el clima viajan por el subtítulo
  * L5 efectos    pulso/glitch/scan — intactos                 (mandados por el core)
  * ```
  *
  * Regla madre: **en reposo, tres cosas — el reactor, el reloj y la esquina.**
- * Todo lo demás se invoca y se despide, que es la gramática común de las siete
- * referencias en video.
+ * Lo demás se invoca y se despide; ahora además se mueve: la pila de ventanas
+ * vive en `cort/ventanas.ts` (pura, probada con `make test-web`) y el vidrio
+ * regula cuánto reactor se ve a través de ella.
  */
 export default function App() {
   useEffect(connect, [])
@@ -34,8 +38,8 @@ export default function App() {
   /** La bandeja (registro + entrada) arranca guardada: la cara es el reactor. */
   const [abierto, setAbierto] = useState(false)
 
-  /** El modal de herramientas: `null` = no existe en pantalla. */
-  const [pestana, setPestana] = useState<Pestana | null>(null)
+  /** La pila de ventanas de vidrio: en reposo vacía, la cara manda. */
+  const [ventanas, setVentanas] = useState(reposo)
 
   /**
    * El cuerpo de CORT: `null` = reactor; un nombre de archivo = proyección con
@@ -46,7 +50,7 @@ export default function App() {
   const [atuendo, setAtuendo] = useState<string | null>(null)
 
   /**
-   * Tamaño del `avatar CORT`: 1 es la figura medida en R7; la pestaña de
+   * Tamaño del `avatar CORT`: 1 es la figura medida en R7; la ventana de
    * atuendos ofrece 0,72 (compañera de escritorio) y 1,25 (protagonista).
    * Se persigue con lerp dentro de `Vrm`, no se salta.
    */
@@ -74,7 +78,9 @@ export default function App() {
   }, [atuendo, esModelo])
 
   function invocarEntrada() {
-    setPestana(null)
+    // Invocar la entrada limpia la pila: quien invoca quiere escribir, no
+    // apartar ventanas de en medio. Las teclas 1–5 las devuelven.
+    setVentanas(cerrarTodo)
     setAbierto(true)
     setInvocar((n) => n + 1)
   }
@@ -82,10 +88,11 @@ export default function App() {
   useEffect(() => {
     function teclas(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        // El `Esc` jerárquico: primero despide el modal, y sólo si no hay modal
-        // guarda la bandeja. Cerrar las dos superficies de un golpe obligaría a
-        // reabrir todo para seguir leyendo.
-        if (pestana) setPestana(null)
+        // El `Esc` jerárquico de `v0.11`, con ventanas apiladas: primero
+        // despide la ventana del frente; `esc` devuelve `null` cuando ya no
+        // queda ninguna, y sólo entonces el Esc guarda la bandeja.
+        const tras = esc(ventanas)
+        if (tras) setVentanas(tras)
         else setAbierto(false)
         return
       }
@@ -95,10 +102,11 @@ export default function App() {
         return
       }
       // El teclado es de primera clase, como prometía `v0.10` («se llega con tres
-      // manos»): `/` invoca la entrada y `1`–`5` saltan a las cinco pestañas del
-      // modal. Con la mano ya en el teclado no se busca un botón de 46 px. La
-      // guarda del `target` es para que escribir '/' o un número DENTRO del campo
-      // siga siendo escribir, no invocar.
+      // manos»): `/` invoca la entrada y `1`–`5` abren y ocultan SU ventana —
+      // cada tecla alterna su cristal, pueden convivir varias a la vez. Con la
+      // mano ya en el teclado no se busca un botón de 46 px. La guarda del
+      // `target` es para que escribir '/' o un número DENTRO del campo siga
+      // siendo escribir, no invocar.
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
@@ -108,16 +116,15 @@ export default function App() {
         return
       }
       if (e.key === '?') {
-        setPestana('ayuda')
+        setVentanas((v) => abrir(v, 'ayuda'))
         return
       }
-      const PESTANAS_TECLA = ['voz', 'camara', 'atuendos', 'sistema', 'ayuda'] as const
-      const n = Number(e.key)
-      if (n >= 1 && n <= PESTANAS_TECLA.length) setPestana(PESTANAS_TECLA[n - 1])
+      const id = seccionPorTecla(e.key)
+      if (id) setVentanas((v) => alternar(v, id))
     }
     window.addEventListener('keydown', teclas)
     return () => window.removeEventListener('keydown', teclas)
-  }, [pestana])
+  }, [ventanas])
 
   return (
     <>
@@ -128,19 +135,22 @@ export default function App() {
       {/* El subtítulo no se pinta con la bandeja abierta: sería la misma frase
           dos veces, una encima de la otra. */}
       <Respuesta visible={!abierto} onAbrir={() => setAbierto(true)} />
-      <Hud abierto={abierto} invocar={invocar} onAbrirPanel={(p) => setPestana(p ?? 'voz')} />
+      <Hud
+        abierto={abierto}
+        invocar={invocar}
+        onAbrirVentana={(id) => setVentanas((v) => abrir(v, id ?? 'voz'))}
+      />
       <Bandeja abierto={abierto} onToggle={() => setAbierto((v) => !v)} />
-      {pestana && (
-        <Panel
-          pestana={pestana}
-          onPestana={setPestana}
-          onCerrar={() => setPestana(null)}
-          atuendo={atuendo}
-          onAtuendo={setAtuendo}
-          tamaño={tamaño}
-          onTamaño={setTamaño}
-        />
-      )}
+      <Ventanas
+        estado={ventanas}
+        onTraer={(id) => setVentanas((v) => abrir(v, id))}
+        onOcultar={(id) => setVentanas((v) => cerrar(v, id))}
+        onVidrio={() => setVentanas((v) => ({ pilas: v.pilas, vidrio: siguienteVidrio(v.vidrio) }))}
+        atuendo={atuendo}
+        onAtuendo={setAtuendo}
+        tamaño={tamaño}
+        onTamaño={setTamaño}
+      />
       {/* Va siempre montada y no se pinta casi nunca: devuelve `null` mientras no
           haya cuenta atrás. El temporizador no es un panel que se abre, es un
           número que aparece cuando se pide. */}

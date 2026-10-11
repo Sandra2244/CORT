@@ -35,8 +35,11 @@ body {
    1000 ms en una máquina de dos núcleos. `tabular-nums` no es capricho: con
    cifras proporcionales el reloj baila un par de píxeles cada segundo.
 
-   Va centrado arriba porque arriba está libre desde que la telemetría se mudó
-   al modal, y `pointer-events: none` porque es puro dato: nada que pulsar. */
+   N1 lo soltó de su ancla: se agarra y se mueve como las ventanas (`useArrastre`
+   encima del propio div). Por eso `pointer-events` pasó de `none` a superficie
+   viva: `touch-action: none` para que el dedo arrastre el reloj y no la página,
+   y el `translate` de centrado sigue siendo propiedad separada del `transform`
+   del arrastre — se componen y no se pisan, la lección de `.respuesta`. */
 .reloj {
   position: fixed;
   top: 14px;
@@ -46,12 +49,32 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  pointer-events: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
   color: var(--tint);
   font-size: 1.05rem;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
   text-shadow: 0 0 14px rgba(92, 225, 255, 0.35);
+}
+
+.reloj.tirando {
+  cursor: grabbing;
+}
+
+/* El ⤾ del reloj: miniatura del `hud-colocar`, mismo lenguaje — en una línea de
+   hora un botón de 44 px empujaría el centro de la pantalla. */
+.reloj-colocar {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--tint);
+  background: rgba(6, 16, 34, 0.5);
+  border: 1px solid rgba(120, 190, 230, 0.25);
+  border-radius: 8px;
+  cursor: pointer;
 }
 
 /* ─── El subtítulo (capa L2) ──────────────────────────────────────────────
@@ -227,7 +250,7 @@ body {
   gap: 8px;
 }
 
-/* La puerta del modal (L3). fantasma como los botones de gesto: en una barra
+/* La puerta de las ventanas (L3). fantasma como los botones de gesto: en una barra
    de estado un botón relleno de cian grita más que la conversación que hay
    debajo, que es lo importante. */
 .hud-ajustes {
@@ -277,8 +300,9 @@ body {
 }
 
 /* Telemetría: lo que el core comprueba de sí mismo. R2 la bajó de la esquina
-   fija al modal — en reposo la cara no lleva paneles informativos —, así que
-   aquí es un bloque **estático** dentro de la pestaña «sistema»: sin posición,
+   fija a la superficie modal — en reposo la cara no lleva paneles informativos
+   —, y N1 la dejó en la ventana «sistema»: aquí es un bloque **estático**, sin
+   posición,
    sin `pointer-events: none` (aquí sí se puede seleccionar texto) y a ancho
    completo. */
 .telemetry {
@@ -622,81 +646,147 @@ button:focus-visible {
   line-height: 1.4;
 }
 
-/* ─── El modal de herramientas (capa L3) ──────────────────────────────────
-   R2: todo el riel —voz, cámara, atuendos, sistema y ayuda— es ahora UN
-   `<dialog>` centrado que aparece, cumple y desaparece. Nativo: el overlay,
-   la trampa de foco y el `Esc` los regala el navegador, que en una máquina de
-   1,8 GiB es la mejor librería de moda. Como se abre con `showModal()` vive
-   en la *top layer*: ningún `z-index` de la cara tiene que pelear con él. */
-.panel {
+/* ─── Las ventanas de vidrio (capa L3) ────────────────────────────────────
+   N1 de docs/REDESIGN-NUCLEO.md: el modal de una pestaña se convirtió en
+   ventanas flotantes, apilables y ocultables — la gramática de las referencias
+   en video (@techenclear, @sued.tiago): paneles translúcidos sobre el
+   escritorio real, no una caja que se traga la escena. Por eso **no** son
+   `<dialog>`: un modal oscurece el fondo y aísla; el vidrio deja ver el
+   reactor a través y el fondo sigue vivo. El `Esc` jerárquico y las teclas
+   1–5 los atiende `App.tsx` sobre la pila pura de `cort/ventanas.ts`.
+
+   Las clases `.ventana-<id>` son el ancla de cada sección — izquierda para
+   voz/atuendos, derecha para cámara/sistema—, y el arrastre (`useArrastre`)
+   desplaza con `transform` desde ahí; `⤾` vuelve al ancla. La sujeción del
+   arrastre garantiza que siempre quedan 72 px asomando: nada se pierde fuera. */
+.ventana {
   position: fixed;
-  inset: 0;
-  margin: auto;
-  width: min(560px, 92vw);
-  max-height: min(560px, 84vh);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 0;
+  width: min(420px, 88vw);
+  max-height: min(460px, 58vh);
+  display: flex;
+  flex-direction: column;
   color: var(--ink);
-  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.97), rgba(6, 16, 34, 0.97));
   border: 1px solid rgba(120, 190, 230, 0.28);
   border-radius: 14px;
   box-shadow: 0 0 48px rgba(92, 225, 255, 0.14);
+  /* El vidrio de verdad: desenfoque y saturación de lo que hay detrás. Es caro
+     para la GPU — con tres niveles y el HUD ya usando `blur(6px)` desde `v0.11`
+     el patrón está; medir fps queda para la re-verificación en navegador. */
+  backdrop-filter: blur(10px) saturate(1.3);
+  overflow: hidden;
 }
 
-/* El fondo a oscuras es la única señal de que lo demás espera: sin botón de
-   cerrar flotando en la cara, cerrar es pulsar aquí o `Esc`. */
-.panel::backdrop {
-  background: rgba(2, 6, 14, 0.62);
+.ventana-voz { left: 14px; top: 15vh }
+.ventana-atuendos { left: 14px; bottom: 26vh }
+.ventana-camara { right: 14px; top: 15vh }
+.ventana-sistema { right: 14px; bottom: 26vh }
+.ventana-ayuda { left: 14px; top: 15vh }
+
+/* Los tres niveles del botón ◐: qué tan transparente es la ventana. Fondo con
+   alfa fija por nivel — menos `calc` en el paint de una máquina de 1,8 GiB. */
+.vidrio-opaco {
+  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.97), rgba(6, 16, 34, 0.97));
 }
 
-.panel-cab {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+.vidrio-normal {
+  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.78), rgba(6, 16, 34, 0.78));
+}
+
+.vidrio-bruma {
+  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.55), rgba(6, 16, 34, 0.55));
+}
+
+/* La barra es también el asa: `touch-action: none` para que el dedo mueva la
+   ventana y no la página, igual que en la barra de estado del HUD. */
+.ventana-cab {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 8px 10px 0;
-  background: rgba(7, 18, 36, 0.97);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border-bottom: 1px solid rgba(120, 190, 230, 0.18);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
 
-/* Pestañas como filo subrayado, no como botones: cinco cajas rellenas en una
-   cabecera de 44 px volverían a ser el riel con otro vestido. */
-.pestana {
-  padding: 10px 12px;
-  min-height: 40px;
-  color: var(--dim);
-  font: inherit;
+.ventana.tirando .ventana-cab {
+  cursor: grabbing;
+}
+
+.ventana.tirando {
+  user-select: none;
+}
+
+.ventana-titulo {
+  color: var(--tint);
   font-size: 0.78rem;
   letter-spacing: 0.12em;
   text-transform: lowercase;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.pestana:hover {
-  color: var(--ink);
-}
-
-.pestana.activa {
-  color: var(--tint);
-  border-bottom-color: var(--tint);
   text-shadow: 0 0 12px rgba(92, 225, 255, 0.5);
 }
 
-.panel-cuerpo {
+.ventana-botones {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Los tres mandos de la barra: fantasmas, como el «ajustes» de la bandeja —
+   en una barra de 40 px un botón relleno de cian grita más que la ventana.
+   44 px de alto: lo mínimo que acierta un dedo sin mirar. */
+.ventana-colocar,
+.ventana-vidrio,
+.ventana-cerrar {
+  min-height: 44px;
+  padding: 0 10px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  background: rgba(6, 16, 34, 0.5);
+  border: 1px solid rgba(120, 190, 230, 0.25);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.ventana-colocar:hover,
+.ventana-vidrio:hover,
+.ventana-cerrar:hover {
+  color: var(--tint);
+}
+
+.ventana-cuerpo {
+  overflow-y: auto;
+  scrollbar-width: thin;
   display: flex;
   flex-direction: column;
   gap: 10px;
   padding: 14px;
 }
 
-/* La pestaña «sistema»: telemetría + atuendo + clima, los datos que antes
-   viajaban por el cabezal del HUD. */
+/* En móvil no hay dos columnas: la ventana ocupa el ancho, cae debajo del
+   reloj, y como mucho se apila otra encima (el frente se ve, el resto espera
+   su `Esc`). El selector compuesto iguala la especificidad de las anclas y
+   manda por ir después en el archivo. */
+@media (max-width: 520px) {
+  .ventana.ventana-voz,
+  .ventana.ventana-atuendos,
+  .ventana.ventana-camara,
+  .ventana.ventana-sistema,
+  .ventana.ventana-ayuda {
+    left: 8px;
+    right: 8px;
+    bottom: auto;
+    top: 64px;
+    width: auto;
+    max-height: 56vh;
+  }
+}
+
+/* El cuerpo de la ventana «sistema»: telemetría + atuendo + clima, los datos
+   que antes viajaban por el cabezal del HUD. */
 .sistema {
   display: flex;
   flex-direction: column;
@@ -934,8 +1024,8 @@ button:focus-visible {
 }
 
 /* El tamaño del `avatar CORT`, debajo de la lista y sólo con un VRM puesto:
-   para una imagen no hay escala que elegir. Mismos botones chiquitos que las
-   pestañas para que el modal no introduzca un segundo lenguaje de control. */
+   para una imagen no hay escala que elegir. Mismos botones chiquitos que los
+   mandos de las ventanas para no introducir un segundo lenguaje de control. */
 .tamanos {
   display: flex;
   align-items: center;
@@ -1156,8 +1246,8 @@ input {
     max-height: 30dvh;
   }
 
-  /* La telemetría ya no vive en la cara: viaja dentro del modal, donde el
-     ancho lo manda el dialog y no queda nada que encoger aquí. */
+  /* La telemetría ya no vive en la cara: viaja dentro de la ventana «sistema»,
+     donde el ancho lo manda la ventana y no queda nada que encoger aquí. */
   .tl-row {
     gap: 10px;
   }
@@ -1263,7 +1353,7 @@ input {
   }
 
   .crono {
-    /* Centro arriba: con la telemetría mudada al modal (R2) el único sitio que
+    /* Centro arriba: con la telemetría fuera de la cara (R2) el único sitio que
        queda libre de verdad es el medio del borde superior. */
     top: 10px;
     left: 50%;

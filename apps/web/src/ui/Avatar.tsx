@@ -90,10 +90,11 @@ function Miniatura({ nombre, bytes, activo, onElegir }: {
 /**
  * El selector táctil de archivos de atuendo.
  *
- * Rediseño R2: ya no vive en el riel de la bandeja — ahora es la pestaña
- * «atuendos» del modal, y por eso su `visible` lo decide el modal, no la
- * bandeja. Sigue pidiendo la lista al core sólo cuando alguien abre la
- * pestaña: mientras nadie la pida, CORT no lee la carpeta de avatares de nadie.
+ * Rediseño R2: ya no vive en el riel de la bandeja — ahora es la ventana
+ * «atuendos» (modal en R2, vidrio suelto desde N1), y por eso su `visible` lo
+ * decide la ventana, no la bandeja. Sigue pidiendo la lista al core sólo cuando
+ * alguien la abre: mientras nadie la pida, CORT no lee la carpeta de avatares
+ * de nadie.
  *
  * Hay dos tipos de mosaico. Las **imágenes** se eligen con su miniatura; los
  * **VRM** se eligen con un recuadro de texto, porque una vista previa de una

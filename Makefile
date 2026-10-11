@@ -67,9 +67,12 @@ test:
 # Las pruebas de la cara vivían aquí (`make test-web`, 17 pruebas del riel y su
 # tabla de teclas). El rediseño por capas de `docs/REDESIGN-UI.md` (2026-10-10)
 # borró el riel —el módulo probado, `src/cort/paneles.ts`, ya no existe—, y con
-# él se fue el runner. La superficie nueva se comprobó en navegador real, capa
-# por capa, y eso está contado en `docs/STATUS.md`; si el modal crece lógica
-# pura otra vez, aquí vuelve a haber sitio para probarla.
+# él se fue el runner. N1 de `docs/REDESIGN-NUCLEO.md` trajo la lógica pura de
+# vuelta —la pila de ventanas de vidrio, `src/cort/ventanas.ts`—, y con ella el
+# runner restaurado desde el historial (`scripts/pruebas-web.mjs`): transpila
+# con el `typescript` que ya es devDependency y corre `node --test`. 11 pruebas.
+test-web:
+	node scripts/pruebas-web.mjs
 
 # Quién intentó lo que CORT no dejó: lee el registro real, en la carpeta que
 # ignora `.gitignore`. Aquí **sí** se lee el `.env` (sin `CORT_DOTENV=0`), porque
@@ -77,5 +80,5 @@ test:
 rechazos:
 	cd $(CORE) && $(PY) -m cort_core.audit
 
-.PHONY: setup install doctor dev launch web web-deps web-build demo test rechazos
+.PHONY: setup install doctor dev launch web web-deps web-build demo test test-web rechazos
 

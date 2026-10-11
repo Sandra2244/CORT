@@ -247,8 +247,8 @@ export function Voz() {
         {escucha ? 'escuchando…' : 'hablarle'}
       </button>
       {escucha && oyendo && <span className="gesto-medida">{oyendo}</span>}
-      {/* El párrafo que explicaba qué hace cada botón se mudó a la pestaña
-          «ayuda» del modal (rediseño R2): en la cara no se leen manuales. */}
+      {/* El párrafo que explicaba qué hace cada botón se mudó a la ventana
+          «ayuda» (rediseño R2): en la cara no se leen manuales. */}
       {error && <p className="gesto-aviso">{error}</p>}
     </div>
   )

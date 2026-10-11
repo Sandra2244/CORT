@@ -8,10 +8,16 @@
 > clip). **Cero assets, cero fotogramas, cero líneas de código de terceros entran al repo**:
 > se copia distribución y comportamiento, no expresión protegida (regla 9).
 
-Este documento **no ejecuta nada todavía**: es el mapa de qué se integra, dónde es factible
+Este documento **no ejecutaba nada al escribirse**: era el mapa de qué se integra, dónde es factible
 en esta máquina y con esta pila (Python + React + Ollama, regla 13), y en qué orden. Cada
 pieza lleva su veredicto honesto —**hecho factible aquí / necesita dependencia nueva /
 inviable sin APK / choca con una regla de seguridad**—, dicho en vez de simulado (reglas 10 y 11).
+
+> **Estado de ejecución (2026-10-10):** N1 **hecha y medida en navegador** — ventanas de
+> vidrio apilables con arrastre y sujeción, tres niveles de opacidad, reloj agarrable, pila
+> pura en `cort/ventanas.ts` con 11 pruebas (`make test-web` recuperado); función 82 en
+> `docs/FUNCTIONS.md`. Sigue el orden: **N4 (secciones) → N2 (agenda que habla sola) →
+> N3 (consola chat‑agente) → N5 (mano, opcional y medido)**.
 
 ## Los seis patrones que salen de los cuatro videos
 
