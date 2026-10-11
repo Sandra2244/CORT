@@ -1,9 +1,13 @@
 # CORT
 
 <p align="center">
+  <img src="docs/assets/cort-logo.png" alt="Logo de CORT: anillo holográfico cian con halo violeta y núcleo brillante sobre fondo espacial" width="150">
+</p>
+
+<p align="center">
   <img alt="Versión" src="https://img.shields.io/badge/versión-v0.10.1-6f4ff2?style=flat-square">
   <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-5%20publicadas-2ea44f?style=flat-square"></a>
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-327%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-331%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -15,7 +19,7 @@
 
 No una maqueta: un orbe de shader que respira, **una voz que se oye**, una memoria que sobrevive al apagar, un cerebro que puede ser un modelo tuyo o un chat local, **una cara que se aparta cuando dejas de tocarla** — seis hilos en un borde, uno cada vez, y se llega con el dedo, con el cursor o con el teclado —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.10.1`** · rama **`main`** · **327 pruebas en verde** del core (ejecutadas, no contadas; las 17 de la cara se fueron con el riel — README paso 8 y función 76) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.10.1`** · rama **`main`** · **331 pruebas en verde** del core (ejecutadas, no contadas; las 17 de la cara se fueron con el riel — README paso 8 y función 76— y volvieron 4 nuevas con la marca, `test_marca`) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT: reactor holográfico azul/violeta ocupando la pantalla, con el cabezal de estado y la esquina que abre la bandeja (captura del corte v0.6.0)](docs/assets/prototipo-v0.6.0.png)
 
@@ -102,7 +106,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Voz** | `apps/web/src/ui/Voz.tsx` | Habla con `speechSynthesis` y escucha con `SpeechRecognition`: **cero dependencias, cero RAM del core, y el mismo código en el portátil que en el Android**. Elige la mejor voz en español puntuando las instaladas (`Natural` > `online` > resto, región primero), limpia el markdown y los emojis que el sintetizador deletrea, parte por oraciones para que haya pausas, y **cierra el micrófono mientras CORT habla** para no oírse a sí misma |
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1` |
-| **Pruebas** | `services/core/tests/` | **327** en Python con la biblioteca estándar (`make test`). Con el rediseño por capas (2026-10-10) se fue el riel, y con él `cort/paneles.ts` y sus 17 pruebas de Node: el módulo probado ya no existe (función 76). El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` | **331** en Python con la biblioteca estándar (`make test`), cuatro de ellas sobre `scripts/marca.py` — la marca se dibuja con código y se prueba como código: firma PNG, cabecera ICO y forma del anillo (núcleo claro, campo medio oscuro, banda cian). Con el rediseño por capas (2026-10-10) se fue el riel, y con él `cort/paneles.ts` y sus 17 pruebas de Node: el módulo probado ya no existe (función 76). El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
@@ -207,7 +211,7 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | ⚡ | **Acciones reales en el sistema** a través de la capa de permisos: cambia el volumen con `wpctl` y **lee el nivel antes y después**; hace una **captura de pantalla** con `scrot` y **comprueba el archivo**; **abre aplicaciones** de una lista cerrada y lo confirma contando el proceso nuevo | Verificado por WebSocket contra PipeWire, contra disco (PNG real de 1366×768) y contra `pgrep`: `xfce4-terminal` pasó de 0 a 1 procesos con CORT diciendo «Abriendo la terminal», y a la segunda «La terminal ya estaba en marcha» |
 | ✨ | **Efectos de un solo disparo**: onda al ejecutarse algo, desgarro al fallar y **sacudida del panel al responder** | `MutationObserver` en el navegador, medido de nuevo el 2026-10-09: tras «hola cort» el HUD pasó por `hud` → `hud fx-shaking` → `hud`, con la respuesta ya escrita en el log. El `shake` estaba **arreglado y sin productor** (el core sólo mandaba `pulse` y `glitch`); ahora lo manda en cada turno del modelo, con su prueba de orden en `test_protocol.py` |
 | 📊 | **Panel de telemetría** —cuántos recuerdos hay y hasta dónde llegan, qué modelo contestó, si las acciones están encendidas, si puede hablar primero—, ahora **dentro del hilo `2` del riel** en vez de fijo en una esquina. Con el apagador puesto dice «apagadas» en vez de fingir. Y **reloj** y **clima** en la línea de arriba, siempre visibles | `test_status` (10) y `test_protocol` (14), y cliente real: `{"memories":1,"keep":200,"brain":null,"ollama":false,"actions":false}`. El reloj, medido: `00:25:04 → 00:25:07` en 2,1 s. La telemetría se ve en el navegador abierta desde el riel el 2026-10-09 |
-| 🖥️ | **Arranque de doble clic**: `CORT.desktop` en Linux, `cort.bat` en Windows, terminal con banner y **siete barras** (core · interfaz · ollama · memoria · **audio** · **cámara** · red) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida. La barra de audio, ejecutada hoy: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s)`. La de red, con `--lan` y las dos direcciones escuchando en `0.0.0.0`. **Sin verificar el doble clic en el escritorio XFCE** (lo maneja a mano Sandra) |
+| 🖥️ | **Arranque de doble clic con su marca**: `CORT.desktop` en Linux, `cort.bat` en Windows, con el **logo de CORT** (anillo holográfico generado con código en `scripts/marca.py`) en el icono del lanzador y del instalador; terminal con banner y **siete barras** (core · interfaz · ollama · memoria · **audio** · **cámara** · red) | Lanzado de verdad: `dist` y `vite dev`, `--quiet` y salida redirigida. La barra de audio, ejecutada hoy: `0 salida(s): ninguna real (Dummy Output) · 0 entrada(s)`. La de red, con `--lan` y las dos direcciones escuchando en `0.0.0.0`. La marca, **ejecutada y mirada**: `scripts/marca.py` produce el PNG y el ICO, y 4 pruebas en `test_marca.py` fijan su forma. **Sin verificar el doble clic en el escritorio XFCE** (lo maneja a mano Sandra) |
 | 🎨 | **Atuendo por hora y temperatura real**: el reactor elige color según el cielo de la ciudad, y **se puede agrandar de un arrastre** (50 % a 200 %) | `pick_outfit` con las tres temperaturas de corte probadas; el tamaño, medido en el navegador: 18 fps a 100 % y los mismos 18 a 200 % |
 | 🌦️ | **Clima por Open-Meteo** (sin clave): la ciudad del `.env` se resuelve una vez, se refresca cada 15 min y se sirve de caché para no bloquear el WebSocket. Sin `CORT_CITY` no sale ningún paquete | 9 pruebas con HTTP simulado + una medición real: `Bogotá → 17,7 °C, código 3` |
 | 🤳 | **Gesto de cámara**: desenfocar con los dedos delante de la webcam encoge el orbe; enfocar lo devuelve a su tamaño. La cámara la abre un botón y apagarla detiene las pistas | Medido en el navegador con un stream real de imagen nítida y desenfocada: **100 % → 51 % al desenfocar, de vuelta al 100 %, 17 fps con el análisis activo** (18 sin él). Con dedos humanos: sin verificar (el navegador de pruebas negó el permiso) |
@@ -239,7 +243,7 @@ CORT/
 ├── services/core/
 │   ├── cort_core/            # el cerebro: server · brain · intents · planner · actions · avatars · status · outfit · weather · initiative · timer · security · audit · env
 │   │   └── memory/           # store.py (SQLite) + facts.py (extracción de hechos)
-│   ├── tests/                # 327 pruebas, biblioteca estándar
+│   ├── tests/                # 331 pruebas, biblioteca estándar
 │   ├── data/                 # memory.db y rechazos.jsonl — fuera de git: son datos de la casa
 │   └── requirements.txt
 ├── apps/web/                 # React 19 + Vite + Three.js
@@ -450,7 +454,7 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 327 pruebas del core, ~68-120 s en esta máquina (según carga)
+make test      # 331 pruebas del core, ~68-120 s en esta máquina (según carga)
 ```
 
 Hasta `v0.10.1` existía además un `make test-web` (17 pruebas del riel de paneles). El rediseño por capas del 2026-10-10 borró el riel y su módulo de estado, así que el objetivo y sus pruebas se retiraron juntos; la cuenta volvió a ser **una sola suite**.
@@ -514,7 +518,7 @@ Tareas abiertas que no requieren hardware nuevo (orden sugerido, de más barata 
 | [`docs/STATUS.md`](docs/STATUS.md) | **Fuente de verdad operativa**: qué funciona de verdad, qué se intentó y falló, qué deuda hay |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Capas, protocolo, capa de permisos, módulos de `apps/web` — con el por qué de cada decisión |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md) | Nueve fases, cada una con su criterio de "listo" |
-| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 80 funciones con estado y viabilidad por sistema operativo |
+| [`docs/FUNCTIONS.md`](docs/FUNCTIONS.md) | Las 81 funciones con estado y viabilidad por sistema operativo |
 | [`docs/REFERENCIAS.md`](docs/REFERENCIAS.md) | El análisis de los videos de interfaz que se usaron como referencia: seis patrones, qué se copió (distribución) y qué se descartó con su motivo — cero assets y cero líneas de terceros |
 | [`docs/PLATFORM.md`](docs/PLATFORM.md) | Electron, Capacitor, PWA, C++/Java y voz: qué se puede hacer aquí y con qué número |
 | [`docs/VISION.md`](docs/VISION.md) | Qué se traduce de Cortana a algo real |

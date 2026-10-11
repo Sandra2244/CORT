@@ -33,6 +33,10 @@ DefaultDirName={autopf}\CORT
 DefaultGroupName={#MyAppName}
 OutputDir=Output
 OutputBaseFilename=cort-setup-{#MyAppVersion}
+; El icono del setup.exe y de sus ventanas: la marca de CORT, generada con
+; código desde `scripts/marca.py` (los colores de palette.ts, sin arte de
+; terceros). Ruta relativa al sitio de este .iss.
+SetupIconFile=cort.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
