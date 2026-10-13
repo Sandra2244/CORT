@@ -5,8 +5,9 @@ import { BlendFunction } from 'postprocessing'
 import * as THREE from 'three'
 import { Core } from './Core'
 import { Particles } from './Particles'
+import { Nube } from './Nube'
 import { Vrm } from './Vrm'
-import { getSnapshot, setOrbeVisible, subscribe, target } from '../cort/connection'
+import { REPOSO_MS, getSnapshot, setOrbeVisible, subscribe, target } from '../cort/connection'
 
 /**
  * Todo lo que la escena anima por frame, en un único objeto mutable.
@@ -24,6 +25,10 @@ export type Drive = {
   /** 0..1.6 revelado del anillo desde el centro. */
   open: number
   visible: boolean
+  /** 0..1 cuánto se ha deshecho el reactor en la nube de reposo. */
+  reposo: number
+  /** 0..1 cuánto se ha formado el anillo de escucha. */
+  escucha: number
 }
 
 function Rig() {
@@ -37,6 +42,8 @@ function Rig() {
       intensity: 1,
       open: 0,
       visible: true,
+      reposo: 0,
+      escucha: 0,
     }),
     [],
   )
@@ -55,13 +62,46 @@ function Rig() {
     // y aquí 1 fps valen.
     drive.visible = target.visible
 
-    // Sin micrófono todavía: el nivel es una respiración, y pensar la agita.
+    const t = state.clock.elapsedTime
+
+    // -- qué cara toca ------------------------------------------------------
+    // Escucha: el micrófono está abierto y nadie más tiene la palabra.
+    // Reposo: nada ha pasado en REPOSO_MS (ni gesto, ni mensaje, ni voz) y CORT
+    // ni piensa ni habla. Si no, el reactor de siempre.
+    const quiereEscucha = target.forzar === 'escucha' || target.escucha
+    const quiereReposo =
+      !quiereEscucha &&
+      (target.forzar === 'reposo' ||
+        (REPOSO_MS > 0 &&
+          !target.habla &&
+          !getSnapshot().thinking &&
+          performance.now() - target.actividad > REPOSO_MS))
+    drive.escucha += ((quiereEscucha ? 1 : 0) - drive.escucha) * Math.min(1, dt * 1.3)
+    drive.reposo += ((quiereReposo ? 1 : 0) - drive.reposo) * Math.min(1, dt * 0.8)
+    // El reactor y su polvo se apagan a medida que la nube se enciende.
+    drive.intensity = 1 - Math.max(drive.escucha, drive.reposo)
+
+    // -- nivel --------------------------------------------------------------
+    // Sin medidor de micrófono: el navegador no entrega el volumen del
+    // reconocimiento de voz, así que el nivel se arma con lo que sí avisa
+    // (empieza a hablar, llega una palabra, CORT pronuncia una palabra).
+    target.nivel *= Math.exp(-dt * 4.5)
     const idle = 0.05 + (target.spin > 1 ? 0.22 : 0)
-    const breathe = (Math.sin(state.clock.elapsedTime * 0.9) * 0.5 + 0.5) * idle
-    drive.level += (breathe - drive.level) * Math.min(1, dt * 9)
+    const breathe = (Math.sin(t * 0.9) * 0.5 + 0.5) * idle
+    // Respaldo mientras CORT habla: las voces «Natural» en línea no siempre
+    // mandan el aviso de cada palabra, y el reactor no puede quedarse quieto.
+    const habla = target.habla ? 0.28 + 0.22 * Math.abs(Math.sin(t * 7.1)) * (0.6 + 0.4 * Math.sin(t * 2.3)) : 0
+    const oye = quiereEscucha
+      ? target.oyendo
+        ? 0.5
+        : target.forzar === 'escucha'
+          ? 0.35 + 0.3 * Math.max(0, Math.sin(t * 0.7)) * Math.abs(Math.sin(t * 5.0))
+          : 0.16 + 0.05 * Math.sin(t * 1.3)
+      : 0
+    const meta = Math.max(breathe, habla, oye, target.nivel)
+    drive.level += (meta - drive.level) * Math.min(1, dt * 9)
 
     // Deriva lenta de la cámara: mantiene la imagen viva sin ser un barrido.
-    const t = state.clock.elapsedTime
     state.camera.position.x = Math.sin(t * 0.13) * 0.35
     state.camera.position.y = Math.cos(t * 0.17) * 0.22
     state.camera.lookAt(0, 0, 0)
@@ -73,6 +113,7 @@ function Rig() {
     <>
       <Core drive={drive} />
       <Particles drive={drive} />
+      <Nube drive={drive} />
     </>
   )
 }

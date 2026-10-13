@@ -158,5 +158,39 @@ Nada de esto añade dependencias (ni framer-motion ni zustand: la regla de los 1
 **Lo que NO se copió.** La referencia de ventanas que ella señaló (`jaredrhod/fullstack-agent`) es **AGPL-3.0**: de ahí viene la *idea* de ventanas flotantes sobre la escena, no una línea de código. El arrastre sí es transplante declarado de `adewaskar/JARVIS` (MIT, atribuido en `apps/web/CREDITS.md`), y sigue siendo el mismo archivo `cort/arrastre.ts` que ya estaba.
 
 ---
+
+## 8. R6 · La cara tiene dos estados más: reposo y escucha (2026-10-12)
+
+La cara que salió de R5 tenía **una** sola expresión: el reactor encendido, siempre igual, con ventanas encima. Los videos de referencia que ella trajeron el 10-10 mostraban otra cosa — un asistente que **se recoge cuando nadie le habla** y **forma un anillo cuando escucha**. Este apartado añade esos dos estados y deja el reactor como lo que era.
+
+**Las tres caras, y una sola a la vez.**
+
+| Cara | Qué se pinta | Cuándo |
+|---|---|---|
+| **Reactor** | el orbe de `scene/Core.tsx` + el polvo de `scene/Particles.tsx` | hay actividad reciente: un gesto, un mensaje, una palabra |
+| **Reposo** | `scene/Nube.tsx` en modo hilos: ~11 000 puntos curvos y punteados alrededor de un destello casi quieto | pasan `REPOSO_MS` (30 s) sin nada de lo anterior |
+| **Escucha** | el mismo campo de puntos, junto, en un anillo que gira con estelas, agitado por el nivel de la voz | `connection.ts` tiene `escucha` a `true` (micrófono abierto en `cort/voz.ts`) |
+
+**Las tres reglas que sostienen el diseño.**
+
+1. **Nunca dos caras pintando a la vez.** `Scene.tsx` baja la del reactor con `drive.intensity = 1 - Math.max(drive.escucha, drive.reposo)`, y el fundido va en el propio material. No es un adorno: en esta máquina (2 núcleos, sin GPU) dos campos de puntos vivos son dos facturas de fotogramas, y una pantalla a medio segundo por cuadro no comunica nada.
+2. **El coste se paga en el *shader*, no en JavaScript.** `Nube.tsx` sube **ocho uniformes por cuadro** y no calcula una sola posición de partícula en el hilo de JS; el movimiento de los hilos, la respiración y la agitación por nivel se resuelven en el *vertex shader* sobre **un** `Points`. Medido el 2026-10-12 con el bundle final, ventana de `requestAnimationFrame` de 3-4 s por estado, viewport 535×521: **1,21 fps el reactor · 1,09 fps la nube en reposo · 1,09 fps el anillo de escucha**. La nube cuesta ~0,1 fps; el cuello sigue siendo la escena 3D renderizada por CPU, exactamente igual que en la medición del cristal de R5.
+3. **El reposo lo decide la actividad real, y se puede apagar.** `connection.ts` apunta `actividad` en los gestos (`pointerdown/move`, `keydown`, `wheel`, `touchstart`, todos `passive`), en el envío de un mensaje y cuando el core dice `thinking: true`. Un `state` repetido con `thinking: false` **no** renueva la actividad —si contara, el reposo no llegaría nunca, que es el fallo que esta regla evita—. `?reposo=10` lo muestra pronto y `?reposo=0` lo desactiva para quien no quiera la cara.
+
+**Dónde se fue la voz, y por qué.** El altavoz y el micrófono vivían dentro de `ui/Voz.tsx`, o sea dentro de una ventana: se cerraba la ventana y se cerraba la escucha. El 2026-10-12 la lógica pasó a **`cort/voz.ts`**, que `App.tsx` arranca con `iniciarVoz()` una sola vez, y `ui/Voz.tsx` quedó como un cuerpo de 100 líneas pegado a ese módulo con `useSyncExternalStore`. La **frase de activación** («OK CORT») se separó además en **`cort/activacion.ts`**, un módulo puro sin navegador ni dependencias, precisamente para poder probarlo: **12 pruebas** en `make test-web` (`scripts/pruebas-web.mjs`, el riel que se había jubilado el 10-10 y vuelve con esta capa), incluidas las que exigen que «cortometraje», «corte» o «hola Laura, cortá la música» **no** despierten al asistente.
+
+**Qué se verificó y qué no** (2026-10-12, core en `--demo`):
+
+| Comprobación | Resultado |
+|---|---|
+| Tipos y compilado | `tsc --noEmit` sin errores; `vite build` sin errores |
+| Pruebas | core en verde; `make test-web` 12/12 |
+| Tres caras | vistas en navegador con `?demo=reposo` y `?demo=escucha`: `docs/assets/nube-reposo-2026-10-12.png`, `docs/assets/nube-escucha-2026-10-12.png` |
+| Coste | la tabla de arriba: 1,21 / 1,09 / 1,09 fps medidos, no supuestos |
+| Falsa activación | 12 pruebas de `activacion.ts`, con las trampas léxicas |
+
+**Sin verificar, y así queda:** el micrófono real agitándole la nube a CORT (en este portátil `wpctl status` no lista ningún *Source*; la escucha se probó forzada con `?demo=escucha`), oír la voz con auriculares, el dedo en el teléfono, y los fps de la nube en un equipo con GPU. Las funciones afectadas llevan su fila en `docs/FUNCTIONS.md`: **11, 12, 13, 22 y 83**.
+
+---
 ---
 *Análisis hecho el 2026-10-10 sobre los videos de `Respaldo Proyectos Programacion/`, el código de `apps/web/src/` a `cort-local-verified` (post-v0.6.1) y `docs/STATUS.md`. Los frames extraídos son temporales (`/tmp/frames/`); los videos fuente, respaldados. Ejecutar este plan requiere luz verde de Sandra y se hace capa por capa, midiendo en esta máquina antes de afirmarlo.*

@@ -26,7 +26,27 @@ export function Ayuda() {
       <p>
         <b>voz</b> — <b>que me hable</b> lee en voz alta lo que CORT responde.{' '}
         <b>hablarle</b> abre el micrófono y conversa: pide permiso la primera vez y
-        el reconocimiento necesita internet (Edge o Chrome).
+        el reconocimiento necesita internet (Edge o Chrome). El micrófono{' '}
+        <b>no se apaga al cerrar la ventana</b>: vive fuera de ella, así que puedes
+        dejarlo escuchando y seguir mirando la cara.
+      </p>
+      <p>
+        <b>«OK CORT»</b> — el tercer botón deja el micrófono vigilando: cuando dices{' '}
+        <b>OK CORT</b> (también <b>oye CORT</b> o <b>hola CORT</b>) suena un pitido, el
+        anillo se forma y hablas: puedes decir la orden aparte o de corrido («OK CORT,
+        sube el volumen»). Al responder vuelve a esperar. <b>Ojo:</b> el navegador no
+        tiene una palabra de activación local, así que mientras esté activo el audio se
+        manda al servicio de reconocimiento de Edge o Chrome. Apágalo cuando no lo
+        necesites.
+      </p>
+      <p>
+        <b>reposo y escucha</b> — si nadie toca nada durante 30 segundos, el reactor se
+        deshace en una nube de puntos; cualquier gesto o mensaje lo devuelve. Con el
+        micrófono abierto (<b>hablarle</b>) la nube se junta en un anillo que gira y se
+        agita con tu voz; mientras CORT piensa o habla vuelve el reactor. Para verlos sin
+        esperar: añade <code>?demo=reposo</code> o <code>?demo=escucha</code> a la
+        dirección, o <code>?reposo=10</code> para que el reposo llegue a los 10 segundos
+        (<code>?reposo=0</code> lo desactiva).
       </p>
       <p>
         <b>cuerpo</b> — CORT proyecta los archivos de tu carpeta. Se declara con{' '}

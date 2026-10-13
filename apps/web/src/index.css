@@ -660,6 +660,43 @@ button:focus-visible {
   line-height: 1.4;
 }
 
+/* Ajustes de la voz: cuál habla, qué tan rápida, y probarla. Viven dentro de la
+   ventana «voz», así que heredan el vidrio (mismos tokens, ningún color nuevo). */
+.voz-ajustes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  flex: 1 1 100%;
+}
+
+.voz-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--dim);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+}
+
+.voz-campo select {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 0 10px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.76rem;
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
+}
+
+.voz-campo input[type='range'] {
+  min-height: 44px;
+  width: 132px;
+  accent-color: var(--tint);
+}
+
 /* La ventana «sistema»: telemetría + atuendo + clima, los datos que antes
    viajaban por el cabezal del HUD. */
 .sistema {

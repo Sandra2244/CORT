@@ -107,6 +107,16 @@ let snapshot: Snapshot = {
 const listeners = new Set<() => void>()
 
 function set(patch: Partial<Snapshot>) {
+  // Lo que despierta a CORT del reposo es algo que pasó de verdad: un mensaje
+  // nuevo, un pensar que empieza, un temporizador o un efecto. Un cuadro
+  // `state` repetido con `thinking: false` NO cuenta, o el reposo nunca llegaría.
+  if (
+    (patch.msgs && patch.msgs !== snapshot.msgs) ||
+    patch.thinking === true ||
+    patch.crono ||
+    patch.effect
+  )
+    tocarActividad()
   snapshot = { ...snapshot, ...patch }
   listeners.forEach((l) => l())
 }
@@ -142,6 +152,35 @@ export const target = {
    * WebSocket con la misma conexión abierta.
    */
   visible: true,
+
+  // -- La nube de partículas (reposo y escucha), ver `scene/Nube.tsx` --------
+  /** `performance.now()` de lo último que pasó: un gesto, un mensaje, una voz. */
+  actividad: typeof performance !== 'undefined' ? performance.now() : 0,
+  /** El micrófono está abierto Y CORT no está ni hablando ni esperando respuesta. */
+  escucha: false,
+  /** CORT está diciendo algo en voz alta. */
+  habla: false,
+  /** Alguien está hablando ahora mismo (lo dice el reconocimiento de voz). */
+  oyendo: false,
+  /** 0..1, un golpe que decae solo: cada palabra y cada resultado parcial lo sube. */
+  nivel: 0,
+  /** Para ver un estado sin micrófono ni esperar: `?demo=reposo` o `?demo=escucha`. */
+  forzar: null as null | 'reposo' | 'escucha',
+}
+
+const params = new URLSearchParams(location.search)
+const demo = params.get('demo')
+if (demo === 'reposo' || demo === 'escucha') target.forzar = demo
+
+/**
+ * Segundos sin actividad para que el reactor se deshaga en la nube de reposo.
+ * `?reposo=10` para verlo pronto, `?reposo=0` para que nunca ocurra.
+ */
+const reposoS = Number(params.get('reposo') ?? 30)
+export const REPOSO_MS = (Number.isFinite(reposoS) && reposoS >= 0 ? reposoS : 30) * 1000
+
+export function tocarActividad() {
+  target.actividad = performance.now()
 }
 
 /** El margen que el shader aguanta sin que el anillo se salga del cuadro. */
@@ -261,9 +300,14 @@ function open() {
   }
 }
 
+const GESTOS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const
+
 export function connect() {
   open()
+  // Cualquier gesto despierta la cara. `passive`: no se frena el scroll por esto.
+  GESTOS.forEach((g) => window.addEventListener(g, tocarActividad, { passive: true }))
   return () => {
+    GESTOS.forEach((g) => window.removeEventListener(g, tocarActividad))
     if (timer) clearTimeout(timer)
     timer = undefined
     const s = sock

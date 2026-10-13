@@ -9,6 +9,7 @@ import { Ventanas } from './ui/Ventanas'
 import { Temporizador } from './ui/Temporizador'
 import type { IdVentana } from './ui/Ventana'
 import { getSnapshot, connect, setOrbeVisible, setZoom, subscribe } from './cort/connection'
+import { iniciarVoz } from './cort/voz'
 
 /**
  * Las capas de CORT, reestructuradas el 2026-10-11.
@@ -40,6 +41,15 @@ import { getSnapshot, connect, setOrbeVisible, setZoom, subscribe } from './cort
  */
 export default function App() {
   useEffect(connect, [])
+
+  /**
+   * La voz vive **fuera** de las ventanas (2026-10-12): cuando todo estaba dentro
+   * del componente `Voz`, cerrar la ventana desmontaba el componente y apagaba el
+   * micrófono justo cuando se quería dejarlo escuchando y mirar la cara. Aquí el
+   * estado lo sostiene `cort/voz.ts` y esta línea lo enciende una sola vez; su
+   * retorno es lo que lo apaga al desmontar la app.
+   */
+  useEffect(iniciarVoz, [])
 
   /**
    * Las ventanas abiertas, **en orden de pila**: el último elemento se pinta
