@@ -1,4 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
+import { sujetar } from './asoma'
+import type { Punto } from './asoma'
 
 /**
  * Arrastrar un panel con el dedo o con el ratón.
@@ -13,52 +15,17 @@ import { useCallback, useRef, useState } from 'react'
  * el puntero ya no esté encima del asa, y en cuanto sueltas dejan de escucharse
  * los tres: no queda ningún escuchador pendiente mientras el panel está quieto.
  *
- * Lo que CORT añade y el original no necesitaba: la **sujeción**. Un panel de
- * escritorio se puede tirar fuera de la pantalla; un HUD que desaparece no se
- * puede volver a agarrar, así que siempre tienen que quedar píxeles asomando por
- * algún borde.
+ * Lo que CORT añade y el original no necesitaba: la **sujeción** — un panel de
+ * escritorio se puede tirar fuera de la pantalla, y un HUD que desaparece no se
+ * puede volver a agarrar. Esa geometría ya no vive aquí: se fue a `cort/asoma.ts`
+ * (función 82), que es pura, sin `window` ni nodos, y lleva sus pruebas porque
+ * **ya estuvo equivocada una vez**: los topes emparejaban el borde de arriba del
+ * panel con el de arriba de la ventana y, desde su propio sitio, no se podía
+ * arrastrar hacia abajo ni un píxel. Aquí queda lo que sí necesita un DOM: medir
+ * el nodo, leer el tamaño de la ventana y enterarse de los puntos del puntero.
  */
 
-/** Píxeles del panel que han de seguir visibles por dondequiera que se arrastre. */
-const ASOMA_MIN = 72
-
-type Punto = { x: number; y: number }
-
-function recortar(v: number, min: number, max: number): number {
-  return Math.min(Math.max(v, min), max)
-}
-
-/**
- * El destino tras un paso de `dx`/`dy`, con el panel ya donde está.
- *
- * `caja` es el rectángulo **ya con el desplazamiento aplicado** (es lo que
- * devuelve `getBoundingClientRect`) y `actual` la posición del panel en este
- * instante, así que el tope se calcula en cada cuadro y sobre el cuadro que se
- * acaba de dar. No una vez al agarrar y sobre el arrancada entera: el propio panel
- * cambia de alto a media arrancada —el botón de recolocar aparece y la barra
- * partida se va a una segunda línea—, y con la medida vieja el tope se queda
- * corto unos 25 px.
- *
- * Cada borde se empareja con el opuesto de la ventana: para que el panel siga
- * asomando por la izquierda tiene que haber por lo menos `ASOMA_MIN` píxeles entre
- * el borde izquierdo de la ventana y el **suyo derecho**. La otra pareja —izquierda
- * con izquierda— no sujeta nada, y fue la que dejó el panel sin poder moverse ni un
- * píxel hacia abajo desde su propio sitio.
- *
- * Cuando el panel es más ancho que la ventana los límites de un eje se cruzan (el
- * mínimo queda por encima del máximo); las dos variantes se prueban con `min`/`max`
- * en vez de asumir un orden.
- */
-function sujetar(caja: DOMRect, actual: Punto, dx: number, dy: number): Punto {
-  const izq = actual.x + (ASOMA_MIN - caja.right)
-  const der = actual.x + (window.innerWidth - ASOMA_MIN - caja.left)
-  const sup = actual.y + (ASOMA_MIN - caja.bottom)
-  const inf = actual.y + (window.innerHeight - ASOMA_MIN - caja.top)
-  return {
-    x: recortar(actual.x + dx, Math.min(izq, der), Math.max(izq, der)),
-    y: recortar(actual.y + dy, Math.min(sup, inf), Math.max(sup, inf)),
-  }
-}
+export type { Punto } from './asoma'
 
 /**
  * Devuelve el desplazamiento del panel, si se está tirando de él ahora mismo y
@@ -93,7 +60,14 @@ export function useArrastre<T extends HTMLElement = HTMLDivElement>() {
       ultX = ev.clientX
       ultY = ev.clientY
       if (!dx && !dy) return
-      setPos((actual) => sujetar(el.getBoundingClientRect(), actual, dx, dy))
+      setPos((actual) =>
+        // El tope se recalcula cada cuadro, sobre la caja que el panel tiene
+        // ahora: cambia de alto a media arrancada cuando asoma el `⤾`.
+        sujetar(el.getBoundingClientRect(), actual, dx, dy, {
+          x: window.innerWidth,
+          y: window.innerHeight,
+        }),
+      )
     }
 
     const soltar = () => {
