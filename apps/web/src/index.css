@@ -550,6 +550,59 @@ button:focus-visible {
   box-shadow: 0 0 18px var(--glow);
 }
 
+/* La tecla escrita en el propio botón. Está aquí y no en un párrafo de la ayuda
+   porque la ayuda puede decir «3 abre la cámara» aunque el muelle haya cambiado
+   de orden: el número se lee de la misma tabla que obedece el teclado
+   (`cort/teclas.ts`), así que lo que se ve es lo que se pulsa. */
+.muelle-tecla {
+  display: inline-grid;
+  place-items: center;
+  min-width: 17px;
+  height: 17px;
+  margin-left: 7px;
+  padding: 0 3px;
+  color: var(--dim);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
+  border-radius: 5px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  vertical-align: 1px;
+}
+
+.muelle-acceso:hover .muelle-tecla,
+.muelle-acceso:focus-visible .muelle-tecla {
+  color: var(--tint);
+  border-color: var(--tint);
+}
+
+/* Con el acceso lleno el número no puede pelearse con el fondo: se pinta con la
+   tinta del botón, sin colores nuevos. */
+.muelle-acceso.activa .muelle-tecla {
+  color: inherit;
+  background: transparent;
+  border-color: currentColor;
+  opacity: 0.8;
+}
+
+.muelle-acceso:hover .muelle-tecla,
+.muelle-acceso:focus-visible .muelle-tecla {
+  color: var(--tint);
+  border-color: var(--tint);
+}
+
+/* Con el botón lleno el número no puede quedarse en gris sobre el color de
+   relleno: hereda la tinta del texto y sólo deja el contorno. */
+.muelle-acceso.activa .muelle-tecla {
+  color: inherit;
+  background: transparent;
+  border-color: currentColor;
+  opacity: 0.75;
+}
+
 .muelle-aviso {
   position: absolute;
   top: -2px;
@@ -730,6 +783,35 @@ button:focus-visible {
   background: var(--glass-2);
   border-radius: 4px;
   font-size: 0.95em;
+}
+
+/* La tabla de teclas, generada desde `cort/teclas.ts`. Se pinta como rejilla de
+   fichas y no como párrafo corrido porque es una consulta, no una lectura: se
+   busca el número con la vista, no con el dedo. */
+.ayuda-teclas {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ayuda-teclas li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
+  border-radius: 8px;
+  font-size: 0.74rem;
+}
+
+.ayuda-teclas code {
+  min-width: 1.5em;
+  text-align: center;
+  font-weight: 700;
 }
 
 /* ─── El cuerpo holográfico ───────────────────────────────────────────────
@@ -980,6 +1062,12 @@ button:focus-visible {
     flex: 1 1 auto;
     padding: 0 6px;
     font-size: 0.72rem;
+  }
+
+  /* En el teléfono no hay teclado: el número sería una promesa vacía y roba el
+     ancho que los seis nombres necesitan. La ayuda tampoco lo enumera. */
+  .muelle-tecla {
+    display: none;
   }
 }
 

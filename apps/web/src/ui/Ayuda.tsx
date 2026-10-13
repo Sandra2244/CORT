@@ -6,6 +6,8 @@
  * ventana y se abre con su nombre o con `?` — el resto de la pantalla puede
  * respirar.
  */
+import { ACCESOS } from '../cort/teclas'
+
 export function Ayuda() {
   return (
     <div className="ayuda">
@@ -55,10 +57,27 @@ export function Ayuda() {
         mismo canvas.
       </p>
       <p>
-        <b>atajos</b> — <code>/</code> abre la charla con el cursor listo;{' '}
-        <code>1</code>–<code>6</code> saltan a las seis ventanas; <code>Esc</code>{' '}
-        despide la de enfrente. El temporizador y las acciones se piden escribiendo:
-        «pon un temporizador de 5 minutos», «baja el volumen».
+        <b>atajos</b> — <code>/</code> abre la charla con el cursor listo,{' '}
+        <code>?</code> trae esta ayuda y <code>Esc</code> despide la ventana de
+        enfrente (no todas de un golpe). Cada superficie tiene su número, y el
+        número es el que se ve en el muelle:
+      </p>
+      {/*
+       * La tabla se genera desde `cort/teclas.ts`, no se teclea a mano aquí. Es
+       * el motivo de que exista esa lista compartida: escrita a mano, la ayuda
+       * puede prometer una tecla que el teclado ya no escucha, y nadie se entera
+       * hasta que pulsa.
+       */}
+      <ul className="ayuda-teclas">
+        {ACCESOS.map(({ id, etiqueta, tecla }) => (
+          <li key={id}>
+            <code>{tecla}</code> <b>{etiqueta}</b>
+          </li>
+        ))}
+      </ul>
+      <p>
+        El temporizador y las acciones se piden escribiendo: «pon un temporizador de
+        5 minutos», «baja el volumen».
       </p>
     </div>
   )

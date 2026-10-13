@@ -10,6 +10,13 @@ import { Temporizador } from './ui/Temporizador'
 import type { IdVentana } from './ui/Ventana'
 import { getSnapshot, connect, setOrbeVisible, setZoom, subscribe } from './cort/connection'
 import { iniciarVoz } from './cort/voz'
+import {
+  accionDeTecla,
+  conmutar as conmutarDeLista,
+  despedir,
+  despedirFrente,
+  traerAlFrente,
+} from './cort/teclas'
 
 /**
  * Las capas de CORT, reestructuradas el 2026-10-11.
@@ -107,53 +114,54 @@ export default function App() {
 
   /** Abrir (o traer al frente si ya estaba). Es lo que hace `/` y un toque al núcleo. */
   function abrir(id: IdVentana) {
-    setAbiertas((prev) => [...prev.filter((x) => x !== id), id])
+    setAbiertas((prev) => traerAlFrente(prev, id))
     if (id === 'charla') setInvocar((n) => n + 1)
   }
 
-  /** El muelle: si está abierta, la despide; si no, la abre. */
+  /**
+   * El muelle: si está abierta, la despide; si no, la abre.
+   *
+   * Las tres operaciones sobre la pila (`traerAlFrente`, `conmutar`, `despedir`)
+   * viven en `cort/teclas.ts` y tienen su prueba. Filtran sin mutar a propósito:
+   * si devolvieran el mismo array, React no vería cambio y no pintaría nada.
+   */
   function conmutar(id: IdVentana) {
-    setAbiertas((prev) => (prev.includes(id) ? cerrarDeLista(prev, id) : [...prev, id]))
+    setAbiertas((prev) => conmutarDeLista(prev, id))
     if (id === 'charla') setInvocar((n) => n + 1)
   }
 
   function cerrar(id: IdVentana) {
-    setAbiertas((prev) => cerrarDeLista(prev, id))
+    setAbiertas((prev) => despedir(prev, id))
   }
 
+  /**
+   * El teclado de la cara. La decisión de **qué tecla hace qué** ya no vive
+   * aquí: está en `cort/teclas.ts`, que es lógica pura y se prueba sin navegador
+   * con `make test-web`. Lo único que este efecto aporta es lo que sólo el DOM
+   * sabe: si el foco está dentro de un campo, y el `preventDefault`.
+   */
   useEffect(() => {
     function teclas(e: KeyboardEvent) {
-      if (e.key === 'Escape') {
+      const t = e.target as HTMLElement | null
+      const escribiendo =
+        !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+      const accion = accionDeTecla({
+        key: e.key,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        altKey: e.altKey,
+        escribiendo,
+      })
+      if (!accion) return
+      if (accion.tipo === 'cerrar-frente') {
         // Cerrar la de enfrente, no todas de un golpe: si hubiera tres ventanas
         // abiertas, `Esc` debería vaciar la pantalla y obligar a reabrirlas una
         // por una para seguir trabajando.
-        setAbiertas((prev) => prev.slice(0, -1))
+        setAbiertas((prev) => despedirFrente(prev))
         return
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-        e.preventDefault()
-        abrir('charla')
-        return
-      }
-      // El teclado es de primera clase: `/` invoca la charla y `1`–`6` levantan
-      // las seis ventanas. Con la mano en el teclado no se busca un blanco de
-      // 44 px. La guarda del `target` es para que escribir '/' o un número
-      // DENTRO del campo siga siendo escribir, no invocar.
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      if (e.key === '/') {
-        e.preventDefault()
-        abrir('charla')
-        return
-      }
-      if (e.key === '?') {
-        abrir('ayuda')
-        return
-      }
-      const ORDEN: IdVentana[] = ['charla', 'voz', 'camara', 'cuerpo', 'sistema', 'ayuda']
-      const n = Number(e.key)
-      if (n >= 1 && n <= ORDEN.length) abrir(ORDEN[n - 1])
+      if (accion.evitar) e.preventDefault()
+      abrir(accion.id)
     }
     window.addEventListener('keydown', teclas)
     return () => window.removeEventListener('keydown', teclas)
@@ -186,9 +194,4 @@ export default function App() {
       <Effects />
     </>
   )
-}
-
-/** Filtrar sin mutar: React vería el mismo array y no pintaría nada. */
-function cerrarDeLista(prev: IdVentana[], id: IdVentana): IdVentana[] {
-  return prev.filter((x) => x !== id)
 }

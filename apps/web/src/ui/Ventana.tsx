@@ -31,7 +31,14 @@ import { useArrastre } from '../cort/arrastre'
  *   ventana no se puede echar con el pulgar, la interfaz no es táctil.
  */
 
-export type IdVentana = 'charla' | 'voz' | 'camara' | 'cuerpo' | 'sistema' | 'ayuda'
+/**
+ * El identificador de ventana **se define en `cort/teclas.ts`**, que es el sitio
+ * donde se decide qué tecla levanta qué superficie. Desde aquí se re-exporta el
+ * tipo para que las importaciones de siempre sigan valiendo y para que nadie
+ * pueda tener dos listas de ventanas que synchronizar a mano.
+ */
+export type { IdVentana } from '../cort/teclas'
+import type { IdVentana } from '../cort/teclas'
 
 /** Dónde aterriza cada ventana la primera vez, en clases CSS (`.ventana--x`). */
 export function clasePorDefecto(id: IdVentana): string {

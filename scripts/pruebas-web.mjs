@@ -38,11 +38,17 @@ try {
 }
 
 /** Módulos puros de la interfaz que se prueban sin navegador. Amplía la lista así. */
-const MODULOS = ['src/cort/activacion.ts', 'src/cort/labios.ts', 'src/cort/afecto.ts']
+const MODULOS = [
+  'src/cort/activacion.ts',
+  'src/cort/labios.ts',
+  'src/cort/afecto.ts',
+  'src/cort/teclas.ts',
+]
 const PRUEBAS = [
   'tests/activacion.test.mjs',
   'tests/labios.test.mjs',
   'tests/afecto.test.mjs',
+  'tests/teclas.test.mjs',
 ]
 
 const TMP = join(dirname(fileURLToPath(import.meta.url)), '..', '.pruebas-web-tmp')

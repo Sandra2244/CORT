@@ -17,16 +17,8 @@
  * vive en el reactor (color = ánimo) y dentro de las ventanas.
  */
 
+import { ACCESOS } from '../cort/teclas'
 import type { IdVentana } from './Ventana'
-
-const ACCESOS: { id: IdVentana; etiqueta: string }[] = [
-  { id: 'charla', etiqueta: 'charla' },
-  { id: 'voz', etiqueta: 'voz' },
-  { id: 'camara', etiqueta: 'cámara' },
-  { id: 'cuerpo', etiqueta: 'cuerpo' },
-  { id: 'sistema', etiqueta: 'sistema' },
-  { id: 'ayuda', etiqueta: 'ayuda' },
-]
 
 export function Muelle({
   abiertas,
@@ -40,7 +32,7 @@ export function Muelle({
 }) {
   return (
     <nav className="muelle" aria-label="ventanas de CORT">
-      {ACCESOS.map(({ id, etiqueta }) => {
+      {ACCESOS.map(({ id, etiqueta, tecla }) => {
         const activa = abiertas.includes(id)
         return (
           <button
@@ -49,8 +41,14 @@ export function Muelle({
             className={`muelle-acceso ${activa ? 'activa' : ''}`}
             onClick={() => onConmutar(id)}
             aria-pressed={activa}
+            // El número de su tecla, leído de la misma tabla que obedece el
+            // teclado: si `App.tsx` cambiara el orden, aquí cambiaría el aviso.
+            title={`${etiqueta} · tecla ${tecla}`}
           >
             {etiqueta}
+            <span className="muelle-tecla" aria-hidden="true">
+              {tecla}
+            </span>
             {id === 'charla' && !activa && sinLeer > 0 && (
               <span className="muelle-aviso" aria-label={`${sinLeer} sin leer`}>
                 {sinLeer}
