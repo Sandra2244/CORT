@@ -7,6 +7,12 @@
  * respirar.
  */
 import { ACCESOS } from '../cort/teclas'
+import { MANDOS } from '../cort/comandos'
+
+/** El nombre en español de cada ventana, leído de la tabla del muelle. */
+const NOMBRES: Record<string, string> = Object.fromEntries(
+  ACCESOS.map((a) => [a.id, a.etiqueta]),
+)
 
 export function Ayuda() {
   return (
@@ -76,9 +82,23 @@ export function Ayuda() {
         ))}
       </ul>
       <p>
-        El temporizador y las acciones se piden escribiendo: «pon un temporizador de
-        5 minutos», «baja el volumen».
+        <b>escribiéndole</b> — el temporizador y las acciones se piden escribiendo:
+        «pon un temporizador de 5 minutos», «baja el volumen». Cuatro frases levantan
+        además <b>su</b> ventana, y son exactamente éstas:
       </p>
+      {/*
+       * Igual que las teclas: la lista sale de `cort/comandos.ts`, el mismo sitio
+       * que consulta la charla. Si mañana «activa la cámara» deja de funcionar,
+       * deja de aparecer aquí — la ayuda no puede prometer una frase que ya no
+       * está en la lista.
+       */}
+      <ul className="ayuda-mandos">
+        {MANDOS.map(({ id, ejemplo }) => (
+          <li key={id}>
+            <code>«{ejemplo}»</code> <span>→ {NOMBRES[id]}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

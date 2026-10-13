@@ -43,12 +43,14 @@ const MODULOS = [
   'src/cort/labios.ts',
   'src/cort/afecto.ts',
   'src/cort/teclas.ts',
+  'src/cort/comandos.ts',
 ]
 const PRUEBAS = [
   'tests/activacion.test.mjs',
   'tests/labios.test.mjs',
   'tests/afecto.test.mjs',
   'tests/teclas.test.mjs',
+  'tests/comandos.test.mjs',
 ]
 
 const TMP = join(dirname(fileURLToPath(import.meta.url)), '..', '.pruebas-web-tmp')

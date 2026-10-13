@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, pintaFaltaDeLlave, send, subscribe } from '../cort/connection'
+import { ventanaPorComando } from '../cort/comandos'
 import type { IdVentana } from './Ventana'
 
 /**
@@ -17,13 +18,12 @@ import type { IdVentana } from './Ventana'
  * conversación.
  */
 
-/** Comandos locales: la frase abre SU ventana además de viajar al core. */
-const LOCALES: [RegExp, IdVentana][] = [
-  [/(?:activa|abre|enciende|prende)\s+(?:la\s+|mi\s+)?c[áa]mara/i, 'camara'],
-  [/(?:activa|abre)\s+(?:el\s+|la\s+)?(?:micr[oó]fono|voz)/i, 'voz'],
-  [/(?:cambia|pon|muestra|elige|proyecta)\s+(?:el\s+|mi\s+)?atuendo/i, 'cuerpo'],
-  [/(?:estado|diagn[oó]stico|sistema)/i, 'sistema'],
-]
+/**
+ * Los comandos locales **no se deciden aquí**: viven en `cort/comandos.ts`, que es
+ * lógica pura y tiene su prueba (`apps/web/tests/comandos.test.mjs`). Lo que el
+ * componente aporta es sólo lo que necesita un DOM: recibir el texto, abrir la
+ * ventana que el módulo nombre y mandar la frase al core igual.
+ */
 
 export function Charla({
   invocar,
@@ -52,8 +52,8 @@ export function Charla({
     e.preventDefault()
     const text = draft.trim()
     if (!text) return
-    const local = LOCALES.find(([re]) => re.test(text))
-    if (local) onAbrir(local[1])
+    const destino = ventanaPorComando(text)
+    if (destino) onAbrir(destino)
     send(text)
     setDraft('')
   }

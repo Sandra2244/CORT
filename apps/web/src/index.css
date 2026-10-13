@@ -573,21 +573,7 @@ button:focus-visible {
   vertical-align: 1px;
 }
 
-.muelle-acceso:hover .muelle-tecla,
-.muelle-acceso:focus-visible .muelle-tecla {
-  color: var(--tint);
-  border-color: var(--tint);
-}
-
-/* Con el acceso lleno el número no puede pelearse con el fondo: se pinta con la
-   tinta del botón, sin colores nuevos. */
-.muelle-acceso.activa .muelle-tecla {
-  color: inherit;
-  background: transparent;
-  border-color: currentColor;
-  opacity: 0.8;
-}
-
+/* Al pasar el cursor o el tabulador, el número sube con la palabra. */
 .muelle-acceso:hover .muelle-tecla,
 .muelle-acceso:focus-visible .muelle-tecla {
   color: var(--tint);
@@ -812,6 +798,31 @@ button:focus-visible {
   min-width: 1.5em;
   text-align: center;
   font-weight: 700;
+}
+
+/* Los cuatro comandos escritos, generados desde `cort/comandos.ts`. En columna y
+   no en rejilla: aquí lo que se lee es la frase entera, no un número suelto. */
+.ayuda-mandos {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ayuda-mandos li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
+  border-radius: 8px;
+  font-size: 0.74rem;
+}
+
+.ayuda-mandos span {
+  color: var(--dim);
 }
 
 /* ─── El cuerpo holográfico ───────────────────────────────────────────────
