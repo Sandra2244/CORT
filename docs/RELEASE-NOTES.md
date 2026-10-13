@@ -7,31 +7,109 @@ empujando una etiqueta `v*`, empujando `main`, o a mano desde *Actions → publi
 workflow* escribiendo la etiqueta. Es idempotente: la etiqueta que ya tenga su página se omite, y la
 que no tenga sección se publica con notas generadas antes que con una página muda.
 
-Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` están publicadas en el remoto y cada
-una resuelve a su commit. Nacieron **antes** de este pipeline, y como un `push` de etiqueta busca su
-YAML en el commit de esa etiqueta, quien las convirtió en Release fue el disparo por `main` — no hizo
-falta borrar ni recrear ninguna. Las cinco páginas están en
-[github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases) desde el
-2026-10-09, comprobado con `curl` a la API pública sin credenciales. Sigue sin poder crearse una
-Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni `GH_TOKEN` en el
-entorno, ni `~/.config/gh`.
+Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` nacieron **antes** de este pipeline,
+y como un `push` de etiqueta busca su YAML en el commit de esa etiqueta, quien las convirtió en
+Release fue el disparo por `main` — no hizo falta borrar ni recrear ninguna. **Las seis
+(`v0.7.0` … `v0.11.0`) están publicadas**, `v0.11.0` desde el 2026-10-11 con su nota recortada de
+este documento — comprobado con `curl` a la API pública sin credenciales el 2026-10-12: seis
+páginas, y cada cuerpo terminando en su propia línea `**Zip**`—, en
+[github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases). Sigue sin poder
+crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni
+`GH_TOKEN` en el entorno, ni `~/.config/gh`.
 
-**La lista de tareas para cortar la siguiente (v0.11.0), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.12.0), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.11.0\` — …` escrita (ya está, en
-   `cort-local-verified`), con su línea **Zip** — la prueba `test_cada_etiqueta_del_documento_tiene_su_nota`
-   la exige y `make test` lo recuerda.
-2. La rama se revisa y **se fusiona a `main`** (pull request → merge). Sin este paso la Release
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.12.0\` — …` escrita, con su línea **Zip** — la
+   prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
+2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
+   `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
-3. Se etiqueta el commit de `main`: `git tag v0.11.0 && git push origin v0.11.0`. Ahí se dispara
+3. Se etiqueta el commit de `main`: `git tag v0.12.0 && git push origin v0.12.0`. Ahí se dispara
    `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
    esa es el acta «.zip como proyecto profesional» sin construir nada.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: se construyen en un PC Windows con la receta de
-   `packaging/` y se adjuntan a la Release ya abierta con `gh release upload v0.11.0 <archivo>`.
+   `packaging/` y se adjuntan a la Release ya abierta con `gh release upload v0.12.0 <archivo>`.
    Nunca hace falta tocar nada de datos: la Release son artefactos nuevos; el historial, los
    recuerdos y el `.env` de quien usa CORT viven fuera del repo y una actualización no los borra.
+
+---
+
+## `v0.12.0` — ventanas de vidrio, la voz que no se apaga al cerrar la ventana y la cara del cuerpo
+
+Cuatro cortes en una sola Release, porque venían del mismo sitio: **la cara**. El `avatar CORT` pasa
+de ser una foto proyectada a **mirar, gesticular y mover la boca con lo que dice**; la voz se va del
+componente al módulo y deja de morirse cuando se cierra su ventana; y el reactor tiene dos estados
+más — **reposo** y **escucha**— dibujados en el *vertex shader*. La pila no cambia (Python + React +
+Ollama, todo en local), no entra ninguna dependencia nueva y **no se añade ni un marco al
+WebSocket**: la expresión viaja dentro del `assistant_message` que ya existía.
+
+- **Ventanas de vidrio en vez de modal** (`ui/Ventana.tsx` + `ui/Ventanas.tsx` + `ui/Muelle.tsx`,
+  función 82 ✅): **una sola primitiva** de chrome —tubo arrastrable, rótulo, `⤾` para devolverla a
+  su sitio y `✕`— con seis cuerpos dentro (charla · voz · cámara · cuerpo · sistema · ayuda) que
+  levantan su acceso en el **muelle**, la única fila de mandos que existe. **No son modales**: se
+  pueden tener varias abiertas, la que se toca pasa al frente, `Esc` despide sólo la de enfrente y
+  cada ventana de móvil aterriza 46 px más abajo que la anterior. Salen `Hud.tsx`, `Bandeja.tsx` y
+  `Panel.tsx` con **29 reglas de CSS duplicadas**. `backdrop-filter: blur(14px) saturate(150%)` sólo
+  en ventana y muelle —cada desenfoque cuesta un búfer y esta máquina no tiene GPU—; `:root` pasa a
+  tokens (`--glass-*`, `--tint`, `--glow`) y el atuendo por defecto es `night`, el morado de Cortana.
+- **La voz es un módulo, no un componente** (`cort/voz.ts`, 582 líneas; funciones 12 · 13 · 11 · 83):
+  el arreglo de fondo es un fallo concreto — mientras el reconocimiento vivió dentro de `ui/Voz.tsx`,
+  **cerrar la ventana «voz» apagaba el micrófono**, justo cuando se quería dejarlo escuchando y
+  mirar la cara. Ahora el estado lo sostiene el módulo, la ventana queda en 100 líneas de botones y
+  la escena lee `escucha · habla · oyendo · nivel` **sin pasar por React**. Elige la mejor voz en
+  español puntuando las instaladas, limpia el markdown y los emojis que el sintetizador deletrea,
+  parte por oraciones para que haya pausas y **cierra el micrófono mientras CORT habla** para no
+  oírse a sí misma. **La frase de activación** «OK CORT / oye CORT / hola CORT» vive en
+  `cort/activacion.ts`, lógica pura con 12 pruebas que fijan que hace falta el saludo delante y que
+  «cortometraje», «corte» y «cortedad» no despiertan a CORT a media conversación.
+- **Reposo y escucha** (`scene/Nube.tsx`, función 83): si pasan 30 s sin que nadie toque nada, el
+  reactor se deshace en una **nube de ~11 000 puntos** con hilos curvos y un destello central; con el
+  micrófono abierto esa misma nube se junta en un **anillo que gira** y se agita con la voz. Todo el
+  movimiento se resuelve en el *vertex shader*: la CPU sube ocho uniformes por cuadro y no calcula
+  ninguna posición por partícula en JavaScript. Se puede invocar sin esperar: `?demo=reposo`,
+  `?demo=escucha`, `?reposo=10`.
+- **La cara del cuerpo siente lo que dice** (funciones 29 ✅ y 27 🔨): el `mood` viajaba en cada
+  mensaje **vacío**, porque los once sitios de `server.py` escribían `"calm"` a mano y `Vrm.tsx`
+  ponía una sonrisa fija al cargar — por eso CORT sonreía siempre. Ahora lo rellena
+  `cort_core/affect.py` con **cinco señales medidas** del servidor (una acción que `actions.perform`
+  verificó, un plan con un paso caído, un recuerdo nuevo contado con dos `COUNT`, una cuenta atrás
+  que termina, un aviso de la iniciativa) y un léxico determinista cuando no hay señal;
+  `cort/afecto.ts` lo traduce a los cinco pesos del `.vrm` con **`angry` en cero en los cinco
+  estados** — CORT no devuelve el enfado a quien le habla— y caducidad a los 6 s, porque un gesto que
+  no se apaga es una máscara. `cort/labios.ts` le agenda la boca al texto: una apertura por grupo
+  vocálico, **diptongo cuenta una, hiato con tilde dos**, y el hueco lo elige la puntuación real.
+- **Regla 3 de vuelta en la cara**: `make test-web` existió hasta `v0.10.1` con 17 pruebas del riel,
+  el rediseño del 2026-10-10 borró el riel y su módulo, y las pruebas se fueron **con lo que
+  probaban**. Vuelven y se quedan: **33 pruebas en Node** sin navegador (`scripts/pruebas-web.mjs`
+  transpila con el `typescript` que ya era `devDependency`; cero dependencias nuevas, porque un DOM
+  simulado cuesta justo la RAM que el reactor necesita).
+
+- **Medido en esta máquina** (2 núcleos, 1,8 GiB, sin GPU): `tsc --noEmit` limpio, `vite build`
+  limpio, `make test` → **Ran 353 tests in 72,043 s — OK** y `make test-web` → **33/33 en 5,6 s**.
+  En navegador con el core real: **1,21 fps el reactor · 1,09 fps la nube en reposo · 1,09 fps el
+  anillo de escucha**; el cuerpo 3D con expresión y boca en movimiento, **12,56 fps**; la cara
+  `surprised` sube `0,28 → 0,51 → 0,64 → 0,75` cuadro a cuadro y caduca sola a los 6,5 s; la boca
+  recorre `ou 0,73 → ou 0,8 → ee 0,84` y se cierra al acabarse la frase; en reposo, 0 ventanas en el
+  DOM; arrastre de 108 → 304 px con `⤾` devolviendo la ventana a su aterrizaje. Capturas:
+  `docs/assets/ventanas-vidrio-2026-10-11.png`, `docs/assets/nube-reposo-2026-10-12.png` y
+  `docs/assets/nube-escucha-2026-10-12.png`.
+
+**Sin verificar aquí** (regla 11, con su motivo delante): **la boca vista con la voz sonando por un
+altavoz real** — `speechSynthesis` no expone ningún flujo de audio que mirar, así que el lip-sync se
+agenda desde el texto y esta máquina no tiene ni sink real (*Dummy Output*) ni *Source*: por eso la
+función 27 va 🔨 y no ✅; cualquier frase **oída** por el micrófono (función 12) — medido de nuevo el
+2026-10-12 con Bluetooth conectado, `wpctl status` sigue sin dar ninguna entrada —, y el reconocimiento
+del navegador es además un **servicio en línea** (Chrome habla con Google, Edge con Microsoft):
+*escuchar* necesita internet y saca el audio de la máquina, *hablar* no; **el dedo humano** en un
+Android físico (esquina de 56 px, que la ventana no tape el reactor a 360 px, y el teclado de Android
+con `1`–`6`) y **`Enter` para enviar**, ambos escritos y compilados pero no re-verificados tecla por
+tecla; los cuatro cantos de escritorio con el navegador del agente, que no se pudo redimensionar; y
+los fps **en un equipo con GPU** — los números de arriba son de este portátil y ninguna cifra es
+promesa para otra máquina.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.12.0.zip`
 
 ---
 
