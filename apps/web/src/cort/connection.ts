@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { esMood } from './afecto'
 import { DEFAULT_OUTFIT, SPIN, THINKING_HOT, palette, type Outfit } from './palette'
 
 export type Msg = { from: 'user' | 'cort'; text: string }
@@ -164,6 +165,17 @@ export const target = {
   oyendo: false,
   /** 0..1, un golpe que decae solo: cada palabra y cada resultado parcial lo sube. */
   nivel: 0,
+
+  // -- La cara del cuerpo 3D (funciones 27 y 29), ver `scene/Vrm.tsx` --------
+  /**
+   * El último estado afectivo **dicho**. Viaja en `assistant_message`, `greeting`
+   * y `proactive` desde que se escribió el marco, pero hasta hoy siempre con el
+   * literal `"calm"`: lo llena `cort_core/affect.py`. Se guarda la marca de tiempo
+   * porque la cara caduca (`MOOD_MS` en `cort/afecto.ts`) — un gesto que no se
+   * apaga es una máscara, y la usuaria lo leería como que CORT se quedó mirando.
+   */
+  mood: 'calm',
+  moodDesde: 0,
   /** Para ver un estado sin micrófono ni esperar: `?demo=reposo` o `?demo=escucha`. */
   forzar: null as null | 'reposo' | 'escucha',
 }
@@ -171,6 +183,13 @@ export const target = {
 const params = new URLSearchParams(location.search)
 const demo = params.get('demo')
 if (demo === 'reposo' || demo === 'escucha') target.forzar = demo
+// Sonda de medición, sólo con `?sonda` en la dirección: publica las metas crudas
+// para poder leerlas desde la consola. Sin el parámetro no se deja ningún objeto
+// global, y con él se puede comprobar qué afirmó el core de verdad (la cara
+// afectiva de las funciones 27 y 29 se mide leyendo `mood`, no creyéndolo).
+if (params.has('sonda')) {
+  ;(window as unknown as Record<string, unknown>).__cort_target = target
+}
 
 /**
  * Segundos sin actividad para que el reactor se deshaga en la nube de reposo.
@@ -181,6 +200,19 @@ export const REPOSO_MS = (Number.isFinite(reposoS) && reposoS >= 0 ? reposoS : 3
 
 export function tocarActividad() {
   target.actividad = performance.now()
+}
+
+/**
+ * Lo que dice el core se apunta dos veces: en el registro (se lee) y en la cara
+ * (se pinta). Sólo los tres marcos que **son** un dicho; el `mood` que trae
+ * `state` se ignora a propósito, porque `state()` corre después de cada respuesta
+ * y borraría la expresión a los dos segundos de aparecer.
+ */
+function apuntarMood(valor: unknown) {
+  const mood = esMood(valor)
+  if (!mood) return
+  target.mood = mood
+  target.moodDesde = performance.now()
 }
 
 /** El margen que el shader aguanta sin que el anillo se salga del cuadro. */
@@ -277,14 +309,21 @@ function open() {
     // El saludo es por conexión, y el log sobrevive a las reconexiones: sin el
     // `msgs.length === 0` cada reintento del WebSocket añadiría un «Hola, soy
     // CORT.» nuevo a una conversación que ya está en curso.
-    if (m.type === 'greeting' && snapshot.msgs.length === 0)
+    if (m.type === 'greeting' && snapshot.msgs.length === 0) {
+      apuntarMood(m.mood)
       set({ msgs: [{ from: 'cort', text: m.text }] })
-    if (m.type === 'assistant_message') set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+    }
+    if (m.type === 'assistant_message') {
+      apuntarMood(m.mood)
+      set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+    }
     // `proactive` es lo mismo dicho por su cuenta: viaja separado porque el core
     // decide cuándo (iniciativa, regla determinista, sin LLM) y para que alguien
     // pueda apagarlo con `CORT_INITIATIVE=0` sin tocar cómo se pinta un mensaje.
-    if (m.type === 'proactive' && typeof m.text === 'string')
+    if (m.type === 'proactive' && typeof m.text === 'string') {
+      apuntarMood(m.mood)
       set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+    }
     if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
     if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
     if (m.type === 'avatars')

@@ -3,7 +3,9 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
-import { avatarUrl } from '../cort/connection'
+import { ahora as bocaAhora, empezar } from '../cort/labios'
+import { expresionesPara, moodVigente, type Expresiones } from '../cort/afecto'
+import { avatarUrl, target } from '../cort/connection'
 import { DEFAULT_OUTFIT, palette, type Outfit } from '../cort/palette'
 
 /**
@@ -64,6 +66,17 @@ const MATERIA = 1.8
  * dedos separados de la cadera. A π/2 (1,57) el brazo se clava contra el muslo.
  */
 const BRAZOS = 1.2
+
+/** Las cinco caras que sabe poner un `.vrm`, más los cinco visemas de la boca. */
+const CARAS = ['happy', 'sad', 'surprised', 'relaxed', 'angry'] as const
+const VISEMAS = ['aa', 'ee', 'ih', 'oh', 'ou'] as const
+
+/**
+ * Cuánto se persigue la cara cada cuadro. `3` llega al 95 % en un segundo: lo
+ * bastante rápido para que el cambio se vea y lo bastante lento para que no sea
+ * un salto de máscaras. Es el mismo criterio del lerp de color del orbe.
+ */
+const PASO_CARA = 3
 
 /**
  * El tinte del atuendo, en la misma paleta que el reactor: si el cuerpo fuera de
@@ -171,6 +184,10 @@ export function Vrm({ nombre, outfit, tamaño = 1, onFallo }: {
   const tiempo = useRef(0)
   const tama = useRef(1)
   const parpadeo = useRef({ siguiente: 2.4, cerrando: -1 })
+  // La cara que hay puesta ahora, cuadro a cuadro. Se persigue en vez de
+  // asignarse: `expresionesPara` da un destino y el destino sin interpolación es
+  // un salto, y un salto en una cara se lee como un defecto de imagen.
+  const cara = useRef<Expresiones>({ ...expresionesPara('calm') })
   // Un solo objeto de uniformes compartido por todas las piezas del cuerpo: si
   // cada malla tuviera el suyo, el barrido subiría desincronizado por brazo,
   // pelo y vestido.
@@ -212,8 +229,19 @@ export function Vrm({ nombre, outfit, tamaño = 1, onFallo }: {
           // Sonda de medición: con `?sonda` en la URL el modelo queda a mano desde
           // la consola, que es como se barrió el eje de los brazos en vez de
           // adivinarlo. Sin el parámetro no se publica ningún objeto global.
+          // Con la cara afectiva (funciones 27 y 29) la sonda sirve para lo
+          // mismo que antes: medir, no fingir. Aquí se le añade la agenda de
+          // labios y un disparador de `mood`, porque **en esta máquina no hay
+          // audio que oír** (el único sink es *Dummy Output*) y la única forma de
+          // comprobar que la boca se mueve es ponerla en marcha a mano y leer los
+          // pesos del `expressionManager`.
           if (new URLSearchParams(window.location.search).has('sonda')) {
-            ;(window as unknown as Record<string, unknown>).__cort_vrm = modelo
+            const sonda = window as unknown as Record<string, unknown>
+            sonda.__cort_vrm = modelo
+            sonda.__cort_boca = {
+              decir: (texto: string) => empezar(texto),
+              target,
+            }
           }
 
           // Un VRM 0..x mira hacia -Z; sin girarlo, CORT da la espalda.
@@ -281,13 +309,14 @@ export function Vrm({ nombre, outfit, tamaño = 1, onFallo }: {
             registrar('neck', 0, { fx: 0.23, ax: 0.02, fy: 0.19, ay: 0.03, fase: 2.1 })
             registrar('head', 0, { fx: 0.17, ax: 0.03, fy: 0.13, ay: 0.05, fase: 0.6 })
           }
-          // Expresiones: la sonrisa de reposo queda puesta una sola vez (el peso
-          // es persistente; `expressionManager.update()`, que corre dentro de
-          // `vrm.update(dt)`, la mantiene aplicada). El parpadeo se anima por
-          // cuadro más abajo. Si el `.vrm` no trae un ojo que cierre, `setValue`
-          // no hace nada y CORT simplemente no parpadea.
+          // Expresiones: el gestor se guarda y a partir de aquí lo mueve `useFrame`
+          // cada cuadro (cara afectiva + labios). Ya no se deja una sonrisa fija
+          // puesta al cargar: eso era lo que había antes de la función 29, y es
+          // justo lo que se quita — una cara que no cambia es una máscara.
+          // Si el `.vrm` no trae un gesto, `setValue` con ese nombre no hace nada
+          // (leído en la fuente de `@pixiv/three-vrm@3`) y CORT simplemente no lo
+          // pone: no se simula con un guiño lo que el archivo no trae.
           expresiones.current = modelo.expressionManager
-          modelo.expressionManager?.setValue('happy', 0.18)
           // Estas dos podas quitan vértices y huesos que no usa ninguna malla. No
           // son limpieza estética: en una máquina sin GPU cada vértice y cada
           // articulación es trabajo por frame.
@@ -450,12 +479,35 @@ export function Vrm({ nombre, outfit, tamaño = 1, onFallo }: {
       if (h.fy) h.nodo.rotation.y = h.by + Math.sin(t * h.fy + h.fase) * h.ay
     }
 
-    // ── Parpadeo ────────────────────────────────────────────────────────────
-    // Triángulo de 140 ms cada 2,4-5,4 s: abrir y cerrar a diente de sierra se
-    // ve mecánico; medio ciclo de subida, medio de bajada, es lo que hace un
-    // ojo. Sin `AnimationMixer` ni clips `.vrma` — dos restas y un contador.
+    // ── La cara: estado afectivo y labios ───────────────────────────────────
+    // Dos cosas distintas que writes en el mismo gestor: `mood` dice **cómo**
+    // está CORT (lo afirma el core, con señales medidas: `cort_core/affect.py`) y
+    // la agenda de labios dice **qué está diciendo** (`cort/labios.ts`, calculada
+    // del texto porque el audio de `speechSynthesis` no pasa por ningún sitio que
+    // se pueda mirar). Las dos se persiguen en vez de asignarse, y las dos vuelven
+    // solas a su sitio: la cara porque caduca (`MOOD_MS`) y la boca porque entre
+    // sílaba y sílaba el peso es cero.
     const em = expresiones.current
     if (em) {
+      const meta = expresionesPara(moodVigente(target.mood, target.moodDesde, performance.now()))
+      const k = Math.min(1, paso * PASO_CARA)
+      for (const nombre of CARAS) {
+        const nuevo = cara.current[nombre] + (meta[nombre] - cara.current[nombre]) * k
+        cara.current[nombre] = nuevo
+        em.setValue(nombre, nuevo)
+      }
+      // El labio superior se abre un poco menos de lo que la agenda pide: con el
+      // peso a 1 el modelo que hay en disco deja de cerrar la boca del todo y se
+      // le ve la lengua. 0,85 es lo que quedó midido con `?sonda`.
+      const b = target.habla ? bocaAhora() : { visma: 'aa', abierto: 0 }
+      for (const nombre of VISEMAS) {
+        em.setValue(nombre, nombre === b.visma ? b.abierto * 0.85 : 0)
+      }
+
+      // ── Parpadeo ──────────────────────────────────────────────────────────
+      // Triángulo de 140 ms cada 2,4-5,4 s: abrir y cerrar a diente de sierra se
+      // ve mecánico; medio ciclo de subida, medio de bajada, es lo que hace un
+      // ojo. Sin `AnimationMixer` ni clips `.vrma` — dos restas y un contador.
       const pa = parpadeo.current
       if (pa.cerrando < 0 && t >= pa.siguiente) pa.cerrando = t
       if (pa.cerrando >= 0) {

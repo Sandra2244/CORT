@@ -2,6 +2,10 @@ import { getSnapshot, send, subscribe, target, tocarActividad } from './connecti
 // La frase de activación vive en su propio módulo puro (`activacion.ts`) para poder
 // probarse sin navegador. Aquí se usa.
 import { buscarActivacion } from './activacion'
+// La agenda de labios (`labios.ts`) también es pura y probada sin navegador; aquí
+// sólo se le pasa el texto que se va a decir y se la realinea con el aviso de
+// palabra, cuando el navegador se digna mandarlo.
+import { alinear, empezar, parar } from './labios'
 
 /**
  * Voz de CORT, hecha con lo que ya trae el navegador: nada que instalar y nada
@@ -399,6 +403,10 @@ function hablar(texto: string) {
     u.pitch = ajustes.tono
     u.onstart = () => {
       hablando = true
+      // La boca se agenda con la frase que **empieza** a sonar, no con el texto
+      // entero: `speechSynthesis` lanza una frase por `Utterance` y la cola puede
+      // tardar. Función 27.
+      empezar(frase)
       // Mientras CORT habla, el micrófono se cierra: no debe oírse a sí mismo.
       pararReconocimiento()
       sincronizarEscena()
@@ -406,13 +414,23 @@ function hablar(texto: string) {
     // Cada palabra pronunciada sacude el reactor. Las voces «Natural» en línea no
     // siempre mandan este aviso: la escena tiene su propio pulso de respaldo
     // mientras `target.habla` esté encendido.
-    u.onboundary = () => {
+    u.onboundary = (ev: SpeechSynthesisEvent) => {
       target.nivel = Math.max(target.nivel, 0.85)
+      // Y cuando el aviso llega con la posición de la palabra, se realinea la
+      // agenda: se tira lo que ya se dijo y se programa el resto desde ahí. Si
+      // nunca llega, la agenda original sigue valiendo — es el motivo de calcularla
+      // del texto y no del audio, que este navegador tampoco deja mirar.
+      if (typeof ev?.charIndex === 'number' && ev.charIndex > 0) {
+        alinear((frase ?? '').slice(ev.charIndex))
+      }
     }
     u.onend = u.onerror = () => {
       if (window.speechSynthesis.speaking || window.speechSynthesis.pending) return
       hablando = false
       esperando = false
+      // Boca cerrada: si no, la última sílaba se quedaría abierta para siempre
+      // hasta el siguiente mensaje.
+      parar()
       sincronizarEscena()
       if (turnoVigilia) {
         terminarTurno()
@@ -469,6 +487,9 @@ export function iniciarVoz() {
     hablando = false
     esperando = false
     pararReconocimiento()
+    // La boca se apaga con la voz: `parar()` deja la agenda vacía, así que la
+    // escena vuelve a los labios cerrados en el cuadro siguiente.
+    parar()
     window.speechSynthesis?.cancel()
     poner({ habla: false, escucha: false, vigilia: false, turno: false })
     sincronizarEscena()
@@ -490,6 +511,7 @@ export function alternarHabla() {
   } else {
     window.speechSynthesis.cancel()
     hablando = false
+    parar()
     sincronizarEscena()
   }
 }

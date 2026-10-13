@@ -20,7 +20,9 @@ from .memory.store import MemoryStore
 from .outfit import pick_outfit
 from .status import build as status_payload
 from . import weather
+from . import affect
 from . import avatars
+from . import brain
 from . import audit
 from . import initiative
 from . import planner
@@ -60,6 +62,11 @@ def state(thinking=False):
     # clientes mientras el servicio de turno contesta.
     clima = weather.snapshot()
     temp = float(os.getenv("CORT_CITY_TEMP_C", "22")) if clima is None else clima["temp_c"]
+    # `mood` en reposo aquí es **el marco de la cara**, no un estado anímico que
+    # cambiar: lo que pone la expresión es lo que se *dijo* (`assistant_message`,
+    # `greeting`, `proactive`), y `state` no dice nada. La interfaz ignora el
+    # campo en este marco justamente para que un `state()` posterior al saludo no
+    # borre la sonrisa de la cara a los dos segundos (función 29).
     frame = {"type": "state", "outfit": pick_outfit(datetime.now().hour, temp),
              "mood": "calm", "thinking": thinking}
     if clima is not None:
@@ -191,8 +198,8 @@ async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
             if sug is None:
                 continue
             dichas.add(sug.clave)
-            await sock.send_json({"type": "proactive", "text": sug.texto,
-                                  "mood": "calm", "clave": sug.clave})
+            await sock.send_json(affect.marco("proactive", sug.texto,
+                                              senal="iniciativa", clave=sug.clave))
     except (WebSocketDisconnect, RuntimeError):
         # RuntimeError: el lazo se cerró entre el `sleep` y el envío. No es un
         # fallo de CORT, es que la pestaña se cerró; callar y salir.
@@ -214,7 +221,8 @@ async def _correr_cuenta(sock: WebSocket, segundos: int) -> None:
         # habrá cancelado esta tarea. No hay a quién avisar.
         return
     await sock.send_json({"type": "effect", "kind": "pulse"})
-    await sock.send_json({"type": "assistant_message", "text": "Se acabó el tiempo.", "mood": "calm"})
+    await sock.send_json(affect.marco("assistant_message", "Se acabó el tiempo.",
+                                      senal="fin_cuenta"))
 
 
 @app.websocket("/ws")
@@ -245,9 +253,10 @@ async def ws(sock: WebSocket):
     # navegador: la pestaña que sobrevive a varios reinicios del core muestra el
     # reintento cada tres segundos, y acumuló cuatro «Hola, soy CORT.» seguidos.
     # La interfaz sólo pinta éste si el registro está vacío.
-    await sock.send_json({"type": "greeting",
-                          "text": f"Hola de nuevo, {name}." if name else "Hola, soy CORT.",
-                          "mood": "calm"})
+    await sock.send_json(affect.marco(
+        "greeting",
+        f"Hola de nuevo, {name}." if name else "Hola, soy CORT.",
+        senal="saludo"))
     # Después del saludo, no antes: `count()` es una lectura al disco, y lo
     # primero que debe notar quien abre la página es que CORT contesta.
     await sock.send_json(status_payload(memory, MEMORY_KEEP))
@@ -268,8 +277,20 @@ async def ws(sock: WebSocket):
             # Desde aquí cuenta el reloj de cortesía: la iniciativa no habla
             # mientras la usuaria está escribiendo o esperando su respuesta.
             actividad["ultimo"] = time.monotonic()
-            for fact in extract(text):
+            # Cuántos hechos **nuevos** dejó este mensaje: es la señal de `memoria`
+            # (función 29), y por eso se mide en vez de suponerse — `remember`
+            # devuelve el id de lo que ya estaba, así que repetir «me llamo Sandra»
+            # cinco veces no es recordar cinco cosas y la cara no debe alegrarse
+            # cinco veces. Dos lecturas de un `COUNT` en sqlite cuesta mil veces
+            # menos que el turno de LLM que puede venir detrás.
+            # Se llama `nuevos`, no `hechos`, porque más abajo `hechos` es la lista
+            # de pasos del planificador: dos cosas distintas con el mismo nombre
+            # en el mismo `while` serían un error esperando a junio.
+            hechos_nuevos = extract(text)
+            antes = memory.count() if hechos_nuevos else 0
+            for fact in hechos_nuevos:
                 memory.remember(fact)
+            guardados = (memory.count() - antes) if hechos_nuevos else 0
             # El temporizador se mira **antes** que los intents locales y que el
             # LLM: «pon un temporizador de 5 minutos» no es una orden al sistema
             # (no pasa por `actions`, no ejecuta nada) y preguntarle a Ollama por
@@ -282,21 +303,21 @@ async def ws(sock: WebSocket):
                 cuenta["tarea"] = None
                 await sock.send_json({"type": "timer", "estado": "cancela",
                                       "restante": 0, "total": 0})
-                await sock.send_json({"type": "assistant_message",
-                                      "text": "Temporizador cancelado.", "mood": "calm"})
+                await sock.send_json(affect.marco("assistant_message",
+                                                  "Temporizador cancelado.",
+                                                  senal="cancelado"))
                 continue
             segundos = timer.parse(text)
             if segundos:
                 if en_marcha:
-                    await sock.send_json({"type": "assistant_message",
-                                          "text": "Ya hay una cuenta atrás en marcha; "
-                                                  "di «cancela el temporizador» y empiezo otra.",
-                                          "mood": "calm"})
+                    await sock.send_json(affect.marco(
+                        "assistant_message",
+                        "Ya hay una cuenta atrás en marcha; "
+                        "di «cancela el temporizador» y empiezo otra."))
                     continue
                 cuenta["tarea"] = asyncio.create_task(_correr_cuenta(sock, segundos))
-                await sock.send_json({"type": "assistant_message",
-                                      "text": f"Cuenta atrás de {timer.texto(segundos)}.",
-                                      "mood": "calm"})
+                await sock.send_json(affect.marco(
+                    "assistant_message", f"Cuenta atrás de {timer.texto(segundos)}."))
                 continue
             pasos = planner.pasos(text)
             if planner.es_plan(pasos):
@@ -315,8 +336,12 @@ async def ws(sock: WebSocket):
                     ok, said = await perform(paso)
                     await sock.send_json({"type": "effect", "kind": "pulse" if ok else "glitch"})
                     hechos.append((planner.etiqueta(paso), ok, "" if ok else said))
-                await sock.send_json({"type": "assistant_message",
-                                      "text": planner.resumen(hechos), "mood": "calm"})
+                # La cara la decide lo medido, no el resumen: un plan de tres pasos
+                # con uno caído es `plan_con_fallo` aunque el texto suene entero.
+                todos_ok = all(ok for _, ok, _ in hechos)
+                await sock.send_json(affect.marco(
+                    "assistant_message", planner.resumen(hechos),
+                    senal="plan_completo" if todos_ok else "plan_con_fallo"))
                 # El contador de recuerdos puede haber cambiado igual que en el
                 # camino de un paso: los hechos del mensaje se guardaron antes.
                 await sock.send_json(status_payload(memory, MEMORY_KEEP))
@@ -329,9 +354,10 @@ async def ws(sock: WebSocket):
                 # rasgón cuando no: un holograma que parpadea todo el tiempo no
                 # comunica nada.
                 await sock.send_json({"type": "effect", "kind": "pulse" if ok else "glitch"})
-                await sock.send_json({"type": "assistant_message",
-                                      "text": said if ok else f"No pude: {said}.",
-                                      "mood": "calm"})
+                await sock.send_json(affect.marco(
+                    "assistant_message",
+                    said if ok else f"No pude: {said}.",
+                    senal="logro" if ok else "fallo"))
                 # Los hechos de un mensaje se guardan antes de mirar los intents,
                 # así que el contador puede haber cambiado incluso sin LLM.
                 await sock.send_json(status_payload(memory, MEMORY_KEEP))
@@ -340,7 +366,7 @@ async def ws(sock: WebSocket):
                 # Se responde desde la memoria, sin LLM: funciona aunque Ollama no esté.
                 known = memory.name_of_user()
                 reply = f"Te llamas {known}." if known else "Aún no me has dicho tu nombre."
-                await sock.send_json({"type": "assistant_message", "text": reply, "mood": "calm"})
+                await sock.send_json(affect.marco("assistant_message", reply))
                 continue
             history.append({"role": "user", "content": text})
             await sock.send_json(state(thinking=True))
@@ -355,7 +381,16 @@ async def ws(sock: WebSocket):
             finally:
                 actividad["ocupada"] = False
             history.append({"role": "assistant", "content": reply})
-            await sock.send_json({"type": "assistant_message", "text": reply, "mood": "calm"})
+            # Qué puede afirmar la cara de esta respuesta, en este orden:
+            # - `memoria`: el mensaje de la usuaria dejó hechos **nuevos** en el
+            #   disco, y eso sí pasó.
+            # - `eco`: no contestó ningún modelo (`brain.last_model()` sigue sin
+            #   nombre), así que CORT repitió; ponerle alegría a un eco sería
+            #   afirmar lo que la regla 11 prohíbe.
+            # - nada: sin señal, `affect` mira el léxico del texto, y si tampoco
+            #   ahí hay motivo, reposo.
+            senal = "memoria" if guardados else ("eco" if brain.last_model() is None else None)
+            await sock.send_json(affect.marco("assistant_message", reply, senal=senal))
             # **La respuesta se siente, no sólo se lee.** El temblor va en el marco
             # del HUD (`arrastre.ts` lo separó a propósito: el `shake` escribe
             # `transform` y el arrastre también) y es lo que pidió la dueña del

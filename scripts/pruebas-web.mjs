@@ -38,8 +38,12 @@ try {
 }
 
 /** Módulos puros de la interfaz que se prueban sin navegador. Amplía la lista así. */
-const MODULOS = ['src/cort/activacion.ts']
-const PRUEBAS = ['tests/activacion.test.mjs']
+const MODULOS = ['src/cort/activacion.ts', 'src/cort/labios.ts', 'src/cort/afecto.ts']
+const PRUEBAS = [
+  'tests/activacion.test.mjs',
+  'tests/labios.test.mjs',
+  'tests/afecto.test.mjs',
+]
 
 const TMP = join(dirname(fileURLToPath(import.meta.url)), '..', '.pruebas-web-tmp')
 rmSync(TMP, { recursive: true, force: true })

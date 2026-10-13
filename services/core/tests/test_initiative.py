@@ -24,7 +24,7 @@ from unittest import mock
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from cort_core import initiative, server, weather
+from cort_core import affect, initiative, server, weather
 from cort_core.memory.store import MemoryStore
 from cort_core.server import app
 
@@ -185,7 +185,10 @@ class TestBucle(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(cuadros, "con la base vacía tiene que proponer el nombre")
         self.assertEqual("sin_nombre", cuadros[0]["clave"])
         self.assertEqual(len(cuadros), 1, f"dichas deduplica, llegó {len(cuadros)}")
-        self.assertEqual("calm", cuadros[0]["mood"])
+        # `relaxed` y no `calm` desde la función 29: hablar sola tras 90 s de
+        # silencio es asomarse en calma, no celebrar nada. La señal la pone
+        # `affect.marco(..., senal="iniciativa")` y la cara la pinta suave.
+        self.assertEqual("relaxed", cuadros[0]["mood"])
         self.assertIsInstance(cuadros[0]["text"], str)
 
     async def test_no_habla_mientras_la_usuaria_espera_su_turno(self):
@@ -319,14 +322,31 @@ class TestFronteraSeguridad(unittest.TestCase):
         # `_cuidar_iniciativa` es el trozo que vive atado a una conexión abierta, y
         # su única salida permitida es un cuadro de WebSocket: igualar la lista a
         # mano obliga a quien la amplíe a pasar por aquí y pensarlo dos veces.
+        # `affect.marco` entró con la función 29 porque es el único sitio que
+        # puede decir «esto que paso es una señal, no un texto simpático», y sigue
+        # siendo un formateador puro: no abre nada ni ejecuta nada.
         arbol = ast.parse(inspect.getsource(server._cuidar_iniciativa)).body[0]
         self.assertEqual(
             {"initiative.enabled", "asyncio.sleep", "actividad.get", "time.monotonic",
              "weather.snapshot", "initiative.ahora", "memory.count", "initiative.sugerir",
-             "dichas.add", "sock.send_json", "set"},
+             "dichas.add", "sock.send_json", "set", "affect.marco"},
             self._llamadas(arbol),
         )
         self.assertNotIn("perform", " ".join(self._llamadas(arbol)))
+
+    def test_affect_no_toca_el_sistema(self):
+        # La cara la pone un módulo que se ejecuta en el bucle del WebSocket, o sea
+        # en el sitio donde más fácil es colarse a hacer algo. Aquí su lista de
+        # imports es cerrada (`re` y `unicodedata`, los dos de la estándar) y no
+        # puede haber red, disco ni proceso.
+        arbol = ast.parse(inspect.getsource(affect))
+        self.assertEqual({"re", "unicodedata"}, self._importes(arbol))
+        prohibidas = {"os.system", "subprocess.run", "eval", "exec", "open",
+                      "httpx.get", "requests.get", "__import__"}
+        self.assertEqual(set(), self._llamadas(arbol) & prohibidas)
+        # Y el vocabulario de salida es cerrado: cinco estados, ni uno más.
+        self.assertEqual({"calm", "happy", "sad", "surprised", "relaxed"},
+                         set(affect.MOODS))
 
 
 if __name__ == "__main__":
