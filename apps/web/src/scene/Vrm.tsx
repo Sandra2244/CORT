@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { VRM, VRMHumanBoneName } from '@pixiv/three-vrm'
 import { avatarUrl } from '../cort/connection'
-import { palette, type Outfit } from '../cort/palette'
+import { DEFAULT_OUTFIT, palette, type Outfit } from '../cort/palette'
 
 /**
  * `VRMUtils` se pide con `import()` y no con `import`: así la biblioteca de
@@ -71,7 +71,7 @@ const BRAZOS = 1.2
  * colores que no combinan.
  */
 function tinte(atuendo: Outfit): THREE.Color {
-  const p = palette[atuendo] ?? palette.work
+  const p = palette[atuendo] ?? palette[DEFAULT_OUTFIT]
   return new THREE.Color(p.ui)
 }
 

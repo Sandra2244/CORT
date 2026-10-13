@@ -1,8 +1,35 @@
+/*
+ * Los colores de CORT, en un solo sitio.
+ *
+ * La petición es de Sandra (2026-10-11): su estética es **Cortana de Halo** —
+ * morados y azules sobre negro, no el cian de consola que había quedado. Antes
+ * el color estaba escrito a mano en unas cuarenta reglas
+ * (`rgba(120, 190, 230, ...)`) y por eso cambiarlo era imposible: se habría
+ * retocado media hoja y habría quedado medio mal. Con variables la hoja entera
+ * se recoloca cambiando seis líneas, y cada superficie (vidrio, filo, tinta)
+ * hereda del tema.
+ *
+ * `--tint` sigue siendo el color del atuendo puesto: `palette.ts` lo pinta en
+ * línea en cada capa, y aquí vive el **por defecto** — morado, el de `night`.
+ */
 :root {
-  --bg: #02040c;
-  --ink: #dff2ff;
-  --dim: #5d86a0;
-  --tint: #5ce1ff;
+  --bg: #04020f;
+  --ink: #e9e0ff;
+  --dim: #9084bd;
+  --tint: #a479ff;
+  --azul: #6ea0ff;
+
+  /* El vidrio. Cuatro tokens y nada mas: fondo en dosel, el filo iluminado,
+     la linea de luz de arriba y la sombra que separa la ventana del reactor. */
+  --glass-1: rgba(46, 24, 96, 0.40);
+  --glass-2: rgba(10, 10, 34, 0.34);
+  --glass-line: rgba(168, 132, 255, 0.30);
+  --glass-hi: rgba(232, 220, 255, 0.18);
+  --glass-shadow: 0 22px 54px rgba(3, 1, 12, 0.58);
+  --fondo-escena: #150b32;
+  --glow: rgba(164, 121, 255, 0.34);
+  --glow-fuerte: rgba(164, 121, 255, 0.62);
+  --tinta-sobre: #0d0624;
 }
 
 * {
@@ -17,7 +44,7 @@ body,
 }
 
 body {
-  background: radial-gradient(circle at 50% 42%, #0a1430 0%, var(--bg) 62%);
+  background: radial-gradient(circle at 50% 42%, var(--fondo-escena) 0%, var(--bg) 62%);
   color: var(--ink);
   font-family: "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
@@ -36,7 +63,7 @@ body {
    cifras proporcionales el reloj baila un par de píxeles cada segundo.
 
    Va centrado arriba porque arriba está libre desde que la telemetría se mudó
-   al modal, y `pointer-events: none` porque es puro dato: nada que pulsar. */
+   a una ventana, y `pointer-events: none` porque es puro dato: nada que pulsar. */
 .reloj {
   position: fixed;
   top: 14px;
@@ -51,7 +78,7 @@ body {
   font-size: 1.05rem;
   letter-spacing: 0.08em;
   font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 14px rgba(92, 225, 255, 0.35);
+  text-shadow: 0 0 14px var(--glow);
 }
 
 /* ─── El subtítulo (capa L2) ──────────────────────────────────────────────
@@ -94,11 +121,11 @@ body {
   text-align: center;
   text-transform: none;
   letter-spacing: 0.01em;
-  background: rgba(4, 12, 26, 0.52);
+  background: var(--glass-2);
   border: 0;
   border-radius: 12px;
   backdrop-filter: blur(4px);
-  text-shadow: 0 0 18px rgba(92, 225, 255, 0.4);
+  text-shadow: 0 0 18px var(--glow);
   cursor: pointer;
 }
 
@@ -127,128 +154,7 @@ body {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(120, 220, 255, 0.045) 2px 3px);
-}
-
-/*
- * El marco es lo que se mueve al arrastrar; el HUD de dentro es lo que tiembla
- * con el efecto `shake`. Dos nodos porque dos `transform` distintos: si el
- * desplazamiento y la sacudida vivieran en el mismo elemento, la animación CSS
- * escribiría `transform` cada cuadro y el panel se soltaría de los dedos a media
- * arrancada.
- */
-.hud-marco {
-  position: fixed;
-  inset: auto 0 0 0;
-  z-index: 2;
-}
-
-.hud {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0 auto;
-  max-width: 680px;
-  width: 100%;
-  padding: 14px 16px 18px;
-  background: linear-gradient(to top, rgba(6, 16, 34, 0.82), rgba(6, 16, 34, 0));
-  backdrop-filter: blur(6px);
-}
-
-/*
- * El asa. Sin `backdrop-filter` y sin caja: una barra de luz sobre el borde del
- * panel, que es lo que dice «esto se mueve» en una interfaz táctil sin robarle
- * ni un píxel de lectura a la pantalla. `touch-action: none` es lo que permite
- * arrastrar con el dedo en vez de deslizar la página.
- */
-.asa {
-  align-self: center;
-  width: 46px;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(to right, transparent, var(--tint), transparent);
-  opacity: 0.55;
-  cursor: grab;
-  touch-action: none;
-}
-
-.hud-marco.tirando {
-  user-select: none;
-}
-
-.hud-marco.tirando .asa,
-.hud-marco.tirando .status {
-  cursor: grabbing;
-}
-
-.status {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: var(--dim);
-  font-size: 0.85rem;
-  letter-spacing: 0.02em;
-  /* La barra de estado es también barra de arrastre: sin `touch-action: none` un
-     dedo desliza la página y no mueve el panel. */
-  cursor: grab;
-  touch-action: none;
-}
-
-/* Recolocar el panel después de moverlo. 44 px es lo mínimo que acierta un dedo
-   sin mirar, y aquí manda la clase aunque el bloque táctil de abajo pida 64 px
-   de ancho: en una barra de estado un botón así de gordo empuja todo lo demás. */
-.hud-colocar {
-  min-width: 44px;
-  min-height: 44px;
-  padding: 0 12px;
-  font-size: 1.1rem;
-  line-height: 1;
-  color: var(--tint);
-  background: rgba(6, 16, 34, 0.5);
-  border: 1px solid rgba(120, 190, 230, 0.25);
-  border-radius: 10px;
-}
-
-/* El aviso de cable suelto. Vive en la barra de estado de la bandeja — que es
-   donde alguien que va a arreglar algo la necesita — y no en la cara: R1 dejó
-   el estado de conexión en el puntito de `Cabecera`. */
-.status-aviso {
-  color: #ff8fa6;
-  font-size: 0.78rem;
-}
-
-/* La única fila de mandos que queda en el HUD: los controles de superficie,
-   arrimados a la derecha para que el aviso ocupe el resto de la línea. */
-.status-herramientas {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* La puerta del modal (L3). fantasma como los botones de gesto: en una barra
-   de estado un botón relleno de cian grita más que la conversación que hay
-   debajo, que es lo importante. */
-.hud-ajustes {
-  padding: 0 14px;
-  min-height: 44px;
-  color: var(--dim);
-  font: inherit;
-  font-size: 0.76rem;
-  letter-spacing: 0.1em;
-  text-transform: lowercase;
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  border-radius: 10px;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.hud-ajustes:hover,
-.hud-ajustes:focus-visible {
-  color: var(--tint);
-  border-color: var(--tint);
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(178, 140, 255, 0.05) 2px 3px);
 }
 
 /* Bogotá, Medellín, Buenos Aires: un nombre propio no se escribe en minúsculas
@@ -277,8 +183,8 @@ body {
 }
 
 /* Telemetría: lo que el core comprueba de sí mismo. R2 la bajó de la esquina
-   fija al modal — en reposo la cara no lleva paneles informativos —, así que
-   aquí es un bloque **estático** dentro de la pestaña «sistema»: sin posición,
+   fija a una ventana — en reposo la cara no lleva paneles informativos —, así
+   que aquí es un bloque **estático** dentro de la ventana «sistema»: sin posición,
    sin `pointer-events: none` (aquí sí se puede seleccionar texto) y a ancho
    completo. */
 .telemetry {
@@ -289,8 +195,8 @@ body {
   color: var(--dim);
   font-size: 0.78rem;
   letter-spacing: 0.03em;
-  background: rgba(6, 16, 34, 0.5);
-  border: 1px solid rgba(120, 190, 230, 0.2);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
   border-left: 2px solid var(--tint);
   border-radius: 8px;
 }
@@ -330,7 +236,7 @@ body {
   max-width: 85%;
   padding: 8px 12px;
   line-height: 1.45;
-  background: rgba(8, 24, 48, 0.62);
+  background: var(--glass-2);
   border-left: 2px solid var(--tint);
 }
 
@@ -352,15 +258,15 @@ input {
   padding: 12px;
   font: inherit;
   color: var(--ink);
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.28);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
 }
 
 button {
   padding: 0 18px;
   font: inherit;
   font-weight: 600;
-  color: #02131f;
+  color: var(--tinta-sobre);
   background: var(--tint);
   border: 0;
   cursor: pointer;
@@ -412,146 +318,278 @@ button:focus-visible {
     display: none;
   }
 
-  .log p,
-  .status {
+  .log p {
     text-shadow: none;
   }
 }
 
-/* ─── Bandeja guardada ────────────────────────────────────────────────────
-   La pantalla por defecto es el reactor. Todo lo demás vive dentro de
-   `.cuerpo`, que se pliega con `opacity` + `transform` + `max-height`. El
-   `max-height` entró en el rediseño por un motivo medido en pantalla: sólo con
-   `visibility: hidden` el cuerpo plegado **seguía ocupando su hueco**, y el
-   degradado y el desenfoque del `.hud` —pensados para leer el chat— cortaban
-   a media altura el reactor, que ahora es la cara entera. Animar el alto
-   recalcula layout, sí, pero solo durante los 220 ms del pliegue; el reposo no
-   cuesta un cuadro. `visibility` al final del tiempo saca los campos del orden
-   de tabulación cuando ya no se ven. */
-.cuerpo {
+/* ─── Las ventanas de vidrio (la primitiva única) ─────────────────────────
+   Todo lo que se pone encima de la cara es una `Ventana` (ui/Ventana.tsx): tubo
+   para arrastrar, rótulo, botón ⤾ si está movida y ✕ para echarla. Antes había
+   dos superficies con chrome propio y CSS distinto para cada una; reestructurar
+   la base fue unificarlas aquí.
+
+   Por qué `backdrop-filter` y no una textura: el efecto de cristal se produce
+   desenfocando lo que hay detrás, y detrás está el reactor 3D. Es lo que hace
+   que la ventana parezca proyectada sobre la escena y no un cartel pegado. En
+   esta máquina (gráficos por software) el desenfoque cuesta, así que se aplica
+   SOLO a la ventana y al muelle — nunca al fondo ni a cada línea de texto — y
+   `saturate` acompaña a `blur` porque el vidrio de Cortana no apaga el color de
+   lo que hay detrás, lo sube. */
+.ventano {
+  position: fixed;
+  /* La posición base la da la clase `.ventana--x` de abajo; el arrastre suma un
+     `translate` en línea. Separados a propósito: si el arrastre escribiera
+     `left/top`, cada cuadro recomputaría el layout de toda la página. */
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.ventano.tirando {
+  user-select: none;
+}
+
+.ventano.tirando .ventana-tubo {
+  cursor: grabbing;
+}
+
+.ventana {
+  display: flex;
+  flex-direction: column;
+  width: min(360px, calc(100vw - 20px));
+  max-height: min(60vh, 440px);
+  color: var(--ink);
+  background: linear-gradient(158deg, var(--glass-1) 0%, var(--glass-2) 72%);
+  /* El prefijo va ANTES del estándar: el minimizador de Vite deja el último, y
+     si el último es `-webkit-` el `getComputedStyle` de Chrome lee `none` y nadie
+     puede comprobar que el cristal exista. */
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  border: 1px solid var(--glass-line);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+  overflow: hidden;
+  /* Entrar con revelado, no de golpe: la línea de luz que barre el tubo es la
+     misma gramática del orbe. 260 ms: por debajo parece un fallo de pintado. */
+  animation: ventana-revelado 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes ventana-revelado {
+  from { opacity: 0; transform: translateY(10px) scale(0.985) }
+  to   { opacity: 1; transform: translateY(0) scale(1) }
+}
+
+/* El tubo: asa, rótulo y controles en una sola línea de 42 px. `touch-action:
+   none` es lo que convierte un deslizamiento de dedo en arrastre de ventana. */
+.ventana-tubo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  position: relative;
+  min-height: 42px;
+  padding: 0 8px 0 14px;
+  cursor: grab;
+  touch-action: none;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.06), transparent);
+  border-bottom: 1px solid var(--glass-line);
+  color: var(--dim);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+}
+
+/* El hilo de luz del tubo: el filo iluminado del cristal. Un pseudo de 1 px,
+   gratis, y es lo que hace que el borde se lea grueso como vidrio de verdad. Va
+   anclado al propio tubo (`position: relative` arriba) — sin ese ancla el pseudo
+   buscaría al ancestro posicionado más cercano, que es `.ventano`, y el hilo
+   aparecería fuera de la ventana. */
+.ventana-tubo::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  bottom: -1px;
+  width: 46px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--tint), transparent);
+  opacity: 0.7;
+}
+
+.ventana-titulo {
+  color: var(--tint);
+  text-shadow: 0 0 12px var(--glow);
+  white-space: nowrap;
+}
+
+.ventana-botones {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ventana-cerrar,
+.ventana-colocar {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.ventana-cerrar:hover,
+.ventana-cerrar:focus-visible,
+.ventana-colocar:hover,
+.ventana-colocar:focus-visible {
+  color: var(--tint);
+  border-color: var(--glass-line);
+  background: var(--glass-2);
+}
+
+.ventana-cuerpo {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 70vh;
-  opacity: 1;
-  transform: translateY(0);
-  transition: opacity 240ms ease, transform 280ms cubic-bezier(0.2, 0.8, 0.2, 1), max-height 280ms ease, visibility 0s;
+  min-height: 0;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  overscroll-behavior: contain;
 }
 
-.cuerpo.cerrado {
-  opacity: 0;
-  transform: translateY(22px) scaleY(0.94);
-  max-height: 0;
-  overflow: hidden;
-  pointer-events: none;
-  visibility: hidden;
-  transition: opacity 200ms ease, transform 220ms ease, max-height 220ms ease, visibility 0s linear 200ms;
+/* Dónde aterriza cada ventana. Se reparten los cuatro cantos alrededor del
+   reactor —que ocupa el centro— para que dos abiertas no se tapen entre sí ni
+   tapen la cara. En pantallas angostas (`@media` abajo) todas se apilan. */
+.ventana--charla  { right: 18px; top: 78px; }
+.ventana--voz     { left: 18px; top: 78px; }
+.ventana--camara  { left: 18px; bottom: 92px; }
+.ventana--cuerpo  { right: 18px; bottom: 92px; }
+.ventana--sistema { left: 18px; top: 300px; }
+.ventana--ayuda   { right: 18px; top: 300px; }
+
+@media (max-width: 760px) {
+  /* Un móvil no tiene cantos: la ventana ocupa el ancho. Pero dos ventanas en el
+     mismo sitio son una ventana — la de atrás no se puede ni ver ni agarrar —,
+     así que cada una se apoya 46 px más abajo que la anterior usando `--marco`,
+     el orden de pila que ya le pasa `App`. Sigue siendo movable (arrastre con
+     sujeción a 72 px); sólo cambia el sitio de aterrizaje. */
+  .ventano {
+    left: 8px !important;
+    right: 8px !important;
+    top: calc(62px + var(--apilado, 0px)) !important;
+    bottom: auto !important;
+  }
+
+  .ventana {
+    width: auto;
+    max-height: min(52dvh, 420px);
+  }
 }
 
-/* El punto de entrada (R1/R5). Antes era una solapa con texto («⌃ mensajes»);
-   las referencias no letreron la esquina: pintan un indicio. Un círculo de 46
-   px con un núcleo que late — se ve vivo sin ocupar una palabra — y el contador
-   cuando hay algo que leer. */
-.esquina {
+/* ─── El muelle: la única fila de mandos ──────────────────────────────────
+   Seis accesos con palabra, en un solo cristal abajo. Es el reemplazo del punto
+   de la esquina + el botón «ajustes» + las pestañas del modal: tres entradas
+   distintas a lo mismo, y ninguna se encontraba. Ya no existen. */
+.muelle {
   position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 4;
+  left: 50%;
+  bottom: 18px;
+  translate: -50% 0;
+  z-index: 9;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 46px;
-  padding: 0;
-  color: var(--tint);
-  background: radial-gradient(circle, rgba(10, 26, 52, 0.88), rgba(10, 26, 52, 0.38));
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  border-radius: 50%;
-  backdrop-filter: blur(6px);
+  gap: 4px;
+  padding: 6px;
+  background: linear-gradient(to bottom, var(--glass-1), var(--glass-2));
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  box-shadow: var(--glass-shadow), inset 0 1px 0 var(--glass-hi);
+}
+
+.muelle-acceso {
+  position: relative;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.76rem;
+  letter-spacing: 0.1em;
+  text-transform: lowercase;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
   touch-action: manipulation;
-  transition: box-shadow 240ms ease, color 240ms ease;
+  transition: color 200ms ease, border-color 200ms ease, background 200ms ease;
 }
 
-/* El barrido de luz: una línea que recorre el borde y se apaga. Es lo que hace
-   que abrir la bandeja parezca revelado de holograma y no un div que aparece.
-   Un pseudo con `transform` animado, sin librería y sin repintar el layout. */
-.esquina::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(115deg, transparent 35%, rgba(140, 230, 255, 0.5) 50%, transparent 65%);
-  background-size: 260% 100%;
-  background-position: 130% 0;
-  opacity: 0;
-}
-
-.esquina:hover,
-.esquina:focus-visible {
-  box-shadow: 0 0 22px rgba(92, 225, 255, 0.28);
+.muelle-acceso:hover,
+.muelle-acceso:focus-visible {
+  color: var(--tint);
+  border-color: var(--glass-line);
   outline: none;
 }
 
-.esquina:hover::after,
-.esquina:focus-visible::after {
-  animation: barrido-esquina 900ms ease-out;
-}
-
-@keyframes barrido-esquina {
-  from { background-position: 130% 0; opacity: 0.9 }
-  to   { background-position: -30% 0; opacity: 0 }
-}
-
-/* El núcleo: un punto de luz que respira. `currentColor` para que el estado
-   abierto lo apague sin otra regla, y el latido es lo único en movimiento de
-   la esquina — el botón ya no dice nada en palabras. */
-.esquina-nucleo {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 14px currentColor;
-  animation: nucleo-latido 3.2s ease-in-out infinite;
-}
-
-@keyframes nucleo-latido {
-  0%, 100% { opacity: 0.5 }
-  50%      { opacity: 1 }
-}
-
-.esquina.abierta {
-  color: var(--dim);
-}
-
-/* Cuántos mensajes llegaron con la bandeja cerrada. Se pinta sólo si hay, para
-   que un «0» no se confunda con un contador siempre encendido. Va montado en
-   el borde del círculo, como una notificación de app. */
-.esquina-aviso {
-  position: absolute;
-  top: -7px;
-  right: -3px;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 5px;
-  border-radius: 10px;
-  color: #04101f;
+/* Abierta = el acceso se llena: el estado se ve sin leer la palabra, que es lo
+   que hace falta cuando hay seis botones y dos dedos. */
+.muelle-acceso.activa {
+  color: var(--tinta-sobre);
   background: var(--tint);
-  box-shadow: 0 0 12px var(--tint);
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 20px;
-  text-align: center;
-  letter-spacing: 0;
+  border-color: var(--tint);
+  box-shadow: 0 0 18px var(--glow);
 }
 
-/* La esquina vive en el vértice inferior derecho, encima de todo lo demás, así
-   que el botón de enviar le cede sitio: solaparse con un control es peor que un
-   campo algo más corto. Con `esquina` reducida a un punto de 46 px, 132 px de
-   reserva eran un agujero en el formulario por una amenaza que ya no existe. */
-.hud form {
-  padding-right: 64px;
+.muelle-aviso {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 10px;
+  color: var(--tinta-sobre);
+  background: var(--tint);
+  box-shadow: 0 0 12px var(--glow-fuerte);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 19px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ─── El cuerpo de la charla ──────────────────────────────────────────────
+   Lo que quedó del HUD: registro y entrada. `.log` ya no tiene su `max-height`
+   de viewport: dentro de la ventana es `flex: 1`, así el alto lo decide la
+   ventana y el campo de escritura nunca se queda colgando fuera. */
+.charla {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.charla .log {
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 90px;
+}
+
+.charla-aviso {
+  margin: 0;
+  color: #ff8fa6;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 /* ─── Gestos con la cámara ────────────────────────────────────────────────
@@ -573,8 +611,8 @@ button:focus-visible {
   font-size: 0.76rem;
   letter-spacing: 0.1em;
   text-transform: lowercase;
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.28);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -582,7 +620,7 @@ button:focus-visible {
 /* Activa = el borde late y el texto toma el tinte: el estado se entiende de
    un vistazo, sin leer la etiqueta. */
 .gesto-btn.on {
-  color: #04101f;
+  color: var(--tinta-sobre);
   background: var(--tint);
   border-color: var(--tint);
   box-shadow: 0 0 18px var(--tint);
@@ -610,8 +648,8 @@ button:focus-visible {
 .gesto-barra {
   width: 74px;
   height: 3px;
-  background: linear-gradient(to right, var(--tint) var(--r, 100%), rgba(120, 190, 230, 0.22) var(--r, 100%));
-  box-shadow: 0 0 8px rgba(92, 225, 255, 0.5);
+  background: linear-gradient(to right, var(--tint) var(--r, 100%), var(--glass-line) var(--r, 100%));
+  box-shadow: 0 0 8px var(--glow-fuerte);
 }
 
 .gesto-aviso {
@@ -622,80 +660,7 @@ button:focus-visible {
   line-height: 1.4;
 }
 
-/* ─── El modal de herramientas (capa L3) ──────────────────────────────────
-   R2: todo el riel —voz, cámara, atuendos, sistema y ayuda— es ahora UN
-   `<dialog>` centrado que aparece, cumple y desaparece. Nativo: el overlay,
-   la trampa de foco y el `Esc` los regala el navegador, que en una máquina de
-   1,8 GiB es la mejor librería de moda. Como se abre con `showModal()` vive
-   en la *top layer*: ningún `z-index` de la cara tiene que pelear con él. */
-.panel {
-  position: fixed;
-  inset: 0;
-  margin: auto;
-  width: min(560px, 92vw);
-  max-height: min(560px, 84vh);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  padding: 0;
-  color: var(--ink);
-  background: linear-gradient(to bottom, rgba(8, 20, 40, 0.97), rgba(6, 16, 34, 0.97));
-  border: 1px solid rgba(120, 190, 230, 0.28);
-  border-radius: 14px;
-  box-shadow: 0 0 48px rgba(92, 225, 255, 0.14);
-}
-
-/* El fondo a oscuras es la única señal de que lo demás espera: sin botón de
-   cerrar flotando en la cara, cerrar es pulsar aquí o `Esc`. */
-.panel::backdrop {
-  background: rgba(2, 6, 14, 0.62);
-}
-
-.panel-cab {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding: 8px 10px 0;
-  background: rgba(7, 18, 36, 0.97);
-  border-bottom: 1px solid rgba(120, 190, 230, 0.18);
-}
-
-/* Pestañas como filo subrayado, no como botones: cinco cajas rellenas en una
-   cabecera de 44 px volverían a ser el riel con otro vestido. */
-.pestana {
-  padding: 10px 12px;
-  min-height: 40px;
-  color: var(--dim);
-  font: inherit;
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
-  text-transform: lowercase;
-  background: transparent;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-}
-
-.pestana:hover {
-  color: var(--ink);
-}
-
-.pestana.activa {
-  color: var(--tint);
-  border-bottom-color: var(--tint);
-  text-shadow: 0 0 12px rgba(92, 225, 255, 0.5);
-}
-
-.panel-cuerpo {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-}
-
-/* La pestaña «sistema»: telemetría + atuendo + clima, los datos que antes
+/* La ventana «sistema»: telemetría + atuendo + clima, los datos que antes
    viajaban por el cabezal del HUD. */
 .sistema {
   display: flex;
@@ -725,7 +690,7 @@ button:focus-visible {
 .ayuda code {
   padding: 1px 5px;
   color: var(--tint);
-  background: rgba(8, 24, 48, 0.72);
+  background: var(--glass-2);
   border-radius: 4px;
   font-size: 0.95em;
 }
@@ -761,7 +726,7 @@ button:focus-visible {
      Un solo `drop-shadow`, medido: con dos la proyección baja de 26 a 22 fps en
      esta máquina y el segundo halo no se aprecia en pantalla. */
   filter: brightness(1.28) saturate(1.12)
-    drop-shadow(0 0 22px rgba(110, 170, 255, 0.6));
+    drop-shadow(0 0 22px rgba(150, 128, 255, 0.62));
   animation: avatar-flotar 7s ease-in-out infinite;
 }
 
@@ -770,7 +735,7 @@ button:focus-visible {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(160deg, rgba(63, 216, 255, 0.16), rgba(143, 92, 255, 0.2));
+  background: linear-gradient(160deg, var(--glass-1), rgba(143, 92, 255, 0.2));
   mix-blend-mode: soft-light;
 }
 
@@ -781,7 +746,7 @@ button:focus-visible {
   left: 0;
   right: 0;
   height: 16vh;
-  background: linear-gradient(to bottom, transparent, rgba(140, 230, 255, 0.09) 62%, rgba(140, 230, 255, 0.3));
+  background: linear-gradient(to bottom, transparent, rgba(200, 170, 255, 0.10) 62%, var(--glass-hi));
   animation: avatar-barrido 5.5s linear infinite;
 }
 
@@ -838,8 +803,8 @@ button:focus-visible {
   flex: 0 0 auto;
   width: 76px;
   padding: 4px;
-  background: rgba(8, 24, 48, 0.72);
-  border: 1px solid rgba(120, 190, 230, 0.22);
+  background: var(--glass-2);
+  border: 1px solid var(--glass-line);
   cursor: pointer;
   touch-action: manipulation;
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -881,7 +846,7 @@ button:focus-visible {
 
 .atuendo.activo {
   border-color: var(--tint);
-  box-shadow: 0 0 16px rgba(92, 225, 255, 0.35);
+  box-shadow: 0 0 16px var(--glow);
 }
 
 .atuendo.activo span {
@@ -897,7 +862,7 @@ button:focus-visible {
   letter-spacing: 0.1em;
   text-transform: lowercase;
   background: transparent;
-  border: 1px solid rgba(120, 190, 230, 0.28);
+  border: 1px solid var(--glass-line);
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -934,8 +899,8 @@ button:focus-visible {
 }
 
 /* El tamaño del `avatar CORT`, debajo de la lista y sólo con un VRM puesto:
-   para una imagen no hay escala que elegir. Mismos botones chiquitos que las
-   pestañas para que el modal no introduzca un segundo lenguaje de control. */
+   para una imagen no hay escala que elegir. Mismos botones chiquitos que los
+   accesos del muelle, para que no se introduzca un segundo lenguaje de control. */
 .tamanos {
   display: flex;
   align-items: center;
@@ -946,7 +911,7 @@ button:focus-visible {
 .tamano {
   padding: 4px 10px;
   background: transparent;
-  border: 1px solid rgba(120, 190, 230, 0.28);
+  border: 1px solid var(--glass-line);
   border-radius: 999px;
   color: var(--dim);
   font: inherit;
@@ -961,14 +926,23 @@ button:focus-visible {
   text-shadow: 0 0 10px var(--tint);
 }
 
-/* En el teléfono el pulgar no acierta con un punto de 46 px apoyado en el borde
-   físico de la pantalla: el círculo crece y se aparta del reborde seguro. */
+/* En el teléfono el pulgar trabaja en la mitad de abajo de la pantalla: el
+   muelle se pega al borde, se le quitan los márgenes falsos y entra el área de
+   seguridad (el notch y la barra de gestos de Android). Sin `env()` el botón de
+   «ayuda» queda bajo la barra del sistema y no se puede pulsar. */
 @media (pointer: coarse) {
-  .esquina {
-    width: 56px;
-    height: 56px;
-    right: 16px;
-    bottom: calc(16px + env(safe-area-inset-bottom));
+  .muelle {
+    left: 6px;
+    right: 6px;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    justify-content: space-between;
+    gap: 4px;
+  }
+
+  .muelle-acceso {
+    flex: 1 1 auto;
+    padding: 0 6px;
+    font-size: 0.72rem;
   }
 }
 
@@ -1088,7 +1062,7 @@ button:focus-visible {
 }
 
 .fx-glitch::before { background: rgba(255, 40, 90, 0.13) }
-.fx-glitch::after  { background: rgba(40, 220, 255, 0.13); animation-direction: reverse }
+.fx-glitch::after  { background: var(--glass-1); animation-direction: reverse }
 
 @keyframes fxChroma {
   0%, 100% { opacity: 0; transform: translateX(0) }
@@ -1097,10 +1071,11 @@ button:focus-visible {
   75%      { opacity: 1; transform: translateX(-2px) }
 }
 
-/* 'shake' va en la raíz del HUD, no en esta capa: el marco entero recibe el
-   golpe como un solo cuerpo, y la escena 3D —que es otra capa— se queda quieta.
-   Eso es lo que lo vende a "le han dado a los instrumentos". */
-.hud.fx-shaking {
+/* 'shake' va en el cuerpo de la ventana, no en el marco: el marco lleva el
+   `translate` del arrastre y la animación escribe `transform` cada cuadro — si
+   vivieran en el mismo nodo, el temblor le ganaría al dedo y la ventana se
+   soltaría a media arrancada. Dos nodos, dos transformaciones. */
+.ventana.fx-shaking {
   animation: fxShake 520ms cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
@@ -1144,8 +1119,8 @@ input {
     font-size: 16px;
   }
 
-  .hud {
-    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  .ventana-cuerpo {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
   }
 
   .log {
@@ -1156,7 +1131,7 @@ input {
     max-height: 30dvh;
   }
 
-  /* La telemetría ya no vive en la cara: viaja dentro del modal, donde el
+  /* La telemetría ya no vive en la cara: viaja dentro de su ventana, donde el
      ancho lo manda el dialog y no queda nada que encoger aquí. */
   .tl-row {
     gap: 10px;
@@ -1187,10 +1162,10 @@ input {
   align-items: center;
   gap: 12px;
   padding: 10px 16px 10px 10px;
-  border: 1px solid rgba(120, 220, 255, 0.22);
+  border: 1px solid var(--glow);
   border-radius: 999px;
-  background: rgba(6, 16, 34, 0.62);
-  box-shadow: 0 0 24px rgba(92, 225, 255, 0.12);
+  background: var(--glass-2);
+  box-shadow: 0 0 24px var(--glass-1);
   /* No se toca: el temporizador se manda diciéndoselo a CORT. Con esto fuera, un
      panel encima del orbe robaría el gesto de arrastrar la escena. */
   pointer-events: none;
@@ -1204,7 +1179,7 @@ input {
 
 .crono-guia {
   fill: none;
-  stroke: rgba(120, 220, 255, 0.14);
+  stroke: var(--glass-1);
   stroke-width: 3;
 }
 
@@ -1228,7 +1203,7 @@ input {
   color: var(--ink);
   font-size: 1.45rem;
   letter-spacing: 0.02em;
-  text-shadow: 0 0 14px rgba(92, 225, 255, 0.55);
+  text-shadow: 0 0 14px var(--glow-fuerte);
 }
 
 .crono-nombre {
@@ -1241,7 +1216,7 @@ input {
 /* Terminar es un estado que hay que ver, no un parpadeo: el anillo se queda
    entero, cambia el color y el panel se apaga solo seis segundos después. */
 .crono-listo {
-  border-color: rgba(120, 220, 255, 0.5);
+  border-color: var(--glass-hi);
 }
 
 .crono-listo .crono-tiempo {
@@ -1263,7 +1238,7 @@ input {
   }
 
   .crono {
-    /* Centro arriba: con la telemetría mudada al modal (R2) el único sitio que
+    /* Centro arriba: con la telemetría dentro de su ventana (R2), el único sitio que
        queda libre de verdad es el medio del borde superior. */
     top: 10px;
     left: 50%;
@@ -1289,18 +1264,14 @@ input {
     animation-timing-function: ease-out;
   }
 
-  /* La bandeja se sigue abriendo y cerrando — es estado, no adorno — pero sin
-     el deslizamiento, y el LED de la cámara deja de latir. */
-  .cuerpo,
-  .cuerpo.cerrado {
-    transform: none;
-    transition: opacity 120ms linear;
+  /* La ventana se sigue abriendo y cerrando — es estado, no adorno — pero sin
+     el deslizamiento de entrada, y el acceso activo del muelle deja de latir. */
+  .ventana {
+    animation: none;
   }
 
-  .esquina::after,
-  .esquina:hover::after,
-  .esquina:focus-visible::after {
-    animation: none;
+  .muelle-acceso.activa {
+    box-shadow: none;
   }
 
   .gesto-btn.on {
@@ -1314,7 +1285,7 @@ input {
     animation: none;
   }
 
-  .esquina-nucleo {
+  .muelle-aviso {
     animation: none;
     opacity: 1;
   }

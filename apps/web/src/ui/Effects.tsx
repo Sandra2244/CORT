@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe, type UiEffect } from '../cort/connection'
-import { palette } from '../cort/palette'
+import { DEFAULT_OUTFIT, palette } from '../cort/palette'
 
 /**
  * Efectos de un solo disparo, los que manda CORT.
@@ -17,10 +17,10 @@ import { palette } from '../cort/palette'
  * que pedir 'glitch' dos veces seguidas remonta el nodo y la animación arranca
  * de cero, donde re-aplicar la misma clase a un elemento vivo no haría nada.
  *
- * 'shake' es la excepción. Sacudir el marco significa mover el HUD entero, y
- * esta capa no lo posee —es su hermana, no su hijo—, así que se lo busca por
- * clase: la clase va al nodo `.hud` durante la animación y se quita al terminar,
- * también al desmontar.
+ * 'shake' es la excepción. Sacudir significa mover una superficie entera, y
+ * esta capa no la posee —es su hermana, no su hijo—, así que se lo busca por
+ * clase: la clase va al nodo `.ventana` de enfrente durante la animación y se
+ * quita al terminar, también al desmontar.
  */
 
 /** Lo que duran los keyframes de cada efecto. En paso con index.css. */
@@ -51,26 +51,30 @@ export function Effects() {
 
   useEffect(() => {
     if (!live || live !== 'shake') return
-    // `querySelector`, no `closest`: esta capa es hermana del HUD, no está dentro
+    // `querySelector`, no `closest`: esta capa es hermana de las ventanas, no vive dentro de una
     // de él, y `closest` sube ancestros — nunca lo habría encontrado. Con eso el
     // temblor se montaba y se desmontaba sin mover nada, y pasaba por funcionando
     // porque el resto de los efectos sí aterrizan.
-    const hud = document.querySelector('.hud')
-    if (!hud) return
-    hud.classList.add('fx-shaking')
-    const done = setTimeout(() => hud.classList.remove('fx-shaking'), DURATION.shake)
+    // `All` y el último: `abiertas` se dibuja en orden de pila, así la ventana
+    // que está delante es la última del DOM. Sacudir la de atrás mientras la de
+    // enfrente quieta sería un efecto que no se ve.
+    const todas = document.querySelectorAll('.ventana')
+    const frente = todas[todas.length - 1] as HTMLElement | undefined
+    if (!frente) return
+    frente.classList.add('fx-shaking')
+    const done = setTimeout(() => frente.classList.remove('fx-shaking'), DURATION.shake)
     return () => {
       clearTimeout(done)
-      hud.classList.remove('fx-shaking')
+      frente.classList.remove('fx-shaking')
     }
   }, [live])
 
   if (!live || !effect) return null
 
   // El color lo manda la misma paleta que pinta el reactor. Esta capa cuelga
-  // fuera de .hud, así que no hereda su --tint: si no se fijara aquí, la onda
+  // fuera de las ventanas, así que no hereda su --tint: si no se fijara aquí, la onda
   // saldría de un color distinto al del anillo que acaba de expandirla.
-  const tint = palette[snapshot.outfit] ?? palette.work
+  const tint = palette[snapshot.outfit] ?? palette[DEFAULT_OUTFIT]
 
   return (
     <div

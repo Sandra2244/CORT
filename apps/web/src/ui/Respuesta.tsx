@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe } from '../cort/connection'
-import { palette } from '../cort/palette'
+import { DEFAULT_OUTFIT, palette } from '../cort/palette'
 
 /**
  * La superficie de conversación (capa L2 del rediseño).
@@ -45,7 +45,7 @@ export function Respuesta({ visible, onAbrir }: { visible: boolean; onAbrir: () 
   for (let i = s.msgs.length - 1; i >= 0; i--) {
     if (s.msgs[i].from === 'cort') { texto = s.msgs[i].text; break }
   }
-  const tint = palette[s.outfit] ?? palette.work
+  const tint = palette[s.outfit] ?? palette[DEFAULT_OUTFIT]
 
   return (
     <div className="respuesta" style={{ ['--tint' as string]: tint.ui }} role="status">

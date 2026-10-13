@@ -121,4 +121,42 @@ Nada de esto añade dependencias (ni framer-motion ni zustand: la regla de los 1
 - **No rompe nada verificado**: el core, el protocolo, la memoria, los permisos y las 226 pruebas quedan intactos; esto es una capa visual sobre el cable que ya funciona.
 
 ---
+
+## 7. R5 · La reestructura por ventanas (2026-10-11)
+
+**Qué dijo Sandra, con sus palabras:** «chimbo y horrible: reestructura la base y luego agregas todo eso, las ventanas de vidrio, diséñalo todo, y luego se le cambian colores a mi estética». No es una crítica a un botón: es un orden de trabajo, y ese orden es el que está ejecutado aquí.
+
+**El diagnóstico de por qué el rediseño del 10 se veía mal.** No por las capas —ésas siguen— sino porque **dejó dos superficies que hacían lo mismo y ninguna se podía manejar**: la bandeja del HUD (con su asa, su barra de estado y su botón «ajustes») y el `<dialog>` modal (con cinco pestañas y su propio lenguaje de control). De ahí vienen los tres defectos que se le notaron de golpe: los mandos estaban **regados** (punto de la esquina + «ajustes» + teclas + pestañas), el modal **tapaba la cara** y no dejaba abrir otra cosa encima, y **no había forma de echar una superficie con el dedo** — cerrar era `Esc` o pulsar el overlay, y en el teléfono el overlay no existe como idea. Un interfaz con dos formas de hacer lo mismo se desordena sola, por mucho que se pula el color.
+
+**Los tres pasos, en el orden que pidió.**
+
+1. **La base.** Una sola primitiva, `ui/Ventana.tsx`: tubo (asa + rótulo + `⤾` + `✕`) y cuerpo. Todo lo demás pasó a ser contenido dentro de ella: `Charla`, `Voz`, `GestoCamara`, `Atuendos`, `Telemetry`, `Ayuda`. Se borraron `Hud.tsx`, `Bandeja.tsx` y `Panel.tsx` y sus **29 reglas de CSS duplicadas**; `index.css` pasó de **1338 a 1309 líneas** — la hoja casi no encogió en neto porque las reglas muertas salieron y entró el bloque nuevo del cristal, el muelle y la charla (1338 − 29 fuera + el bloque de ventanas = 1309, medido con `wc -l`). El registro `ui/Ventanas.tsx` (`id → cuerpo`) es lo que evita que esto vuelva a pasar: una ventana nueva es una fila, no una superficie nueva que inventar.
+2. **El vidrio.** `backdrop-filter: blur(14px) saturate(150%)` sobre un dosel violeta en dos gradientes, filo iluminado (`--glass-line`), hilo de luz en el tubo, sombra que despega la ventana del reactor y entrada con revelado de 260 ms. **Sólo** en ventana y muelle: cada `backdrop-filter` cuesta un búfer por capa y esta máquina no tiene GPU, así que ponerlo en cada línea de texto sería pagar fps por decoración. Los cuatro cantos de escritorio y la cascada de 46 px en móvil existen para que las ventanas se puedan **colocar y mover**, que es lo que ella pidió el 9 («puede colocar, mover»).
+3. **Sus colores.** El cian de consola sale de la hoja: `:root` pasa a tokens (`--glass-*`, `--tint`, `--glow`, `--bg` hollín-violeta) y las ~25 apariciones de `rgba(120, 190, 230, …)` y `rgba(92, 225, 255, …)` se reasignan a ellos. `palette.ts` deja de tener un atuendo verde-agua y un cian: los cinco quedan en morado/azul con distinta luminancia, y `DEFAULT_OUTFIT` pasa de `work` a `night` (el morado de Cortana), coincidiendo con el `--tint` de la hoja.
+
+**Qué se verificó y qué no** (2026-10-11, core real en `--demo`, viewport del navegador de prueba 536×521):
+
+| Comprobación | Resultado |
+|---|---|
+| Tipos y compilado | `tsc --noEmit` sin errores; `vite build` en 7,5 s |
+| Pruebas del core | `Ran 331 tests in 78,208 s — OK` (el `shake` sigue teniendo productor y protocolo cerrado) |
+| Reposo | 0 ventanas en el DOM, muelle con seis accesos, `dot on` (conectado al core) |
+| Varias ventanas | ayuda (z 10, `top` 62) + voz (z 11, `top` 108) conviviendo; la cascada de 46 px sale medida, no supuesta |
+| Cristal | `getComputedStyle(...).backdropFilter = blur(14px) saturate(1.5)` — antes del arreglo del orden de prefijos leía `none` |
+| **Jalón para echar (build final)** | puntero abajo **150 px** desde el tubo → la ventana **desaparece del DOM** (`querySelectorAll('.ventano') = []`). Medido sobre el bundle de las 14:06, que ya lleva la corrección: se compara el `clientY` del puntero, no la posición sujeta de la ventana |
+| **Micro-arrastre (build final)** | el mismo recorrido de **25 px** → **no** se cierra: `top` 62 → 87 y aparece `⤾`. Es la prueba que faltaba para saber que el jalón no cierra por cualquier toque |
+| `⤾` recolocar | `top` 87 → **62** y el botón vuelve a desaparecer (la ventana ya no está desplazada) |
+| `✕` | cierra la ventana desde el tubo; los seis accesos del muelle quedan en `aria-pressed="false"` |
+| `Esc` | con dos abiertas cerró **sólo** la de enfrente (voz) y dejó ayuda |
+| Arrastre | `top` de la ventana charla: 108 → 304 con una arrancada de puntero |
+| Efecto `shake` | tras «hola cort» apareció `.ventana.fx-shaking` (antes apuntaba a `.hud`, que ya no existe) |
+| **Coste del cristal (medido hoy)** | `requestAnimationFrame` sobre 1,2 s: **2 fps con dos ventanas** de vidrio y **1 fps en reposo** con el canvas vacío de ventanas. La diferencia está dentro del ruido de esta máquina: **el cuello no son los `backdrop-filter`, es la escena 3D renderizada por CPU** (sin GPU, 2 núcleos). Mismo número honesto que los ~7 fps del VRM del 10-09 |
+| Consola | sin errores ni avisos de React |
+
+**Sin verificar, y así queda:** el reparto en cuatro cantos en una pantalla de escritorio (el navegador de prueba no se pudo redimensionar; sólo se ejercitó la rama de ≤760 px), el dedo real sobre el teléfono, y los fps **en un equipo con GPU** — lo medido aquí es CPU pura y no sirve como promesa para otra máquina.
+
+**Lo que NO se copió.** La referencia de ventanas que ella señaló (`jaredrhod/fullstack-agent`) es **AGPL-3.0**: de ahí viene la *idea* de ventanas flotantes sobre la escena, no una línea de código. El arrastre sí es transplante declarado de `adewaskar/JARVIS` (MIT, atribuido en `apps/web/CREDITS.md`), y sigue siendo el mismo archivo `cort/arrastre.ts` que ya estaba.
+
+---
+---
 *Análisis hecho el 2026-10-10 sobre los videos de `Respaldo Proyectos Programacion/`, el código de `apps/web/src/` a `cort-local-verified` (post-v0.6.1) y `docs/STATUS.md`. Los frames extraídos son temporales (`/tmp/frames/`); los videos fuente, respaldados. Ejecutar este plan requiere luz verde de Sandra y se hace capa por capa, midiendo en esta máquina antes de afirmarlo.*

@@ -1,41 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { Scene } from './scene/Scene'
-import { Hud } from './ui/Hud'
 import { Effects } from './ui/Effects'
-import { Bandeja } from './ui/Bandeja'
 import { Avatar } from './ui/Avatar'
 import { Cabecera } from './ui/Cabecera'
 import { Respuesta } from './ui/Respuesta'
-import { Panel, type Pestana } from './ui/Panel'
+import { Muelle } from './ui/Muelle'
+import { Ventanas } from './ui/Ventanas'
 import { Temporizador } from './ui/Temporizador'
-import { connect, setOrbeVisible, setZoom } from './cort/connection'
+import type { IdVentana } from './ui/Ventana'
+import { getSnapshot, connect, setOrbeVisible, setZoom, subscribe } from './cort/connection'
 
 /**
- * Las capas de CORT (rediseño de docs/REDESIGN-UI.md, ejecutado 2026-10-10).
+ * Las capas de CORT, reestructuradas el 2026-10-11.
  *
  * ```text
- * L0 escena     fondo casi-negro con líneas de barrido       (siempre)
- * L1 cara       reactor/VRM + reloj con su punto de cable    (siempre)
- * L2 voz        subtítulo de la última respuesta             (8 s, auto-cierre)
- * L2+ bandeja   registro completo + entrada                  (esquina / tap / Ctrl+/)
- * L3 modal      voz · cámara · atuendos · sistema · ayuda    (desde la bandeja)
- * L4 resultados temporizador arriba a la izquierda; la       (sólo cuando existen)
- *               captura y el clima viajan por el subtítulo
- * L5 efectos    pulso/glitch/scan — intactos                 (mandados por el core)
+ * L0 escena     fondo casi-negro con líneas de barrido        (siempre)
+ * L1 cara       reactor/VRM + reloj con su punto de cable     (siempre)
+ * L2 subtítulo  la última frase que CORT dijo                 (8 s, se despide sola)
+ * L3 ventanas   charla · voz · cámara · cuerpo · sistema ·    (vidrio, móvil, echable
+ *               ayuda                                         con ✕ o Esc)
+ * L4 muelle     la única fila de botones que existe           (siempre, abajo)
+ * L5 efectos    pulso/glitch/temblor — intactos               (mandados por el core)
  * ```
  *
- * Regla madre: **en reposo, tres cosas — el reactor, el reloj y la esquina.**
- * Todo lo demás se invoca y se despide, que es la gramática común de las siete
- * referencias en video.
+ * Qué cambió respecto a la versión anterior, y por qué:
+ * - Había **dos** superficies con chrome propio (el HUD con su asa y «ajustes», y
+ *   un `<dialog>` modal de cinco pestañas). Ahora hay **una** primitiva,
+ *   `Ventana`, y seis instancias. Reestructurar la base era eso: quitar la
+ *   duplicación antes de pintar nada bonito, porque dos formas de hacer lo mismo
+ *   se desordenan solas.
+ * - El modal no dejaba abrir otra cosa encima y tapaba el reactor. Las ventanas
+ *   no son modales: se colocan alrededor de la cara, se pueden tener varias, y la
+ *   que se toca pasa al frente (`abiertas` es además el orden de pila).
+ * - Los mandos estaban regados (punto de la esquina + botón «ajustes» + teclas).
+ *   Ahora son seis accesos en un `Muelle`, con palabra en vez de glifo.
+ *
+ * Regla madre que se mantiene: **en reposo, tres cosas — el reactor, el reloj y el
+ * muelle.** Las ventanas se invocan y se despiden; nada de series aparcadas.
  */
 export default function App() {
   useEffect(connect, [])
 
-  /** La bandeja (registro + entrada) arranca guardada: la cara es el reactor. */
-  const [abierto, setAbierto] = useState(false)
-
-  /** El modal de herramientas: `null` = no existe en pantalla. */
-  const [pestana, setPestana] = useState<Pestana | null>(null)
+  /**
+   * Las ventanas abiertas, **en orden de pila**: el último elemento se pinta
+   * delante. Un array en vez de seis booleanos porque «traer al frente» sin
+   * reordenar es imposible, y porque así `abiertas.includes(id)` sigue siendo la
+   * prueba de «está abierta» sin mantener dos fuentes de verdad.
+   */
+  const [abiertas, setAbiertas] = useState<IdVentana[]>([])
 
   /**
    * El cuerpo de CORT: `null` = reactor; un nombre de archivo = proyección con
@@ -46,14 +58,24 @@ export default function App() {
   const [atuendo, setAtuendo] = useState<string | null>(null)
 
   /**
-   * Tamaño del `avatar CORT`: 1 es la figura medida en R7; la pestaña de
-   * atuendos ofrece 0,72 (compañera de escritorio) y 1,25 (protagonista).
-   * Se persigue con lerp dentro de `Vrm`, no se salta.
+   * Tamaño del `avatar CORT`: 1 es la figura medida en R7; la ventana de cuerpo
+   * ofrece 0,72 (compañera de escritorio) y 1,25 (protagonista). Se persigue con
+   * lerp dentro de `Vrm`, no se salta.
    */
   const [tamaño, setTamaño] = useState(1)
 
-  /** Contador que sube cada vez que alguien invoca la entrada (tap al núcleo o `Ctrl+/`). */
+  /** Contador que sube cada vez que alguien invoca la charla (tap al núcleo o `/`). */
   const [invocar, setInvocar] = useState(0)
+
+  const s = useSyncExternalStore(subscribe, getSnapshot)
+  const vistos = useRef(s.msgs.length)
+
+  /** La charla abierta = sus mensajes ya leídos; el badge del muelle se apaga. */
+  useEffect(() => {
+    if (abiertas.includes('charla')) vistos.current = s.msgs.length
+  }, [abiertas, s.msgs.length])
+
+  const sinLeer = Math.max(0, s.msgs.length - vistos.current)
 
   /**
    * Un `.vrm` se proyecta dentro del canvas del reactor; una imagen se pinta
@@ -73,79 +95,90 @@ export default function App() {
     setZoom(esModelo ? 0.55 : 1)
   }, [atuendo, esModelo])
 
-  function invocarEntrada() {
-    setPestana(null)
-    setAbierto(true)
-    setInvocar((n) => n + 1)
+  /** Abrir (o traer al frente si ya estaba). Es lo que hace `/` y un toque al núcleo. */
+  function abrir(id: IdVentana) {
+    setAbiertas((prev) => [...prev.filter((x) => x !== id), id])
+    if (id === 'charla') setInvocar((n) => n + 1)
+  }
+
+  /** El muelle: si está abierta, la despide; si no, la abre. */
+  function conmutar(id: IdVentana) {
+    setAbiertas((prev) => (prev.includes(id) ? cerrarDeLista(prev, id) : [...prev, id]))
+    if (id === 'charla') setInvocar((n) => n + 1)
+  }
+
+  function cerrar(id: IdVentana) {
+    setAbiertas((prev) => cerrarDeLista(prev, id))
   }
 
   useEffect(() => {
     function teclas(e: KeyboardEvent) {
       if (e.key === 'Escape') {
-        // El `Esc` jerárquico: primero despide el modal, y sólo si no hay modal
-        // guarda la bandeja. Cerrar las dos superficies de un golpe obligaría a
-        // reabrir todo para seguir leyendo.
-        if (pestana) setPestana(null)
-        else setAbierto(false)
+        // Cerrar la de enfrente, no todas de un golpe: si hubiera tres ventanas
+        // abiertas, `Esc` debería vaciar la pantalla y obligar a reabrirlas una
+        // por una para seguir trabajando.
+        setAbiertas((prev) => prev.slice(0, -1))
         return
       }
       if ((e.ctrlKey || e.metaKey) && e.key === '/') {
         e.preventDefault()
-        invocarEntrada()
+        abrir('charla')
         return
       }
-      // El teclado es de primera clase, como prometía `v0.10` («se llega con tres
-      // manos»): `/` invoca la entrada y `1`–`5` saltan a las cinco pestañas del
-      // modal. Con la mano ya en el teclado no se busca un botón de 46 px. La
-      // guarda del `target` es para que escribir '/' o un número DENTRO del campo
-      // siga siendo escribir, no invocar.
+      // El teclado es de primera clase: `/` invoca la charla y `1`–`6` levantan
+      // las seis ventanas. Con la mano en el teclado no se busca un blanco de
+      // 44 px. La guarda del `target` es para que escribir '/' o un número
+      // DENTRO del campo siga siendo escribir, no invocar.
       if (e.ctrlKey || e.metaKey || e.altKey) return
       const t = e.target as HTMLElement | null
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
       if (e.key === '/') {
         e.preventDefault()
-        invocarEntrada()
+        abrir('charla')
         return
       }
       if (e.key === '?') {
-        setPestana('ayuda')
+        abrir('ayuda')
         return
       }
-      const PESTANAS_TECLA = ['voz', 'camara', 'atuendos', 'sistema', 'ayuda'] as const
+      const ORDEN: IdVentana[] = ['charla', 'voz', 'camara', 'cuerpo', 'sistema', 'ayuda']
       const n = Number(e.key)
-      if (n >= 1 && n <= PESTANAS_TECLA.length) setPestana(PESTANAS_TECLA[n - 1])
+      if (n >= 1 && n <= ORDEN.length) abrir(ORDEN[n - 1])
     }
     window.addEventListener('keydown', teclas)
     return () => window.removeEventListener('keydown', teclas)
-  }, [pestana])
+  }, [])
 
   return (
     <>
-      <Scene atuendo={atuendo} tamaño={tamaño} onFallo={() => setAtuendo(null)} onInvocar={invocarEntrada} />
+      <Scene atuendo={atuendo} tamaño={tamaño} onFallo={() => setAtuendo(null)} onInvocar={() => abrir('charla')} />
       <div className="scan" aria-hidden="true" />
       {!esModelo && atuendo && <Avatar nombre={atuendo} onFallo={() => setAtuendo(null)} />}
       <Cabecera />
-      {/* El subtítulo no se pinta con la bandeja abierta: sería la misma frase
-          dos veces, una encima de la otra. */}
-      <Respuesta visible={!abierto} onAbrir={() => setAbierto(true)} />
-      <Hud abierto={abierto} invocar={invocar} onAbrirPanel={(p) => setPestana(p ?? 'voz')} />
-      <Bandeja abierto={abierto} onToggle={() => setAbierto((v) => !v)} />
-      {pestana && (
-        <Panel
-          pestana={pestana}
-          onPestana={setPestana}
-          onCerrar={() => setPestana(null)}
-          atuendo={atuendo}
-          onAtuendo={setAtuendo}
-          tamaño={tamaño}
-          onTamaño={setTamaño}
-        />
-      )}
+      {/* El subtítulo no se pinta con la charla abierta: sería la misma frase dos
+          veces, una encima de la otra. */}
+      <Respuesta visible={!abiertas.includes('charla')} onAbrir={() => abrir('charla')} />
+      <Ventanas
+        abiertas={abiertas}
+        onCerrar={cerrar}
+        onTraer={abrir}
+        invocar={invocar}
+        atuendo={atuendo}
+        onAtuendo={setAtuendo}
+        tamaño={tamaño}
+        onTamaño={setTamaño}
+      />
+      <Muelle abiertas={abiertas} sinLeer={sinLeer} onConmutar={conmutar} />
       {/* Va siempre montada y no se pinta casi nunca: devuelve `null` mientras no
-          haya cuenta atrás. El temporizador no es un panel que se abre, es un
+          haya cuenta atrás. El temporizador no es una ventana que se abre, es un
           número que aparece cuando se pide. */}
       <Temporizador />
       <Effects />
     </>
   )
+}
+
+/** Filtrar sin mutar: React vería el mismo array y no pintaría nada. */
+function cerrarDeLista(prev: IdVentana[], id: IdVentana): IdVentana[] {
+  return prev.filter((x) => x !== id)
 }

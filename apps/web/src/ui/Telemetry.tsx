@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { getSnapshot, subscribe } from '../cort/connection'
-import { palette } from '../cort/palette'
+import { DEFAULT_OUTFIT, palette } from '../cort/palette'
 
 /**
  * Telemetría: lo que CORT sabe de sí mismo.
@@ -49,7 +49,7 @@ export function Telemetry() {
   // El tinte viene del atuendo, como en el HUD: el panel es parte del mismo
   // cuerpo y si fuera siempre del mismo cyan, cambiar de atuendo se leería
   // como un fallo del panel.
-  const tint = palette[s.outfit] ?? palette.work
+  const tint = palette[s.outfit] ?? palette[DEFAULT_OUTFIT]
 
   return (
     <div
