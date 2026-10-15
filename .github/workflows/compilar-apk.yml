@@ -19,6 +19,16 @@
 # fusionar los dos pipelines: si un día el SDK del runner se rompe, la Release
 # de texto sigue saliendo igual—.
 #
+# Por qué también busca la etiqueta cuando el evento es `main` (medido el
+# 2026-10-15 con v0.14.0): `publicar-release.yml` se dispara con el `push` de
+# `main` y llama a `gh release create v0.14.0`, que **crea la etiqueta él solo**
+# sobre el commit si no existía. Ese corte no generó ningún evento de etiqueta,
+# así que el APK se compiló verde y se quedó sin subir: la página salió con su
+# texto y sus `.zip` de fuente, pero sin `CORT-v0.14.0.apk`. Desde este fix el
+# paso, si va por rama, pregunta a la API de tags qué etiqueta apunta a *este*
+# commit y sube a esa página. Compilar tarda minuto y pico, y la Release se abre
+# en cinco segundos: la carrera está a favor, no en contra.
+#
 # La firma es desechable **mientras no haya secreto** `CORT_APK_KEYSTORE_B64` en
 # el repo: cada APK sale con una llave nueva y hay que desinstalar el anterior
 # para instalar el nuevo. Con el secreto puesto, `compilar.sh` firma con la
@@ -93,13 +103,34 @@ jobs:
             apps/apk/build/CORT.apk
             apps/apk/build/firma.txt
 
-      - name: Subirlo a la Release (sólo cuando se empuja una etiqueta)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Subirlo a la Release (cuando este commit tiene etiqueta)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          etiqueta="$GITHUB_REF_NAME"
+          etiqueta=""
+          case "${GITHUB_REF_NAME:-}" in
+            v*) etiqueta="$GITHUB_REF_NAME" ;;
+            *)
+              # Evento de rama: buscar la etiqueta que apunta a ESTE commit. La
+              # crea `publicar-release.yml` con `gh release create` si no existía,
+              # y eso no dispara ningún evento de etiqueta — por eso el APK de
+              # v0.14.0 se quedó sin subir el 2026-10-15.
+              etiqueta="$(gh api "repos/$GITHUB_REPOSITORY/tags?per_page=20" \
+                | python3 -c '
+          import json, os, sys
+          sha = os.environ["GITHUB_SHA"]
+          for t in json.load(sys.stdin):
+              if t["commit"]["sha"] == sha:
+                  print(t["name"])
+                  break
+          ')"
+              ;;
+          esac
+          if [ -z "$etiqueta" ]; then
+            echo "Sin etiqueta sobre ${GITHUB_SHA:0:7}: el APK queda sólo como artefacto del run."
+            exit 0
+          fi
           # Esperar a `publicar-release.yml` abra la página (máx. 10 min).
           for i in $(seq 1 60); do
             if gh release view "$etiqueta" >/dev/null 2>&1; then
@@ -107,7 +138,10 @@ jobs:
             fi
             sleep 10
           done
-          gh release view "$etiqueta" >/dev/null
+          if ! gh release view "$etiqueta" >/dev/null 2>&1; then
+            echo "::error::no hay Release para $etiqueta tras 10 min de espera — revisar publicar-release.yml"
+            exit 1
+          fi
           # Nombre con la versión dentro: es lo que se toca desde el teléfono y
           # tiene que decir qué es sin abrir el gestor de archivos.
           cp apps/apk/build/CORT.apk "CORT-$etiqueta.apk"
