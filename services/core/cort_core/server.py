@@ -21,6 +21,7 @@ from .outfit import pick_outfit
 from .status import build as status_payload
 from . import weather
 from . import affect
+from . import agente
 from . import avatars
 from . import brain
 from . import audit
@@ -28,6 +29,8 @@ from . import initiative
 from . import planner
 from . import security
 from . import timer
+from . import agenda as agenda_mod
+from . import herramientas
 
 app = FastAPI(title="CORT core")
 
@@ -172,6 +175,192 @@ async def get_avatar(nombre: str, solicitud: Request):
                         headers={"Access-Control-Allow-Origin": "*"})
 
 
+# -- La agenda y el asistente -------------------------------------------------------
+# Creadas al primer uso y no al importar: así las pruebas no tocan el
+# `data/agenda.json` de nadie, y cambiar `CORT_AGENDA_FILE` en el `.env` vale.
+_agenda: agenda_mod.Agenda | None = None
+
+
+def get_agenda() -> agenda_mod.Agenda:
+    global _agenda
+    if _agenda is None:
+        _agenda = agenda_mod.Agenda()
+    return _agenda
+
+
+def herr_ctx() -> herramientas.Contexto:
+    """El contexto de las herramientas: el sistema de verdad. Las pruebas lo sustituyen."""
+    return herramientas.Contexto(agenda=get_agenda(), musica=os.getenv("CORT_MUSIC", "spotify").strip().lower())
+
+
+def _herramientas_activas() -> bool:
+    return os.getenv("CORT_TOOLS", "1") != "0"
+
+
+#: Las conexiones abiertas: la alarma suena en todas las pestañas que haya.
+CONEXIONES: set = set()
+_vigilante: dict = {"loop": None, "tarea": None, "evento": None}
+
+
+async def _difundir(cuadro: dict) -> bool:
+    """Manda un cuadro a todas las conexiones. `True` si al menos una lo recibió."""
+    entregado = False
+    for sock in list(CONEXIONES):
+        try:
+            await sock.send_json(cuadro)
+            entregado = True
+        except Exception:
+            # Una pestaña que se cerró entre la lista y el envío: se olvida.
+            CONEXIONES.discard(sock)
+    return entregado
+
+
+async def _entregar_vencidos() -> None:
+    """Avisa lo que ya tocaba. Si no hay nadie con la cara abierta, **se queda
+    pendiente** y se avisa al conectarse: marcarlo entregado sin entregarlo sería
+    perder la alarma sin decirlo."""
+    ag = get_agenda()
+    ahora = datetime.now()
+    for item in ag.vencidos(ahora):
+        tarde = (ahora - datetime.fromisoformat(item["cuando"])).total_seconds() > 120
+        if not await _difundir(agenda_mod.marco(item, atrasada=tarde)):
+            return
+        ag.marcar_entregado(item["id"])
+
+
+async def _vigilar_agenda(evento: asyncio.Event) -> None:
+    """Duerme exactamente hasta el próximo aviso. Con la agenda vacía duerme hasta
+    que alguien añada algo: en reposo no hay reloj contando ni sondeo."""
+    while True:
+        espera = get_agenda().segundos_hasta_proximo(datetime.now())
+        try:
+            await asyncio.wait_for(evento.wait(), timeout=None if espera is None else min(espera + 0.05, 3600))
+        except asyncio.TimeoutError:
+            pass
+        evento.clear()
+        await _entregar_vencidos()
+
+
+def _asegurar_vigilante() -> None:
+    """Un solo vigilante por bucle de eventos (y se rehace si el bucle cambió o la
+    tarea murió: así vale igual con el servidor real que con las pruebas)."""
+    loop = asyncio.get_running_loop()
+    v = _vigilante
+    if v["tarea"] is None or v["tarea"].done() or v["loop"] is not loop:
+        v["loop"], v["evento"] = loop, asyncio.Event()
+        v["tarea"] = loop.create_task(_vigilar_agenda(v["evento"]))
+
+
+def _despertar_vigilante() -> None:
+    if _vigilante["evento"] is not None:
+        _vigilante["evento"].set()
+
+
+async def _correr_cronometro(sock: WebSocket) -> None:
+    """Cuenta hacia arriba, un cuadro por segundo, hasta que se cancele. Como la
+    cuenta atrás: existe sólo mientras corre, y `CancelledError` se propaga."""
+    inicio = time.monotonic()
+    try:
+        while True:
+            await sock.send_json({"type": "timer", "estado": "sube", "total": 0,
+                                  "restante": int(time.monotonic() - inicio)})
+            await asyncio.sleep(1.0)
+    except (WebSocketDisconnect, RuntimeError):
+        return
+
+
+async def _una_herramienta(sock: WebSocket, crono: dict, llamada: dict) -> tuple[bool, str]:
+    """Ejecuta **una** llamada ya validada y manda su efecto. Devuelve (ok, texto).
+
+    Vive aparte del bucle de `_ejecutar_herramientas` porque el lazo de
+    `agente.turno` ejecuta de a una: el modelo ve el resultado, decide el
+    siguiente paso, y ese paso se ejecuta y se pinta en el momento. Un turno
+    puede ahora emitir varios marcos `effect` —no hay marco nuevo en el
+    protocolo (regla 5), sólo repetición de los que la interfaz ya entiende—.
+    """
+    res = herramientas.ejecutar(llamada, herr_ctx())
+    orden = res.extra.get("cronometro")
+    if orden:
+        await _mandar_cronometro(sock, crono, orden)
+    if res.extra.get("agenda") is not None:
+        _despertar_vigilante()
+    await sock.send_json({"type": "effect", "kind": "pulse" if res.ok else "glitch"})
+    return res.ok, res.texto
+
+
+async def _ejecutar_herramientas(sock: WebSocket, llamadas: list[dict], crono: dict) -> tuple[str, list]:
+    """Ejecuta llamadas **validadas** y cuenta lo que pasó. Devuelve (texto, hechos).
+
+    La frase de cierre la decide `planner.dicho`: con un paso, la magnitud
+    medida de la acción («Volumen al 45 %.»); con varios, el recuento. Los
+    `hechos` salen también porque la cara (`senal`) se decide con lo medido,
+    no con la prosa.
+    """
+    hechos = []
+    for llamada in llamadas:
+        ok, texto = await _una_herramienta(sock, crono, llamada)
+        hechos.append((herramientas.etiqueta(llamada), ok, texto))
+    return planner.dicho(hechos), hechos
+
+
+async def _cabos_al_modelo(sock: WebSocket, crono: dict, text: str, cabos: list[str],
+                           dicho: str, actividad: dict, history: list[dict]) -> str:
+    """La parte del mensaje que las reglas no entendieron se le pregunta al
+    modelo, con lo ya ejecutado de contexto. Es el puente del plan parcial:
+    «abre YouTube y cuéntame un chiste» abre YouTube por reglas y deja el
+    chiste donde vive —la conversación—.
+
+    Sin nube configurada no hay a quién preguntar con decencia: un turno local
+    cuesta 15-60 s medidos y respondería eco, así que se dice literalmente qué
+    no se supo hacer. Prometerlo igual y devolver «Dijiste:» sería ruido.
+    """
+    if brain.provider() == "ollama":
+        return " Y no supe cómo hacer: " + ", ".join(cabos) + "."
+    nota = ("Acciones ya hechas en este mensaje: " + dicho + ". "
+            "Responde SÓLO a la parte que falta de la petición de la usuaria; "
+            "si no puedes hacerla, dilo breve y en español.")
+    await sock.send_json(state(thinking=True))
+    actividad["ocupada"] = True
+    try:
+        extra = await think([{"role": "system", "content": nota},
+                             {"role": "user", "content": text}])
+    finally:
+        actividad["ocupada"] = False
+    # El modelo puede proponer una herramienta para el cabo: pasa por la misma
+    # validación que todo lo que propone, y lo que se muestra es lo medido.
+    propuesta = herramientas.extraer_llamada(extra) if _herramientas_activas() else None
+    if propuesta is not None:
+        llamada, motivo = herramientas.validar(propuesta)
+        if llamada:
+            extra, _ = await _ejecutar_herramientas(sock, [llamada], crono)
+        else:
+            extra = f"No pude hacer eso: {motivo}."
+    if not extra:
+        return ""
+    history.append({"role": "user", "content": text})
+    history.append({"role": "assistant", "content": extra})
+    return " Y " + extra
+
+
+async def _mandar_cronometro(sock: WebSocket, crono: dict, orden: str) -> None:
+    """Iniciar, parar o reiniciar. El estado vive en la conexión, igual que la cuenta atrás."""
+    tarea = crono.get("tarea")
+    if orden in ("parar", "reiniciar") and tarea is not None and not tarea.done():
+        tarea.cancel()
+        crono["tarea"] = None
+        if orden == "parar":
+            seg = int(time.monotonic() - crono["inicio"])
+            await sock.send_json({"type": "timer", "estado": "para", "total": 0, "restante": seg})
+            return
+    if orden in ("iniciar", "reiniciar"):
+        if tarea is not None and not tarea.done():
+            tarea.cancel()
+        crono["inicio"] = time.monotonic()
+        crono["tarea"] = asyncio.create_task(_correr_cronometro(sock))
+    elif orden == "parar":
+        await sock.send_json({"type": "timer", "estado": "cancela", "total": 0, "restante": 0})
+
+
 async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
     """El turno de reloj de una conexión: mira, propone y calla. **No ejecuta nada.**
 
@@ -235,6 +424,8 @@ async def ws(sock: WebSocket):
         await sock.close(code=4401)
         return
     await sock.accept()
+    CONEXIONES.add(sock)
+    _asegurar_vigilante()
     history: list[dict] = []
     name = memory.name_of_user()
     # El reloj de la conexión: cuándo habló por última vez quien está al otro
@@ -247,6 +438,9 @@ async def ws(sock: WebSocket):
     # temporizadores a la vez se verían como dos reloles peleando en la pantalla,
     # y en esta máquina cada uno es una tarea y cuadros por segundo.
     cuenta: dict = {"tarea": None}
+    # El cronómetro de esta conexión: igual que la cuenta atrás, una tarea que existe
+    # sólo mientras corre.
+    crono: dict = {"tarea": None, "inicio": 0.0}
     await sock.send_json(state())
     # `greeting` y no `assistant_message`: el saludo es lo que CORT dice al
     # *presentarse*, y una reconexión no es una presentación. Medido en el
@@ -260,6 +454,8 @@ async def ws(sock: WebSocket):
     # Después del saludo, no antes: `count()` es una lectura al disco, y lo
     # primero que debe notar quien abre la página es que CORT contesta.
     await sock.send_json(status_payload(memory, MEMORY_KEEP))
+    # Lo que sonó mientras no había nadie mirando se avisa ahora.
+    _despertar_vigilante()
     try:
         while True:
             msg = await sock.receive_json()
@@ -307,6 +503,30 @@ async def ws(sock: WebSocket):
                                                   "Temporizador cancelado.",
                                                   senal="cancelado"))
                 continue
+            # Las herramientas se miran después de «cancela» y **antes** que la cuenta
+            # atrás y que las órdenes antiguas: «pon música de X» no es «reproduce» (una
+            # tecla), y «pon una alarma a las 7» no es una cuenta atrás. Sin modelo y sin
+            # internet: es lo que hace que «abre YouTube» funcione aunque la nube no.
+            # `entender_plan` en vez de `entender`: si un trozo de la frase no se
+            # entiende, no se tira el plan completo —se hacen las partes que se saben
+            # y el cabo suelto se le pregunta al modelo (o se dice, sin nube)—.
+            if _herramientas_activas():
+                llamadas, cabos = herramientas.entender_plan(text, herr_ctx())
+                if llamadas:
+                    dicho, hechos = await _ejecutar_herramientas(sock, llamadas, crono)
+                    if cabos:
+                        dicho += await _cabos_al_modelo(sock, crono, text, cabos,
+                                                        dicho, actividad, history)
+                    # La cara la decide lo medido, igual que el plan antiguo de
+                    # `intents`: un paso bien es `logro`; varios con uno caído,
+                    # `plan_con_fallo` aunque el texto suene entero.
+                    todos_ok = all(ok for _, ok, _ in hechos)
+                    await sock.send_json(affect.marco(
+                        "assistant_message", dicho,
+                        senal=("logro" if todos_ok else "fallo") if len(hechos) == 1
+                        else ("plan_completo" if todos_ok else "plan_con_fallo")))
+                    await sock.send_json(status_payload(memory, MEMORY_KEEP))
+                    continue
             segundos = timer.parse(text)
             if segundos:
                 if en_marcha:
@@ -377,7 +597,17 @@ async def ws(sock: WebSocket):
             # la respuesta que la usuaria está esperando.
             actividad["ocupada"] = True
             try:
-                reply = await think([*context, *history[-20:]])
+                # `agente.turno` en vez de un `think` con una sola propuesta:
+                # cada herramienta que el modelo propone se ejecuta, se mide,
+                # y **el resultado le vuelve** para que decida el siguiente
+                # paso o cierre. Tope: `PASOS_MAX` llamadas y turnos. Sin
+                # llamadas, el turno es exactamente la conversación de siempre.
+                if _herramientas_activas():
+                    reply, _hechos = await agente.turno(
+                        [*context, *history[-20:]], think=think,
+                        ejecutar=lambda llamada: _una_herramienta(sock, crono, llamada))
+                else:
+                    reply = await think([*context, *history[-20:]])
             finally:
                 actividad["ocupada"] = False
             history.append({"role": "assistant", "content": reply})
@@ -411,6 +641,9 @@ async def ws(sock: WebSocket):
         # CORT hablando hacia una pestaña que ya no está — y una tarea por cada
         # pestaña abierta y cerrada, acumulada de por vida.
         tarea.cancel()
+        CONEXIONES.discard(sock)
+        if crono["tarea"] is not None:
+            crono["tarea"].cancel()
         # Lo mismo con la cuenta atrás: sin esto, un temporizador de una hora
         # seguiría enviando cuadros a una conexión cerrada durante una hora.
         if cuenta["tarea"] is not None:

@@ -149,7 +149,7 @@ class TestEntender(Base):
             ("anota que debo pagar el recibo", [("nota", {"texto": "debo pagar el recibo"})]),
             ("sube el volumen", [("volumen", {"orden": "subir"})]),
             ("pausa", [("multimedia", {"orden": "play_pausa"})]),
-            ("ok viernes abre spotify", [("spotify", {})]),
+            ("ok cort abre spotify", [("spotify", {})]),
         ]:
             with self.subTest(texto):
                 self.assertEqual(self.llamadas(texto), esperado)
@@ -403,7 +403,7 @@ class TestHoraYFecha(Base):
 
     def test_con_cortesia_y_con_otra_orden_al_lado(self):
         self.assertEqual(self.di("por favor, ¿qué hora es?").texto, "Son las 9:30 p. m.")
-        self.assertEqual(self.di("ok viernes qué hora es, por favor").texto, "Son las 9:30 p. m.")
+        self.assertEqual(self.di("ok cort qué hora es, por favor").texto, "Son las 9:30 p. m.")
         # Con otra orden en la misma frase no se contesta sólo la hora: se deja al plan.
         self.ctx.windows = False
         self.assertEqual(h.entender("¿qué hora es y sube el volumen?", self.ctx), [])

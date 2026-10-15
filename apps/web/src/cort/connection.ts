@@ -54,13 +54,16 @@ function readStatus(m: any): Status {
 }
 
 /**
- * Cuenta atrás en marcha, o `null`. **No hay reloj en el navegador**: este
- * objeto se escribe sólo cuando llega un cuadro del core, así que en reposo no
- * hay ningún `setInterval` contando, ni un nodo que repintar, ni memoria viva.
+ * Cuenta atrás o cronómetro en marcha, o `null`. **No hay reloj en el navegador**:
+ * este objeto se escribe sólo cuando llega un cuadro del core, así que en reposo
+ * no hay ningún `setInterval` contando, ni un nodo que repintar, ni memoria viva.
  * Y si el core se cae, la cuenta se apaga con él — un temporizador que sigue
  * contando sin servidor es un reloj que miente.
+ *
+ * `corre`/`termina` son la cuenta atrás de siempre; `sube`/`para` son el
+ * cronómetro: el core lleva el tiempo y aquí sólo cambia el número que se pinta.
  */
-export type Crono = { restante: number; total: number; estado: 'corre' | 'termina' }
+export type Crono = { restante: number; total: number; estado: 'corre' | 'termina' | 'sube' | 'para' }
 
 export type Snapshot = {
   online: boolean
@@ -330,11 +333,31 @@ function open() {
       set({ avatars: Array.isArray(m.items) ? m.items.filter((i: any) => typeof i?.nombre === 'string') : [] })
     // El temporizador viaja como cuadro propio y no como mensaje de texto: lo
     // que pinta es un número que baja, no una frase. `cancela` borra el nodo,
-    // `termina` lo deja en cero para que la interfaz pueda avisar y apagarse.
+    // `termina` lo deja en cero para que la interfaz pueda avisar y apagarse,
+    // y `sube`/`para` son el cronómetro: el mismo cuadro con el tiempo contando
+    // hacia arriba. Un estado desconocido se pinta como `corre` en vez de
+    // desaparecer — es lo que ya hacía esta línea antes del cronómetro.
     if (m.type === 'timer') {
       const restante = Number.isFinite(m.restante) ? m.restante : 0
       if (m.estado === 'cancela') set({ crono: null })
-      else set({ crono: { restante, total: Number.isFinite(m.total) ? m.total : restante, estado: m.estado === 'termina' ? 'termina' : 'corre' } })
+      else {
+        const estados = ['termina', 'sube', 'para'] as const
+        const estado = (estados as readonly string[]).includes(m.estado)
+          ? (m.estado as (typeof estados)[number])
+          : 'corre'
+        set({ crono: { restante, total: Number.isFinite(m.total) ? m.total : restante, estado } })
+      }
+    }
+    // `alarm` es la agenda sonando: el core ya armó la frase, y la cara la pinta
+    // como una línea del chat. `atrasada` se muestra porque «suena ahora pero
+    // eran las 7» es información que la usuaria necesita, no un detalle técnico.
+    if (m.type === 'alarm' && typeof m.texto === 'string') {
+      const hora = typeof m.cuando === 'string' ? `${m.cuando} · ` : ''
+      const que = m.tipo === 'recordatorio' ? 'Recordatorio' : 'Alarma'
+      set({ msgs: [...snapshot.msgs, {
+        from: 'cort',
+        text: `${hora}${que}: ${m.texto}${m.atrasada ? ' (llegó tarde)' : ''}`,
+      }] })
     }
   }
 }

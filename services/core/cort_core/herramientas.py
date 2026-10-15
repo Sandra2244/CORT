@@ -494,7 +494,7 @@ def ejecutar(llamada: dict, ctx: Contexto) -> Resultado:
             dicho = f"Alarma puesta para {cuando}." + (f" «{texto}»" if texto else "")
         else:
             dicho = f"Recordatorio para {cuando}: {texto}."
-        return Resultado(True, dicho + " (Suena si Viernes está abierta a esa hora; si no, te aviso al abrirla.)",
+        return Resultado(True, dicho + " (Suena si CORT está abierta a esa hora; si no, te aviso al abrirla.)",
                          {"agenda": item["id"]})
 
     if n == "evento_calendario":
@@ -606,7 +606,7 @@ def etiqueta(llamada: dict) -> str:
 # -- entender frases en español (sin modelo) ---------------------------------------
 
 _CORTESIA = re.compile(
-    r"^\s*(?:(?:ok|okey|okay|oye|hey|hola)\s+)?(?:viernes\b[\s,:.!-]*)?"
+    r"^\s*(?:(?:ok|okey|okay|oye|hey|hola)\s+)?(?:cort\b[\s,:.!-]*)?"
     r"(?:(?:por favor|porfa)[\s,]*)?"
     r"(?:(?:me\s+)?(?:puedes|podr[ií]as|podr[ií]a|quiero que|necesito que|quisiera que|te pido que)\s+)?",
     re.I,

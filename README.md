@@ -111,7 +111,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 
 ## Protocolo WebSocket
 
-`ws://127.0.0.1:8765/ws`, JSON plano: **once tipos**, dos entrantes y nueve salientes. Cuando el core está publicado en la red, el lazo y la ruta de archivos piden además `?token=…` (ver [La red y su llave](#la-red-y-su-llave)). Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
+`ws://127.0.0.1:8765/ws`, JSON plano: **doce tipos**, dos entrantes y diez salientes. Cuando el core está publicado en la red, el lazo y la ruta de archivos piden además `?token=…` (ver [La red y su llave](#la-red-y-su-llave)). Los tipos nuevos se escriben aquí y en `docs/ARCHITECTURE.md` **antes** de programarlos (regla 5 de `AGENTS.md`).
 
 | Tipo | Dirección | Lleva | Quién lo pinta |
 |---|---|---|---|
@@ -125,7 +125,8 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | `status` | core → cliente | `memories`, `keep`, `brain`, `ollama`, `actions`, `iniciativa` | panel de telemetría |
 | `avatars` | core → cliente | `items`: `nombre`, `mime`, `bytes` (lista vacía si no hay `CORT_AVATAR_DIR`) | mosaico táctil de atuendos. Los bytes no van por aquí: se cargan con `<img>` desde `GET /avatars/{nombre}` |
 | `proactive` | core → cliente | `text`, `mood`, `clave` | el chat, **sin que nadie haya preguntado**: es la iniciativa, y `clave` es el tema ya dicho en esta conexión para que no suene a alarma. No lleva orden ninguna — sale de `initiative.py`, que no importa `actions` y no puede ejecutar nada |
-| `timer` | core → cliente | `restante`, `total`, `estado` ∈ `corre · termina · cancela` | el anillo de cuenta atrás (`ui/Temporizador.tsx`). **Un cuadro por segundo y sólo mientras hay cuenta atrás**: no hay temporizador en el navegador, así que si el core se apaga el número se apaga con él. Sale de `timer.py`, que no importa `actions` ni `subprocess` y no puede ejecutar nada. Se pide en texto («pon un temporizador de 5 minutos») y se cancela igual |
+| `timer` | core → cliente | `restante`, `total`, `estado` ∈ `corre · termina · cancela · sube · para` | el anillo de cuenta atrás (`ui/Temporizador.tsx`), y con el asistente también el **cronómetro**: `sube` cuenta hacia arriba (`total: 0`) y `para` congela el número seis segundos. **Un cuadro por segundo y sólo mientras hay cuenta atrás o cronómetro en marcha**: no hay temporizador en el navegador, así que si el core se apaga el número se apaga con él. Sale de `timer.py` y del hueco `cronometro` de `herramientas.py`; ninguno importa `subprocess` ni puede ejecutar un mando |
+| `alarm` | core → cliente | `id`, `tipo` ∈ `alarma · recordatorio`, `texto`, `cuando`, `atrasada` | el chat: suena algo de `agenda.json`. Se difunde a **todas** las pestañas abiertas; si no había ninguna, el aviso queda pendiente y llega al conectar — una alarma nunca se da por entregada sin haberla entregado —, y `atrasada: true` dice que tocaba hace más de dos minutos |
 
 ## Voz
 
@@ -170,9 +171,9 @@ Y lo que **no** es la red: un túnel cifrado. Sin TLS el secreto va en claro por
 
 Lo que hace a esto una capa de permisos y no un `subprocess` suelto:
 
-1. **Lista cerrada.** Sólo hay cuatro mandos: `volume`, `media`, `screenshot`, `launch`. Todo lo demás responde «no está en la lista permitida» con un `glitch`, en vez de fingir un «entendido».
+1. **Lista cerrada.** `actions.py` conoce cuatro mandos (`volume`, `media`, `screenshot`, `launch`) y `herramientas.py` diecinueve herramientas con esquema; todo lo demás responde «no está en la lista permitida» con un `glitch`, en vez de fingir un «entendido».
 2. **argv fijo.** No existe `shell=True`, y ni el texto del usuario ni la salida del modelo entran en los argumentos: sólo un entero que sale de *nuestra* tabla de patrones y claves de una constante.
-3. **El LLM no tiene herramientas.** `brain.py` devuelve texto y ese texto se pinta. No hay camino del modelo al shell.
+3. **El LLM elige claves, no comandos.** Sólo puede proponer objetos `{"herramienta": …, "args": …}` de la lista cerrada, y cada propuesta pasa por la misma `validar` antes de ejecutarse. No hay camino del modelo al shell: pedirle «formatea el disco» produce un rechazo escrito, no un `subprocess`.
 4. **Se puede apagar sin tocar código:** `CORT_SYSTEM_ACTIONS=0`.
 5. **El resultado se comprueba, no se supone:** el nivel se lee antes y después, la captura se mira en disco, la app se cuenta con `pgrep`. Un `returncode` 0 no es una prueba.
 6. **Datos personales fuera de git.** La base vive en `services/core/data/` (ignorada), `.env` está ignorado, y las claves no se suben nunca. Para enseñar CORT a otra persona existe `--demo`.

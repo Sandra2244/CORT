@@ -139,5 +139,234 @@ class TestChain(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(seen["options"]["num_predict"], brain.MAX_TOKENS)
 
 
+class TestCloud(unittest.IsolatedAsyncioTestCase):
+    """La nube es opcional y nunca debe dejar a CORT callada: si falla, habla
+    la cadena local, y lo dice."""
+
+    ENV = {"CORT_LLM_PROVIDER": "anthropic", "CORT_ANTHROPIC_API_KEY": "sk-ant-PRUEBA"}
+
+    def setUp(self):
+        import os
+        from unittest import mock
+        self._chain, self._cap = brain.CHAIN, brain.MAX_MODEL_MIB
+        brain.CHAIN, brain.MAX_MODEL_MIB = ["local:1b"], 3000
+        for k in ("CORT_LLM_PROVIDER", "CORT_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY",
+                  "CORT_OPENAI_API_KEY", "CORT_OPENAI_MODEL", "CORT_OPENAI_BASE_URL",
+                  "CORT_ANTHROPIC_EFFORT", "CORT_ANTHROPIC_MODEL", "CORT_OPENAI_REASONING_EFFORT"):
+            os.environ.pop(k, None)
+        self._patch = mock.patch.dict(os.environ, {})
+        self._patch.start()
+
+    def tearDown(self):
+        self._patch.stop()
+        brain.CHAIN, brain.MAX_MODEL_MIB = self._chain, self._cap
+
+    def cloud(self, status=200, text="hola desde la nube", seen=None, local=None):
+        def handler(request):
+            if request.url.host == "api.anthropic.com":
+                if seen is not None:
+                    seen.update(headers=dict(request.headers), body=json.loads(request.content))
+                if status != 200:
+                    return httpx.Response(status, json={"error": {"message": "credit balance is too low"}})
+                return httpx.Response(200, json={"content": [{"type": "text", "text": text}]})
+            if request.url.path == "/api/tags":
+                return httpx.Response(200, json={"models": [model("local:1b", 300)]})
+            if local is not None:
+                local.append(1)
+            return httpx.Response(200, json={"message": {"content": "respuesta local"}})
+        return httpx.MockTransport(handler)
+
+    async def run_think(self, transport_, history=None):
+        async with httpx.AsyncClient(transport=transport_) as client:
+            return await brain.think(history or [{"role": "user", "content": "hola"}], client)
+
+    async def test_default_is_local_and_never_touches_the_cloud(self):
+        hosts = []
+        def handler(request):
+            hosts.append(request.url.host)
+            if request.url.path == "/api/tags":
+                return httpx.Response(200, json={"models": [model("local:1b", 300)]})
+            return httpx.Response(200, json={"message": {"content": "local"}})
+        out = await self.run_think(httpx.MockTransport(handler))
+        self.assertEqual(out, "local")
+        self.assertNotIn("api.anthropic.com", hosts)
+
+    async def test_anthropic_answers_and_ollama_is_not_asked(self):
+        import os
+        os.environ.update(self.ENV)
+        local, seen = [], {}
+        out = await self.run_think(self.cloud(seen=seen, local=local))
+        self.assertEqual(out, "hola desde la nube")
+        self.assertEqual(local, [], "con la nube respondiendo no se toca Ollama")
+        self.assertEqual(brain.last_model(), "anthropic:claude-haiku-5-5")
+        self.assertEqual(seen["headers"]["x-api-key"], "sk-ant-PRUEBA")
+        self.assertEqual(seen["headers"]["anthropic-version"], "2023-06-01")
+
+    async def test_request_shape_matches_what_current_claude_models_accept(self):
+        """Los Claude recientes rechazan `temperature` y `top_p`, y el `system`
+        va aparte; un tope de 120 tokens cortaría la respuesta antes del texto."""
+        import os
+        os.environ.update(self.ENV)
+        seen = {}
+        await self.run_think(self.cloud(seen=seen))
+        b = seen["body"]
+        self.assertNotIn("temperature", b)
+        self.assertNotIn("top_p", b)
+        self.assertTrue(b["system"].startswith(brain.SYSTEM))
+        self.assertGreaterEqual(b["max_tokens"], 512)
+        self.assertEqual(b["output_config"], {"effort": "low"})
+
+    async def test_conversation_starts_with_the_user(self):
+        import os
+        os.environ.update(self.ENV)
+        seen = {}
+        await self.run_think(self.cloud(seen=seen), [
+            {"role": "assistant", "content": "Hola, soy CORT."},
+            {"role": "user", "content": "¿qué tal?"}])
+        self.assertEqual(seen["body"]["messages"][0]["role"], "user")
+
+    async def test_effort_can_be_turned_off_for_older_models(self):
+        import os
+        os.environ.update({**self.ENV, "CORT_ANTHROPIC_EFFORT": ""})
+        seen = {}
+        await self.run_think(self.cloud(seen=seen))
+        self.assertNotIn("output_config", seen["body"])
+
+    async def test_cloud_failure_falls_back_to_local_and_says_why(self):
+        import os
+        os.environ.update(self.ENV)
+        out = await self.run_think(self.cloud(status=400))
+        self.assertTrue(out.startswith("[nube no disponible"), out)
+        self.assertIn("credit balance", out, "el motivo real ayuda a arreglarlo")
+        self.assertTrue(out.endswith("respuesta local"))
+        self.assertNotIn("sk-ant", out, "la clave jamás sale en un mensaje")
+        self.assertEqual(brain.last_model(), "local:1b")
+
+    async def test_rejected_key_is_reported_as_such(self):
+        import os
+        os.environ.update(self.ENV)
+        out = await self.run_think(self.cloud(status=401))
+        self.assertIn("clave rechazada", out)
+
+    async def test_missing_key_is_reported_without_calling_the_cloud(self):
+        import os
+        os.environ["CORT_LLM_PROVIDER"] = "anthropic"
+        hosts = []
+        base = self.cloud()
+        def handler(request):
+            hosts.append(request.url.host)
+            return base.handle_request(request)
+        out = await self.run_think(httpx.MockTransport(handler))
+        self.assertIn("falta CORT_ANTHROPIC_API_KEY", out)
+        self.assertNotIn("api.anthropic.com", hosts)
+
+    async def test_empty_cloud_answer_counts_as_a_failure(self):
+        import os
+        os.environ.update(self.ENV)
+        out = await self.run_think(self.cloud(text=""))
+        self.assertIn("vacía", out)
+
+    async def test_gemini_style_list_error_body_still_explains_itself(self):
+        """Gemini manda el error dentro de una lista. Un 404 por «el modelo ya
+        no existe» salía como «error 404», sin motivo, y no había por dónde
+        empezar a arreglarlo."""
+        import os
+        os.environ.update({"CORT_LLM_PROVIDER": "openai", "CORT_OPENAI_API_KEY": "AIza-SECRETA",
+                           "CORT_OPENAI_MODEL": "gemini-viejo"})
+        def handler(request):
+            if request.url.host == "generativelanguage.googleapis.com":
+                return httpx.Response(404, json=[{"error": {"code": 404, "message":
+                    "models/gemini-viejo is no longer available. Key AIza-SECRETA"}}])
+            if request.url.path == "/api/tags":
+                return httpx.Response(200, json={"models": [model("local:1b", 300)]})
+            return httpx.Response(200, json={"message": {"content": "respuesta local"}})
+        os.environ["CORT_OPENAI_BASE_URL"] = "https://generativelanguage.googleapis.com/v1beta/openai/"
+        out = await self.run_think(httpx.MockTransport(handler))
+        self.assertIn("error 404", out)
+        self.assertIn("gemini-viejo is no longer available", out)
+        self.assertNotIn("AIza-SECRETA", out, "ni aunque el proveedor la repita")
+
+    async def test_plain_text_error_body_is_shown_too(self):
+        import os
+        os.environ.update(self.ENV)
+        def handler(request):
+            if request.url.host == "api.anthropic.com":
+                return httpx.Response(502, text="Bad gateway")
+            if request.url.path == "/api/tags":
+                return httpx.Response(200, json={"models": [model("local:1b", 300)]})
+            return httpx.Response(200, json={"message": {"content": "respuesta local"}})
+        out = await self.run_think(httpx.MockTransport(handler))
+        self.assertIn("error 502: Bad gateway", out)
+
+    def test_system_prompt_tells_the_model_what_time_it_is(self):
+        """Sin esto, «¿qué hora es?» recibía «no tengo acceso a la hora»."""
+        import os
+        from datetime import datetime
+        from unittest import mock
+        with mock.patch.dict(os.environ, {"CORT_CITY": "Bogota"}):
+            texto = brain.system()
+        ahora = datetime.now().astimezone()
+        self.assertTrue(texto.startswith(brain.SYSTEM))
+        self.assertIn("Fecha y hora actuales", texto)
+        self.assertIn(str(ahora.year), texto)
+        self.assertIn(f"{ahora:%H:%M}", texto)
+        self.assertIn("Bogota", texto)
+
+    def test_system_prompt_without_a_city_does_not_invent_one(self):
+        import os
+        from unittest import mock
+        env = {k: v for k, v in os.environ.items() if k != "CORT_CITY"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            self.assertNotIn("La usuaria está en", brain.system())
+
+    async def test_openai_compatible_endpoint(self):
+        import os
+        os.environ.update({"CORT_LLM_PROVIDER": "openai", "CORT_OPENAI_API_KEY": "gsk-PRUEBA",
+                           "CORT_OPENAI_MODEL": "modelo-x",
+                           "CORT_OPENAI_BASE_URL": "https://api.groq.com/openai/v1/"})
+        seen = {}
+        def handler(request):
+            seen.update(url=str(request.url), auth=request.headers["authorization"],
+                        body=json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "hola compatible"}}]})
+        out = await self.run_think(httpx.MockTransport(handler))
+        self.assertEqual(out, "hola compatible")
+        self.assertEqual(seen["url"], "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(seen["auth"], "Bearer gsk-PRUEBA")
+        self.assertEqual(seen["body"]["messages"][0]["role"], "system")
+        self.assertIn("max_tokens", seen["body"])
+        self.assertEqual(brain.last_model(), "openai:modelo-x")
+
+    async def test_reasoning_effort_is_sent_only_when_asked_for(self):
+        import os
+        base = {"CORT_LLM_PROVIDER": "openai", "CORT_OPENAI_API_KEY": "k", "CORT_OPENAI_MODEL": "m",
+                "CORT_OPENAI_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai/"}
+        seen = {}
+        def handler(request):
+            seen.update(url=str(request.url), body=json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        os.environ.update(base)
+        await self.run_think(httpx.MockTransport(handler))
+        self.assertNotIn("reasoning_effort", seen["body"])
+        self.assertEqual(seen["url"],
+                         "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+        os.environ["CORT_OPENAI_REASONING_EFFORT"] = "low"
+        await self.run_think(httpx.MockTransport(handler))
+        self.assertEqual(seen["body"]["reasoning_effort"], "low")
+        os.environ.pop("CORT_OPENAI_REASONING_EFFORT", None)
+
+    async def test_openai_proper_uses_the_new_token_cap_name(self):
+        import os
+        os.environ.update({"CORT_LLM_PROVIDER": "openai", "CORT_OPENAI_API_KEY": "k",
+                           "CORT_OPENAI_MODEL": "m"})
+        seen = {}
+        def handler(request):
+            seen.update(body=json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        await self.run_think(httpx.MockTransport(handler))
+        self.assertIn("max_completion_tokens", seen["body"])
+        self.assertNotIn("max_tokens", seen["body"])
+
+
 if __name__ == "__main__":
     unittest.main()
