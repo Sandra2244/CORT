@@ -35,7 +35,7 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
 > leyendo una log que es privada.
 
-**La lista de tareas para cortar la siguiente (v0.14.4), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.14.5), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -50,21 +50,64 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
 3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
-   ve que `v0.14.4` tiene sección y no tiene página, llama a `gh release create v0.14.4` —que crea la
+   ve que `v0.14.5` tiene sección y no tiene página, llama a `gh release create v0.14.5` —que crea la
    etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
    `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
    `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
    apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
-   `CORT-v0.14.4.apk` y su `CORT-v0.14.4-firma.txt` a esa Release. Etiquetar a mano
-   (`git tag v0.14.4 && git push origin v0.14.4`) sigue siendo válido y dispara el mismo camino por la
+   `CORT-v0.14.5.apk` y su `CORT-v0.14.5-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.14.5 && git push origin v0.14.5`) sigue siendo válido y dispara el mismo camino por la
    vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
    sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.4 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.5 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.14.4` — el teléfono abre CORT sin que nadie pegue nada
+
+Después de `v0.14.0` quedaba un muro de tamaño teclado: la primera pantalla del APK **es** la cara de
+CORT, pero para verla funcionar hay que **leer** un enlace en la terminal del portátil y **copiarlo** en
+el teléfono. Este corte quita ese último tecleo con dos datagramas, y lo hace enseñando la animación en
+vez que el formulario.
+
+- **El protocolo**, escrito en `docs/ARCHITECTURE.md` antes de codificarse (regla 5): sonda
+  `CORT-ENCONTRARSO-1` al broadcast `:8781`, respuesta `CORT-AQUI-1|http://<ip>:8780/?token=…`. No hay
+  HTTP ni core en el medio: pregunta el teléfono y contesta **el lanzador**, que es el que sabe la IP, el
+  puerto y la llave. El 8781 es un puerto aparte — el 8780 sigue siendo la página y el 8765 el WebSocket.
+- **El coste está dicho con todas sus letras**: la respuesta lleva la llave, así que quien esté **dentro
+  de la misma Wi-Fi** y sepa la mágica la recibe. Es una decisión tomada, no un descuido: `--lan` ya
+  publica el puerto a esa Wi-Fi y el enlace ya viaja en claro, sin HTTPS. Contra eso hay tres frenos —
+  sólo se responde con `--lan` publicado y la página en modo `dist`, **cada respuesta se imprime en la
+  terminal con la IP que la pidió** («a quién le di la llave» se ve), y `--sin-descubrimiento` o
+  `CORT_LAN_DISCOVER=0` apagan el puerto sin tocar nada más.
+- **En el teléfono**: el anillo girando con «Buscando a CORT en tu Wi-Fi…», tres intentos de 900 ms
+  lanzados **en su propio hilo** —`DatagramSocket.receive` bloquea, y bloquear el hilo de la interfaz
+  congela el anillo: una pantalla de arranque congelada vuelve a ser un formulario—; si llega respuesta,
+  se guarda en `SharedPreferences` y la ventana abre sola. Mientras busca, el campo **no pide el foco**,
+  para que no salte el teclado encima de la cara de CORT.
+- **El campo de pegar no se va**: hay redes donde el broadcast no pasa (VLAN de oficina, puntos de acceso
+  con aislamiento de cliente). Si la búsqueda no contesta, la misma pantalla lo dice en español y queda el
+  camino de siempre.
+- **Quince pruebas nuevas**: 10 en `test_launcher.py` (el lazo UDP probado en `127.0.0.1` con un puerto
+  libre de verdad: sonda buena → enlace completo + la IP queda apuntada; sonda basura → silencio; sin
+  `--lan` → silencio; el puerto del `.env` manda y un valor absurdo no detiene el arranque) y 5 en
+  `test_apk_manifesta.py`, que leen el Java y exigen que sus tres literales estén formados **con las
+  constantes del lanzador** — no existe un import compartido entre los dos lenguajes; la prueba es la
+  costura, y sin ella cambiar la mágica en un lado dejaría mudo a un teléfono que nadie tiene delante.
+- **Medido en esta máquina** con el lanzador real (`cort.py --lan --demo --no-browser`): la sonda volvió
+  con el enlace completo, la terminal imprimió `127.0.0.1 preguntó por CORT: se le dio el enlace con su
+  llave`, un `HOLA` y un `CORT-ENCONTRARSO-1x` **no sacaron respuesta**, y la barra `red` cambió de texto:
+  ya no manda a pegar nada. Suite completa: `TMPDIR=/tmp make test` **532** en verde y `make test-web`
+  **56** — **588**.
+- **Sin verificar**: que el Java compile (aquí no hay `javac`; lo dirá el run de `compilar-apk` que dispara
+  este mismo `push`) y, otra vez, que nadie lo ha visto ocurrir en el Samsung A16.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.4.zip
 
 ---
 

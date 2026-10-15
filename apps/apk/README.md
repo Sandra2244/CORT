@@ -118,10 +118,49 @@ renglón dice exacto `APK de CORT 0.14.3 (versionCode 1403)`, y en el manifiesto
 binario del propio APK aparece la cadena `0.14.3` y el entero `1403` — no el `main`
 que salió en `v0.14.1`, ni el `0.13.0` que vivía fijado en el archivo—.
 
+Para `v0.14.4` el número que le toca por derivación es **1404**, y **todavía no se
+ha comprobado**: el APK de ese corte lo tiene que colgar el pipeline, y en esta
+máquina no hay `javac` ni SDK con que compilarlo (regla 11).
+
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma
 desechable, en cambio, cada APK nuevo exige desinstalar el anterior aunque el
 número suba.
+
+## El teléfono encuentra a CORT solo (`v0.14.4`)
+
+Desde este corte, la app **no espera que nadie pegue nada**: al abrirse por primera
+vez pregunta en la Wi-Fi y, si el portátil está lanzado con `--lan`, se abre solo.
+
+El cambio está en el lanzador, no en el core. `scripts/cort.py` abre un socket UDP
+en el puerto **8781** (el 8780 sigue siendo la página) y contesta a un datagrama
+que empiece exacto por `CORT-ENCONTRARSO-1` con `CORT-AQUI-1|http://IP:8780/?token=…`.
+El Java hace el viaje inverso: `DatagramSocket` con `setBroadcast(true)`, tres
+intentos de 900 ms a `255.255.255.255:8781`, y el enlace que vuelve se guarda en
+`SharedPreferences` y se abre — con la búsqueda **en un hilo aparte**, porque
+preguntar en la red desde el hilo de la interfaz congela la pantalla.
+
+Qué hay que saber:
+
+- La respuesta **lleva la llave**. Quien esté en tu Wi-Fi y formule la sonda exacta
+  recibe el enlace con su `?token=`. Es el precio de quitar el tecleo, y está
+  escrito en `docs/ARCHITECTURE.md`. Los frenos: sólo se contesta con `--lan` y con
+  `--serve dist`; una sonda que no coincide se ignora en silencio; cada IP que
+  pregunta se imprime en la terminal del arranque (`[red] 192.168.x.x preguntó por
+  CORT…`), y hay apagador: `python3 scripts/cort.py --lan --sin-descubrimiento`
+  o `CORT_LAN_DISCOVER=0`.
+- **Si la red no deja emitir broadcasts** (algunos puntos de acceso los bloquean),
+  el campo de siempre sigue ahí: se abre la pantalla, se pega el enlace de la línea
+  `red` y listo. La búsqueda no sustituye al pegado, lo precede.
+- **Si el móvil no encuentra a CORT**: comprueba que el portátil lanzó con `--lan`
+  (la barra `red` en verde), que están en la misma Wi-Fi y que el puerto 8781 no lo
+  tiene ocupado otro programa. Si no, usa el campo.
+
+Las **15** pruebas de `test_apk_manifesta.py` (10 del manifiesto + 5 de este
+protocolo) vigilan además que los literales del Java sean **los mismos** que las
+constantes del lanzador: `SONDA`, `RESPUESTA` y `PUERTO_DIVULGACION` se comparan
+contra `cort.py`, así que cambiar el puerto o la palabra mágica en un lado sin
+cambiarlo en el otro revienta en `make test` y no en un teléfono.
 
 ## Si tocas el manifiesto
 
@@ -134,7 +173,8 @@ vigilar que el `<manifest>` no vuelva a fijar su propia versión, que el paquete
 `dev.sandra.cort` sea el mismo en el manifiesto y en el Java, que ningún import
 saque de `android.*` / `java.*` / `dev.sandra.cort` (aquí no hay AndroidX) y que
 `compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado.
-Las **10** pruebas corren con `make test`.
+Son **10** de manifiesto y **5** del protocolo de divulgación: quince pruebas en el
+archivo, todas corriendo con `make test`.
 
 ## Compilar a mano (no hace falta)
 

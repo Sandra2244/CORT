@@ -185,6 +185,23 @@ Lo que **no** es: un túnel cifrado. Sin TLS el secreto va en claro por la Wi-Fi
 
 Y el aviso que faltaba: cuando la página se abre desde otro equipo **sin** `?token=`, el rechazo llega al navegador como un `403` mudo. El cabezal distingue ese caso (`pintaFaltaDeLlave()` en `connection.ts`) y dice «falta la llave de la red» en vez de mandar a la usuaria a buscar un core que sí está levantado.
 
+### La divulgación por UDP: el teléfono pregunta, el portátil contesta (`scripts/cort.py`)
+
+Desde este corte la primera vez que se abre el APK **no se pega nada**. El protocolo son dos datagramas en el puerto **8781** — el 8780 sigue siendo la página y el 8765 el core; aquí no hay HTTP ni WebSocket, sólo un «¿estás ahí?» —:
+
+```
+sonda      teléfono → 255.255.255.255:8781   «CORT-ENCONTRARSO-1»
+respuesta  portátil → el origen de la sonda   «CORT-AQUI-1|http://<ip>:8780/?token=…»
+```
+
+Cinco decisiones, y la segunda es la incómoda:
+
+1. **Sólo con `--lan` publicado y la página en modo `dist`.** Sin enlace completo no hay nada que decir: con `--serve dev` la página sigue atada a `127.0.0.1` y divulgar un enlace a medias sería peor que callar.
+2. **La respuesta lleva la llave.** Es una decisión tomada con su coste escrito, no un descuido. Hasta ahora el enlace había que **leerlo** en la pantalla del portátil y **copiarlo** al teléfono; eso era la fricción que la dueña pidió quitar. Lo que se expone es la llave a quien pregunte **desde dentro de la misma Wi-Fi**, el radio que `--lan` ya acepta al publicar el puerto y que ya viaja en claro sin HTTPS. Contra eso hay tres frenos: la sonda tiene que ser la mágica exacta (`sonda_valida` desecha cualquier otro datagrama del vecindario), cada respuesta **se imprime con la IP que la pidió** — «a quién le di la llave» se ve en la terminal del arranque—, y se apaga con `--sin-descubrimiento` o `CORT_LAN_DISCOVER=0`.
+3. **El socket escucha en `0.0.0.0:8781` dentro del lanzador**, no en el core: quien sabe la IP, el puerto y la llave es el lanzador, y el core no necesita enterarse de que existe un teléfono. El bucle (`bucle_descubrimiento`) recibe el socket ya bindado desde fuera, que es lo que permite probarlo en `127.0.0.1` con un puerto libre sin tocar la red de la casa.
+4. **Un puerto ocupado no detiene CORT.** Se avisa una vez y se sigue: el campo de pegar del APK sigue existiendo exactamente para las redes donde el broadcast no pasa (VLAN de oficina, puntos de acceso con aislamiento de cliente). `CORT_DISCOVERY_PORT` lo cambia, y un valor inválido vuelve a 8781 en vez de fallar.
+5. **Los dos lados se vigilan desde Python.** No hay un módulo compartido entre `MainActivity.java` y `scripts/cort.py`, así que `test_apk_manifesta.py` lee el Java y exige que sus literales (`SONDA`, `RESPUESTA`, `PUERTO_DIVULGACION`) salgan **formados con las constantes del lanzador**. Cambiar la mágica en un lado dejaría el descubrimiento mudo en un teléfono que nadie tiene delante; la prueba lo impide antes de empujar.
+
 ## La bitácora de rechazos (`cort_core/audit.py`)
 
 `security.py` decide; hasta `v0.7.0` lo decidido se iba con la respuesta. Quedaba sin responder la pregunta que la dueña del proyecto pone como «base y proyección contra malware»: **¿alguien estuvo probando, y por cuál puerta?** Un registro es lo único que la responde, y es lo que añade este módulo. Cuatro decisiones de diseño, cada una contra un modo concreto en que un log se vuelve inútil o peligroso:

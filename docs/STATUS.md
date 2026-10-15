@@ -2,7 +2,18 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (6)** (`v0.14.3` **comprobado en la página**: el `publicar-release` run 27 abrió la etiqueta `v0.14.3` sobre `923b396` y el `compilar-apk` run 19 quedó **verde** sobre ese mismo commit — el manifiesto arreglado en `a4327e8` ya enlaza —; la Release trae `CORT-v0.14.3.apk` (49 977 B) y `CORT-v0.14.3-firma.txt` (421 B), y el `.apk` **descargado y abierto en esta máquina**: su `AndroidManifest.xml` binario contiene la cadena `0.14.3` — no `main`, no `0.13.0` — y entre sus enteros está **1403** (y 26 / 34 de SDK). Censo por API: **trece Releases**, tres con adjunto (`v0.13.1`, `v0.14.1`, `v0.14.3`) y diez sin él. Firma: `llave: desechable`, así que Sandra todavía no pegó los dos secretos. Verificación anterior, **2026-10-15 (5)** (`TMPDIR=/tmp make test` **517** en verde en **72,516 s** — las
+> Última verificación: **2026-10-15 (7)** (`TMPDIR=/tmp make test` **532** en verde en
+> **94,046 s** — las **15** nuevas del descubrimiento por Wi-Fi: 10 de `test_launcher.py`
+> haciendo un viaje real de datagrama contra el lanzador en bucle invertido, 5 de
+> `test_apk_manifesta.py` cosiendo los literales del Java con las constantes de
+> `cort.py` — y `make test-web` **56** (`# pass 56`), **588** en total. **Medido en
+> vivo**: `python3 scripts/cort.py --lan` imprimió la barra `red` con su enlace, la
+> línea `↳ el APK abre CORT solo: pregunta por UDP en el puerto 8781…`, y al mandarle
+> la sonda `CORT-ENCONTRARSO-1` desde otro proceso contestó `CORT-AQUI-1|http://…` y
+> apuntó `[red] 127.0.0.1 preguntó por CORT: se le dio el enlace con su llave`; una
+> sonda con basura **no recibió nada**. **Sin verificar**: el Java de este corte no lo
+> ha compilado todavía un runner ni nadie lo ha visto buscar en el Samsung —aquí no hay
+> `javac`, medido—. Verificación anterior, **2026-10-15 (6)** (`v0.14.3` **comprobado en la página**: el `publicar-release` run 27 abrió la etiqueta `v0.14.3` sobre `923b396` y el `compilar-apk` run 19 quedó **verde** sobre ese mismo commit — el manifiesto arreglado en `a4327e8` ya enlaza —; la Release trae `CORT-v0.14.3.apk` (49 977 B) y `CORT-v0.14.3-firma.txt` (421 B), y el `.apk` **descargado y abierto en esta máquina**: su `AndroidManifest.xml` binario contiene la cadena `0.14.3` — no `main`, no `0.13.0` — y entre sus enteros está **1403** (y 26 / 34 de SDK). Censo por API: **trece Releases**, tres con adjunto (`v0.13.1`, `v0.14.1`, `v0.14.3`) y diez sin él. Firma: `llave: desechable`, así que Sandra todavía no pegó los dos secretos. Verificación anterior, **2026-10-15 (5)** (`TMPDIR=/tmp make test` **517** en verde en **72,516 s** — las
 > **10** nuevas de `test_apk_manifesta.py`, que leen el manifiesto y el `compilar.sh` sin runner — y
 > `make test-web` **56** (`# pass 56`), **573** en total; **12 Releases** por la API pública, y sólo tres
 > con adjunto: `v0.14.2` salió **con cero**, otra vez. Ésa es la medida nueva del corte: el run **18** de
@@ -39,6 +50,30 @@
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.14.4` (2026-10-15): que el móvil abra CORT sin que nadie pegue el enlace.**
+La dueña lo pidió dos veces seguidas —«hay que colocar token de arranque», «no puede
+iniciar con su animación como una IA normal»— y lo que quedaba era **una** fricción:
+leer la IP en el portátil y teclearla en el teléfono. Este corte la quita con un
+protocolo de dos datagramas por UDP en el puerto **8781**: el APK pregunta
+`CORT-ENCONTRARSO-1` al broadcast de la Wi-Fi y el lanzador contesta
+`CORT-AQUI-1|<enlace con su llave>`; el teléfono lo guarda en `SharedPreferences` y
+abre la cara. Tres decisiones de seguridad están documentadas antes en
+`docs/ARCHITECTURE.md` (regla 5): sólo se contesta con `--lan` **y** `--serve dist`,
+la sonda tiene que coincidir exacta y una basura se ignora en silencio, y cada IP que
+pregunta se imprime en la terminal del arranque. Se puede apagar con
+`--sin-descubrimiento` o `CORT_LAN_DISCOVER=0`, y el campo de pegado **sigue** para
+las redes que no dejan emitir broadcasts. El coste escrito: la llave viaja a quien la
+pida desde dentro de su propia Wi-Fi —sin TLS ya viajaba al pegarla; ahora no hace
+falta ni eso—. **Medido en esta máquina**: `make test` **532** en verde (15 nuevas:
+10 del lanzador con viaje real de datagrama en `127.0.0.1`, 5 que cosen los literales
+del Java a las constantes de `cort.py`), `make test-web` **56**, y el lanzador
+arrancado con `--lan` contestó la sonda y apuntó al que preguntó. **Sin verificar en
+el teléfono**: el Java nuevo no lo ha compilado un runner todavía y nadie lo ha visto
+buscar en el Samsung A16 (regla 11), y sigue en pie que el aviso de Play Protect
+«app desconocida / dañina» **no se quita con código** mientras no haya publicación en
+la Play Store; lo que sí depende de Sandra es pegar los dos secretos de la llave de
+firma estable.
+
 **Corte `v0.14.3` (2026-10-15): que el manifiesto del APK vuelva a ser XML, y que eso se compruebe sin
 pedirle un run a GitHub.** Nada de la cara cambia — Python, React y el Java de la pantalla de estreno son
 los de `v0.14.2`—; lo que cambia es que `v0.14.2` **no llegó al teléfono** (cero adjuntos) por un motivo que
