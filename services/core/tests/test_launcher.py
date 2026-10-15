@@ -332,8 +332,10 @@ class TestRed(unittest.TestCase):
             self.assertIsNone(self.m.lan_address())
 
     def test_lan_sin_token_se_niega(self):
-        """El lanzador no abre el puerto si no hay secreto: por ese cable se
-        cambia el volumen, se abren apps y se captura la pantalla."""
+        """Última barrera: sin secreto no se abre el puerto, porque por ese cable
+        se cambia el volumen, se abren apps y se captura la pantalla. Desde
+        `v0.14.0` casi nadie llega aquí — la llave se crea sola antes —, pero la
+        decisión de seguridad sigue siendo la misma."""
         motivo = self.m.rechazo_de_red(True, "")
         self.assertIsNotNone(motivo)
         self.assertIn("CORT_LAN_TOKEN", motivo)
@@ -348,6 +350,87 @@ class TestRed(unittest.TestCase):
         """En `127.0.0.1` no hay a quién autorizar: exigir token ahí sería un
         paso de más para la dueña del portátil, y rompería el doble clic."""
         self.assertIsNone(self.m.rechazo_de_red(False, ""))
+
+
+class TestLlaveQueSeCreaSola(unittest.TestCase):
+    """`--lan` ya no es un muro: la llave que falta se crea y se guarda sola.
+
+    Lo que se prueba aquí es el cambio de contrato que pidió la dueña del
+    proyecto (2026-10-15): el arranque no puede pedirle a nadie que edite un
+    `.env` a mano para que su teléfono funcione. La protección NO se tocó —la
+    sigue aplicando `cort_core/security.py` en cada conexión—; lo que se quitó
+    fue el tecleo, y con él la pantalla roja.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.env_file = Path(self.tmp.name) / ".env"
+
+    def test_sin_llave_se_crea_y_se_escribe_en_el_env(self):
+        env: dict[str, str] = {}
+        token, motivo, creada = self.m.llave_de_red(True, self.env_file, env)
+        self.assertIsNone(motivo)
+        self.assertTrue(creada)
+        self.assertGreaterEqual(len(token), 20, "una llave corta es un secreto débil")
+        self.assertIn(f"CORT_LAN_TOKEN={token}", self.env_file.read_text())
+        self.assertEqual(env["CORT_LAN_TOKEN"], token, "el core tiene que recibirla")
+        # Y con la llave ya en la mano, la última barrera se aparta sola.
+        self.assertIsNone(self.m.rechazo_de_red(True, token))
+
+    def test_el_archivo_queda_con_permiso_de_secreto(self):
+        # `.env` lleva la llave de red: 0600 para que no la lea otro usuario de
+        # la máquina. Sin esto, un portátil compartido filtraría el acceso.
+        self.m.llave_de_red(True, self.env_file, {})
+        self.assertEqual(self.env_file.stat().st_mode & 0o777, 0o600)
+
+    def test_segunda_vez_no_duplica_ni_cambia_la_llave(self):
+        first, _, _ = self.m.llave_de_red(True, self.env_file, {})
+        env = {"CORT_LAN_TOKEN": first}
+        again, motivo, creada = self.m.llave_de_red(True, self.env_file, env)
+        self.assertEqual(again, first)
+        self.assertFalse(creada, "una llave guardada no se regenera: el teléfono perdería el enlace")
+        text = self.env_file.read_text()
+        self.assertEqual(text.count("CORT_LAN_TOKEN="), 1)
+
+    def test_un_env_que_no_termina_en_salto_no_se_pega(self):
+        # El fallo clásico de escribir a pelo: `CORT_PORT=8765` sin `\n` final y
+        # la llave quedando `8765CORT_LAN_TOKEN=…`, que no parsea nadie.
+        self.env_file.write_text("CORT_PORT=8765")
+        token, motivo, _ = self.m.llave_de_red(True, self.env_file, {})
+        self.assertIsNone(motivo)
+        lineas = self.env_file.read_text().splitlines()
+        self.assertEqual(lineas[0], "CORT_PORT=8765")
+        self.assertIn(f"CORT_LAN_TOKEN={token}", lineas)
+
+    def test_sin_lan_el_env_ni_se_toca(self):
+        self.env_file.write_text("CORT_PORT=8765\n")
+        token, motivo, creada = self.m.llave_de_red(False, self.env_file, {})
+        self.assertEqual((token, motivo, creada), ("", None, False))
+        self.assertEqual(self.env_file.read_text(), "CORT_PORT=8765\n")
+
+    def test_solo_lectura_devuelve_motivo_en_lugar_de_reventar(self):
+        if hasattr(self.m.os, "geteuid") and self.m.os.geteuid() == 0:
+            self.skipTest("como root el chmod 400 no niega la escritura")
+        self.env_file.write_text("A=1\n")
+        self.env_file.chmod(0o400)
+        token, motivo, creada = self.m.llave_de_red(True, self.env_file, {})
+        self.assertEqual(token, "")
+        self.assertFalse(creada)
+        self.assertIsNotNone(motivo, "sin disco de escritura hay que negarse, no abrir sin llave")
+        self.assertIn("no se pudo escribir", motivo)
+
+    def test_CORT_LAN_en_el_entorno_enciende_la_red_sin_bandera(self):
+        # El doble clic del escritorio no lleva banderas: `CORT_LAN=1` en el
+        # `.env` tiene que valer lo mismo que escribir `--lan`.
+        for valor in ("1", "true", "si", "sí", "on", "YES"):
+            self.assertTrue(self.m.verdad(valor), valor)
+        for valor in ("", "0", "no", "off", "nunca"):
+            self.assertFalse(self.m.verdad(valor), valor)
 
 
 class TestBarraDeCamara(unittest.TestCase):

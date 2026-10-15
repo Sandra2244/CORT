@@ -356,10 +356,69 @@ def rechazo_de_red(lan: bool, token: str | None) -> str | None:
     toma el lanzador, y tiene que poder probarse sin arrancar un servidor. El
     criterio es el mismo que el del core (`cort_core/security.py`), y si algún
     día discrepan gana el del core: él es el que está escuchando.
+
+    Desde `v0.14.0` esta es la **última** barrera, no la primera: la llave que
+    falte se crea sola (`llave_de_red`) antes de llegar aquí, así que este motivo
+    sólo se imprime si el `.env` no se puede escribir o si alguien borra la
+    variable a la vez que falla el disco. La regla no ha cambiado —sin secreto
+    no se publica—; lo que cambió es quién la escribe.
     """
     if not lan or (token or "").strip():
         return None
-    return "--lan cancelado: no hay CORT_LAN_TOKEN en el .env."
+    return "--lan cancelado: no hay CORT_LAN_TOKEN en el .env y no se pudo crear."
+
+
+def verdad(valor: str | None) -> bool:
+    """Lo que una persona escribe en un `.env` para decir «sí»."""
+    return (valor or "").strip().lower() in {"1", "true", "si", "sí", "on", "y", "yes"}
+
+
+def asegurar_token_lan(file: Path, largo: int = 18) -> tuple[str, str | None]:
+    """Genera la llave de red, la escribe en `.env` y devuelve `(token, None)`.
+
+    Existe porque el muro que veía la dueña era este: encender el teléfono
+    pedía editar un archivo de configuración a mano, y una pantalla roja de
+    terminal no es la cara de un asistente. **La protección sigue entera** —lo
+    que se quitó es el tecleo—: la llave sale de `secrets`, queda en el `.env`
+    (fuera del repo, regla 7) y el core la sigue exigiendo en cada conexión.
+
+    Devuelve `("", motivo)` si el archivo no se puede escribir, en vez de abrir
+    el puerto con una llave que sólo vive en la memoria de este proceso: al
+    reiniciar, nadie sabría el enlace y el teléfono se quedaría otra vez fuera.
+    """
+    token = secrets.token_urlsafe(largo)
+    bloque = (f"\n# Llave de red que CORT creó solo al pedir `--lan` "
+              f"({time.strftime('%Y-%m-%d')}).\n"
+              f"# Puedes cambiarla por otra de 20 caracteres o más; el enlace que\n"
+              f"# imprime el arranque ya lleva esta. Si la borras, se crea otra.\n"
+              f"CORT_LAN_TOKEN={token}\n")
+    try:
+        previo = file.read_text(encoding="utf-8", errors="replace") if file.is_file() else ""
+        with file.open("a", encoding="utf-8") as handle:
+            # Sin el salto extra, un `.env` que no termine en retorno de carro
+            # pegar la llave al final de la última línea y la dejaría inservible.
+            handle.write(bloque if not previo or previo.endswith("\n") else "\n" + bloque)
+        os.chmod(file, 0o600)   # es un secreto: que no lo lea nadie más de la máquina
+    except OSError as error:
+        return "", f"--lan cancelado: no se pudo escribir la llave en {file} ({error})."
+    return token, None
+
+
+def llave_de_red(lan: bool, env_file: Path,
+                 environ: dict[str, str] | None = None) -> tuple[str, str | None, bool]:
+    """La llave con la que se abre el puerto: `(token, motivo, creada_ahora)`.
+
+    Se prueba sin tocar el disco: el `environ` se pasa a mano en las pruebas para
+    comprobar que una variable ya exportada manda y no se genera otra encima.
+    """
+    env = os.environ if environ is None else environ
+    token = (env.get("CORT_LAN_TOKEN") or "").strip()
+    if not lan or token:
+        return token, None, False
+    nuevo, motivo = asegurar_token_lan(env_file)
+    if motivo is None:
+        env["CORT_LAN_TOKEN"] = nuevo
+    return nuevo, motivo, motivo is None
 
 
 def main() -> int:
@@ -376,10 +435,19 @@ def main() -> int:
     ap.add_argument("--quiet", action="store_true", help="sin banner ni salida de los hijos")
     ap.add_argument("--demo", action="store_true",
                     help="memoria de usar y tirar: no escribe en la base real")
-    ap.add_argument("--lan", action="store_true",
+    ap.add_argument("--lan", dest="lan", action="store_true", default=None,
                     help="publica la interfaz en la red local (para abrir CORT desde el móvil)")
+    ap.add_argument("--sin-lan", dest="lan", action="store_false",
+                    help="aunque el .env pida la red, quédate en 127.0.0.1")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
+
+    # `CORT_LAN=1` en el `.env` equivale a escribir `--lan`: el doble clic del
+    # escritorio no lleva banderas, y la dueña no puede estar recordando una.
+    # Con `default=None` el lanzador distingue «no lo puso» de «dijo que no»,
+    # que es lo que hace falta para respetar `--sin-lan`.
+    if args.lan is None:
+        args.lan = verdad(os.getenv("CORT_LAN", ""))
 
     color = sys.stdout.isatty() and not args.no_color and not args.quiet
     # Sin esto, con la salida redirigida a un archivo stdout búferes de bloque:
@@ -400,22 +468,28 @@ def main() -> int:
         os.environ["CORT_MEMORY_DB"] = demo_db_path(os.environ)
     db = Path(os.getenv("CORT_MEMORY_DB", DATA / "memory.db"))
 
-    token = (os.getenv("CORT_LAN_TOKEN") or "").strip()
-    motivo = rechazo_de_red(args.lan, token)
+    token, motivo, creada = llave_de_red(args.lan, ROOT / ".env")
+    motivo = motivo or rechazo_de_red(args.lan, token)
     if motivo:
-        # `--lan` sin llave no se abre, y el lanzador se niega en vez de levantar
-        # el puerto "y ya veremos". El motivo es concreto: por ese WebSocket se
-        # puede cambiar el volumen, abrir aplicaciones y capturar la pantalla de
-        # esta máquina. Quien lo publica sin secreto le está prestando el PC a
-        # todo el Wi-Fi, y eso no puede ser consecuencia de una variable que
-        # nadie puso.
+        # `--lan` sin llave **y sin poder crearla** no se abre, y el lanzador se
+        # niega en vez de levantar el puerto "y ya veremos". El motivo es concreto:
+        # por ese WebSocket se puede cambiar el volumen, abrir aplicaciones y
+        # capturar la pantalla de esta máquina. Quien lo publica sin secreto le está
+        # prestando el PC a todo el Wi-Fi, y eso no puede ser consecuencia de una
+        # variable que nadie puso.
         print(paint(f"\n{RED}{motivo}{RESET}", color))
-        print(paint(f" {DIM}Añade esta línea a {ROOT / '.env'} —o cambia el secreto por uno "
-                    f"tuyo, de unos 20 caracteres— y vuelve a arrancar:{RESET}", color))
-        print(paint(f"   {CYAN}CORT_LAN_TOKEN={secrets.token_urlsafe(18)}{RESET}", color))
-        print(paint(f" {DIM}Sin eso el core sigue en 127.0.0.1: arráncalo sin --lan si el "
+        print(paint(f" {DIM}Escribe tú la línea en {ROOT / '.env'} —un secreto de 20 "
+                    f"caracteres o más— o arregla el permiso del archivo:{RESET}", color))
+        print(paint(f"   {CYAN}CORT_LAN_TOKEN=…{RESET}", color))
+        print(paint(f" {DIM}Sin eso el core sigue en 127.0.0.1: arráncalo con --sin-lan si el "
                     f"teléfono no hace falta.{RESET}", color))
         return 1
+    if creada and not args.quiet:
+        # Se avisa, pero sin imprimir el valor: la barra `red` de abajo ya da el
+        # enlace completo con la llave, y un secreto en la terminal es un secreto
+        # que acaba en una captura (la misma razón de la nota del `.env`).
+        print(paint(f" {DIM}llave de red: CORT la creó sola y la guardó en "
+                    f"{ROOT / '.env'} — no vuelve a pedirla{RESET}", color))
 
     children: list[subprocess.Popen] = []
 
@@ -498,11 +572,17 @@ def main() -> int:
             # Vite en dev escucha sólo en 127.0.0.1 y publicarlo exige otra
             # bandera suya (`--host`): con `--serve dev` el `--lan` dejaría el
             # core accesible y la página no, que es la peor combinación.
-            notes = {"dist": f"el móvil abre http://{ip}:{args.web_port}/?token={token} — "
-                             "sin HTTPS: la llave viaja en claro por tu Wi-Fi",
+            enlace = f"http://{ip}:{args.web_port}/?token={token}" if ip else None
+            notes = {"dist": f"el móvil abre {enlace}",
                      "dev": "interfaz en modo dev: el móvil verá el core, pero no la página — usa --serve dist"}
             print(bar("red", ip is not None and mode == "dist", color,
                       notes[mode] if ip else "sin IP de red: el teléfono no podrá entrar"))
+            if ip and mode == "dist":
+                # La frase de uso, sin repetir el secreto: la llave ya viajó una vez
+                # arriba y cada copia extra en pantalla es una captura más donde vive.
+                print(paint(f" {DIM}↳ eso, ENTERO, es lo que se pega en la app la primera vez "
+                            f"(viaja en claro por tu Wi-Fi: no hay HTTPS). Después la app "
+                            f"lo guarda y ya no lo pregunta.{RESET}", color))
         print()
         print(paint(f" {CYAN}{BOLD}CORT en línea{RESET}   Ctrl+C para cerrar todo.", color))
         print(paint(f" {DIM}{'─' * 58}{RESET}", color))
