@@ -105,23 +105,38 @@ que merece una copia fuera del portátil.
 ## Qué versión lleva escrita el APK
 
 Desde `v0.14.2` el binario sabe de qué corte es: `compilar.sh` recibe la versión
-(`0.14.2`) y con ella fija `versionName` y un `versionCode` derivado (`1402`).
+(`0.14.3`) y con ella fija `versionName` y un `versionCode` derivado (`1403`).
 Antes el número estaba fijado en el manifiesto (`0.13.0`) y el pipeline, cuando
 el run llegaba por rama, pasaba el nombre de la rama: el `CORT-v0.14.1.apk` se
 instaló rotulado como **`main`**, y así lo enseña Ajustes → Aplicaciones → CORT.
 Para comprobar el rotulado sin instalar nada, el primer renglón del
-`CORT-v<etiqueta>-firma.txt` de la Release dice `APK de CORT 0.14.2 (versionCode
-1402)`.
+`CORT-v<etiqueta>-firma.txt` de la Release dice `APK de CORT <versión>
+(versionCode <número>)` — en `v0.14.3`, `APK de CORT 0.14.3 (versionCode 1403)`;
+ésa es la línea que hay que mirar para saber que el adjunto es de este corte y no
+del anterior.
 
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma
 desechable, en cambio, cada APK nuevo exige desinstalar el anterior aunque el
 número suba.
 
+## Si tocas el manifiesto
+
+`AndroidManifest.xml` se compila con `aapt2 link`, que es **estricto con los
+comentarios**: dentro de un bloque de comentario no pueden aparecer dos guiones
+seguidos. Escribir ahí el nombre de un flag largo es la forma más rápida de
+romper el build, y el fallo se ve en el runner, no en `make test`. Por eso
+`services/core/tests/test_apk_manifesta.py` lee el archivo y lo valida, además de
+vigilar que el `<manifest>` no vuelva a fijar su propia versión, que el paquete
+`dev.sandra.cort` sea el mismo en el manifiesto y en el Java, que ningún import
+saque de `android.*` / `java.*` / `dev.sandra.cort` (aquí no hay AndroidX) y que
+`compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado.
+Las **10** pruebas corren con `make test`.
+
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.14.2     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.14.3     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un

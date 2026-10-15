@@ -29,7 +29,7 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
 > con el hueco cerrado.
 
-**La lista de tareas para cortar la siguiente (v0.14.3), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.14.4), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -38,27 +38,60 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
    firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
    no hace falta abrir una log que es privada.
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.3\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.4\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
 3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
-   ve que `v0.14.3` tiene sección y no tiene página, llama a `gh release create v0.14.3` —que crea la
+   ve que `v0.14.4` tiene sección y no tiene página, llama a `gh release create v0.14.4` —que crea la
    etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
    `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
    `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
    apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
-   `CORT-v0.14.3.apk` y su `CORT-v0.14.3-firma.txt` a esa Release. Etiquetar a mano
-   (`git tag v0.14.3 && git push origin v0.14.3`) sigue siendo válido y dispara el mismo camino por la
+   `CORT-v0.14.4.apk` y su `CORT-v0.14.4-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.14.4 && git push origin v0.14.4`) sigue siendo válido y dispara el mismo camino por la
    vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
    sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.3 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.4 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.14.3` — el manifiesto del APK vuelve a ser XML, y hay pruebas que lo vigilan
+
+Corte **pequeño y de obra**, como el anterior: el código Python, la cara React y el Java de la pantalla de
+estreno son los de `v0.14.2`. Lo que se arregla es lo que impidió que `v0.14.2` llegara al teléfono: el
+`AndroidManifest.xml` estaba **mal formado** y `aapt2` lo rechazaba.
+
+- **La regla que no sabíamos**: un comentario XML no puede contener `--` en ningún punto, ni siquiera
+  dentro de una frase. El texto que avisaba de `aapt2 link` llevaba el nombre del flag con su guion doble y
+  partía el manifiesto. Reescrito sin guiones juntos; validado aquí mismo con `xml.etree.ElementTree`, que
+  reporta `comentarios con dos guiones: 0` y lee la raíz, el `package` y los atributos.
+- **Y salió un bug de verdad, no de forma**: el cabecero del manifiesto prometía que el micrófono y la
+  cámara no eran obligatorios, pero `RECORD_AUDIO` y `CAMERA` no llevaban `android:required="false"` —el
+  valor por defecto es `true`—, así que el aviso estaba mintiendo. Ahora el atributo está en las dos líneas
+  y el `<uses-feature>` y el permiso dicen lo mismo.
+- **Diez pruebas nuevas que no dependen de un runner** (`test_apk_manifesta.py`): que ningún comentario
+  tenga `--`, que el `<manifest>` no vuelva a fijar
+  `versionCode`/`versionName`, que el paquete `dev.sandra.cort` sea idéntico en manifiesto y Java, que los
+  imports del Java sean sólo `android.*`, `java.*` o propios (el muro contra AndroidX), que haya una única
+  actividad `exported` con `MAIN`+`LAUNCHER`, y que `compilar.sh` siga pasando el `versionCode` derivado
+  (`--version-code "$CODE"`) en lugar del 1 clavado. **Esto es lo que faltaba en `v0.14.2`**: la prueba
+  vivía en GitHub, con token y con espera.
+- **Contado, no mirado**: `TMPDIR=/tmp make test` **517** en verde en **72,516 s** y `make test-web`
+  **56** (`# pass 56`) — **573** en total. El Java se compila en el runner; en esta máquina no hay
+  `javac`, y sigue sin verse nada en un dedo (regla 11).
+- **Qué lleva la página**: `CORT-v0.14.3.apk` y su `CORT-v0.14.3-firma.txt`, que debe encabezar con
+  `APK de CORT 0.14.3 (versionCode 1403)`. Al cierre de este texto hay **doce Releases** y sólo tres con
+  adjunto (`v0.13.1`, `v0.14.1` y la que esté abriendo el pipeline); `v0.14.0` y `v0.14.2` se quedaron sin
+  APK por las dos causas distintas que se explican arriba. No se mueven etiquetas publicadas.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.3.zip
 
 ---
 
@@ -93,6 +126,13 @@ el nombre de la rama. Medido descargando el `CORT-v0.14.1.apk` que subió el pip
   `main`→1), y `make test` **507** en verde en **74,4 s** (las 10 nuevas del resolutor) con
   `make test-web` **56**. **Lo que no se ha visto todavía**: este APK instalado en el Samsung — nadie lo ha
   encendido en un dedo, regla 11.
+
+> **Después de cortar (medido el 2026-10-15)**: la página `v0.14.2` salió **con cero adjuntos**, y no por
+> el token de la etiqueta esta vez. El run 18 de `compilar-apk` se puso **rojo** en «Compilar»: `aapt2
+> link` rechazó el manifiesto porque el comentario que explica esta misma sección contenía **dos guiones
+> seguidos**, y eso dentro de un `<!-- -->` no es comentario — es XML roto. Como los logs de Actions son
+> privados y `gh` no tiene sesión en esta máquina, el fallo se leyó por **anotaciones públicas**
+> (`/check-runs/<job>/annotations`), que es el único canal que queda abierto. El arreglo va en `v0.14.3`.
 
 **Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.2.zip
 

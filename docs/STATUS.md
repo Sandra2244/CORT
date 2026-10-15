@@ -2,7 +2,17 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (4)** (`make test` **507** en verde en **74,434 s** — 10 nuevas del
+> Última verificación: **2026-10-15 (5)** (`TMPDIR=/tmp make test` **517** en verde en **72,516 s** — las
+> **10** nuevas de `test_apk_manifesta.py`, que leen el manifiesto y el `compilar.sh` sin runner — y
+> `make test-web` **56** (`# pass 56`), **573** en total; **12 Releases** por la API pública, y sólo tres
+> con adjunto: `v0.14.2` salió **con cero**, otra vez. Ésa es la medida nueva del corte: el run **18** de
+> `compilar-apk` se puso rojo en «Compilar» y se leyó por **anotaciones públicas** (`/check-runs/<job>/
+> annotations`) — los logs son privados y `gh` sigue sin sesión aquí — porque `aapt2 link` rechazaba el
+> `AndroidManifest.xml`: el comentario que explicaba el propio flag contenía **dos guiones seguidos**, y
+> dentro de un `<!-- -->` eso rompe el XML. Arreglado y validado con `xml.etree.ElementTree`
+> (`comentarios con dos guiones: 0`), y las pruebas nuevas **destaparon un segundo bug de verdad**:
+> `RECORD_AUDIO` y `CAMERA` no llevaban `android:required="false"` aunque el cabecero lo prometiera. Verificación anterior, **2026-10-15 (4)**:
+> `make test` **507** en verde en **74,434 s** — 10 nuevas del
 > resolutor `scripts/etiqueta_del_commit.py` — y `make test-web` **56** (`# pass 56`), **563** en total; el
 > corte `v0.14.1` **comprobado descargando sus adjuntos** por la API pública sin credenciales:
 > `CORT-v0.14.1.apk` de 49 977 B y `CORT-v0.14.1-firma.txt` de 400 B, con `llave: desechable` y la huella
@@ -29,6 +39,19 @@
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.14.3` (2026-10-15): que el manifiesto del APK vuelva a ser XML, y que eso se compruebe sin
+pedirle un run a GitHub.** Nada de la cara cambia — Python, React y el Java de la pantalla de estreno son
+los de `v0.14.2`—; lo que cambia es que `v0.14.2` **no llegó al teléfono** (cero adjuntos) por un motivo que
+no se podía ver desde aquí: `aapt2` rechazó el manifiesto porque un comentario suyo llevaba `--` dentro, y
+eso en XML no es comentario sino manifiesto roto. Tres cosas, medidas en esta máquina: **(1)** el comentario
+reescrito y el XML validado con `xml.etree.ElementTree`; **(2)** `android:required="false"` añadido de verdad
+a `RECORD_AUDIO` y `CAMERA`, que el cabecero prometía y el archivo no cumplía; **(3)** **10 pruebas nuevas**
+(`test_apk_manifesta.py`) que leen el manifiesto, el `compilar.sh` y los imports del Java — sin AndroidX, sin
+`versionCode` clavado, con una sola actividad `exported` — para que la próxima vez el error salte en
+`make test` y no en un runner con token privado. Queda **por comprobar después de empujar**: que la página de
+`v0.14.3` traiga `CORT-v0.14.3.apk` y `…-firma.txt`, y que ese archivo encabece con
+`APK de CORT 0.14.3 (versionCode 1403)`. **Sin verificar en dedo**, como los dos cortes anteriores.
+
 **Corte `v0.14.2` (2026-10-15): el APK sale rotulado con su versión, no con el nombre de la rama.** Se
 descubrió **descargando** el `CORT-v0.14.1.apk` de la Release: `compilar.sh` había recibido `main` como
 versión, porque el run vino por rama y el YAML sacaba la versión de `GITHUB_REF_NAME`. Ahora un paso
