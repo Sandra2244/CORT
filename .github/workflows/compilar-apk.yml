@@ -46,6 +46,12 @@ jobs:
 
       - name: Compilar
         run: |
+          # `set +e` es obligatorio, no cosmético: el shell por defecto de GitHub
+          # se comporta como `bash -e`, y en el run 38677344363 (medido) eso mató
+          # el paso justo en la línea de `compilar.sh` — antes de `st=$?` y antes
+          # del annotation. Sin esta línea el paso falla en 1 s y no cuenta por
+          # qué, que es exactamente el problema que este bloque quiere resolver.
+          set +e
           TAG="${GITHUB_REF_NAME#v}"
           # Las logs de Actions **no son públicas** (medido 2026-10-15: la API de
           # logs pide `admin:read` y la URL web pide sesión — el comentario que
