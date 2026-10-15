@@ -15,22 +15,35 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:?falta ANDROID_HOME: este script corre en el pipeline, no en el portátil}}"
+SDK="${ANDROID_HOME:-}"
+[ -n "$SDK" ] || SDK="${ANDROID_SDK_ROOT:-}"
+# Ni una ni otra: la ruta estándar del runner de Ubuntu, por si la imagen
+# cambia de nombre la variable pero deja el SDK donde siempre.
+if [ -z "$SDK" ] && [ -d /usr/local/lib/android/sdk ]; then
+    SDK=/usr/local/lib/android/sdk
+fi
+[ -n "$SDK" ] || { echo "falta ANDROID_HOME: este script corre en el pipeline, no en el portátil"; exit 1; }
 # Versión visible del APK: `compilar.sh 0.13.0`. La etiqueta `v0.13.0` del
 # pipeline la pasa sin la `v`; el default es para cuando se dispara a mano.
 VERSION="${1:-0.13.0}"
-BT="$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1)"
-PLAT="$(ls -d "$SDK"/platforms/* 2>/dev/null | sort -V | tail -1)"
+# El `|| true` dentro de la sustitución NO es decoración: con `set -o pipefail`
+# un `ls` que no encuentra el globo devuelve 2, ese 2 sale del `$( )` como código
+# de la asignación, y `set -e` mata el script **antes** de la guarda de vacío
+# de abajo — que nació exactamente para cubrir ese caso—. Medido de la peor
+# manera posible: el primer run del pipeline (2026-10-15, commit af34cef) cayó
+# en un segundo por justo eso.
+BT="$( { ls -d "$SDK"/build-tools/*/ 2>/dev/null || true; } | sort -V | tail -1)"
+PLAT="$( { ls -d "$SDK"/platforms/*/ 2>/dev/null || true; } | sort -V | tail -1)"
 if [ -z "$BT" ] || [ -z "$PLAT" ]; then
     # El runner de GitHubActions trae el SDK preinstalado; si la imagen alguna
     # vez no lo trae, `sdkmanager` (también viene) descarga lo mínimo. No se
     # instala Gradle ni AndroidX: no hacen falta para un `aapt2` + `javac` + `d8`.
-    CMDL="$(ls -d "$SDK"/cmdline-tools/*/bin 2>/dev/null | head -1)"
+    CMDL="$( { ls -d "$SDK"/cmdline-tools/*/bin 2>/dev/null || true; } | head -1)"
     [ -n "$CMDL" ] || { echo "ni SDK ni sdkmanager: el runner cambió de imagen"; exit 1; }
     yes | "$CMDL/sdkmanager" --licenses >/dev/null 2>&1 || true
     "$CMDL/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
-    BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"
-    PLAT="$(ls -d "$SDK"/platforms/* | sort -V | tail -1)"
+    BT="$( { ls -d "$SDK"/build-tools/*/ 2>/dev/null || true; } | sort -V | tail -1)"
+    PLAT="$( { ls -d "$SDK"/platforms/*/ 2>/dev/null || true; } | sort -V | tail -1)"
 fi
 echo "build-tools: $(basename "$BT") · platform: $(basename "$PLAT") · versión: $VERSION"
 
