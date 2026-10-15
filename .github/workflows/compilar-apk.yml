@@ -62,12 +62,16 @@ jobs:
             echo "ANDROID_HOME=${ANDROID_HOME:-vacío} · ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-vacío}"
             ls -d /usr/local/lib/android/* 2>/dev/null || echo "(sin /usr/local/lib/android)"
           } > /tmp/pre.log
-          bash apps/apk/compilar.sh "${TAG:-0.0.0}" > /tmp/apk.log 2>&1
+          # `-x` desde el run 6 (medido 2026-10-15): el script salió con 1 sin
+          # imprimir nada después de la nota de `javac`, y un fallo mudo no se
+          # puede diagnosticar ni por annotation. El trazado deja en el log cada
+          # comando ejecutado; el último sobreviviente dice dónde murió.
+          bash -x apps/apk/compilar.sh "${TAG:-0.0.0}" > /tmp/apk.log 2>&1
           st=$?
           cat /tmp/apk.log
           if [ $st -ne 0 ]; then
-            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 700 /tmp/apk.log; } \
-                   | tr '\n\r%;#()' ' ..... ' )
+            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 1500 /tmp/apk.log; } \
+                   | tr '\n\r%;#()' ' ...... ' )
             echo "::error::compilar.sh salió con $st — $msg"
             exit $st
           fi
