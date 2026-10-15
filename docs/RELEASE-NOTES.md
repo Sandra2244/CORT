@@ -9,35 +9,100 @@ que no tenga sección se publica con notas generadas antes que con una página m
 
 Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` nacieron **antes** de este pipeline,
 y como un `push` de etiqueta busca su YAML en el commit de esa etiqueta, quien las convirtió en
-Release fue el disparo por `main` — no hizo falta borrar ni recrear ninguna. **Las siete
-(`v0.7.0` … `v0.12.0`) están publicadas**: `v0.11.0` desde el 2026-10-11 y `v0.12.0` desde el
-2026-10-13 con su nota recortada de este documento — `v0.12.0` comprobado por la API pública sin
-credenciales el mismo día de su corte: id `411249554`, `published_at` `2026-10-13T03:58:21Z`, cuerpo
-de 6 378 caracteres terminando en su línea `**Zip**`, y `…/archive/refs/tags/v0.12.0.zip` → `200` —,
+Release fue el disparo por `main` — no hizo falta borrar ni recrear ninguna. **Las ocho
+(`v0.7.0` … `v0.13.0`) están publicadas**: `v0.11.0` desde el 2026-10-11, `v0.12.0` desde el
+2026-10-13 y `v0.13.0` desde el 2026-10-15 con su nota recortada de este documento — `v0.13.0`
+comprobado por la API pública sin credenciales en su corte: id `413388728`, `published_at`
+`2026-10-15T03:28:49Z`, cuerpo de 8 266 caracteres, `…/archive/refs/tags/v0.13.0.zip` → `200` —,
 en [github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases). Sigue sin poder
 crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni
 `GH_TOKEN` en el entorno, ni `~/.config/gh`.
 
-**La lista de tareas para cortar la siguiente (v0.13.0), en orden** — el orden importa porque el
+> **`v0.13.0` salió con su página de texto pero SIN el APK**: la etiqueta se cortó sobre `af34cef`,
+> cuando `compilar.sh` todavía tenía el bug de `pipefail`, así que el `run` disparado por esa etiqueta
+> falló y no colgó artefacto. El arreglo del pipeline vive en `v0.13.1`, que es la primera Release que
+> lleva `CORT-v*.apk` descargable desde el teléfono.
+
+**La lista de tareas para cortar la siguiente (v0.13.1), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.13.0\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.13.1\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
-3. Se etiqueta el commit de `main`: `git tag v0.13.0 && git push origin v0.13.0`. Ahí se dispara
+3. Se etiqueta el commit de `main`: `git tag v0.13.1 && git push origin v0.13.1`. Ahí se dispara
    `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
    esa es el acta «.zip como proyecto profesional» sin construir nada. Y desde este corte se dispara
    también `compilar-apk.yml`, que compila `CORT.apk` con el SDK del runner y lo sube a la Release
-   como `CORT-v0.13.0.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
-   **antes** de etiquetar.
+   como `CORT-v0.13.1.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
+   **antes** de etiquetar (y así se cumplió: verde en el run 38679448057 sobre `main`).
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.13.0 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.13.1 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.13.1` — el pipeline del APK, domeado: la ventana al teléfono ya compila y sube
+
+Corte pequeño y honesto: el código del asistente **no cambia** respecto a `v0.13.0`; lo que cambia es
+que **el pipeline del APK pasó de fallar a salir verde**, y desde esta etiqueta la Release llega con
+`CORT-v0.13.1.apk` colgado. Lo que se cuenta aquí es la cruz de los nueve `run`s que costó, porque
+cada una es una decisión de ingeniería, no ruido:
+
+- **`pipefail` matando antes de la guarda** (`apps/apk/compilar.sh`, commit `fb9529e`): bajo
+  `set -euo pipefail`, la línea `BT="$(ls -d "$SDK"/build-tools/* | sort -V | tail -1)"` **abortaba el
+  script** si el `glob` no casaba nada —el `ls` devuelve 1 y `pipefail` lo propaga—, justo antes del
+  `[ -z "$BT" ]` que debía detectar el hueco. Arreglado envolviendo cada sonda en `{ ls … || true; }`.
+  Un fallo de 1 segundo sin log no se diagnostica: este fue el primer `run` ciego (38676464493).
+- **El log de Actions no es público** (se descubrió a golpes): la API de logs pide `admin:read` y la
+  URL web pide sesión — el comentario del YAML afirmaba lo contrario y estaba mal, corregido—. Los
+  *annotations* del check-run **sí** se leen sin credenciales, así que el paso `Compilar` ahora
+  **convierte el final de su propio log en un `::error::`** (`.github/workflows/compilar-apk.yml`,
+  commit `6186d35`): es la única ventana honesta que hay desde fuera, y es lo que permitió ver los
+  cinco fallos siguientes en vez de adivinarlos.
+- **El shell por defecto de GitHub se comporta como `bash -e`** (commit `49c1845`): en el `run`
+  38677344363 el paso murió en la línea de `compilar.sh` **antes** de `st=$?` y del `echo ::error::`,
+  así que la instrumentación no se ejecutaba y el fallo volvía mudo. `set +e` al principio del bloque
+  lo arregla; sin eso, el annotation que debía explicar el siguiente fallo no salía nunca.
+- **`AndroidManifest.xml` con `--` dentro de un comentario** (run 38677901897, `AndroidManifest.xml:4:
+  error: not well-formed (invalid token)`): la línea que ponía `` `cort.py --lan` `` como ejemplo
+  rompía el XML, que no admite dos guiones seguidos dentro de `<!-- -->`. Reescrita la frase (commit
+  `96d2243`). Este fallo concreto tardó tres runs en **verse** porque el `bash -e` de arriba lo tapaba.
+- **`javac` con `-bootclasspath` y target 11** (run 38678109143, salió con 2): esa combinación está
+  **prohibida desde JDK 9**. Pasado a `--release 11` con `android.jar` al classpath (commit `4e7ee91`)
+  — el `java.*` lo pone el módulo del JDK y el `android.*` la plataforma; para una actividad que sólo
+  usa `android.app` + `android.webkit`, el mismo bytecode.
+- **`keytool` firmando a escondidas** (run 38678678013, trazado con `bash -x`): el script tenía un
+  `>/dev/null` que **se comía el mensaje de error** de `keytool`; el paso moría con 1 sin decir nada.
+  Quitado el redirect (commit `c10f10a`) y el annotation por fin lo contó. Debajo había **dos** bugs
+  reales: la contraseña desechable `cort` tenía 4 caracteres y **JDK exige 6+** (run 38678972941,
+  alargada a `cortapk` en `6d9f345`), y el JDK del runner **no pone `-keyalg` por defecto** (run
+  38679183347, añadido `-keyalg RSA -keysize 2048` en `961c31a`).
+- **Una prueba que chupaba del disco** (`tests/test_initiative.py`): `TestBucle` aísla la memoria y
+  el clima, pero no el recuento de puertas cerradas —`_cuidar_iniciativa` llama a
+  `audit.rechazos_de_acceso()`, que lee el `CORT_AUDIT_LOG` real—. En el `discover` completo `test_audit`
+  (que va antes por orden alfabético) deja rechazos escritos en ese archivo compartido, y la regla
+  `rechazos` —diseñada para hablar DELANTE de todas— tapaba a `sin_nombre` y falsaba tres pruebas del
+  bucle. No es un bug del producto sino una fuga de estado entre pruebas, y se cierra aislándola igual
+  que el clima (`rechazos_de_acceso` devolviendo 0 en `TestBucle`); la medición real de rechazos sigue
+  probada en su propio `TestReglas`. La suite completa volvió a correr con `mktemp -u` en el log de
+  auditoría: **Ran 490 tests in 64,966 s — OK** (antes del aislamiento, tres fallos dependientes del
+  orden).
+- **El primer verde, medido**: run **38679448057** sobre `main` (commit `961c31a`) — pasos `Compilar`
+  y `Dejar el APK como artefacto` en `success`; artefacto `CORT-apk` de **38 442 bytes** (digest
+  `sha256:f5fb4f12…`).
+
+**Sin verificar aquí** (regla 11): **el APK instalado en un dedo** — el pipeline ya lo compila y lo
+cuelga, pero nadie lo ha instalado en el Samsung de la dueña; la firma es desechable mientras el repo
+no tenga el secreto `CORT_APK_KEYSTORE_B64`, así que cada APK nuevo pide **desinstalar el anterior**.
+Nada del cerebro, la memoria ni la red cambió en este corte: es `v0.13.0` con la ventana al teléfono
+por fin construida en CI.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.13.1.zip`
 
 ---
 

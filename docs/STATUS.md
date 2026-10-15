@@ -2,7 +2,7 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-14** (`make test` 490 en verde en 70,169 s y `make test-web` 56 en 11,4 s), ejecutando comandos, no recordándolos.
+> Última verificación: **2026-10-15** (`make test` 490 en verde en 64,966 s tras aislar los rechazos en `TestBucle`, y el pipeline del APK **verde** en el run 38679448057 sobre `main` — APK de 38 442 bytes —), ejecutando comandos, no recordándolos. El corte de funciones es `v0.13.0` (página publicada, id 413388728, sin APK porque su etiqueta cayó sobre el commit con el `compilar.sh` roto); `v0.13.1` es el parche que deja el pipeline del APK verde y estrena la Release con `CORT-v0.13.1.apk` descargable.
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual

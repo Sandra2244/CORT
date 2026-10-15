@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.13.0-6f4ff2?style=flat-square">
-  <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-7%20publicadas-2ea44f?style=flat-square"></a>
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.13.1-6f4ff2?style=flat-square">
+  <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-8%20publicadas-2ea44f?style=flat-square"></a>
   <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-546%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
@@ -19,15 +19,16 @@
 
 No una maqueta: un orbe de shader que respira y que **se deshace en una nube de puntos cuando dejas de mirarlo**, **una voz que se oye** y un micrófono que sigue escuchando aunque cierres la ventana, una memoria que sobrevive al apagar y que **ya sabe quién eres y qué teléfono usas sin que lo repitas**, un cerebro que puede ser un modelo tuyo o un chat local —y desde este corte **ejecuta, comprueba el resultado en el mundo real, y avisa solo si alguien le toca la puerta sin llave**—, **una cara que se aparta cuando dejas de tocarla** — en reposo son tres cosas: el reactor, el reloj y un muelle con seis accesos; lo demás son ventanas de vidrio que se invocan, se arrastran y se echan —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.13.0`** · rama **`main`** · **490 pruebas en verde** del core + **56** de la cara (`make test` y `make test-web`; ejecutadas, no contadas — el corte del 2026-10-14 sumó **137** del cerebro: 87 del registro de herramientas y su lazo, 37 del server cableado, la agenda y el cronómetro, 6 de la memoria de dispositivo y el `system` de la nube, 7 del aviso de rechazos; las de la cara volvieron en otra forma el 2026-10-12 con `cort/activacion.ts` y siguen: `labios.ts`, `afecto.ts`, `cort/teclas.ts`, `cort/comandos.ts` y `cort/asoma.ts`—) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.13.1`** (el cerebro JARVIS es de `v0.13.0`; `v0.13.1` es el corte que **domó el pipeline del APK** — nueve `run`s, cada fallo leído por *annotation* público — y hace que la Release traiga el `CORT-v0.13.1.apk` descargable, **sin verificar aún en un dedo**) · rama **`main`** · **490 pruebas en verde** del core + **56** de la cara (`make test` y `make test-web`; ejecutadas, no contadas — el corte del 2026-10-14 sumó **137** del cerebro: 87 del registro de herramientas y su lazo, 37 del server cableado, la agenda y el cronómetro, 6 de la memoria de dispositivo y el `system` de la nube, 7 del aviso de rechazos; las de la cara volvieron en otra forma el 2026-10-12 con `cort/activacion.ts` y siguen: `labios.ts`, `afecto.ts`, `cort/teclas.ts`, `cort/comandos.ts` y `cort/asoma.ts`—) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT en reposo: el reactor holográfico morado y azul ocupando la pantalla, el reloj con su punto de conexión arriba y el muelle de vidrio con sus seis accesos abajo (captura del 2026-10-11)](docs/assets/ventanas-vidrio-2026-10-11.png)
 
 *La portada es del 2026-10-11, sacada del navegador con el core real en `--demo` (memoria de usar y tirar, así el panel no enseña recuerdos de nadie).* Muestra CORT **en reposo**, que es el estado por defecto: el reactor morado, el reloj con su punto de conexión y el muelle de vidrio con sus seis accesos —en la foto aún sin el numerito de su tecla dentro de cada botón, que entró el 2026-10-13 y no se ha vuelto a capturar—. Las ventanas no aparecen en la foto porque en reposo no hay ninguna montada en el DOM —se invocan—, y así se comprueba en la tabla de abajo.
 
 > **Descargar / probar:** [`git clone https://github.com/Sandra2244/CORT.git`](https://github.com/Sandra2244/CORT) ·
-> [ZIP de `v0.13.0`](https://github.com/Sandra2244/CORT/archive/refs/tags/v0.13.0.zip) ·
-> [las siete Release publicadas](https://github.com/Sandra2244/CORT/releases) ·
+> [ZIP de `v0.13.1`](https://github.com/Sandra2244/CORT/archive/refs/tags/v0.13.1.zip) ·
+> [APK para el teléfono (`CORT-v0.13.1.apk` en la Release)](https://github.com/Sandra2244/CORT/releases/tag/v0.13.1) ·
+> [las ocho Release publicadas](https://github.com/Sandra2244/CORT/releases) ·
 > [Instalación paso a paso ↓](#instalación)
 
 ---
