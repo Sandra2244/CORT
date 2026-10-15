@@ -1,0 +1,82 @@
+# Compilar el APK del teléfono en el pipeline, no en el portátil.
+#
+# Por qué existe: la dueña del proyecto quiere abrir CORT desde su Samsung con
+# un APK descargable, y **no se puede compilar en su máquina** — 1,8 GiB de RAM,
+# sin JDK (`javac` medido: no está) y un `gradle build` que la congeló. Las
+# herramientas que hacen falta (`aapt2`, `d8`, `zipalign`, `apksigner`) vienen
+# **preinstaladas** en el runner de GitHub Actions, y `apps/apk/compilar.sh` las
+# usa sin Gradle ni AndroidX: una actividad Java pura, cuatro pasos, cero
+# descargas.
+#
+# Por qué también `push: branches: main`: para ver si compila **antes** de
+# etiquetar. Con `gh run list` no hace falta: el log queda público y la marca
+# se comprueba con la Release.
+#
+# Por qué espera a que exista la Release: quien abre la página es
+# `publicar-release.yml`, disparado por la misma etiqueta. Subir el APK antes
+# fracasaría (`gh release upload` sobre una página que no existe), así que este
+# trabajo espera, reintentando, hasta que `publicar-release` la abra —sin
+# fusionar los dos pipelines: si un día el SDK del runner se rompe, la Release
+# de texto sigue saliendo igual—.
+#
+# La firma es desechable **mientras no haya secreto** `CORT_APK_KEYSTORE_B64` en
+# el repo: cada APK sale con una llave nueva y hay que desinstalar el anterior
+# para instalar el nuevo. Con el secreto puesto, `compilar.sh` firma con la
+# llave guardada y el APK se actualiza instalando encima. Es decisión de la
+# dueña cuál de los dos modos quiere; el pipeline funciona igual en ambos.
+name: compilar-apk
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - "main"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bajar el repo
+        uses: actions/checkout@v4
+
+      - name: Compilar
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          bash apps/apk/compilar.sh "${TAG:-0.0.0}"
+        env:
+          # Si la dueña guarda un keystore en los secretos, se usa; si no, el
+          # script genera uno desechable y lo dice en el log.
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+
+      - name: Dejar el APK como artefacto del run
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORT-apk
+          path: apps/apk/build/CORT.apk
+
+      - name: Subirlo a la Release (sólo cuando se empuja una etiqueta)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          etiqueta="$GITHUB_REF_NAME"
+          # Esperar a `publicar-release.yml` abra la página (máx. 10 min).
+          for i in $(seq 1 60); do
+            if gh release view "$etiqueta" >/dev/null 2>&1; then
+              break
+            fi
+            sleep 10
+          done
+          gh release view "$etiqueta" >/dev/null
+          # Nombre con la versión dentro: es lo que se toca desde el teléfono y
+          # tiene que decir qué es sin abrir el gestor de archivos.
+          cp apps/apk/build/CORT.apk "CORT-$etiqueta.apk"
+          gh release upload "$etiqueta" "CORT-$etiqueta.apk" --clobber
+          echo "APK subido a la Release $etiqueta"

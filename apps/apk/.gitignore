@@ -1,0 +1,6 @@
+# Todo esto sale de `compilar.sh` en el pipeline; en el portátil de la dueña no
+# se compila (sin JDK) y no debe quedar ni una copia.
+build/
+# Los iconos se dibuja con `scripts/marca.py` en cada build: no son assets de
+# tercero, son código ejecutado, y guardar el PNG sería una segunda verdad.
+res/

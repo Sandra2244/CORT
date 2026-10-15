@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  El APK es una ventana, no un segundo CORT: carga la página que sirve el
+  lanzador (`cort.py --lan` → http://IP:8780) sobre el WebView del sistema.
+  Todo lo que hace el asistente —cerebro, memoria, permisos— vive en el
+  portátil; este archivo no añade ninguna capacidad nueva, sólo un sitio donde
+  ver la cara desde el teléfono.
+
+  `usesCleartextTraffic="true"` es la decisión ya escrita en el repo: la LAN es
+  `http://` sin TLS porque poner un certificado en el portátil es tema aparte y
+  la dueña del proyecto lo dejó como decisión suya, no como ticket. A cambio el
+  puerto no se abre sin `CORT_LAN_TOKEN` (`security.py`), y el token viaja en la
+  URL porque el WebSocket del WebView tampoco puede mandar cabeceras.
+
+  Micrófono y cámara se piden como `required=false`: sirven para `getUserMedia`
+  (los gestos de `defocus.ts` sí funcionan aquí), y la escucha por
+  `SpeechRecognition` depende del motor de Google — ver el límite escrito en
+  `apps/apk/README.md`, no en un comentario que nadie lee.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="dev.sandra.cort"
+          android:versionCode="1"
+          android:versionName="0.13.0">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <application
+        android:label="CORT"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
