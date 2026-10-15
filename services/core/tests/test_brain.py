@@ -225,6 +225,38 @@ class TestCloud(unittest.IsolatedAsyncioTestCase):
             {"role": "user", "content": "¿qué tal?"}])
         self.assertEqual(seen["body"]["messages"][0]["role"], "user")
 
+    async def test_los_hechos_de_la_usuaria_llegan_a_claude(self):
+        """El server manda los recuerdos como mensaje de sistema, y Claude no lo
+        acepta dentro de `messages`: sin mergearlos en `system`, la nube olvidaría
+        justo lo que la usuaria no quiere repetir —su nombre, su dispositivo—.
+        Este era el olvido silencioso que la regla «no inventar» obliga a buscar."""
+        import os
+        os.environ.update(self.ENV)
+        seen = {}
+        await self.run_think(self.cloud(seen=seen), [
+            {"role": "system", "content": "Datos del usuario: El usuario se llama Sandra"},
+            {"role": "user", "content": "¿quién soy?"}])
+        self.assertIn("El usuario se llama Sandra", seen["body"]["system"])
+        self.assertNotIn("system", [m["role"] for m in seen["body"]["messages"]],
+                         "un system suelto en messages es rechazado por la API")
+
+    async def test_los_hechos_llegan_en_un_solo_system_al_endpoint_compatible(self):
+        import os
+        os.environ.update({"CORT_LLM_PROVIDER": "openai", "CORT_OPENAI_API_KEY": "k",
+                           "CORT_OPENAI_MODEL": "m",
+                           "CORT_OPENAI_BASE_URL": "https://api.groq.com/openai/v1/"})
+        seen = {}
+        def handler(request):
+            seen.update(body=json.loads(request.content))
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+        await self.run_think(httpx.MockTransport(handler), [
+            {"role": "system", "content": "Datos del usuario: El usuario usa un Samsung A16"},
+            {"role": "user", "content": "¿qué dispositivo uso?"}])
+        mensajes = seen["body"]["messages"]
+        self.assertEqual(sum(1 for m in mensajes if m["role"] == "system"), 1,
+                         "una sola instrucción de sistema: hay puertas que rechazan la segunda")
+        self.assertIn("El usuario usa un Samsung A16", mensajes[0]["content"])
+
     async def test_effort_can_be_turned_off_for_older_models(self):
         import os
         os.environ.update({**self.ENV, "CORT_ANTHROPIC_EFFORT": ""})

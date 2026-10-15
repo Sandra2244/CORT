@@ -137,13 +137,30 @@ def _alternating(history: list[dict]) -> list[dict]:
     return msgs
 
 
+def _hechos_de(history: list[dict]) -> str:
+    """Los hechos de la usuaria, que el server manda como mensaje de sistema
+    (`Datos del usuario: …`).
+
+    Claude rechaza un `system` dentro de `messages`, y `_alternating` lo quitaría
+    del historial: si no se rescata aquí, la nube olvidaría justo lo que la
+    dueña de CORT no quiere repetir — su nombre, su dispositivo, sus gustos—.
+    """
+    return " ".join(m["content"].strip() for m in history
+                    if m.get("role") == "system" and m.get("content"))
+
+
 async def _ask_anthropic(client: httpx.AsyncClient, history: list[dict]) -> tuple[str, str]:
     key = os.getenv("CORT_ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_API_KEY")
     if not key:
         raise CloudError("falta CORT_ANTHROPIC_API_KEY en el .env")
     model = os.getenv("CORT_ANTHROPIC_MODEL", "claude-haiku-5-5").strip()
-    body: dict = {"model": model, "max_tokens": CLOUD_MAX_TOKENS, "system": system(),
-                  "messages": _alternating(history)}
+    # Los hechos van pegados al `system`, no en `messages`: es el único sitio que
+    # Claude acepta como instrucción, y `_alternating` los barrería del historial.
+    sys = system()
+    if datos := _hechos_de(history):
+        sys = f"{sys}\n{datos}"
+    body: dict = {"model": model, "max_tokens": CLOUD_MAX_TOKENS, "system": sys,
+                  "messages": [m for m in _alternating(history) if m["role"] != "system"]}
     # `low`: la charla no necesita razonar a fondo y así responde rápido y barato.
     # Vacío lo desactiva (los modelos viejos no conocen el parámetro).
     effort = os.getenv("CORT_ANTHROPIC_EFFORT", "low").strip()
@@ -169,8 +186,15 @@ async def _ask_openai(client: httpx.AsyncClient, history: list[dict]) -> tuple[s
         raise CloudError("falta CORT_OPENAI_MODEL en el .env")
     # OpenAI propiamente dicha cambió el nombre del tope; los demás siguen con el viejo.
     cap = "max_completion_tokens" if "api.openai.com" in base else "max_tokens"
+    # Un solo `system`, con los hechos mergeados: hay puertas compatibles (Gemini)
+    # que rechazan un segundo mensaje de sistema en el historial, y perder ahí los
+    # datos de la usuaria sería el mismo olvido que acabamos de cerrar en Claude.
+    sys = system()
+    if datos := _hechos_de(history):
+        sys = f"{sys}\n{datos}"
     body: dict = {"model": model, cap: CLOUD_MAX_TOKENS,
-                  "messages": [{"role": "system", "content": system()}, *history]}
+                  "messages": [{"role": "system", "content": sys},
+                               *[m for m in history if m.get("role") != "system"]]}
     # Los modelos que «piensan» (Gemini 2.5, por ejemplo) gastan parte del tope en
     # pensar; `low` deja la charla rápida y con el tope entero para la respuesta.
     # Opcional: no todos los proveedores conocen el parámetro.

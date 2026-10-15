@@ -210,6 +210,26 @@ class TestFacts(unittest.TestCase):
     def test_multiple_facts(self):
         self.assertEqual(2, len(extract("me llamo Sandra y me gusta el café")))
 
+    def test_dispositivo_por_marca(self):
+        """«uso un Samsung A16» se guarda una vez y no se pregunta más: la dueña
+        cambia entre el portátil y el teléfono, y repetir el dispositivo en cada
+        charla es un turno perdido."""
+        self.assertEqual(["El usuario usa un Samsung A16"],
+                         extract("uso un Samsung A16"))
+
+    def test_dispositivo_por_nombre(self):
+        self.assertEqual(["El usuario dice que su teléfono es un Redmi Note 12"],
+                         extract("mi teléfono es un Redmi Note 12"))
+
+    def test_dispositivo_con_nombre_y_marca(self):
+        self.assertEqual(2, len(extract("me llamo Sandra y uso un Samsung A16")))
+
+    def test_uso_no_es_dispositivo(self):
+        """Cualquier «uso un …» no es un aparato: sin ancla de marca, una frase
+        de cortesía llenaría la memoria de basura."""
+        self.assertEqual([], extract("uso el cronómetro para estudiar"))
+        self.assertEqual([], extract("uso un martillo de goma"))
+
 
 class TestDbPathOverride(unittest.TestCase):
     """`CORT_MEMORY_DB` decide qué cabeza usa un CORT: una demo no escribe encima
