@@ -50,11 +50,16 @@ ARCHIVOS = {
     "SpeechRecognizer": "core/java/android/speech/SpeechRecognizer.java",
     "TextToSpeech": "core/java/android/speech/tts/TextToSpeech.java",
     "View": "core/java/android/view/View.java",
+    # Desde `v0.15.1` la pantalla de ajustes de la nube también nombra
+    # `InputType.TYPE_TEXT_VARIATION_PASSWORD` y `..._URI`, y un flag de teclado
+    # escrito de memoria es exactamente el `cannot find symbol` que ya costó dos
+    # Runs con `AlarmClock`.
+    "InputType": "core/java/android/text/InputType.java",
 }
 
 PREFIJOS = ("ACTION_", "EXTRA_", "CATEGORY_", "FLAG_", "STREAM_", "ADJUST_", "RINGER_",
             "MODE_", "ERROR_", "LANG_", "QUEUE_", "IME_", "PERMISSION_", "RESULTS_",
-            "LANGUAGE_MODEL_", "ALARM_SEARCH_MODE_")
+            "LANGUAGE_MODEL_", "ALARM_SEARCH_MODE_", "TYPE_")
 SUELTAS = {"SUCCESS", "INFINITE", "FOCUS_DOWN", "FOCUS_UP", "FOCUS_LEFT", "FOCUS_RIGHT",
            "VISIBLE", "INVISIBLE", "GONE", "MANUFACTURER", "MODEL", "VERSION", "SDK_INT",
            "DEVICE", "PRODUCT", "BRAND"}

@@ -35,6 +35,15 @@ SIMBOLOS = APK / "simbolos-android.json"
 
 HUECOS = {"hora", "fecha", "resto", "lista", "valor"}
 
+# Las clases del SDK que el Java del APK puede nombrar. **Una sola vez**: las dos
+# pruebas de abajo compartían la lista escrita a mano dos veces, y cuando entró
+# `InputType` (`v0.15.1`, la pantalla de la nube) la segunda copia se quedó
+# antigua — o sea: el filtro habría dado por buena una constante inventada de
+# `InputType` porque ni la miraba. Con una sola constante, añadir una clase es
+# añadir su archivo de AOSP a `scripts/simbolos_android.py` y su nombre aquí.
+CLASES = ("AlarmClock|Settings|Intent|AudioManager|RecognizerIntent|SpeechRecognizer"
+          "|TextToSpeech|EditorInfo|PackageManager|Build|View|InputType")
+
 
 def normaliza(texto):
     """Espejo en Python de `Cerebro.normaliza` (Java). Si las dos mitades
@@ -233,13 +242,19 @@ class TestSimbolosDeAndroid(unittest.TestCase):
         cls.clases = diccionario["clases"]
         cls.verificado = diccionario.get("verificado", "?")
 
+    def test_la_lista_de_clases_ya_no_esta_duplicada_con_el_diccionario(self):
+        """`CLASES` (el filtro de estas dos pruebas) y `clases` (el diccionario de
+        AOSP) tienen que nombrar lo mismo. Si no, el filtro deja de mirar una clase
+        que sí está descargada — y una constante inventada de esa clase pasa—.
+        """
+        self.assertEqual(set(CLASES.split("|")), set(self.clases),
+                         "o falta una clase en `CLASES` o sobra una en el diccionario: "
+                         "refresca `scripts/simbolos_android.py` y arregla la lista")
+
     def test_el_diccionario_tiene_las_clases_que_el_java_nombra(self):
         nombradas = set()
         for texto in self.fuentes.values():
-            nombradas |= set(re.findall(
-                r"\b(AlarmClock|Settings|Intent|AudioManager|RecognizerIntent"
-                r"|SpeechRecognizer|TextToSpeech|EditorInfo|PackageManager|Build|View)"
-                r"\.[A-Z]", texto))
+            nombradas |= set(re.findall(r"\b(" + CLASES + r")\.[A-Z]", texto))
         self.assertEqual(set(), nombradas - set(self.clases),
                          "el Java nombra una clase que no está en el diccionario: "
                          "hay que añadir su archivo de AOSP a `scripts/simbolos_android.py`")
@@ -254,9 +269,7 @@ class TestSimbolosDeAndroid(unittest.TestCase):
         # del runner.
         for nombre, texto in self.fuentes.items():
             for clase, simbolo in re.findall(
-                    r"\b(AlarmClock|Settings|Intent|AudioManager|RecognizerIntent"
-                    r"|SpeechRecognizer|TextToSpeech|EditorInfo|PackageManager|Build|View)"
-                    r"\.([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(?![\w.])", texto):
+                    r"\b(" + CLASES + r")\.([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(?![\w.])", texto):
                 permitidas = self.clases[clase]
                 self.assertIn(simbolo, permitidas,
                               f"{nombre}: {clase}.{simbolo} no existe en AOSP "

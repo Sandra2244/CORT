@@ -251,5 +251,168 @@ class TestProtocoloDeDivulgacion(unittest.TestCase):
         self.assertIn("mostrarOSetup", self.java)
 
 
+def solo_codigo(texto):
+    """El Java de **verdad**, sin comentarios ni literales de cadena.
+
+    Hace falta porque la primera versión de `test_la_clave_guardada_nunca_vuelve_a
+    _la_pantalla` contó cuatro usos de `nube.clave()` cuando había tres: el cuarto
+    estaba dentro del comentario que explica precisamente que no se muestra. Un
+    filtro que lee prosa como si fuera código acaba acusando (o perdonando) lo que
+    no debe, así que aquí se quitan los bloques `/* */`, las líneas `//` y las
+    cadenas `"..."` antes de buscar nada.
+    """
+    salida, i, n = [], 0, len(texto)
+    while i < n:
+        c = texto[i]
+        if c == "/" and i + 1 < n and texto[i + 1] == "/":
+            j = texto.find("\n", i)
+            i = n if j < 0 else j
+        elif c == "/" and i + 1 < n and texto[i + 1] == "*":
+            j = texto.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+        elif c in '"\'':
+            j = i + 1
+            while j < n:
+                if texto[j] == "\\":
+                    j += 2
+                    continue
+                if texto[j] == c:
+                    break
+                j += 1
+            i = j + 1
+        else:
+            salida.append(c)
+            i += 1
+    return "".join(salida)
+
+
+class TestAjustesDeNube(unittest.TestCase):
+    """`v0.15.1`: la dueña eligió «nube si hay internet, local si no», y la mitad
+    de la nube estaba **inaccesible** — `Nube` leía la clave de un `SharedPreferences`
+    que ningún dedo podía escribir desde el teléfono—.
+
+    Estas pruebas leen el fuente, como las demás: en esta máquina no hay `javac`,
+    así que lo que se puede fijar es la forma de la pantalla y las tres promesas
+    que la hacen segura — la clave no se muestra, no se guarda en el repo, y
+    probarla no congela la cara—.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.cara = (FUENTES / "Cara.java").read_text(encoding="utf-8")
+        cls.nube = (FUENTES / "Nube.java").read_text(encoding="utf-8")
+        cls.todos = {p.name: p.read_text(encoding="utf-8") for p in sorted(FUENTES.glob("*.java"))}
+        cls.activos = (APK / "assets" / "habilidades.json").read_text(encoding="utf-8")
+
+    def test_la_pantalla_existe_y_se_abre_desde_la_cara(self):
+        self.assertIn("public void abrirAjustes()", self.cara)
+        self.assertIn("setOnClickListener(v -> abrirAjustes())", self.cara)
+        self.assertIn("actualizandoChip();", self.cara)
+
+    def test_la_clave_se_teclea_en_un_campo_que_no_la_devela(self):
+        """`TYPE_TEXT_VARIATION_PASSWORD` es lo que hace que Android pinte puntos
+        en vez de la clave; sin eso, cualquier hombro cercano lee el secreto."""
+        self.assertIn("InputType.TYPE_TEXT_VARIATION_PASSWORD", self.cara)
+        self.assertIn("InputType.TYPE_TEXT_VARIATION_URI", self.cara)
+
+    def test_la_clave_guardada_nunca_vuelve_a_la_pantalla(self):
+        """A `nube.clave()` sólo se le piden **tres** cosas: si existe
+        (`.isEmpty()`), cuántos caracteres tiene (`.length()`, para la pista del
+        campo) y conservarse cuando la dueña no teclea nada. Ninguna de las tres
+        la escribe en una pantalla, y ésa es la diferencia entre «el campo dice
+        que hay una clave de 35 caracteres» y «el hombro de al lado lee el
+        secreto»."""
+        # Tres y sólo tres licencias. Se busca sobre `solo_codigo` porque el
+        # comentario que explica esta misma regla nombra `nube.clave()`, y esa
+        # mención no es un uso.
+        codigo = solo_codigo(self.cara)
+        self.assertIn("nube.clave().isEmpty()", codigo)
+        self.assertIn("nube.clave().length()", codigo)
+        self.assertIn("tecleada.isEmpty() ? nube.clave() : tecleada", codigo)
+        # Y ninguna aparición más: fuera de medir si existe, medir su longitud y
+        # conservarse, `nube.clave()` sólo puede acabar escrito en una pantalla.
+        for m in re.finditer(r"nube\.clave\(\)", codigo):
+            despues = codigo[m.end():m.end() + 12]
+            anterior = codigo[max(0, m.start() - 24):m.start()].rstrip()
+            self.assertTrue(despues.startswith((".isEmpty()", ".length()")) or anterior.endswith("?"),
+                            f"la clave se está mostrando: nube.clave(){despues!r}")
+        self.assertEqual(3, len(re.findall(r"nube\.clave\(\)", codigo)),
+                        "aparece un uso nuevo de la clave: míralo uno a uno antes de pasar")
+        self.assertNotIn("setText(nube.clave()", codigo)
+        # Y el campo se construye con el valor vacío, no con la guardada.
+        self.assertIn('"", true);', self.cara)
+
+    def test_escribir_poco_no_borra_la_clave(self):
+        """Dejar el campo en blanco significa «no la cambio», no «quítala»: si no,
+        tocar el modelo obligaría a reescribir el secreto cada vez."""
+        self.assertIn("tecleada.isEmpty() ? nube.clave() : tecleada", self.cara)
+
+    def test_se_puede_apagar_sin_dejar_la_cara_a_medias(self):
+        self.assertIn('nube.ajustar(modo[0], lo(base), lo(modelo), "");', self.cara)
+        # Y sin clave la cara sigue respondiendo: la nube es un añadido, no un requisito.
+        inicio = self.cara.index("private void porNube(")
+        trozo = self.cara[inicio:inicio + 700]
+        self.assertIn("if (!nube.configurada())", trozo)
+        self.assertIn("proponer(dicho)", trozo)
+
+    def test_probar_la_conexion_no_corre_en_el_hilo_de_la_interfaz(self):
+        """`Nube.preguntar` es HTTPS bloqueante (12 s de conexión, 25 s de lectura).
+        En el hilo de la UI congela la cara, y una cara congelada vuelve a ser el
+        formulario que `v0.15.0` vino a quitar."""
+        inicio = self.cara.index("private void probandoNube(")
+        trozo = self.cara[inicio:inicio + 900]
+        antes, despues = trozo.split("new Thread(", 1)
+        self.assertNotIn("nube.preguntar(", antes, "la llamada no puede ir en el hilo de la UI")
+        self.assertIn("nube.preguntar(", despues)
+        self.assertIn("runOnUiThread", despues)
+
+    def test_el_panel_de_ajustes_pinta_su_fondo_antes_que_su_texto(self):
+        """Android da el `AlertDialog` con tema **claro** y la paleta de CORT es
+        oscura: si el panel no se pinta su propio fondo, los avisos en blanco al
+        54 % salen sobre blanco. Es un detalle que sólo se ve con un dedo delante,
+        así que lo fija una línea de fuente en vez de una captura.
+        """
+        self.assertIn("desplegable.setBackgroundColor(Paleta.FONDO);", self.cara)
+
+    def test_todo_campo_de_texto_de_la_cara_trae_su_vidrio_oscuro(self):
+        """`new EditText(actividad)` dentro de un `AlertDialog` de Android sale
+        sobre el blanco del diálogo, y la cara pinta su texto en `Paleta.CLARO`:
+        blanco sobre blanco. Pasó en el diálogo de aprender frases (`v0.15.0`, sin
+        instalar aún) y por eso la regla se fija aquí, no con una captura.
+        """
+        crea = [m.start() for m in re.finditer(r"new EditText\(actividad\)", self.cara)]
+        self.assertEqual(3, len(crea), "la cara tiene tres campos: el de hablar, el de "
+                                       "responder y los de ajustes")
+        for inicio in crea:
+            trozo = self.cara[inicio:inicio + 700]
+            self.assertIn("setBackgroundColor(Paleta.CAMPO)", trozo,
+                          "hay un campo de texto sin fondo oscuro: invisible sobre el diálogo")
+
+    def test_ningun_secreto_del_mundo_real_vive_en_el_apk(self):
+        """Regla 7: ni la clave de la nube ni la llave de firma se suben. Aquí se
+        mide que en **ninguna** fuente ni activo hay una cadena con forma de clave
+        de Anthropic/OpenAI, y que el valor por defecto del secreto está vacío."""
+        forma = re.compile(r"sk-(?:ant-)?[A-Za-z0-9_\-]{16,}")
+        for nombre, texto in self.todos.items():
+            self.assertIsNone(forma.search(texto), f"{nombre}: hay una clave literal dentro")
+        self.assertIsNone(forma.search(self.activos), "habilidades.json lleva una clave")
+        self.assertIn('prefs.getString("clave", "")', self.nube)
+
+    def test_la_unica_escritura_de_ese_almacen_es_el_ajustar_de_nube(self):
+        """`Cara` no escribe `SharedPreferences` por su cuenta: si la pantalla
+        empezara a guardar la clave por su lado, `Nube.configurada()` mentiría."""
+        for prohibido in ('getSharedPreferences("cort-nube"', 'putString("clave"'):
+            self.assertNotIn(prohibido, self.cara)
+        self.assertIn('.putString("clave", clave).apply();', self.nube)
+
+    def test_los_textos_de_la_cara_abren_y_cierran_su_comilla(self):
+        """Español con «comillas angulares»: en `v0.15.0` una frase aprendida se
+        anunciaba con `diré «hola"`, cerrando con la comilla de escape de Java. Es
+        el tipo de errata que ningún compilador ve y que la dueña lee en la pantalla."""
+        for nombre, texto in self.todos.items():
+            self.assertEqual(texto.count("«"), texto.count("»"),
+                             f"{nombre}: hay una « sin su » (o al revés)")
+
+
 if __name__ == "__main__":
     unittest.main()

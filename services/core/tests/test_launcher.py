@@ -11,6 +11,7 @@ import sys
 import socket
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -508,6 +509,24 @@ class TestDescubrimientoPorRed(unittest.TestCase):
         finally:
             cliente.close()
 
+    def esperando(self, registro, hasta=2.0):
+        """`bucle_descubrimiento` primero **contesta** y después apunta quién
+        preguntó, así que el `recvfrom` de arriba puede volver antes de que esa
+        segunda mitad ocurra. Con la suite entera corriendo en los dos núcleos de
+        esta máquina se cumplió el caso: `test_una_sonda_legitima…` salió roja
+        dentro de `make test` (el 2026-10-15, con 571 pruebas) y pasó tres veces
+        sola — era la prueba la que iba justita de tiempo, no el producto, y así
+        queda escrito en vez de rezar para que el ordenate vaya lento.
+
+        Se espera con techo y se devuelve lo que haya: si en dos segundos no aparece
+        nada, el `assertEqual` de enfrente falla con el valor real y no con una
+        carrera.
+        """
+        limite = time.time() + hasta
+        while not registro and time.time() < limite:
+            time.sleep(0.02)
+        return registro
+
     def test_el_puerto_por_defecto_es_el_que_lleva_el_apk(self):
         self.assertEqual(8781, self.m.puerto_descubrimiento({}))
 
@@ -552,7 +571,9 @@ class TestDescubrimientoPorRed(unittest.TestCase):
         self.hilos.append(hilo)
         self.assertEqual(b"CORT-AQUI-1|http://192.168.100.xxx:8780/?token=abc",
                          self.sondear(puerto))
-        self.assertEqual(["127.0.0.1"], quien, "quien pidió la llave tiene que quedar impreso")
+        # El `print` va **detrás** de la respuesta en el lazo del lanzador: se espera.
+        self.assertEqual(["127.0.0.1"], self.esperando(quien),
+                         "quien pidió la llave tiene que quedar impreso")
 
     def test_una_sonda_basura_no_saca_respuesta(self):
         sock, motivo = self.m.abrir_descubrimiento(0)

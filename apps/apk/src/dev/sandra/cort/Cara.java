@@ -53,6 +53,7 @@ public class Cara implements Voz.AlOir {
     private LinearLayout registro;
     private ScrollView hoja;
     private TextView estado;
+    private TextView nubeChip;
     private EditText campo;
     private TextView micro;
     private boolean escuchando;
@@ -105,6 +106,16 @@ public class Cara implements Voz.AlOir {
         estado.setLetterSpacing(0.22f);
         estado.setGravity(Gravity.CENTER_HORIZONTAL);
         cuerpo.addView(estado, par(-1, -2));
+
+        nubeChip = texto("", 12f, Paleta.SUAVE);
+        nubeChip.setGravity(Gravity.CENTER_HORIZONTAL);
+        nubeChip.setPadding(dp(14), dp(11), dp(14), dp(11));
+        nubeChip.setBackgroundColor(Paleta.CAMPO);
+        nubeChip.setOnClickListener(v -> abrirAjustes());
+        LinearLayout.LayoutParams marcaChip = new LinearLayout.LayoutParams(-2, -2);
+        marcaChip.gravity = Gravity.CENTER_HORIZONTAL;
+        cuerpo.addView(nubeChip, marcaChip);
+        actualizandoChip();
 
         registro = new LinearLayout(actividad);
         registro.setOrientation(LinearLayout.VERTICAL);
@@ -246,6 +257,159 @@ public class Cara implements Voz.AlOir {
         voz.hablar(texto);
     }
 
+    /* ------------------------------------------------------------------ nube */
+
+    /**
+     * La pantalla que faltaba. La dueña eligió «nube si hay internet, local si
+     * no», y hasta aquí la segunda mitad era letra muerta: `Nube` leía la clave
+     * de un `SharedPreferences` que **nadie podía escribir desde el teléfono**.
+     *
+     * Tres decisiones que no son de estilo:
+     *
+     * 1. **La clave guardada no se vuelve a enseñar.** El campo se abre vacío y
+     *    su pista dice cuántos caracteres hay guardados; escribir algo la
+     *    reemplaza y dejarlo en blanco la conserva. En ningún punto se concatena
+     *    `nube.clave()` con un texto de pantalla, y por eso la prueba
+     *    `test_la_clave_guardada_nunca_vuelve_a_la_pantalla` existe.
+     * 2. **Probar no congela la cara.** `Nube.preguntar` es HTTPS bloqueante: va
+     *    en su propio `Thread` y el resultado vuelve con `runOnUiThread`, la
+     *    misma regla que ya rige la búsqueda por UDP.
+     * 3. **Se puede apagar.** «Borrar la clave de este teléfono» deja la cara
+     *    exactamente como estaba antes de `v0.15.0`: tabla local y memoria local.
+     *    La nube es un añadido, nunca un requisito.
+     */
+    public void abrirAjustes() {
+        final String[] modo = {nube.proveedor()};
+        ScrollView desplegable = new ScrollView(actividad);
+        // El `AlertDialog` de Android es de tema **claro**, y aquí todo el texto se
+        // pinta con la paleta oscura de CORT: sin este fondo, los avisos en
+        // `Paleta.SUAVE` (blanco al 54 %) salen sobre blanco y no se leen. Se fija
+        // con una prueba porque en esta máquina no hay pantalla donde verlo.
+        desplegable.setBackgroundColor(Paleta.FONDO);
+        LinearLayout caja = new LinearLayout(actividad);
+        caja.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(18);
+        caja.setPadding(pad, pad, pad, pad);
+        desplegable.addView(caja, par(-1, -2));
+
+        caja.addView(texto("La nube, si quieres", 19f, Paleta.CIAN), par(-1, -2));
+        TextView explic = texto("Sin clave CORT contesta con su tabla y su memoria, que es como funciona hoy. "
+                + "Con clave, las frases que no conoce se las pregunta al modelo cuando hay internet. "
+                + "La clave se queda escrita en este teléfono: no va al repositorio ni al APK.",
+                12f, Paleta.SUAVE);
+        explic.setLineSpacing(0f, 1.35f);
+        caja.addView(explic, par(-1, -2));
+
+        final TextView proveedor = texto("", 14f, Paleta.CLARO);
+        proveedor.setText("modo: " + modo[0] + "  ·  toca para cambiar");
+        proveedor.setPadding(0, dp(16), 0, dp(16));
+        proveedor.setOnClickListener(v -> {
+            modo[0] = "openai".equals(modo[0]) ? "anthropic" : "openai";
+            proveedor.setText("modo: " + modo[0] + "  ·  toca para cambiar");
+        });
+        caja.addView(proveedor, par(-1, -2));
+
+        final EditText base = campoDe("dirección del servicio", nube.base(), false);
+        final EditText modelo = campoDe("modelo", nube.modelo(), false);
+        final EditText clave = campoDe(hayClave()
+                ? "clave guardada (" + nube.clave().length() + " caracteres) — en blanco: no la cambio"
+                : "clave de la API, se teclea una vez", "", true);
+        caja.addView(base, par(-1, -2));
+        caja.addView(modelo, par(-1, -2));
+        caja.addView(clave, par(-1, -2));
+
+        final TextView salida = texto("", 12f, Paleta.AVISO);
+        salida.setLineSpacing(0f, 1.35f);
+        salida.setPadding(0, dp(12), 0, dp(4));
+        caja.addView(salida, par(-1, -2));
+
+        TextView probar = texto("▶  probar la conexión", 14f, Paleta.CIAN);
+        probar.setPadding(0, dp(12), 0, dp(12));
+        probar.setOnClickListener(v -> probandoNube(salida));
+        caja.addView(probar, par(-1, -2));
+
+        TextView borrar = texto("⌫  borrar la clave de este teléfono", 13f, Paleta.SUAVE);
+        borrar.setPadding(0, dp(6), 0, dp(6));
+        borrar.setOnClickListener(v -> {
+            nube.ajustar(modo[0], lo(base), lo(modelo), "");
+            clave.setText("");
+            salida.setText("Clave borrada. CORT vuelve a su tabla local.");
+            actualizandoChip();
+        });
+        caja.addView(borrar, par(-1, -2));
+
+        new AlertDialog.Builder(actividad)
+                .setView(desplegable)
+                .setPositiveButton("Guardar", (d, w) -> guardandoAjustes(
+                        modo[0], lo(base), lo(modelo), lo(clave)))
+                .setNegativeButton("Cerrar", null)
+                .show();
+    }
+
+    private void guardandoAjustes(String proveedor, String base, String modelo, String tecleada) {
+        // Vacío significa «conserva la que ya está», no «bórrala»: si no, cada
+        // arreglo de un modelo le haría volver a teclear el secreto entero.
+        String guardada = tecleada.isEmpty() ? nube.clave() : tecleada;
+        nube.ajustar(proveedor, base, modelo, guardada);
+        actualizandoChip();
+        if (nube.configurada()) {
+            linea("Nube activada: " + modelo + " en " + base + ". Lo que no sepa la tabla se lo pregunta.",
+                    Paleta.AVISO);
+        } else {
+            linea("Sin nube: CORT contesta solo con su tabla y su memoria.", Paleta.SUAVE);
+        }
+    }
+
+    /** HTTPS en un hilo aparte, y el aviso vuelve a la cara por `runOnUiThread`. */
+    private void probandoNube(final TextView salida) {
+        if (!nube.configurada()) {
+            salida.setText("Falta la clave, la dirección o el modelo.");
+            return;
+        }
+        salida.setText("preguntando…");
+        new Thread(() -> {
+            final String respuesta = nube.preguntar(
+                    "Responde únicamente con estas dos palabras: hola CORT", "");
+            final String aviso = respuesta == null
+                    ? "No contestó: " + nube.ultimoFallo()
+                    : "Contestó: " + respuesta;
+            actividad.runOnUiThread(() -> salida.setText(aviso));
+        }).start();
+    }
+
+    private boolean hayClave() {
+        return !nube.clave().isEmpty();
+    }
+
+    private void actualizandoChip() {
+        if (nubeChip == null) {
+            return;
+        }
+        nubeChip.setText(nube.configurada()
+                ? "⚙ nube: " + nube.proveedor() + " · " + nube.modelo()
+                : "⚙ nube apagada · toca para escribirla");
+    }
+
+    private EditText campoDe(String pista, String valor, boolean secreta) {
+        EditText campo = new EditText(actividad);
+        campo.setHint(pista);
+        campo.setHintTextColor(Paleta.SUAVE);
+        campo.setTextColor(Paleta.CLARO);
+        campo.setBackgroundColor(Paleta.CAMPO);
+        campo.setTextSize(15f);
+        campo.setSingleLine(true);
+        campo.setInputType(secreta
+                ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+                : InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        campo.setPadding(dp(12), dp(14), dp(12), dp(14));
+        campo.setText(valor);
+        return campo;
+    }
+
+    private static String lo(EditText campo) {
+        return campo.getText().toString().trim();
+    }
+
     /**
      * «no lo sé» con una salida: las acciones que CORT ya sabe hacer, para que
      * la dueña le asocie la frase nueva. Nunca se ofrece escribir código ni
@@ -280,6 +444,12 @@ public class Cara implements Voz.AlOir {
         escritura.setHint("lo que CORT deberá responder");
         escritura.setTextColor(Paleta.CLARO);
         escritura.setHintTextColor(Paleta.SUAVE);
+        // Bug de `v0.15.0` que nadie ha visto con un dedo porque nadie ha instalado
+        // la cara nativa: el `AlertDialog` de Android viene con tema **claro**, y
+        // este campo se pintaba en blanco sobre el blanco del diálogo. Ahora el
+        // campo trae su propio vidrio oscuro, como los de la pantalla de la nube.
+        escritura.setBackgroundColor(Paleta.CAMPO);
+        escritura.setPadding(dp(14), dp(14), dp(14), dp(14));
         new AlertDialog.Builder(actividad)
                 .setTitle("¿Qué te contesto?")
                 .setView(escritura)
@@ -289,7 +459,7 @@ public class Cara implements Voz.AlOir {
                         return;
                     }
                     recuerdos.aprender(patron, "decir", "", texto);
-                    linea("Aprendida: diré «" + texto + "\".", Paleta.AVISO);
+                    linea("Aprendida: diré «" + texto + "».", Paleta.AVISO);
                 })
                 .setNegativeButton("Dejarlo", null)
                 .show();
