@@ -370,7 +370,10 @@ async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
 
     Lee la temperatura de la **caché del clima**, nunca del valor de reserva: un
     «abrígate» sacado de los 22° que PONE el `.env` cuando no hay ciudad medida
-    sería un consejo mentiroso.
+    sería un consejo mentiroso. Y lee la bitácora: si alguien está llamando a la
+    puerta sin llave, eso se dice solo, que era el hueco entre «queda apuntado»
+    y «la dueña se entera». El recuento lo hace `audit`, no `initiative`: este
+    lado mira números ya mirados.
     """
     if not initiative.enabled() or INICIATIVA_S <= 0:
         return
@@ -382,7 +385,8 @@ async def _cuidar_iniciativa(sock: WebSocket, actividad: dict) -> None:
                 continue
             clima = weather.snapshot()
             m = initiative.ahora(memory.count(),
-                                 clima["temp_c"] if clima else None)
+                                 clima["temp_c"] if clima else None,
+                                 audit.rechazos_de_acceso())
             sug = initiative.sugerir(m, dichas)
             if sug is None:
                 continue

@@ -37,13 +37,13 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import security
 
 __all__ = ["MOTIVOS", "DETALLE_MAX", "LIMITE_BYTES", "ruta_de_bitacora",
-           "normaliza", "linea", "registrar", "recientes"]
+           "normaliza", "linea", "registrar", "recientes", "rechazos_de_acceso"]
 
 #: Los seis rechazos que existen. Coinciden con los que `server.py` puede
 #: producir; si un módulo nuevo quiere otro, primero entra aquí.
@@ -187,6 +187,39 @@ def resumen(cuadros: list[dict], ruta: Path) -> str:
         lineas.append(f"  {c.get('iso', '?')}  {c.get('motivo', '?'):<28}"
                       f"  {c.get('origen') or '—':<22}  {c.get('detalle') or ''}")
     return "\n".join(lineas) + "\n"
+
+
+#: Los motivos que son «alguien llamó a la puerta». Los de rutas y extensiones no
+#: cuentan: un vecino curioseando `../.env` es un intento, pero tres erratas de la
+#: propia usuaria pidiendo un `.txt` no son un allanamiento, y avisar por ellas
+#: enseñaría a ignorar el aviso.
+_LLAMADAS = ("acceso-sin-llave", "llave-incorrecta")
+
+
+def rechazos_de_acceso(minutos: int = 10) -> int:
+    """Cuántos rechazos de puerta hay apuntados en los últimos `minutos`.
+
+    Es el número que convierte la bitácora en aviso: la dueña no va a leer un
+    JSONL cada media hora, pero sí va a escuchar «he bloqueado cinco intentos».
+    Se detiene en el primer evento fuera de la ventana —`recientes()` viene del
+    más nuevo al más viejo— y una marca ilegible no corta el recuento: se tira
+    y se sigue, porque un registro tocado a mano no puede apagar la alarma.
+    """
+    corte = datetime.now(timezone.utc) - timedelta(minutes=minutos)
+    n = 0
+    for c in recientes():
+        iso = c.get("iso", "")
+        try:
+            cuando = datetime.fromisoformat(iso)
+            if cuando.tzinfo is None:
+                cuando = cuando.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if cuando < corte:
+            break
+        if c.get("motivo") in _LLAMADAS:
+            n += 1
+    return n
 
 
 if __name__ == "__main__":

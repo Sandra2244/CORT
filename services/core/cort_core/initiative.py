@@ -39,11 +39,16 @@ class Momento:
     la temperatura de reserva (`CORT_CITY_TEMP_C`) sería un aviso inventado. Sin
     ciudad configurada no sale ninguna sugerencia de temperatura, igual que el
     cabezal no pinta un `0°` que nadie midió.
+
+    `rechazos` es cuántas veces llamaron a la puerta sin la llave en los últimos
+    minutos —lo mide `audit.rechazos_de_acceso()`, que lee el disco, no este
+    módulo, que sigue sin importar a nadie—.
     """
 
     hora: int
     temp_c: float | None
     recuerdos: int
+    rechazos: int = 0
 
 
 @dataclass(frozen=True)
@@ -57,7 +62,7 @@ def enabled() -> bool:
     return os.getenv("CORT_INITIATIVE", "1") != "0"
 
 
-def ahora(recuerdos: int, temp_c: float | None) -> Momento:
+def ahora(recuerdos: int, temp_c: float | None, rechazos: int = 0) -> Momento:
     """El reloj de la máquina con el clima ya medido (leído de la caché).
 
     `CORT_NOW` existe para poder probar un turno de madrugada sin esperar a la
@@ -65,16 +70,26 @@ def ahora(recuerdos: int, temp_c: float | None) -> Momento:
     """
     override = os.getenv("CORT_NOW", "").strip()
     hora = int(override) if _HORA.fullmatch(override) else datetime.now().hour
-    return Momento(hora=hora, temp_c=temp_c, recuerdos=recuerdos)
+    return Momento(hora=hora, temp_c=temp_c, recuerdos=recuerdos, rechazos=rechazos)
+
+
+#: A partir de cuántos intentos sin llave se dice algo. Uno puede ser una errata
+#: al abrir el enlace del portátil; tres, en diez minutos, ya tienen pinta de
+#: alguien probando. Es un número, y está escrito para poder discutirlo con datos.
+RECHAZOS_PARA_AVISO = 3
 
 
 def _posibles(m: Momento):
     """Las reglas, en orden de prioridad. La primera que se cumpla es la que se dice.
 
-    Orden deliberado: primero lo que sólo se dice una vez en la vida de la base
+    Orden deliberado: primero la puerta (puede estar llamando alguien ahora mismo,
+    y lo demás espera), luego lo que sólo se dice una vez en la vida de la base
     (no saber el nombre), después el cuerpo (frío, calor) y al final la hora, que
     vuelve a ser cierta cada mañana.
     """
+    if m.rechazos >= RECHAZOS_PARA_AVISO:
+        yield "rechazos", (f"He bloqueado {m.rechazos} intentos de entrar sin la llave. "
+                           "Si no fuiste tú, `make rechazos` enseña quién y desde dónde.")
     if m.recuerdos == 0:
         yield "sin_nombre", ("Todavía no sé nada de ti. Con un «me llamo …» ya "
                              "saludo por tu nombre y me acuerdo.")

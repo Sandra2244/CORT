@@ -29,10 +29,13 @@ from cort_core.memory.store import MemoryStore
 from cort_core.server import app
 
 
-def momento(hora: int = 13, temp_c=None, recuerdos: int = 1) -> initiative.Momento:
+def momento(hora: int = 13, temp_c=None, recuerdos: int = 1,
+             rechazos: int = 0) -> initiative.Momento:
     """Momento con defaults que **no** disparan ninguna regla: la hora 13 no está
-    en madrugada, ni de café, ni de «es tarde», y hay recuerdos guardados."""
-    return initiative.Momento(hora=hora, temp_c=temp_c, recuerdos=recuerdos)
+    en madrugada, ni de café, ni de «es tarde», hay recuerdos guardados y nadie
+    está llamando a la puerta."""
+    return initiative.Momento(hora=hora, temp_c=temp_c, recuerdos=recuerdos,
+                              rechazos=rechazos)
 
 
 def nuevo_store() -> MemoryStore:
@@ -90,6 +93,28 @@ class TestReglas(unittest.TestCase):
         self.assertEqual({"clave", "texto"}, {f.name for f in campos})
         self.assertTrue(all(f.type == "str" for f in campos))
         self.assertIsInstance(initiative.sugerir(momento(temp_c=5.0), set()).texto, str)
+
+    def test_tres_llamadas_sin_llave_se_avisan_primero(self):
+        """La bitácora convertida en aviso: si están llamando detrás del puerto,
+        eso va delante del clima, de la hora y hasta del saludo — lo demás puede
+        esperar a la próxima mirada al reloj; una puerta a la que insisten, no—.
+        El texto cita el número medido y el comando para ver la lista."""
+        s = initiative.sugerir(momento(hora=7, temp_c=5.0, rechazos=5), set())
+        self.assertEqual("rechazos", s.clave)
+        self.assertIn("5 intentos", s.texto)
+        self.assertIn("make rechazos", s.texto)
+
+    def test_dos_llamadas_no_son_una_invasion(self):
+        """El umbral es tres: uno puede ser una errata abriendo el enlace desde
+        el propio portátil, y un aviso que suena por nada se aprende a ignorarlo."""
+        s = initiative.sugerir(momento(temp_c=5.0, rechazos=initiative.RECHAZOS_PARA_AVISO - 1), set())
+        self.assertEqual("frio", s.clave, "con dos intentos manda la regla de siempre")
+
+    def test_el_aviso_de_la_puerta_no_se_repite_en_la_misma_conexion(self):
+        m = momento(rechazos=9)
+        self.assertEqual("rechazos", initiative.sugerir(m, set()).clave)
+        self.assertIsNone(initiative.sugerir(m, {"rechazos"}),
+                          "repetirlo cada media hora no es iniciativa, es una alarma")
 
 
 class TestConfig(unittest.TestCase):
@@ -325,11 +350,16 @@ class TestFronteraSeguridad(unittest.TestCase):
         # `affect.marco` entró con la función 29 porque es el único sitio que
         # puede decir «esto que paso es una señal, no un texto simpático», y sigue
         # siendo un formateador puro: no abre nada ni ejecuta nada.
+        # `audit.rechazos_de_acceso` entró con la bitácora convertida en aviso:
+        # es la única lectura de disco permitida aquí, y `audit` por lista cerrada
+        # sólo cuenta líneas que YA escribió — leer un JSONL pequeño no abre una
+        # puerta, no invoca nada y no escribe donde no debe.
         arbol = ast.parse(inspect.getsource(server._cuidar_iniciativa)).body[0]
         self.assertEqual(
             {"initiative.enabled", "asyncio.sleep", "actividad.get", "time.monotonic",
              "weather.snapshot", "initiative.ahora", "memory.count", "initiative.sugerir",
-             "dichas.add", "sock.send_json", "set", "affect.marco"},
+             "dichas.add", "sock.send_json", "set", "affect.marco",
+             "audit.rechazos_de_acceso"},
             self._llamadas(arbol),
         )
         self.assertNotIn("perform", " ".join(self._llamadas(arbol)))

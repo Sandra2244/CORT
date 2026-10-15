@@ -164,6 +164,57 @@ class TestBitacora(unittest.TestCase):
         self.assertTrue(str(ruta).endswith("services/core/data/rechazos.jsonl"))
 
 
+class TestRechazosDeAcceso(unittest.TestCase):
+    """El recuento que convierte la bitácora en aviso: «han llamado tres veces»
+    sale de aquí, y lo escucha la iniciativa. Se apunta con `cuando` explícito
+    para poder fabricar una ventana de minutos real sin esperar una hora."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.log = pathlib.Path(self.tmp.name) / "rechazos.jsonl"
+        self.parche = mock.patch.dict(os.environ, {
+            "CORT_DOTENV": "0",
+            "CORT_AUDIT_LOG": str(self.log),
+        })
+        self.parche.start()
+        self.addCleanup(self.parche.stop)
+
+    def escribir(self, motivo: str, hace_minutos: int) -> None:
+        from datetime import datetime, timedelta, timezone
+        cuando = datetime.now(timezone.utc) - timedelta(minutes=hace_minutos)
+        self.log.parent.mkdir(parents=True, exist_ok=True)
+        with self.log.open("a", encoding="utf-8") as f:
+            f.write(audit.linea(motivo, "192.0.2.1", "WS /ws", cuando))
+
+    def test_solo_cuentan_las_llamadas_a_la_puerta(self):
+        """Una evasión de ruta es un nombre mal escrito; tres erratas no son un
+        allanamiento, y avisar por ellas enseñaría a ignorar el aviso."""
+        self.escribir("acceso-sin-llave", 1)
+        self.escribir("llave-incorrecta", 2)
+        self.escribir("extension-no-permitida", 1)
+        self.assertEqual(2, audit.rechazos_de_acceso())
+
+    def test_lo_de_ayer_no_cuenta(self):
+        """La ventana es corta a propósito: «han estado llamando *ahora*»."""
+        self.escribir("acceso-sin-llave", 120)
+        self.escribir("llave-incorrecta", 3)
+        self.assertEqual(1, audit.rechazos_de_acceso(minutos=10))
+
+    def test_sin_bitacora_el_numero_es_cero(self):
+        self.assertFalse(self.log.exists())
+        self.assertEqual(0, audit.rechazos_de_acceso())
+
+    def test_una_linea_ilegible_no_apaga_el_aviso(self):
+        """Un registro tocado a mano o cortado por un apagón no puede ser la
+        causa de que la alarma calle: se tira esa línea y se sigue contando."""
+        self.log.parent.mkdir(parents=True, exist_ok=True)
+        self.log.write_text("{no es json}\n", encoding="utf-8")
+        self.escribir("acceso-sin-llave", 1)
+        self.escribir("acceso-sin-llave", 2)
+        self.assertEqual(2, audit.rechazos_de_acceso())
+
+
 class ConRedPublicada(unittest.TestCase):
     """Cuatro rechazos reales a través del servidor, leídos después en el disco."""
 
