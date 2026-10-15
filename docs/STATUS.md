@@ -2,7 +2,23 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (12)** (`TMPDIR=/tmp make test` **688** en verde en **85,311 s**,
+> Última verificación: **2026-10-15 (13)** (`TMPDIR=/tmp make test` **692** en verde en **97,372 s**,
+> `make test-web` **56** — **748** en total—): **`v0.15.5` es el arreglo del segundo error que sólo
+> existe al compilar.** `Reconocimiento.onStartListening` llamaba a `listener.error(…)` sin recoger
+> nada, y en AOSP `RecognitionService.Callback.error(int)` **declara** `throws RemoteException`; el run
+> **38812262724** de `compilar-apk` cayó con **un solo** error —«unreported exception RemoteException;
+> must be caught or declared to be thrown», `Reconocimiento.java:40`— y **`v0.15.4` quedó publicado sin
+> `CORT-v0.15.4.apk`** (medido por la API pública: 19 páginas, **12 sin APK**, 7 con). El `Pattern` de
+> (12) sí estaba arreglado: `javac` no lo volvió a nombrar. Ahora la llamada vive en un
+> `try { … } catch (RemoteException …)` con su `import`, y el mismo guion que baja las constantes de
+> AOSP (`scripts/simbolos_android.py`) escribe un segundo diccionario, `apps/apk/lanza-android.json`,
+> con las **firmas `throws`** de los diez métodos del `Callback` que el Java podría llamar.
+> `TestLoQueJavacObligaARecoger` (4 pruebas, `test_apk_manifesta.py` llega a **71**; **105** vigilando
+> `apps/apk/`) exige que toda llamada a un método declarado peligroso esté en un `try` con su `catch` o
+> en un método que declare el `throws`: **comprobadas no vacías** —quitando el `try` fallan dos, con él
+> pasan las cuatro—, y una cuarta prueba añade que el `catch` no nombre una clase sin `import`, que es
+> el siguiente error de este género. Verificación anterior, **2026-10-15 (12)**
+> (`TMPDIR=/tmp make test` **688** en verde en **85,311 s**,
 > `make test-web` **56** — **744** en total—): **`v0.15.4` es el arreglo de un error que sólo existía al
 > compilar.** `Cerebro.partir()` llamaba a `split` sobre el `String` pasándole el `Pattern`
 > (`normaliza(entrada).split(UNION)`), `javac` dijo «incompatible types: Pattern cannot be converted to

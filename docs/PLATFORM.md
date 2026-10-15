@@ -54,7 +54,7 @@ otro».
 Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
 - **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
-  nada: las **688** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+  nada: las **692** pruebas de `services/core` (ejecutadas el 2026-10-15), el
   WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
   segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
   ni un dispositivo.
@@ -83,7 +83,11 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
   la tabla de frases es un JSON probado por `make test`, y las constantes de
   Android que puede nombrar el Java salen de un diccionario descargado de AOSP
   (`scripts/simbolos_android.py`): **1044 constantes en doce clases**, medido el 2026-10-15.
-  Dos Runs costó aprenderlo.
+  Dos Runs costó aprenderlo. **Desde `v0.15.5` el mismo guion escribe un segundo
+  diccionario**, `apps/apk/lanza-android.json`, con las **firmas `throws`** de los métodos que
+  el Java llama sobre objetos del sistema —**10 firmas**, las diez de `RecognitionService.Callback`
+  lanzando `RemoteException`—, porque `javac` no sólo mira que el símbolo exista: mira lo que
+  declara. Ese segundo error costó otros dos Runs (`v0.15.3` y `v0.15.4`, las dos páginas sin APK).
 - **Ser el asistente del teléfono tiene un coste, y se dice antes de prometerlo.** Desde
   `v0.15.3` el APK lleva el traje que el sistema pide para aparecer en Ajustes → *Asistente
   por defecto* (`VoiceInteractionService` + su `SessionService` + `RecognitionService`, con

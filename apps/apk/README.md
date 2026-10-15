@@ -42,15 +42,17 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 | `Paleta.java`, `Anillo.java` | los literales de la marca y el anillo dibujado con `Canvas`, compartidos por las dos caras |
 | `assets/habilidades.json` | **la tabla de frases**: el dato que `make test` sí puede validar en esta máquina |
 | `simbolos-android.json` | el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py` |
+| `lanza-android.json` | las **firmas `throws`** de los métodos del SDK que llama el Java (`RecognitionService.Callback`: diez, todas con `RemoteException`) — lo que `javac` exige recoger y aquí no hay quien lo compruebe |
 
 ## Usarlo
 
 1. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
-   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: la página de
-   `v0.15.3` está publicada con su texto pero **sin APK** — su compilado cayó con un `Pattern` pasado
-   a `String.split`—; el binario que hay que bajar es **`CORT-v0.15.4.apk`**, que lleva las funciones
-   de `v0.15.3` arregladas. Se comprueba mirando los adjuntos de la página, no una log de Actions que
-   es privada.
+   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: las páginas de
+   `v0.15.3` y `v0.15.4` están publicadas con su texto pero **sin APK** — cada compilado cayó con
+   **un** error de tipos que aquí no se puede ver: el `Pattern` pasado a `String.split`, y el
+   `RemoteException` sin recoger en `Reconocimiento.java:40`—; el binario que hay que bajar es
+   **`CORT-v0.15.5.apk`**, que lleva las funciones de `v0.15.3` ya compiladas. Se comprueba mirando
+   los adjuntos de la página, no una log de Actions que es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
    aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa

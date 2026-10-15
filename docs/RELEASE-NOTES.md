@@ -29,11 +29,12 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
 > con el hueco cerrado.
 
-> **Once de las dieciocho páginas publicadas no tienen APK** (medido por la API, sin credenciales, el
+> **Doce de las diecinueve páginas publicadas no tienen APK** (medido por la API, sin credenciales, el
 > 2026-10-15), y ya se sabe por qué cada vez: ocho nacieron antes de que existiera el pipeline del APK,
 > `v0.14.0` vio su etiqueta creada por el propio workflow —y eso no dispara el trabajo del APK—, `v0.14.2`
-> tuvo el manifiesto mal formado, y `v0.15.3` un `Pattern` pasado a `String.split`: un error de tipos que
-> **sólo existe cuando alguien compila**, y en esta máquina no hay `javac`. Las siete con adjunto — `v0.13.1`,
+> tuvo el manifiesto mal formado, `v0.15.3` un `Pattern` pasado a `String.split`, y `v0.15.4` un `throws`
+> sin recoger (`RecognitionService.Callback.error` declara `RemoteException`): dos errores de tipos que
+> **sólo existen cuando alguien compila**, y en esta máquina no hay `javac`. Las siete con adjunto — `v0.13.1`,
 > `v0.14.1`, `v0.14.3`, `v0.14.4`, `v0.15.0`, `v0.15.1`, `v0.15.2` — se comprobaron **descargándolas**, no
 > leyendo una log que es privada. La lección de forma: una Release se corrige **hacia adelante** con una
 > etiqueta nueva; la publicada no se mueve.
@@ -73,6 +74,44 @@ todas esas cadenas como `v<etiqueta>`:
 
 ---
 
+## `v0.15.5` — el segundo error que sólo existe al compilar: un `throws` sin recoger
+
+Tres líneas de Java, un diccionario nuevo sacado de AOSP y cuatro pruebas que hacen la
+pregunta que `javac` hace y esta máquina no puede hacer.
+
+- **Lo que pasó**: `Reconocimiento.onStartListening` llamaba a `listener.error(…)` sin
+  recoger nada. En AOSP `RecognitionService.Callback.error(int)` **declara**
+  `throws RemoteException` —el `Callback` es un proxy al proceso del servicio de voz—, y
+  Java obliga a un `catch` o a un `throws` propio. El run **38812262724** de `compilar-apk`
+  cayó con **un solo** error: «unreported exception RemoteException; must be caught or
+  declared to be thrown», y **`v0.15.4` salió con su página de texto y sin
+  `CORT-v0.15.4.apk`** (medido por la API pública: 19 páginas, **12 sin APK**, 7 con). El
+  arreglo va **hacia adelante**, otra vez: la etiqueta publicada no se mueve.
+- **Lo que hace ahora**: la llamada está dentro de un `try` con su
+  `catch (RemoteException …)`, y `import android.os.RemoteException;` delante, porque un
+  `catch` de una clase sin importar es otro `cannot find symbol`.
+- **La guarda nueva**: `scripts/simbolos_android.py` escribe ahora un segundo diccionario,
+  `apps/apk/lanza-android.json`, con las **firmas `throws`** leídas del fuente de AOSP —
+  diez métodos del `Callback` de `RecognitionService`, los diez lanzan `RemoteException`—.
+  `TestLoQueJavacObligaARecoger` (`test_apk_manifesta.py`) exige que en cualquier archivo
+  que nombre esa clase, toda llamada a un método declarado peligroso esté dentro de un `try`
+  con su `catch` o en un método que declare el `throws`. Cuatro pruebas, y **comprobadas no
+  vacías reintegrando el bug**: con el `try` fuera fallan dos, con él dentro pasan las
+  cuatro.
+- **Lo que esto dice del método**: `v0.15.4` no fue tiempo perdido —el `Pattern` sí estaba
+  arreglado y `javac` no lo nombró—, pero cada error de tipos que queda se cobra una Release
+  entera. Las dos guardias de este mes (`TestLoQueJavacNoDejaPasar`,
+  `TestLoQueJavacObligaARecoger`) existen para que el tercero no llegue al runner.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **692** en verde en **97,372 s** y
+  `make test-web` **56** — **748** en total—; `test_apk_manifesta.py` llega a **71** y entre
+  las dos carpetas del APK vigilan **105** pruebas. **Sin verificar**: el `javac` de este
+  commit es el del runner, y no se afirmará nada del teléfono hasta bajar el binario y
+  abrirlo aquí.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.5.zip`
+
+---
+
 ## `v0.15.4` — el error que sólo se entera compilando: `Pattern.split`, y la Release corregida hacia adelante
 
 Un commit de arreglo, dos pruebas nuevas y la lección escrita donde se lee antes de tocar el Java.
@@ -103,6 +142,10 @@ Un commit de arreglo, dos pruebas nuevas y la lección escrita donde se lee ante
   `make test-web` **56** — **744** en total—; `test_apk_manifesta.py` llega a **67** y entre las
   dos carpetas del APK vigilan **101** pruebas. **Sin verificar**: el `javac` de este commit es el
   del runner, y no se afirmará nada del binario hasta bajarlo y abrirlo aquí.
+- **Cómo terminó esto** (escrito hacia adelante desde `v0.15.5`): el `Pattern` sí estaba
+  arreglado —el run **38812262724** no lo volvió a nombrar—, pero `javac` encontró **otro**
+  error del mismo género: `Reconocimiento.java:40`, «unreported exception `RemoteException`».
+  `v0.15.4` tampoco trajo APK; la corrección es **`v0.15.5`**.
 
 **Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.4.zip`
 
