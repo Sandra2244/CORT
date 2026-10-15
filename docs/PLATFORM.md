@@ -11,7 +11,7 @@ Documento de decisión, no de intenciones. Nace de la **guía "Proyecto Jarvis �
 | **Node.js** | Herramientas de JavaScript | ✅ Presente (`node`, `npm` en `/usr/bin`) | medido con `command -v` |
 | **Ollama + Qwen** | Cerebro local, atado a `localhost` | ✅ Igual, con **guarda de RAM** que la guía no tiene: descarta los modelos que no caben antes de intentarlos | `test_brain` (10) + medición real |
 | **Electron** | Convertir la web en app de escritorio instalable | ⚠️ **No está, y hoy no cabe.** Ver "Las dos piezas que la guía no puede cumplir aquí" | — |
-| **Capacitor** | Llevar la misma interfaz a móvil como app nativa | ✅ **Resuelto por otra vía:** no hace falta Capacitor ni Gradle. Desde `v0.15.0` hay **APK nativo propio** (`apps/apk`, Java puro, once acciones y SQLite dentro del teléfono) y se compila en el pipeline. La PWA sigue viva como alternativa | Run verde `38771718345`, `CORT-v0.15.0.apk` = 70 526 B |
+| **Capacitor** | Llevar la misma interfaz a móvil como app nativa | ✅ **Resuelto por otra vía:** no hace falta Capacitor ni Gradle. Desde `v0.15.0` hay **APK nativo propio** (`apps/apk`, Java puro, quince acciones y SQLite dentro del teléfono) y se compila en el pipeline. La PWA sigue viva como alternativa | Run verde `38771718345`, `CORT-v0.15.0.apk` = 70 526 B |
 | **SpeechRecognition** (escucharte) | STT local | ❌ **Inviable en este equipo, medido:** `arecord -l` lista *"List of CAPTURE Hardware Devices"* **vacía** y `wpctl status` no muestra ni un *Source* de audio. No hay micrófono que leer | — |
 | **pyttsx3** (hablarte) | TTS local | ⚠️ El motor **sí está** (`/usr/bin/espeak-ng`), pero el único *Sink* es *Dummy Output*: no hay por dónde sacar sonido. El `returncode` de un mando no prueba que alguien lo oiga (ya se vio con `wpctl`) | — |
 
@@ -54,12 +54,12 @@ otro».
 Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
 - **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
-  nada: las **653** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+  nada: las **686** pruebas de `services/core` (ejecutadas el 2026-10-15), el
   WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
   segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
   ni un dispositivo.
 - **En el teléfono sí hay Java nativo** (`apps/apk/src`), y no es el core
-  portado: es una **segunda cara** con su propio cerebro de once acciones, su
+  portado: es una **segunda cara** con su propio cerebro de quince acciones, su
   SQLite y su voz. Cuando el portátil aparece por la Wi-Fi se usa el core de
   siempre en el WebView; cuando no, el teléfono no se queda en un formulario.
 - **El coste de esa duplicación está escrito y es real.** Son **tres deudas**, y se llevan
@@ -76,7 +76,7 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
      plantilla que el otro lado entiende. **Sin verificar en dedo**: el cruce lo ejecutó
      `make test` con dos bases y las dos rutas, no un Samsung.
   3. **Abierta**: conviven **dos cuerpos de reglas** — `herramientas.py` en Python
-     (19 herramientas) y `habilidades.json` en Java (once acciones)— que se parecen pero no
+     (19 herramientas) y `habilidades.json` en Java (quince acciones)— que se parecen pero no
      son el mismo archivo, así que una mejora en un lado no viaja al otro.
   Mientras el teléfono esté solo, 3 es invisible; en cuanto se usen los dos, se nota.
 - **La verificación se compra con datos, no con fe**: como aquí no hay `javac`,
@@ -84,7 +84,18 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
   Android que puede nombrar el Java salen de un diccionario descargado de AOSP
   (`scripts/simbolos_android.py`): **1044 constantes en doce clases**, medido el 2026-10-15.
   Dos Runs costó aprenderlo.
-
+- **Ser el asistente del teléfono tiene un coste, y se dice antes de prometerlo.** Desde
+  `v0.15.3` el APK lleva el traje que el sistema pide para aparecer en Ajustes → *Asistente
+  por defecto* (`VoiceInteractionService` + su `SessionService` + `RecognitionService`, con
+  `res/xml/asistente.xml`). Los cuatro contratos se leyeron del fuente de AOSP, no de un
+  Samsung A16, y **no hay `javac` en esta máquina**: la primera verificación real es el runner.
+  Lo que falta no es código sino un **modelo de reconocimiento propio**, y en este build no
+  puede haberlo (sin Gradle, sin modelos pesados en el repo — regla 7—, y 1,8 GiB en el PC de
+  desarrollo). Así que `Reconocimiento` cede la escucha al micrófono de la cara
+  (`SpeechRecognizer` + `Cara.escucharAhora()`) y cierra la petición del sistema con
+  `ERROR_NO_MATCH`. **Consecuencia: el «OK Google» no se transfiere a CORT.** Elegir a CORT
+  como asistente es decisión de la dueña, no un ticket, y mientras no se decida el traje está
+  montado pero sin usar.
 ## Qué se adopta de la guía, dicho en una lista
 
 1. **La pila se confirma tal como está** (Python + React + Ollama, todo en local). No se reescribe nada.

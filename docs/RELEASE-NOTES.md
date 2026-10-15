@@ -35,8 +35,10 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
 > leyendo una log que es privada.
 
-**La lista de tareas para cortar la siguiente (`v0.15.2`), en orden** — el orden importa porque el
-pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
+**La lista de tareas para cortar la siguiente, en orden** — el orden importa porque el pipeline lee las
+notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta. Está escrita con
+`v0.15.2` como ejemplo: `v0.15.2` y `v0.15.3` ya están publicados, y para el próximo corte se leen
+todas esas cadenas como `v<etiqueta>`:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
    pegar los dos secretos `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS` en Settings → Secrets and
@@ -65,6 +67,83 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.15.3` — cualquier app por su nombre, mandatos encadenados, y CORT se ofrece como asistente del teléfono
+
+La dueña lo pidió con un ejemplo concreto: «*colócame Lark Player en la música After dark*». En
+`v0.15.2` eso era dos imposibles: CORT no conocía las apps instaladas (sólo «abre la música», un
+ajuste genérico) y no podía oír dos mandatos en una frase. Aquí se cierran los dos, y se añade lo
+que faltaba para que CORT se comporte como un asistente del aparato en vez de una ventana.
+
+- **`abre <cualquier app>`** — `Acciones.app()` pregunta al sistema por las actividades de arranque
+  (`Intent ACTION_MAIN` + `CATEGORY_LAUNCHER`, `queryIntentActivities`), puntúa las coincidencias con
+  `Cerebro.normaliza` (igual > empieza > contiene > el paquete contiene), y arranca el componente
+  **que el propio sistema devolvió** con `setClassName`. No hay shell ni comandos: la regla 6 sigue
+  entera dentro del teléfono.
+- **Sin el permiso que Google castiga.** Lo que hace visible la lista es un bloque `<queries>` en el
+  manifiesto (`MAIN`/`LAUNCHER`), no `QUERY_ALL_PACKAGES`: el manifiesto declara exactamente los
+  mismos cuatro permisos que antes, y una prueba prohíbe que esa cadena aparezca en el manifiesto **y
+  en el código** de los quince archivos.
+- **Música y video por nombre**: `pon / poner / reproduce / suena <obra>` (`pon After dark`) abre la
+  búsqueda con `ACTION_VIEW` sobre una URL construida con `URLEncoder.encode(…, "UTF-8")` — el
+  `Charset` de esa sobrecarga es API 29 y el suelo del APK es 26, así que la que compila es la del
+  nombre de caracter— . **Llamar** usa `ACTION_DIAL` con `Uri.fromParts("tel", …)`: marca el número
+  delante de la dueña y deja que ella pulse; `ACTION_CALL` y `CALL_PHONE` no están, y hay pruebas que
+  lo vigilan. **Linterna** (`enciende la linterna`) usa `CameraManager.setTorchMode` sobre
+  `getCameraIdList()`, sin permiso nuevo — `CAMERA` ya estaba declarado y su ausencia se avisa en
+  español—.
+- **Cadenas de mandatos**: `Cerebro.cadena()` parte por *y luego / luego / después / y* y, si **todas**
+  las piezas tienen regla, ejecuta los pasos y contesta **una sola voz** (`Cara.encadenar`, un `hablar`
+  con las respuestas unidas). «baja el volumen y abre spotify» son ahora dos acciones.
+- **El orden se eligió midiéndolo, no suponiéndolo**: la primera versión probaba la frase entera antes
+  de partir, y la genérica `abre {resto}` se comía «spotify y pon After dark» entero como nombre de
+  app. Se invirtió — partir primero, y si una pieza no entiende nada se cae a la frase entera—, y
+  cuando un paso falla CORT dice el paso que falta en vez de inventarlo: «abre spotify y hazme un café»
+  abre Spotify y pide el dato del café. Las reglas nuevas van **al final de la tabla** porque su
+  posición es la prioridad, y una prueba lo fija.
+- **Traje de asistente** (función 108): `Asistente` (`VoiceInteractionService`), `Sesiones`
+  (`VoiceInteractionSessionService`), `Sesion` (`VoiceInteractionSession.onShow`) y `Reconocimiento`
+  (`RecognitionService`), con sus tres `<service>` en el manifiesto y `res/xml/asistente.xml`. Al
+  mostrar la sesión, `Sesion` abre `MainActivity` con la bandera `PIDE_ESCUCHAR` y se cierra; la cara
+  nativa contesta con `escucharAhora()`, que es el `SpeechRecognizer` del sistema. `launchMode` pasa a
+  `singleTop` porque un asistente llama a una activity que ya está viva.
+- **Lo que cuesta, dicho antes de que lo descubras instalando**: los contratos los leí del fuente de
+  AOSP —`VoiceInteractionServiceInfo` exige `BIND_VOICE_INTERACTION`, `sessionService` y
+  `recognitionService`, y **lee los atributos sin prefijo** por eso el XML los escribe sin `android:`—,
+  no de un Samsung A16. Y para ser el asistente *por defecto* el sistema pide un modelo de reconocimiento
+  propio que CORT no puede traer en este build, así que `Reconocimiento` cede la escucha al micrófono de
+  la cara y cierra la petición con `SpeechRecognizer.ERROR_NO_MATCH`. Consecuencia honesta: **el
+  «OK Google» no se transfiere a CORT** — se activa desde Ajustes → Aplicaciones → Asistente por defecto
+  y desde los gestos, y elegirlo es decisión de la dueña, no un ticket de código.
+- **13 pruebas nuevas en `test_apk_cerebro.py` (21 → 34) y 20 en `test_apk_manifesta.py` (45 → 65) — 17 del traje y de la visibilidad, 3 de lo que llega al runner—**:
+  las **99** guardan `apps/apk/` sin compilarlo. La prueba que justifica el corte es el espejo en Python de
+  `Cerebro.cadena`, que exige que «pon una alarma a las ocho y media» **no** se parta (el «y media» es
+  un horario, no un segundo mandato) y que «sube el volumen, abre spotify y pon After dark» den tres.
+- **Una trampa que no se podía ver desde esta máquina, y que ya tiene prueba**:
+  `apps/apk/.gitignore` tenía `res/` entero — la regla existe para que los PNG que dibuja
+  `scripts/marca.py` en cada build no se commitearan—, y con ella `res/xml/asistente.xml`, que
+  es **fuente escrito a mano**, se quedaba fuera del `git add`. El runner trabaja sobre el
+  *clone*: no lo habría visto, y `aapt2 link` se cae con «resource `@xml/asistente` not found»
+  → Release con su texto y **sin APK**, el fallo que ya pasó tres veces (`v0.13.0`, `v0.14.0`,
+  `v0.14.2`) por motivos distintos. Git no permite re-incluir un archivo cuyo directorio padre
+  está excluido, así que un `!res/xml/` debajo no habría servido: la regla es ahora
+  `res/mipmap-*`. Tres guardias nuevas (`TestLoQueLlegaAlRunner`) corren `git check-ignore`
+  sobre el manifiesto, el guion de compilado, la tabla de frases, los quince Java y el XML del
+  contrato, y exigen además que el icono generado **siga** ignorado.
+
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **686** en verde en **78,228 s** y `make test-web`
+  **56** — **742** en total—. Java: **quince archivos / 3 485 líneas / 143 KB** (de once / 2 943 / 118
+  KB). Censo de funciones: **108** — 40 hechas, 30 en curso, 38 sin hacer—; el grupo «El asistente que
+  actúa» va a **25** (11 hechas, 14 en curso).
+- **Sin verificar en el dedo**: todo lo anterior. En esta máquina no hay `javac` para Java de Android ni
+  teléfono: lo ejecutado son las pruebas que leen el fuente y, en cuanto el runner responda, el `javac`
+  y el `d8` de `compilar-apk`. El manifiesto binario del APK publicado dirá `0.15.3` / `versionCode 1503`
+  y su `classes.dex` tendrá las cuatro clases nuevas — y eso se comprueba **bajando el binario**, no
+  leyendo un log que es privado.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.3.zip`
 
 ---
 

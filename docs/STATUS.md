@@ -2,7 +2,22 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (10)** (`TMPDIR=/tmp make test` **653** en verde en **93,912 s**,
+> Última verificación: **2026-10-15 (11)** (`TMPDIR=/tmp make test` **686** en verde en **78,228 s**,
+> `make test-web` **56** — **742** en total—; **33** pruebas nuevas cosiendo `apps/apk/`: **13** en
+> `test_apk_cerebro.py` (21 → **34**), que trae el espejo en Python de `Cerebro.cadena` y fue el que
+> sacó el **bug de diseño real** del corte —probar la frase entera antes de partir hacía que la
+> genérica `abre {resto}` se comiera «spotify y pon After dark» entero como nombre de app—; y **20**
+> en `test_apk_manifesta.py` (45 → **65**) sobre el `<queries>` del manifiesto, la ausencia de
+> `QUERY_ALL_PACKAGES` y `CALL_PHONE` **también dentro del código**, y el contrato XML del asistente
+> leído con `ElementTree`. **Qué hay**: cualquier app por nombre (`queryIntentActivities` +
+> `parecido` + `setClassName`, sin shell), `pon <obra>` por URL codificada, `llamar` por
+> `ACTION_DIAL`, linterna por `CameraManager.setTorchMode`, mandatos encadenados con una sola voz, y
+> el traje de asistente (`Asistente`/`Sesiones`/`Sesion`/`Reconocimiento` + `res/xml/asistente.xml`),
+> con `singleTop` y `PIDE_ESCUCHAR` para que la sesión del sistema despierte la escucha de la cara.
+> **La trampa que paró el push**: `apps/apk/.gitignore` ignoraba `res/` entero — para los PNG que dibuja `marca.py`— y con eso dejaba `res/xml/asistente.xml` **fuera del clone del runner**: `aapt2 link` se habría caído y la Release habría salido sin APK. La regla es ahora `res/mipmap-*` y tres guardias corren `git check-ignore` sobre cada entrada del build. Java: **quince archivos / 3 485 líneas / 143 KB**. Censo: **108** funciones (40 / 30 / 38). **Todo
+> lo del teléfono sigue sin verificar en el dedo**, y el `javac` de estas cuatro clases nuevas sólo
+> existirá cuando responda el runner: los contratos se leyeron del fuente de AOSP, no de un Samsung
+> A16. Verificación anterior, **2026-10-15 (10)** (`TMPDIR=/tmp make test` **653** en verde en **93,912 s**,
 > y vuelta a ejecutar al cerrar los docs — las **82** pruebas nuevas son **el puente de memoria**, la
 > deuda 2 del acuerdo Java: **39** en `test_puente.py` (el cuadro, `exportar`/`fusionar`/`canoniza`,
 > los cuatro topes y la pureza leída por AST), **23** en `test_puente_red.py` (las dos rutas HTTP

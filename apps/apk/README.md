@@ -28,11 +28,15 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 |---|---|
 | `MainActivity.java` | **qué superficie se ve**: el WebView si el portátil contesta, la cara nativa si no, el campo de pegar sólo si nadie tiene la culpa |
 | `Cara.java` | la interfaz nativa: registro, campo, micrófono, el lazo oír → tabla → ejecutar → (nube) → proponer aprender, la **pantalla de ajustes de nube** (`⚙` bajo el anillo, `v0.15.1`) y la fila que **cruza el puente** (`↔ traer y llevar mis recuerdos al portátil`, `v0.15.2`) |
-| `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. **No ejecuta nada** |
-| `Acciones.java` | las manos: once acciones, todas con intenciones públicas de Android o `AudioManager`. Sin shell, sin `QUERY_ALL_PACKAGES` |
+| `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. Desde `v0.15.3` también **parte la frase** por «y luego / luego / después / y» y dice si son **varios mandatos** (`cadena`). **No ejecuta nada** |
+| `Acciones.java` | las manos: **quince acciones**, todas con intenciones públicas de Android, `AudioManager` o `CameraManager`. Desde `v0.15.3` abre **cualquier app por su nombre** con la lista que devuelve el propio sistema (`queryIntentActivities` + `<queries>` en el manifiesto), pone música o video por URL codificada, deja el número en el marcador y enciende la linterna. Sin shell, sin `QUERY_ALL_PACKAGES`, sin `ACTION_CALL` |
 | `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende. Desde `v0.15.2` es además **la cabeza** que el puente lee y en la que escribe, y Traduce al revés: `El usuario se llama Sandra` que viene del portátil se guarda con la clave `nombre` |
 | `Puente.java` | el **espejo exacto** de `cort_core/puente.py`: el cuadro, `exportar`, `fusionar`, `normaliza`, los topes. Puro — sólo `java.util` y `org.json`, y una prueba le prohíbe nombrar red, disco o Android |
 | `Sincroniza.java` | la **única** clase del APK que abre un socket: baja el cuadro del portátil, lo fusiona, sube el de aquí, y devuelve el recuento o `null` con su motivo en español |
+| `Asistente.java` | el **traje de asistente del sistema** (`v0.15.3`): un `VoiceInteractionService` vacío a propósito — en AOSP no tiene ningún método abstracto; todo el contrato vive en el manifiesto y en `res/xml/asistente.xml`— |
+| `Sesiones.java` + `Sesion.java` | la sesión que el sistema muestra: `onShow` abre `MainActivity` con la bandera `PIDE_ESCUCHAR`, la cara nativa empieza a escuchar, y la sesión del sistema se cierra |
+| `Reconocimiento.java` | el `RecognitionService` que el marco **obliga** a declarar. CORT no tiene modelo propio de voz, así que cede la escucha al micrófono de la cara y cierra la petición con `ERROR_NO_MATCH` |
+| `res/xml/asistente.xml` | el contrato del asistente, con los atributos **sin prefijo `android:`**: son internos del sistema y `aapt2` rechazaría la forma con prefijo |
 | `Voz.java` | `TextToSpeech` y `SpeechRecognizer`: hablar **y escuchar**, que el WebView no podía |
 | `Nube.java` | la nube opcional, con la clave escrita una vez en el aparato |
 | `Paleta.java`, `Anillo.java` | los literales de la marca y el anillo dibujado con `Canvas`, compartidos por las dos caras |
@@ -98,6 +102,16 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
    el portátil no contesta lo dice en español en vez de quedarse callado. La
    llave de red viaja en la URL, como en `/ws`, y **nunca dentro de un recuerdo**:
    una fila que la contenga no sale del teléfono.
+9. **Actuar sobre el aparato** (función 107, desde `v0.15.3`). A la app instalada se le dice
+   por su nombre —«**abre Lark Player**», «abre spotify», «lanza la cámara»—: CORT pide al
+   sistema la lista de actividades de arranque y elige la más parecida; si no la encuentra,
+   lo dice en vez de abrir otra cosa parecida. «**pon After dark**» (también «pon», «reproduce»,
+   «suena») abre la búsqueda de ese tema en el navegador. «**llama a …**» deja el número escrito
+   en el marcador **sin marcar**: el teléfono no llama solo y no hay permiso de llamada.
+   «**enciende la linterna**» / «apaga la linterna» usa la cámara y pide su permiso la primera
+   vez. Y **dos mandatos caben en una frase**: «baja el volumen y abre spotify» ejecuta los dos
+   pasos y contesta con **una sola voz**; si un paso no lo entiende, CORT dice ese paso en vez
+   de inventarlo («abre spotify y hazme un café» abre Spotify y pregunta por el café).
 
 **Qué va a la nube y qué no**: sólo la frase dicha y un resumen de los hechos
 guardados (van en el `system`, no en el historial — el bug que ya cazó
@@ -111,6 +125,40 @@ recuerdos y su fecha, con tres topes escritos (`MAX_CONTENIDO` 300 caracteres po
 fila, `MAX_BYTES` 256 KiB de cuerpo, y un tope de filas **calculado** — 271 — para
 que el cuerpo nunca sobre-pase los 256 KiB y el server conteste 413). La clave de
 nube **no** viaja: vive en `SharedPreferences` y el puente sólo mueve `hechos`.
+
+## CORT como asistente del teléfono (`v0.15.3`)
+
+El APK ahora **se ofrece** al sistema. Lleva el traje que Android pide para que CORT aparezca en
+*Ajustes → Aplicaciones → Aplicaciones por defecto → Asistente de voz* (y en los gestos del botón
+de inicio). Si se elige, el gesto despierta a CORT: se abre la cara nativa y empieza a escuchar
+por su micrófono, como si se hubiera pulsado ●.
+
+Cuatro archivos lo sostienen y **ninguna firma es de memoria**: cada contrato se leyó del fuente
+de AOSP (`VoiceInteractionServiceInfo`, `VoiceInteractionService`, `VoiceInteractionSessionService`,
+`VoiceInteractionSession`, `RecognitionService`). Dos cosas de ese fuente que no son obvias y que
+una prueba ya no deja romper: el servicio tiene que declararse **con el permiso
+`BIND_VOICE_INTERACTION`**, y en `res/xml/asistente.xml` los atributos `sessionService` y
+`recognitionService` van **sin prefijo `android:`** — son atributos internos del sistema, y con
+prefijo `aapt2` los rechaza.
+
+**Lo que cuesta, dicho antes de que se descubra instalando.** Android sólo deja ser asistente por
+defecto a quien trae su **modelo de reconocimiento de voz**, y este build no lo trae: sin Gradle,
+con los modelos pesados fuera del repo (regla 7) y con 1,8 GiB de RAM en la máquina de desarrollo
+no hay dónde entrenarlo ni dónde empaquetarlo. Así que `Reconocimiento` **cede la escucha** al
+micrófono de la cara (`SpeechRecognizer` del sistema) y cierra la petición del asistente con
+`SpeechRecognizer.ERROR_NO_MATCH`. En la práctica esto significa:
+
+- **el «OK Google» no se transfiere a CORT**: esa frase sigue siendo de Google. Con CORT elegido,
+  el *gesto* del asistente es de CORT; la palabra de activación no;
+- elegir a CORT **no desactiva** a Google Assistant de ninguna otra cosa, y se vuelve atrás en
+  cualquier momento desde el mismo menú;
+- si eso no compensa, **no hay que tocar nada**: todo lo de `v0.15.3` funciona igual abriendo la
+  app de siempre. La decisión es de Ajustes y de la dueña, no un ticket de código.
+
+**Sin verificar en el dedo.** Que el Samsung A16 muestre la opción, que la sesión arranque y que
+la cara escuche desde el gesto no se ha comprobado en esta máquina — no hay `javac` de Android ni
+teléfono: el primer compilado real de estas cuatro clases es el del runner, y su resultado se lee
+por la API pública, no por un log privado.
 
 ## Instalar aunque Android avise
 
@@ -145,7 +193,9 @@ necesita al portátil encendido**.
 | Chat, reactor, ventanas, muelle, teclado táctil | ✅ la misma cara que en el navegador | 🔨 cara nativa Java (`Cara.java`): compilada y firmada, **sin verla un dedo todavía** |
 | **Que CORT hable** | 🔨 en WebView con `speechSynthesis`, medido sólo en escritorio | 🔨 `TextToSpeech` del sistema: código escrito, **sin oírse en dedo** |
 | **Que CORT escuche** | ❌ **límite real del WebView**: el API de reconocimiento no corre en un WebView embebido; ahí la escucha se usa desde la **PWA** de `apps/web` | 🔨 **ésta es la vía que abre la cara nativa**: `SpeechRecognizer` con su permiso de micrófono pedido en pantalla. Sin verificar en dedo |
-| Volumen, alarma, cronómetro, abrir apps del sistema | 🔨 a través del core del portátil | 🔨 once acciones con intenciones públicas de Android y `AudioManager`, validadas contra el diccionario AOSP; **sin ejecutar en el teléfono** |
+| Volumen, alarma, cronómetro, abrir apps del sistema | 🔨 a través del core del portátil | 🔨 quince acciones con intenciones públicas de Android, `AudioManager` y `CameraManager`, validadas contra el diccionario AOSP; **sin ejecutar en el teléfono** |
+| **Cualquier app por su nombre**, música o video («pon After dark»), marcar un número, la linterna | ❌ el core del portátil no puede tocar el teléfono | 🔨 **`v0.15.3`**: la lista la da el propio sistema (`queryIntentActivities` con `<queries>` en el manifiesto), sin shell y sin `QUERY_ALL_PACKAGES`; llamar es `ACTION_DIAL` — el número se queda en el marcador. **Sin verificar en dedo** |
+| **Ser el asistente del sistema** (el gesto del botón de inicio) | ❌ no aplica | 🔨 traje montado (`v0.15.3`): Android ya ofrece a CORT. **Sin modelo de voz propio: el «OK Google» no se pasa a CORT** y la escucha la hace el micrófono de la cara. Nunca visto en un A16 |
 | Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 `cort.db` en SQLite, propia del teléfono y **con puente desde `v0.15.2`**: la fila `↔` del `⚙` trae lo que hay en el portátil y lleva lo de aquí. **Sin verificar en dedo** — lo ejecutó `make test` con dos bases, no un Samsung |
 | Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`) **y ya escribible desde el teléfono** (`v0.15.1`): el chip `⚙` bajo el anillo abre la pantalla donde se pega la clave. Responde cuando hay clave; sin ella, la tabla local. **Sin ver en dedo** |
 | Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo | ❌ no existen en la cara nativa |
@@ -347,11 +397,18 @@ qué acción es; `Acciones` la ejecuta; `Recuerdos` la recuerda; `Voz` la oye y 
 habla; `Nube` la pregunta cuando hay internet. Cada una de esas piezas tiene su
 prueba en `test_apk_cerebro.py` o en `test_apk_manifesta.py`, y la regla de siempre
 sigue en pie dentro del teléfono: **las acciones son una lista cerrada** (regla 6)
-— **once**: `abrir`, `alarma`, `buscar`, `cronometro`, `decir`, `fecha`, `guardar`,
-`hora`, `listar`, `saber`, `volumen`. Ninguna frase, aprendida o propuesta por la
-nube, puede invocar algo que no esté ahí, y en `Acciones.java` no hay shell ni
-`QUERY_ALL_PACKAGES`: las pruebas buscan literalmente `Runtime.getRuntime`,
-`ProcessBuilder`, `exec(` y `/system/bin`.
+— **quince**: `abrir`, `alarma`, `app`, `buscar`, `cronometro`, `decir`, `fecha`,
+`guardar`, `hora`, `linterna`, `listar`, `llamar`, `poner`, `saber`, `volumen`.
+Ninguna frase, aprendida o propuesta por la nube, puede invocar algo que no esté
+ahí, y en `Acciones.java` no hay shell ni `QUERY_ALL_PACKAGES`: las pruebas buscan
+literalmente `Runtime.getRuntime`, `ProcessBuilder`, `exec(` y `/system/bin`. Lo de
+`app` no lo cambia: la acción recibe un nombre, pregunta al sistema por sus
+actividades de arranque y arranca el componente que el sistema devolvió — el hueco
+que se abrió es el de *cuáles*, no el de *qué se puede hacer*—.
+
+Y desde `v0.15.3` hay cuatro piezas más que no pintan nada: `Asistente`, `Sesiones`,
+`Sesion` y `Reconocimiento` son el traje con el que el **sistema** puede llamar a
+CORT; lo único que hacen es abrir `MainActivity` y pedirle que escuche.
 
 ## Aprender, con aprobación de la dueña
 
