@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "nota": "Unica tabla de frases de CORT en el telefono. La lee Java (`Cerebro.java`) desde assets y la valida Python (`test_apk_cerebro.py`): si un patron no esta en forma normalizada, o una accion no esta en la lista cerrada, la prueba revienta antes de empujar y no en un movil. Regla 6 de AGENTS.md: `acciones` es lista cerrada, aqui no entra ninguna frase que ejecute comandos arbitrarios.",
+  "nota": "Unica tabla de frases de CORT en el telefono. La lee Java (`Cerebro.java`) desde assets y la valida Python (`test_apk_cerebro.py`): si un patron no esta en forma normalizada, o una accion no esta en la lista cerrada, la prueba revienta antes de empujar y no en un movil. Regla 6 de AGENTS.md: `acciones` es lista cerrada, aqui no entra ninguna frase que ejecute comandos arbitrarios. Las cuatro reglas del final (`app`, `poner`, `llamar`, `linterna`) van DESPUES de todas las demas porque casan por prefijo: su posicion en la tabla es la prioridad, y la prueba `test_una_regla_con_hueco_no_le_roba_la_frase_a_la_exacta` lo vigila.",
   "acciones": [
     "hora",
     "fecha",
@@ -12,7 +12,11 @@
     "saber",
     "listar",
     "buscar",
-    "decir"
+    "decir",
+    "app",
+    "poner",
+    "llamar",
+    "linterna"
   ],
   "parametros": {
     "volumen": [
@@ -28,10 +32,16 @@
       "musica",
       "mensajeria",
       "telefono",
-      "teclado"
+      "teclado",
+      "wifi",
+      "bluetooth"
     ],
     "saber": [
       "yo"
+    ],
+    "linterna": [
+      "enciende",
+      "apaga"
     ]
   },
   "patrones": [
@@ -323,6 +333,88 @@
         "como estas"
       ],
       "respuesta": "Bien, en el telefono. No hace falta tu portatil para esto."
+    },
+    {
+      "id": "linterna-enciende",
+      "accion": "linterna",
+      "param": "enciende",
+      "patrones": [
+        "enciende la linterna",
+        "prende la linterna",
+        "pon la linterna",
+        "dame luz"
+      ],
+      "respuesta": "Enciendo la linterna."
+    },
+    {
+      "id": "linterna-apaga",
+      "accion": "linterna",
+      "param": "apaga",
+      "patrones": [
+        "apaga la linterna",
+        "apagar la linterna",
+        "quita la luz"
+      ],
+      "respuesta": "Apago la linterna."
+    },
+    {
+      "id": "abrir-wifi",
+      "accion": "abrir",
+      "param": "wifi",
+      "patrones": [
+        "abre el wifi",
+        "abrir wifi",
+        "ajustes del wifi",
+        "abre la red"
+      ],
+      "respuesta": "Abro los ajustes de la red."
+    },
+    {
+      "id": "abrir-bluetooth",
+      "accion": "abrir",
+      "param": "bluetooth",
+      "patrones": [
+        "abre el bluetooth",
+        "abrir bluetooth",
+        "ajustes del bluetooth"
+      ],
+      "respuesta": "Abro los ajustes de Bluetooth."
+    },
+    {
+      "id": "llamar",
+      "accion": "llamar",
+      "patrones": [
+        "llama a {resto}",
+        "llamar a {resto}",
+        "marca a {resto}",
+        "llama al numero {resto}"
+      ],
+      "respuesta": "Abro el marcador con {resto}."
+    },
+    {
+      "id": "poner",
+      "accion": "poner",
+      "patrones": [
+        "pon {resto}",
+        "poner {resto}",
+        "reproduce {resto}",
+        "pon la cancion {resto}",
+        "pon el video {resto}",
+        "suena {resto}"
+      ],
+      "respuesta": "Pongo {resto}."
+    },
+    {
+      "id": "app-cualquiera",
+      "accion": "app",
+      "patrones": [
+        "abre {resto}",
+        "abrir {resto}",
+        "arranca {resto}",
+        "lanza {resto}",
+        "entra en {resto}"
+      ],
+      "respuesta": "Abro {resto}."
     }
   ]
 }

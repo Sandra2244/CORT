@@ -51,15 +51,40 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!--
+      Bloque `queries` (API 30, Android 11): la visibilidad filtrada que
+      sustituye al permiso que Google castiga. Con él, el `PackageManager` del
+      APK ve los **lanzadores** del teléfono, que es lo único que necesita
+      `Acciones.app()` para responder a «abre Lark player» o «abre Spotify» con el
+      nombre que la dueña diga. Sin él, en Android 11 o más nuevo la lista sale
+      vacía y CORT contestaría «no encontré esa app» en un teléfono lleno de apps
+      — un fallo que sólo se ve con un dedo encima, y por eso está escrito aquí —.
+
+      Es un filtro por *intención*, no un permiso: se ven iconos de arranque y
+      nada más. El permiso ese que castiga la tienda no aparece en este archivo, y
+      `test_apk_manifesta.py` lo prohíbe por su nombre literal.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:label="CORT"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true">
 
+        <!-- `singleTop`: el asistente (`.Asistente`, `.Sesiones`) y el
+             reconocedor (`.Reconocimiento`) vuelven a abrir la cara que ya está
+             puesta; con la modalidad por defecto Android montaba una segunda
+             instancia de `MainActivity` encima de la primera. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -67,5 +92,51 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          El traje de asistente de `v0.15.3`, en tres piezas y con sus permisos:
+
+          * `.Asistente` es la puerta. El sistema sólo la mira si está protegida
+            con `BIND_VOICE_INTERACTION`: `VoiceInteractionServiceInfo` lo
+            comprueba en AOSP y, si falta, el error es «Service does not require
+            permission android.permission.BIND_VOICE_INTERACTION».
+          * La meta-datos `android.voice_interaction` apunta a
+            `res/xml/asistente.xml`, donde viven `sessionService` y
+            `recognitionService` con el nombre de clase completo.
+          * `.Sesiones` y `.Reconocimiento` son servicios reales y también se
+            declaran aquí; el de reconocimiento lleva `BIND_SPEECH_RECOGNIZER`.
+
+          Elegir CORT como asistente predeterminado es decisión de la dueña, y su
+          coste está escrito en `apps/apk/README.md`: el hotword de Google no se
+          muda con este APK, porque lo dice el servidor de Google.
+        -->
+        <service
+            android:name=".Asistente"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="CORT">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/asistente" />
+        </service>
+
+        <service
+            android:name=".Sesiones"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="CORT" />
+
+        <service
+            android:name=".Reconocimiento"
+            android:permission="android.permission.BIND_SPEECH_RECOGNIZER"
+            android:exported="true"
+            android:label="CORT">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

@@ -20,6 +20,7 @@ estas guardias pueden comprobar es la forma —el paquete, la lista cerrada de
 prometidos—; la semántica del cerebro nativo la prueba `test_apk_cerebro.py`.
 """
 import re
+import subprocess
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -679,6 +680,268 @@ class TestPuenteDeMemoria(unittest.TestCase):
         for nombre, texto in self.todos.items():
             self.assertEqual(texto.count("«"), texto.count("»"),
                              f"{nombre}: hay una « sin su »")
+
+
+class TestAsistenteYVisibilidad(unittest.TestCase):
+    """`v0.15.3`: dos superficies nuevas que **no se pueden ver desde esta máquina**.
+
+    * Que CORT abra *cualquier* app instalada, y no sólo ocho categorías.
+    * Que CORT pueda ser elegido asistente predeterminado del teléfono.
+
+    Las dos viven dentro de un Android que nadie tiene delante y las dos fallan en
+    silencio: un `<queries>` mal escrito da una lista de apps vacía y CORT responde
+    «no la encontré» en un teléfono lleno; un `sessionService` con prefijo
+    `android:` hace que el parser del sistema rechace la meta-datos y CORT **ni
+    aparezca** en la lista de asistentes, sin ninguna pantalla que lo diga. Lo que
+    fija el fuente de AOSP (`VoiceInteractionServiceInfo`) lo fija aquí una prueba,
+    y con eso el primer intento en el Samsung ya no es a ciegas.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.manifiesto = MANIFIESTO.read_text(encoding="utf-8")
+        cls.raiz = ET.fromstring(cls.manifiesto)
+        cls.xml_asistente = (APK / "res" / "xml" / "asistente.xml").read_text(encoding="utf-8")
+        cls.fuentes = {p.name: p.read_text(encoding="utf-8")
+                       for p in sorted(FUENTES.glob("*.java"))}
+        cls.acciones = cls.fuentes["Acciones.java"]
+
+    # -- ver cualquier app, sin el permiso que castiga Google ----------------------
+
+    def test_el_manifiesto_consulta_los_lanzadores(self):
+        """Sin este bloque, `queryIntentActivities` devuelve lista vacía desde
+        Android 11 y «abre Spotify» se convierte en «no lo encontré»."""
+        consultas = [e for e in self.raiz if e.tag == "queries"]
+        self.assertEqual(1, len(consultas), "el manifiesto no declara su <queries>")
+        acciones = [e.get(ANDROIDE + "name") for e in consultas[0].iter()
+                    if e.tag.endswith("action")]
+        categorias = [e.get(ANDROIDE + "name") for e in consultas[0].iter()
+                      if e.tag.endswith("category")]
+        self.assertIn("android.intent.action.MAIN", acciones)
+        self.assertIn("android.intent.category.LAUNCHER", categorias)
+
+    def test_el_permiso_prohibido_no_esta_en_el_manifiesto_ni_en_el_codigo(self):
+        """`QUERY_ALL_PACKAGES` es el permiso que la tienda castiga y que este repo
+        prometió no pedir. Se mira el manifiesto **entero** (ahí un comentario ya
+        estaría pidiéndoselo al lector) y el Java **sin comentarios**, porque la
+        documentación de `Acciones.java` nombra el permiso justamente para explicar
+        por qué no se usa — y una prohibición leída sobre la prosa acusaría al
+        comentario que la sostiene, que es el error que ya corrigió `solo_codigo`—.
+        """
+        self.assertNotIn("QUERY_ALL_PACKAGES", self.manifiesto)
+        for nombre, texto in self.fuentes.items():
+            self.assertNotIn("QUERY_ALL_PACKAGES", solo_codigo(texto), nombre)
+
+    def test_abrir_cualquier_app_sale_del_package_manager_y_no_de_un_shell(self):
+        codigo = solo_codigo(self.acciones)
+        self.assertIn("queryIntentActivities", codigo)
+        self.assertIn("CATEGORY_LAUNCHER", codigo)
+        self.assertIn("setClassName", codigo)
+        # La lista cerrada sigue siendo lista cerrada: la app que se abre es un
+        # componente devuelto por el sistema, no una cadena que se ejecuta.
+        for prohibido in ("Runtime.getRuntime", "ProcessBuilder", "exec(", "/system/bin"):
+            self.assertNotIn(prohibido, codigo)
+
+    def test_el_nombre_se_compara_normalizado_como_el_habla(self):
+        """Un icono dice «Música» y el habla llega como `musica`: si la comparación
+        no pasa por `Cerebro.normaliza`, la app existe y CORT no la ve."""
+        self.assertIn("Cerebro.normaliza", self.acciones)
+        self.assertIn("private static int parecido(", self.acciones)
+
+    def test_poner_abre_un_enlace_buscado_y_no_pulsa_el_play_de_nadie(self):
+        """La honestidad de «pon After dark» por escrita: CORT abre una **búsqueda**
+        (no hay tabla de deep links por app que se oxide), y para eso necesita que
+        el texto vaya codificado en la URL."""
+        self.assertIn("Intent.ACTION_VIEW", self.acciones)
+        self.assertIn("search_query=", self.acciones)
+        self.assertIn("codifica(obra)", self.acciones)
+        self.assertIn('URLEncoder.encode(texto.trim(), "UTF-8")', self.acciones,
+                      "la variante con `Charset` es de API 29 y el suelo del APK es 26")
+
+    def test_llamar_solo_abre_el_marcador(self):
+        """`ACTION_DIAL` enseña el número; `ACTION_CALL` lo marcaría solo y pide
+        `CALL_PHONE`, un permiso peligroso que este APK no tiene ni tendrá. El
+        permiso se comprueba en el manifiesto, y la intención en el código **sin**
+        comentarios: el Javadoc de `llamar()` nombra `CALL_PHONE` para decir que no
+        se usa."""
+        self.assertIn("Intent.ACTION_DIAL", self.acciones)
+        self.assertIn('Uri.fromParts("tel"', self.acciones)
+        self.assertNotIn("ACTION_CALL", solo_codigo(self.acciones))
+        permisos = {e.get(ANDROIDE + "name") for e in self.raiz
+                    if e.tag.endswith("uses-permission")}
+        self.assertNotIn("android.permission.CALL_PHONE", permisos)
+
+    def test_la_linterna_usa_la_camara_que_ya_esta_declarada(self):
+        """`setTorchMode` pide permiso de cámara: el que ya está en el manifiesto
+        (con `required=false`), y si la dueña no lo ha dado aún, `SecurityException`
+        se contesta en español en vez de tumbar la cara."""
+        self.assertIn("setTorchMode", self.acciones)
+        self.assertIn("CameraAccessException", self.acciones)
+        self.assertIn("SecurityException", self.acciones)
+        permisos = {e.get(ANDROIDE + "name") for e in self.raiz
+                    if e.tag.endswith("uses-permission")}
+        self.assertIn("android.permission.CAMERA", permisos)
+
+    # -- el traje de asistente -----------------------------------------------------
+
+    def test_los_tres_servicios_existen_como_archivos_java(self):
+        declarados = {e.get(ANDROIDE + "name"): e
+                      for e in self.raiz.iter() if e.tag.endswith("service")}
+        self.assertEqual({".Asistente", ".Sesiones", ".Reconocimiento"},
+                         set(declarados),
+                         "el asistente son tres servicios: puerta, sesión y oído")
+        nombres = {p.name for p in FUENTES.glob("*.java")}
+        for nombre in declarados:
+            self.assertIn(nombre.lstrip(".") + ".java", nombres,
+                          f"{nombre} está en el manifiesto pero no en el fuente")
+
+    def test_cada_servicio_va_protegido_con_su_permiso_de_sistema(self):
+        """`VoiceInteractionServiceInfo` (AOSP) **rechaza** la meta-datos si el
+        servicio no lleva `BIND_VOICE_INTERACTION`; y el reconocedor se descarta si
+        no lleva `BIND_SPEECH_RECOGNIZER`. Sin estas dos líneas, CORT no aparece
+        como asistente y no hay ningún aviso en pantalla."""
+        declarados = {e.get(ANDROIDE + "name"): e.get(ANDROIDE + "permission")
+                      for e in self.raiz.iter() if e.tag.endswith("service")}
+        self.assertEqual("android.permission.BIND_VOICE_INTERACTION",
+                         declarados[".Asistente"])
+        self.assertEqual("android.permission.BIND_VOICE_INTERACTION",
+                         declarados[".Sesiones"])
+        self.assertEqual("android.permission.BIND_SPEECH_RECOGNIZER",
+                         declarados[".Reconocimiento"])
+        for nombre, permiso in declarados.items():
+            self.assertIsNotNone(permiso, f"{nombre} sin permiso de sistema")
+
+    def test_la_accion_de_intencion_es_la_que_el_sistema_busca(self):
+        filtros = {e.get(ANDROIDE + "name") for e in self.raiz.iter()
+                   if e.tag.endswith("action")}
+        self.assertIn("android.service.voice.VoiceInteractionService", filtros)
+        self.assertIn("android.speech.RecognitionService", filtros)
+
+    def test_la_meta_datos_apunta_a_un_xml_que_el_build_enlaza(self):
+        meta = [e for e in self.raiz.iter() if e.tag.endswith("meta-data")]
+        self.assertEqual(1, len(meta), "la meta-datos del asistente es una sola")
+        self.assertEqual("android.voice_interaction", meta[0].get(ANDROIDE + "name"))
+        self.assertEqual("@xml/asistente", meta[0].get(ANDROIDE + "resource"))
+        self.assertTrue((APK / "res" / "xml" / "asistente.xml").is_file(),
+                        "`aapt2 compile --dir res` no puede enlazar un archivo que no existe")
+
+    def test_el_xml_del_asistente_cumple_el_contrato_de_aosp(self):
+        """Las tres cosas que hacen que el parser del sistema diga «sí» o «no»:
+        el nombre del nodo, los dos servicios obligatorios y **la ausencia de
+        prefijo `android:`** en esos atributos (son recursos internos de
+        `com.android.internal.R.styleable`, no públicos: con prefijo no los
+        reconoce ni `aapt2 link` ni el parser)."""
+        nodo = ET.fromstring(self.xml_asistente)
+        self.assertEqual("voice-interaction-service", nodo.tag)
+        self.assertEqual("dev.sandra.cort.Sesiones", nodo.get("sessionService"))
+        self.assertEqual("dev.sandra.cort.Reconocimiento", nodo.get("recognitionService"))
+        # Ninguna clave con `}` por delante: en ElementTree un atributo con prefijo
+        # `android:` se lee `{http://schemas.android.com/apk/res/android}sessionService`,
+        # y esa forma es la que el parser interno **no** ve. Se comprueba sobre el
+        # nodo parseado y no sobre el texto: el comentario del propio archivo escribe
+        # el error para explicarlo.
+        for clave in nodo.attrib:
+            self.assertNotIn("}", clave,
+                             f"atributo {clave} con nombre de espacio: no lo reconoce nadie")
+
+    def test_el_reconocimiento_no_finge_un_oído_que_no_tiene(self):
+        """`Reconocimiento.java` existe porque el contrato lo exige, no porque CORT
+        reconozca voz por su cuenta: tiene que ceder el micrófono a la cara y
+        cerrar su petición con un código de error del SDK."""
+        texto = self.fuentes["Reconocimiento.java"]
+        codigo = solo_codigo(texto)
+        self.assertIn("listener.error(SpeechRecognizer.ERROR_NO_MATCH)", codigo)
+        self.assertIn("protected void onStartListening(", codigo)
+        self.assertIn("protected void onCancel(", codigo)
+        self.assertIn("protected void onStopListening(", codigo)
+        self.assertIn("MainActivity.PIDE_ESCUCHAR", codigo)
+        self.assertNotIn("AudioRecord", codigo,
+                         "un reconocedor propio exigiría grabar PCM en este proceso")
+
+    def test_la_sesion_abre_la_cara_pidiendo_que_escuche(self):
+        codigo = solo_codigo(self.fuentes["Sesion.java"])
+        self.assertIn("public void onShow(Bundle args, int showFlags)", codigo)
+        self.assertIn("MainActivity.PIDE_ESCUCHAR", codigo)
+        self.assertIn("finish();", codigo,
+                      "dejar la sesión del sistema abierta espera texto que no va a llegar")
+
+    def test_la_bandera_del_escuchado_es_una_sola_cadena(self):
+        """`MainActivity` la declara; `Sesion` y `Reconocimiento` la nombran. Tres
+        copias de la literal serían tres oportunidades de escribir «cort-escuchrar»
+        y que el asistente abra la cara muda."""
+        self.assertIn('public static final String PIDE_ESCUCHAR = "cort-escuchar";',
+                      self.fuentes["MainActivity.java"])
+        for nombre in ("Sesion.java", "Reconocimiento.java"):
+            self.assertIn("MainActivity.PIDE_ESCUCHAR", self.fuentes[nombre], nombre)
+            self.assertNotIn('"cort-escuchar"', solo_codigo(self.fuentes[nombre]),
+                             f"{nombre}: repite la literal en vez de nombrar la constante")
+
+    def test_la_actividad_se_reutiliza_y_no_se_duplica(self):
+        """`singleTop`: la tecla del asistente pulsada dos veces tiene que entregar
+        su bandera a la cara que ya está abierta (`onNewIntent`), no montar otra."""
+        actividad = next(e for e in self.raiz.iter() if e.tag.endswith("activity"))
+        self.assertEqual("singleTop", actividad.get(ANDROIDE + "launchMode"))
+        self.assertIn("protected void onNewIntent(Intent intento)",
+                      self.fuentes["MainActivity.java"])
+        self.assertIn("setIntent(intento)", self.fuentes["MainActivity.java"])
+
+    def test_escuchar_por_el_asistente_reusa_el_micro_que_ya_funciona(self):
+        """El oído del asistente es el `SpeechRecognizer` de `v0.15.0`, no un
+        modelo nuevo metido a presión en el APK."""
+        self.assertIn("public void escucharAhora()", self.fuentes["Cara.java"])
+        self.assertIn("escuchar();", self.fuentes["Cara.java"])
+        main = solo_codigo(self.fuentes["MainActivity.java"])
+        self.assertIn("cara.escucharAhora();", main)
+
+
+class TestLoQueLlegaAlRunner(unittest.TestCase):
+    """El build trabaja sobre el **clone**: lo que git no sigue, el runner no lo ve.
+
+    La trampa mide un día entera. `apps/apk/.gitignore` tenía `res/` para que los
+    PNG que dibuja `scripts/marca.py` no se commitearan — bien—, y con esa regla
+    también se quedaba fuera `res/xml/asistente.xml`, que es **fuente escrito a
+    mano**: el contrato del asistente. El `git add` lo habría saltado en silencio,
+    el runner habría clonado sin él, y `aapt2 link` se habría caído con «resource
+    @xml/asistente not found»: la Release con su texto y **sin APK**, que es el
+    fallo que ya pasó tres veces (`v0.13.0`, `v0.14.0`, `v0.14.2`) por motivos
+    distintos. Aquí no hay `javac` ni SDK y el log del run es privado; lo que sí se
+    puede comprobar en milisegundos es **qué archivos llegan**.
+    """
+
+    def esta_ignorado(self, ruta):
+        resultado = subprocess.run(
+            ["git", "check-ignore", "--", str(ruta.relative_to(RAIZ))],
+            cwd=str(RAIZ), capture_output=True, text=True)
+        self.assertIn(resultado.returncode, (0, 1),
+                      f"`git check-ignore` no respondió ({resultado.returncode}): "
+                      f"{resultado.stderr.strip()}")
+        return resultado.returncode == 0
+
+    def test_el_contrato_del_asistente_llega_al_runner(self):
+        xml = APK / "res" / "xml" / "asistente.xml"
+        self.assertTrue(xml.is_file(), "sin el XML no hay `@xml/asistente` que enlazar")
+        self.assertFalse(self.esta_ignorado(xml),
+                         "`res/xml/asistente.xml` está ignorado: el runner no lo vería")
+
+    def test_toda_entrada_del_build_es_seguida_por_git(self):
+        """Manifiesto, guion de compilado, tabla de frases y los quince Java."""
+        entradas = [MANIFIESTO, COMPILAR, APK / ".gitignore",
+                    APK / "assets" / "habilidades.json",
+                    APK / "res" / "xml" / "asistente.xml"]
+        entradas += sorted((APK / "src").rglob("*.java"))
+        self.assertGreaterEqual(len(entradas), 18, "el glob no encontró fuentes")
+        for ruta in entradas:
+            self.assertFalse(self.esta_ignorado(ruta),
+                             f"{ruta.name}: entrada del build que git ignora")
+
+    def test_los_iconos_generados_siguen_sin_commit(self):
+        """La regla que se salvó: lo que dibuja `marca.py` no es fuente."""
+        icono = APK / "res" / "mipmap-hdpi" / "ic_launcher.png"
+        if not icono.is_file():
+            self.skipTest("aquí no hay iconos generados (no se ha compilado)")
+        self.assertTrue(self.esta_ignorado(icono),
+                        "el PNG generado se está colando en el repo")
+
 
 
 if __name__ == "__main__":

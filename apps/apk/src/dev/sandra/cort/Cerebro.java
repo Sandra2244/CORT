@@ -8,6 +8,7 @@ import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -156,6 +157,72 @@ public class Cerebro {
         }
         String resto = dicho.substring(prefijo.length()).trim();
         return resto.isEmpty() ? null : resto;
+    }
+
+    /* ------------------------------------------------------------------ encadenar */
+
+    /**
+     * Las junturas con las que la dueña encadena dos mandatos en un aliento:
+     * «abre Lark player **y** pon After dark», «baja el volumen **luego** pon
+     * silencio». La `y` suelta también entra, y por eso el paso siguiente es la
+     * guarda que evita el daño que hace: *cada* trozo tiene que casar en la
+     * tabla, si no la frase se procesa entera. Sin esa guarda, «pon una alarma a
+     * las ocho **y** media» se partiría en dos y CORT pondría una alarma a las
+     * ocho y contestaría algo de «media».
+     */
+    private static final Pattern UNION = Pattern.compile(
+            " (?:y luego|luego|y despues|despues de|despues|y) ");
+
+    /** Parte la frase por las junturas, tirando los trozos vacíos. Pura: sin Android. */
+    public static List<String> partir(String entrada) {
+        List<String> piezas = new ArrayList<>();
+        // Se parte sobre la forma **normalizada**: así «Y», «y» y «después» valen lo
+        // mismo, y cada trozo que sale ya está en la forma que `procesar` espera.
+        for (String trozo : normaliza(entrada).split(UNION)) {
+            String limpio = trozo.trim();
+            if (!limpio.isEmpty()) {
+                piezas.add(limpio);
+            }
+        }
+        return piezas;
+    }
+
+    /**
+     * Los pasos de una frase, casi siempre uno. El orden **no es** el que parece:
+     * primero se parte y se comprueba que *todos* los trozos se conozcan, y sólo
+     * si no hay cadena se procesa la frase entera.
+     *
+     * Se probó al revés —entera primero— y falló con la frase literal de la dueña:
+     * «abre Lark player y pon After dark» casa entera contra la regla genérica
+     * «abre {resto}», así que el segundo mandato se iba dentro del nombre de la
+     * app y CORT contestaba «no encontré «lark player y pon after dark»». Partir
+     * primero es lo que hace que los dos mandatos lleguen a sus dos acciones, y la
+     * guarda de «todos los trozos» es la que evita que «pon una alarma a las ocho
+     * **y** media» se ejecute como dos.
+     *
+     * Si ningún camino casa sale la lista vacía, y la cara hace lo de siempre:
+     * preguntar a la nube o proponer aprender.
+     */
+    public List<Resultado> cadena(String entrada) {
+        List<String> piezas = partir(entrada);
+        if (piezas.size() > 1) {
+            List<Resultado> pasos = new ArrayList<>();
+            for (String pieza : piezas) {
+                Resultado r = procesar(pieza);
+                if (r == null) {
+                    break;          // no es una cadena: se intenta la frase entera
+                }
+                pasos.add(r);
+            }
+            if (pasos.size() > 1) {
+                return pasos;
+            }
+        }
+        Resultado entera = procesar(entrada);
+        if (entera == null) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(entera);
     }
 
     /**

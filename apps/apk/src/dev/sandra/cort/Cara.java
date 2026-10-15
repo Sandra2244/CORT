@@ -206,7 +206,11 @@ public class Cara implements Voz.AlOir {
     /** El lazo completo: tabla → acción → medida → (nube) → aprender. */
     public void procesar(final String dicho) {
         linea("«" + dicho + "»", Paleta.SUAVE);
-        Cerebro.Resultado r = cerebro.procesar(dicho);
+        List<Cerebro.Resultado> pasos = cerebro.cadena(dicho);        if (pasos.size() > 1) {
+            encadenar(pasos);
+            return;
+        }
+        Cerebro.Resultado r = pasos.isEmpty() ? null : pasos.get(0);
         if (r != null) {
             String respuesta = acciones.ejecutar(r);
             if (respuesta != null) {
@@ -219,6 +223,34 @@ public class Cara implements Voz.AlOir {
             return;
         }
         porNube(dicho);
+    }
+
+    /**
+     * «Abre Lark player y pon After dark»: dos mandatos, dos intenciones, **una
+     * sola respuesta hablada** al final. Si un paso pide un dato que no está en la
+     * frase, la cadena se corta ahí y se pregunta por ese paso — seguir ejecutando
+     * el resto sería hacer cosas que la dueña no confirmó.
+     *
+     * Lo que este lazo no puede prometer desde el portátil: el orden en que las
+     * dos ventanas aparecen en la pantalla del teléfono depende de Android, y la
+     * segunda tapa a la primera. Es la misma razón por la que «pon After dark»
+     * abre una búsqueda en internet en vez de pulsar el play dentro de la app que
+     * acabamos de abrir.
+     */
+    private void encadenar(List<Cerebro.Resultado> pasos) {
+        StringBuilder texto = new StringBuilder();
+        for (Cerebro.Resultado paso : pasos) {
+            String respuesta = acciones.ejecutar(paso);
+            if (respuesta == null) {
+                contestar("¿Cómo? Necesito el dato: pruébalo con «" + pideEjemplo(paso) + "».");
+                return;
+            }
+            if (texto.length() > 0) {
+                texto.append(" ");
+            }
+            texto.append(respuesta);
+        }
+        contestar(texto.toString());
     }
 
     private String pideEjemplo(Cerebro.Resultado r) {
@@ -509,6 +541,20 @@ public class Cara implements Voz.AlOir {
     }
 
     /* ------------------------------------------------------------------ escucha */
+
+    /**
+     * Empezar a oír **sin que nadie pulse el ●**: es lo que hace `Sesion.java`
+     * cuando la dueña eligió CORT como asistente del teléfono y aprieta la tecla
+     * de asistente o el gesto de la pantalla de bloqueo. CORT usa aquí el
+     * reconocedor que el aparato ya trae —el mismo del botón—, porque un modelo de
+     * speech propio no cabe en un APK de 79 KB de Java ni en el portátil de la
+     * dueña; está escrito en `docs/PLATFORM.md`.
+     */
+    public void escucharAhora() {
+        if (!escuchando) {
+            escuchar();
+        }
+    }
 
     private void escuchar() {
         if (escuchando) {

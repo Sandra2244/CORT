@@ -2,6 +2,7 @@ package dev.sandra.cort;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -63,6 +64,14 @@ public class MainActivity extends Activity {
     private static final int MILISEGAS_POR_INTENTO = 900;
     private static final int INTENTOS = 3;
 
+    /**
+     * La bandera que ponen `Sesion.java` y `Reconocimiento.java` al abrir la cara
+     * desde fuera: «ábrete y ponte a escuchar». Vive aquí, y no como cadena
+     * suelta en los dos archivos, porque las tres mitades tienen que decir
+     * literalmente lo mismo y aquí no hay un test de Android que lo compruebe.
+     */
+    public static final String PIDE_ESCUCHAR = "cort-escuchar";
+
     private WebView web;
     private Cara cara;          // la superficie nativa, cuando no hay portátil
     private LinearLayout capa;  // root: una sola cara a la vez
@@ -82,6 +91,37 @@ public class MainActivity extends Activity {
         capa.setBackgroundColor(Paleta.FONDO);
         setContentView(capa);
         mostrarOSetup();
+        escuchaSiPidenDesdeFuera();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intento) {
+        super.onNewIntent(intento);
+        // `singleTop` en el manifiesto: el asistente que se vuelve a pulsar no
+        // monta una segunda cara encima de la primera, entrega aquí su bandera.
+        setIntent(intento);
+        escuchaSiPidenDesdeFuera();
+    }
+
+    /**
+     * Si quien abrió la app fue el traje de asistente (`Sesion.java`,
+     * `Reconocimiento.java`), CORT se pone a escuchar sin que nadie pulse el ●.
+     *
+     * Va con `post()` y no en línea: en el primer arranque `mostrarOSetup()` está
+     * decidiendo si la cara es la nativa o el WebView del portátil, y `cara` aún
+     * es `null`. Si el portátil apareció y manda la ventana, **no** se escucha
+     * por este camino: esa cara tiene su propio micrófono en la página.
+     */
+    private void escuchaSiPidenDesdeFuera() {
+        final Intent pedido = getIntent();
+        if (pedido == null || !pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
+            return;
+        }
+        capa.post(() -> {
+            if (cara != null && web == null) {
+                cara.escucharAhora();
+            }
+        });
     }
 
     private SharedPreferences prefs() {

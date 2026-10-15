@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  La meta-datos que Android lee para saber si CORT puede ser el asistente del
+  teléfono. Su nombre se declara en `AndroidManifest.xml` como
+  `android:name="android.voice_interaction"` dentro del servicio `.Asistente`, y
+  el contrato lo fija el fuente de AOSP
+  (`core/java/android/service/voice/VoiceInteractionServiceInfo.java`): si el
+  nodo no se llama `voice-interaction-service`, o si falta `sessionService` o
+  `recognitionService`, el parser devuelve un error y **CORT no aparece en la
+  lista de asistentes** del teléfono, sin ninguna pantalla que lo avise.
+
+  Los atributos van **sin** prefijo `android:` a propósito, y es un detalle que
+  cuesta un APK muerto si se escribe mal: `VoiceInteractionServiceInfo` lee las
+  constantes con `res.obtainAttributes(attrs, com.android.internal.R.styleable.
+  VoiceInteractionService)`, y ésas son recursos **internos** del sistema. Un
+  `android:sessionService` escrito aquí no lo reconoce ni `aapt2 link` (no es un
+  atributo público) ni el parser.
+
+  Los dos nombres son rutas de clase completas del paquete `dev.sandra.cort`, y
+  `test_apk_manifesta.py` exige que los tres nombres (`Asistente`, `Sesiones`,
+  `Reconocimiento`) sigan existiendo como archivos Java.
+
+  Sin teléfono delante: ésto está **verificado contra el fuente de AOSP, no contra
+  un Samsung A16**.
+-->
+<voice-interaction-service
+    sessionService="dev.sandra.cort.Sesiones"
+    recognitionService="dev.sandra.cort.Reconocimiento"
+    settingsActivity="dev.sandra.cort.MainActivity"
+    supportsAssist="true"
+    supportsLaunchVoiceAssistFromKeyguard="true" />

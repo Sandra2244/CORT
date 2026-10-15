@@ -3,4 +3,14 @@
 build/
 # Los iconos se dibuja con `scripts/marca.py` en cada build: no son assets de
 # tercero, son código ejecutado, y guardar el PNG sería una segunda verdad.
-res/
+#
+# Desde el 2026-10-15 la regla es `res/mipmap-*` y NO `res/`. Con `res/` entero
+# ignorado, `res/xml/asistente.xml` — el contrato del asistente, que es fuente
+# escrito a mano, no un PNG generado— se quedaba fuera del `git add`, y el runner,
+# que trabaja sobre el *clone*, no lo veía: `aapt2 link` se cae con «resource
+# @xml/asistente not found» y la Release saldría con el texto y sin APK. Git no
+# permite re-incluir un archivo cuyo directorio padre está excluido, así que
+# arreglar esto con `!res/xml/` debajo no servía: hay que dejar de ignorar el
+# padre. La prueba `test_el_contrato_del_asistente_no_queda_ignorada` es la que ya
+# no deja volver a escribir `res/` a secas.
+res/mipmap-*

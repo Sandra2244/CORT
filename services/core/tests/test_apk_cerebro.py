@@ -308,5 +308,173 @@ class TestSimbolosDeAndroid(unittest.TestCase):
                 self.assertNotIn(prohibido, texto, f"{nombre}: {prohibido}")
 
 
+def cadena(reglas, entrada):
+    """Espejo en Python de `Cerebro.cadena` (Java), con su guarda de las junturas.
+
+    `Cerebro.cadena` parte por ` y `, ` luego `, ` despues `… y **sólo** ejecuta
+    como cadena si *todos* los trozos casan solos; si no, procesa la frase entera.
+    El orden está medido, no supuesto: con la frase entera primero, «abre Lark
+    player y pon After dark» la daba por buena contra la regla genérica «abre
+    {resto}» y el segundo mandato se perdía dentro del nombre de la app. La guarda
+    de «todos los trozos» es la que evita que «pon una alarma a las ocho **y**
+    media» se ejecute como dos. El espejo está aquí porque en esta máquina no hay
+    `javac` y esa decisión se toma en Java.
+    """
+    piezas = [trozo for trozo in re.split(
+        r" (?:y luego|luego|y despues|despues de|despues|y) ", normaliza(entrada))
+        if trozo.strip()]
+    if len(piezas) > 1:
+        pasos = []
+        for pieza in piezas:
+            hallado = encaja(reglas, pieza)
+            if hallado is None:
+                break               # no es cadena: se intenta la frase entera
+            pasos.append(hallado)
+        if len(pasos) > 1:
+            return pasos
+    entero = encaja(reglas, entrada)
+    return [entero] if entero is not None else []
+
+
+class TestEncadenar(unittest.TestCase):
+    """`v0.15.3`: «abre Lark player **y** pon After dark» en un solo aliento.
+
+    Es la frase que la dueña pidió literalmente, y su riesgo no es que no se
+    ejecute: es que **se parta mal**. Separar por «y» sin más le roba la coma a
+    «las ocho y media», y un asistente que pone una alarma a las ocho cuando le
+    pidieron «a las ocho y media» no falla en silencio, falla a una hora concreta.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reglas = json.loads(TABLA.read_text(encoding="utf-8"))["patrones"]
+
+    def test_dos_mandatos_juntos_salen_dos_pasos(self):
+        self.assertEqual(["app-cualquiera", "poner"],
+                         cadena(self.reglas, "abre Lark Player y pon After Dark"))
+
+    def test_la_hora_con_y_no_se_parte_jamas(self):
+        """El caso que hizo escribir la guarda: `alarma` casa **entera** antes de
+        que ninguna juntura la toque, y «media» no es un mandato."""
+        self.assertEqual(["alarma"], cadena(self.reglas, "pon una alarma a las ocho y media"))
+        self.assertEqual(["alarma"], cadena(self.reglas, "alarma a las 7:30 y media"))
+
+    def test_un_busqueda_con_y_en_el_titulo_tampoco_se_parte(self):
+        self.assertEqual(["buscar"], cadena(self.reglas, "busca libros y más libros"))
+
+    def test_un_trozo_que_no_se_conoce_vuelve_a_la_frase_entera(self):
+        """La degradación honesta, escrita como está y no como gustaría: «abre
+        spotify y hazme un café» no es cadena porque el segundo trozo no se conoce,
+        así que la frase va entera a la regla genérica y CORT acaba diciendo que no
+        encontró esa app. **No** se parte a medias ni se inventa el segundo paso:
+        la lista vacía — el camino de la nube y del «¿me enseñas?» — queda reservada
+        para lo que no casa por ningún lado, y ahí está la prueba de abajo."""
+        self.assertEqual(["app-cualquiera"], cadena(self.reglas, "abre spotify y hazme un café"))
+        self.assertEqual([], cadena(self.reglas, "hazme un café"))
+
+    def test_un_solo_mandato_sigue_siendo_un_solo_paso(self):
+        self.assertEqual(["hola"], cadena(self.reglas, "hola"))
+        self.assertEqual(["quien-soy"], cadena(self.reglas, "¿quién soy?"))
+
+    def test_tres_pasos(self):
+        self.assertEqual(["volumen-bajar", "app-cualquiera", "poner"],
+                         cadena(self.reglas, "baja el volumen y abre spotify y pon after dark"))
+
+
+class TestReglasNuevas(unittest.TestCase):
+    """Las cuatro acciones de `v0.15.3` (`app`, `poner`, `llamar`, `linterna`) y el
+    orden que las hace seguras. Las seis pruebas de arriba ya vigilan la tabla
+    entera; éstas miran el sitio exacto donde una frase genérica puede tapar a
+    todas las demás."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tabla = json.loads(TABLA.read_text(encoding="utf-8"))
+        cls.reglas = cls.tabla["patrones"]
+        cls.indice = {r["id"]: i for i, r in enumerate(cls.reglas)}
+        cls.nuevas = {"app-cualquiera": "abre", "poner": "pon",
+                      "llamar": "llama", "linterna-enciende": "enciende"}
+
+    def test_cada_una_vive_delante_de_nadie_que_imite_su_palabra(self):
+        """El orden de la tabla **es** la prioridad, y una regla con `{resto}` casa
+        por prefijo: si «abre {resto}» estuviera antes que «abre los ajustes», la
+        pantalla de ajustes se abriría por el camino de `app()` — que busca un icono
+        llamado «ajustes» — y la respuesta dejada en la tabla («Abro los ajustes.»)
+        no se diría nunca. Lo que se prohíbe aquí es que **otra regla posterior**
+        comparta la primera palabra: ésas las tapa la genérica."""
+        for identificador, primera_palabra in self.nuevas.items():
+            donde = self.indice[identificador]
+            for regla in self.reglas[donde + 1:]:
+                for patron in regla["patrones"]:
+                    self.assertFalse(patron.split(" ")[0] == primera_palabra,
+                                     f"«{patron}» ({regla['id']}) queda tapada por "
+                                     f"{identificador}: hay que mover la genérica "
+                                     f"después de ella")
+
+    def test_lo_nuevo_es_lo_ultimo_de_la_tabla(self):
+        """Las siete reglas de `v0.15.3` son literalmente las últimas, y eso es lo
+        que deja a todas las demás delante. Si alguien añade una frase nueva en el
+        commit siguiente, esta prueba le recuerda el sitio."""
+        coletaillo = [r["id"] for r in self.reglas[-7:]]
+        self.assertEqual({"linterna-enciende", "linterna-apaga", "abrir-wifi",
+                          "abrir-bluetooth", "llamar", "poner", "app-cualquiera"},
+                         set(coletaillo),
+                         f"las nuevas no son las últimas: {coletaillo}")
+
+    def test_toda_accion_de_dato_libre_pide_su_dato(self):
+        """`app`, `poner` y `llamar` no tienen parámetro cerrado: viven del `resto`.
+        Un patrón exacto («abre spotify») bajo una de esas acciones dejaría
+        `resto` vacío, `Acciones` devolvería `null` y la cara preguntaría «¿cómo?»
+        por una frase que sí se entendió."""
+        for regla in self.reglas:
+            if regla["accion"] in {"app", "poner", "llamar"}:
+                for patron in regla["patrones"]:
+                    self.assertIn("{resto}", patron,
+                                  f"{regla['id']}: «{patron}» sin {{resto}}")
+                self.assertIn("{resto}", regla.get("respuesta", ""),
+                              f"{regla['id']}: la respuesta tira el nombre a la basura")
+
+    def test_linterna_es_la_unica_nueva_con_parametro(self):
+        """`linterna` entra por `param` (enciende / apaga) porque sus dos frases no
+        llevan dato libre; las otras tres lo llevan. La lista cerrada de
+        `parametros` es lo que `test_los_parametros_vienen_del_diccionario`
+        contrasta contra el Java."""
+        self.assertEqual(["enciende", "apaga"], self.tabla["parametros"]["linterna"])
+        self.assertIn("wifi", self.tabla["parametros"]["abrir"])
+        self.assertIn("bluetooth", self.tabla["parametros"]["abrir"])
+        self.assertEqual(15, len(self.tabla["acciones"]),
+                         "la lista cerrada de acciones cambió: hay que decirlo en el README")
+
+    def test_el_java_tiene_el_case_de_cada_accion_nueva(self):
+        """La costura ya probada arriba (`test_toda_accion_de_la_tabla_tiene_su_case
+        _en_java`) se repite aquí **por nombre**, para que el fallo diga cual falta
+        en vez de mostrar un conjunto anónimo."""
+        java = ACCIONES_JAVA.read_text(encoding="utf-8")
+        for accion in ("app", "poner", "llamar", "linterna"):
+            self.assertIn(f'case "{accion}":', java, f"Acciones.java no entiende {accion}")
+        self.assertIn("return app(r.resto);", java)
+        self.assertIn("return linterna(r.param);", java)
+
+    def test_la_cara_encadena_y_dice_una_sola_frase(self):
+        """`Cara.procesar` ya no pregunta a la tabla una vez, pregunta por una
+        **lista**, y el habla va al final: dos `voz.hablar()` seguidos se atropellan
+        en Android y la dueña oye sólo el último."""
+        cara = CARA_JAVA.read_text(encoding="utf-8")
+        self.assertIn("cerebro.cadena(dicho)", cara)
+        self.assertIn("private void encadenar(List<Cerebro.Resultado> pasos)", cara)
+        self.assertIn("contestar(texto.toString())", cara)
+        inicio = cara.index("private void encadenar(")
+        self.assertNotIn("voz.hablar(", cara[inicio:inicio + 800],
+                        "encadenar no puede hablar paso a paso: habla una vez al final")
+
+    def test_el_cerebro_java_tiene_las_dos_funciones_de_la_cadena(self):
+        cerebro = CEREBRO_JAVA.read_text(encoding="utf-8")
+        self.assertIn("public static List<String> partir(", cerebro)
+        self.assertIn("public List<Resultado> cadena(", cerebro)
+        self.assertIn("procesar(entrada)", cerebro,
+                      "la cadena tiene que probar la frase entera antes de partirla")
+
+
 if __name__ == "__main__":
     unittest.main()
+
