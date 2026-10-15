@@ -113,7 +113,10 @@ Para comprobar el rotulado sin instalar nada, el primer renglón del
 `CORT-v<etiqueta>-firma.txt` de la Release dice `APK de CORT <versión>
 (versionCode <número>)` — en `v0.14.3`, `APK de CORT 0.14.3 (versionCode 1403)`;
 ésa es la línea que hay que mirar para saber que el adjunto es de este corte y no
-del anterior.
+del anterior. **Medido el 2026-10-15 con el `CORT-v0.14.3.apk` descargado**: el
+renglón dice exacto `APK de CORT 0.14.3 (versionCode 1403)`, y en el manifiesto
+binario del propio APK aparece la cadena `0.14.3` y el entero `1403` — no el `main`
+que salió en `v0.14.1`, ni el `0.13.0` que vivía fijado en el archivo—.
 
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma

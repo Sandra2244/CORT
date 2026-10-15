@@ -29,6 +29,12 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
 > con el hueco cerrado.
 
+> **Diez de las trece páginas publicadas no tienen APK** (medido por la API, sin credenciales), y ya se sabe
+> por qué cada vez: ocho nacieron antes de que existiera el pipeline del APK, `v0.14.0` vio su etiqueta
+> creada por el propio workflow —y eso no dispara el trabajo del APK—, y `v0.14.2` tuvo el manifiesto mal
+> formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
+> leyendo una log que es privada.
+
 **La lista de tareas para cortar la siguiente (v0.14.4), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
@@ -86,10 +92,15 @@ estreno son los de `v0.14.2`. Lo que se arregla es lo que impidió que `v0.14.2`
 - **Contado, no mirado**: `TMPDIR=/tmp make test` **517** en verde en **72,516 s** y `make test-web`
   **56** (`# pass 56`) — **573** en total. El Java se compila en el runner; en esta máquina no hay
   `javac`, y sigue sin verse nada en un dedo (regla 11).
-- **Qué lleva la página**: `CORT-v0.14.3.apk` y su `CORT-v0.14.3-firma.txt`, que debe encabezar con
-  `APK de CORT 0.14.3 (versionCode 1403)`. Al cierre de este texto hay **doce Releases** y sólo tres con
-  adjunto (`v0.13.1`, `v0.14.1` y la que esté abriendo el pipeline); `v0.14.0` y `v0.14.2` se quedaron sin
-  APK por las dos causas distintas que se explican arriba. No se mueven etiquetas publicadas.
+- **Qué lleva la página (medido después de empujar)**: run **19** de `compilar-apk` **verde** sobre
+  `923b396`, y la Release `v0.14.3` —abierta primero por `publicar-release` run 27, que creó la etiqueta
+  sobre este mismo commit— con sus **dos adjuntos**: `CORT-v0.14.3.apk` (49 977 B) y
+  `CORT-v0.14.3-firma.txt` (421 B), cuyo primer renglón es `APK de CORT 0.14.3 (versionCode 1403)`. El
+  `.apk` se descargó y se abrió en esta máquina: su `AndroidManifest.xml` binario lleva la cadena `0.14.3`
+  —y no `main`, ni el `0.13.0` viejo— y entre sus enteros está el **1403**, que es lo que Android lee para
+  decidir si es *una versión nueva* o *la misma instalada*. Por la API pública: **trece Releases**, tres
+  con adjunto (`v0.13.1`, `v0.14.1`, `v0.14.3`) y diez sin él, por las dos causas explicadas arriba. No se
+  mueve ninguna etiqueta publicada.
 
 **Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.3.zip
 
