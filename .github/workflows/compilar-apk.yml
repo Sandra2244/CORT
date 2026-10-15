@@ -9,8 +9,8 @@
 # descargas.
 #
 # Por qué también `push: branches: main`: para ver si compila **antes** de
-# etiquetar. Con `gh run list` no hace falta: el log queda público y la marca
-# se comprueba con la Release.
+# etiquetar. Si algo se rompe, el fallo se lee sin sesión: el paso convierte el
+# final de su propio log en un annotation del check-run, y esa API es pública.
 #
 # Por qué espera a que exista la Release: quien abre la página es
 # `publicar-release.yml`, disparado por la misma etiqueta. Subir el APK antes
@@ -47,7 +47,24 @@ jobs:
       - name: Compilar
         run: |
           TAG="${GITHUB_REF_NAME#v}"
-          bash apps/apk/compilar.sh "${TAG:-0.0.0}"
+          # Las logs de Actions **no son públicas** (medido 2026-10-15: la API de
+          # logs pide `admin:read` y la URL web pide sesión — el comentario que
+          # decía lo contrario estaba mal). Los *annotations* del check-run sí se
+          # leen sin credenciales, así que si algo falla, el final del log sale
+          # por ahí: es la única ventana honesta que hay desde fuera.
+          {
+            echo "ANDROID_HOME=${ANDROID_HOME:-vacío} · ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-vacío}"
+            ls -d /usr/local/lib/android/* 2>/dev/null || echo "(sin /usr/local/lib/android)"
+          } > /tmp/pre.log
+          bash apps/apk/compilar.sh "${TAG:-0.0.0}" > /tmp/apk.log 2>&1
+          st=$?
+          cat /tmp/apk.log
+          if [ $st -ne 0 ]; then
+            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 700 /tmp/apk.log; } \
+                   | tr '\n\r%;#()' ' ..... ' )
+            echo "::error::compilar.sh salió con $st — $msg"
+            exit $st
+          fi
         env:
           # Si la dueña guarda un keystore en los secretos, se usa; si no, el
           # script genera uno desechable y lo dice en el log.
