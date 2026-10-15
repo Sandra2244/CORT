@@ -122,5 +122,24 @@ fi
     --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" \
     --out build/CORT.apk build/apk/alineado.apk
 "$BT/apksigner" verify build/CORT.apk
+
+# -- Con qué llave salió firmado (se sube a la Release como prueba pública) ----
+# Las logs del run no son públicas, así que '¿esta Release usó la llave estable
+# o una desechable?' no se puede responder desde fuera... salvo que el propio
+# build lo cuente: `apksigner --print-certs` da la huella SHA-256 del
+# certificado —eso es información pública, vive dentro del APK— y con ella se
+# compara contra la llave guardada. Un APK firmado con llave distinta es, ante
+# Android, otra aplicación: por eso este archivo se sube al lado del APK.
+{
+    echo "APK de CORT $VERSION"
+    if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
+        echo "llave: la del repo (se puede instalar encima de la versión anterior)"
+    else
+        echo "llave: desechable (hay que desinstalar la versión anterior)"
+    fi
+    "$BT/apksigner" verify --print-certs build/CORT.apk
+} > build/firma.txt
+cat build/firma.txt
+
 ls -l build/CORT.apk
 echo "APK listo: build/CORT.apk"

@@ -22,8 +22,12 @@
 # La firma es desechable **mientras no haya secreto** `CORT_APK_KEYSTORE_B64` en
 # el repo: cada APK sale con una llave nueva y hay que desinstalar el anterior
 # para instalar el nuevo. Con el secreto puesto, `compilar.sh` firma con la
-# llave guardada y el APK se actualiza instalando encima. Es decisión de la
-# dueña cuál de los dos modos quiere; el pipeline funciona igual en ambos.
+# llave guardada y el APK se actualiza instalando encima. La llave estable ya
+# existe (se generó con `keytool` el 2026-10-15 y vive en `apps/apk/llave/`,
+# ignorada por git): falta que la dueña la pegue en Settings → Secrets and
+# variables → Actions, y `apps/apk/README.md` dice qué archivo va en qué secreto
+# y cómo se comprueba el resultado — cada run publica en la Release un
+# `CORT-v<etiqueta>-firma.txt` con la huella del certificado usado.
 name: compilar-apk
 
 on:
@@ -85,7 +89,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CORT-apk
-          path: apps/apk/build/CORT.apk
+          path: |
+            apps/apk/build/CORT.apk
+            apps/apk/build/firma.txt
 
       - name: Subirlo a la Release (sólo cuando se empuja una etiqueta)
         if: startsWith(github.ref, 'refs/tags/v')
@@ -106,4 +112,9 @@ jobs:
           # tiene que decir qué es sin abrir el gestor de archivos.
           cp apps/apk/build/CORT.apk "CORT-$etiqueta.apk"
           gh release upload "$etiqueta" "CORT-$etiqueta.apk" --clobber
+          # La nota de la firma viaja al lado del APK: es la única forma de
+          # comprobar, sin leer un log privado, si esta Release se hizo con la
+          # llave estable (se actualiza encima) o con una desechable (desinstalar).
+          cp apps/apk/build/firma.txt "CORT-$etiqueta-firma.txt"
+          gh release upload "$etiqueta" "CORT-$etiqueta-firma.txt" --clobber
           echo "APK subido a la Release $etiqueta"

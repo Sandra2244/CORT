@@ -6,24 +6,53 @@ cerebro, su memoria y sus permisos viven en la máquina de siempre—; este APK 
 es la ventana, para que la cara y el chat estén a mano en la mesa sin abrir el
 portátil.
 
-**Por qué un WebView y no Capacitor**: en el portátil de desarrollo (1,8 GiB, sin
-JDK) un `gradle build` de Capacitor congela la máquina — está medido y escrito en
-`docs/PLATFORM.md`. Aquí no hay Gradle ni AndroidX: una actividad Java, cuatro
-herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`, `d8`,
-`apksigner`) y un script, `compilar.sh`, que **nunca corre en el portátil**.
+**Por qué un WebView y no Capacitor**: en el portátil de desarrollo (1,8 GiB) un
+`gradle build` de Capacitor congela la máquina — está medido y escrito en
+`docs/PLATFORM.md`—, y además aquí no hace falta: `javac` no está (lo que hay es
+el JRE 21 y su `keytool`, medido 2026-10-15), así que no hay nada que compilar
+en esta máquina ni que descargar. Una actividad Java, cuatro herramientas que el
+runner de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un
+script, `compilar.sh`, que **nunca corre en el portátil**.
 
 ## Usarlo
 
-1. En el portátil: `python scripts/cort.py --lan` (necesita `CORT_LAN_TOKEN` en
-   el `.env`; sin llave el lanzador se niega — `security.py`).
-2. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases),
-   instalarlo (Android pide permiso para «instalar apps desconocidas»: es un
-   prototipo firmado en casa, no Play Store).
-3. Abrir CORT: la primera pantalla pide dos cosas — la **dirección** que imprime
-   el lanzador (`http://192.168.100.xxx:8780`, se puede pegar entera con su
-   `?token=`) y la **llave**, si la pegó sin token. Se guarda en
-   `SharedPreferences` y no se vuelve a preguntar.
-4. Mantener pulsado abre el diálogo para cambiar la dirección o salir.
+1. En el portátil: `python scripts/cort.py --lan`. La **llave de red ya no se
+   pide**: si no hay `CORT_LAN_TOKEN` en el `.env`, el lanzador la inventa, la
+   escribe ahí (archivo ignorado por git, permiso 0600) y sigue arrancando. Para
+   que el doble clic del escritorio publique sin escribir banderas, `CORT_LAN=1`
+   en el `.env`; para negarlo un arranque, `--sin-lan`.
+2. Copiar **el enlace entero** que sale en la línea `● red` del arranque
+   (`http://192.168.x.x:8780/?token=…`).
+3. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
+   e instalarlo (lea «Instalar aunque Android avise» abajo).
+4. Abrir CORT: la primera pantalla tiene **un solo campo**, y lo que se pega en
+   él es el enlace del paso 2 tal cual — la llave viaja dentro. Se guarda en
+   `SharedPreferences` y no se vuelve a preguntar; las veces siguientes la app
+   entra directo a la cara animada.
+5. Mantener pulsado (o el botón «atrás») abre el diálogo para cambiar la
+   dirección o salir. La dirección se muestra con la llave tapada.
+
+## Instalar aunque Android avise
+
+Android avisa con **cualquier** APK que no venga de Google Play, y CORT es un
+prototipo firmado en casa: el aviso («¿Instalar esta app desconocida?» / «La app
+puede ser dañina») **no se puede quitar de verdad** mientras no esté en la Play
+Store —eso pide una cuenta de desarrollador (25 USD) y una subida, no un commit—.
+Lo que sí se puede —y se ha hecho— es que el aviso sea el mismo de siempre y que
+el APK nuevo se instale **encima** del viejo. Eso depende de la firma (ver abajo).
+
+En un Samsung (One UI, medido en la documentación de Android, no en esta máquina
+— **sin verificar en dedo**):
+
+1. Abrir el archivo descargado desde «Descargas» (Chrome) y pulsar «Instalar».
+2. Si dice que la app es desconocida: «Detalles» → «Instalar de todos modos».
+3. Si pide permiso suelto: Ajustes → Apps → ⋮ → «Instalar apps desconocidas» →
+   activar para el navegador con el que se descargó. Después, volver a intentar.
+4. Al terminar, quitarle el permiso a esa app: es un interruptor que no debe
+   quedarse encendido.
+5. Si Android dice «no se puede instalar porque una versión anterior existe con
+   otra firma» (o «conflicto de firma»): hay que desinstalar la vez anterior.
+   Eso pasa mientras el repo no tenga la llave estable, y sólo esa vez.
 
 ## Lo que funciona en el teléfono y lo que no
 
@@ -41,13 +70,42 @@ Mientras el repo **no** tenga los secretos `CORT_APK_KEYSTORE_B64` y
 `CORT_APK_KEYSTORE_PASS`, cada Release firma con una llave desechable que se
 genera en el propio run: hay que **desinstalar el APK anterior** antes de
 instalar el nuevo. Con los secretos puestos, `compilar.sh` firma con la llave
-guardada y el APK se actualiza instalando encima. La clave no viaja en el
-repositorio (regla 7).
+guardada y el APK se actualiza instalando encima. La llave no viaja en el
+repositorio (regla 7): vive en `apps/apk/llave/`, ignorada por git.
+
+Poner la llave estable, una sola vez:
+
+1. `github.com/Sandra2244/CORT` → **Settings** → **Secrets and variables** →
+   **Actions** → **New repository secret**.
+2. Crear `CORT_APK_KEYSTORE_B64` con el contenido íntegro de
+   `apps/apk/llave/cort.keystore.b64` (un solo bloque de texto; abrirlo con un
+   editor de texto, no con el visor de imágenes).
+3. Crear `CORT_APK_KEYSTORE_PASS` con el contenido de
+   `apps/apk/llave/cort.keystore.pass` (una sola línea, sin saltos).
+4. Cortar la etiqueta siguiente: el pipeline firma con la llave del repo y
+   `compilar.sh` lo dice en `build/firma.txt`, que se sube a la Release como
+   `CORT-v<etiqueta>-firma.txt`.
+
+Comprobarlo sin leer un log privado (las logs de Actions no son públicas): abrir
+ese archivo en la Release y buscar la huella. Con la llave estable tiene que
+aparecer el SHA-256 `6e4ec4ce7a0cd6c0d3480ec7e0abc5a16849e2a9b383623fbfc230204a6b67f6`
+—el mismo que imprime `keytool -list -v` sobre `apps/apk/llave/cort.keystore`,
+sólo que sin los dos puntos— junto a un sujeto `CN=CORT, OU=prototipo local,
+O=local`, y la primera línea del archivo tiene que decir `llave: la del repo`.
+El texto exacto de esas líneas lo escribe `apksigner --print-certs`, que es el
+que lo genera: la huella y el modo son lo comprobable. Si pone
+`llave: desechable` y una huella distinta, el secreto no llegó. Esta huella es
+pública —vive dentro del APK— y no es el secreto: el secreto es la clave privada
+del `.keystore`.
+
+**Perder la llave** significa no poder volver a instalar encima: cada APK nuevo
+con otra firma obliga a desinstalar. `apps/apk/llave/` es, por tanto, un archivo
+que merece una copia fuera del portátil.
 
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.13.0     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.14.0     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un

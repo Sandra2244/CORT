@@ -16,3 +16,7 @@ CORT.desktop
 # borra solo al terminar; si el proceso se corta a media ejecución, que no aparezca
 # en `git status` como si fuera código del proyecto.
 .pruebas-web-tmp/
+# La llave con la que se firma el APK: `apps/apk/compilar.sh` la lee del secreto
+# CORT_APK_KEYSTORE_B64, y perderla significa no poder instalar un APK nuevo
+# encima de los viejos. Es un secreto, como el `.env`: no va al repo (regla 7).
+apps/apk/llave/
