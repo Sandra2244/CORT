@@ -70,7 +70,7 @@ jobs:
           st=$?
           cat /tmp/apk.log
           if [ $st -ne 0 ]; then
-            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 1500 /tmp/apk.log; } \
+            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 2500 /tmp/apk.log; } \
                    | tr '\n\r%;#()' ' ...... ' )
             echo "::error::compilar.sh salió con $st — $msg"
             exit $st

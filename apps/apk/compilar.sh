@@ -104,9 +104,13 @@ if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
     [ -n "$KS_PASS" ] || { echo "hay keystore pero falta CORT_APK_KEYSTORE_PASS"; exit 1; }
     echo "firmando con la llave del repo (el APK se puede actualizar instalando encima)"
 else
+    # Sin `>/dev/null`: en el run 7 (medido 2026-10-15, trazado con `bash -x`)
+    # esta línea fue la última ejecutada y murió con 1 sin decir nada — el
+    # redirect se comía lo único que keytool tenía que contar. Un generador de
+    # llaves mudo no es un generador de llaves; el ruido es parte del trabajo.
     keytool -genkeypair -keystore build/cort.keystore -alias cort \
         -storepass cort -keypass cort -validity 3650 \
-        -dname "CN=CORT, OU=prototipo local, O=local" >/dev/null
+        -dname "CN=CORT, OU=prototipo local, O=local"
     KS_PASS="cort"
     echo "firmando con una llave desechable (hay que desinstalar el APK anterior)"
 fi
