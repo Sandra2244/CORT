@@ -125,7 +125,7 @@ public class Cerebro {
         if (dicho.isEmpty()) {
             return null;
         }
-        String aprendida = recuerdos == null ? null : recuerdos.habilidad(dicho);
+        String[] aprendida = recuerdos == null ? null : recuerdos.habilidad(dicho);
         if (aprendida != null) {
             return new Resultado("aprendida", aprendida[0], aprendida[1], aprendida[2], dicho);
         }

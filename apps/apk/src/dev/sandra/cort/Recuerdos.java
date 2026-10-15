@@ -58,12 +58,12 @@ public class Recuerdos extends SQLiteOpenHelper {
         fila.put("clave", clave);
         fila.put("valor", valor);
         fila.put("cuando", System.currentTimeMillis());
-        writableDatabase.insertWithOnConflict("hechos", null, fila,
+        getWritableDatabase().insertWithOnConflict("hechos", null, fila,
                 SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public String valor(String clave) {
-        Cursor c = readableDatabase.query("hechos", new String[] {"valor"},
+        Cursor c = getReadableDatabase().query("hechos", new String[] {"valor"},
                 "clave=?", new String[] {clave}, null, null, null, "1");
         try {
             if (c.moveToFirst()) {
@@ -78,7 +78,7 @@ public class Recuerdos extends SQLiteOpenHelper {
     /** Las primeras claves que caben en una frase dicha en voz alta. */
     public String lista(int maximo) {
         List<String> leidos = new ArrayList<>();
-        Cursor c = readableDatabase.query("hechos", new String[] {"clave", "valor"},
+        Cursor c = getReadableDatabase().query("hechos", new String[] {"clave", "valor"},
                 null, null, null, null, "cuando DESC", String.valueOf(maximo));
         try {
             while (c.moveToNext()) {
@@ -161,7 +161,7 @@ public class Recuerdos extends SQLiteOpenHelper {
         if (directa != null) {
             return limpia(limpio) + ": " + directa;
         }
-        Cursor c = readableDatabase.query("hechos", new String[] {"clave", "valor"},
+        Cursor c = getReadableDatabase().query("hechos", new String[] {"clave", "valor"},
                 "clave LIKE ?", new String[] {"%" + limpio + "%"}, null, null, null, "3");
         try {
             List<String> found = new ArrayList<>();
@@ -214,12 +214,12 @@ public class Recuerdos extends SQLiteOpenHelper {
         fila.put("param", param == null ? "" : param);
         fila.put("respuesta", respuesta == null ? "" : respuesta);
         fila.put("veces", 1);
-        writableDatabase.insertWithOnConflict("habilidades", null, fila,
+        getWritableDatabase().insertWithOnConflict("habilidades", null, fila,
                 SQLiteDatabase.CONFLICT_REPLACE);
     }
 
     public String[] habilidad(String patron) {
-        Cursor c = readableDatabase.query("habilidades",
+        Cursor c = getReadableDatabase().query("habilidades",
                 new String[] {"accion", "param", "respuesta"},
                 "patron=?", new String[] {patron}, null, null, null, "1");
         try {
@@ -233,7 +233,7 @@ public class Recuerdos extends SQLiteOpenHelper {
     }
 
     public int cuentasDeHabilidades() {
-        Cursor c = readableDatabase.rawQuery("SELECT COUNT(*) FROM habilidades", null);
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM habilidades", null);
         try {
             return c.moveToFirst() ? c.getInt(0) : 0;
         } finally {

@@ -249,6 +249,19 @@ class TestSimbolosDeAndroid(unittest.TestCase):
         self.assertIn("SDK_INT", java[max(0, uso - 260):uso],
                       "ACTION_SHOW_ALARMS (API 29) se usa sin comprobar la versión")
 
+    def test_el_java_no_escribe_en_kotlin_lo_que_es_java(self):
+        """`readableDatabase` / `writableDatabase` son **métodos**
+        (`getReadableDatabase()`); la forma corta existe en Kotlin y en Java no, y
+        así lo escribió este archivo la primera vez. Costó el Run e519f35
+        (`cannot find symbol: variable readableDatabase`, cinco veces) y es
+        exactamente el error que aquí no puede ver ningún compilador porque no
+        hay `javac` en la máquina: por eso lo ve una prueba y no un editor.
+        """
+        for nombre, texto in self.fuentes.items():
+            for kotlinismo in ("readableDatabase.", "writableDatabase.", "database.use("):
+                self.assertNotIn(kotlinismo, texto,
+                                 f"{nombre}: `{kotlinismo[:-1]}` no es un campo, es un getter")
+
     def test_el_java_no_llama_a_ningun_shell(self):
         """Regla 6 de `AGENTS.md` también dentro del teléfono: CORT no ejecuta
         comandos, ejecuta intenciones de la lista cerrada."""

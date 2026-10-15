@@ -130,8 +130,19 @@ jobs:
           st=$?
           cat /tmp/apk.log
           if [ $st -ne 0 ]; then
-            msg=$( { cat /tmp/pre.log; echo "-- final del log --"; tail -c 2500 /tmp/apk.log; } \
-                   | tr '\n\r%;#()' ' ...... ' )
+            # Los `error:` de `javac` **primero** y después el final del log. Con
+            # sólo el tail se perdió un Run entero (medido 2026-10-15, e519f35):
+            # `javac` imprime veinte errores seguidos, el annotation se corta por
+            # caracteres, y lo que llegaba a fuera era la cola del último. Cada
+            # Run cuesta, así que la ventana pública trae la lista completa (tope
+            # de 30 líneas: el límite de un annotation son 4000 caracteres).
+            # El `tr` de antes también cambiaba `(` y `)` por puntos, y leer
+            # `habilidad.dicho..` en vez de `habilidad(dicho)` costó otro error
+            # más tiempo del que debía.
+            errores="$(grep -E '\.java:[0-9]+: error:' /tmp/apk.log | head -30)"
+            msg=$( { cat /tmp/pre.log; echo "-- errores --"; echo "${errores:-ninguno}"; \
+                     echo "-- final del log --"; tail -c 900 /tmp/apk.log; } \
+                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
             echo "::error::compilar.sh salió con $st — $msg"
             exit $st
           fi
