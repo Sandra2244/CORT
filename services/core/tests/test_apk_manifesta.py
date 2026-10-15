@@ -1189,5 +1189,70 @@ class TestLoQueElSdkDevuelve(unittest.TestCase):
                          "el `getVoices()` volvió a recibirse en un tipo que no es `Set`")
 
 
+class TestLaConversionQueJavacNoPerdona(unittest.TestCase):
+    """Cuarta clase de error que **sólo existe al compilar**, y la que costó la página
+    de `v0.16.0` (sin APK): `Orbe.java:230` tenía
+
+        Math.max(1f, escala * 0.012f * (0.6 + semilla[i]))
+
+    y en Java `0.6` es `double`, así que todo el producto se vuelve `double` y
+    `drawCircle(…, float, …)` lo rechaza con «possible lossy conversion from double to
+    float». Es un literal de un carácter, invisible leyendo, y el compilador del proyecto
+    vuelve a ser el único que lo ve.
+
+    La guarda no intenta reimplementar el sistema de tipos: mira dos sitios donde este
+    error siempre aparece —las llamadas de dibujo que toman `float` y las asignaciones
+    a `float`— y exige que un decimal sin `f` vaya dentro de un `(float)` o `(int)`
+    explícito. No cubre un `float` que llega por una cadena de métodos; lo que cubre es
+    la forma en que este error se escribió la única vez que ocurrió.
+    """
+
+    Llamadas_de_dibujo = re.compile(
+        r"\.(drawCircle|drawArc|drawPath|drawLine|drawRoundRect|setStrokeWidth|setAlpha)\s*\(")
+    Decimal_sin_sufijo = re.compile(r"(?<![\w.])\d+\.\d+(?![\w.])")
+    Conversion_explicita = re.compile(r"\((?:float|int|long|short)\)")
+
+    def setUp(self):
+        self.java = {java.name: java.read_text(encoding="utf-8")
+                     for java in sorted(FUENTES.glob("*.java"))}
+
+    def sentencias_de_float(self, codigo):
+        """Las sentencias que asignan a un `float` o llaman a un método de `Canvas`/`Paint`."""
+        for sentencia in solo_codigo(codigo).split(";"):
+            limpio = sentencia.strip()
+            if not limpio:
+                continue
+            es_asignacion = re.match(r"(?:final\s+)?float\s+\w+\s*[-+*/]?=", limpio)
+            if es_asignacion or self.Llamadas_de_dibujo.search(limpio):
+                yield limpio
+
+    def test_todo_decimal_en_un_sitio_de_float_lleva_su_f_o_su_cast(self):
+        for archivo, texto in sorted(self.java.items()):
+            for sentencia in self.sentencias_de_float(texto):
+                sueltos = [d for d in self.Decimal_sin_sufijo.findall(sentencia)
+                           if not re.search(rf"{re.escape(d)}f\b", sentencia)]
+                if sueltos and not self.Conversion_explicita.search(sentencia):
+                    self.fail(f"{archivo}: {', '.join(sueltos)} sin `f` ni cast en un sitio de "
+                              f"`float`: `{sentencia[:90]}` — javac: «possible lossy conversion "
+                              "from double to float» (así se cayó el run de `v0.16.0`)")
+
+    def test_la_linea_del_polvo_sigue_con_sus_floats(self):
+        """La que se cayó en el runner, dicha literal."""
+        orbe = re.sub(r"\s+", " ", solo_codigo(self.java["Orbe.java"]))
+        self.assertRegex(orbe, r"escala \* 0\.012f \* \(0\.6f \+ semilla\[i\]\)",
+                         "el radio del polvo volvió a mezclar `double` con `float`")
+
+    def test_la_guarda_no_es_decorativa(self):
+        """Con el `0.6` de vuelta, la guarda tiene que caer: si no, no está mirando."""
+        con_el_bug = self.java["Orbe.java"].replace("(0.6f + semilla[i])", "(0.6 + semilla[i])")
+        self.assertNotEqual(con_el_bug, self.java["Orbe.java"],
+                            "la frase buscada cambió y esta prueba ya no prueba nada")
+        encontradas = [s for s in self.sentencias_de_float(con_el_bug)
+                       if self.Decimal_sin_sufijo.search(s)
+                       and not self.Conversion_explicita.search(s)]
+        self.assertEqual(1, len(encontradas),
+                         f"la guarda no cazó el bug reintegrado ({len(encontradas)} sentencias)")
+
+
 if __name__ == "__main__":
     unittest.main()

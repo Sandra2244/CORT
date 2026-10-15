@@ -2,7 +2,21 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (14)** (`TMPDIR=/tmp make test` **722** en verde en **94,472 s**,
+> Última verificación: **2026-10-15 (15)** (`TMPDIR=/tmp make test` **725** en verde en **101,725 s**,
+> `make test-web` **56** — **781** en total—): **`v0.16.1` es un carácter, y lo metí yo.**
+> `Orbe.java:230` escribía `Math.max(1f, escala * 0.012f * (0.6 + semilla[i]))`; en Java `0.6` es
+> `double`, el producto se vuelve `double` y `Canvas.drawCircle(…, float, …)` lo rechaza
+> —«possible lossy conversion from double to float»—. Los dos `compilar-apk` del `push`
+> (**38822621654**) y de la etiqueta (**38822625376**) cayeron con **ese único** error y la página de
+> `v0.16.0` quedó **sin APK** (cuarta vez; leído por *anotaciones* de la API pública, no por un log
+> privado). Lo útil del dictamen: `javac` reportó **un** error sobre **dieciséis** archivos, o sea que
+> el resto del corte —`Set<Voice>`, `isSpeaking()`, el orbe montado, los `lambda` del `postDelayed`—
+> ya está **comprobado limpio de tipos por un compilador real**. El arreglo es `0.6f`, y la cuarta
+> guarda de este género es `TestLaConversionQueJavacNoPerdona` (3 pruebas, `test_apk_manifesta.py` en
+> **77**): toda sentencia que asigna a `float` o llama a un método de dibujo de `Canvas`/`Paint` lleva
+> sus decimales con `f` o con un cast explícito. **La tercera de esas tres pruebas reintegra el
+> literal malo y exige que la guarda marque exactamente una sentencia**, así que no es decorativa.
+> Verificación anterior, **2026-10-15 (14)** (`TMPDIR=/tmp make test` **722** en verde en **94,472 s**,
 > `make test-web` **56** — **778** en total—): **la cara del teléfono deja de ser un formulario y
 > toma el orbe del PC.** `apps/apk/src/dev/sandra/cort/Orbe.java` (nuevo) dibuja con `Canvas` el
 > reactor de `apps/web/src/scene/` —`REPOSO`/`ESCUCHA`/`PENSAR`/`HABLA`, la caída `exp(-dt·4,5)`, la

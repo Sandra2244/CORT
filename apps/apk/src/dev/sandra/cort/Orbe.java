@@ -227,7 +227,7 @@ public class Orbe extends View {
             float y = (float) (cy + Math.sin(anguloDelPunto) * r * 0.62 + altura[i] * escala * 0.34);
             pincel.setColor(Paleta.POLVO);
             pincel.setAlpha((int) (30 + 190 * semilla[i] * (0.35 + nivel * 0.9)));
-            lienzo.drawCircle(x, y, Math.max(1f, escala * 0.012f * (0.6 + semilla[i])), pincel);
+            lienzo.drawCircle(x, y, Math.max(1f, escala * 0.012f * (0.6f + semilla[i])), pincel);
         }
 
         // Un aro fino de vidrio alrededor, como el de la marca: ancla el orbe a la

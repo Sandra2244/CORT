@@ -74,6 +74,37 @@ todas esas cadenas como `v<etiqueta>`:
 
 ---
 
+## `v0.16.1` — un carácter: `0.6` en un sitio de `float`, y la cuarta página sin APK
+
+**El error era mío y lo digo antes de contar el arreglo**: `v0.16.0` añadió la guarda de los
+retornos del SDK y, en el mismo corte, escribió una línea que `javac` no puede tragar.
+
+- **Lo que pasó**: `Orbe.java:230` tenía `Math.max(1f, escala * 0.012f * (0.6 + semilla[i]))`.
+  En Java `0.6` es `double`, el producto entero se vuelve `double`, y `Canvas.drawCircle(…, float, …)`
+  lo rechaza: **«possible lossy conversion from double to float»**. Los dos `compilar-apk` disparados
+  por el `push` (run **38822621654**) y por la etiqueta (run **38822625376**) cayeron con **ese único**
+  error, y la página de `v0.16.0` quedó con su texto y **sin `CORT-v0.16.0.apk`** — la cuarta vez que
+  un compilado se cobra una Release, y la cuarta que se descubre por la API pública y sus
+  *anotaciones*, porque el log del run es privado.
+- **Lo que se aprende del dictamen**: `javac` dijo **un** error sobre los **dieciséis** archivos. Eso
+  quiere decir que lo demás del corte —el `Set<Voice>` corregido, `isSpeaking()`, el orbe montado en
+  `Cara.java`, los `lambda`, el `postDelayed`— ya está **comprobado limpio de tipos por un compilador
+  real**. El run rojo no fue tiempo perdido: es la única verificación de tipos que existe aquí, y esta
+  vez acotó el daño a un carácter.
+- **El arreglo**: `0.6f`. Una letra.
+- **La guarda nueva**: `TestLaConversionQueJavacNoPerdona` (`test_apk_manifesta.py`, **3** pruebas; la
+  carpeta llega a **77**) recorre las sentencias que asignan a un `float` o llaman a un método de dibujo
+  de `Canvas`/`Paint` y exige que todo decimal lleve su `f` o su `(float)`/`(int)` explícito. **Una de
+  las tres pruebas reintegra el literal malo** (`0.6 + semilla[i]`) y exige que la guarda marque
+  exactamente **una** sentencia: si alguien la vacía, se cae ella.
+- **Medido**: `TMPDIR=/tmp make test` **725** en verde y `make test-web` **56** — **781** en total—.
+  **Sin verificar**: el `javac` de este commit otra vez es el del runner (y es el que decide), el orbe
+  en el Samsung A16 y el timbre de la voz elegida.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.16.1.zip`
+
+---
+
 ## `v0.16.0` — el orbe de la cara de PC, en el teléfono; y la voz elegida con las mismas reglas
 
 La dueña lo pidió en una frase: «que se active en modo orbe con su animación y todo, como

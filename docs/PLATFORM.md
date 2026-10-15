@@ -55,7 +55,7 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
 - **El core de escritorio sigue siendo Python + React + Ollama, y la cara del teléfono se copia de él, no se re-inventa.** Desde `v0.16.0` los literales del orbe (`Scene.tsx`, `Core.tsx`, `Particles.tsx`, `palette.ts`) y de la voz (`cort/voz.ts`) están **leídos por una prueba** (`test_apk_orbe.py`, 27): un cambio estético o de acento en un aparato que no viaje al otro rompe `make test`. Es la forma ejecutable de «lo mismo funcione en PC que en el APK».
    No se reescribe
-  nada: las **722** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+  nada: las **725** pruebas de `services/core` (ejecutadas el 2026-10-15), el
   WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
   segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
   ni un dispositivo.

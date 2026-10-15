@@ -56,9 +56,13 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
    `RemoteException` sin recoger en `Reconocimiento.java:40`—; el último binario **medido aquí
    bajándolo** (no leyendo una log) es **`CORT-v0.15.5.apk`**: run **38815381368** en verde,
    82 881 B, sha-256 `86d41d83…d7ccb5`, `versionCode 1505`, las **quince** clases en `classes.dex`.
-   De **`v0.16.0`** — el orbe animado, la voz con las reglas del PC y `Orbe.java`— hay que
-   **comprobar los adjuntos de su página antes de bajarlo**: se hace con la API pública
-   (`/releases/tags/v0.16.0`) y se reporta aquí mismo en cuanto esté medido.
+   **`v0.16.0` tampoco tiene APK**: su `compilar-apk` cayó con un solo error de tipos —
+   `Orbe.java:230` escribía `0.6` (un `double`) dentro de un sitio que pide `float`, y `javac`
+   lo rechazó con «possible lossy conversion from double to float»—; se leyó por las
+   *anotaciones* públicas de los runs **38822621654** y **38822625376**, nunca por un log.
+   El descargable del orbe es **`CORT-v0.16.1.apk`** (mismo código con el literal corregido y
+   una guarda nueva que lo prohíbe), y **hay que comprobar los adjuntos de su página con la API
+   pública antes de bajarlo** (`/releases/tags/v0.16.1`) — aquí se reporta en cuanto esté medido.
    Se comprueba mirando los adjuntos de la página, no una log de Actions que es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
