@@ -112,3 +112,53 @@ class TestPaquete(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProtocoloDeDivulgacion(unittest.TestCase):
+    """El teléfono pregunta por UDP y el lanzador contesta: los dos lados tienen
+    que decir **literalmente** lo mismo, y aquí no hay un import compartido que
+    los ate. Esta prueba es la costura entre Java y Python.
+
+    Sin ella, cambiar la mágica en un lado deja el descubrimiento mudo en el
+    teléfono — y eso sólo se vería en un dedo, que es justo lo que no tenemos.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        lan = RAIZ / "scripts" / "cort.py"
+        spec = importlib.util.spec_from_file_location("cort_launcher_manifesta", lan)
+        cls.m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.m)
+        cls.java = JAVA.read_text(encoding="utf-8")
+
+    def test_la_sonda_del_java_es_la_que_reconoce_el_lanzador(self):
+        self.assertIn('String SONDA = "' + self.m.DESCUBRIR + '";', self.java)
+
+    def test_larespuesta_del_lanzador_es_la_que_el_java_espera(self):
+        self.assertIn('String RESPUESTA = "' + self.m.DESCUBRIR_RESPUESTA + '|";', self.java)
+
+    def test_el_puerto_esta_del_mismo_numero_en_los_dos_lados(self):
+        self.assertIn("int PUERTO_DIVULGACION = %d;" % self.m.DESCUBRIR_PUERTO, self.java)
+
+    def test_el_java_emite_broadcast_sin_pedir_permiso_nuevo(self):
+        # `setBroadcast(true)` sobre 255.255.255.255 no necesita nada más que
+        # INTERNET, que ya está declarado; si alguien añade un permiso, este
+        # aserción lo grita antes del build.
+        self.assertIn("setBroadcast(true)", self.java)
+        self.assertIn('InetAddress.getByName("255.255.255.255")', self.java)
+        raiz = ET.fromstring(MANIFIESTO.read_text(encoding="utf-8"))
+        permisos = {e.get(ANDROIDE + "name") for e in raiz.findall("uses-permission")}
+        self.assertEqual({"android.permission.INTERNET", "android.permission.RECORD_AUDIO",
+                          "android.permission.CAMERA"}, permisos)
+
+    def test_la_busqueda_corre_fuera_del_hilo_de_la_interfaz(self):
+        # `receive()` bloquea: si se llamara en el hilo de la UI el anillo se
+        # congela y la pantalla de estreno vuelve a ser un formulario quieto.
+        inicio = self.java.index("private void buscarATelefonoSilencio()")
+        trozo = self.java[inicio:inicio + 900]
+        self.assertIn("new Thread(", trozo)
+        self.assertIn("runOnUiThread", trozo)
+        antes, despues = trozo.split("new Thread(", 1)
+        self.assertNotIn("preguntarEnLaRed()", antes, "la sonda no puede ir en el hilo de la UI")
+        self.assertIn("preguntarEnLaRed()", despues)

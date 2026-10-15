@@ -29,6 +29,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 
 /**
  * La ventana de CORT en el teléfono. Escrito contra el SDK puro —sin AndroidX,
@@ -49,6 +55,12 @@ import android.widget.Toast;
  * uno y no dos porque la llave ya no la pide esta app ni la escribe la dueña:
  * la inventa el lanzador y la guarda en su `.env`. Lo que quedaba de fricción
  * estaba aquí dentro, y era de tamaño teclado.
+ *
+ * Desde el corte siguiente el campo ni se mira la primera vez: al abrir la app
+ * el teléfono **pregunta en la Wi-Fi** (`CORT-ENCONTRARSO-1` por UDP, el mismo
+ * literal que contesta `scripts/cort.py`) y, si CORT está publicado con `--lan`,
+ * se contestan solos y la ventana abre con su animación. El campo queda de
+ * respaldo para las redes que no dejan emitir broadcasts.
  */
 public class MainActivity extends Activity {
     /* Los mismos literales de `scripts/marca.py`, que son los de
@@ -63,9 +75,21 @@ public class MainActivity extends Activity {
     private static final int AVISO = 0xFFFFC46B;      // el ámbar del subtítulo
     private static final int CAMPO = 0xFF0A1620;      // el vidrio de las ventanas
 
+    /* El protocolo de divulgación: dos datagramas, y su otra mitad vive en
+       `scripts/cort.py` (`DESCUBRIR`, `DESCUBRIR_RESPUESTA`, `DESCUBRIR_PUERTO`).
+       `test_apk_manifesta.py` comprueba que los dos lados sigan diciendo lo
+       mismo — aquí no hay import compartido posible entre Java y Python, así
+       que la prueba es la costura. */
+    private static final String SONDA = "CORT-ENCONTRARSO-1";
+    private static final String RESPUESTA = "CORT-AQUI-1|";
+    private static final int PUERTO_DIVULGACION = 8781;
+    private static final int MILISEGAS_POR_INTENTO = 900;
+    private static final int INTENTOS = 3;
+
     private WebView web;
     private LinearLayout capa;    // root: el setup o el WebView, nunca los dos
     private TextView aviso;       // el motivo por el que el enlace no vale
+    private TextView ayuda;       // el texto que cuenta qué está pasando
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,17 +114,26 @@ public class MainActivity extends Activity {
      * guarda en SharedPreferences y no en memoria: cerrar la app en Android es
      * matar el proceso, y volver a escribir una IP cada mañana sería justo la
      * fricción que este APK existe para quitar.
+     *
+     * La primera vez, además, **no se le espera**: mientras se ve el anillo
+     * girando, el teléfono pregunta en la Wi-Fi. Si CORT contesta, la ventana
+     * abre sola y la dueña no teclea nada en su vida.
      */
     private void mostrarOSetup() {
         String url = prefs().getString("url", "");
         if (url.isEmpty()) {
-            pantallaDeConfiguracion("");
+            pantallaDeConfiguracion("", true);
+            buscarATelefonoSilencio();
         } else {
             abrir(url, prefs().getString("token", ""));
         }
     }
 
     private void pantallaDeConfiguracion(final String previo) {
+        pantallaDeConfiguracion(previo, false);
+    }
+
+    private void pantallaDeConfiguracion(final String previo, boolean buscando) {
         capa.removeAllViews();
         web = null;
         ScrollView desplazable = new ScrollView(this);
@@ -126,9 +159,12 @@ public class MainActivity extends Activity {
         sumario.setLetterSpacing(0.32f);
         pantalla.addView(sumario, centrado(-2));
 
-        TextView ayuda = texto("Pega el enlace que CORT imprime al arrancar: empieza en "
+        TextView explicacion = texto("Pega el enlace que CORT imprime al arrancar: empieza en "
                 + "http://192.168… y lleva su ?token= al final. Se guarda en el teléfono "
                 + "y no se vuelve a pedir.", 15f, CLARO);
+        ayuda = buscando ? texto("Buscando a CORT en tu Wi-Fi… si está encendido y "
+                + "publicado con --lan, la ventana abre sola y no tienes que pegar nada.",
+                15f, CLARO) : explicacion;
         ayuda.setLineSpacing(0f, 1.25f);
         LinearLayout.LayoutParams cuerpo = new LinearLayout.LayoutParams(-1, -2);
         cuerpo.topMargin = dp(34);
@@ -179,7 +215,12 @@ public class MainActivity extends Activity {
             intentar(campo);
             return true;
         });
-        campo.post(() -> campo.requestFocus());
+        // Mientras se busca, el foco **no** va al campo: abrir la app y que salga
+        // el teclado encima del anillo es la cara de un formulario, no la de un
+        // asistente. El foco se pide solo cuando la búsqueda ya falló.
+        if (!buscando) {
+            campo.post(() -> campo.requestFocus());
+        }
     }
 
     /** Validar el enlace pegado, guardarlo y abrir la ventana. */
@@ -202,6 +243,86 @@ public class MainActivity extends Activity {
         prefs().edit().putString("url", pegado).putString("token", "").apply();
         esconderTeclado();
         abrir(pegado, "");
+    }
+
+    /**
+     * Pregunta en la red, y si CORT contesta abre la ventana sin que nadie toque
+     * nada — que es lo que la dueña pidió: «que inicie con su animación como una
+     * IA normal».
+     *
+     * Corre en su propio hilo porque `DatagramSocket.receive` bloquea, y bloquear
+     * el hilo de la interfaz congela el anillo: una pantalla de arranque que se
+     * congela es la maqueta que este APK no quiere ser. El resultado se aplica con
+     * `runOnUiThread` y **sólo si la pantalla de estreno sigue montada** — si
+     * mientras tanto se pegó el enlace y abrió CORT, no se le vuelve a cerrar.
+     */
+    private void buscarATelefonoSilencio() {
+        new Thread(() -> {
+            final String encontrado = preguntarEnLaRed();
+            runOnUiThread(() -> {
+                if (web != null) {
+                    return;
+                }
+                if (encontrado == null) {
+                    ayuda.setText("No encontré a CORT en la Wi-Fi. ¿Está encendido con "
+                            + "--lan? Si tu red no deja emitir broadcasts, pega su enlace "
+                            + "abajo: se guarda y no se vuelve a pedir.");
+                    marcar("Esperando el enlace…");
+                    return;
+                }
+                prefs().edit().putString("url", encontrado).putString("token", "").apply();
+                ayuda.setText("Encontrado: " + recortar(encontrado));
+                abrir(encontrado, "");
+            });
+        }).start();
+    }
+
+    /**
+     * La sonda, tres intentos de 900 ms, y la primera respuesta válida vale.
+     *
+     * `255.255.255.255` es el broadcast del segmento: llega al portátil sin saber
+     * su IP, que es justo el conocimiento que faltaba. Hay redes donde el
+     * broadcast no pasa —VLAN de oficina, puntos de acceso con aislamiento de
+     * cliente—, así que esto devuelve `null` sin dramas en vez de reintentar para
+     * siempre: el campo de pegar sigue siendo el plan, no un adorno.
+     */
+    private String preguntarEnLaRed() {
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket();
+            socket.setBroadcast(true);
+            socket.setSoTimeout(MILISEGAS_POR_INTENTO);
+            byte[] sonda = SONDA.getBytes(StandardCharsets.UTF_8);
+            InetAddress difusion = InetAddress.getByName("255.255.255.255");
+            byte[] buffer = new byte[1024];
+            for (int intento = 0; intento < INTENTOS; intento++) {
+                try {
+                    socket.send(new DatagramPacket(sonda, sonda.length, difusion,
+                            PUERTO_DIVULGACION));
+                    DatagramPacket respuesta = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(respuesta);
+                    String texto = new String(respuesta.getData(), respuesta.getOffset(),
+                            respuesta.getLength(), StandardCharsets.UTF_8);
+                    if (texto.startsWith(RESPUESTA)) {
+                        String enlace = texto.substring(RESPUESTA.length()).trim();
+                        if (enlace.startsWith("http://") || enlace.startsWith("https://")) {
+                            return enlace;
+                        }
+                    }
+                } catch (SocketTimeoutException nadieAun) {
+                    // silencio en este turno: se insiste mientras gira el anillo
+                } catch (IOException noSePuede) {
+                    return null;   // ni sonda sale ni respuesta entra: a pegar el enlace
+                }
+            }
+            return null;
+        } catch (IOException sinSocket) {
+            return null;   // sin UDP no hay descubrimiento, y CORT sigue accesible
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+        }
     }
 
     private void marcar(String motivo) {

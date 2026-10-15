@@ -349,6 +349,112 @@ def lan_address() -> str | None:
         s.close()
 
 
+# ── Que el teléfono encuentre a CORT sin teclear nada (divulgación por UDP) ───
+#
+# Dos datagramas en un puerto aparte, y ahí acaba el protocolo:
+#
+#   sonda      teléfono → broadcast  «CORT-ENCONTRARSO-1»
+#   respuesta  portátil → teléfono    «CORT-AQUI-1|http://<ip>:<puerto>/?token=…»
+#
+# La respuesta **lleva la llave**, y eso es una decisión tomada con sus costes,
+# no un descuido: hasta ahora el enlace había que leerlo en la pantalla del
+# portátil y copiarlo en el teléfono, que es exactamente la fricción que la
+# dueña pidió quitar («no puede iniciar con su animación como una IA normal»).
+# Lo que se gana es cero tecleo. Lo que se expone es la llave a quien pregunte
+# **desde dentro de la misma Wi-Fi** — el radio que `--lan` ya está aceptando al
+# publicar el puerto, y el enlace ya viaja en claro por ese Wi-Fi sin HTTPS
+# (decisión de Sandra, no ticket de código). Por eso hay tres frenos: se responde
+# sólo con `--lan` puesto y modo `dist`, cada respuesta se imprime con la IP que
+# la pidió, y `--sin-descubrimiento` (o `CORT_LAN_DISCOVER=0`) apaga el puerto.
+DESCUBRIR = "CORT-ENCONTRARSO-1"
+DESCUBRIR_RESPUESTA = "CORT-AQUI-1"
+DESCUBRIR_PUERTO = 8781        # el 8780 es la página; éste es sólo el «¿estás ahí?»
+
+
+def puerto_descubrimiento(env: dict[str, str]) -> int:
+    """El puerto de divulgación: el que diga `CORT_DISCOVERY_PORT`, o 8781.
+
+    Un valor que no sea un puerto útil **no** detiene CORT: se usa el de siempre.
+    Es una comodidad de la LAN, no un interruptor de seguridad —el interruptor es
+    la llave de red, y ésa no se toca—.
+    """
+    valor = (env.get("CORT_DISCOVERY_PORT") or "").strip()
+    if valor.isdigit() and 1 <= int(valor) <= 65535:
+        return int(valor)
+    return DESCUBRIR_PUERTO
+
+
+def sonda_valida(datos: bytes) -> bool:
+    """¿Es esta pregunta de CORT, o tráfico cualquiera del vecindario?
+
+    El socket escucha en `0.0.0.0`: escáneres, impresoras y routers van a caer
+    aquí. Se compara la mágica exacta antes del primer espacio —la sonda puede
+    traer un nonce detrás, y un datagrama de tres bytes no merece una respuesta—.
+    """
+    if not datos:
+        return False
+    return datos.decode("utf-8", "replace").split(" ")[0] == DESCUBRIR
+
+
+def respuesta_descubrimiento(enlace: str) -> bytes:
+    """El datagrama con el que CORT se da a conocer; vacío si no hay enlace.
+
+    Vacío es también la forma de decir «no hay nada que responder»: sin `--lan`
+    publicado no existe un enlace que abrir desde el teléfono, y el bucle lo
+    comprueba antes de contestar.
+    """
+    if not enlace:
+        return b""
+    return f"{DESCUBRIR_RESPUESTA}|{enlace}".encode("utf-8")
+
+
+def abrir_descubrimiento(puerto: int) -> tuple[socket.socket | None, str | None]:
+    """El UDP escuchando en `0.0.0.0:puerto`, o el motivo por el que no.
+
+    `SO_REUSEADDR` porque al reiniciar CORT dos veces seguidas el socket anterior
+    puede seguir en `TIME_WAIT`; si aun así el puerto está ocupado, el lanzador
+    lo dice **una vez** y sigue andando: el teléfono siempre puede pegar el enlace,
+    que es el camino de siempre y no se ha quitado.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("0.0.0.0", puerto))
+    except OSError as error:
+        sock.close()
+        return None, f"puerto {puerto} ocupado ({error.strerror})"
+    return sock, None
+
+
+def bucle_descubrimiento(sock: socket.socket, enlace: str, parada: threading.Event,
+                         avisa) -> None:
+    """Atende sondas hasta que `parada` se marque. Corre en su propio hilo.
+
+    El socket viene de fuera a propósito: así el lazo se puede probar en
+    `127.0.0.1` con un puerto libre, sin tocar la Wi-Fi de esta máquina. `avisa`
+    se llama **después** de responder, con la IP de quien preguntó — es el registro
+    de «a quién le di la llave», y se imprime en la terminal del arranque—.
+    """
+    sock.settimeout(0.5)
+    while not parada.is_set():
+        try:
+            datos, origen = sock.recvfrom(256)
+        except socket.timeout:
+            continue
+        except OSError:
+            return                      # socket cerrado al apagar: salida limpia
+        if not sonda_valida(datos):
+            continue
+        mensaje = respuesta_descubrimiento(enlace)
+        if not mensaje:
+            continue
+        try:
+            sock.sendto(mensaje, origen)
+        except OSError:
+            return
+        avisa(origen[0])
+
+
 def rechazo_de_red(lan: bool, token: str | None) -> str | None:
     """El motivo por el que `--lan` no debe abrir el puerto, o `None` si se puede.
 
@@ -439,6 +545,9 @@ def main() -> int:
                     help="publica la interfaz en la red local (para abrir CORT desde el móvil)")
     ap.add_argument("--sin-lan", dest="lan", action="store_false",
                     help="aunque el .env pida la red, quédate en 127.0.0.1")
+    ap.add_argument("--sin-descubrimiento", dest="descubrir", action="store_false",
+                    default=True,
+                    help="no contestar por UDP a quien pregunte por CORT en la Wi-Fi")
     ap.add_argument("--no-color", action="store_true")
     args = ap.parse_args()
 
@@ -492,8 +601,19 @@ def main() -> int:
                     f"{ROOT / '.env'} — no vuelve a pedirla{RESET}", color))
 
     children: list[subprocess.Popen] = []
+    salida = threading.Lock()   # la terminal la escribe también el hilo UDP
+    # El hilo de divulgación (UDP) se apaga con todo lo demás. Se declaran aquí,
+    # vacíos, para que `shutdown()` pueda nombrarlos aunque el arranque falle antes
+    # de abrir el puerto: un `NameError` al limpiar sería una pantalla de Error de
+    # Windows en la cara de la dueña, que es justo lo que este lanzador evitó.
+    divulgar_parada: threading.Event | None = None
+    divulgar_sock: socket.socket | None = None
 
     def shutdown() -> None:
+        if divulgar_parada is not None:
+            divulgar_parada.set()
+        if divulgar_sock is not None:
+            divulgar_sock.close()
         for proc in children:
             if proc.poll() is None:
                 proc.terminate()
@@ -550,6 +670,39 @@ def main() -> int:
             time.sleep(0.25)
         url = "http://localhost:5173/"
 
+    # ── El teléfono pregunta y CORT contesta ───────────────────────────────────
+    # La IP y el enlace se calculan **una vez**, y fuera del bloque de la terminal:
+    # con `--quiet` — el doble clic sin consola — el teléfono tiene que seguir
+    # encontrando a CORT solo, y lo que se divulga tiene que ser literalmente el
+    # mismo enlace que se imprime. Vite en dev escucha sólo en `127.0.0.1`: con
+    # `--serve dev` no hay enlace que divulgar, y el bucle no se abre.
+    ip_lan = lan_address() if args.lan else None
+    enlace_lan = (f"http://{ip_lan}:{args.web_port}/?token={token}"
+                  if ip_lan and mode == "dist" else "")
+    motivo_udp = ""
+    if args.lan and args.descubrir and enlace_lan and verdad(os.getenv("CORT_LAN_DISCOVER", "1")):
+        sock_udp, motivo = abrir_descubrimiento(puerto_descubrimiento(os.environ))
+        if sock_udp is None:
+            motivo_udp = motivo or "puerto de divulgación sin abrir"
+        else:
+            divulgar_sock = sock_udp
+            divulgar_parada = threading.Event()
+
+            def quien_pregunta(ip: str) -> None:
+                # El registro de «a quién le di la llave». Se imprime con la IP de
+                # la propia red de la casa: no va a ningún sitio, pero sí a la
+                # terminal, donde se ve si alguien que no es su teléfono está
+                # preguntando.
+                if args.quiet:
+                    return
+                with salida:
+                    print(paint(f" {DIM}[red] {ip} preguntó por CORT: se le dio el "
+                                f"enlace con su llave{RESET}", color))
+
+            threading.Thread(target=bucle_descubrimiento,
+                             args=(sock_udp, enlace_lan, divulgar_parada, quien_pregunta),
+                             daemon=True).start()
+
     if not args.quiet:
         models = models_available() if ollama_alive() else []
         ready_mem, mem_note = memory_note(db, memory_count(db), args.demo)
@@ -566,23 +719,28 @@ def main() -> int:
         ok_cam, note_cam = camera_note(camera_probe())
         print(bar("camara", ok_cam, color, note_cam))
         if args.lan:
-            # La IP que hay que escribir en el teléfono. Si no se imprime, el
-            # `--lan` no sirve: la usuaria no puede adivinar su propia dirección.
-            ip = lan_address()
-            # Vite en dev escucha sólo en 127.0.0.1 y publicarlo exige otra
-            # bandera suya (`--host`): con `--serve dev` el `--lan` dejaría el
-            # core accesible y la página no, que es la peor combinación.
-            enlace = f"http://{ip}:{args.web_port}/?token={token}" if ip else None
-            notes = {"dist": f"el móvil abre {enlace}",
+            # La IP que vería el teléfono. Si no se imprime, el `--lan` no sirve:
+            # la usuaria no puede adivinar su propia dirección.
+            notes = {"dist": f"el móvil abre {enlace_lan}",
                      "dev": "interfaz en modo dev: el móvil verá el core, pero no la página — usa --serve dist"}
-            print(bar("red", ip is not None and mode == "dist", color,
-                      notes[mode] if ip else "sin IP de red: el teléfono no podrá entrar"))
-            if ip and mode == "dist":
+            print(bar("red", bool(enlace_lan), color,
+                      notes[mode] if ip_lan else "sin IP de red: el teléfono no podrá entrar"))
+            if enlace_lan:
                 # La frase de uso, sin repetir el secreto: la llave ya viajó una vez
                 # arriba y cada copia extra en pantalla es una captura más donde vive.
-                print(paint(f" {DIM}↳ eso, ENTERO, es lo que se pega en la app la primera vez "
-                            f"(viaja en claro por tu Wi-Fi: no hay HTTPS). Después la app "
-                            f"lo guarda y ya no lo pregunta.{RESET}", color))
+                if divulgar_parada is not None:
+                    print(paint(f" {DIM}↳ el APK abre CORT solo: pregunta por UDP en el "
+                                f"puerto {puerto_descubrimiento(os.environ)} y esta máquina "
+                                f"contesta con su enlace. No hay que pegar nada la primera "
+                                f"vez.{RESET}", color))
+                    print(paint(f" {DIM}   (se apaga con --sin-descubrimiento o "
+                                f"CORT_LAN_DISCOVER=0; quien pregunte queda impreso "
+                                f"arriba){RESET}", color))
+                else:
+                    print(paint(f" {DIM}↳ pega eso, ENTERO, en la app la primera vez: viaja en "
+                                f"claro por tu Wi-Fi (no hay HTTPS) y la app lo guarda."
+                                f"{(' Divulgación UDP: ' + motivo_udp) if motivo_udp else ''}"
+                                f"{RESET}", color))
         print()
         print(paint(f" {CYAN}{BOLD}CORT en línea{RESET}   Ctrl+C para cerrar todo.", color))
         print(paint(f" {DIM}{'─' * 58}{RESET}", color))

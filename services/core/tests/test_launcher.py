@@ -8,7 +8,9 @@ import importlib.util
 import os
 import sqlite3
 import sys
+import socket
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -470,3 +472,113 @@ class TestBarraDeCamara(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDescubrimientoPorRed(unittest.TestCase):
+    """El «¿estás ahí?» por UDP que le ahorra a la dueña pegar el enlace.
+
+    El lazo se prueba en `127.0.0.1` con un puerto libre de verdad: el bucle es
+    el mismo que escucha en la Wi-Fi de la casa, y una sonda que no recibe
+    respuesta es un teléfono que se queda en la pantalla de pegar.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load()
+
+    def setUp(self):
+        self.parada = threading.Event()
+        self.hilos = []
+
+    def tearDown(self):
+        self.parada.set()
+        for hilo in self.hilos:
+            hilo.join(timeout=3)
+
+    def sondear(self, puerto, datos=b"CORT-ENCONTRARSO-1"):
+        cliente = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        cliente.settimeout(3)
+        try:
+            cliente.sendto(datos, ("127.0.0.1", puerto))
+            try:
+                respuesta, _ = cliente.recvfrom(512)
+                return respuesta
+            except socket.timeout:
+                return None
+        finally:
+            cliente.close()
+
+    def test_el_puerto_por_defecto_es_el_que_lleva_el_apk(self):
+        self.assertEqual(8781, self.m.puerto_descubrimiento({}))
+
+    def test_un_puerto_del_env_manda(self):
+        self.assertEqual(9999, self.m.puerto_descubrimiento({"CORT_DISCOVERY_PORT": "9999"}))
+
+    def test_un_puerto_absurdo_no_detiene_el_arranque(self):
+        # La divulgación es una comodidad, no un interruptor de seguridad: si el
+        # valor no es un puerto, se usa el de siempre y CORT arranca igual.
+        for malo in ("", "  ", "abc", "0", "70000", "-1"):
+            with self.subTest(malo=malo):
+                self.assertEqual(8781, self.m.puerto_descubrimiento({"CORT_DISCOVERY_PORT": malo}))
+
+    def test_la_sonda_se_reconoce_con_nonce_detras(self):
+        self.assertTrue(self.m.sonda_valida(b"CORT-ENCONTRARSO-1"))
+        self.assertTrue(self.m.sonda_valida(b"CORT-ENCONTRARSO-1 8f2a"))
+
+    def test_lo_que_no_es_de_cort_no_merece_respuesta(self):
+        # El socket escucha en 0.0.0.0: caen escáneres, impresoras y routers.
+        for basura in (b"", b"\n", b"ohoi", b"CORT-ENCONTRARSO-1x", b"CORT-ENCONTRARSO",
+                       b"\x00\x01\x02"):
+            with self.subTest(basura=basura):
+                self.assertFalse(self.m.sonda_valida(basura))
+
+    def test_sin_enlace_no_hay_nada_que_contestar(self):
+        self.assertEqual(b"", self.m.respuesta_descubrimiento(""))
+
+    def test_la_respuesta_es_el_enlace_completo_con_su_llave(self):
+        dato = self.m.respuesta_descubrimiento("http://192.168.100.xxx:8780/?token=abc")
+        self.assertEqual(b"CORT-AQUI-1|http://192.168.100.xxx:8780/?token=abc", dato)
+
+    def test_una_sonda_legitima_vuelve_con_el_enlace_y_queda_apuntada(self):
+        sock, motivo = self.m.abrir_descubrimiento(0)
+        self.assertIsNotNone(sock, motivo)
+        self.addCleanup(sock.close)
+        puerto = sock.getsockname()[1]
+        quien = []
+        hilo = threading.Thread(target=self.m.bucle_descubrimiento,
+                                args=(sock, "http://192.168.100.xxx:8780/?token=abc",
+                                      self.parada, quien.append), daemon=True)
+        hilo.start()
+        self.hilos.append(hilo)
+        self.assertEqual(b"CORT-AQUI-1|http://192.168.100.xxx:8780/?token=abc",
+                         self.sondear(puerto))
+        self.assertEqual(["127.0.0.1"], quien, "quien pidió la llave tiene que quedar impreso")
+
+    def test_una_sonda_basura_no_saca_respuesta(self):
+        sock, motivo = self.m.abrir_descubrimiento(0)
+        self.assertIsNotNone(sock, motivo)
+        self.addCleanup(sock.close)
+        puerto = sock.getsockname()[1]
+        oidos = []
+        hilo = threading.Thread(target=self.m.bucle_descubrimiento,
+                                args=(sock, "http://192.168.100.xxx:8780/?token=abc",
+                                      self.parada, oidos.append), daemon=True)
+        hilo.start()
+        self.hilos.append(hilo)
+        self.assertIsNone(self.sondear(puerto, b"CORT-ENCONTRARSO-1x"))
+        self.assertEqual([], oidos)
+
+    def test_sin_enlace_no_responde_aunque_la_sonda_es_buena(self):
+        sock, motivo = self.m.abrir_descubrimiento(0)
+        self.assertIsNotNone(sock, motivo)
+        self.addCleanup(sock.close)
+        puerto = sock.getsockname()[1]
+        oidos = []
+        hilo = threading.Thread(target=self.m.bucle_descubrimiento,
+                                args=(sock, "", self.parada, oidos.append), daemon=True)
+        hilo.start()
+        self.hilos.append(hilo)
+        self.assertIsNone(self.sondear(puerto))
+        self.assertEqual([], oidos)
+
+
