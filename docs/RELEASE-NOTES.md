@@ -22,8 +22,14 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > cuando `compilar.sh` todavía tenía el bug de `pipefail`, así que el `run` disparado por esa etiqueta
 > falló y no colgó artefacto. El arreglo del pipeline vive en `v0.13.1`, que es la primera Release que
 > lleva `CORT-v*.apk` descargable desde el teléfono.
+>
+> **`v0.14.0` repitió el caso por otro motivo**: su etiqueta la creó `gh release create` desde el propio
+> workflow, y un `push` hecho con `GITHUB_TOKEN` no dispara otros trabajos —el APK se compiló verde pero
+> su paso de subida sólo escuchaba eventos de etiqueta—. Dejó la página con el texto y los `.zip` de
+> fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
+> con el hueco cerrado.
 
-**La lista de tareas para cortar la siguiente (v0.14.0), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.14.2), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -32,23 +38,61 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
    firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
    no hace falta abrir una log que es privada.
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.0\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.2\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
-3. Se etiqueta el commit de `main`: `git tag v0.14.0 && git push origin v0.14.0`. Ahí se dispara
-   `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
-   esa es el acta «.zip como proyecto profesional» sin construir nada. Y desde este corte se dispara
-   también `compilar-apk.yml`, que compila `CORT.apk` con el SDK del runner y lo sube a la Release
-   como `CORT-v0.14.0.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
-   **antes** de etiquetar (y así se cumplió: verde en el run 38679448057 sobre `main`).
+3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
+   ve que `v0.14.2` tiene sección y no tiene página, llama a `gh release create v0.14.2` —que crea la
+   etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
+   `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
+   `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
+   apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
+   `CORT-v0.14.2.apk` y su `CORT-v0.14.2-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.14.2 && git push origin v0.14.2`) sigue siendo válido y dispara el mismo camino por la
+   vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
+   sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.0 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.2 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.14.1` — la Release se abre sola con el `push` de `main`, y el APK ya la acompaña
+
+Corte de **pipeline**, no de cara: el teléfono y el lanzador llevan el mismo código que `v0.14.0`
+(llave de red auto-creada, pantalla de estreno con la cara de CORT, firma estable opcional). Lo que se
+arregla aquí es que la página saliera con su texto **y sin su APK**, que es justo lo que la dueña no
+puede descargar.
+
+- **Qué pasó con `v0.14.0`** (medido el 2026-10-15 por la API pública, sin credenciales): el `push` de
+  `main` disparó `publicar-release.yml`, que al no existir la etiqueta llama a
+  `gh release create v0.14.0` y GitHub crea el tag sobre ese commit. Siete segundos después la página
+  estaba abierta (`published_at 2026-10-15T05:32:24Z`). Pero ese `push` de etiqueta lo produjo el token
+  del propio workflow, y **los eventos generados con `GITHUB_TOKEN` no disparan otros trabajos**: no
+  llegó ningún run con `head_branch: v0.14.0`. `compilar-apk.yml` corrió sólo por la rama (run 15,
+  verde, artefacto `CORT-apk` de 42 574 B), y su paso de subida estaba atado a
+  `startsWith(github.ref, 'refs/tags/v')` — condición falsa en un `push` de rama—. Release con cero
+  adjuntos.
+- **El arreglo**: el paso de subida deja de preguntar de dónde viene el evento y pregunta **si hay una
+  etiqueta que apunta a su propio commit** (`gh api repos/…/tags` contrastado con `GITHUB_SHA`). Si aún
+  no la ve, espera dos minutos a que la abra su hermana `publicar-release` —compilar ya dura minuto y
+  pico, así que la carrera está a favor—. Y si sobre ese commit no hay etiqueta ninguna, lo dice y sale
+  **0**: seguir comprobando el Java en cada `push` de `main` no debe costar una Release.
+- **Comprobado en esta máquina antes de empujar**: `bash -n` sobre el guion extraído del YAML, y la
+  resolución de etiqueta ejecutada a mano con la respuesta real de la API de tags —devuelve
+  `v0.14.0` cuando el SHA coincide y cadena vacía cuando no—. Suite verde: **497** del core (72,3 s) y
+  **56** de la cara, **553** en total.
+- **Qué hace la dueña con esto**: descargar el `CORT-v0.14.1.apk` de la Release, instalarlo y pegar **una
+  sola vez** el enlace completo que imprime `python3 scripts/cort.py --lan` en el portátil. La primera
+  instalación con la llave estable exige desinstalar el APK anterior (firma distinta); el aviso de
+  Android «app desconocida» sigue mientras no esté en la Play Store —guía en `apps/apk/README.md`—.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.1.zip
 
 ---
 
