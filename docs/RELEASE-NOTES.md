@@ -35,7 +35,7 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
 > leyendo una log que es privada.
 
-**La lista de tareas para cortar la siguiente (`v0.15.1`), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (`v0.15.2`), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -44,27 +44,95 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
    firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
    no hace falta abrir una log que es privada.
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.15.1\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.15.2\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
 3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
-   ve que `v0.15.1` tiene sección y no tiene página, llama a `gh release create v0.15.1` —que crea la
+   ve que `v0.15.2` tiene sección y no tiene página, llama a `gh release create v0.15.2` —que crea la
    etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
    `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
    `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
    apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
-   `CORT-v0.15.1.apk` y su `CORT-v0.15.1-firma.txt` a esa Release. Etiquetar a mano
-   (`git tag v0.15.1 && git push origin v0.15.1`) sigue siendo válido y dispara el mismo camino por la
+   `CORT-v0.15.2.apk` y su `CORT-v0.15.2-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.15.2 && git push origin v0.15.2`) sigue siendo válido y dispara el mismo camino por la
    vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
    sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.15.1 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.15.2 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.15.1` — la nube del teléfono se enciende desde el teléfono (y dos bugs que sobraba por el camino)
+
+`v0.15.0` escribió la promesa y su código, pero dejó la **mitad de la nube inaccesible**: la dueña
+eligió «nube si hay internet, local si no», `Nube.java` estaba hecho y funcionaba con su propia
+cabecera, y **no había ningún sitio donde teclear la clave desde el aparato**. La leía de un
+`SharedPreferences` que sólo existía si alguien lo escribía a mano. Ésta es esa pantalla.
+
+- **Un chip bajo el anillo de la cara nativa**: `⚙ nube apagada · toca para escribirla`, que se
+  convierte en `⚙ nube: anthropic · claude-…` cuando está activada. Al tocar abre
+  `Cara.abrirAjustes()` (función 105).
+- **Cuatro campos y dos botones**: proveedor (`anthropic` ↔ `openai` compatible, se cambia
+  tocando la línea), dirección del servicio, modelo y **clave**. La clave entra con
+  `InputType.TYPE_TEXT_VARIATION_PASSWORD`, así que Android pinta puntos y no la deja leer por
+  encima del hombro.
+- **La clave guardada no se vuelve a mostrar, nunca.** El campo se abre vacío y su pista dice sólo
+  cuántos caracteres hay (`clave guardada (35 caracteres) — en blanco: no la cambio`). Hay una
+  prueba que enumera los **tres** usos de `nube.clave()` del fuente y falla si aparece un cuarto
+  con otra forma, porque «se muestra» y «se mide» son dos cosas que en un `EditText` se confunden.
+- **Dejarlo en blanco conserva; no es borrar.** Si cada arreglo de un modelo obligara a reescribir
+  el secreto entero, la pantalla se usaría una vez. `⌫ borrar la clave de este teléfono` es el
+  camino explícito de apagar, y apaga de verdad: la cara vuelve a `v0.15.0`, tabla y memoria
+  locales.
+- **«▶ probar la conexión» no congela la cara.** `Nube.preguntar` es HTTPS bloqueante (12 s de
+  conexión, 25 s de lectura) y va en su `Thread`, con el aviso devuelto por `runOnUiThread`. Es la
+  misma regla que ya regía la búsqueda por UDP, y también la fija una prueba que lee el fuente.
+- **Se cierra la primera de las tres deudas** que `docs/PLATFORM.md` apuntó con el corte anterior:
+  ya no hace falta el portátil ni un editor de archivos para escribir la clave. Quedan las otras
+  dos, escritas y sin arreglar: **`cort.db` y `memory.db` no se sincronizan** y hay **dos cuerpos
+  de reglas** (`herramientas.py` con 19 herramientas, `habilidades.json` con once acciones).
+- **Bug de contraste encontrado leyendo, no mirando**: el diálogo de *aprender una frase* de
+  `v0.15.0` creaba su `EditText` con texto en `Paleta.CLARO` —blanco casi puro— **sobre el blanco
+  del `AlertDialog`** de Android. Nadie lo ha visto todavía porque nadie ha instalado la cara
+  nativa; ahora el campo trae su vidrio oscuro (`Paleta.CAMPO`) y una prueba exige que **todo**
+  `new EditText(actividad)` de la cara pinte su fondo, que es una regla que se rompe sola en
+  cuanto alguien añade un campo más.
+- **`InputType` no estaba en el diccionario de AOSP**, y eso destapó un hueco peor: la lista de
+  clases que se verificaba estaba **escrita dos veces** en `test_apk_cerebro.py`, así que la
+  segunda copia jamás habría mirado una constante de una clase nueva. Ahora la lista es una
+  constante (`CLASES`) y una prueba adicional la compara con el JSON. El diccionario sube de
+  999 constantes en once clases a **1044 en doce**, y sigue descargándose con
+  `python3 scripts/simbolos_android.py`.
+- **Un flaky era de la prueba, no del producto**: `test_una_sonda_legitima…` cayó **roja** dentro
+  de `make test` completo (571 pruebas, dos núcleos) y pasó **tres veces** ejecutada sola. El lazo
+  del lanzador responde el datagrama y *después* apunta quién preguntó; la prueba asumía que el
+  orden estaba garantizado. Ahora hay una espera con techo de dos segundos y un párrafo que dice
+  lo que se midió, en vez de relanzar hasta que salga verde.
+- **Once pruebas nuevas** en `TestAjustesDeNube` (`test_apk_manifesta.py`, que pasa de 22 a **33**)
+  y **una** en `test_apk_cerebro.py`: pantalla existente y accesible, campo con `PASSWORD`, la
+  clave que no se muestra, en blanco = conservar, se puede apagar, probar fuera del hilo de la UI,
+  fondo del panel, ningún secreto literal en el APK ni en `habilidades.json`, la escritura del
+  almacén vive sólo en `Nube`, todos los campos con su vidrio, y las comillas «angulares» de los
+  textos abiertas y cerradas. **Comprobadas no-vacías**: al quitar las dos líneas de color vuelven
+  a fallar dos pruebas.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **571** en verde en **76,873 s** —y vuelta a
+  ejecutar antes de etiquetar: **80,320 s**, otra vez **571** y `OK`— y
+  `make test-web` **56** — **627** en total—. La cara nativa pasa de 2 120 a **2 290 líneas** de
+  Java (90 KB) en los mismos **nueve archivos**; el número de archivos no cambia porque la
+  pantalla nueva es UI, y ahí vive `Cara`.
+- **Sin verificar**: la pantalla entera en un dedo. Nadie ha tecleado una clave en el Samsung A16,
+  nadie ha visto si el teclado de Android deja escribir una URL sin comérsela, ni si «probar la
+  conexión» contesta, ni si el diálogo se ve entero en 360 px de ancho. Sigue en pie que el aviso
+  de Play Protect no se quita con código y que la firma es desechable hasta que se peguen los dos
+  secretos.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.1.zip
 
 ---
 

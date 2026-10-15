@@ -6,12 +6,12 @@ Documento de decisión, no de intenciones. Nace de la **guía "Proyecto Jarvis �
 
 | Pieza de la guía | Para qué la pide | Estado en CORT | Evidencia |
 |---|---|---|---|
-| **Python** | Backend: lógica, voz, conexión con la IA | ✅ Igual. `services/core/cort_core/` con FastAPI + WebSocket | `make test` → 557 pruebas |
+| **Python** | Backend: lógica, voz, conexión con la IA | ✅ Igual. `services/core/cort_core/` con FastAPI + WebSocket | `make test` → 571 pruebas (medido 2026-10-15) |
 | **JavaScript / React** | Interfaz y comportamiento | ✅ Igual. `apps/web` en React 19 + Vite + TypeScript | `npm run build` → `✓ built`, servido en `:8780` |
 | **Node.js** | Herramientas de JavaScript | ✅ Presente (`node`, `npm` en `/usr/bin`) | medido con `command -v` |
 | **Ollama + Qwen** | Cerebro local, atado a `localhost` | ✅ Igual, con **guarda de RAM** que la guía no tiene: descarta los modelos que no caben antes de intentarlos | `test_brain` (10) + medición real |
 | **Electron** | Convertir la web en app de escritorio instalable | ⚠️ **No está, y hoy no cabe.** Ver "Las dos piezas que la guía no puede cumplir aquí" | — |
-| **Capacitor** | Llevar la misma interfaz a móvil como app nativa | ⚠️ **No está.** La alternativa que sí se sirve hoy es la capa PWA (`manifest.webmanifest`), y el bloqueo es el mismo que el del core en `127.0.0.1` | `200 application/manifest+json` medido |
+| **Capacitor** | Llevar la misma interfaz a móvil como app nativa | ✅ **Resuelto por otra vía:** no hace falta Capacitor ni Gradle. Desde `v0.15.0` hay **APK nativo propio** (`apps/apk`, Java puro, once acciones y SQLite dentro del teléfono) y se compila en el pipeline. La PWA sigue viva como alternativa | Run verde `38771718345`, `CORT-v0.15.0.apk` = 70 526 B |
 | **SpeechRecognition** (escucharte) | STT local | ❌ **Inviable en este equipo, medido:** `arecord -l` lista *"List of CAPTURE Hardware Devices"* **vacía** y `wpctl status` no muestra ni un *Source* de audio. No hay micrófono que leer | — |
 | **pyttsx3** (hablarte) | TTS local | ⚠️ El motor **sí está** (`/usr/bin/espeak-ng`), pero el único *Sink* es *Dummy Output*: no hay por dónde sacar sonido. El `returncode` de un mando no prueba que alguien lo oiga (ya se vio con `wpctl`) | — |
 
@@ -23,13 +23,13 @@ Documento de decisión, no de intenciones. Nace de la **guía "Proyecto Jarvis �
 
 Lo que sí existe hoy y cubre el 90 % de lo que la guía pide de Electron: **el lanzador de doble clic** (`CORT.desktop`, `cort.bat`) que arranca core + interfaz y abre la ventana del navegador a pantalla completa. Se pierde la ventana "sin barra del navegador", se gana que CORT quepa en la máquina.
 
-**Capacitor.** Empaquetar para Android pide **JDK** (aquí sólo hay *runtime*: `java` sí, `javac` **no**, medido), **Android SDK** (varios GB) y un build de **Gradle** que se come más de 1 GiB de RAM en su pico. En dos núcleos a 1,46 GHz eso no es "tardar más": es congelar el PC. **El APK, si se hace, se hace en otra máquina** (o en un runner de CI) y aquí sólo se escribe y se revisa el código. Mientras tanto, la PWA instalable es la vía real en el Samsung A16: mismo React, mismo `manifest`, sin Gradle.
+**Capacitor.** Empaquetar para Android pide **JDK** (aquí sólo hay *runtime*: `java` sí, `javac` **no**, medido), **Android SDK** (varios GB) y un build de **Gradle** que se come más de 1 GiB de RAM en su pico. En dos núcleos a 1,46 GHz eso no es "tardar más": es congelar el PC. **El APK, si se hace, se hace en otra máquina** (o en un runner de CI) y aquí sólo se escribe y se revisa el código — así fue: desde `v0.15.0` el APK se compila en un runner de GitHub Actions con `aapt2` + `javac --release 11` + `d8` + `apksigner`, sin Gradle ni AndroidX, y el resultado se vuelve a medir aquí descargando el binario publicado—. Mientras tanto, la PWA instalable **sigue** siendo la vía en el Samsung A16 para quien quiera el React de siempre: mismo `manifest`, sin Gradle.
 
 ## Y sobre C++ / Java
 
 La guía **no los menciona**: su tabla de tecnologías es Python, JavaScript, React, Node.js, Electron y Capacitor. Aun así, medido por si vuelve la idea:
 
-- **Java:** hay OpenJDK 21 *runtime*, no hay compilador (`javac` ausente). Escribir CORT en Java exigiría instalar un JDK y, sobre todo, tirar 557 pruebas y el core entero que hoy funciona.
+- **Java:** hay OpenJDK 21 *runtime*, no hay compilador (`javac` ausente). Escribir CORT en Java exigiría instalar un JDK y, sobre todo, tirar 571 pruebas y el core entero que hoy funciona. **Y esta línea se corrigió a medias en `v0.15.0`**: Java nativo *no* reemplaza el core — está en el teléfono, donde el core Python no corre—, así que la frase exacta hoy es «Java en el PC: descartado; Java en el teléfono: hecho y publicado».
 - **C++:** `g++` y `gcc` sí están. Pero C++ no aporta multiplataforma aquí —la interfaz ya es multiplataforma *porque* es web— y sí costaría reescribir el backend que ya ejecuta acciones reales y verifica sus resultados.
 - **Lo multiplataforma ya está resuelto por arquitectura, no por lenguaje:** un core Python que habla por WebSocket + una interfaz React que corre en cualquier navegador (PC, teléfono, tablet). Cambiar de lenguaje no añade ni un dispositivo donde funcione; añade una segunda implementación que mantener.
 
@@ -61,15 +61,22 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
   portado: es una **segunda cara** con su propio cerebro de once acciones, su
   SQLite y su voz. Cuando el portátil aparece por la Wi-Fi se usa el core de
   siempre en el WebView; cuando no, el teléfono no se queda en un formulario.
-- **El coste de esa duplicación está escrito y es real**: hay dos memorias
-  (`memory.db` y `cort.db`) que **no se sincronizan**, y dos cuerpos de reglas
-  (`herramientas.py` y `habilidades.json`) que se parecen pero no son el mismo
-  archivo. Mientras el teléfono esté solo, eso es invisible; en cuanto se usen
-  los dos, es la primera deuda de este corte y se dirá aquí delante.
+- **El coste de esa duplicación está escrito y es real.** Son **tres deudas**, y se llevan
+  aquí delante en orden:
+  1. ~~No había forma de escribir la clave de nube desde el teléfono~~: **cerrada el
+     2026-10-15 con `v0.15.1`** (`Cara.abrirAjustes()` — función 105; la clave se teclea una
+     vez en el aparato, nunca vuelve a la pantalla y nunca entra al repo, regla 7).
+  2. **Abierta**: `memory.db` (el portátil) y `cort.db` (el teléfono) **no se sincronizan**.
+     Lo que CORT aprende en uno no lo sabe en el otro.
+  3. **Abierta**: conviven **dos cuerpos de reglas** — `herramientas.py` en Python
+     (19 herramientas) y `habilidades.json` en Java (once acciones)— que se parecen pero no
+     son el mismo archivo, así que una mejora en un lado no viaja al otro.
+  Mientras el teléfono esté solo, 2 y 3 son invisibles; en cuanto se usen los dos, se notan.
 - **La verificación se compra con datos, no con fe**: como aquí no hay `javac`,
   la tabla de frases es un JSON probado por `make test`, y las constantes de
   Android que puede nombrar el Java salen de un diccionario descargado de AOSP
-  (`scripts/simbolos_android.py`). Dos Runs costó aprenderlo.
+  (`scripts/simbolos_android.py`): **1044 constantes en doce clases**, medido el 2026-10-15.
+  Dos Runs costó aprenderlo.
 
 ## Qué se adopta de la guía, dicho en una lista
 

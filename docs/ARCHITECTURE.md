@@ -236,13 +236,24 @@ El descubrimiento de `v0.14.4` sigue ahí, pero **ya no es el portero**: si no e
 - **`Voz`** — `TextToSpeech` + `SpeechRecognizer`, con `RECORD_AUDIO` pedido en tiempo de ejecución. Esto es lo que el WebView **no podía** dar: escuchar exigía HTTPS y en una LAN en claro no lo hay. Aquí el micrófono es nativo.
 - **`Nube`** — opcional, con la clave escrita **una vez en el aparato** (`SharedPreferences`, modo privado; almacenamiento en claro del dispositivo, dicho en `apps/apk/README.md` en vez de prometer `security-crypto` que pediría Gradle). Cualquier fallo devuelve `null` y la tabla local sigue contestando: la nube es un añadido, nunca un requisito. La memoria viaja en el `system`, el mismo bug que cazó `brain.py`.
 
+### La pantalla que escribe esa clave (`Cara.abrirAjustes()`, función 105, `v0.15.1`)
+
+Hasta `v0.15.0`, `Nube` leía `prefs.getString("clave", "")` y **ningún dedo podía llenar ese campo**: la nube que la dueña eligió («si hay internet, nube; si no, local») estaba escrita y era inalcanzable. Ahora un chip bajo el anillo abre un `AlertDialog` con proveedor (`anthropic` ↔ `openai` compatible), dirección base, modelo y clave. Cuatro decisiones de forma, cada una con su prueba leyendo el fuente en `test_apk_manifesta.py`:
+
+- **La guardada nunca vuelve a la pantalla.** El campo arranca en `""` y la pista dice sólo cuántos caracteres hay. Está probado con una regla cerrada: se cuentan las apariciones de `nube.clave()` fuera de comentarios y literales, y sólo se admiten las tres que tienen permiso (contar para la pista, conservar si se teclea vacío, borrar). Un `setText(nube.clave())` sería una clave en claro legible por encima del hombro.
+- **En blanco conserva** — `tecleada.isEmpty() ? nube.clave() : tecleada`—. Si no, cada retoque del modelo borraría la llave y obligaría a buscarla otra vez.
+- **Probar no congela la cara.** `probandoNube()` lanza el `preguntar()` en su propio `Thread` y devuelve el aviso con `runOnUiThread`: en el hilo de UI una nube que no contesta, con `HttpURLConnection` por delante, se llevaría el `AlertDialog` de regalo.
+- **Se puede apagar.** «⌫ borrar la clave de este teléfono» deja la cara exactamente como `v0.15.0`: sin clave, `porNube` no pregunta y contesta la tabla local.
+
+La escritura vive **sólo** en `Nube.ajustar()` (es el único `.putString("clave", …)` del proyecto); `Cara` no toca el almacén. **Protocolo: ningún marco nuevo** (regla 5) — el ajuste es puro teléfono: no habla con el core ni con el WebSocket—.
+
 ### Cómo se comprueba lo que no se puede compilar
 
 Tres piezas, nacidas cada una de un fallo medido:
 
-1. **`apps/apk/simbolos-android.json`** — el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py`. El Java no puede nombrar una `Clase.CONSTANTE` que no esté ahí. Existe porque me inventé dos veces la misma constante (`AlarmClock.EXTRA_TIME_IN_MILLIS`, luego `EXTRA_COUNTDOWN`) y cada una costó un Run.
+1. **`apps/apk/simbolos-android.json`** — el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py`. El Java no puede nombrar una `Clase.CONSTANTE` que no esté ahí: **1044 constantes en doce clases** al 2026-10-15. Existe porque me inventé dos veces la misma constante (`AlarmClock.EXTRA_TIME_IN_MILLIS`, luego `EXTRA_COUNTDOWN`) y cada una costó un Run. Cuando la pantalla de ajustes pidió `InputType.TYPE_TEXT_VARIATION_PASSWORD`, el procedimiento fue el mismo al revés: **primero** se bajó `core/java/android/text/InputType.java` de AOSP y se comprobó que los dos nombres existen, **después** se usaron y se amplió el diccionario.
 2. **El annotation del `Compilar`** trae ahora **todos** los `.java:NN: error:` y no sólo el final del log: `javac` imprime los errores primero y el mensaje se corta a 4000 caracteres, así que con el tail se perdía la lista y se andaba arreglando de uno en uno.
-3. **Las pruebas de costura** (`test_apk_cerebro.py`, 20) leen Java y tabla a la vez: toda acción de la tabla tiene su `case`, todo hueco de plantilla lo rellena `rellena()`, lo que se ofrece aprender no necesita datos, y los literales del protocolo UDP siguen siendo los del lanzador.
+3. **Las pruebas de costura** (`test_apk_cerebro.py`, 21; `test_apk_manifesta.py`, 33) leen Java y tabla a la vez: toda acción de la tabla tiene su `case`, todo hueco de plantilla lo rellena `rellena()`, lo que se ofrece aprender no necesita datos, los literales del protocolo UDP siguen siendo los del lanzador, y la forma de la pantalla de nube está atada (los tres únicos permisos sobre `nube.clave()`, el fondo del `AlertDialog`, que ningún `.java` ni asset traiga un literal con forma de clave). Dos detalles nacidos de fallos reales de estas pruebas: cuentan el código con un `solo_codigo()` que quita comentarios, Javadoc y literales —una mención en un comentario se estaba contando como uso—, y la lista de clases que se exige cubrir es **una sola** (`CLASES`) comparada contra el JSON, porque hasta `v0.15.1` había dos copias y la segunda era ciega a cualquier constante que no estuviera en la primera.
 
 Lo que **ninguna** de las tres puede comprobar sigue marcado como sin verificar en `docs/FUNCTIONS.md`: que la cara nativa se vea, que el micrófono oiga y que la voz salga por el altavoz de un Samsung concreto.
 

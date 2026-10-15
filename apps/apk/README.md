@@ -24,7 +24,7 @@ cuatro herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`,
 | archivo | qué decide |
 |---|---|
 | `MainActivity.java` | **qué superficie se ve**: el WebView si el portátil contesta, la cara nativa si no, el campo de pegar sólo si nadie tiene la culpa |
-| `Cara.java` | la interfaz nativa: registro, campo, micrófono, y el lazo oír → tabla → ejecutar → (nube) → proponer aprender |
+| `Cara.java` | la interfaz nativa: registro, campo, micrófono, el lazo oír → tabla → ejecutar → (nube) → proponer aprender, y la **pantalla de ajustes de nube** (`⚙` bajo el anillo, `v0.15.1`) |
 | `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. **No ejecuta nada** |
 | `Acciones.java` | las manos: once acciones, todas con intenciones públicas de Android o `AudioManager`. Sin shell, sin `QUERY_ALL_PACKAGES` |
 | `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende |
@@ -71,11 +71,17 @@ cuatro herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`,
    donde el broadcast no pasa (VLAN, puntos de acceso con aislamiento de
    cliente); se pega el enlace entero de la línea `● red` — la llave viaja dentro
    — y queda guardado. La dirección se muestra con la llave tapada.
-7. **La nube, si se quiere** (opcional, y nunca necesaria): en el teléfono,
-   menú → *Configurar la nube*… **todavía no hay pantalla para eso**; por ahora
-   se escribe en `SharedPreferences` «cort-nube» (`clave`, `base`, `modelo`,
-   `proveedor`), y con la clave puesta CORT pregunta al modelo lo que la tabla no
-   conoce. Sin internet o sin clave, responde la tabla local y punto.
+7. **La nube, si se quiere** (opcional, y nunca necesaria): en el teléfono, **el chip
+   que vive bajo el anillo** —`⚙ nube apagada · toca para escribirla`— abre la pantalla
+   de ajustes (función 105, desde `v0.15.1`). Ahí se elige proveedor (`anthropic` o
+   cualquier servicio compatible con OpenAI), se escribe la dirección base, el modelo y
+   la clave; se guarda en `SharedPreferences` «cort-nube» y CORT pregunta al modelo lo
+   que la tabla no conoce. Con la nube encendida hay un botón «▶ probar la conexión»
+   que contesta en español si no hay respuesta, y «⌫ borrar la clave de este teléfono»
+   devuelve la cara a local puro. Tres cosas que importan: **la clave guardada no se
+   vuelve a mostrar nunca** (el campo arranca vacío y sólo dice cuántos caracteres hay),
+   dejarla en blanco al guardar **la conserva** (no la borra), y sin internet o sin
+   clave responde la tabla local y punto.
 
 **Qué va a la nube y qué no**: sólo la frase dicha y un resumen de los hechos
 guardados (van en el `system`, no en el historial — el bug que ya cazó
@@ -119,7 +125,7 @@ necesita al portátil encendido**.
 | **Que CORT escuche** | ❌ **límite real del WebView**: el API de reconocimiento no corre en un WebView embebido; ahí la escucha se usa desde la **PWA** de `apps/web` | 🔨 **ésta es la vía que abre la cara nativa**: `SpeechRecognizer` con su permiso de micrófono pedido en pantalla. Sin verificar en dedo |
 | Volumen, alarma, cronómetro, abrir apps del sistema | 🔨 a través del core del portátil | 🔨 once acciones con intenciones públicas de Android y `AudioManager`, validadas contra el diccionario AOSP; **sin ejecutar en el teléfono** |
 | Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 **otra memoria**: `cort.db` en SQLite, propia del teléfono. **No se sincroniza con la del core** (coste escrito en `docs/PLATFORM.md`) |
-| Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`): responde cuando hay clave en el aparato, y **la pantalla para ponerla todavía no existe** |
+| Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`) **y ya escribible desde el teléfono** (`v0.15.1`): el chip `⚙` bajo el anillo abre la pantalla donde se pega la clave. Responde cuando hay clave; sin ella, la tabla local. **Sin ver en dedo** |
 | Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo | ❌ no existen en la cara nativa |
 
 Lo único **visto en dedo** hasta hoy (dos capturas, 2026-10-15) es lo de `v0.14.4`:
@@ -246,8 +252,9 @@ Qué hay que saber:
   (la barra `red` en verde), que están en la misma Wi-Fi y que el puerto 8781 no lo
   tiene ocupado otro programa. Si no, usa el campo.
 
-Las **22** pruebas de `test_apk_manifesta.py` (16 del manifiesto, el build y el
-paquete + 6 del protocolo de divulgación) vigilan además que los literales del
+Las **33** pruebas de `test_apk_manifesta.py` (16 del manifiesto, el build y el
+paquete + 6 del protocolo de divulgación + 11 de la pantalla de ajustes de nube)
+vigilan además que los literales del
 Java sean **los mismos** que las constantes del lanzador: `SONDA`, `RESPUESTA` y
 `PUERTO_DIVULGACION` se comparan contra `cort.py`, así que cambiar el puerto o la
 palabra mágica en un lado sin cambiarlo en el otro revienta en `make test` y no
@@ -269,17 +276,20 @@ usa el código y que todos los que se pueden negar sean *requitable*, y que
 `compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado y
 siga enlazando los `assets` donde vive la tabla.
 
-**Cuarenta y dos** pruebas vigilan esta carpeta desde `make test`: **22** de manifiesto,
-build, paquete y protocolo (`test_apk_manifesta.py`) y **20** del cerebro
+**Cincuenta y cuatro** pruebas vigilan esta carpeta desde `make test`: **33** de manifiesto,
+build, paquete, protocolo y pantalla de nube (`test_apk_manifesta.py`) y **21** del cerebro
 (`test_apk_cerebro.py`). Éstas son las que de verdad sustituyen al compilador que
 no existe en el portátil de la dueña: validan `habilidades.json` (una acción por
 fuera de la lista cerrada, un patrón sin normalizar, un hueco prometido y no
 rellenado: todo eso revienta aquí), cosean cada acción de la tabla con su `case`
 del Java, y comparan cada `Clase.CONSTANTE` que aparece en el código contra
-`simbolos-android.json` — el diccionario de **999** constantes descargadas de AOSP
-por `scripts/simbolos_android.py`. Sin ese diccionario, la verdad del SDK vivía en
+`simbolos-android.json` — el diccionario de **1044** constantes descargadas de AOSP
+en **doce** clases por `scripts/simbolos_android.py`. Sin ese diccionario, la verdad del SDK vivía en
 mi memoria, y salió `AlarmClock.EXTRA_COUNTDOWN`: un nombre inventado que costó un
-run fallido (116541550041, medido 2026-10-15).
+run fallido (116541550041, medido 2026-10-15). La pantalla de ajustes de `v0.15.1`
+pidió `InputType`, y el procedimiento fue el contrario: primero se bajó
+`core/java/android/text/InputType.java` de AOSP y se verificó que los dos nombres
+que quería usar existen, y **después** se escribieron en el Java.
 
 ## La cara nativa, en una línea por archivo
 
@@ -302,6 +312,37 @@ cuatro acciones que pueden guardarse con una frase nueva (`decir`, `hora`, `fech
 habilidad aprendida guarda la frase entera como texto, así que las tres acciones
 que piden un parámetro (`abrir`, `saber`, `volumen`) no son aprendibles, y
 `test_apk_cerebro.py` falla si alguien las mete en `APRENDIBLES`.
+
+## La nube se configura en el teléfono (`v0.15.1`)
+
+El chip `⚙` bajo el anillo abre un `AlertDialog` con cuatro campos y dos botones. Lo
+que no se ve desde fuera son las tres reglas que sus pruebas defienden, y son las que
+hacen que meter una clave aquí sea seguro de usar:
+
+- **La clave guardada no vuelve a la pantalla.** Nunca hay un `setText(nube.clave())`:
+  el campo arranca vacío y la pista dice sólo `clave guardada (N caracteres)`. Un
+  `EditText` que se rellena con la llave es una llave en claro legible por encima del
+  hombro, y la prueba cuenta las apariciones de `nube.clave()` fuera de comentarios y
+  literales para que no se cuele una cuarta.
+- **En blanco conserva.** Guardar sin teclear no borra la llave: se pueden corregir el
+  modelo o la dirección sin volver a buscarla. Borrarla es un acto explícito, con su
+  botón.
+- **Probar no congela la cara.** «▶ probar la conexión» pregunta en su propio `Thread`
+  y contesta con `runOnUiThread`. La prueba parte el fuente en `new Thread(` y exige
+  que el `preguntar()` quede del lado de atrás.
+
+La escritura de la clave vive **sólo** en `Nube.ajustar()`: `Cara` no toca el
+almacén, y `.putString("clave", …)` aparece una única vez en todo el proyecto. Ningún
+`.java` ni asset lleva un literal con forma de clave (`sk-…`), y la verificación de
+eso corre en `make test`, no de palabra.
+
+Dos bugs de `v0.15.0` salieron al escribir esta pantalla y van arreglados aquí: el
+diálogo de aprender una frase cerraba con `«` y `"`, y su campo pintaba texto claro
+sobre el blanco del `AlertDialog` de Android —nadie lo había visto porque nadie había
+instalado la cara nativa—; los tres `new EditText(actividad)` del proyecto llevan
+ahora su fondo `Paleta.CAMPO`. **Sin verificar en dedo**, igual que el resto de la
+cara: que la pantalla se vea, que la nube conteste y que «probar» no trabe la interfaz
+es lo que hay que mirar al instalar este APK.
 
 ## Compilar a mano (no hace falta)
 

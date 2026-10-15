@@ -2,8 +2,27 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (8)** (`TMPDIR=/tmp make test` **559** en verde en
-> **77,765 s** — las **27** nuevas son de la cara nativa del teléfono: **20** de
+> Última verificación: **2026-10-15 (9)** (`TMPDIR=/tmp make test` **571** en verde en
+> **76,873 s**, y **80,320 s** en la pasada de repaso justo antes de etiquetar — doce pruebas nuevas: **11** de `TestAjustesDeNube`, en `test_apk_manifesta.py`,
+> que llega a **33**, sobre la pantalla de ajustes de la nube que **faltaba** (el chip bajo el
+> anillo, la clave que nunca se vuelve a mostrar, «en blanco: no la cambio», el botón de
+> apagarla, `probandoNube` fuera del hilo de la interfaz, el fondo oscuro del `AlertDialog` y
+> que en el APK no haya ni una cadena con forma de clave), y **1** más en `test_apk_cerebro.py`
+> comparando la lista de clases con el diccionario; `make test-web` **56**, **627** en total—.
+> **Una prueba que iba justita y se cayó**: `test_una_sonda_legitima…` salió **roja** dentro de
+> `make test` completo y pasó **tres veces sola** —el lazo del lanzador primero contesta y
+> *después* apunta quién preguntó, y en dos núcleos con la suite entera el segundo no siempre
+> caía antes del `assertEqual—; ahora `esperando()` la espera con techo de dos segundos, y el
+> docstring dice en claro que era la prueba, no el producto—. **El diccionario de AOSP sube a
+> 1044 constantes en doce clases** porque la pantalla nueva pide `InputType`, y al añadirlo salió
+> otro hueco: la lista de clases estaba **duplicada en dos regex** de `test_apk_cerebro.py` —la
+> segunda copia no había mirado nunca una constante de `InputType`—, así que ahora es una sola
+> constante `CLASES` con su prueba de sincronía. **Bug de contraste encontrado leyendo el fuente
+> de `v0.15.0`**: el diálogo de aprender una frase pintaba su `EditText` en blanco sobre el
+> blanco del `AlertDialog` de Android; ya trae su vidrio oscuro y la regla (todo campo con
+> `Paleta.CLARO` lleva `Paleta.CAMPO`) la fija una prueba —comprobada no-vacía: quitando las dos
+> líneas vuelven a fallar dos—. Verificación anterior, **2026-10-15 (8)** (`TMPDIR=/tmp make test`
+> **559** en verde en **77,765 s** — las **27** nuevas son de la cara nativa del teléfono: **20** de
 > `test_apk_cerebro.py`, que validan `habilidades.json` (once acciones cerradas, 26 patrones
 > todos pre-normalizados, ningún hueco prometido sin rellenar), cosean cada acción con su
 > `case` del Java y comparan cada `Clase.CONSTANTE` del APK contra
@@ -88,6 +107,36 @@
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.15.1` (2026-10-15): la nube del teléfono se enciende desde el teléfono.**
+`v0.15.0` dejó una promesa sin cumplir: la dueña eligió «nube si hay internet, local si no», y
+`Nube.java` existía, pero **leía la clave de un almacén que nadie podía escribir desde el
+aparato** — la función 102 estaba escrita y era inalcanzable—. Este corte es la pantalla que
+faltaba (función 105): un chip bajo el anillo de `Cara` abre un diálogo con proveedor
+(`anthropic` ↔ `openai` compatible), dirección, modelo y clave; se guarda en `cort-nube` del modo
+privado de la app, **la guardada no se vuelve a enseñar nunca** (el campo arranca vacío y la pista
+dice sólo cuántos caracteres hay), dejarlo en blanco **la conserva** en vez de borrarla, hay «▶
+probar la conexión» que corre en su propio `Thread` y devuelve el motivo en español si falla, y
+«⌫ borrar la clave» devuelve la cara exactamente a `v0.15.0`. Con esto se cierra **la primera de
+las tres deudas** que `docs/PLATFORM.md` apuntó el 2026-10-15; siguen abiertas las otras dos:
+`cort.db` y `memory.db` **no se sincronizan**, y hay **dos cuerpos de reglas**
+(`herramientas.py`, 19 herramientas; `habilidades.json`, once acciones).
+Lo que salió del camino al hacerlo: la pantalla pedía `InputType`, `InputType` no estaba en el
+diccionario de AOSP, y el diccionario se filtraba con **dos copias** de la lista de clases en
+`test_apk_cerebro.py` —una de ellas ciega a cualquier constante que no estuviera en la primera
+lista—; ahora hay una sola `CLASES`, una prueba que la compara con el JSON, y el JSON sube a
+**1044 constantes en doce clases**. Y leyendo el fuente de `v0.15.0` apareció un bug de contraste
+que nadie ha visto porque nadie ha instalado la cara nativa: el diálogo de aprender una frase
+pintaba su campo en blanco sobre el blanco del `AlertDialog` de Android.
+**Medido**: `make test` **571** en verde (76,873 s) y `make test-web` **56** — **627**—; las doce
+pruebas nuevas del corte están listadas arriba. La cara nativa pasa de 2 120 a **2 290 líneas**
+y de 83 a **90 KB** de Java en los mismos nueve archivos.
+**Sin verificar en dedo**: la pantalla entera —nadie la ha abierto en el Samsung—, que el teclado
+de Android deje escribir una URL sin autocorregirla, que la prueba de conexión conteste, y todo lo
+que ya estaba sin verificar en `v0.15.0`: la cara nativa instalada, el micrófono oyendo, la voz
+sonando y las once acciones moviendo el teléfono. **Y una nota de método**: el `flaky` que se cayó
+en `make test` completo era de la prueba, no del producto; está arreglado con espera y con su
+párrafo en el docstring, en vez de volver a lanzar hasta que salga verde.
+
 **Corte `v0.15.0` (2026-10-15): CORT funciona dentro del teléfono, sin portátil encendido.**
 Lo pidió la dueña con dos capturas de su Samsung delante y con estas palabras: *«no necesito
 nada mas abrirlo en mi pc y luego el cel eso es opcional … que funcione de forma local en mi
