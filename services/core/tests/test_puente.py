@@ -120,6 +120,104 @@ class TestExportar(unittest.TestCase):
         self.assertEqual(262_144, puente.MAX_BYTES)
 
 
+class TestCanoniza(unittest.TestCase):
+    """`canoniza`: el cuadro sale igual por fuera y traducido por dentro.
+
+    El puente no puede conocer a `facts` (una prueba le lee el AST y sólo le
+    permite `re`), así que la traducción llega como callable. Lo que se prueba aquí
+    es la **mecánica** del reemplazo; las reglas de qué es canónico viven en
+    `test_memory.py`, junto a la función que las aplica.
+    """
+
+    def dos_formas(self, texto):
+        """Un canon de juguete que devuelve dos hechos **distintos** por frase.
+
+        Distintos de verdad: si devolviera la misma frase en mayúsculas, el dedupe
+        normalizado de abajo la colapsaría — que es lo correcto, y lo que hace que
+        este juguete tenga que elegir palabras que no se parezcan tanto.
+        """
+        return [texto, "HECHO: " + texto] if texto else []
+
+    def revienta(self, texto):
+        raise RuntimeError("el traductor se cayó")
+
+    def test_reescribe_y_devuelve_el_mismo_cuadro_por_fuera(self):
+        cuadro = {"tipo": "memoria", "version": 1, "origen": "telefono", "total": 1,
+                  "ocultados": 0, "recuerdos": [{"contenido": "nombre: Sandra",
+                                                 "cuando": "2026-10-15T10:00:00+00:00"}]}
+        salida = puente.canoniza(cuadro, lambda t: ["El usuario se llama Sandra"])
+        self.assertEqual(["El usuario se llama Sandra"],
+                         [r["contenido"] for r in salida["recuerdos"]])
+        self.assertEqual("telefono", salida["origen"])
+        self.assertEqual(1, salida["total"], "el total se recalcula: es lo que viaja")
+        self.assertEqual("2026-10-15T10:00:00+00:00", salida["recuerdos"][0]["cuando"],
+                         "el cuándo del recuerdo se conserva, no se pone a cero")
+
+    def test_una_fila_puede_volverse_varias(self):
+        salida = puente.canoniza({"version": 1, "recuerdos": [{"contenido": "me llamo Sandra"}]},
+                                 self.dos_formas)
+        self.assertEqual(["me llamo Sandra", "HECHO: me llamo Sandra"],
+                         [r["contenido"] for r in salida["recuerdos"]])
+
+    def test_dos_formas_que_difieren_solo_en_mayusculas_no_ocupan_dos_sitios(self):
+        """`normaliza` es la clave del dedupe también dentro del cuadro traducido."""
+        salida = puente.canoniza({"version": 1, "recuerdos": [{"contenido": "x"}]},
+                                 lambda t: [t, t.upper()])
+        self.assertEqual(["x"], [r["contenido"] for r in salida["recuerdos"]])
+
+    def test_dos_filas_que_canonizan_igual_solo_van_una_vez(self):
+        """El dedupe del cuadro evita la fila duplicada *antes* de llegar a disco."""
+        salida = puente.canoniza({"version": 1, "recuerdos": [
+            {"contenido": "nombre: Sandra"}, {"contenido": "me llamo: Sandra"}]},
+            lambda t: ["El usuario se llama Sandra"])
+        self.assertEqual(1, len(salida["recuerdos"]))
+
+    def test_un_canon_que_no_devuelve_nada_conserva_la_fila(self):
+        """La diferencia entre «no lo entendí» y «lo tiré»: un `[]` no borra un dato."""
+        salida = puente.canoniza({"version": 1, "recuerdos": [{"contenido": "hobby: tocar"}]},
+                                 lambda t: [])
+        self.assertEqual(["hobby: tocar"], [r["contenido"] for r in salida["recuerdos"]])
+
+    def test_un_canon_que_revienta_no_rompe_la_subida(self):
+        salida = puente.canoniza({"version": 1, "recuerdos": [{"contenido": "nombre: Ana"}]},
+                                 self.revienta)
+        self.assertEqual(["nombre: Ana"], [r["contenido"] for r in salida["recuerdos"]])
+
+    def test_el_tope_de_filas_se_respeta_traduciendo(self):
+        cuadro = {"version": 1, "recuerdos": [{"contenido": f"hecho {n}"}
+                                              for n in range(puente.MAX_FILAS)]}
+        salida = puente.canoniza(cuadro, self.dos_formas)
+        self.assertEqual(puente.MAX_FILAS, len(salida["recuerdos"]),
+                         "un cuadro que al traducirse pasa del tope se corta, no revienta")
+
+    def test_un_cuadro_mal_formado_pasa_sin_tocar(self):
+        """`fusionar` es quien da el error de forma; canonizar no decide por él."""
+        for basura in (None, "texto", {"version": 1}, {"version": 1, "recuerdos": "no"}):
+            self.assertEqual(basura, puente.canoniza(basura, str))
+        cuadro = {"version": 1, "recuerdos": [{"contenido": "x"}]}
+        self.assertEqual(cuadro, puente.canoniza(cuadro, None))
+
+    def test_traducir_no_le_devuelve_la_llave_al_puerto(self):
+        """El orden del servidor (canoniza → fusionar) no puede reabrir la regla 1:
+        una fila con la llave sigue rechazándose aunque la traducción la reescriba."""
+        almac = Almacen()
+        cuadro = puente.canoniza({"version": 1, "recuerdos": [{"contenido": "clave: llave-123"}]},
+                                 lambda t: [f"El usuario se llama {t}"])
+        recuento = puente.fusionar(almac, cuadro, llave="llave-123")
+        self.assertEqual({"nuevos": 0, "repetidos": 0, "rechazados": 1, "total": 1}, recuento)
+        self.assertEqual([], almac.guardadas)
+
+    def test_despues_de_canonizar_almacena_la_forma_canonica(self):
+        """El extremo a extremo del puente, sin HTTP: es la prueba que paga el corte."""
+        from cort_core.memory.facts import desde_el_telefono
+        almac = Almacen()
+        cuadro = puente.canoniza(puente.exportar(
+            [{"content": "nombre: Sandra"}, {"content": "nota cualquiera"}],
+            origen="telefono"), desde_el_telefono)
+        puente.fusionar(almac, cuadro)
+        self.assertEqual(["El usuario se llama Sandra", "nota cualquiera"], almac.guardadas)
+
+
 class TestFusionar(unittest.TestCase):
 
     def test_mete_los_nuevos_y_cuenta_los_que_ya_estaban(self):

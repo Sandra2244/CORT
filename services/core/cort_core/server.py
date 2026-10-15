@@ -16,7 +16,7 @@ load_env()
 from .actions import perform
 from .brain import think
 from .intents import match_intent
-from .memory.facts import extract
+from .memory.facts import extract, desde_el_telefono
 from .memory.store import MemoryStore
 from .outfit import pick_outfit
 from .status import build as status_payload
@@ -236,6 +236,12 @@ async def post_memoria(solicitud: Request):
         cuadro = json.loads(cuerpo.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError):
         raise HTTPException(status_code=400, detail="el cuadro no es JSON")
+    # La traducción va **antes** de fusionar y después de la llave: `exportar` ya
+    # descartó lo que la contenía, y aquí lo que llega en forma del teléfono
+    # («nombre: Sandra») se reescribe en la forma que el portátil sabe leer
+    # («El usuario se llama Sandra»). Sin este paso la fila viaja y `name_of_user()`
+    # no la reconoce: sincronía perfecta, saludo sin nombre.
+    cuadro = puente.canoniza(cuadro, desde_el_telefono)
     try:
         recuento = puente.fusionar(memory, cuadro,
                                    llave=security.token_configurado())

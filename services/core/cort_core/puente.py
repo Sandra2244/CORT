@@ -88,6 +88,66 @@ def exportar(filas, *, origen: str = "escritorio", llave: str = "",
             "total": len(recuerdos), "ocultados": ocultados, "recuerdos": recuerdos}
 
 
+def canoniza(cuadro, canon) -> dict:
+    """El mismo cuadro con cada recuerdo pasado por `canon`, antes de tocar disco.
+
+    El teléfono guarda `nombre: Sandra` y el portátil `El usuario se llama Sandra`.
+    Si el puente sólo moviera filas, la sincronía funcionaría y la dueña seguiría
+    teniendo que decir quién es: la fila llega, pero `name_of_user()` no la
+    reconoce. `server.py` pasa `facts.desde_el_telefono` aquí y con eso el dato, al
+    entrar, ya está en la forma que el portátil sabe leer.
+
+    Tres cosas que esta función **no** hace, y son las tres que la mantienen pura:
+
+    - no escribe en disco (es `fusionar` quien decide, con sus cuatro salidas);
+    - no conoce a `facts`: recibe un callable, así que el módulo sigue importando
+      `re` y nada más — una prueba le el AST y lo comprueba—;
+    - no decide por su cuenta qué recuerdo es válido: `_limpia` lo hace una vez, en
+      el mismo sitio para los dos lados.
+
+    Una fila puede volverse varias (`extract` devuelve más de un hecho de una frase)
+    o ninguna si `canon` devuelve lista vacía; entonces se **conserva la original**,
+    que es la diferencia entre «no lo entendí» y «lo tiré». El resultado se corta en
+    `MAX_FILAS` para que `fusionar` no rechace por tamaño un cuadro legítimo de un
+    teléfono con muchos hechos.
+    """
+    if not isinstance(cuadro, dict) or not callable(canon):
+        return cuadro
+    recuerdos = cuadro.get("recuerdos")
+    if not isinstance(recuerdos, list):
+        return cuadro
+
+    vistas = set()
+    salida: list[dict] = []
+    for fila in recuerdos:
+        if not isinstance(fila, dict):
+            salida.append(fila)          # `fusionar` la cuenta como rechazada
+            continue
+        contenido = str(fila.get("contenido") or fila.get("content") or "")
+        try:
+            formas = canon(contenido)
+        except Exception:               # un fallo de traducción no puede romper la subida
+            formas = [contenido]        # guarda la frase original y sigue
+        if not isinstance(formas, (list, tuple)) or not formas:
+            formas = [contenido]
+        for forma in formas:
+            texto = str(forma or "").strip()
+            clave = normaliza(texto)
+            if not texto or clave in vistas:
+                continue
+            vistas.add(clave)
+            salida.append({"contenido": texto, "cuando": str(fila.get("cuando")
+                                                            or fila.get("created_at") or "")})
+            if len(salida) >= MAX_FILAS:
+                break
+        if len(salida) >= MAX_FILAS:
+            break
+    nuevo = dict(cuadro)
+    nuevo["recuerdos"] = salida
+    nuevo["total"] = len(salida)
+    return nuevo
+
+
 def fusionar(destino, cuadro, *, llave: str = "") -> dict:
     """Metiendo un cuadro viajero en un almacén, **sin borrar nada** (regla 3).
 

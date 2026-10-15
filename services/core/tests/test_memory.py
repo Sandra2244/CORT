@@ -3,7 +3,7 @@ import os, sys, pathlib, tempfile, unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from cort_core.memory.store import MemoryStore
-from cort_core.memory.facts import extract
+from cort_core.memory.facts import extract, desde_el_telefono
 
 
 class TestStore(unittest.TestCase):
@@ -261,6 +261,56 @@ class TestDbPathOverride(unittest.TestCase):
         os.environ.pop("CORT_MEMORY_DB", None)
         self.assertEqual("memory.db", self._reload().name)
         self.assertEqual("data", self._reload().parent.name)
+
+
+class TestHechosDelTelefono(unittest.TestCase):
+    """`desde_el_telefono`: la traducción que hace que el puente sirva de algo.
+
+    El teléfono guarda `nombre: Sandra` porque su tabla es `clave, valor`
+    (`Recuerdos.java`). El portátil busca el nombre con
+    `LIKE 'El usuario se llama%'` — para el saludo, para `name_of_user()` y para no
+    podarlo nunca (`store.py`, tres sitios distintos). Si el puente sólo moviera la
+    fila, la dueña sincronizaría y seguiría teniendo que decir quién es: estas
+    pruebas son la diferencia entre «los dos lados tienen la misma cadena» y «los
+    dos lados saben lo mismo».
+    """
+
+    def test_la_clave_de_nombre_se_vuelve_el_hecho_canonico(self):
+        self.assertEqual(["El usuario se llama Sandra"],
+                         desde_el_telefono("nombre: Sandra"))
+
+    def test_cualquier_otra_clave_viaja_como_esta(self):
+        """«no lo reconozco» no es «lo tiro»: la fila se guarda tal cual."""
+        self.assertEqual(["gestos: saludo con la mano"],
+                         desde_el_telefono("gestos: saludo con la mano"))
+
+    def test_una_frase_suelda_del_telefono_usa_los_patrones_de_siempre(self):
+        self.assertEqual(["El usuario se llama Sandra"],
+                         desde_el_telefono("me llamo Sandra"))
+
+    def test_la_clave_de_aparato_conserva_la_tilde(self):
+        """La palabra del aparato sale del texto original, no de la forma clasificada:
+        `extract` la escribe con tilde y el dedupe del puente es sensible a ella."""
+        self.assertEqual(["El usuario dice que su teléfono es un Redmi Note 12"],
+                         desde_el_telefono("teléfono: un Redmi Note 12"))
+
+    def test_una_hora_o_una_url_no_se_parten_como_clave(self):
+        """El `:` de «salí a las 8: 30» no es una clave. Sin el espacio obligatorio
+        después de los dos puntos, el portátil guardaba la mitad equivocada."""
+        self.assertEqual(["salí a las 8: 30"], desde_el_telefono("salí a las 8: 30"))
+        self.assertEqual(["http://192.168.100.5:8780"],
+                         desde_el_telefono("http://192.168.100.5:8780"))
+
+    def test_lo_canonico_no_se_duplica_al_pasar_por_aqui(self):
+        """Idempotencia: el puente puede traer una fila que él mismo subió antes."""
+        self.assertEqual(["El usuario se llama Sandra"],
+                         desde_el_telefono("El usuario se llama Sandra"))
+
+    def test_el_vacio_devuelve_vacio(self):
+        self.assertEqual([], desde_el_telefono("   "))
+
+    def test_una_frase_puede_volver_mas_de_un_hecho(self):
+        self.assertEqual(2, len(desde_el_telefono("me llamo Sandra y me gusta el café")))
 
 
 if __name__ == "__main__":

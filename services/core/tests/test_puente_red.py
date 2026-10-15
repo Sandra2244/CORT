@@ -144,7 +144,10 @@ class TestLaLlaveNoViaja(unittest.TestCase):
                               {"contenido": "me llamo Sandra"}]})
             self.assertEqual({"nuevos": 1, "repetidos": 0, "rechazados": 1, "total": 2},
                              {k: r.json()[k] for k in ("nuevos", "repetidos", "rechazados", "total")})
-            self.assertEqual(["me llamo Sandra"], ctx.store.all())
+            # La fila buena entra **ya traducida**: el servidor canoniza antes de
+            # fusionar, así que lo que queda en `memory.db` es la forma que
+            # `name_of_user()` sabe leer. Lo que traía la llave sigue fuera.
+            self.assertEqual(["El usuario se llama Sandra"], ctx.store.all())
             self.assertNotIn(LLAVE, json.dumps(ctx.store.all()))
 
 
@@ -253,6 +256,48 @@ class TestIdayVuelta(unittest.TestCase):
             self.assertEqual(0, puente.fusionar(ctx.store, de_vuelta)["nuevos"])
 
 
+class TestLoQueLlegaSeReconoce(unittest.TestCase):
+    """El pago real del puente, medido por HTTP: que el portátil **sepa** el nombre.
+
+    Mover filas es la parte fácil y la que no sirve de nada: `store.py` busca el
+    nombre con `LIKE 'El usuario se llama%'` para el saludo, para `name_of_user()`
+    y para no podarlo nunca. Un «nombre: Sandra» que llega del teléfono viaja perfecto
+    y sigue siendo invisible. Esta es la prueba que no deja convertir el corte en un
+    transporte de cadenas.
+    """
+
+    def test_un_nombre_del_telefono_se_saluda_en_el_portatil(self):
+        with ConRed() as ctx:
+            r = ctx.client.post(f"/memoria/puente?token={LLAVE}", json={
+                "version": 1, "origen": "telefono",
+                "recuerdos": [{"contenido": "nombre: Sandra"}]})
+            self.assertEqual(200, r.status_code)
+            self.assertEqual("Sandra", ctx.store.name_of_user(),
+                             "si el nombre no es canónico, el saludo sigue sin saberlo")
+            self.assertIn("El usuario se llama Sandra",
+                          ctx.store.context_for("¿qué sabes de mí?"))
+
+    def test_un_dato_que_el_portatil_no_conoce_viaja_igual(self):
+        """Regla 2 de la traducción: «no lo entiendo» no es «lo tiro»."""
+        with ConRed() as ctx:
+            ctx.client.post(f"/memoria/puente?token={LLAVE}", json={
+                "version": 1, "origen": "telefono",
+                "recuerdos": [{"contenido": "gestos: saludo con la mano"}]})
+            self.assertEqual(["gestos: saludo con la mano"], ctx.store.all())
+
+    def test_una_segunda_subida_del_mismo_nombre_no_duplica(self):
+        with ConRed() as ctx:
+            cuadro = {"version": 1, "origen": "telefono",
+                      "recuerdos": [{"contenido": "nombre: Sandra"},
+                                    {"contenido": "me llamo Sandra"}]}
+            self.assertEqual(1, ctx.client.post(f"/memoria/puente?token={LLAVE}",
+                                                json=cuadro).json()["nuevos"])
+            segundo = ctx.client.post(f"/memoria/puente?token={LLAVE}", json=cuadro).json()
+            self.assertEqual(0, segundo["nuevos"],
+                             "dos claves que canonizan a la misma frase ocupan una fila")
+            self.assertEqual(1, ctx.store.count())
+
+
 class TestQueElServidorUseElPuente(unittest.TestCase):
     """Costura: que `server.py` no se haya quedado en su propia copia de la lógica.
 
@@ -267,6 +312,21 @@ class TestQueElServidorUseElPuente(unittest.TestCase):
     def test_llama_a_exportar_y_a_fusionar(self):
         self.assertIn("puente.exportar(", self.fuente)
         self.assertIn("puente.fusionar(", self.fuente)
+
+    def test_canoniza_con_la_funcion_de_facts_y_no_con_una_copia(self):
+        """La traducción vive en `facts.py` (dueña de las plantillas canónicas); el
+        servidor sólo la pasa. Si alguien la reescribiera aquí, `puente.py` seguiría
+        puro pero el portátil volvería a saludar sin nombre.
+
+        Lo que se pincha es la **llamada**, no las palabras: una prueba que buscara
+        la cadena «El usuario se llama» en `server.py` fallaría contra un comentario
+        que la explique, que es justo el error que ya cometió `test_apk_cerebro.py`
+        contando usos dentro de un Javadoc.
+        """
+        self.assertIn("puente.canoniza(cuadro, desde_el_telefono)", self.fuente)
+        self.assertIn("from .memory.facts import extract, desde_el_telefono", self.fuente)
+        self.assertNotIn("NOMBRE.format", self.fuente,
+                         "el servidor no arma plantillas: pide que se canonicen")
 
     def test_pasa_la_llave_en_ambos_sentidos(self):
         self.assertEqual(2, self.fuente.count("llave=security.token_configurado()"))
