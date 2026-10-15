@@ -132,6 +132,25 @@ cabecera, y **no había ningún sitio donde teclear la clave desde el aparato**.
   de Play Protect no se quita con código y que la firma es desechable hasta que se peguen los dos
   secretos.
 
+- **Comprobado en el binario publicado** (medido el 2026-10-15, bajando el `.apk` de la Release y
+  abriéndolo en esta máquina): `CORT-v0.15.1.apk` de **74 622 B**, sha-256
+  `9d42bc0b0f56f32716fd9527d0644c54851f2bcffd2d7cbd78979c312f582beb` — el mismo que anuncia la API—,
+  manifiesto UTF-16 con `0.15.1` y `versionCode 1501` y **sin** rastro de `0.15.0`/`1500`, los cuatro
+  permisos, las **nueve** clases del fuente con **44 descriptores** en `classes.dex` (eran 37 en
+  `v0.15.0`, medido sobre su binario: la pantalla nueva añade siete listeners, y `Cara` pasa de 10
+  clases generadas a 17), la referencia `InputType` y **escritas literalmente en el binario** las
+  frases de la cara nueva (`⚙ nube apagada`, `▶  probar la conexión`, `La nube, si quieres`,
+  `⌫  borrar la clave de este teléfono`). En negativo, que es lo que importa de la regla 6 y la 7:
+  no hay `Runtime.getRuntime`, `ProcessBuilder`, `exec(`, `/system/bin` ni `QUERY_ALL_PACKAGES`, y
+  **ninguno de los doce archivos del APK** contiene una cadena con forma de clave `sk-…`. La tabla
+  interna sigue en once acciones, 26 patrones y `listar` (16) delante de `saber-algo` (17). El
+  `…-firma.txt` dice `APK de CORT 0.15.1 (versionCode 1501)` y `llave: desechable`, con huella
+  `721bf5f4…15dcf` — otra confirmación de que los dos secretos del repo aún no están pegados—.
+  Compilaron los runs **38786879687** y **38786887027** sobre `01cb1b9`. **Un matiz honesto sobre
+  la página**: `publicar-release.yml` es idempotente y esta Release ya estaba abierta cuando se midió
+  todo lo del párrafo, así que el texto de arriba no se reescribió —la corrección va hacia adelante,
+  en el repo, como se hizo con `v0.15.0`— y la etiqueta publicada **no se mueve**.
+
 **Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.1.zip
 
 ---

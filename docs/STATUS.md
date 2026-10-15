@@ -127,9 +127,17 @@ lista—; ahora hay una sola `CLASES`, una prueba que la compara con el JSON, y 
 **1044 constantes en doce clases**. Y leyendo el fuente de `v0.15.0` apareció un bug de contraste
 que nadie ha visto porque nadie ha instalado la cara nativa: el diálogo de aprender una frase
 pintaba su campo en blanco sobre el blanco del `AlertDialog` de Android.
-**Medido**: `make test` **571** en verde (76,873 s) y `make test-web` **56** — **627**—; las doce
+**Medido**: `make test` **571** en verde (76,873 s, y **80,320 s** en la pasada de repaso antes de
+etiquetar) y `make test-web` **56** — **627**—; las doce
 pruebas nuevas del corte están listadas arriba. La cara nativa pasa de 2 120 a **2 290 líneas**
 y de 83 a **90 KB** de Java en los mismos nueve archivos.
+**Y está publicado y abierto**: la Release `v0.15.1` salió con sus dos adjuntos y el
+`CORT-v0.15.1.apk` se bajó y se midió en esta máquina — **74 622 B**, sha-256 `9d42bc0b…82beb`
+igual al que anuncia la API, manifiesto UTF-16 con `0.15.1`/`1501`, las nueve clases del fuente
+entre **44** descriptores del `classes.dex`, `InputType` presente y las frases de la pantalla nueva
+escritas en el binario; **sin** `Runtime`/`ProcessBuilder`/`exec(`/`/system/bin` y **sin** una sola
+cadena con forma de clave `sk-` en sus doce archivos. La medición entera, en
+`apps/apk/README.md`.
 **Sin verificar en dedo**: la pantalla entera —nadie la ha abierto en el Samsung—, que el teclado
 de Android deje escribir una URL sin autocorregirla, que la prueba de conexión conteste, y todo lo
 que ya estaba sin verificar en `v0.15.0`: la cara nativa instalada, el micrófono oyendo, la voz

@@ -218,6 +218,33 @@ página. **Lo que esto no prueba**: que la cara nativa funcione en un dedo —na
 ha instalado aún—, que el micrófono oiga, que la voz suene por el altavoz o que las
 once acciones muevan el teléfono.
 
+`CORT-v0.15.1.apk` **también está publicado, bajado y abierto aquí** (medido el
+2026-10-15). **74 622 B**, sha-256 `9d42bc0b0f56f32716fd9527d0644c54851f2bcffd2d7cbd78979c312f582beb`
+— el mismo que anuncia la API de GitHub —, y doce archivos dentro del zip. El
+`AndroidManifest.xml` binario trae `0.15.1` y `versionCode 1501` **y ya no** la cadena
+`0.15.0` ni el `1500`, con sus cuatro permisos de siempre. En `classes.dex` están las
+**nueve** clases del fuente y **35 más** generadas (`Cara$0…$16`, `MainActivity$0…$11`,
+los `…$0` de `Anillo` y `Cerebro`, `Cerebro$Regla`, `Cerebro$Resultado`, `Voz$AlOir`,
+`Voz$Escucha`): **44 descriptores frente a los 37 de `v0.15.0`**, medidos sobre los dos
+binarios — y sólo en `Cara` pasan de 10 clases generadas a 17, que es exactamente el número
+de listeners nuevos de esta pantalla —, la referencia
+`InputType`, y **literalmente escrita** la cara nueva: `⚙ nube apagada`,
+`▶  probar la conexión`, `La nube, si quieres`, `⌫  borrar la clave de este teléfono`.
+Un matiz honesto: `TYPE_TEXT_VARIATION_PASSWORD` **no** aparece como texto porque `javac`
+inlinea las constantes `static final int`; lo comprobable es la clase y el comportamiento,
+y eso lo fija la prueba sobre el fuente. **No** hay `Runtime.getRuntime`, `ProcessBuilder`,
+`exec(`, `/system/bin` ni `QUERY_ALL_PACKAGES`, y **ningún archivo del APK** lleva una cadena
+con forma de clave (`sk-…`) — la llave se teclea en el aparato, regla 7—.
+`assets/habilidades.json` sigue con **once acciones**, **26 patrones** y `listar` en la
+posición 16, delante de `saber-algo` en la 17. Su `…-firma.txt` (421 B) arranca con
+`APK de CORT 0.15.1 (versionCode 1501)` y `llave: desechable (hay que desinstalar la
+versión anterior)` con la huella `721bf5f4…15dcf`, que **no** es la de la llave estable
+(`6e4ec4ce…a6b67f6`): los dos secretos del repo siguen sin estar pegados. Compilaron los
+runs **38786879687** y **38786887027** de `compilar-apk` sobre `01cb1b9`, y
+`publicar-release` 38786879665 / 38786886950 abrieron y completaron la página.
+**Lo que esto sigue sin probar**: lo mismo que arriba, y además que la pantalla de ajustes
+se vea, que la nube conteste con una cuenta real y que «probar» no trabe la interfaz.
+
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma
 desechable, en cambio, cada APK nuevo exige desinstalar el anterior aunque el
