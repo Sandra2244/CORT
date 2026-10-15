@@ -1,0 +1,40 @@
+{
+ "que_es": "El tipo que **devuelve** cada método del SDK de Android que el Java del APK recibe en una variable. `javac` rechaza un tipo equivocado en la asignación, y aquí no hay `javac`: así que el retorno se copia de AOSP. Es la tercera clase de error que sólo existe al compilar, después de las constantes inventadas (`simbolos-android.json`), el `Pattern` pasado a `String.split` y el `throws` sin recoger (`lanza-android.json`).",
+ "fuente": "aosp-mirror/platform_frameworks_base, rama main",
+ "url_base": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/",
+ "verificado": "2026-10-15",
+ "como_refrescar": "python3 scripts/simbolos_android.py",
+ "clases": {
+  "TextToSpeech": {
+   "archivo": "core/java/android/speech/tts/TextToSpeech.java",
+   "metodos": {
+    "isSpeaking": [
+     "boolean"
+    ],
+    "setSpeechRate": [
+     "int"
+    ],
+    "setPitch": [
+     "int"
+    ],
+    "setLanguage": [
+     "int"
+    ],
+    "getVoices": [
+     "Set<Voice>"
+    ],
+    "setVoice": [
+     "int"
+    ]
+   }
+  },
+  "Bundle": {
+   "archivo": "core/java/android/os/Bundle.java",
+   "metodos": {
+    "getStringArrayList": [
+     "ArrayList<String>"
+    ]
+   }
+  }
+ }
+}

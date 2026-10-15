@@ -17,8 +17,8 @@ abierta una (los dos cuerpos de reglas).
 `gradle build` de Capacitor congela la máquina — está medido y escrito en
 `docs/PLATFORM.md`—, y además aquí no hace falta: `javac` no está (lo que hay es
 el JRE 21 y su `keytool`, medido 2026-10-15), así que no hay nada que compilar
-en esta máquina ni que descargar. **Once archivos de Java puro** contra el SDK
-(2 943 líneas, 118 KB medidos el 2026-10-15), cuatro herramientas que el runner
+en esta máquina ni que descargar. **Dieciséis archivos de Java puro** contra el SDK
+(3 961 líneas, 164 KB medidos el 2026-10-15), cuatro herramientas que el runner
 de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 `compilar.sh`, que **nunca corre en el portátil**.
 
@@ -40,8 +40,11 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 | `Voz.java` | `TextToSpeech` y `SpeechRecognizer`: hablar **y escuchar**, que el WebView no podía |
 | `Nube.java` | la nube opcional, con la clave escrita una vez en el aparato |
 | `Paleta.java`, `Anillo.java` | los literales de la marca y el anillo dibujado con `Canvas`, compartidos por las dos caras |
+| `Orbe.java` | **el reactor animado de la cara de PC**, dibujado con `Canvas` desde `v0.16.0`: sus cuatro estados y sus números son los de `apps/web/src/scene/`, y `test_apk_orbe.py` los compara con el TypeScript |
+| `Voz.java` | además de hablar y escuchar, elige la voz con las mismas reglas de `apps/web/src/cort/voz.ts` (`es-CO`, 0,95, tono 1, lista preferida) y reenvía el nivel real del micrófono al orbe |
 | `assets/habilidades.json` | **la tabla de frases**: el dato que `make test` sí puede validar en esta máquina |
 | `simbolos-android.json` | el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py` |
+| `devuelve-android.json` | el **tipo que devuelve** cada método del SDK cuyo resultado se guarda en una variable (`getVoices → Set<Voice>`, `isSpeaking → boolean`, …) — recibirlo en el tipo equivocado es `incompatible types` en `javac` |
 | `lanza-android.json` | las **firmas `throws`** de los métodos del SDK que llama el Java (`RecognitionService.Callback`: diez, todas con `RemoteException`) — lo que `javac` exige recoger y aquí no hay quien lo compruebe |
 
 ## Usarlo
@@ -50,11 +53,13 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
    e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: las páginas de
    `v0.15.3` y `v0.15.4` están publicadas con su texto pero **sin APK** — cada compilado cayó con
    **un** error de tipos que aquí no se puede ver: el `Pattern` pasado a `String.split`, y el
-   `RemoteException` sin recoger en `Reconocimiento.java:40`—; el binario que hay que bajar es
-   **`CORT-v0.15.5.apk`**, que lleva las funciones de `v0.15.3` ya compiladas: el run **38815381368**
-   dio verde y el APK está publicado (82 881 B, sha-256 `86d41d83…d7ccb5`, `versionCode 1505`, las **quince**
-   clases en `classes.dex`) — medido aquí bajándolo, no leyendo una log. Se comprueba mirando
-   los adjuntos de la página, no una log de Actions que es privada.
+   `RemoteException` sin recoger en `Reconocimiento.java:40`—; el último binario **medido aquí
+   bajándolo** (no leyendo una log) es **`CORT-v0.15.5.apk`**: run **38815381368** en verde,
+   82 881 B, sha-256 `86d41d83…d7ccb5`, `versionCode 1505`, las **quince** clases en `classes.dex`.
+   De **`v0.16.0`** — el orbe animado, la voz con las reglas del PC y `Orbe.java`— hay que
+   **comprobar los adjuntos de su página antes de bajarlo**: se hace con la API pública
+   (`/releases/tags/v0.16.0`) y se reporta aquí mismo en cuanto esté medido.
+   Se comprueba mirando los adjuntos de la página, no una log de Actions que es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
    aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa

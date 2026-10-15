@@ -968,15 +968,16 @@ class TestLoQueLlegaAlRunner(unittest.TestCase):
                          "`res/xml/asistente.xml` está ignorado: el runner no lo vería")
 
     def test_toda_entrada_del_build_es_seguida_por_git(self):
-        """Manifiesto, guion de compilado, tabla de frases, los dos diccionarios de
-        AOSP y los quince Java."""
+        """Manifiesto, guion de compilado, tabla de frases, los tres diccionarios de
+        AOSP y los dieciséis Java (con `Orbe.java` desde `v0.16.0`)."""
         entradas = [MANIFIESTO, COMPILAR, APK / ".gitignore",
                     APK / "assets" / "habilidades.json",
                     APK / "res" / "xml" / "asistente.xml",
                     APK / "simbolos-android.json",
-                    APK / "lanza-android.json"]
+                    APK / "lanza-android.json",
+                    APK / "devuelve-android.json"]
         entradas += sorted((APK / "src").rglob("*.java"))
-        self.assertGreaterEqual(len(entradas), 20, "el glob no encontró fuentes")
+        self.assertGreaterEqual(len(entradas), 21, "el glob no encontró fuentes")
         for ruta in entradas:
             self.assertFalse(self.esta_ignorado(ruta),
                              f"{ruta.name}: entrada del build que git ignora")
@@ -1106,6 +1107,86 @@ class TestLoQueJavacObligaARecoger(unittest.TestCase):
             if "catch (RemoteException" in codigo:
                 self.assertIn("import android.os.RemoteException;", codigo,
                               f"{archivo}: recoge `RemoteException` sin importarla")
+
+
+class TestLoQueElSdkDevuelve(unittest.TestCase):
+    """La tercera clase de error que **sólo existe cuando alguien compila**, y que
+    este corte produjo él solo: `TextToSpeech.getVoices()` devuelve `Set<Voice>` y
+    el Java lo estaba recibiendo en un `List<Voice>`. `javac` diría «incompatible
+    types», el runner caería y la Release saldría sin APK — la cuarta vez que un
+    error de tipos se descubre pagando un Run (después de dos constantes inventadas
+    de `AlarmClock`, el `Pattern` a `String.split` y el `RemoteException` sin
+    recoger).
+
+    La cura es la misma que con las otras tres: el dato se saca de AOSP con
+    `scripts/simbolos_android.py`, vive en `apps/apk/devuelve-android.json`, y aquí
+    se compara con lo que el Java declara.
+    """
+
+    # Un supertipo también compila; una clase no listada se admite sólo si el tipo
+    # es idéntico, que es el caso común (recibir en la misma clase que devuelve).
+    SUPERTIPOS = {"Set": {"Collection", "Iterable", "Object"},
+                  "List": {"Collection", "Iterable", "Object"},
+                  "ArrayList": {"List", "Collection", "Iterable", "Object"},
+                  "boolean": {"Boolean", "Object"},
+                  "int": {"Integer", "long", "Long", "float", "Float", "double", "Object"}}
+
+    def setUp(self):
+        self.devuelve = json.loads((APK / "devuelve-android.json").read_text(encoding="utf-8"))
+        self.java = {java.name: java.read_text(encoding="utf-8")
+                     for java in sorted(FUENTES.glob("*.java"))}
+
+    def test_el_diccionario_de_los_retornos_llega_y_no_esta_vacio(self):
+        """Sin este JSON la guarda no mira nada. Que llegue al clone lo vigila
+        `test_toda_entrada_del_build_es_seguida_por_git`."""
+        self.assertTrue((APK / "devuelve-android.json").is_file(),
+                        "falta apps/apk/devuelve-android.json: refrescar con "
+                        "`python3 scripts/simbolos_android.py`")
+        metodos = self.devuelve["clases"]["TextToSpeech"]["metodos"]
+        self.assertEqual(["Set<Voice>"], metodos["getVoices"],
+                         "el retorno de `getVoices` cambió en AOSP o se borró el dato")
+        self.assertIn("isSpeaking", metodos)
+        self.assertGreaterEqual(sum(len(v["metodos"]) for v in self.devuelve["clases"].values()),
+                                6, "la lista de retornos bajó: hay métodos sin vigilar")
+
+    def _permite(self, declarado: str, tipos: list[str]) -> bool:
+        base = declarado.split("<")[0].strip()
+        for tipo in tipos:
+            if tipo == declarado:
+                return True
+            if base == tipo.split("<")[0].strip():
+                return True
+            if base in self.SUPERTIPOS and tipo.split("<")[0].strip() in self.SUPERTIPOS[base]:
+                return True
+        return False
+
+    def test_toda_variable_que_recibe_un_metodo_del_sdk_usa_su_tipo_real(self):
+        """`Tipo x = objeto.metodo(...)` tiene que declarar el tipo que AOSP dice."""
+        for clase, datos in sorted(self.devuelve["clases"].items()):
+            for nombre, tipos in sorted(datos["metodos"].items()):
+                for archivo, texto in sorted(self.java.items()):
+                    if clase not in solo_codigo(texto):
+                        continue
+                    codigo = solo_codigo(texto)
+                    for coincidencia in re.finditer(rf"\.{re.escape(nombre)}\(", codigo):
+                        inicio = max((codigo.rfind(c, 0, coincidencia.start())
+                                      for c in ";{}"), default=-1)
+                        fragmento = codigo[inicio + 1:coincidencia.start()].strip()
+                        asignacion = re.fullmatch(
+                            r"(?:final\s+)?([\w.<>\[\], ]+?)\s+\w+\s*=\s*[^=]+", fragmento)
+                        if not asignacion:
+                            continue
+                        self.assertTrue(
+                            self._permite(asignacion.group(1).strip(), tipos),
+                            f"{archivo}: `{fragmento}.{nombre}()` guarda el resultado en "
+                            f"`{asignacion.group(1).strip()}`, y AOSP devuelve "
+                            f"{', '.join(tipos)} — javac: «incompatible types»")
+
+    def test_la_linea_de_las_voces_sigue_recibiendo_un_Set(self):
+        """La que estaba mal escrita en este corte, dicha literal."""
+        self.assertRegex(re.sub(r"\s+", " ", solo_codigo(self.java["Voz.java"])),
+                         r"Set<Voice> \w+ = \w+\.getVoices\(\);",
+                         "el `getVoices()` volvió a recibirse en un tipo que no es `Set`")
 
 
 if __name__ == "__main__":

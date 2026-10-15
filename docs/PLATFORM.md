@@ -53,8 +53,9 @@ otro».
 
 Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
-- **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
-  nada: las **692** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+- **El core de escritorio sigue siendo Python + React + Ollama, y la cara del teléfono se copia de él, no se re-inventa.** Desde `v0.16.0` los literales del orbe (`Scene.tsx`, `Core.tsx`, `Particles.tsx`, `palette.ts`) y de la voz (`cort/voz.ts`) están **leídos por una prueba** (`test_apk_orbe.py`, 27): un cambio estético o de acento en un aparato que no viaje al otro rompe `make test`. Es la forma ejecutable de «lo mismo funcione en PC que en el APK».
+   No se reescribe
+  nada: las **722** pruebas de `services/core` (ejecutadas el 2026-10-15), el
   WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
   segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
   ni un dispositivo.
@@ -87,7 +88,7 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
   diccionario**, `apps/apk/lanza-android.json`, con las **firmas `throws`** de los métodos que
   el Java llama sobre objetos del sistema —**10 firmas**, las diez de `RecognitionService.Callback`
   lanzando `RemoteException`—, porque `javac` no sólo mira que el símbolo exista: mira lo que
-  declara. Ese segundo error costó otros dos Runs (`v0.15.3` y `v0.15.4`, las dos páginas sin APK).
+  declara. Ese segundo error costó otros dos Runs (`v0.15.3` y `v0.15.4`, las dos páginas sin APK). **Desde `v0.16.0` escribe un tercero**, `apps/apk/devuelve-android.json` —**7 retornos en dos clases**: `getVoices → Set<Voice>`, `isSpeaking → boolean`, `getStringArrayList → ArrayList<String>`…—, porque la tercera clase de error que sólo existe al compilar es **recibir un método del SDK en el tipo equivocado**: el Java nuevo escribía `List<Voice> disponibles = boca.getVoices()`. Esta vez lo cazó `TestLoQueElSdkDevuelve` aquí mismo, sin pagar un Run.
 - **Ser el asistente del teléfono tiene un coste, y se dice antes de prometerlo.** Desde
   `v0.15.3` el APK lleva el traje que el sistema pide para aparecer en Ajustes → *Asistente
   por defecto* (`VoiceInteractionService` + su `SessionService` + `RecognitionService`, con

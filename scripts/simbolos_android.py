@@ -16,7 +16,9 @@ Qué hace: descarga las clases que usa el APK, saca toda constante pública
 esté en la lista de sueltas), y escribe el JSON con su marca de tiempo. **Desde
 `v0.15.5` escribe además `apps/apk/lanza-android.json`**, con las firmas `throws`
 de los métodos que el Java llama sobre objetos del sistema — otro error que sólo
-existe al compilar, y que costó una Release entera (leer el bloque de abajo).
+existe al compilar, y que costó una Release entera (leer el bloque de abajo)—.
+**Desde `v0.16.0` escribe la tercera salida**, `apps/apk/devuelve-android.json`,
+con el tipo que devuelve cada método cuyo resultado se guarda en una variable.
 
 Uso — necesita red, y **no** forma parte de `make test`:
 
@@ -38,6 +40,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parents[1]
 SALIDA = RAIZ / "apps" / "apk" / "simbolos-android.json"
 SALIDA2 = RAIZ / "apps" / "apk" / "lanza-android.json"
+SALIDA3 = RAIZ / "apps" / "apk" / "devuelve-android.json"
 
 BASE = "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/"
 
@@ -100,6 +103,32 @@ FIRMA = re.compile(
     r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+)*"
     r"[\w.<>@\[\] ]+?\s(\w+)\s*\([^)]*\)\s*(?:throws\s+([\w.,\s@<>]+?))?\s*[;{]")
 
+"""
+LO QUE DEVUELVE CADA MÉTODO DEL SDK (tercera salida del script)
+===============================================================
+
+La tercera clase de error que **sólo existe al compilar**: recibir el resultado de
+un método del SDK en una variable del tipo equivocado. `TextToSpeech.getVoices()`
+devuelve `Set<Voice>`, y este corte lo tenía declarado como `List<Voice>` — escrito
+de memoria, otra vez. `javac` lo rechaza con «incompatible types», el runner cae y
+la Release sale sin APK. Es el mismo fallo de forma que los dos `AlarmClock` y que
+el `RemoteException`: **aquí no se confía en el recuerdo, se lee AOSP**.
+
+Se guarda el tipo de retorno declarado y `test_apk_manifesta.py`
+(`TestLoQueElSdkDevuelve`) exige que toda asignación `Tipo x = …método(…)` del Java
+use ese tipo — o un supertipo suyo, que también compila—.
+"""
+DEVUELVE = {
+    "TextToSpeech": ("core/java/android/speech/tts/TextToSpeech.java",
+                     ("getVoices", "isSpeaking", "setVoice", "setSpeechRate",
+                      "setPitch", "setLanguage")),
+    "Bundle": ("core/java/android/os/Bundle.java", ("getStringArrayList",)),
+}
+
+REGRESA = re.compile(
+    r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+)*"
+    r"([\w.<>@\[\]]+(?:\s*\[\])?)\s+(\w+)\s*\([^)]*\)\s*(?:throws[^;{]+)?[;{]")
+
 
 def descargar(clase: str, ruta: str) -> list[str]:
     texto = urllib.request.urlopen(BASE + ruta, timeout=90).read().decode("utf-8", "replace")
@@ -134,6 +163,25 @@ def metodos_que_lanzan(clase: str, archivo: str, nombres: tuple[str, ...]) -> di
         raise SystemExit(f"{clase}: no encontró la firma de {faltan} — cambió AOSP o la ruta")
     return resultado
 
+
+
+def metodos_que_devuelven(clase: str, archivo: str,
+                          nombres: tuple[str, ...]) -> dict[str, list[str]]:
+    """`{método: [tipos declarados tras `public`]}` para los métodos que interesan.
+
+    Como con las firmas `throws`, un método sobrecargado puede devolver tipos
+    distintos en AOSP: se guardan **todos** y la prueba admite cualquiera. Si un
+    método nombrado no aparece, el script falla en vez de escribir un hueco.
+    """
+    texto = firma_clase(archivo)
+    salida: dict[str, set[str]] = {}
+    for tipo, nombre in REGRESA.findall(texto):
+        if nombre in nombres:
+            salida.setdefault(nombre, set()).add(" ".join(tipo.split()))
+    faltan = sorted(set(nombres) - set(salida))
+    if faltan:
+        raise SystemExit(f"{clase}: no encontró el retorno de {faltan} — cambió AOSP o la ruta")
+    return {n: sorted(v) for n, v in salida.items()}
 
 
 def main() -> int:
@@ -181,6 +229,27 @@ def main() -> int:
     }, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
     print(f"{SALIDA2.relative_to(RAIZ)}: {sum(len(v['metodos']) for v in lanzan.values())} "
           f"firmas en {len(lanzan)} clases")
+
+    devuelven = {}
+    for clase, (archivo, nombres) in DEVUELVE.items():
+        metodos = metodos_que_devuelven(clase, archivo, nombres)
+        devuelven[clase] = {"archivo": archivo, "metodos": metodos}
+        print(f"  {clase}: {len(metodos)} retornos ({', '.join(f'{m}→{t[0]}' for m, t in metodos.items())})")
+    SALIDA3.write_text(json.dumps({
+        "que_es": "El tipo que **devuelve** cada método del SDK de Android que el Java del APK "
+                  "recibe en una variable. `javac` rechaza un tipo equivocado en la asignación, "
+                  "y aquí no hay `javac`: así que el retorno se copia de AOSP. Es la tercera "
+                  "clase de error que sólo existe al compilar, después de las constantes "
+                  "inventadas (`simbolos-android.json`), el `Pattern` pasado a `String.split` y "
+                  "el `throws` sin recoger (`lanza-android.json`).",
+        "fuente": "aosp-mirror/platform_frameworks_base, rama main",
+        "url_base": BASE,
+        "verificado": date.today().isoformat(),
+        "como_refrescar": "python3 scripts/simbolos_android.py",
+        "clases": devuelven,
+    }, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    print(f"{SALIDA3.relative_to(RAIZ)}: {sum(len(v['metodos']) for v in devuelven.values())} "
+          f"retornos en {len(devuelven)} clases")
     return 0
 
 

@@ -2,7 +2,27 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (13)** (`TMPDIR=/tmp make test` **692** en verde en **97,372 s**,
+> Última verificación: **2026-10-15 (14)** (`TMPDIR=/tmp make test` **722** en verde en **94,472 s**,
+> `make test-web` **56** — **778** en total—): **la cara del teléfono deja de ser un formulario y
+> toma el orbe del PC.** `apps/apk/src/dev/sandra/cort/Orbe.java` (nuevo) dibuja con `Canvas` el
+> reactor de `apps/web/src/scene/` —`REPOSO`/`ESCUCHA`/`PENSAR`/`HABLA`, la caída `exp(-dt·4,5)`, la
+> respiración `0,05 + (giro>1 ? 0,22 : 0)`, la curva de hablar `0,28 + 0,22·|sin(7,1t)|·(0,6+0,4·sin(2,3t))`,
+> la de escuchar `0,35 + 0,3·…`, el anillo `R=0,74`, grosor `0,030`, oscilación `0,055`, granilla `0,020`,
+> el polvo con `1,9 + r²·2,6` y su empuje `0,35`— y `services/core/tests/test_apk_orbe.py` (**27**)
+> **lee el TypeScript y exige los mismos números**: la paridad PC ↔ APK que la dueña pide
+> («lo mismo funcione, tanto en PC como en el APK») ya es una prueba, no una intención. El recorte
+> declarado: **220 puntos de polvo** contra los 4 000 de la GPU. La voz hace lo mismo con `cort/voz.ts`:
+> `es-CO`, `0,95`, tono `1`, la lista preferida y el baremo `0 / 20 / 40`, y la cara escribe
+> `voz: <nombre> · <locale>` para poder comparar; el teléfono además **sí tiene nivel real de micrófono**
+> (`onRmsChanged` → `Orbe.nivel()`), cosa que el navegador no entrega. **Tercer error de tipos cazado
+> antes del runner** —y confieso que lo introduje yo en este corte—: `TextToSpeech.getVoices()` devuelve
+> `Set<Voice>` y el Java lo recibía en `List<Voice>`. `scripts/simbolos_android.py` escribe ahora un
+> **tercer** diccionario, `apps/apk/devuelve-android.json` (`7` retornos en `2` clases, leído de AOSP), y
+> `TestLoQueElSdkDevuelve` (3 pruebas; `test_apk_manifesta.py` llega a **74**, y **135** sobre `apps/apk/`)
+> rechaza toda asignación con tipo distinto. **Las guardias se comprobaron no vacías reintegrando los tres
+> fallos a la vez** (`List<Voice>`, `CAIDA = 4.0f`, y quitar `modo(Orbe.PENSAR)` de `Cara.java`): caen
+> cuatro pruebas. **Sin verificar**: el `javac` de este commit es el del runner; el orbe en el Samsung A16
+> y el timbre de la voz elegida son de dedo. Verificación anterior, **2026-10-15 (13)** (`TMPDIR=/tmp make test` **692** en verde en **97,372 s**,
 > `make test-web` **56** — **748** en total—): **`v0.15.5` es el arreglo del segundo error que sólo
 > existe al compilar.** `Reconocimiento.onStartListening` llamaba a `listener.error(…)` sin recoger
 > nada, y en AOSP `RecognitionService.Callback.error(int)` **declara** `throws RemoteException`; el run

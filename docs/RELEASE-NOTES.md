@@ -74,6 +74,66 @@ todas esas cadenas como `v<etiqueta>`:
 
 ---
 
+## `v0.16.0` — el orbe de la cara de PC, en el teléfono; y la voz elegida con las mismas reglas
+
+La dueña lo pidió en una frase: «que se active en modo orbe con su animación y todo, como
+es el proyecto CORT acá en PC», y añadió la que importa para el futuro: «lo mismo funcione:
+las actualizaciones lo debe tener tanto el que funciona en PC como el APK». Este corte
+responde las dos con un dibujo nuevo y con una prueba que **lee los dos cuerpos**.
+
+- **`Orbe.java` (nuevo, `apps/apk/src/dev/sandra/cort/`)**: el reactor animado de la cara
+  de PC, dibujado con `Canvas`. El PC usa WebGL con tres.js; en el APK `compilar.sh` es
+  `aapt2` + `javac` + `d8`, sin Gradle ni dependencias, así que el orbe se dibuja con lo que
+  Android sí trae. Lo que **no** cambia son los números: los cuatro estados
+  (`REPOSO` / `ESCUCHA` / `PENSAR` / `HABLA`), la caída del nivel, la respiración, la curva
+  de cuando habla y la de cuando escucha, el grosor del anillo, su oscilación y su granilla,
+  el empuje del polvo y el magenta de pensar salen de `scene/Scene.tsx`, `scene/Core.tsx`,
+  `scene/Particles.tsx` y `cort/palette.ts`. El único recorte, declarado dentro del propio
+  archivo: **220 puntos de polvo frente a los 4 000 de la GPU** —un orbe a menos cuadros por
+  segundo se ve peor que un orbe con menos puntos—.
+- **El teléfono tiene algo que el navegador no**: Android sí entrega el volumen real del
+  micrófono mientras escucha (`RecognitionListener.onRmsChanged`), y el PC tiene que
+  simularlo. Desde aquí ese nivel normalizado alimenta al orbe, así que en el móvil el
+  reactor se mueve **con la voz de la dueña**, no con una curva.
+- **La voz, que «parecía otra»**: `Voz.java` ya no deja la elección en manos del azar. Usa
+  los literales de `apps/web/src/cort/voz.ts` —idioma `es-CO`, velocidad `0,95`, tono `1`—
+  y el mismo orden de mérito: natural `0`, en línea `20`, local `40`, más la posición en la
+  lista preferida (`jorge, gonzalo, alvaro, alonso, tomas, lorenzo, raul, pablo`) y un punto
+  si el acento no es `co / mx / us / 419`. La cara escribe en el registro
+  `voz: <nombre> · <locale>` para que se pueda **comparar con la del PC** en vez de discutir
+  de oído.
+- **La paridad deja de ser una promesa**: `services/core/tests/test_apk_orbe.py` (**27**
+  pruebas) abre el TypeScript de la cara de PC y exige que el Java del teléfono diga el
+  mismo hex, la misma tasa y la misma lista. Si alguien afina el reactor en un aparato y no
+  en el otro, la suite se cae. Es la respuesta escrita a «que lo mismo funcione en PC que en
+  el APK».
+- **El tercer error de tipos que se cazó antes del runner**: `TextToSpeech.getVoices()`
+  devuelve `Set<Voice>` y el Java nuevo lo recibía en `List<Voice>`. `javac` lo habría
+  rechazado —como con el `Pattern` de `v0.15.3` y el `throws` de `v0.15.4`—; esta vez se
+  encontró aquí. El mismo guion que baja las constantes de AOSP
+  (`scripts/simbolos_android.py`) escribe ahora el **tercer** diccionario,
+  `apps/apk/devuelve-android.json`, con el tipo que devuelve cada método del SDK cuyo
+  resultado se guarda en una variable (`7` retornos en `2` clases:
+  `getVoices → Set<Voice>`, `isSpeaking → boolean`, `getStringArrayList → ArrayList<String>`…).
+  `TestLoQueElSdkDevuelve` (3 pruebas en `test_apk_manifesta.py`, que llega a **74**) rechaza
+  toda asignación cuyo tipo no sea el declarado ni un supertipo suyo. **Las guardias nuevas
+  se comprobaron no vacías reintegrando los tres fallos**: con el `List<Voice>`, el
+  `CAIDA = 4.0f` y el `modo(Orbe.PENSAR)` borrado, se caen cuatro pruebas.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **722** en verde en **94,472 s** y
+  `make test-web` **56** — **778** en total—; sobre `apps/apk/` vigilan **135** pruebas.
+  **Sin verificar**: que este Java compile (el `javac` es el del runner), que el orbe se vea
+  bien en la pantalla del Samsung A16 y que la voz elegida suene igual que la del PC —eso es
+  de dedo, y se reporta con el binario bajado y abierto—.
+
+**Lo que sigue, ya escrito como corte**: la réplica **literal** de la cara —meter el `dist`
+de la web dentro del APK para que el teléfono muestre el mismo reactor WebGL, con su puente
+al cerebro Java— y el instalador de PC a partir de `packaging/cort.iss`, que se construye en
+un runner, no en esta máquina.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.16.0.zip`
+
+---
+
 ## `v0.15.5` — el segundo error que sólo existe al compilar: un `throws` sin recoger
 
 Tres líneas de Java, un diccionario nuevo sacado de AOSP y cuatro pruebas que hacen la

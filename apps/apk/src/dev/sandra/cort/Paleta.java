@@ -20,6 +20,11 @@ public final class Paleta {
     public static final int AVISO = 0xFFFFC46B;      // el ámbar del subtítulo
     public static final int CAMPO = 0xFF0A1620;      // el vidrio de las ventanas
     public static final int BORDE = 0xFF143040;      // el hilo que separa el registro
+    // Los dos del orbe, copiados literales de la cara de PC: `THINKING_HOT` de
+    // `apps/web/src/cort/palette.ts` (el acento de esfuerzo) y el `uColor` del polvo
+    // orbital de `scene/Particles.tsx`. `test_apk_orbe.py` los compara con el TS.
+    public static final int PENSAMIENTO = 0xFFFF5CE0;  // THINKING_HOT '#ff5ce0'
+    public static final int POLVO = 0xFF3FD8FF;        // uColor '#3fd8ff'
 
     private Paleta() {
     }

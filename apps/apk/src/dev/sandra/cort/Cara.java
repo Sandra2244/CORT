@@ -58,6 +58,21 @@ public class Cara implements Voz.AlOir {
     private EditText campo;
     private TextView micro;
     private boolean escuchando;
+    private Orbe orbe;
+    private String vozElogio;
+    private final Runnable hastaQueCalle = new Runnable() {
+        @Override
+        public void run() {
+            if (orbe == null || micro == null) {
+                return;
+            }
+            if (voz.hablando()) {
+                micro.postDelayed(this, 180L);
+            } else {
+                orbe.modo(Orbe.REPOSO);
+            }
+        }
+    };
 
     public Cara(Activity actividad) {
         this.actividad = actividad;
@@ -70,6 +85,15 @@ public class Cara implements Voz.AlOir {
         // dice que no y la fila ni se intenta.
         this.sincroniza = new Sincroniza(actividad.getApplicationContext(), recuerdos);
         this.voz = new Voz(actividad.getApplicationContext());
+        // El nivel del micrófono entra al orbe **de verdad**: `Voz.Escucha` reenvía
+        // `onRmsChanged(float)` de Android, y el navegador no tiene esa señal (por
+        // eso la cara de PC simula el nivel con curvas). Es la única ventaja real
+        // del teléfono sobre el PC en este dibujo.
+        this.voz.ponerNivel(nuevo -> {
+            if (orbe != null) {
+                orbe.nivel(nuevo);
+            }
+        });
         sembrar();
     }
 
@@ -96,10 +120,13 @@ public class Cara implements Voz.AlOir {
         hoja.addView(cuerpo, par(-1, -2));
         raiz.addView(hoja, new LinearLayout.LayoutParams(-1, 0, 1f));
 
-        Anillo anillo = new Anillo(actividad);
-        LinearLayout.LayoutParams marca = new LinearLayout.LayoutParams(dp(74), dp(74));
+        // El reactor animado, no la marca quieta. `Anillo` sigue siendo la marca
+        // (la usa `MainActivity` en el arranque); aquí lo que se pide es el orbe
+        // con sus cuatro estados, dibujado con los literales de la cara de PC.
+        orbe = new Orbe(actividad);
+        LinearLayout.LayoutParams marca = new LinearLayout.LayoutParams(dp(168), dp(168));
         marca.gravity = Gravity.CENTER_HORIZONTAL;
-        cuerpo.addView(anillo, marca);
+        cuerpo.addView(orbe, marca);
 
         TextView titulo = texto("CORT", 26f, Paleta.CIAN);
         titulo.setTypeface(Typeface.create("sans-serif-light", Typeface.BOLD));
@@ -185,10 +212,17 @@ public class Cara implements Voz.AlOir {
     }
 
     public void hablar(String texto) {
-        voz.hablar(texto);
+        decir(texto);
     }
 
     public void cerrar() {
+        if (micro != null) {
+            micro.removeCallbacks(hastaQueCalle);
+        }
+        if (orbe != null) {
+            orbe.quieto(true);
+            orbe = null;
+        }
         voz.cerrar();
     }
 
@@ -274,6 +308,9 @@ public class Cara implements Voz.AlOir {
             return;
         }
         linea("pensando…", Paleta.SUAVE);
+        if (orbe != null) {
+            orbe.modo(Orbe.PENSAR);
+        }
         final String memoria = recuerdos.lista(12);
         new Thread(() -> {
             final String respuesta = nube.preguntar(dicho, memoria);
@@ -291,7 +328,28 @@ public class Cara implements Voz.AlOir {
 
     private void contestar(String texto) {
         linea(texto, Paleta.CLARO);
+        decir(texto);
+    }
+
+    /**
+     * Hablar y poner el reactor en modo `HABLA` **juntos**: en la cara de PC la
+     * animación no la mueve un temporizador aparte, sino el estado de la
+     * conversación (`Drive.habla`), así que aquí el orbe entra a la vez que la boca
+     * y vuelve a reposo cuando `TextToSpeech.isSpeaking()` dice que ya calló. No es
+     * un cálculo de duración: es la pregunta real al motor, contestada cada 180 ms.
+     */
+    private void decir(String texto) {
         voz.hablar(texto);
+        if (orbe == null || micro == null) {
+            return;
+        }
+        if (vozElogio == null && !voz.voz().isEmpty()) {
+            vozElogio = voz.voz();
+            linea("voz: " + vozElogio, Paleta.SUAVE);
+        }
+        orbe.modo(Orbe.HABLA);
+        micro.removeCallbacks(hastaQueCalle);
+        micro.postDelayed(hastaQueCalle, 240L);
     }
 
     /* ------------------------------------------------------------------ nube */
@@ -576,6 +634,9 @@ public class Cara implements Voz.AlOir {
     private void poniendoMicro(boolean activo) {
         escuchando = activo;
         micro.setTextColor(activo ? Paleta.CIAN : Paleta.SUAVE);
+        if (orbe != null) {
+            orbe.modo(activo ? Orbe.ESCUCHA : Orbe.REPOSO);
+        }
     }
 
     @Override
