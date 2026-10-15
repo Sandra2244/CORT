@@ -50,20 +50,22 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 ## Usarlo
 
 1. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
-   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: las páginas de
-   `v0.15.3` y `v0.15.4` están publicadas con su texto pero **sin APK** — cada compilado cayó con
-   **un** error de tipos que aquí no se puede ver: el `Pattern` pasado a `String.split`, y el
-   `RemoteException` sin recoger en `Reconocimiento.java:40`—; el último binario **medido aquí
-   bajándolo** (no leyendo una log) es **`CORT-v0.15.5.apk`**: run **38815381368** en verde,
-   82 881 B, sha-256 `86d41d83…d7ccb5`, `versionCode 1505`, las **quince** clases en `classes.dex`.
-   **`v0.16.0` tampoco tiene APK**: su `compilar-apk` cayó con un solo error de tipos —
-   `Orbe.java:230` escribía `0.6` (un `double`) dentro de un sitio que pide `float`, y `javac`
-   lo rechazó con «possible lossy conversion from double to float»—; se leyó por las
-   *anotaciones* públicas de los runs **38822621654** y **38822625376**, nunca por un log.
-   El descargable del orbe es **`CORT-v0.16.1.apk`** (mismo código con el literal corregido y
-   una guarda nueva que lo prohíbe), y **hay que comprobar los adjuntos de su página con la API
-   pública antes de bajarlo** (`/releases/tags/v0.16.1`) — aquí se reporta en cuanto esté medido.
-   Se comprueba mirando los adjuntos de la página, no una log de Actions que es privada.
+   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: hay
+   **trece páginas sin APK** (22 en total, **nueve** con — medido por la API pública, no de
+   memoria—) porque el compilador del runner rechaza errores de tipos que en esta máquina no se
+   pueden ver: el `Pattern` pasado a `String.split`, el `RemoteException` sin recoger, el
+   `Set<Voice>` recibido como `List`, y el `0.6` escrito sin `f` en `Orbe.java:230`.
+   **El descargable de hoy es `CORT-v0.16.1.apk`**, bajado y abierto aquí: run
+   **38823817894** en verde, **86 977 B**, sha-256 `9bc1aaf8…275f69` — el mismo `digest` que
+   publica la API—, **trece** entradas, `classes.dex` de **82 680 B** con las **dieciséis**
+   clases `dev/sandra/cort/*` (`Orbe` está, y su `drawCircle` aparece una vez dentro del dex),
+   manifiesto con `0.16.1` escrito **una** sola vez y su `versionCode` **1601** (el entero
+   little-endian, encontrado en el offset 2516), `BIND_VOICE_INTERACTION`,
+   `BIND_SPEECH_RECOGNIZER`, `CAMERA` e `INTERNET`; **cero** de
+   `Runtime`/`ProcessBuilder`/`exec(`/`/system/bin`/`QUERY_ALL_PACKAGES`/`ACTION_CALL` y cero
+   cadenas `sk-`. Su `…-firma.txt` (421 B) dice `llave: desechable`: hay que desinstalar el
+   anterior para instalarlo. Se comprueba mirando los adjuntos de la página, no una log de
+   Actions que es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
    aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa

@@ -98,8 +98,15 @@ retornos del SDK y, en el mismo corte, escribió una línea que `javac` no puede
   las tres pruebas reintegra el literal malo** (`0.6 + semilla[i]`) y exige que la guarda marque
   exactamente **una** sentencia: si alguien la vacía, se cae ella.
 - **Medido**: `TMPDIR=/tmp make test` **725** en verde y `make test-web` **56** — **781** en total—.
-  **Sin verificar**: el `javac` de este commit otra vez es el del runner (y es el que decide), el orbe
-  en el Samsung A16 y el timbre de la voz elegida.
+- **Y esta vez el binario también se bajó**: el run **38823817894** de `compilar-apk` dio verde y
+  `CORT-v0.16.1.apk` está publicado. Medido aquí, no por una log: **86 977 B**, sha-256
+  `9bc1aaf8…275f69` igual al `digest` de la API, **trece** entradas, `classes.dex` de **82 680 B** con
+  las **dieciséis** clases `dev/sandra/cort/*` —`Orbe` está y su `drawCircle` aparece dentro del dex—,
+  manifiesto con `0.16.1` una sola vez y `versionCode` **1601**, y **cero** de
+  `Runtime`/`ProcessBuilder`/`exec(`/`/system/bin`/`QUERY_ALL_PACKAGES`/`ACTION_CALL`/`sk-`. El censo de
+  la API pública: **22 Releases, 9 con APK y 13 sin**. Su `…-firma.txt` dice `llave: desechable`, así
+  que hay que desinstalar el anterior. **Sin verificar**: el orbe en la pantalla del Samsung A16, el
+  timbre de la voz elegida, que hable, que oiga y que el teléfono liste a CORT como asistente.
 
 **Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.16.1.zip`
 

@@ -2,7 +2,20 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (15)** (`TMPDIR=/tmp make test` **725** en verde en **101,725 s**,
+> Última verificación: **2026-10-15 (16)** (el mismo corte que (15): `TMPDIR=/tmp make test` **725**
+> en verde en **101,725 s**, `make test-web` **56** — **781** en total—): **`CORT-v0.16.1.apk` está
+> publicado, bajado y abierto en esta máquina.** El run **38823817894** de `compilar-apk` dio verde y
+> su página trae los dos adjuntos; medidos bajándolos, no leyendo una log: **86 977 B** con sha-256
+> `9bc1aaf8…275f69` — **el mismo `digest`** que publica la API—, **trece** entradas, `classes.dex` de
+> **82 680 B** con las **dieciséis** clases `dev/sandra/cort/*`, `Orbe` entre ellas y su `drawCircle`
+> apareciendo una vez dentro del dex (el orbe viajó), manifiesto con `0.16.1` escrito una sola vez y
+> `versionCode` **1601** (el entero little-endian, en el offset 2516), `BIND_VOICE_INTERACTION`,
+> `BIND_SPEECH_RECOGNIZER`, `CAMERA` e `INTERNET`; **cero** de `Runtime`/`ProcessBuilder`/`exec(`/
+> `/system/bin`/`QUERY_ALL_PACKAGES`/`ACTION_CALL` y cero cadenas `sk-`. El censo de las páginas también
+> es medido: **22 Releases, 9 con APK y 13 sin** (`v0.16.0` entró en la lista de las vacías). El
+> `…-firma.txt` de 421 B dice `llave: desechable`: hay que desinstalar el anterior. **Lo que sigue sin
+> verificar es el dedo**: que el orbe se mueva, que hable, que oiga, que abra apps y que el A16 liste a
+> CORT como asistente. Verificación anterior, **2026-10-15 (15)** (`TMPDIR=/tmp make test` **725** en verde en **101,725 s**,
 > `make test-web` **56** — **781** en total—): **`v0.16.1` es un carácter, y lo metí yo.**
 > `Orbe.java:230` escribía `Math.max(1f, escala * 0.012f * (0.6 + semilla[i]))`; en Java `0.6` es
 > `double`, el producto se vuelve `double` y `Canvas.drawCircle(…, float, …)` lo rechaza
