@@ -89,9 +89,14 @@ mkdir -p build/obj build/apk
 
 # -- Recursos y manifiesto -----------------------------------------------------
 "$BT/aapt2" compile --dir res -o build/obj/res.zip
+# `-A assets`: desde `v0.15.0` la tabla de frases del cerebro nativo
+# (`assets/habilidades.json`) viaja dentro del APK y la lee Java con
+# `getAssets()`. Sin esa bandera el archivo se queda en el repo y el teléfono
+# abre con la boca vacía.
 "$BT/aapt2" link -o build/apk/sin-alinear.apk \
     -I "$PLAT/android.jar" \
     --manifest AndroidManifest.xml \
+    -A assets \
     --min-sdk-version 26 --target-sdk-version 34 \
     --version-code "$CODE" --version-name "$VERSION" \
     build/obj/res.zip --auto-add-overlay

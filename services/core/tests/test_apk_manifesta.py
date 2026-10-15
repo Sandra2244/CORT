@@ -12,6 +12,12 @@ máquina** (aquí no hay `javac` ni SDK: el binario lo compila el runner):
 
 Estas pruebas no compilan nada: leen los archivos de entrada del build. Cuestan
 milisegundos y son la única forma de enterarse de esto *antes* de empujar.
+
+Desde `v0.15.0` hay una tercera razón de ser: el APK ya no es sólo un WebView,
+lleva nueve archivos Java y un activo JSON. Aquí no hay `javac`, así que lo que
+estas guardias pueden comprobar es la forma —el paquete, la lista cerrada de
+`import`, que los activos se enlacen y que los permisos sigan siendo los cuatro
+prometidos—; la semántica del cerebro nativo la prueba `test_apk_cerebro.py`.
 """
 import re
 import unittest
@@ -22,9 +28,18 @@ RAIZ = Path(__file__).resolve().parents[3]
 APK = RAIZ / "apps" / "apk"
 MANIFIESTO = APK / "AndroidManifest.xml"
 COMPILAR = APK / "compilar.sh"
-JAVA = APK / "src" / "dev" / "sandra" / "cort" / "MainActivity.java"
+FUENTES = APK / "src" / "dev" / "sandra" / "cort"
+JAVA = FUENTES / "MainActivity.java"
 
 ANDROIDE = "{http://schemas.android.com/apk/res/android}"
+
+# La lista cerrada de permisos del APK. `MODIFY_AUDIO_SETTINGS` llega en
+# v0.15.0 porque la cara nativa sube y baja el volumen del teléfono; es un
+# permiso **normal** (se concede al instalar), y por eso puede estar aquí. Un
+# permiso *dangerous* fuera de los dos que la usuaria ve en el diálogo de
+# runtime —micrófono y cámara— sería pedirle algo nuevo sin necesidad.
+PERMISOS = {"android.permission.INTERNET", "android.permission.RECORD_AUDIO",
+            "android.permission.CAMERA", "android.permission.MODIFY_AUDIO_SETTINGS"}
 
 
 class TestManifiesto(unittest.TestCase):
@@ -49,14 +64,30 @@ class TestManifiesto(unittest.TestCase):
         prohibidos = {ANDROIDE + "versionCode", ANDROIDE + "versionName"}
         self.assertEqual([], sorted(prohibidos & set(self.raiz.attrib)))
 
-    def test_los_tres_permisos_y_su_required(self):
+    def test_los_permisos_son_la_lista_cerrada_de_cuatro(self):
         pedidos = {e.get(ANDROIDE + "name"): e.get(ANDROIDE + "required")
                    for e in self.raiz if e.tag.endswith("uses-permission")}
-        self.assertIn("android.permission.INTERNET", pedidos)
-        for micro in ("android.permission.RECORD_AUDIO", "android.permission.CAMERA"):
-            self.assertIn(micro, pedidos, micro)
+        self.assertEqual(PERMISOS, set(pedidos),
+                         "el APK pide permisos distintos de los cuatro prometidos a la dueña")
+        for micro in ("android.permission.RECORD_AUDIO", "android.permission.CAMERA",
+                      "android.permission.MODIFY_AUDIO_SETTINGS"):
             self.assertEqual("false", pedidos[micro],
                              f"{micro} debe ser required=false: sin teléfono delante no se instala distinto")
+
+    def test_todo_lo_que_se_puede_negar_es_requitable(self):
+        """`required=false` no es decoración: es lo que deja instalar el APK en un
+        teléfono sin micrófono o sin cámara. La única excepción honesta es
+        INTERNET, que el WebView necesita para vivir."""
+        pedidos = {e.get(ANDROIDE + "name"): e.get(ANDROIDE + "required")
+                   for e in self.raiz if e.tag.endswith("uses-permission")}
+        for nombre, requerido in pedidos.items():
+            if nombre == "android.permission.INTERNET":
+                continue
+            self.assertEqual("false", requerido, nombre)
+        funciones = {e.get(ANDROIDE + "name"): e.get(ANDROIDE + "required")
+                     for e in self.raiz if e.tag.endswith("uses-feature")}
+        self.assertEqual({}, {k: v for k, v in funciones.items() if v != "false"},
+                         "un uses-feature obligatorio filtraría teléfonos de la Release")
 
     def test_la_actividad_es_launchable_y_exported(self):
         actividades = [e for e in self.raiz.iter() if e.tag.endswith("activity")]
@@ -92,26 +123,72 @@ class TestCompilar(unittest.TestCase):
         versión salió, no sólo con qué llave."""
         self.assertIn('echo "APK de CORT $VERSION (versionCode $CODE)"', self.texto)
 
+    def test_los_activos_se_enlazan(self):
+        """`-A assets`: sin esa bandera el JSON de la tabla de frases se queda en
+        el repo y `getAssets().open()` falla en el teléfono — la cara nativa
+        abriría con la boca vacía, y aquí no hay un `javac` que lo avise—.
+        """
+        self.assertIn("-A assets \\", self.texto)
+
+    def test_el_java_de_todas_las_fuentes_esta_en_el_build(self):
+        """`javac` compila `$(find src -name '*.java')`: si alguien cambia la
+        Find por una lista fija, los archivos nuevos no entran al APK y el
+        fallo sólo se ve en el teléfono."""
+        self.assertIn("$(find src -name '*.java')", self.texto)
+
 
 class TestPaquete(unittest.TestCase):
-    def test_manifiesto_y_java_dicen_el_mismo_paquete(self):
+    def setUp(self):
+        self.fuentes = sorted(FUENTES.glob("*.java"))
+
+    def test_hay_fuentes_y_el_manifiesto_dicen_el_mismo_paquete(self):
         raiz = ET.fromstring(MANIFIESTO.read_text(encoding="utf-8"))
-        java = JAVA.read_text(encoding="utf-8")
         self.assertEqual("dev.sandra.cort", raiz.get("package"))
-        self.assertIn("package dev.sandra.cort;", java)
+        self.assertGreaterEqual(len(self.fuentes), 9,
+                                "la cara nativa son nueve archivos; si faltan, el build no los compiló")
+        for java in self.fuentes:
+            texto = java.read_text(encoding="utf-8")
+            self.assertIn("package dev.sandra.cort;", texto, java.name)
 
-    def test_el_java_sigue_sin_androidx(self):
-        """Regla escrita en el README del APK: una actividad de `android.app` y
-        `android.webkit`, nada más — eso es lo que compila sin Gradle—.
+    def test_el_paquete_del_manifiesto_coincide_con_la_actividad(self):
+        """`.MainActivity` se resuelve contra `package=`: si los dos se separan,
+        Android instala un APK que no arranca, y el pipeline sale verde igual.
         """
-        java = JAVA.read_text(encoding="utf-8")
-        for importado in re.findall(r"^import ([\w.]+);", java, re.M):
-            self.assertTrue(importado.startswith(("android.", "java.", "dev.sandra.cort")),
-                            f"import fuera de la lista cerrada: {importado}")
+        raiz = ET.fromstring(MANIFIESTO.read_text(encoding="utf-8"))
+        actividad = next(e for e in raiz.iter() if e.tag.endswith("activity"))
+        nombre = actividad.get(ANDROIDE + "name")
+        self.assertTrue(nombre.startswith("."), nombre)
+        self.assertEqual("dev.sandra.cort" + nombre, "dev.sandra.cort.MainActivity")
 
+    def test_los_imports_son_la_lista_cerrada_sin_androidx(self):
+        """Regla escrita en el README del APK: sólo `android.*`, `java.*` y
+        `org.json.*` —eso es lo que compila con `aapt2` + `javac` + `d8` sin
+        Gradle y sin descargar una sola dependencia—. `org.json` entra desde
+        v0.15.0 porque viene **dentro** de `android.jar`, no del Maven.
+        """
+        for java in self.fuentes:
+            texto = java.read_text(encoding="utf-8")
+            for importado in re.findall(r"^import ([\w.]+);", texto, re.M):
+                self.assertTrue(
+                    importado.startswith(("android.", "java.", "org.json.")),
+                    f"import fuera de la lista cerrada en {java.name}: {importado}")
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_ningun_archivo_trae_kotlin_o_AndroidX(self):
+        for java in self.fuentes:
+            texto = java.read_text(encoding="utf-8")
+            for prohibido in ("androidx.", "kotlin.", "com.google.android"):
+                self.assertNotIn(prohibido, texto,
+                                 f"{prohibido} en {java.name}: el pipeline no lo puede descargar")
+
+    def test_la_clase_publica_se_llama_como_el_archivo(self):
+        """`javac` lo exigiría, pero el `find` del script podría quedarse a
+        medias: un archivo vacío o mal renombrado se ve aquí antes del run.
+        """
+        for java in self.fuentes:
+            self.assertIsNotNone(
+                re.search(r"\b(?:public\s+)?(?:final\s+)?class\s+" + java.stem + r"\b",
+                          java.read_text(encoding="utf-8")),
+                f"{java.name} no declara la clase que su nombre promete")
 
 
 class TestProtocoloDeDivulgacion(unittest.TestCase):
@@ -143,22 +220,36 @@ class TestProtocoloDeDivulgacion(unittest.TestCase):
 
     def test_el_java_emite_broadcast_sin_pedir_permiso_nuevo(self):
         # `setBroadcast(true)` sobre 255.255.255.255 no necesita nada más que
-        # INTERNET, que ya está declarado; si alguien añade un permiso, este
-        # aserción lo grita antes del build.
+        # INTERNET, que ya está declarado; el descubrimiento por UDP tiene que
+        # seguir funcionando con los cuatro permisos de siempre y ni uno más.
         self.assertIn("setBroadcast(true)", self.java)
         self.assertIn('InetAddress.getByName("255.255.255.255")', self.java)
         raiz = ET.fromstring(MANIFIESTO.read_text(encoding="utf-8"))
         permisos = {e.get(ANDROIDE + "name") for e in raiz.findall("uses-permission")}
-        self.assertEqual({"android.permission.INTERNET", "android.permission.RECORD_AUDIO",
-                          "android.permission.CAMERA"}, permisos)
+        self.assertEqual(PERMISOS, permisos)
 
     def test_la_busqueda_corre_fuera_del_hilo_de_la_interfaz(self):
         # `receive()` bloquea: si se llamara en el hilo de la UI el anillo se
         # congela y la pantalla de estreno vuelve a ser un formulario quieto.
         inicio = self.java.index("private void buscarATelefonoSilencio()")
-        trozo = self.java[inicio:inicio + 900]
+        trozo = self.java[inicio:inicio + 1300]
         self.assertIn("new Thread(", trozo)
         self.assertIn("runOnUiThread", trozo)
         antes, despues = trozo.split("new Thread(", 1)
         self.assertNotIn("preguntarEnLaRed()", antes, "la sonda no puede ir en el hilo de la UI")
         self.assertIn("preguntarEnLaRed()", despues)
+
+    def test_el_portatil_que_no_esta_no_deja_al_telefono_sin_cara(self):
+        """v0.15.0: el descubrimiento dejó de ser el portero de la app. Si no
+        contesta nadie, MainActivity no muestra un formulario vacío: monta la
+        cara nativa y le avisa a la dueña dónde está el portátil.
+        """
+        inicio = self.java.index("private void buscarATelefonoSilencio()")
+        trozo = self.java[inicio:inicio + 1300]
+        self.assertIn("cara != null", trozo)
+        self.assertIn("decirDondeEstaElPortatil(false)", trozo)
+        self.assertIn("mostrarOSetup", self.java)
+
+
+if __name__ == "__main__":
+    unittest.main()

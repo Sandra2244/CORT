@@ -1,22 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  El APK es una ventana, no un segundo CORT: carga la página que sirve el
-  lanzador (`cort.py` con su bandera de LAN → http://IP:8780) sobre el WebView
-  del sistema.
-  Todo lo que hace el asistente —cerebro, memoria, permisos— vive en el
-  portátil; este archivo no añade ninguna capacidad nueva, sólo un sitio donde
-  ver la cara desde el teléfono.
+  El APK es dos cosas, y las dos en el mismo teléfono.
+
+  Ventana: si el lanzador del portátil está publicado (`cort.py` con su bandera
+  de LAN, que sirve la página en `http://IP:8780`), el WebView abre esa cara:
+  el CORT completo, con cuerpo 3D, atuendos y telemetría.
+
+  Cuerpo: si no está, `v0.15.0` abre la cara nativa (`Cara.java`), que oye por
+  el micrófono de Android, habla por su altavoz, maneja el aparato y recuerda en
+  SQLite. No hace falta servidor ni portátil encendido, y por eso este manifiesto
+  ya no puede decir que «no añade ninguna capacidad nueva»: añade volumen,
+  intenciones de apps, memoria local y voz.
 
   `usesCleartextTraffic="true"` es la decisión ya escrita en el repo: la LAN es
-  `http://` sin TLS porque poner un certificado en el portátil es tema aparte y
-  la dueña del proyecto lo dejó como decisión suya, no como ticket. A cambio el
-  puerto no se abre sin `CORT_LAN_TOKEN` (`security.py`), y el token viaja en la
-  URL porque el WebSocket del WebView tampoco puede mandar cabeceras.
+  `http` sin TLS. El puerto no se abre sin llave (`security.py`), y la llave
+  viaja en la URL porque el WebSocket del WebView no puede mandar cabeceras.
 
-  Micrófono y cámara se piden como `required=false`: sirven para `getUserMedia`
-  (los gestos de `defocus.ts` sí funcionan aquí), y la escucha por
-  `SpeechRecognition` depende del motor de Google — ver el límite escrito en
-  `apps/apk/README.md`, no en un comentario que nadie lee.
+  Micrófono y cámara son `required=false`: la cara nativa los pide en tiempo de
+  ejecución, y si el teléfono no los tiene CORT sigue funcionando por escrito.
+
+  `MODIFY_AUDIO_SETTINGS` es un permiso normal, concedido solo y sin aviso: lo
+  necesita `AudioManager.adjustStreamVolume` para subir o bajar el volumen.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="dev.sandra.cort">
@@ -39,6 +43,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO"
                      android:required="false" />
     <uses-permission android:name="android.permission.CAMERA"
+                     android:required="false" />
+    <!-- El volumen del teléfono, para «sube el volumen» dicho en voz alta. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
                      android:required="false" />
 
     <uses-feature android:name="android.hardware.microphone" android:required="false" />

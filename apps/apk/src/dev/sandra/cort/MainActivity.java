@@ -1,18 +1,12 @@
 package dev.sandra.cort;
 
-import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
-import android.view.animation.LinearInterpolator;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
@@ -37,44 +31,27 @@ import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 
 /**
- * La ventana de CORT en el teléfono. Escrito contra el SDK puro —sin AndroidX,
- * sin Gradle, sin Capacitor— porque cada dependencia es una descarga que el
- * pipeline tiene que traer y este proyecto no reparte sorpresas: `compilar.sh`
- * usa sólo `aapt2`, `javac` y `d8`, que vienen con las herramientas que el
- * runner de GitHub Actions ya tiene instaladas.
+ * La ventana de CORT en el teléfono, y desde `v0.15.0` también su cuerpo.
+ * Escrito contra el SDK puro —sin AndroidX, sin Gradle, sin Capacitor— porque
+ * cada dependencia es una descarga que el pipeline tiene que traer y este
+ * proyecto no reparte sorpresas: `compilar.sh` usa sólo `aapt2`, `javac` y `d8`.
  *
- * El asistente NO vive aquí. Vive en el portátil (`cort.py --lan`), y lo que se
- * ve es la misma página React servida en `http://IP:8780`, abierta con la llave
- * de la red como consulta — el mismo enlace que imprime el lanzador al arrancar.
- * Este archivo decide dos cosas y nada más: qué dirección abrir y con qué
- * permisos del teléfono responde el WebView.
+ * El reparto nuevo, en tres caminos y ninguno obligatorio:
  *
- * La pantalla de estreno (2026-10-15) dejó de ser el formulario gris de Android:
- * es oscura como la cara del asistente, tiene su anillo girando y pide **un**
- * campo — el enlace completo del arranque, con su `?token=` incluido. Se hizo
- * uno y no dos porque la llave ya no la pide esta app ni la escribe la dueña:
- * la inventa el lanzador y la guarda en su `.env`. Lo que quedaba de fricción
- * estaba aquí dentro, y era de tamaño teclado.
+ * - **El portátil está publicado en la Wi-Fi** → `WebView` con la página React:
+ *   la cara buena, el cuerpo 3D, los atuendos. Se encuentra solo, con el
+ *   protocolo UDP de `v0.14.4`.
+ * - **No está** → `Cara`, la cara nativa: CORT oye por el micrófono de Android,
+ *   habla por su altavoz, maneja el aparato y recuerda en SQLite. Sin servidor,
+ *   sin HTTPS y sin abrir el portátil — que es lo que la dueña pidió.
+ * - **Ninguna de las dos funciona** (red aislada, core caído) → el campo de
+ *   siempre para pegar el enlace, escondido detrás de un toque largo.
  *
- * Desde el corte siguiente el campo ni se mira la primera vez: al abrir la app
- * el teléfono **pregunta en la Wi-Fi** (`CORT-ENCONTRARSO-1` por UDP, el mismo
- * literal que contesta `scripts/cort.py`) y, si CORT está publicado con `--lan`,
- * se contestan solos y la ventana abre con su animación. El campo queda de
- * respaldo para las redes que no dejan emitir broadcasts.
+ * Esta clase decide **qué superficie se ve** y nada más: el lazo está en
+ * `Cerebro`/`Acciones`, la memoria en `Recuerdos`, la voz en `Voz` y la nube
+ * opcional en `Nube`.
  */
 public class MainActivity extends Activity {
-    /* Los mismos literales de `scripts/marca.py`, que son los de
-       `apps/web/src/cort/palette.ts`. Nada de imágenes: el anillo se dibuja con
-       `Canvas` y el fondo es un entero, así que esta pantalla no puede
-       desentonar con la PWA ni costarle un kilobyte al APK. */
-    private static final int FONDO = 0xFF02040C;      // --bg
-    private static final int CIAN = 0xFF5CE1FF;       // --tint
-    private static final int VIOLETA = 0xFF8F5CFF;    // night.core
-    private static final int CLARO = 0xFFDFFBFF;      // work.hot
-    private static final int SUAVE = 0x8ADFFBFF;      // el mismo blanco al 54 %
-    private static final int AVISO = 0xFFFFC46B;      // el ámbar del subtítulo
-    private static final int CAMPO = 0xFF0A1620;      // el vidrio de las ventanas
-
     /* El protocolo de divulgación: dos datagramas, y su otra mitad vive en
        `scripts/cort.py` (`DESCUBRIR`, `DESCUBRIR_RESPUESTA`, `DESCUBRIR_PUERTO`).
        `test_apk_manifesta.py` comprueba que los dos lados sigan diciendo lo
@@ -87,20 +64,22 @@ public class MainActivity extends Activity {
     private static final int INTENTOS = 3;
 
     private WebView web;
-    private LinearLayout capa;    // root: el setup o el WebView, nunca los dos
-    private TextView aviso;       // el motivo por el que el enlace no vale
-    private TextView ayuda;       // el texto que cuenta qué está pasando
+    private Cara cara;          // la superficie nativa, cuando no hay portátil
+    private LinearLayout capa;  // root: una sola cara a la vez
+    private TextView aviso;     // el motivo por el que el enlace no vale
+    private TextView ayuda;     // el texto que cuenta qué está pasando
+    private volatile boolean buscando;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().getDecorView().setBackgroundColor(FONDO);
-        // Con el teclado abierto, la pantalla de estreno se recoloca en vez de
-        // quedar tapada: el campo del enlace está en el centro y el botón debajo.
+        getWindow().getDecorView().setBackgroundColor(Paleta.FONDO);
+        // Con el teclado abierto la pantalla se recoloca en vez de quedar
+        // tapada: el campo está en el centro y el botón debajo.
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         capa = new LinearLayout(this);
         capa.setOrientation(LinearLayout.VERTICAL);
-        capa.setBackgroundColor(FONDO);
+        capa.setBackgroundColor(Paleta.FONDO);
         setContentView(capa);
         mostrarOSetup();
     }
@@ -110,168 +89,67 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * La primera vez se pregunta el enlace; después se abre en silencio. Se
-     * guarda en SharedPreferences y no en memoria: cerrar la app en Android es
-     * matar el proceso, y volver a escribir una IP cada mañana sería justo la
-     * fricción que este APK existe para quitar.
+     * Ya no se espera a nadie: la cara nativa se monta **siempre**, y encima se
+     * busca el portátil. Si aparece, se cambia de superficie; si no, CORT sigue
+     * siendo útil aquí dentro.
      *
-     * La primera vez, además, **no se le espera**: mientras se ve el anillo
-     * girando, el teléfono pregunta en la Wi-Fi. Si CORT contesta, la ventana
-     * abre sola y la dueña no teclea nada en su vida.
+     * Cuando hay una dirección guardada de otra sesión se prueba primero el
+     * WebView, que es la cara completa; si falla la carga se cae a la nativa en
+     * vez de dejar la pantalla en blanco de Android.
      */
     private void mostrarOSetup() {
         String url = prefs().getString("url", "");
-        if (url.isEmpty()) {
-            pantallaDeConfiguracion("", true);
-            buscarATelefonoSilencio();
-        } else {
+        if (!url.isEmpty()) {
             abrir(url, prefs().getString("token", ""));
+            return;
         }
+        montarCara();
+        buscarATelefonoSilencio();
     }
 
-    private void pantallaDeConfiguracion(final String previo) {
-        pantallaDeConfiguracion(previo, false);
-    }
-
-    private void pantallaDeConfiguracion(final String previo, boolean buscando) {
+    /** La superficie nativa, con sus datos de aparato ya sembrados. */
+    private void montarCara() {
+        if (cara != null) {
+            capa.removeAllViews();
+            cara.montar(capa);
+            return;
+        }
+        cara = new Cara(this);
         capa.removeAllViews();
-        web = null;
-        ScrollView desplazable = new ScrollView(this);
-        LinearLayout pantalla = new LinearLayout(this);
-        pantalla.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(24);
-        pantalla.setPadding(pad, pad, pad, pad);
-        desplazable.addView(pantalla, new LinearLayout.LayoutParams(-1, -2));
-        capa.addView(desplazable, new LinearLayout.LayoutParams(-1, -1));
-
-        Anillo anillo = new Anillo(this);
-        LinearLayout.LayoutParams marca = new LinearLayout.LayoutParams(dp(150), dp(150));
-        marca.topMargin = dp(26);
-        marca.gravity = Gravity.CENTER_HORIZONTAL;
-        pantalla.addView(anillo, marca);
-
-        TextView titulo = texto("CORT", 40f, CIAN);
-        titulo.setTypeface(Typeface.create("sans-serif-light", Typeface.BOLD));
-        titulo.setLetterSpacing(0.16f);
-        pantalla.addView(titulo, centrado(-2));
-
-        TextView sumario = texto("LA VENTANA A TU PORTÁTIL", 12f, SUAVE);
-        sumario.setLetterSpacing(0.32f);
-        pantalla.addView(sumario, centrado(-2));
-
-        TextView explicacion = texto("Pega el enlace que CORT imprime al arrancar: empieza en "
-                + "http://192.168… y lleva su ?token= al final. Se guarda en el teléfono "
-                + "y no se vuelve a pedir.", 15f, CLARO);
-        ayuda = buscando ? texto("Buscando a CORT en tu Wi-Fi… si está encendido y "
-                + "publicado con --lan, la ventana abre sola y no tienes que pegar nada.",
-                15f, CLARO) : explicacion;
-        ayuda.setLineSpacing(0f, 1.25f);
-        LinearLayout.LayoutParams cuerpo = new LinearLayout.LayoutParams(-1, -2);
-        cuerpo.topMargin = dp(34);
-        pantalla.addView(ayuda, cuerpo);
-
-        final EditText campo = new EditText(this);
-        campo.setHint("http://192.168.100.xxx:8780/?token=…");
-        campo.setInputType(InputType.TYPE_TEXT_VARIATION_URI
-                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        campo.setSingleLine(true);
-        campo.setTextColor(CLARO);
-        campo.setHintTextColor(SUAVE);
-        campo.setBackgroundColor(CAMPO);
-        campo.setTextSize(15f);
-        campo.setPadding(dp(14), dp(16), dp(14), dp(16));
-        if (!previo.isEmpty()) {
-            campo.setText(previo);
-        }
-        LinearLayout.LayoutParams caja = new LinearLayout.LayoutParams(-1, -2);
-        caja.topMargin = dp(18);
-        pantalla.addView(campo, caja);
-
-        aviso = texto("", 13f, AVISO);
-        aviso.setVisibility(View.INVISIBLE);
-        pantalla.addView(aviso, centrado(-2));
-
-        Button entrar = new Button(this);
-        entrar.setText("Abrir CORT");
-        entrar.setTextColor(CIAN);
-        entrar.setBackgroundColor(0xFF0F2B3A);
-        entrar.setTextSize(17f);
-        entrar.setLetterSpacing(0.06f);
-        LinearLayout.LayoutParams boton = new LinearLayout.LayoutParams(-1, dp(54));
-        boton.topMargin = dp(14);
-        pantalla.addView(entrar, boton);
-
-        TextView pie = texto("¿No lo tienes? En el portátil:  python scripts/cort.py --lan\n"
-                + "El enlace sale en la línea «red» del arranque, con su llave.", 12f, SUAVE);
-        pie.setLineSpacing(0f, 1.3f);
-        LinearLayout.LayoutParams piecaja = new LinearLayout.LayoutParams(-1, -2);
-        piecaja.topMargin = dp(26);
-        pantalla.addView(pie, piecaja);
-
-        entrar.setOnClickListener(v -> intentar(campo));
-        // `Enter`/«Ir» del teclado hace lo mismo que el botón: con las manos
-        // ocupadas, el enlace se pega y se entra sin buscar el botón a ciegas.
-        campo.setOnEditorActionListener((v, accion, ev) -> {
-            intentar(campo);
-            return true;
-        });
-        // Mientras se busca, el foco **no** va al campo: abrir la app y que salga
-        // el teclado encima del anillo es la cara de un formulario, no la de un
-        // asistente. El foco se pide solo cuando la búsqueda ya falló.
-        if (!buscando) {
-            campo.post(() -> campo.requestFocus());
-        }
-    }
-
-    /** Validar el enlace pegado, guardarlo y abrir la ventana. */
-    private void intentar(EditText campo) {
-        String pegado = campo.getText().toString().trim();
-        if (pegado.isEmpty()) {
-            marcar("Pega el enlace que imprime CORT al arrancar.");
-            return;
-        }
-        if (!pegado.startsWith("http://") && !pegado.startsWith("https://")) {
-            // Amable con quien escribe la IP a mano: `192.168.x.x:8780` no es un
-            // enlace, pero se adivina, y obligar a escribir el protocolo es
-            // otrafricción que este APK no necesita.
-            pegado = "http://" + pegado;
-        }
-        if (!pegado.contains("token=")) {
-            marcar("Falta la llave: copia el enlace ENTERO, el que termina en ?token=…");
-            return;
-        }
-        prefs().edit().putString("url", pegado).putString("token", "").apply();
-        esconderTeclado();
-        abrir(pegado, "");
+        cara.montar(capa);
     }
 
     /**
-     * Pregunta en la red, y si CORT contesta abre la ventana sin que nadie toque
-     * nada — que es lo que la dueña pidió: «que inicie con su animación como una
-     * IA normal».
+     * Pregunta en la red, y si CORT contesta cambia a la ventana del portátil
+     * sin que nadie toque nada — que es lo que la dueña pidió: «que inicie con
+     * su animación como una IA normal».
      *
-     * Corre en su propio hilo porque `DatagramSocket.receive` bloquea, y bloquear
-     * el hilo de la interfaz congela el anillo: una pantalla de arranque que se
-     * congela es la maqueta que este APK no quiere ser. El resultado se aplica con
-     * `runOnUiThread` y **sólo si la pantalla de estreno sigue montada** — si
-     * mientras tanto se pegó el enlace y abrió CORT, no se le vuelve a cerrar.
+     * Corre en su propio hilo porque `DatagramSocket.receive` bloquea, y
+     * bloquear el hilo de la interfaz congela el anillo. El resultado se aplica
+     * con `runOnUiThread`, y **sólo si la usuaria sigue sin haber abierto nada**:
+     * si mientras tanto escribió o salió, no se le cambia la pantalla.
      */
     private void buscarATelefonoSilencio() {
+        if (buscando) {
+            return;
+        }
+        buscando = true;
         new Thread(() -> {
             final String encontrado = preguntarEnLaRed();
+            buscando = false;
             runOnUiThread(() -> {
+                if (encontrado == null) {
+                    if (cara != null) {
+                        cara.decirDondeEstaElPortatil(false);
+                        cara.hablar("Estoy en el teléfono. Tu portátil no aparece por "
+                                + "la Wi-Fi, pero funcionamos igual.");
+                    }
+                    return;
+                }
                 if (web != null) {
                     return;
                 }
-                if (encontrado == null) {
-                    ayuda.setText("No encontré a CORT en la Wi-Fi. ¿Está encendido con "
-                            + "--lan? Si tu red no deja emitir broadcasts, pega su enlace "
-                            + "abajo: se guarda y no se vuelve a pedir.");
-                    marcar("Esperando el enlace…");
-                    return;
-                }
                 prefs().edit().putString("url", encontrado).putString("token", "").apply();
-                ayuda.setText("Encontrado: " + recortar(encontrado));
                 abrir(encontrado, "");
             });
         }).start();
@@ -280,11 +158,12 @@ public class MainActivity extends Activity {
     /**
      * La sonda, tres intentos de 900 ms, y la primera respuesta válida vale.
      *
-     * `255.255.255.255` es el broadcast del segmento: llega al portátil sin saber
-     * su IP, que es justo el conocimiento que faltaba. Hay redes donde el
+     * `255.255.255.255` es el broadcast del segmento: llega al portátil sin
+     * saber su IP, que es justo el conocimiento que faltaba. Hay redes donde el
      * broadcast no pasa —VLAN de oficina, puntos de acceso con aislamiento de
-     * cliente—, así que esto devuelve `null` sin dramas en vez de reintentar para
-     * siempre: el campo de pegar sigue siendo el plan, no un adorno.
+     * cliente—, así que esto devuelve `null` sin dramas: desde `v0.15.0` el
+     * silencio ya no deja a la usuaria delante de un formulario, deja la cara
+     * nativa encendida.
      */
     private String preguntarEnLaRed() {
         DatagramSocket socket = null;
@@ -312,12 +191,12 @@ public class MainActivity extends Activity {
                 } catch (SocketTimeoutException nadieAun) {
                     // silencio en este turno: se insiste mientras gira el anillo
                 } catch (IOException noSePuede) {
-                    return null;   // ni sonda sale ni respuesta entra: a pegar el enlace
+                    return null;   // ni sonda sale ni respuesta entra: CORT se queda en el teléfono
                 }
             }
             return null;
         } catch (IOException sinSocket) {
-            return null;   // sin UDP no hay descubrimiento, y CORT sigue accesible
+            return null;   // sin UDP no hay descubrimiento, y la cara nativa sigue ahí
         } finally {
             if (socket != null) {
                 socket.close();
@@ -325,9 +204,187 @@ public class MainActivity extends Activity {
         }
     }
 
+    /* ------------------------------------------------------------------ WebView */
+
+    /**
+     * El enlace que abre la ventana. Si ya trae `?token=` —porque la usuaria
+     * copió el enlace completo del lanzador— se respeta tal cual: parsearlo y
+     * reconstruirlo sería una forma de romper un secreto.
+     */
+    private void abrir(String base, String token) {
+        // `final` y en una sola expresión: el `WebViewClient` anónimo de abajo
+        // captura esta cadena, y una variable reasignada no la puede capturar.
+        final String destino = (token.isEmpty() || base.contains("token="))
+                ? base
+                : base + (base.contains("?") ? "&" : "/?") + "token=" + token;
+        web = new WebView(this);
+        // Oscuro desde el primer fotograma: sin esto el WebView pinta su fondo
+        // blanco antes de que la página arranque.
+        web.setBackgroundColor(Paleta.FONDO);
+        capa.removeAllViews();
+        capa.addView(web, new LinearLayout.LayoutParams(-1, -1));
+        WebSettings s = web.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        // `speechSynthesis` y el `<video>` de los gestos son «reproducción» a
+        // ojos del WebView: sin esta línea CORT quedaría muda hasta que alguien
+        // toque la pantalla.
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setAllowFileAccess(false);       // la página viene de la red, no del disco
+        s.setAllowContentAccess(false);
+        web.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onReceivedError(WebView vista, WebResourceRequest peticion,
+                                        WebResourceError error) {
+                if (!peticion.isForMainFrame()) {
+                    return;   // un icono que falta no es CORT caído
+                }
+                // El caso normal no es un fallo raro: el portátil se apagó o su IP
+                // cambió. Antes esto dejaba la cara de Android; desde `v0.15.0` se
+                // cae a la nativa, que funciona sin él.
+                avisar("Se fue el portátil. Sigo en el teléfono.");
+                prefs().edit().putString("url", "").apply();
+                volverACara();
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                // Los gestos de cámara (`defocus.ts`) y el micrófono por
+                // `getUserMedia` piden aquí. Se concede lo que la página solicita,
+                // dentro de lo que el manifest declaró.
+                request.grant(request.getResources());
+            }
+        });
+        web.loadUrl(destino);
+    }
+
+    /** Cerrar el WebView y devolver el control a la cara nativa. */
+    private void volverACara() {
+        if (web != null) {
+            web.destroy();
+            web = null;
+        }
+        montarCara();
+        buscarATelefonoSilencio();
+    }
+
+    /* ------------------------------------------------------------------ pegado de respaldo */
+
+    private void pantallaDeConfiguracion(final String previo) {
+        capa.removeAllViews();
+        if (web != null) {
+            web.destroy();
+            web = null;
+        }
+        ScrollView desplazable = new ScrollView(this);
+        LinearLayout pantalla = new LinearLayout(this);
+        pantalla.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(24);
+        pantalla.setPadding(pad, pad, pad, pad);
+        desplazable.addView(pantalla, new LinearLayout.LayoutParams(-1, -2));
+        capa.addView(desplazable, new LinearLayout.LayoutParams(-1, -1));
+
+        Anillo anillo = new Anillo(this);
+        LinearLayout.LayoutParams marca = new LinearLayout.LayoutParams(dp(120), dp(120));
+        marca.topMargin = dp(14);
+        marca.gravity = Gravity.CENTER_HORIZONTAL;
+        pantalla.addView(anillo, marca);
+
+        TextView titulo = texto("CORT", 32f, Paleta.CIAN);
+        titulo.setTypeface(Typeface.create("sans-serif-light", Typeface.BOLD));
+        titulo.setLetterSpacing(0.16f);
+        pantalla.addView(titulo, centrado(-2));
+
+        ayuda = texto("Sólo si tu red no deja buscar por Wi-Fi: pega el enlace que "
+                + "imprime CORT al arrancar con --lan. Se guarda y no se vuelve a pedir.",
+                15f, Paleta.CLARO);
+        ayuda.setLineSpacing(0f, 1.25f);
+        LinearLayout.LayoutParams cuerpo = new LinearLayout.LayoutParams(-1, -2);
+        cuerpo.topMargin = dp(26);
+        pantalla.addView(ayuda, cuerpo);
+
+        final EditText campo = new EditText(this);
+        campo.setHint("http://192.168.100.xxx:8780/?token=…");
+        campo.setInputType(InputType.TYPE_TEXT_VARIATION_URI
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        campo.setSingleLine(true);
+        campo.setTextColor(Paleta.CLARO);
+        campo.setHintTextColor(Paleta.SUAVE);
+        campo.setBackgroundColor(Paleta.CAMPO);
+        campo.setTextSize(15f);
+        campo.setPadding(dp(14), dp(16), dp(14), dp(16));
+        if (!previo.isEmpty()) {
+            campo.setText(previo);
+        }
+        LinearLayout.LayoutParams caja = new LinearLayout.LayoutParams(-1, -2);
+        caja.topMargin = dp(18);
+        pantalla.addView(campo, caja);
+
+        aviso = texto("", 13f, Paleta.AVISO);
+        aviso.setVisibility(View.INVISIBLE);
+        pantalla.addView(aviso, centrado(-2));
+
+        Button entrar = new Button(this);
+        entrar.setText("Abrir CORT");
+        entrar.setTextColor(Paleta.CIAN);
+        entrar.setBackgroundColor(0xFF0F2B3A);
+        entrar.setTextSize(17f);
+        entrar.setLetterSpacing(0.06f);
+        LinearLayout.LayoutParams boton = new LinearLayout.LayoutParams(-1, dp(54));
+        boton.topMargin = dp(14);
+        pantalla.addView(entrar, boton);
+
+        Button volver = new Button(this);
+        volver.setText("Seguir en el teléfono");
+        volver.setTextColor(Paleta.SUAVE);
+        volver.setBackgroundColor(Paleta.FONDO);
+        volver.setTextSize(14f);
+        pantalla.addView(volver, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        TextView pie = texto("¿No lo tienes? En el portátil:  python scripts/cort.py --lan\n"
+                + "El enlace sale en la línea «red» del arranque, con su llave.",
+                12f, Paleta.SUAVE);
+        pie.setLineSpacing(0f, 1.3f);
+        LinearLayout.LayoutParams piecaja = new LinearLayout.LayoutParams(-1, -2);
+        piecaja.topMargin = dp(20);
+        pantalla.addView(pie, piecaja);
+
+        entrar.setOnClickListener(v -> intentar(campo));
+        volver.setOnClickListener(v -> montarCara());
+        campo.setOnEditorActionListener((v, accion, ev) -> {
+            intentar(campo);
+            return true;
+        });
+        campo.post(() -> campo.requestFocus());
+    }
+
+    /** Validar el enlace pegado, guardarlo y abrir la ventana. */
+    private void intentar(EditText campo) {
+        String pegado = campo.getText().toString().trim();
+        if (pegado.isEmpty()) {
+            marcar("Pega el enlace que imprime CORT al arrancar.");
+            return;
+        }
+        if (!pegado.startsWith("http://") && !pegado.startsWith("https://")) {
+            // Amable con quien escribe la IP a mano: `192.168.x.x:8780` no es un
+            // enlace, pero se adivina.
+            pegado = "http://" + pegado;
+        }
+        if (!pegado.contains("token=")) {
+            marcar("Falta la llave: copia el enlace ENTERO, el que termina en ?token=…");
+            return;
+        }
+        prefs().edit().putString("url", pegado).putString("token", "").apply();
+        esconderTeclado();
+        abrir(pegado, "");
+    }
+
     private void marcar(String motivo) {
-        aviso.setText(motivo);
-        aviso.setVisibility(View.VISIBLE);
+        if (aviso != null) {
+            aviso.setText(motivo);
+            aviso.setVisibility(View.VISIBLE);
+        }
     }
 
     private LinearLayout.LayoutParams centrado(int alto) {
@@ -349,64 +406,6 @@ public class MainActivity extends Activity {
         return Math.round(valor * getResources().getDisplayMetrics().density);
     }
 
-    /**
-     * El enlace que abre la ventana. Si ya trae `?token=` —porque la usuaria copió
-     * el enlace completo del lanzador— se respeta tal cual: parsearlo y
-     * reconstruirlo sería una forma de romper un secreto.
-     */
-    private void abrir(String base, String token) {
-        // `final` y en una sola expresión: el `WebViewClient` anónimo de abajo
-        // captura esta cadena, y una variable reasignada no la puede capturar.
-        final String destino = (token.isEmpty() || base.contains("token="))
-                ? base
-                : base + (base.contains("?") ? "&" : "/?") + "token=" + token;
-        web = new WebView(this);
-        // Oscuro desde el primer fotograma: sin esto el WebView pinta su fondo
-        // blanco antes de que la página arranque, y el «enciende y ya está» se
-        // convierte en un destello de navegador.
-        web.setBackgroundColor(FONDO);
-        capa.removeAllViews();
-        capa.addView(web, new LinearLayout.LayoutParams(-1, -1));
-        WebSettings s = web.getSettings();
-        s.setJavaScriptEnabled(true);
-        s.setDomStorageEnabled(true);
-        // `speechSynthesis` y el `<video>` de los gestos son «reproducción» a
-        // ojos del WebView: sin esta línea CORT quedaría muda hasta que alguien
-        // toque la pantalla, y un asistente que hay que tocar para que hable no
-        // es un asistente.
-        s.setMediaPlaybackRequiresUserGesture(false);
-        s.setAllowFileAccess(false);       // la página viene de la red, no del disco
-        s.setAllowContentAccess(false);
-        web.setWebViewClient(new WebViewClient() {
-            @Override
-            public void onReceivedError(WebView vista, WebResourceRequest peticion,
-                                        WebResourceError error) {
-                if (!peticion.isForMainFrame()) {
-                    return;   // un icono que falta no es CORT caído
-                }
-                // El caso normal no es un fallo raro: el portátil está apagado o
-                // su IP cambió. Android lo diría en inglés y en blanco; se dice
-                // aquí, y se ofrece el único arreglo que existe.
-                avisar("No se ve a CORT en " + recortar(destino));
-                cambioDeDireccion();
-            }
-        });
-        web.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onPermissionRequest(PermissionRequest request) {
-                // Los gestos de cámara (`defocus.ts`) y el micrófono por
-                // `getUserMedia` piden aquí. Se concede lo que la página solicita,
-                // dentro de lo que el manifest declaró; negar todo convertiría
-                // el APK en un navegador sin manos.
-                request.grant(request.getResources());
-            }
-        });
-        web.loadUrl(destino);
-        // Mantener vivo el hilo del JS con la pantalla encendida es el Android
-        // decidiendo, no nosotros: al apagarla, la página se congela y el core
-        // sigue corriendo en el portátil — que es exactamente el reparto.
-    }
-
     private void avisar(String mensaje) {
         Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show();
     }
@@ -420,10 +419,12 @@ public class MainActivity extends Activity {
     private void esconderTeclado() {
         View foco = getCurrentFocus();
         if (foco != null) {
-            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
-            imm.hideSoftInputFromWindow(foco.getWindowToken(), 0);
+            InputMethodManager inm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            inm.hideSoftInputFromWindow(foco.getWindowToken(), 0);
         }
     }
+
+    /* ------------------------------------------------------------------ gestos */
 
     @Override
     public void onBackPressed() {
@@ -431,93 +432,52 @@ public class MainActivity extends Activity {
             web.goBack();
             return;
         }
-        // Sin WebView histórico, el botón «atrás» **no sale a la calle a la
-        // primera**: abre el cambio de dirección. En un teléfono con una sola
-        // pantalla, salir sin querer significa perder a CORT de vista hasta
-        // volver a deslizar el dedo por el lanzador.
-        cambioDeDireccion();
+        // El botón «atrás» no sale a la calle a la primera: abre el menú de
+        // conexión. En un teléfono con una sola pantalla, salir sin querer
+        // significa perder a CORT de vista.
+        menu();
     }
 
-    /** El gesto para reconfigurar sin reinstalar: mantener pulsado. */
+    /** Mantener pulsado, en cualquier superficie: el menú de siempre. */
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus && web != null) {
-            web.setOnLongClickListener(v -> {
-                cambioDeDireccion();
-                return true;
-            });
+        if (!hasFocus) {
+            return;
+        }
+        View.OnLongClickListener pulso = v -> {
+            menu();
+            return true;
+        };
+        capa.setOnLongClickListener(pulso);
+        if (web != null) {
+            web.setOnLongClickListener(pulso);
         }
     }
 
-    private void cambioDeDireccion() {
+    private void menu() {
         final String guardada = prefs().getString("url", "");
         new AlertDialog.Builder(this)
-                .setTitle("Dirección de CORT")
-                .setMessage(guardada.isEmpty() ? "Aún no hay ninguna guardada." : recortar(guardada))
-                .setPositiveButton("Cambiar", (d, w) -> pantallaDeConfiguracion(guardada))
+                .setTitle("Dónde está CORT")
+                .setMessage(guardada.isEmpty()
+                        ? "Ahora mismo vivo en este teléfono. Busco tu portátil por la "
+                        + "Wi-Fi y, si aparece, abro su cara completa."
+                        : "Conectado a " + recortar(guardada))
+                .setPositiveButton("Buscar el portátil", (d, w) -> {
+                    prefs().edit().putString("url", "").apply();
+                    montarCara();
+                    buscarATelefonoSilencio();
+                })
+                .setNeutralButton("Pegar un enlace", (d, w) -> pantallaDeConfiguracion(guardada))
                 .setNegativeButton("Salir", (d, w) -> finish())
                 .show();
     }
 
-    /**
-     * El anillo de la marca, dibujado con `Canvas`: la misma geometría de
-     * `scripts/marca.py` (banda cian de radio 0,68 del semitamaño, halo violeta
-     * por dentro y núcleo caliente en el centro) girando despacio. Gira porque
-     * una pantalla de arranque quieta es un formulario, y CORT se presenta.
-     */
-    private static class Anillo extends View {
-        private final Paint pincel = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final RectF aro = new RectF();
-        private float angulo;
-        private ValueAnimator giro;
-
-        Anillo(Context contexto) {
-            super(contexto);
-            setBackgroundColor(FONDO);
-            giro = ValueAnimator.ofFloat(0f, 360f);
-            giro.setDuration(4200L);
-            giro.setRepeatCount(ValueAnimator.INFINITE);
-            giro.setInterpolator(new LinearInterpolator());
-            giro.addUpdateListener(animacion -> {
-                angulo = (float) animacion.getAnimatedValue();
-                invalidate();
-            });
-            giro.start();
+    @Override
+    protected void onDestroy() {
+        if (cara != null) {
+            cara.cerrar();
         }
-
-        @Override
-        protected void onDetachedFromWindow() {
-            super.onDetachedFromWindow();
-            if (giro != null) {
-                giro.cancel();   // irse a la ventana sin soltar el hilo de animación
-            }
-        }
-
-        @Override
-        protected void onDraw(Canvas lienzo) {
-            float cx = getWidth() / 2f;
-            float cy = getHeight() / 2f;
-            float mitad = Math.min(cx, cy);
-            float radio = mitad * 0.68f;
-            aro.set(cx - radio, cy - radio, cx + radio, cy + radio);
-            pincel.setStyle(Paint.Style.STROKE);
-            // Halo violeta: más grueso, más suave y por dentro de la banda, como
-            // en el PNG. Alpha fijo porque aquí no hay que sumar exposición, hay
-            // que dar profundidad con dos trazos.
-            pincel.setColor(VIOLETA);
-            pincel.setAlpha(90);
-            pincel.setStrokeWidth(mitad * 0.11f);
-            lienzo.drawArc(aro, angulo + 150f, 210f, false, pincel);
-            // Banda cian: el trazo fino, con un tercio del aro abierto para que
-            // el giro se vea.
-            pincel.setAlpha(255);
-            pincel.setStrokeWidth(mitad * 0.035f);
-            lienzo.drawArc(aro, angulo, 240f, false, pincel);
-            // Núcleo caliente.
-            pincel.setColor(CLARO);
-            pincel.setStyle(Paint.Style.FILL);
-            lienzo.drawCircle(cx, cy, mitad * 0.07f, pincel);
-        }
+        super.onDestroy();
     }
 }
