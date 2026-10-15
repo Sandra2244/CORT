@@ -18,8 +18,16 @@
 > cinco `cannot find symbol` por escribir `readableDatabase` como campo en vez de
 > `getReadableDatabase()` y un `incompatible types` en `Cerebro.java:128`, el segundo por
 > `AlarmClock.EXTRA_COUNTDOWN`, **nombre que me inventé**. El tercero, 38771718345 sobre
-> `14000cf`, quedó **verde** y su artefacto `CORT-apk` pesa **63 677 B** (el `.apk` dentro
-> aún no está en ninguna Release: eso lo hace la etiqueta de este corte). **Y la cara de CORT
+> `14000cf`, quedó **verde** y su artefacto `CORT-apk` pesa **63 677 B**. Con la etiqueta ya empujada,
+> `publicar-release` 38778796447 abrió `v0.15.0` sobre `1ec9638`, `compilar-apk` 38778796522 quedó
+> **verde** y el `.apk` **descargado y abierto aquí** pesa **70 526 B** (sha-256 `d1d0e7ee…a563`, el
+> mismo *digest* de la API): su manifiesto binario en UTF-16 lleva `0.15.0` y el entero **1500** y los
+> cuatro permisos, su `classes.dex` tiene las **nueve** clases `dev/sandra/cort/*`, `cort.db`,
+> `TextToSpeech`, `SpeechRecognizer` y la sonda `CORT-ENCONTRARSO-1`, y **no** tiene `Runtime`,
+> `ProcessBuilder` ni `exec(` — la regla 6 comprobada sobre el binario —; su
+> `assets/habilidades.json` interno trae once acciones, 26 patrones y `listar` antes de `saber-algo`
+> (16 < 17), así que el arreglo de «¿qué sabes de mí?» va en el archivo que se instala. Censo por API:
+> **15 Releases**, cinco con adjunto. **Y la cara de CORT
 > se vio por primera vez en un dedo**: dos capturas de la dueña desde su Samsung A16, tomadas
 > hoy con `CORT-v0.14.4.apk` instalado, enseñan la pantalla oscura con el anillo, el aviso
 > «No encontré a CORT en la Wi-Fi…» y el campo de pegar con el teclado de Android abierto. La

@@ -188,10 +188,29 @@ el manifiesto binario aparece la cadena `0.14.4` y el entero **1404**, y el
 `CORT-AQUI-1|`, `Buscando a CORT en tu Wi-Fi`). El sha-256 del archivo es distinto
 del de `v0.14.3`, así que no es el mismo binario repetido. Lo compiló el run **21**
 de `compilar-apk` —en esta máquina no hay `javac`, así que el SDK es del runner—.
-**Éste sí lo vio un dedo**: dos capturas de la dueña (2026-10-15) enseña la
+**Éste sí lo vio un dedo**: dos capturas de la dueña (2026-10-15) enseñan la
 pantalla oscura con el anillo y el aviso de que no encontró al portátil, con el
 campo de pegar y el teclado de Android abierto. Lo que no ha visto nadie todavía es
 la cara nativa que entra con `v0.15.0`.
+
+`CORT-v0.15.0.apk` **ya está publicado y abierto también en esta máquina** (medido
+el 2026-10-15 tras empujar la etiqueta): **70 526 B**, sha-256 `d1d0e7ee…a563` —el
+mismo *digest* que anuncia la API—, y su `…-firma.txt` arranca con
+`APK de CORT 0.15.0 (versionCode 1500)`. Dentro del `AndroidManifest.xml` binario
+están la cadena `0.15.0` y el entero **1500**, y **no** está `0.14.4`, con los
+cuatro permisos (`INTERNET`, `RECORD_AUDIO`, `CAMERA`, `MODIFY_AUDIO_SETTINGS`). En
+`classes.dex` aparecen las **nueve** clases `dev/sandra/cort/*` —`Acciones`,
+`Anillo`, `Cara`, `Cerebro`, `MainActivity`, `Nube`, `Paleta`, `Recuerdos`, `Voz`—,
+`cort.db`, `TextToSpeech`, `SpeechRecognizer` y la sonda `CORT-ENCONTRARSO-1`; y
+**no** aparecen `Runtime`, `ProcessBuilder` ni `exec(`, que es la prueba de que la
+lista cerrada de acciones viaja en el binario y no sólo en el fuente. El
+`assets/habilidades.json` del APK trae **once acciones**, **26 patrones** y
+`listar` antes de `saber-algo` (posición 16 contra 17): el arreglo de
+«¿qué sabes de mí?» va instalado, no prometido. Lo compiló el run **38778796522**
+de `compilar-apk` sobre `1ec9638`, con `publicar-release` 38778796447 abriendo la
+página. **Lo que esto no prueba**: que la cara nativa funcione en un dedo —nadie la
+ha instalado aún—, que el micrófono oiga, que la voz suene por el altavoz o que las
+once acciones muevan el teléfono.
 
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma

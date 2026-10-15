@@ -157,6 +157,24 @@ nube), **nube si hay internet y local si no**, y **que aprenda frases nuevas con
   (`a27f018`: el `EXTRA_COUNTDOWN` inventado), y **verde** en **38771718345** sobre `14000cf`, con su
   artefacto `CORT-apk` de **63 677 B**. Es la primera vez que compila un cerebro nativo en Java, y lo
   hace en el runner porque aquí no hay SDK.
+- **Comprobado en el binario publicado** (el 2026-10-15, bajando el adjunto y abriéndolo en esta máquina):
+  `publicar-release` run **38778796447** abrió la página sobre `1ec9638` y `compilar-apk` run
+  **38778796522** quedó **verde**, así que `v0.15.0` trae `CORT-v0.15.0.apk` de **70 526 B** —su
+  *digest* `sha256:d1d0e7ee…a563` es el que anuncia la API y el que sale de `sha256sum` aquí— y su
+  `…-firma.txt` (421 B), que arranca `APK de CORT 0.15.0 (versionCode 1500)` y sigue diciendo
+  `llave: desechable`. Dentro del `AndroidManifest.xml` binario, que AAPT2 escribe en **UTF-16**, están
+  la cadena `0.15.0` y el entero **1500** (y **no** está `0.14.4`), con los cuatro permisos
+  `INTERNET` / `RECORD_AUDIO` / `CAMERA` / `MODIFY_AUDIO_SETTINGS`. En `classes.dex` están las
+  **nueve** clases `dev/sandra/cort/*` (`Acciones`, `Anillo`, `Cara`, `Cerebro`, `MainActivity`, `Nube`,
+  `Paleta`, `Recuerdos`, `Voz`), `cort.db`, `TextToSpeech`, `SpeechRecognizer` y la sonda
+  `CORT-ENCONTRARSO-1`; **no** están `Runtime`, `ProcessBuilder` ni `exec(`: el APK no abre una sola
+  cáscara de sistema, que es la regla 6 medida sobre el binario y no sobre el fuente. Y el
+  `assets/habilidades.json` que viaja dentro trae **once acciones**, **26 patrones** y `listar` en la
+  posición **16**, antes de `saber-algo` (17) — el arreglo de «¿qué sabes de mí?» va en el binario, no
+  sólo en el repositorio. Censo por API: **15 Releases**, cinco con adjunto (`v0.13.1`, `v0.14.1`,
+  `v0.14.3`, `v0.14.4`, `v0.15.0`). *Lo honesto:* esta medida es **posterior** a la etiqueta, y
+  `publicar-release` es idempotente (`gh release view` manda al `continue`), así que **el texto de la
+  página publicada no se reescribe**; se corrige hacia adelante, en el repo.
 - **Visto en dedo, por primera vez**: dos capturas de la dueña del mismo día, con `CORT-v0.14.4.apk`
   instalado en su Samsung A16, enseñan la pantalla oscura con el anillo, el aviso «No encontré a CORT en
   la Wi-Fi…» y el campo de pegar con el teclado de Android abierto. Es la confirmación de la pantalla de
