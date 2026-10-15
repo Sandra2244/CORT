@@ -1,36 +1,88 @@
 # CORT en el teléfono (APK)
 
-Un cliente WebView de una sola pantalla: abre la página que sirve
-`cort.py --lan` en el portátil. El asistente **no se instala en el teléfono** —su
-cerebro, su memoria y sus permisos viven en la máquina de siempre—; este APK sólo
-es la ventana, para que la cara y el chat estén a mano en la mesa sin abrir el
-portátil.
+Desde `v0.15.0` este APK es **dos cosas**. Si el portátil está publicado en la
+Wi-Fi, abre la página que sirve `cort.py --lan`: la cara completa, con su cuerpo
+3D y su memoria del core. Y si no lo está, **CORT funciona dentro del teléfono**:
+una cara nativa en Java con su propio cerebro de once acciones, su memoria en
+SQLite, su voz y su micrófono, sin servidor y sin abrir el portátil.
+
+**Por qué** — el número lo puso la dueña del proyecto, no una sugerencia externa:
+«que funcione de forma local en mi cel, que no tengo servidor y mi PC no tiene
+recursos para eso». Está escrito en `docs/PLATFORM.md`, con su coste (dos
+memorias que hoy no se sincronizan).
 
 **Por qué un WebView y no Capacitor**: en el portátil de desarrollo (1,8 GiB) un
 `gradle build` de Capacitor congela la máquina — está medido y escrito en
 `docs/PLATFORM.md`—, y además aquí no hace falta: `javac` no está (lo que hay es
 el JRE 21 y su `keytool`, medido 2026-10-15), así que no hay nada que compilar
-en esta máquina ni que descargar. Una actividad Java, cuatro herramientas que el
-runner de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un
-script, `compilar.sh`, que **nunca corre en el portátil**.
+en esta máquina ni que descargar. Nueve archivos de Java puro contra el SDK,
+cuatro herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`,
+`d8`, `apksigner`) y un script, `compilar.sh`, que **nunca corre en el portátil**.
+
+## Qué hay dentro
+
+| archivo | qué decide |
+|---|---|
+| `MainActivity.java` | **qué superficie se ve**: el WebView si el portátil contesta, la cara nativa si no, el campo de pegar sólo si nadie tiene la culpa |
+| `Cara.java` | la interfaz nativa: registro, campo, micrófono, y el lazo oír → tabla → ejecutar → (nube) → proponer aprender |
+| `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. **No ejecuta nada** |
+| `Acciones.java` | las manos: once acciones, todas con intenciones públicas de Android o `AudioManager`. Sin shell, sin `QUERY_ALL_PACKAGES` |
+| `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende |
+| `Voz.java` | `TextToSpeech` y `SpeechRecognizer`: hablar **y escuchar**, que el WebView no podía |
+| `Nube.java` | la nube opcional, con la clave escrita una vez en el aparato |
+| `Paleta.java`, `Anillo.java` | los literales de la marca y el anillo dibujado con `Canvas`, compartidos por las dos caras |
+| `assets/habilidades.json` | **la tabla de frases**: el dato que `make test` sí puede validar en esta máquina |
+| `simbolos-android.json` | el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py` |
 
 ## Usarlo
 
-1. En el portátil: `python scripts/cort.py --lan`. La **llave de red ya no se
-   pide**: si no hay `CORT_LAN_TOKEN` en el `.env`, el lanzador la inventa, la
-   escribe ahí (archivo ignorado por git, permiso 0600) y sigue arrancando. Para
-   que el doble clic del escritorio publique sin escribir banderas, `CORT_LAN=1`
-   en el `.env`; para negarlo un arranque, `--sin-lan`.
-2. Copiar **el enlace entero** que sale en la línea `● red` del arranque
-   (`http://192.168.x.x:8780/?token=…`).
-3. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
+1. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
    e instalarlo (lea «Instalar aunque Android avise» abajo).
-4. Abrir CORT: la primera pantalla tiene **un solo campo**, y lo que se pega en
-   él es el enlace del paso 2 tal cual — la llave viaja dentro. Se guarda en
-   `SharedPreferences` y no se vuelve a preguntar; las veces siguientes la app
-   entra directo a la cara animada.
-5. Mantener pulsado (o el botón «atrás») abre el diálogo para cambiar la
-   dirección o salir. La dirección se muestra con la llave tapada.
+2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
+   el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
+   aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa
+   ● y se le habla. No hay que pegar nada en ninguno de los dos casos.
+3. Frases que contesta solo, sin portátil y sin nube —**comprobadas una por una
+   contra la tabla con el espejo Python de `Cerebro.encaja`**, no de oído—:
+   «qué hora es» / «dime la hora», «qué día es hoy», «sube el volumen»,
+   «baja el volumen», «silencio», «ponlo al máximo», «abre los ajustes», «abre el
+   navegador», «abre la música», «abre los mensajes», «abre el reloj», «abre el
+   teclado», «pon una alarma a las 7:30» (o «despiértame a las 6:45»),
+   «cronómetro de 5 minutos», «recuerda que mi nombre es Sandra»,
+   «¿qué sabes de mí?» y «qué recuerdas» (la lista entera), «¿qué sabes de mis
+   gustos?» (un dato suelto), «¿quién soy?», «busca el tiempo en Madrid»,
+   «quién eres», «qué puedes hacer», «hola», «gracias», «¿me oyes?» y «adiós».
+   La regla de la tabla: **una frase casa si es exacta**, o si empieza por una de
+   las formadas con hueco (`busca …`, `recuerda que …`, `alarma a las …`) y le
+   sobra algo. «baja» a secas **no** está; «baja el volumen» sí. Y el orden
+   importa: «¿qué sabes de mí?» contesta la lista porque la regla exacta vive
+   delante de la del hueco — había al revés, se llamaba un hecho clave `mi`, y
+   hay dos pruebas que ya no lo permiten.
+4. Si no conoce una frase, **propone aprenderla**: enseña las acciones que ya
+   sabe hacer y guarda la que la dueña elija. Nunca se le ocurre ejecutar algo
+   que no esté en esa lista.
+5. Para la cara del portátil hace falta lanzarlo: `python scripts/cort.py --lan`.
+   La **llave de red ya no se pide**: si no hay `CORT_LAN_TOKEN` en el `.env`, el
+   lanzador la inventa, la escribe ahí (archivo ignorado por git, permiso 0600)
+   y sigue arrancando. Para que el doble clic del escritorio publique sin
+   banderas, `CORT_LAN=1` en el `.env`; para negarlo un arranque, `--sin-lan`.
+6. **Mantener pulsado** (o el botón «atrás») abre el menú: *Buscar el portátil* /
+   *Pegar un enlace* / *Salir*. El pegado de enlace es el respaldo para las redes
+   donde el broadcast no pasa (VLAN, puntos de acceso con aislamiento de
+   cliente); se pega el enlace entero de la línea `● red` — la llave viaja dentro
+   — y queda guardado. La dirección se muestra con la llave tapada.
+7. **La nube, si se quiere** (opcional, y nunca necesaria): en el teléfono,
+   menú → *Configurar la nube*… **todavía no hay pantalla para eso**; por ahora
+   se escribe en `SharedPreferences` «cort-nube» (`clave`, `base`, `modelo`,
+   `proveedor`), y con la clave puesta CORT pregunta al modelo lo que la tabla no
+   conoce. Sin internet o sin clave, responde la tabla local y punto.
+
+**Qué va a la nube y qué no**: sólo la frase dicha y un resumen de los hechos
+guardados (van en el `system`, no en el historial — el bug que ya cazó
+`brain.py`—). La API key **no entra en el repositorio ni en el APK**: se escribe
+una vez en el aparato y vive en su almacenamiento privado, que es en claro —es
+suficiente para un prototipo propio, y se dice aquí en vez de prometer un
+cifrado que pediría Gradle—.
 
 ## Instalar aunque Android avise
 
@@ -56,13 +108,24 @@ En un Samsung (One UI, medido en la documentación de Android, no en esta máqui
 
 ## Lo que funciona en el teléfono y lo que no
 
-| | |
-|---|---|
-| Chat, reactor, ventanas, muelle, teclado táctil | ✅ la misma cara que en el navegador |
-| **Que CORT hable** (`speechSynthesis`) | ✅ en WebView con Chrome, **con la nota del audio sin verificar en dedo** — medido sólo en escritorio |
-| **Que CORT escuche** (`SpeechRecognition`) | ❌ **límite real**: el API de reconocimiento de voz del WebView **no existe sin los servicios de Google y no corre en un WebView embebido**. En el teléfono, la escucha se usa abriendo la **PWA** (Chrome → «instalar app»), que es lo que `apps/web` ya trae. Este APK es la ventana; la voz que escucha vive en Chrome |
-| Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo: el WebView concede el permiso, pero nadie lo ha medido con esta ventana |
-| Memoria, cerebro, acciones, temporizador, agenda | ✅ todo en el core del portátil; el teléfono no guarda nada |
+Dos columnas, porque hay dos CORT en el mismo APK. Lo de la izquierda es la cara
+del portátil (`WebView`); lo de la derecha vive dentro del teléfono y **no
+necesita al portátil encendido**.
+
+| | con el portátil en la Wi-Fi | **solo en el teléfono (v0.15.0)** |
+|---|---|---|
+| Chat, reactor, ventanas, muelle, teclado táctil | ✅ la misma cara que en el navegador | 🔨 cara nativa Java (`Cara.java`): compilada y firmada, **sin verla un dedo todavía** |
+| **Que CORT hable** | 🔨 en WebView con `speechSynthesis`, medido sólo en escritorio | 🔨 `TextToSpeech` del sistema: código escrito, **sin oírse en dedo** |
+| **Que CORT escuche** | ❌ **límite real del WebView**: el API de reconocimiento no corre en un WebView embebido; ahí la escucha se usa desde la **PWA** de `apps/web` | 🔨 **ésta es la vía que abre la cara nativa**: `SpeechRecognizer` con su permiso de micrófono pedido en pantalla. Sin verificar en dedo |
+| Volumen, alarma, cronómetro, abrir apps del sistema | 🔨 a través del core del portátil | 🔨 once acciones con intenciones públicas de Android y `AudioManager`, validadas contra el diccionario AOSP; **sin ejecutar en el teléfono** |
+| Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 **otra memoria**: `cort.db` en SQLite, propia del teléfono. **No se sincroniza con la del core** (coste escrito en `docs/PLATFORM.md`) |
+| Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`): responde cuando hay clave en el aparato, y **la pantalla para ponerla todavía no existe** |
+| Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo | ❌ no existen en la cara nativa |
+
+Lo único **visto en dedo** hasta hoy (dos capturas, 2026-10-15) es lo de `v0.14.4`:
+el APK instalado, la pantalla oscura con el anillo, el aviso «No encontré a CORT
+en la Wi-Fi…» y el campo de pegar con el teclado de Android. Nada de la columna
+derecha: esa cara entra en este corte y aún no se ha instalado.
 
 ## La firma
 
@@ -124,8 +187,11 @@ el manifiesto binario aparece la cadena `0.14.4` y el entero **1404**, y el
 `classes.dex` trae las palabras del descubrimiento (`CORT-ENCONTRARSO-1`,
 `CORT-AQUI-1|`, `Buscando a CORT en tu Wi-Fi`). El sha-256 del archivo es distinto
 del de `v0.14.3`, así que no es el mismo binario repetido. Lo compiló el run **21**
-de `compilar-apk` —en esta máquina no hay `javac`, así que el SDK es del runner—,
-y sigue sin verlo un dedo.
+de `compilar-apk` —en esta máquina no hay `javac`, así que el SDK es del runner—.
+**Éste sí lo vio un dedo**: dos capturas de la dueña (2026-10-15) enseña la
+pantalla oscura con el anillo y el aviso de que no encontró al portátil, con el
+campo de pegar y el teclado de Android abierto. Lo que no ha visto nadie todavía es
+la cara nativa que entra con `v0.15.0`.
 
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma
@@ -161,11 +227,12 @@ Qué hay que saber:
   (la barra `red` en verde), que están en la misma Wi-Fi y que el puerto 8781 no lo
   tiene ocupado otro programa. Si no, usa el campo.
 
-Las **15** pruebas de `test_apk_manifesta.py` (10 del manifiesto + 5 de este
-protocolo) vigilan además que los literales del Java sean **los mismos** que las
-constantes del lanzador: `SONDA`, `RESPUESTA` y `PUERTO_DIVULGACION` se comparan
-contra `cort.py`, así que cambiar el puerto o la palabra mágica en un lado sin
-cambiarlo en el otro revienta en `make test` y no en un teléfono.
+Las **22** pruebas de `test_apk_manifesta.py` (16 del manifiesto, el build y el
+paquete + 6 del protocolo de divulgación) vigilan además que los literales del
+Java sean **los mismos** que las constantes del lanzador: `SONDA`, `RESPUESTA` y
+`PUERTO_DIVULGACION` se comparan contra `cort.py`, así que cambiar el puerto o la
+palabra mágica en un lado sin cambiarlo en el otro revienta en `make test` y no
+en un teléfono.
 
 ## Si tocas el manifiesto
 
@@ -175,16 +242,52 @@ seguidos. Escribir ahí el nombre de un flag largo es la forma más rápida de
 romper el build, y el fallo se ve en el runner, no en `make test`. Por eso
 `services/core/tests/test_apk_manifesta.py` lee el archivo y lo valida, además de
 vigilar que el `<manifest>` no vuelva a fijar su propia versión, que el paquete
-`dev.sandra.cort` sea el mismo en el manifiesto y en el Java, que ningún import
-saque de `android.*` / `java.*` / `dev.sandra.cort` (aquí no hay AndroidX) y que
-`compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado.
-Son **10** de manifiesto y **5** del protocolo de divulgación: quince pruebas en el
-archivo, todas corriendo con `make test`.
+`dev.sandra.cort` sea el mismo en el manifiesto, en la actividad y en las **nueve**
+capas de archivo del Java, que ningún import saque de la lista cerrada (`android.*`,
+`java.*`, `org.json.*` y `dev.sandra.cort`: aquí no hay AndroidX ni Kotlin porque
+no hay Gradle), que los cuatro permisos declarados sean exactamente los cuatro que
+usa el código y que todos los que se pueden negar sean *requitable*, y que
+`compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado y
+siga enlazando los `assets` donde vive la tabla.
+
+**Cuarenta y dos** pruebas vigilan esta carpeta desde `make test`: **22** de manifiesto,
+build, paquete y protocolo (`test_apk_manifesta.py`) y **20** del cerebro
+(`test_apk_cerebro.py`). Éstas son las que de verdad sustituyen al compilador que
+no existe en el portátil de la dueña: validan `habilidades.json` (una acción por
+fuera de la lista cerrada, un patrón sin normalizar, un hueco prometido y no
+rellenado: todo eso revienta aquí), cosean cada acción de la tabla con su `case`
+del Java, y comparan cada `Clase.CONSTANTE` que aparece en el código contra
+`simbolos-android.json` — el diccionario de **999** constantes descargadas de AOSP
+por `scripts/simbolos_android.py`. Sin ese diccionario, la verdad del SDK vivía en
+mi memoria, y salió `AlarmClock.EXTRA_COUNTDOWN`: un nombre inventado que costó un
+run fallido (116541550041, medido 2026-10-15).
+
+## La cara nativa, en una línea por archivo
+
+`MainActivity` decide qué se ve; `Cara` la pinta; `Cerebro` lee la tabla y dice
+qué acción es; `Acciones` la ejecuta; `Recuerdos` la recuerda; `Voz` la oye y la
+habla; `Nube` la pregunta cuando hay internet. Cada una de esas piezas tiene su
+prueba en `test_apk_cerebro.py` o en `test_apk_manifesta.py`, y la regla de siempre
+sigue en pie dentro del teléfono: **las acciones son una lista cerrada** (regla 6)
+— **once**: `abrir`, `alarma`, `buscar`, `cronometro`, `decir`, `fecha`, `guardar`,
+`hora`, `listar`, `saber`, `volumen`. Ninguna frase, aprendida o propuesta por la
+nube, puede invocar algo que no esté ahí, y en `Acciones.java` no hay shell ni
+`QUERY_ALL_PACKAGES`: las pruebas buscan literalmente `Runtime.getRuntime`,
+`ProcessBuilder`, `exec(` y `/system/bin`.
+
+## Aprender, con aprobación de la dueña
+
+Cuando la tabla no conoce una frase y no hay nube, `Cara` **propone**: enseña las
+cuatro acciones que pueden guardarse con una frase nueva (`decir`, `hora`, `fecha`,
+`listar`) y sólo guarda la que ella elija. La restricción no es cosmética: una
+habilidad aprendida guarda la frase entera como texto, así que las tres acciones
+que piden un parámetro (`abrir`, `saber`, `volumen`) no son aprendibles, y
+`test_apk_cerebro.py` falla si alguien las mete en `APRENDIBLES`.
 
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.14.4     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.15.0     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un

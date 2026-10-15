@@ -2,7 +2,31 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (7)** (`TMPDIR=/tmp make test` **532** en verde en
+> Última verificación: **2026-10-15 (8)** (`TMPDIR=/tmp make test` **559** en verde en
+> **77,765 s** — las **27** nuevas son de la cara nativa del teléfono: **20** de
+> `test_apk_cerebro.py`, que validan `habilidades.json` (once acciones cerradas, 26 patrones
+> todos pre-normalizados, ningún hueco prometido sin rellenar), cosean cada acción con su
+> `case` del Java y comparan cada `Clase.CONSTANTE` del APK contra
+> `apps/apk/simbolos-android.json` — **999** constantes descargadas de AOSP por
+> `scripts/simbolos_android.py`—; y **7** más en `test_apk_manifesta.py`, que llega a **22** y
+> vigila los cuatro permisos, los nueve archivos, la lista cerrada de imports (`android.*`,
+> `java.*`, `org.json.*`), el `-A assets` del `aapt2` y que la búsqueda no congele la
+> interfaz—; `make test-web` **56**, **615** en total. **El Java del teléfono compiló a la
+> tercera**, y esa tercera es la única que importa porque en esta máquina no hay `javac`: los
+> runs 38768664328 (`e519f35`) y 38769573480 (`a27f018`) salieron **rojos** —leídos por
+> *annotations* públicas, porque los logs de Actions siguen siendo privados—; el primero con
+> cinco `cannot find symbol` por escribir `readableDatabase` como campo en vez de
+> `getReadableDatabase()` y un `incompatible types` en `Cerebro.java:128`, el segundo por
+> `AlarmClock.EXTRA_COUNTDOWN`, **nombre que me inventé**. El tercero, 38771718345 sobre
+> `14000cf`, quedó **verde** y su artefacto `CORT-apk` pesa **63 677 B** (el `.apk` dentro
+> aún no está en ninguna Release: eso lo hace la etiqueta de este corte). **Y la cara de CORT
+> se vio por primera vez en un dedo**: dos capturas de la dueña desde su Samsung A16, tomadas
+> hoy con `CORT-v0.14.4.apk` instalado, enseñan la pantalla oscura con el anillo, el aviso
+> «No encontré a CORT en la Wi-Fi…» y el campo de pegar con el teclado de Android abierto. La
+> función 96 pasa de *sin verificar* a *vista*, y el respaldo del descubrimiento funcionó tal
+> como estaba escrito. **Sin verificar**: la cara nativa de `v0.15.0` entera —nadie la ha
+> instalado aún—, el micrófono, que CORT hable por `TextToSpeech`, y que las once acciones
+> muevan algo en el teléfono. Verificación anterior, **2026-10-15 (7)** (`TMPDIR=/tmp make test` **532** en verde en
 > **94,046 s** — las **15** nuevas del descubrimiento por Wi-Fi: 10 de `test_launcher.py`
 > haciendo un viaje real de datagrama contra el lanzador en bucle invertido, 5 de
 > `test_apk_manifesta.py` cosiendo los literales del Java con las constantes de
@@ -56,6 +80,38 @@
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.15.0` (2026-10-15): CORT funciona dentro del teléfono, sin portátil encendido.**
+Lo pidió la dueña con dos capturas de su Samsung delante y con estas palabras: *«no necesito
+nada mas abrirlo en mi pc y luego el cel eso es opcional … que funcione de forma local en mi
+cel ya que no tengo servidor, mi pc no tiene los recursos para usarlo para eso … mejora eso
+para que funcione CORT de una forma mas inteligente como una JARVIS o como lo haria Cortana, o
+toma a Hermes agent de referencias, transplante de codigo no importa la regla de que no se
+deberia o puede»*. Tres decisiones suyas, tomadas por pregunta directa y no por suposición:
+**cerebro en Java nativo en el teléfono** (no Kotlin, no Capacitor, no un servidor en la nube),
+**nube si hay internet y local si no** (la nube es un añadido que nunca puede ser un requisito)
+y **que CORT aprenda frases nuevas, con su aprobación**. Lo que hay ahora en `apps/apk/src` —
+nueve archivos, 83 KB y 2 120 líneas de Java—: `MainActivity` eligiendo superficie (WebView si el portátil
+contesta, **cara nativa** si no, campo de pegar sólo de respaldo), `Cara` con su registro y su
+botón de micrófono, `Cerebro` leyendo `assets/habilidades.json` —**26 patrones sobre once
+acciones cerradas**—, `Acciones` ejecutando con intenciones públicas de Android y `AudioManager`,
+`Recuerdos` guardando en SQLite `cort.db` (siembra `teléfono` y `android` sola, del `Build`),
+`Voz` con `TextToSpeech` + `SpeechRecognizer` —**escuchar**, lo que el WebView no podía—, `Nube`
+con `HttpURLConnection` y la clave escrita una vez en el aparato, y `Paleta`/`Anillo`
+compartiendo la marca. Hermes entra como **idea portada** (el lazo oír → entender → actuar →
+proponer aprender), no como código: la regla 6 sigue intacta dentro del teléfono, y hay pruebas
+que buscan literalmente `Runtime.exec`, `ProcessBuilder`, `exec(` y `/system/bin`. El coste,
+escrito en `docs/PLATFORM.md`: **hay dos memorias que no se sincronizan** (`memory.db` del
+portátil, `cort.db` del teléfono) y dos cuerpos de reglas (`herramientas.py`, 19 herramientas;
+`habilidades.json`, once acciones). **Medido en esta máquina**: `make test` **559** en verde (77,765 s),
+`make test-web` **56**, y el diccionario AOSP que sostiene la verificación (999 constantes,
+función 104). **Comprobado tras el `push`**: `compilar-apk` run 38771718345 **verde** sobre
+`14000cf` con su artefacto de 63 677 B —dos runs rojos antes, y sus errores leídos por
+annotation pública—. **Visto en dedo**: la pantalla de estreno y su aviso de respaldo, dos
+capturas del 2026-10-15 (funciones 96 y 98). **Sin verificar en dedo**: todo lo demás de este
+corte —la cara nativa instalada por primera vez, el micrófono oyendo, la voz sonando y las
+once acciones moviendo el teléfono—; es exactamente lo que hay que mirar al instalar
+`CORT-v0.15.0.apk`.
+
 **Corte `v0.14.4` (2026-10-15): que el móvil abra CORT sin que nadie pegue el enlace.**
 La dueña lo pidió dos veces seguidas —«hay que colocar token de arranque», «no puede
 iniciar con su animación como una IA normal»— y lo que quedaba era **una** fricción:
@@ -73,7 +129,7 @@ pida desde dentro de su propia Wi-Fi —sin TLS ya viajaba al pegarla; ahora no 
 falta ni eso—. **Medido en esta máquina**: `make test` **532** en verde (15 nuevas:
 10 del lanzador con viaje real de datagrama en `127.0.0.1`, 5 que cosen los literales
 del Java a las constantes de `cort.py`), `make test-web` **56**, y el lanzador
-arrancado con `--lan` contestó la sonda y apuntó al que preguntó. **Comprobado tras el `push`**: `compilar-apk` run **21** quedó **verde** sobre `3217007` y la Release `v0.14.4` salió con `CORT-v0.14.4.apk` (49 977 B) y su `…-firma.txt` (`APK de CORT 0.14.4 (versionCode 1404)`); bajado y abierto aquí, su `classes.dex` trae `CORT-ENCONTRARSO-1`, `CORT-AQUI-1|` y `Buscando a CORT en tu Wi-Fi`, y su manifiesto binario dice `0.14.4` con el entero **1404**. **Sin verificar en el teléfono**: nadie lo ha visto buscarse en el Samsung A16 (regla 11), y sigue en pie que el aviso de Play Protect
+arrancado con `--lan` contestó la sonda y apuntó al que preguntó. **Comprobado tras el `push`**: `compilar-apk` run **21** quedó **verde** sobre `3217007` y la Release `v0.14.4` salió con `CORT-v0.14.4.apk` (49 977 B) y su `…-firma.txt` (`APK de CORT 0.14.4 (versionCode 1404)`); bajado y abierto aquí, su `classes.dex` trae `CORT-ENCONTRARSO-1`, `CORT-AQUI-1|` y `Buscando a CORT en tu Wi-Fi`, y su manifiesto binario dice `0.14.4` con el entero **1404**. **Sin verificar en el teléfono**: nadie lo ha visto **buscarse** en el Samsung A16 (regla 11) — aunque dos capturas del mismo día enseñan su otra mitad: la pantalla con el aviso de no-encontrado y el campo de pegar, tal como estaba escrita; ver el corte `v0.15.0` —, y sigue en pie que el aviso de Play Protect
 «app desconocida / dañina» **no se quita con código** mientras no haya publicación en
 la Play Store; lo que sí depende de Sandra es pegar los dos secretos de la llave de
 firma estable.

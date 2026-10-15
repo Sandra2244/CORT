@@ -202,6 +202,50 @@ Cinco decisiones, y la segunda es la incómoda:
 4. **Un puerto ocupado no detiene CORT.** Se avisa una vez y se sigue: el campo de pegar del APK sigue existiendo exactamente para las redes donde el broadcast no pasa (VLAN de oficina, puntos de acceso con aislamiento de cliente). `CORT_DISCOVERY_PORT` lo cambia, y un valor inválido vuelve a 8781 en vez de fallar.
 5. **Los dos lados se vigilan desde Python.** No hay un módulo compartido entre `MainActivity.java` y `scripts/cort.py`, así que `test_apk_manifesta.py` lee el Java y exige que sus literales (`SONDA`, `RESPUESTA`, `PUERTO_DIVULGACION`) salgan **formados con las constantes del lanzador**. Cambiar la mágica en un lado dejaría el descubrimiento mudo en un teléfono que nadie tiene delante; la prueba lo impide antes de empujar.
 
+## El cuerpo en el teléfono: CORT sin portátil (`apps/apk/src`)
+
+Hasta `v0.14.4` el APK era una **ventana**: sin el portátil publicado en la Wi-Fi no había CORT, y lo que se veía era un campo pidiendo un enlace. La dueña cerró ese camino con un número suyo —«mi PC no tiene recursos para eso, y no tengo servidor»— y desde `v0.15.0` el teléfono lleva **su propio core** en Java nativo.
+
+### Tres superficies, ninguna obligatoria
+
+`MainActivity` dejó de ser un formulario y pasó a ser un **router**, y es lo único que decide:
+
+| se da | se ve | qué es |
+|---|---|---|
+| el portátil contesta por UDP | `WebView` con la página React | la cara completa: cuerpo 3D, atuendos, memoria del core |
+| no contesta | `Cara`, la interfaz nativa | CORT con cerebro, memoria, voz y manos propias |
+| la red está aislada y el core caído | el campo de pegar, detrás del menú | respaldo, no pantalla de estreno |
+
+El descubrimiento de `v0.14.4` sigue ahí, pero **ya no es el portero**: si no encuentra nada, la cara nativa queda montada y CORT lo dice en voz alta. Un fallo de red dejó de ser una pantalla vacía.
+
+### El cerebro es un dato, no un `switch`
+
+`apps/apk/assets/habilidades.json` (**26 patrones** repartidos en **once acciones**: `id`, `accion`, `param`, `patrones`, `respuesta`) es la única verdad de las frases. La razón es de verificación, no de elegancia: **en esta máquina no hay `javac`**, así que el Java sólo se comprueba en un runner, mientras que el JSON lo valida `make test` en dos segundos. Poner las frases en código sería dejar sin prueba la parte que más se toca. `aapt2 link` las mete en el APK con `-A assets`, y `Cerebro` las lee con `getAssets()` y `org.json` —que viene **dentro** de `android.jar`, no de Maven, y por eso pasa el muro de imports—.
+
+`Cerebro.normaliza()` (NFD → fuera marcas → minúsculas → fuera signos → un espacio) tiene un **espejo en Python** en `test_apk_cerebro.py`, y la prueba compara los dos conjuntos de signos: un patrón que casa distinto según quién lo lea es un patrón que en el móvil no casa.
+
+`Cerebro.encaja()` tiene **dos** modos y el orden de la tabla es su prioridad: un patrón sin `{resto}` casa **solo si la frase es exacta**, y uno con `{resto}` casa **por prefijo** y devuelve lo que sobra. De ahí la regla que `v0.15.0` se encontró de golpe: si una del hueco vive **antes** que una exacta que empieza igual, la exacta no se activa nunca. «¿qué sabes de mí?» caía en `saber-algo` (`que sabes de {resto}`) y CORT se ponía a buscar un hecho clave `mi` en vez de listar su memoria — justo la pregunta para la que se escribió `listar`. Se movió `listar` delante y quedaron **dos** pruebas nuevas: la general (ninguna regla de hueco puede atrapar por prefijo a una exacta que venga después) y la concreta, escrita como frase. Con la tabla en el orden viejo fallan las dos, medida el 2026-10-15.
+
+### Las manos: lista cerrada, regla 6 también dentro del teléfono
+
+`Acciones` sólo conoce **once** acciones (`abrir`, `alarma`, `buscar`, `cronometro`, `decir`, `fecha`, `guardar`, `hora`, `listar`, `saber`, `volumen`), y todas se hacen con intenciones públicas de Android o con `AudioManager`. No hay `Runtime.exec`, ni `ProcessBuilder`, ni `QUERY_ALL_PACKAGES`: «abre Spotify» no está, está «abre la música». Lo mismo rige el aprendizaje —una habilidad que la dueña enseña puede apuntar a una acción de la lista, nunca a un comando—, que es el lazo de Hermes portado como **idea** y no como código.
+
+### Memoria, voz y nube
+
+- **`Recuerdos`** — SQLite `cort.db`, dos tablas (`hechos`, `habilidades`). La regla que ya aprendió `memory/facts.py` se porta tal cual: sólo se guarda lo que tiene forma `X es Y`, porque «uso el cronómetro» es una frase real y llenar la memoria de frases sueltas es tener una memoria que miente.
+- **`Voz`** — `TextToSpeech` + `SpeechRecognizer`, con `RECORD_AUDIO` pedido en tiempo de ejecución. Esto es lo que el WebView **no podía** dar: escuchar exigía HTTPS y en una LAN en claro no lo hay. Aquí el micrófono es nativo.
+- **`Nube`** — opcional, con la clave escrita **una vez en el aparato** (`SharedPreferences`, modo privado; almacenamiento en claro del dispositivo, dicho en `apps/apk/README.md` en vez de prometer `security-crypto` que pediría Gradle). Cualquier fallo devuelve `null` y la tabla local sigue contestando: la nube es un añadido, nunca un requisito. La memoria viaja en el `system`, el mismo bug que cazó `brain.py`.
+
+### Cómo se comprueba lo que no se puede compilar
+
+Tres piezas, nacidas cada una de un fallo medido:
+
+1. **`apps/apk/simbolos-android.json`** — el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py`. El Java no puede nombrar una `Clase.CONSTANTE` que no esté ahí. Existe porque me inventé dos veces la misma constante (`AlarmClock.EXTRA_TIME_IN_MILLIS`, luego `EXTRA_COUNTDOWN`) y cada una costó un Run.
+2. **El annotation del `Compilar`** trae ahora **todos** los `.java:NN: error:` y no sólo el final del log: `javac` imprime los errores primero y el mensaje se corta a 4000 caracteres, así que con el tail se perdía la lista y se andaba arreglando de uno en uno.
+3. **Las pruebas de costura** (`test_apk_cerebro.py`, 20) leen Java y tabla a la vez: toda acción de la tabla tiene su `case`, todo hueco de plantilla lo rellena `rellena()`, lo que se ofrece aprender no necesita datos, y los literales del protocolo UDP siguen siendo los del lanzador.
+
+Lo que **ninguna** de las tres puede comprobar sigue marcado como sin verificar en `docs/FUNCTIONS.md`: que la cara nativa se vea, que el micrófono oiga y que la voz salga por el altavoz de un Samsung concreto.
+
 ## La bitácora de rechazos (`cort_core/audit.py`)
 
 `security.py` decide; hasta `v0.7.0` lo decidido se iba con la respuesta. Quedaba sin responder la pregunta que la dueña del proyecto pone como «base y proyección contra malware»: **¿alguien estuvo probando, y por cuál puerta?** Un registro es lo único que la responde, y es lo que añade este módulo. Cuatro decisiones de diseño, cada una contra un modo concreto en que un log se vuelve inútil o peligroso:

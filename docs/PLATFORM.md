@@ -6,7 +6,7 @@ Documento de decisión, no de intenciones. Nace de la **guía "Proyecto Jarvis �
 
 | Pieza de la guía | Para qué la pide | Estado en CORT | Evidencia |
 |---|---|---|---|
-| **Python** | Backend: lógica, voz, conexión con la IA | ✅ Igual. `services/core/cort_core/` con FastAPI + WebSocket | `make test` → 124 pruebas |
+| **Python** | Backend: lógica, voz, conexión con la IA | ✅ Igual. `services/core/cort_core/` con FastAPI + WebSocket | `make test` → 557 pruebas |
 | **JavaScript / React** | Interfaz y comportamiento | ✅ Igual. `apps/web` en React 19 + Vite + TypeScript | `npm run build` → `✓ built`, servido en `:8780` |
 | **Node.js** | Herramientas de JavaScript | ✅ Presente (`node`, `npm` en `/usr/bin`) | medido con `command -v` |
 | **Ollama + Qwen** | Cerebro local, atado a `localhost` | ✅ Igual, con **guarda de RAM** que la guía no tiene: descarta los modelos que no caben antes de intentarlos | `test_brain` (10) + medición real |
@@ -29,11 +29,47 @@ Lo que sí existe hoy y cubre el 90 % de lo que la guía pide de Electron: **el 
 
 La guía **no los menciona**: su tabla de tecnologías es Python, JavaScript, React, Node.js, Electron y Capacitor. Aun así, medido por si vuelve la idea:
 
-- **Java:** hay OpenJDK 21 *runtime*, no hay compilador (`javac` ausente). Escribir CORT en Java exigiría instalar un JDK y, sobre todo, tirar 124 pruebas y el core entero que hoy funciona.
+- **Java:** hay OpenJDK 21 *runtime*, no hay compilador (`javac` ausente). Escribir CORT en Java exigiría instalar un JDK y, sobre todo, tirar 557 pruebas y el core entero que hoy funciona.
 - **C++:** `g++` y `gcc` sí están. Pero C++ no aporta multiplataforma aquí —la interfaz ya es multiplataforma *porque* es web— y sí costaría reescribir el backend que ya ejecuta acciones reales y verifica sus resultados.
 - **Lo multiplataforma ya está resuelto por arquitectura, no por lenguaje:** un core Python que habla por WebSocket + una interfaz React que corre en cualquier navegador (PC, teléfono, tablet). Cambiar de lenguaje no añade ni un dispositivo donde funcione; añade una segunda implementación que mantener.
 
 Donde **sí** tiene sentido un lenguaje compilado, y está en el roadmap, es en el borde: **firmware ESP32** (C++/MicroPython, Fase 7) para sensores reales. Ahí no hay navegador, y ahí iremos.
+
+## La decisión de `v0.15.0`: Java **en el teléfono**, no en el portátil
+
+Regla 13: la pila no cambia por una sugerencia externa, y para alterar una
+decisión de plataforma hay que traer **un número**, no una opinión. El número lo
+puso la dueña del proyecto, que es a quién sirve esta pila:
+
+> «no necesito nada más abrirlo en mi PC y luego el cel… que funcione de forma
+> local en mi cel, ya que no tengo servidor y mi PC no tiene los recursos para
+> usarlo»
+
+El número es **cero**. Cero servidores, cero portátil encendido, cero RAM de la
+casa gastada: el Samsung A16 tiene que poder con CORT **solo**. Y el otro número
+que pesa es el de siempre — 1,8 GiB y 263 MB disponibles —, que es exactamente
+por lo que la respuesta no puede ser «entonces mueve el core al portátil de
+otro».
+
+Lo que se decidió, dicho sin eufemismos sobre su alcance:
+
+- **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
+  nada: las 557 pruebas de `services/core`, el WebSocket, el cuerpo 3D y la
+  memoria del portátil se quedan donde están. Un segundo CORT en Java en el PC
+  sería pagar una segunda implementación sin ganar ni un dispositivo.
+- **En el teléfono sí hay Java nativo** (`apps/apk/src`), y no es el core
+  portado: es una **segunda cara** con su propio cerebro de once acciones, su
+  SQLite y su voz. Cuando el portátil aparece por la Wi-Fi se usa el core de
+  siempre en el WebView; cuando no, el teléfono no se queda en un formulario.
+- **El coste de esa duplicación está escrito y es real**: hay dos memorias
+  (`memory.db` y `cort.db`) que **no se sincronizan**, y dos cuerpos de reglas
+  (`herramientas.py` y `habilidades.json`) que se parecen pero no son el mismo
+  archivo. Mientras el teléfono esté solo, eso es invisible; en cuanto se usen
+  los dos, es la primera deuda de este corte y se dirá aquí delante.
+- **La verificación se compra con datos, no con fe**: como aquí no hay `javac`,
+  la tabla de frases es un JSON probado por `make test`, y las constantes de
+  Android que puede nombrar el Java salen de un diccionario descargado de AOSP
+  (`scripts/simbolos_android.py`). Dos Runs costó aprenderlo.
 
 ## Qué se adopta de la guía, dicho en una lista
 

@@ -35,7 +35,7 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
 > leyendo una log que es privada.
 
-**La lista de tareas para cortar la siguiente (v0.14.5), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (`v0.15.1`), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -44,27 +44,130 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
    firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
    no hace falta abrir una log que es privada.
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.4\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.15.1\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
 3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
-   ve que `v0.14.5` tiene sección y no tiene página, llama a `gh release create v0.14.5` —que crea la
+   ve que `v0.15.1` tiene sección y no tiene página, llama a `gh release create v0.15.1` —que crea la
    etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
    `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
    `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
    apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
-   `CORT-v0.14.5.apk` y su `CORT-v0.14.5-firma.txt` a esa Release. Etiquetar a mano
-   (`git tag v0.14.5 && git push origin v0.14.5`) sigue siendo válido y dispara el mismo camino por la
+   `CORT-v0.15.1.apk` y su `CORT-v0.15.1-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.15.1 && git push origin v0.15.1`) sigue siendo válido y dispara el mismo camino por la
    vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
    sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.5 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.15.1 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.15.0` — CORT vive en el teléfono: cerebro, memoria y voz dentro del APK
+
+La dueña lo pidió con dos capturas de su Samsung delante y con estas palabras: *«no necesito nada mas
+abrirlo en mi pc y luego el cel, eso es opcional; que funcione de forma local en mi cel ya que no tengo
+servidor, mi pc no tiene los recursos para usarlo para eso. Mejora eso para que funcione CORT de una
+forma mas inteligente, como una JARVIS o como lo haría Cortana, o toma a Hermes agent de referencia —
+transplante de código, no importa la regla de que no se debería o puede»*. Hasta este corte el teléfono
+era **una ventana**: si el portátil no estaba encendido, CORT no estaba. Y el portátil no da para más —
+1,8 GiB y dos núcleos, medido y escrito en `docs/PLATFORM.md`—. Este corte mete a CORT **dentro del
+teléfono**. Tres decisiones son suyas y se le preguntaron antes de escribir la primera línea: **Java
+nativo en el aparato** (no Capacitor, que exige Gradle y congela esta máquina; no un servidor en la
+nube), **nube si hay internet y local si no**, y **que aprenda frases nuevas con su aprobación**.
+
+- **Nueve archivos de Java puro, 83 KB y 2 120 líneas** (`apps/apk/src/dev/sandra/cort/`), sin AndroidX
+  ni Kotlin porque no hay Gradle: `MainActivity` (decide qué superficie se ve), `Cara` (la interfaz
+  nativa: registro, campo, micrófono), `Cerebro` (lee la tabla y dice qué acción es — **no ejecuta
+  nada**—), `Acciones` (las manos), `Recuerdos` (SQLite `cort.db`), `Voz` (`TextToSpeech` +
+  `SpeechRecognizer`), `Nube` (`HttpURLConnection`), `Paleta` y `Anillo` (la marca, compartida).
+- **El cerebro es un dato, no un `switch`**: `assets/habilidades.json`, **26 patrones sobre once
+  acciones cerradas** (`abrir`, `alarma`, `buscar`, `cronometro`, `decir`, `fecha`, `guardar`, `hora`,
+  `listar`, `saber`, `volumen`). Vive en un JSON por una razón de verificación, no de elegancia: en esta
+  máquina **no hay `javac`**, así que el Java sólo lo comprueba el runner, mientras que la tabla la
+  valida `make test` en dos segundos. Contesta, sin portátil y sin nube: «qué hora es», «dime la hora»,
+  «qué día es hoy», «sube el volumen», «baja el volumen», «silencio», «ponlo al máximo», «abre los
+  ajustes», «abre el navegador», «abre la música», «abre los mensajes», «abre el reloj», «abre el
+  teclado», «pon una alarma a las 7:30», «despiértame a las 6:45», «cronómetro de 5 minutos», «recuerda
+  que mi nombre es Sandra», «¿qué sabes de mí?», «qué recuerdas», «¿quién soy?», «busca el tiempo en
+  Madrid», «quién eres», «qué puedes hacer», «hola», «gracias», «¿me oyes?», «adiós». **Cada una está
+  comprobada contra la tabla con el espejo Python de `Cerebro.encaja`**, no de oído.
+- **Y el orden de la tabla resultó ser su prioridad**, descubierto probando: una frase casa **exacta**
+  si el patrón no lleva hueco y **por prefijo** si lleva `{resto}`, y la primera de la tabla gana. Así
+  que «¿qué sabes de mí?» caía en `saber-algo` (`que sabes de {resto}`) y CORT buscaba un hecho clave
+  `mi` en vez de listar su memoria — justo la pregunta para la que se escribió `listar`—. Movido
+  delante, con dos pruebas nuevas que ya no lo permiten (con la tabla en el orden viejo **fallan las
+  dos**, medido).
+- **Escuchar deja de depender del navegador.** `SpeechRecognizer` nativo con `RECORD_AUDIO` pedido en
+  tiempo de ejecución —sin eso el recognizer devuelve `ERROR_INSUFFICIENT_PERMISSIONS` en silencio y la
+  dueña cree que el micrófono está roto—, los siete códigos de fallo con su frase en español, la primera
+  palabra encolada hasta que el motor contesta, y aviso honesto si el teléfono no tiene voz en español.
+  Es exactamente lo que el WebView **no podía** dar y estaba escrito desde que existe la ventana.
+- **Memoria propia del aparato**: al montar la cara se siembran `teléfono` (`Build.MANUFACTURER + MODEL`)
+  y `android` (nivel de API) sin que nadie los teclee, y se mantiene la regla que ya aprendió el core:
+  sólo se guarda lo que tiene forma `X es Y`. La trampa que cazó una prueba del propio camino: « son »
+  mide cinco caracteres y « es » cuatro, y con la longitud fija «mis gestos son uno y dos» se guardaba
+  como valor `n uno y dos`.
+- **Regla 6 intacta dentro del teléfono** — y es lo que separa esto de un script con interfaz: las once
+  acciones se hacen con intenciones públicas de Android y `AudioManager`. No hay `Runtime.exec`, ni
+  `ProcessBuilder`, ni `exec(`, ni `/system/bin`, ni `QUERY_ALL_PACKAGES`: **«abre Spotify» no está, está
+  «abre la música»**, y hay pruebas que leen el fuente buscándolo. El Hermes entra como **idea portada**
+  (el lazo oír → entender → actuar → proponer aprender), no como código.
+- **Aprender, con aprobación**: si la tabla no conoce la frase, la cara **propone** y la dueña elige. La
+  lista de aprendibles es corta a propósito (`decir`, `hora`, `fecha`, `listar`) porque una habilidad
+  aprendida guarda la frase entera como texto: ofrecer `alarma` daría una alarma a las `null`.
+- **La nube es un añadido, nunca un requisito**: endpoint Anthropic o compatible con OpenAI sobre
+  `HttpURLConnection`, sin librerías; **cualquier** fallo (sin red, 401, cuota, timeout) devuelve `null`
+  con su motivo y la tabla local sigue contestando. La API key **no entra en el repo ni en el APK**: se
+  teclea una vez en el aparato. Lo que viaja es la frase dicha y un resumen de los hechos, metido en el
+  `system` — el mismo olvido que ya cazó `brain.py`—. **Honestidad del corte**: todavía no hay pantalla
+  para poner esa clave; se escribe en `SharedPreferences`.
+- **El portátil pasa a ser opcional**: si responde por UDP, el WebView abre la cara completa con su
+  cuerpo 3D; si no, la cara nativa queda montada y CORT lo dice. Un fallo de red dejó de ser una
+  pantalla vacía, y el campo de pegar se va detrás del menú, como respaldo.
+- **El coste, escrito antes de que lo pregunten** (`docs/PLATFORM.md`): hay **dos memorias**
+  (`memory.db` del portátil y `cort.db` del teléfono) que **no se sincronizan**, y **dos cuerpos de
+  reglas** (`herramientas.py`, 19 herramientas; `habilidades.json`, once acciones) que se parecen y no
+  son el mismo archivo. Mientras el teléfono esté solo no se nota; en cuanto se usen los dos, ésa es la
+  primera deuda de este corte.
+- **Cómo se verifica lo que no se puede compilar aquí** (función 104): `scripts/simbolos_android.py`
+  descarga las once clases de Android que nombra el Java desde `aosp-mirror/platform_frameworks_base` y
+  escribe `apps/apk/simbolos-android.json` — **999 constantes** con su fecha de verificación—; la prueba
+  exige que toda `Clase.CONSTANTE` del APK esté ahí. Existe porque **me inventé dos**:
+  `AlarmClock.EXTRA_TIME_IN_MILLIS` y `EXTRA_COUNTDOWN`, y la segunda costó un run rojo. Lo que AOSP
+  define para `ACTION_SET_TIMER` es `EXTRA_LENGTH`, entero y en segundos. Y el paso `Compilar` vuelca
+  ahora **todos** los `.java:NN: error:` en la annotation pública, no sólo el final del log.
+- **27 pruebas nuevas** sobre las 532 de `v0.14.4`: **20** en `test_apk_cerebro.py` (la tabla, su
+  normalización y su orden espejados en Python, la costura con las `case` del Java, el diccionario AOSP,
+  el nivel de API de cada constante y la caza del shell) y **7** más en `test_apk_manifesta.py`, que
+  llega a **22**: los cuatro permisos exactos y *requitables*, los nueve archivos dentro del build, la
+  lista cerrada de imports (`android.*`, `java.*`, `org.json.*`), el `-A assets` del `aapt2`, que la
+  búsqueda corra fuera del hilo de la interfaz y que el portátil apagado no deje al teléfono sin cara.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **559** en verde en **77,765 s** y `make test-web`
+  **56**.
+- **Comprobado después de empujar** (2026-10-15, por la API pública y sus *annotations*, que es lo único
+  que hay: los logs de Actions siguen siendo privados): `compilar-apk` quedó **rojo** en 38768664328
+  (`e519f35`: cinco `cannot find symbol` por escribir `readableDatabase` como campo en vez de
+  `getReadableDatabase()`, y un `incompatible types` en `Cerebro.java:128`) y en 38769573480
+  (`a27f018`: el `EXTRA_COUNTDOWN` inventado), y **verde** en **38771718345** sobre `14000cf`, con su
+  artefacto `CORT-apk` de **63 677 B**. Es la primera vez que compila un cerebro nativo en Java, y lo
+  hace en el runner porque aquí no hay SDK.
+- **Visto en dedo, por primera vez**: dos capturas de la dueña del mismo día, con `CORT-v0.14.4.apk`
+  instalado en su Samsung A16, enseñan la pantalla oscura con el anillo, el aviso «No encontré a CORT en
+  la Wi-Fi…» y el campo de pegar con el teclado de Android abierto. Es la confirmación de la pantalla de
+  los cortes anteriores y del camino de respaldo del descubrimiento.
+- **Sin verificar**: la cara nativa de este corte **aún no se ha instalado** — nadie ha visto el
+  micrófono oír, ni la voz sonar por el altavoz, ni las once acciones mover el teléfono; es literalmente
+  lo que hay que probar al bajar `CORT-v0.15.0.apk`—; sigue en pie que el aviso de Play Protect («app
+  desconocida / puede ser dañina») **no se quita con código** mientras no haya publicación en la Play
+  Store, y que la firma es desechable hasta que se peguen los dos secretos de la llave estable.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.0.zip
 
 ---
 
