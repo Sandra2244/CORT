@@ -100,7 +100,14 @@ React + Ollama, todo local) y no entra ninguna dependencia.
   la recuerda en `SharedPreferences`; el icono se **dibuja** con `scripts/marca.py` en cada build,
   como el resto de la marca. El pipeline lo compila con las herramientas del SDK preinstalado del
   runner (`aapt2`/`javac`/`d8`/`zipalign`/`apksigner`) y sube `CORT-v0.13.0.apk` a esta misma
-  Release; corre también con cada `push` de `main`, para verlo verde **antes** de etiquetar. Límites
+  Release; corre también con cada `push` de `main`, para verlo verde **antes** de etiquetar. **Y así
+  se cumplió, medido**: el primer verde salió el 2026-10-15 en el run 38679448057 sobre `main`
+  (commit `961c31a`), con `CORT.apk` de **38 442 bytes** como artefacto. Costó nueve runs domear el
+  pipeline, y cada fallo lo contó él mismo por un *annotation* público del check-run — las logs de
+  Actions no son públicas, los annotations sí—: el `ls` del SDK muerto por `pipefail`, un `--` dentro
+  de un comentario del manifiesto (ilegal en XML), `-bootclasspath` prohibido con target 11 desde
+  JDK 9, `keytool` firmando a escondidas tras un `>/dev/null`, una contraseña de cuatro caracteres
+  que JDK rechaza y un `-keyalg` que el JDK del runner no pone solo. Límites
   escritos en `apps/apk/README.md`, no escondidos: `SpeechRecognition` **no existe dentro del
   WebView** — escuchar es la PWA en Chrome, ya instalable—, y sin el secreto `CORT_APK_KEYSTORE_B64`
   la firma es desechable.
@@ -117,8 +124,8 @@ React + Ollama, todo local) y no entra ninguna dependencia.
   y `initiative.sugerir` responde `rechazos` delante de todas.
 
 **Sin verificar aquí** (regla 11, con su motivo): **el APK en un dedo** — no hay `javac` ni SDK en
-esta máquina (así está medido en `docs/PLATFORM.md`) y el pipeline nunca había corrido; lo que se
-afirme de él será la Release que devuelva la API pública, no un log—; **la alarma vista sonar en una
+esta máquina (así está medido en `docs/PLATFORM.md`); el pipeline **sí** corrió y salió verde sobre
+`main` (run 38679448057, `CORT.apk` de 38 442 bytes), pero nadie lo ha instalado todavía—; **la alarma vista sonar en una
 pantalla y el anillo del cronómetro pintado** — el navegador va cerrado por pedido expreso de la dueña
 desde el 2026-10-12—; **la voz dentro del WebView** (escuchar no: ahí no existe `SpeechRecognition`,
 y hablar está escrito pero nadie lo oyó salir de un teléfono—); **el hecho del dispositivo recordado
