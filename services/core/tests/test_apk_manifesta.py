@@ -944,5 +944,45 @@ class TestLoQueLlegaAlRunner(unittest.TestCase):
 
 
 
+class TestLoQueJavacNoDejaPasar(unittest.TestCase):
+    """El compilado es la única verificación de tipos que existe aquí, y cuesta un
+    Release.
+
+    El run 38810161046 de `compilar-apk` cayó sobre `2ceb46f` con **un solo** error,
+    y no era de los que vigilan el diccionario ni de los que cabe imaginar:
+    `normaliza(entrada).split(UNION)`. `String.split` recibe un `String` con la
+    expresión regular; `Pattern` es el otro dueño de ese método. Salió `v0.15.3` con
+    su página de texto y **sin APK**, otra vez, y se enteró una por la annotation
+    pública porque en esta máquina no hay `javac`.
+
+    Éstas no sustituyen al compilador: cortan el error de forma que se repite cuando
+    se escribe Java de memoria.
+    """
+
+    def setUp(self):
+        self.java = {java.name: java.read_text(encoding="utf-8")
+                     for java in sorted(FUENTES.glob("*.java"))}
+
+    def test_un_Pattern_nunca_es_argumento_de_split(self):
+        """`texto.split(MI_PATTERN)` no compila; `MI_PATTERN.split(texto)` sí."""
+        for nombre, texto in sorted(self.java.items()):
+            codigo = solo_codigo(texto)
+            for patron in re.findall(r"Pattern\s+(\w+)\s*=\s*Pattern\.compile", codigo):
+                self.assertNotIn(f".split({patron})", codigo,
+                                 f"{nombre}: `{patron}` es un Pattern y se le pasó a "
+                                 f"`String.split` — javac: «incompatible types»")
+                usado = (codigo.count(f"{patron}.split(")
+                         + codigo.count(f"{patron}.matcher("))
+                self.assertGreater(usado, 0,
+                                   f"{nombre}: `{patron}` se declara como Pattern y no "
+                                   f"se le llama a ninguno de sus dos métodos")
+
+    def test_el_pattern_de_la_union_parte_la_forma_normalizada(self):
+        """La línea que se cayó: sigue partida sobre `normaliza(...)`, no sobre la
+        frase cruda, que es lo que hace que «Y» y «y» valgan lo mismo."""
+        codigo = solo_codigo(self.java["Cerebro.java"])
+        self.assertIn("UNION.split(normaliza(entrada))", codigo)
+
+
 if __name__ == "__main__":
     unittest.main()

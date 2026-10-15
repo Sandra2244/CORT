@@ -178,7 +178,13 @@ public class Cerebro {
         List<String> piezas = new ArrayList<>();
         // Se parte sobre la forma **normalizada**: así «Y», «y» y «después» valen lo
         // mismo, y cada trozo que sale ya está en la forma que `procesar` espera.
-        for (String trozo : normaliza(entrada).split(UNION)) {
+        //
+        // `split` lo llama el `Pattern`, no el `String`. Escrito al revés
+        // —`texto.split(UNION)`— `javac` dice «incompatible types: Pattern cannot be
+        // converted to String», y eso costó el run 38810161046 de `compilar-apk` y una
+        // Release `v0.15.3` con su texto y sin APK: en esta máquina no hay `javac`.
+        // La prueba `test_un_Pattern_nunca_es_argumento_de_split` ya no lo deja repetir.
+        for (String trozo : UNION.split(normaliza(entrada))) {
             String limpio = trozo.trim();
             if (!limpio.isEmpty()) {
                 piezas.add(limpio);
