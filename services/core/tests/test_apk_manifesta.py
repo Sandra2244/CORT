@@ -19,6 +19,7 @@ estas guardias pueden comprobar es la forma —el paquete, la lista cerrada de
 `import`, que los activos se enlacen y que los permisos sigan siendo los cuatro
 prometidos—; la semántica del cerebro nativo la prueba `test_apk_cerebro.py`.
 """
+import json
 import re
 import subprocess
 import unittest
@@ -285,6 +286,49 @@ def solo_codigo(texto):
             salida.append(c)
             i += 1
     return "".join(salida)
+
+
+def bloques(codigo):
+    """Cada `{ … }` del fuente como `(abierto, cerrado)`, en orden de aparición.
+
+    Hace falta para poder decir si una llamada está **dentro** de un `try`: con las
+    llaves emparejadas es la única forma de no confundirse mirando líneas sueltas.
+    """
+    pila, salida = [], []
+    for numero, letra in enumerate(codigo):
+        if letra == "{":
+            pila.append(numero)
+        elif letra == "}" and pila:
+            salida.append((pila.pop(), numero))
+    return salida
+
+
+def envueltos(codigo, indice):
+    """Los bloques que contienen una posición, del más interno al más externo."""
+    return sorted([(a, c) for a, c in bloques(codigo) if a < indice < c],
+                  key=lambda par: par[1] - par[0])
+
+
+def esta_recogido(codigo, indice, excepciones):
+    """¿La llamada de `indice` cae en un `try` con su `catch`, o en un método que
+    declara el `throws`?
+
+    Ésa es la pregunta que `javac` hace y que en esta máquina no se puede hacer: un
+    `throws` declarado y sin recoger es error de compilación, y cuesta una Release.
+    Valen las dos respuestas que Java admite —el `catch` de una de las excepciones
+    declaradas, o el `throws` en la firma del método que envuelve la llamada—.
+    """
+    for abierto, cerrado in envueltos(codigo, indice):
+        antes = codigo[:abierto].rstrip()
+        if antes.endswith("try"):
+            despues = codigo[cerrado + 1:cerrado + 260].lstrip()
+            if despues.startswith("catch") and any(e in despues.split("{")[0]
+                                                   for e in excepciones):
+                return True
+        if antes.endswith(")") and any("throws" in antes and e in antes
+                                       for e in excepciones):
+            return True
+    return False
 
 
 class TestAjustesDeNube(unittest.TestCase):
@@ -924,12 +968,15 @@ class TestLoQueLlegaAlRunner(unittest.TestCase):
                          "`res/xml/asistente.xml` está ignorado: el runner no lo vería")
 
     def test_toda_entrada_del_build_es_seguida_por_git(self):
-        """Manifiesto, guion de compilado, tabla de frases y los quince Java."""
+        """Manifiesto, guion de compilado, tabla de frases, los dos diccionarios de
+        AOSP y los quince Java."""
         entradas = [MANIFIESTO, COMPILAR, APK / ".gitignore",
                     APK / "assets" / "habilidades.json",
-                    APK / "res" / "xml" / "asistente.xml"]
+                    APK / "res" / "xml" / "asistente.xml",
+                    APK / "simbolos-android.json",
+                    APK / "lanza-android.json"]
         entradas += sorted((APK / "src").rglob("*.java"))
-        self.assertGreaterEqual(len(entradas), 18, "el glob no encontró fuentes")
+        self.assertGreaterEqual(len(entradas), 20, "el glob no encontró fuentes")
         for ruta in entradas:
             self.assertFalse(self.esta_ignorado(ruta),
                              f"{ruta.name}: entrada del build que git ignora")
@@ -982,6 +1029,83 @@ class TestLoQueJavacNoDejaPasar(unittest.TestCase):
         frase cruda, que es lo que hace que «Y» y «y» valgan lo mismo."""
         codigo = solo_codigo(self.java["Cerebro.java"])
         self.assertIn("UNION.split(normaliza(entrada))", codigo)
+
+
+class TestLoQueJavacObligaARecoger(unittest.TestCase):
+    """El **segundo** error que sólo existe al compilar: un `throws` sin recoger.
+
+    El run **38812262724** de `compilar-apk` cayó sobre `97207fa` con un solo error,
+    y no era el del `Pattern` —ése ya estaba arreglado y `javac` no lo volvió a nombrar—:
+
+        src/dev/sandra/cort/Reconocimiento.java:40: error: unreported exception
+        RemoteException; must be caught or declared to be thrown
+                listener.error(SpeechRecognizer.ERROR_NO_MATCH);
+
+    `RecognitionService.Callback.error(int)` **declara** `throws RemoteException` en
+    AOSP (es un proxy al proceso del servicio de voz), y Java obliga a `catch`arlo o a
+    declararlo. `v0.15.4` salió con su página de texto y **sin APK**: la tercera
+    corrección hacia adelante del mes.
+
+    Lo que se puede comprobar aquí no es la semántica de Java: es que el diccionario
+    de firmas (`apps/apk/lanza-android.json`, escrito por `scripts/simbolos_android.py`
+    desde AOSP) exista, y que en el archivo que habla con esa clase ninguna llamada a
+    un método declaradamente peligroso se quede sin su `catch`.
+    """
+
+    def setUp(self):
+        self.lanza = json.loads((APK / "lanza-android.json").read_text(encoding="utf-8"))
+        self.java = {java.name: java.read_text(encoding="utf-8")
+                     for java in sorted(FUENTES.glob("*.java"))}
+
+    def test_el_diccionario_de_las_firmas_llega_y_no_esta_vacio(self):
+        """Sin este JSON la guarda no mira nada; que exista y nombre al `Callback`
+        es lo que la hace válida. Que llegue al clone lo vigila
+        `test_toda_entrada_del_build_es_seguida_por_git`."""
+        self.assertTrue((APK / "lanza-android.json").is_file(),
+                        "falta apps/apk/lanza-android.json: refrescar con "
+                        "`python3 scripts/simbolos_android.py`")
+        clases = self.lanza["clases"]
+        self.assertIn("RecognitionService", clases)
+        metodos = clases["RecognitionService"]["metodos"]
+        self.assertEqual(["RemoteException"], metodos["error"],
+                         "el `error` de `Callback` es el que costó la Release")
+        self.assertGreaterEqual(len(metodos), 8,
+                                "la lista de firmas bajó: se quedaron métodos sin vigilar")
+
+    def test_toda_llamada_a_un_metodo_que_declara_throws_esta_recogida(self):
+        """El archivo que nombra la clase de Android tiene que recoger lo que sus
+        métodos declaran lanzar — o declararlo él en la firma."""
+        for clase, datos in sorted(self.lanza["clases"].items()):
+            for nombre, excepciones in sorted(datos["metodos"].items()):
+                for archivo, texto in sorted(self.java.items()):
+                    if clase not in solo_codigo(texto):
+                        continue
+                    codigo = solo_codigo(texto)
+                    for coincidencia in re.finditer(rf"\.{re.escape(nombre)}\(", codigo):
+                        self.assertTrue(
+                            esta_recogido(codigo, coincidencia.start(), excepciones),
+                            f"{archivo}: `.{nombre}()` llama a un método de «{clase}» que "
+                            f"declara {', '.join(excepciones)} y la llamada no está ni "
+                            "dentro de un `try` con su `catch`, ni en un método que lo "
+                            "`throws`e — javac: «unreported exception»")
+
+    def test_la_linea_que_se_cayo_sigue_dentro_de_su_try(self):
+        """La del run 38812262724, dicha literal: el `error` se avisa y se recoge."""
+        codigo = solo_codigo(self.java["Reconocimiento.java"])
+        self.assertRegex(
+            codigo,
+            r"try \{\s*listener\.error\(SpeechRecognizer\.ERROR_NO_MATCH\);\s*\} "
+            r"catch \(RemoteException",
+            "el `listener.error(...)` volvió a quedarse sin su `catch (RemoteException`")
+
+    def test_el_remoteexception_esta_importado_donde_se_recoge(self):
+        """Un `catch` de una clase sin `import` es otro `cannot find symbol`: la guarda
+        de arriba no lo vería porque sólo mira el texto del `catch`."""
+        for archivo, texto in sorted(self.java.items()):
+            codigo = solo_codigo(texto)
+            if "catch (RemoteException" in codigo:
+                self.assertIn("import android.os.RemoteException;", codigo,
+                              f"{archivo}: recoge `RemoteException` sin importarla")
 
 
 if __name__ == "__main__":

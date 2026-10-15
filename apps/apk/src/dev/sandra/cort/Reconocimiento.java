@@ -1,6 +1,7 @@
 package dev.sandra.cort;
 
 import android.content.Intent;
+import android.os.RemoteException;
 import android.speech.RecognitionService;
 import android.speech.SpeechRecognizer;
 
@@ -37,7 +38,21 @@ public class Reconocimiento extends RecognitionService {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .putExtra(MainActivity.PIDE_ESCUCHAR, true);
         startActivity(abrir);
-        listener.error(SpeechRecognizer.ERROR_NO_MATCH);
+        // `Callback.error(int)` **declara** `throws RemoteException` en AOSP: el
+        // `Callback` es un proxy a otro proceso (el del servicio de voz del sistema),
+        // y si ese proceso se cayó antes de oír el código no hay a quién avisarle.
+        // El run 38812262724 de `compilar-apk` se cayó justo aquí —«unreported
+        // exception RemoteException; must be caught or declared to be thrown»— y dejó
+        // `v0.15.4` publicado sin APK. Aquí no hay `javac`, así que el `throws` de cada
+        // método lo vigila `lanza-android.json` con sus pruebas en
+        // `test_apk_manifesta.py`.
+        try {
+            listener.error(SpeechRecognizer.ERROR_NO_MATCH);
+        } catch (RemoteException caraYaPidiendo) {
+            // No hay nada que hacer: la cara ya está abierta y ya está pidiendo el
+            // micrófono. Avisar al servicio de voz del sistema era un extra, y si su
+            // proceso se cayó antes, ya no hay a quién.
+        }
     }
 
     @Override

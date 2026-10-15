@@ -1,0 +1,44 @@
+{
+ "que_es": "Los métodos de las clases de Android que **declaran** `throws` y que el Java del APK llama sobre un objeto del sistema. `javac` obliga a recoger un `throws` declarado, y aquí no hay `javac`: el run 38812262724 cayó porque `RecognitionService.Callback.error(int)` lanza `RemoteException` y no se recogía. Las pruebas del APK (`TestLoQueJavacObligaARecoger`) leen este archivo y exigen el `catch`.",
+ "fuente": "aosp-mirror/platform_frameworks_base, rama main",
+ "url_base": "https://raw.githubusercontent.com/aosp-mirror/platform_frameworks_base/main/",
+ "verificado": "2026-10-15",
+ "como_refrescar": "python3 scripts/simbolos_android.py",
+ "clases": {
+  "RecognitionService": {
+   "archivo": "core/java/android/speech/RecognitionService.java",
+   "metodos": {
+    "beginningOfSpeech": [
+     "RemoteException"
+    ],
+    "bufferReceived": [
+     "RemoteException"
+    ],
+    "endOfSpeech": [
+     "RemoteException"
+    ],
+    "error": [
+     "RemoteException"
+    ],
+    "partialResults": [
+     "RemoteException"
+    ],
+    "readyForSpeech": [
+     "RemoteException"
+    ],
+    "results": [
+     "RemoteException"
+    ],
+    "rmsChanged": [
+     "RemoteException"
+    ],
+    "segmentResults": [
+     "RemoteException"
+    ],
+    "endOfSegmentedSession": [
+     "RemoteException"
+    ]
+   }
+  }
+ }
+}
