@@ -22,15 +22,24 @@
           package="dev.sandra.cort">
 
     <!-- `versionCode` y `versionName` **no** se escriben aquí: los pone
-         `compilar.sh` al enlazar (`aapt2 link --version-code/--version-name`),
-         derivados de la etiqueta del corte — `v0.14.1` → código 1401 y nombre
-         «0.14.1»—. Aquí vivía un `versionName="0.13.0"` fijo que sobrevivía a
+         `compilar.sh` al enlazar, con las banderas de versión de `aapt2 link`,
+         derivados de la etiqueta del corte — `v0.14.2` → código 1402 y nombre
+         «0.14.2»—. Aquí vivía un `versionName="0.13.0"` fijo que sobrevivía a
          todas las Release: dos verdades de la versión, y la del manifiesto era
-         la que mentía. -->
+         la que mentía. (Y sin guiones seguidos dentro de este comentario: dos de
+         ellos dentro de un comentario XML no son comentario, es manifiesto roto —
+         así se cayó el run 18 de `compilar-apk` sobre `af8b138`, medido por
+         annotation—.) -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- `required="false"` en micrófono y cámara: es lo que dice el comentario de
+         arriba, y hasta ahora sólo lo decían los `<uses-feature>` — los permisos
+         se quedaban sin el atributo, que por defecto vale `true`. La prueba
+         `test_apk_manifesta.py` lo comprueba en los dos sitios. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA"
+                     android:required="false" />
 
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
