@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   El APK es una ventana, no un segundo CORT: carga la página que sirve el
-  lanzador (`cort.py --lan` → http://IP:8780) sobre el WebView del sistema.
+  lanzador (`cort.py` con su bandera de LAN → http://IP:8780) sobre el WebView
+  del sistema.
   Todo lo que hace el asistente —cerebro, memoria, permisos— vive en el
   portátil; este archivo no añade ninguna capacidad nueva, sólo un sitio donde
   ver la cara desde el teléfono.
