@@ -108,6 +108,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          buscar_etiqueta_del_commit() {
+            gh api "repos/$GITHUB_REPOSITORY/tags?per_page=30" \
+              | python3 -c '
+          import json, os, sys
+          sha = os.environ["GITHUB_SHA"]
+          for t in json.load(sys.stdin):
+              if t["commit"]["sha"] == sha:
+                  print(t["name"])
+                  break
+          '
+          }
           etiqueta=""
           case "${GITHUB_REF_NAME:-}" in
             v*) etiqueta="$GITHUB_REF_NAME" ;;
@@ -116,21 +127,25 @@ jobs:
               # crea `publicar-release.yml` con `gh release create` si no existía,
               # y eso no dispara ningún evento de etiqueta — por eso el APK de
               # v0.14.0 se quedó sin subir el 2026-10-15.
-              etiqueta="$(gh api "repos/$GITHUB_REPOSITORY/tags?per_page=20" \
-                | python3 -c '
-          import json, os, sys
-          sha = os.environ["GITHUB_SHA"]
-          for t in json.load(sys.stdin):
-              if t["commit"]["sha"] == sha:
-                  print(t["name"])
-                  break
-          ')"
+              etiqueta="$(buscar_etiqueta_del_commit)"
+              if [ -z "$etiqueta" ]; then
+                # La hermana `publicar-release` corre en paralelo y tarda ~10 s en
+                # abrir la página y crear la etiqueta. Esperar dos minutos cubre la
+                # carrera de sobra: este paso llega después de compilar, que ya dura
+                # minuto y pico.
+                for i in $(seq 1 12); do
+                  sleep 10
+                  etiqueta="$(buscar_etiqueta_del_commit)"
+                  [ -n "$etiqueta" ] && break
+                done
+              fi
               ;;
           esac
           if [ -z "$etiqueta" ]; then
             echo "Sin etiqueta sobre ${GITHUB_SHA:0:7}: el APK queda sólo como artefacto del run."
             exit 0
           fi
+          echo "Etiqueta de este commit: $etiqueta"
           # Esperar a `publicar-release.yml` abra la página (máx. 10 min).
           for i in $(seq 1 60); do
             if gh release view "$etiqueta" >/dev/null 2>&1; then
