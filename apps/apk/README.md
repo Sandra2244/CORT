@@ -51,7 +51,9 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
    `v0.15.3` y `v0.15.4` están publicadas con su texto pero **sin APK** — cada compilado cayó con
    **un** error de tipos que aquí no se puede ver: el `Pattern` pasado a `String.split`, y el
    `RemoteException` sin recoger en `Reconocimiento.java:40`—; el binario que hay que bajar es
-   **`CORT-v0.15.5.apk`**, que lleva las funciones de `v0.15.3` ya compiladas. Se comprueba mirando
+   **`CORT-v0.15.5.apk`**, que lleva las funciones de `v0.15.3` ya compiladas: el run **38815381368**
+   dio verde y el APK está publicado (82 881 B, sha-256 `86d41d83…d7ccb5`, `versionCode 1505`, las **quince**
+   clases en `classes.dex`) — medido aquí bajándolo, no leyendo una log. Se comprueba mirando
    los adjuntos de la página, no una log de Actions que es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,

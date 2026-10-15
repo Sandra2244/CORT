@@ -17,7 +17,16 @@
 > `apps/apk/`) exige que toda llamada a un método declarado peligroso esté en un `try` con su `catch` o
 > en un método que declare el `throws`: **comprobadas no vacías** —quitando el `try` fallan dos, con él
 > pasan las cuatro—, y una cuarta prueba añade que el `catch` no nombre una clase sin `import`, que es
-> el siguiente error de este género. Verificación anterior, **2026-10-15 (12)**
+> el siguiente error de este género. **Y esta vez el binario sí se midió**: el run **38815381368** de
+> `compilar-apk` dio **verde** — el primero de las clases del asistente — y `CORT-v0.15.5.apk` está
+> publicado, bajado y abierto aquí: **82 881 B**, sha-256 `86d41d83…d7ccb5` (igual al `digest` de la API),
+> trece entradas, `classes.dex` de **73 848 B** con las **quince** clases `dev/sandra/cort/*` (`Asistente`,
+> `Sesiones`, `Sesion`, `Reconocimiento` incluidas), `res/xml/asistente.xml` de 476 B con sus cuatro
+> etiquetas crudas, manifiesto con `BIND_VOICE_INTERACTION`, `0.15.5` y `versionCode` **1505** escrito una
+> sola vez, `setTorchMode` y `queryIntentActivities` en el dex, `/memoria/puente` dos veces, y **cero** de
+> `Runtime`/`ProcessBuilder`/`exec(`/`/system/bin`/`QUERY_ALL_PACKAGES`/`ACTION_CALL` y cero cadenas `sk-`.
+> Su `…-firma.txt` dice `llave: desechable`: hay que desinstalar el anterior. **Lo que sigue sin verificar
+> es el dedo**: que hable, oiga, abra apps y sea elegible como asistente. Verificación anterior, **2026-10-15 (12)**
 > (`TMPDIR=/tmp make test` **688** en verde en **85,311 s**,
 > `make test-web` **56** — **744** en total—): **`v0.15.4` es el arreglo de un error que sólo existía al
 > compilar.** `Cerebro.partir()` llamaba a `split` sobre el `String` pasándole el `Pattern`
