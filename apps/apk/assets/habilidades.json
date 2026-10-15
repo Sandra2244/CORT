@@ -15,177 +15,313 @@
     "decir"
   ],
   "parametros": {
-    "volumen": ["subir", "bajar", "silencio", "maximo"],
-    "abrir": ["ajustes", "navegador", "reloj", "musica", "mensajeria", "telefono", "teclado"],
-    "saber": ["yo"]
+    "volumen": [
+      "subir",
+      "bajar",
+      "silencio",
+      "maximo"
+    ],
+    "abrir": [
+      "ajustes",
+      "navegador",
+      "reloj",
+      "musica",
+      "mensajeria",
+      "telefono",
+      "teclado"
+    ],
+    "saber": [
+      "yo"
+    ]
   },
   "patrones": [
     {
       "id": "hora",
       "accion": "hora",
-      "patrones": ["que hora es", "que hora tengo", "dime la hora", "tienes la hora"],
+      "patrones": [
+        "que hora es",
+        "que hora tengo",
+        "dime la hora",
+        "tienes la hora"
+      ],
       "respuesta": "Son las {hora}."
     },
     {
       "id": "fecha",
       "accion": "fecha",
-      "patrones": ["que dia es hoy", "que dia es", "que fecha es", "dime la fecha", "fecha de hoy"],
+      "patrones": [
+        "que dia es hoy",
+        "que dia es",
+        "que fecha es",
+        "dime la fecha",
+        "fecha de hoy"
+      ],
       "respuesta": "Hoy es {fecha}."
     },
     {
       "id": "volumen-subir",
       "accion": "volumen",
       "param": "subir",
-      "patrones": ["sube el volumen", "subir el volumen", "sube volumen", "mas fuerte"],
+      "patrones": [
+        "sube el volumen",
+        "subir el volumen",
+        "sube volumen",
+        "mas fuerte"
+      ],
       "respuesta": "Subo el volumen."
     },
     {
       "id": "volumen-bajar",
       "accion": "volumen",
       "param": "bajar",
-      "patrones": ["baja el volumen", "bajar el volumen", "baja volumen", "mas bajo"],
+      "patrones": [
+        "baja el volumen",
+        "bajar el volumen",
+        "baja volumen",
+        "mas bajo"
+      ],
       "respuesta": "Bajo el volumen."
     },
     {
       "id": "volumen-silencio",
       "accion": "volumen",
       "param": "silencio",
-      "patrones": ["silencio", "pon silencio", "callate el telefono", "sin sonido"],
+      "patrones": [
+        "silencio",
+        "pon silencio",
+        "callate el telefono",
+        "sin sonido"
+      ],
       "respuesta": "Dejo el telefono en silencio."
     },
     {
       "id": "volumen-maximo",
       "accion": "volumen",
       "param": "maximo",
-      "patrones": ["volumen al maximo", "sube todo el volumen", "ponlo al maximo"],
+      "patrones": [
+        "volumen al maximo",
+        "sube todo el volumen",
+        "ponlo al maximo"
+      ],
       "respuesta": "Volumen al maximo."
     },
     {
       "id": "abrir-ajustes",
       "accion": "abrir",
       "param": "ajustes",
-      "patrones": ["abre los ajustes", "abrir ajustes", "abre ajuste", "configuracion"],
+      "patrones": [
+        "abre los ajustes",
+        "abrir ajustes",
+        "abre ajuste",
+        "configuracion"
+      ],
       "respuesta": "Abro los ajustes."
     },
     {
       "id": "abrir-navegador",
       "accion": "abrir",
       "param": "navegador",
-      "patrones": ["abre el navegador", "abrir navegador", "abre chrome"],
+      "patrones": [
+        "abre el navegador",
+        "abrir navegador",
+        "abre chrome"
+      ],
       "respuesta": "Abro el navegador."
     },
     {
       "id": "abrir-reloj",
       "accion": "abrir",
       "param": "reloj",
-      "patrones": ["abre el reloj", "abrir reloj", "abre la app del reloj"],
+      "patrones": [
+        "abre el reloj",
+        "abrir reloj",
+        "abre la app del reloj"
+      ],
       "respuesta": "Abro el reloj."
     },
     {
       "id": "abrir-musica",
       "accion": "abrir",
       "param": "musica",
-      "patrones": ["abre la musica", "abrir musica", "pon musica", "reproduce musica"],
+      "patrones": [
+        "abre la musica",
+        "abrir musica",
+        "pon musica",
+        "reproduce musica"
+      ],
       "respuesta": "Abro la musica."
     },
     {
       "id": "abrir-mensajeria",
       "accion": "abrir",
       "param": "mensajeria",
-      "patrones": ["abre los mensajes", "abrir mensajes", "abre whatsapp"],
+      "patrones": [
+        "abre los mensajes",
+        "abrir mensajes",
+        "abre whatsapp"
+      ],
       "respuesta": "Abro los mensajes."
     },
     {
       "id": "abrir-telefono",
       "accion": "abrir",
       "param": "telefono",
-      "patrones": ["abre el telefono", "marcar numero", "abrir marcador"],
+      "patrones": [
+        "abre el telefono",
+        "marcar numero",
+        "abrir marcador"
+      ],
       "respuesta": "Abro el marcador."
     },
     {
       "id": "abrir-teclado",
       "accion": "abrir",
       "param": "teclado",
-      "patrones": ["abre el teclado", "ajustes del teclado", "configurar teclado"],
+      "patrones": [
+        "abre el teclado",
+        "ajustes del teclado",
+        "configurar teclado"
+      ],
       "respuesta": "Abro los ajustes del teclado."
     },
     {
       "id": "alarma",
       "accion": "alarma",
-      "patrones": ["despiertame a las {resto}", "pon una alarma a las {resto}", "alarma a las {resto}", "alerta a las {resto}"],
+      "patrones": [
+        "despiertame a las {resto}",
+        "pon una alarma a las {resto}",
+        "alarma a las {resto}",
+        "alerta a las {resto}"
+      ],
       "respuesta": "Pongo la alarma a las {resto}."
     },
     {
       "id": "cronometro",
       "accion": "cronometro",
-      "patrones": ["cronometro de {resto}", "pon un cronometro de {resto}", "cuenta atras de {resto}"],
+      "patrones": [
+        "cronometro de {resto}",
+        "pon un cronometro de {resto}",
+        "cuenta atras de {resto}"
+      ],
       "respuesta": "Cronometro de {resto}."
     },
     {
       "id": "guardar",
       "accion": "guardar",
-      "patrones": ["recuerda que {resto}", "aprende que {resto}", "guarda que {resto}", "anota {resto}"],
+      "patrones": [
+        "recuerda que {resto}",
+        "aprende que {resto}",
+        "guarda que {resto}",
+        "anota {resto}"
+      ],
       "respuesta": "Anotado: {resto}. Se queda en este telefono."
+    },
+    {
+      "id": "listar",
+      "accion": "listar",
+      "patrones": [
+        "que sabes de mi",
+        "que recuerdas",
+        "que tengo guardado",
+        "lista de datos"
+      ],
+      "respuesta": "Tengo guardado: {lista}."
     },
     {
       "id": "saber-algo",
       "accion": "saber",
-      "patrones": ["que sabes de {resto}", "que tienes de {resto}", "cual es mi {resto}", "recuerdas {resto}"],
+      "patrones": [
+        "que sabes de {resto}",
+        "que tienes de {resto}",
+        "cual es mi {resto}",
+        "recuerdas {resto}"
+      ],
       "respuesta": "Esto sé de {resto}: {valor}"
     },
     {
       "id": "quien-soy",
       "accion": "saber",
       "param": "yo",
-      "patrones": ["quien soy", "como me llamo", "sabes quien soy"],
+      "patrones": [
+        "quien soy",
+        "como me llamo",
+        "sabes quien soy"
+      ],
       "respuesta": "{valor}"
-    },
-    {
-      "id": "listar",
-      "accion": "listar",
-      "patrones": ["que sabes de mi", "que recuerdas", "que tengo guardado", "lista de datos"],
-      "respuesta": "Tengo guardado: {lista}."
     },
     {
       "id": "buscar",
       "accion": "buscar",
-      "patrones": ["busca {resto}", "buscar {resto}", "googlea {resto}", "investiga {resto}"],
+      "patrones": [
+        "busca {resto}",
+        "buscar {resto}",
+        "googlea {resto}",
+        "investiga {resto}"
+      ],
       "respuesta": "Busco {resto} en el navegador."
     },
     {
       "id": "quien-eres",
       "accion": "decir",
-      "patrones": ["quien eres", "que eres", "como te llamas"],
+      "patrones": [
+        "quien eres",
+        "que eres",
+        "como te llamas"
+      ],
       "respuesta": "Soy CORT. Vivo en este telefono: hablo, escucho, manejo el aparato y me acuerdo de ti. Y cuando tu portátil esta encendido y publicado, tambien lo manejo."
     },
     {
       "id": "puedes",
       "accion": "decir",
-      "patrones": ["que puedes hacer", "para que sirves", "ayuda", "comandos"],
+      "patrones": [
+        "que puedes hacer",
+        "para que sirves",
+        "ayuda",
+        "comandos"
+      ],
       "respuesta": "La hora y la fecha, el volumen, abrir aplicaciones, alarmas y cronometros, acordarme de lo que me cuentes, buscar en internet y hablar por el altavoz. Sin portatil y sin servidor."
     },
     {
       "id": "hola",
       "accion": "decir",
-      "patrones": ["hola", "buenos dias", "buenas tardes", "buenas noches", "oye cort"],
+      "patrones": [
+        "hola",
+        "buenos dias",
+        "buenas tardes",
+        "buenas noches",
+        "oye cort"
+      ],
       "respuesta": "Hola. Te escucho."
     },
     {
       "id": "gracias",
       "accion": "decir",
-      "patrones": ["gracias", "muchas gracias", "muy amable"],
+      "patrones": [
+        "gracias",
+        "muchas gracias",
+        "muy amable"
+      ],
       "respuesta": "Para eso estoy."
     },
     {
       "id": "adios",
       "accion": "decir",
-      "patrones": ["adios", "hasta luego", "apagate"],
+      "patrones": [
+        "adios",
+        "hasta luego",
+        "apagate"
+      ],
       "respuesta": "Aqui sigo cuando me necesites."
     },
     {
       "id": "estado",
       "accion": "decir",
-      "patrones": ["estas ahi", "me oyes", "funcionas", "como estas"],
+      "patrones": [
+        "estas ahi",
+        "me oyes",
+        "funcionas",
+        "como estas"
+      ],
       "respuesta": "Bien, en el telefono. No hace falta tu portatil para esto."
     }
   ]

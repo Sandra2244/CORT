@@ -106,6 +106,48 @@ class TestTabla(unittest.TestCase):
             for hueco in re.findall(r"\{(\w+)\}", regla.get("respuesta", "")):
                 self.assertIn(hueco, HUECOS, f"{regla['id']}: hueco {{ {hueco} }} desconocido")
 
+    def test_una_regla_con_hueco_no_le_roba_la_frase_a_la_exacta(self):
+        """El orden de la tabla **es** la prioridad: `Cerebro.encaja` recorre las
+        reglas de arriba abajo, y una con `{resto}` casa por prefijo. Si una de
+        esas vive antes que una exacta que empieza igual, la exacta no se activa
+        nunca. Pasó de verdad: «¿qué sabes de mí?» caía en `saber-algo`
+        («que sabes de {resto}») y CORT buscaba un hecho clave `mi` en vez de
+        listar lo que sabe —la pregunta literal de la función 100—."""
+        con_hueco = [(i, r["id"], p.split("{resto}")[0].strip())
+                     for i, r in enumerate(self.reglas)
+                     for p in r["patrones"] if "{resto}" in p]
+        exactas = [(i, r["id"], p) for i, r in enumerate(self.reglas)
+                   for p in r["patrones"] if "{resto}" not in p]
+        self.assertTrue(con_hueco and exactas, "la tabla se quedó sin uno de los dos tipos")
+        for i, regla, patron in exactas:
+            for k, otro, prefijo in con_hueco:
+                if prefijo and patron != prefijo and patron.startswith(prefijo) and k < i:
+                    self.fail(f"«{patron}» ({regla}) lo atrapa antes {otro} por prefijo: "
+                              f"la regla exacta no casa nunca")
+
+    def test_quien_pregunta_por_todo_escucha_su_lista(self):
+        """El caso medido que motiva el orden, escrito como frase y no como
+        abstracción: es lo que la dueña va a teclear el día que estrene la cara."""
+        self.assertEqual("listar", encaja(self.reglas, "¿qué sabes de mí?"))
+        self.assertEqual("listar", encaja(self.reglas, "qué recuerdas"))
+        self.assertEqual("saber-algo", encaja(self.reglas, "¿qué sabes de mis gustos?"))
+
+
+def encaja(reglas, entrada):
+    """Espejo en Python de `Cerebro.encaja` (Java): exacto si no lleva `{resto}`,
+    por prefijo si lo lleva, y **la primera de la tabla gana**. Sirve para probar
+    el orden, que en Java no se puede probar en esta máquina."""
+    dicho = normaliza(entrada)
+    for regla in reglas:
+        for patron in regla["patrones"]:
+            hueco = patron.find("{resto}")
+            if hueco == -1:
+                if patron == dicho:
+                    return regla["id"]
+            elif dicho.startswith(patron[:hueco]) and dicho[hueco:].strip():
+                return regla["id"]
+    return None
+
 
 class TestCosturaConJava(unittest.TestCase):
     """La tabla y el Java se leen en sentidos opuestos: Java parsea la tabla, y
