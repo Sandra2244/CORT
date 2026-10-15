@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.13.1-6f4ff2?style=flat-square">
+  <img alt="Versión" src="https://img.shields.io/badge/versión-v0.14.0-6f4ff2?style=flat-square">
   <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-8%20publicadas-2ea44f?style=flat-square"></a>
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-546%20en%20verde-2ea44f?style=flat-square">
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-553%20en%20verde-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -19,15 +19,15 @@
 
 No una maqueta: un orbe de shader que respira y que **se deshace en una nube de puntos cuando dejas de mirarlo**, **una voz que se oye** y un micrófono que sigue escuchando aunque cierres la ventana, una memoria que sobrevive al apagar y que **ya sabe quién eres y qué teléfono usas sin que lo repitas**, un cerebro que puede ser un modelo tuyo o un chat local —y desde este corte **ejecuta, comprueba el resultado en el mundo real, y avisa solo si alguien le toca la puerta sin llave**—, **una cara que se aparta cuando dejas de tocarla** — en reposo son tres cosas: el reactor, el reloj y un muelle con seis accesos; lo demás son ventanas de vidrio que se invocan, se arrastran y se echan —, y una capa de permisos que hace las cosas en el sistema real — con una llave delante cuando asoma el puerto a la red. Corre en un portátil de **1,8 GiB de RAM y sin tarjeta gráfica**, porque si corriera en una máquina de 128 GiB no valdría nada como prueba de concepto.
 
-**Prototipo actual: `v0.13.1`** (el cerebro JARVIS es de `v0.13.0`; `v0.13.1` es el corte que **domó el pipeline del APK** — nueve `run`s, cada fallo leído por *annotation* público — y hace que la Release traiga el `CORT-v0.13.1.apk` descargable, **sin verificar aún en un dedo**) · rama **`main`** · **490 pruebas en verde** del core + **56** de la cara (`make test` y `make test-web`; ejecutadas, no contadas — el corte del 2026-10-14 sumó **137** del cerebro: 87 del registro de herramientas y su lazo, 37 del server cableado, la agenda y el cronómetro, 6 de la memoria de dispositivo y el `system` de la nube, 7 del aviso de rechazos; las de la cara volvieron en otra forma el 2026-10-12 con `cort/activacion.ts` y siguen: `labios.ts`, `afecto.ts`, `cort/teclas.ts`, `cort/comandos.ts` y `cort/asoma.ts`—) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
+**Prototipo actual: `v0.14.0`** (el cerebro JARVIS es de `v0.13.0`, el APK descargable llegó en `v0.13.1`, y este corte **quita el muro del teléfono**: la llave de red la inventa el lanzador y la guarda en el `.env`, la primera pantalla de la app es la cara de CORT con un solo campo que pegar, y la firma del APK tiene llave estable para instalar el APK nuevo encima del viejo sin desinstalar. **Sin verificar en un dedo** — nadie lo ha encendido todavía en el Samsung —) · rama **`main`** · **497 pruebas en verde** del core + **56** de la cara (`make test` y `make test-web`; ejecutadas, no contadas — este corte suma **7** a las del lanzador (la llave que se crea sola), y el corte del 2026-10-14 sumó **137** del cerebro: 87 del registro de herramientas y su lazo, 37 del server cableado, la agenda y el cronómetro, 6 de la memoria de dispositivo y el `system` de la nube, 7 del aviso de rechazos; las de la cara volvieron en otra forma el 2026-10-12 con `cort/activacion.ts` y siguen: `labios.ts`, `afecto.ts`, `cort/teclas.ts`, `cort/comandos.ts` y `cort/asoma.ts`—) · licencia MIT · creadores **Sandra Lopez** y **Askher Vargas**.
 
 ![CORT en reposo: el reactor holográfico morado y azul ocupando la pantalla, el reloj con su punto de conexión arriba y el muelle de vidrio con sus seis accesos abajo (captura del 2026-10-11)](docs/assets/ventanas-vidrio-2026-10-11.png)
 
 *La portada es del 2026-10-11, sacada del navegador con el core real en `--demo` (memoria de usar y tirar, así el panel no enseña recuerdos de nadie).* Muestra CORT **en reposo**, que es el estado por defecto: el reactor morado, el reloj con su punto de conexión y el muelle de vidrio con sus seis accesos —en la foto aún sin el numerito de su tecla dentro de cada botón, que entró el 2026-10-13 y no se ha vuelto a capturar—. Las ventanas no aparecen en la foto porque en reposo no hay ninguna montada en el DOM —se invocan—, y así se comprueba en la tabla de abajo.
 
 > **Descargar / probar:** [`git clone https://github.com/Sandra2244/CORT.git`](https://github.com/Sandra2244/CORT) ·
-> [ZIP de `v0.13.1`](https://github.com/Sandra2244/CORT/archive/refs/tags/v0.13.1.zip) ·
-> [APK para el teléfono (`CORT-v0.13.1.apk` en la Release)](https://github.com/Sandra2244/CORT/releases/tag/v0.13.1) ·
+> [ZIP de `v0.14.0`](https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.0.zip) ·
+> [APK para el teléfono (`CORT-v0.14.0.apk` en la Release)](https://github.com/Sandra2244/CORT/releases/tag/v0.14.0) ·
 > [las ocho Release publicadas](https://github.com/Sandra2244/CORT/releases) ·
 > [Instalación paso a paso ↓](#instalación)
 
@@ -160,7 +160,7 @@ El core escucha en `127.0.0.1`, y así se queda por defecto: **por ese WebSocket
 
 Así que la red tiene una condición, escrita en `cort_core/security.py`:
 
-1. **Sin `CORT_LAN_TOKEN` no se abre el puerto.** Ni el lanzador (`cort.py --lan`) ni el módulo de arranque (`python -m cort_core.server` con `CORT_HOST=0.0.0.0`): los dos se niegan, salen con código 1 y **imprimen la línea exacta que falta**, con un secreto generado para copiar. Un puerto abierto por olvido de una variable es el caso que esta regla cierra.
+1. **Sin `CORT_LAN_TOKEN` no se abre el puerto** — y ya no hace falta que nadie lo escriba. `cort.py --lan` con la variable vacía **la genera** (`secrets`), la guarda en el `.env` con permiso `0600` y arranca; negarse queda como última barrera, sólo si el disco no escribe. El módulo de arranque (`python -m cort_core.server` con `CORT_HOST=0.0.0.0` y sin token) **sí** se sigue negando con código 1: el candado está en el que escucha. Un puerto abierto por olvido de una variable es el caso que esta regla cierra, y abrirlo porque sí sería peor.
 2. **En local no se pide nada.** No hay a quién autorizar en `127.0.0.1`, y exigir una llave ahí sería un paso de más para la dueña del portátil. Publicado el puerto, el bucle invertido **sigue** entrando sin llave: el portátil puede estar en `--lan` para el teléfono y seguir abriéndose a sí mismo como siempre.
 3. **La llave viaja por la URL** (`?token=…`), que es lo que imprime el lanzador ya puesto en la dirección del móvil. No es una cabecera porque el `WebSocket` del navegador y un `<img>` de una miniatura no pueden mandar una `Authorization`.
 4. **Se compara en tiempo constante y antes de tocar el disco.** Un archivo pedido desde la red sin llave responde **401**, no 404, para no confirmar qué nombres existen; y el WebSocket se cierra con **4401 antes de `accept()`**, para no regalar un lazo abierto con su tarea de iniciativa y su saludo.
@@ -197,8 +197,8 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 | Gestos y visión (desenfoque con cámara, arrastrar paneles, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 1 | 11 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| El asistente que actúa (herramientas de lista cerrada, reloj en español, agenda que suena, bucle proponer→ejecutar→medir, nube opcional, APK) | 11 | 9 | 2 | 0 |
-| **Total** | **94** | **38** | **18** | **38** |
+| El asistente que actúa (herramientas de lista cerrada, reloj en español, agenda que suena, bucle proponer→ejecutar→medir, nube opcional, APK) | 14 | 10 | 4 | 0 |
+| **Total** | **97** | **39** | **20** | **38** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «38-44» son siete funciones, no una). No se pasan a mano: las escupe `python scripts/cuenta_funciones.py`, que lee ese documento y escribe esta tabla tal cual. Antes del script el README llegó a decir 77 con 82 filas contadas en el inventario — un número tecleado a mano es un número que se desfasa solo (regla 11)—.
 
@@ -217,8 +217,8 @@ Cada fila de esta tabla se ejecutó en la máquina de desarrollo; nada está ded
 | 🛠️ | **El cerebro JARVIS**: 19 herramientas de **lista cerrada** (abrir apps con búsqueda, brillo, volumen, notas, música, YouTube…), el reloj y la fecha en español, y un bucle que **propone, ejecuta y comprueba** cada paso antes de decir «listo» — con tope de 4 vueltas y una forma fija de decir «No pude hacer eso: …». El modelo **elige claves, no comandos**: lo que se ejecuta es siempre la misma frontera de `actions.py`, y se apaga todo con `CORT_TOOLS=0` sin tocar código | `herramientas.py` + `agente.py` + `tiempo.py` con sus pruebas dentro del suite — incluyendo `TestHerramientasPorElSocket`, que habla por WebSocket de verdad con `TestClient` — y una prueba que le **lee el fuente** al registro buscando `subprocess`/`os.system`. Suite entera vuelta a ejecutar el 2026-10-14: **Ran 490 tests in 70,169 s — OK** |
 | ⏰ | **Agenda que suena y cronómetro**: «pon una alarma a las 7», «recuérdame llamar a mi mamá en 20 minutos» quedan en SQLite, viajan al navegador con el marco nuevo `alarm` (doce tipos en el protocolo) y suenan **aunque el mensaje se haya dicho hace horas** — lo pendiente se entrega al abrir la pestaña—. «cuánto llevo» levanta un cronómetro que sube en el anillo | `agenda.py` + `timer.py` con pruebas en el suite: la cuenta existe **sólo mientras alguien la mira** (la tarea muere al cancelar y al cerrar la conexión), y «1 hora y 15 minutos» son 4500 s, no 15. **Sin verificar**: la alarma sonando vista en una pantalla y el anillo del cronómetro pintado — escrito, typecheado y construido en la cara; el navegador va cerrado por pedido de la dueña desde el 2026-10-12 |
 | ☁️ | **Cerebro opcional en la nube**: `CORT_LLM_PROVIDER=ollama\|anthropic\|openai` — por defecto **nada sale de la máquina**, y si la nube falla el turno igual se cierra con un aviso visible («[nube no disponible: …]») en vez de quedarse callada. Los hechos de la dueña —su nombre, su dispositivo— viajan con el prompt **mergeados en un solo `system`**, porque Claude barría los mensajes `system` sueltos del historial y la nube olvidaba justo lo que no hay que repetir | 18 pruebas en `test_brain.py` con `httpx.MockTransport`, **cero peticiones reales**: las claves de ella no se gastan ni se leen para probar. **Sin verificar con cuenta real**: nadie ha visto a Claude recordar el teléfono en una charla de verdad |
-| 📱 | **APK para el teléfono**: `CORT-v<versión>.apk` en cada Release — una sola actividad Java **sin Gradle ni AndroidX** que abre la URL que imprime `cort.py --lan` con su llave pegada, y guarda la dirección en `SharedPreferences`; el icono se **dibuja** con `scripts/marca.py` en cada build | Compilado por `.github/workflows/compilar-apk.yml` con `aapt2`/`javac`/`d8`/`apksigner`, disparado también al empujar `main` para verlo **antes** de etiquetar. Primer verde medido el 2026-10-15 (run 38679448057 sobre `main`, APK de 38 442 bytes). **Sin verificar en dedo**: `SpeechRecognition` no existe dentro del WebView (escuchar sigue siendo la PWA en Chrome) y la firma es desechable sin el secreto `CORT_APK_KEYSTORE_B64` — límites escritos en `apps/apk/README.md` |
-| 🔑 | **Llave de red**: el puerto no se abre a la Wi-Fi sin `CORT_LAN_TOKEN`, y publicado, el WebSocket se rechaza con **4401 antes de `accept()`** y un archivo de atuendo responde **401 antes de tocar el disco** | 25 pruebas en `test_security.py` + 4 en `test_launcher.py`: matriz de `es_local`, token recortado, arranque rechazado por subprocess (código 1), `autorizado` en sus cuatro casos, lazo rechazado sin llave y aceptado con ella, y el orden 401→404. En local (`127.0.0.1`) nada cambia: no se pide nada |
+| 📱 | **APK para el teléfono**: `CORT-v<versión>.apk` en cada Release — una sola actividad Java **sin Gradle ni AndroidX** que abre la URL que imprime `cort.py --lan`. Desde `v0.14.0` la pantalla de estreno es **la cara de CORT** (fondo espacial, anillo girando dibujado con `Canvas`, un solo campo donde se pega el enlace entero con su llave) y no el formulario gris de Android; la dirección queda en `SharedPreferences` y el botón «atrás» no sale a la calle a la primera. El icono se **dibuja** con `scripts/marca.py` en cada build, y si el portátil está apagado el aviso sale en español (Toast + diálogo para reescribir), no en inglés de navegador | Compilado por `.github/workflows/compilar-apk.yml` con `aapt2`/`javac`/`d8`/`apksigner`, disparado también al empujar `main` para verlo **antes** de etiquetar. Primer verde medido el 2026-10-15 (run 38679448057 sobre `main`, APK de 38 442 bytes). **Sin verificar en dedo**: `SpeechRecognition` no existe dentro del WebView (escuchar sigue siendo la PWA en Chrome), y el aviso de Android («app desconocida») **no se puede quitar** mientras no esté en Play Store — lo que sí se arregló es la firma estable, para instalar encima sin desinstalar: guía y secretos en `apps/apk/README.md` |
+| 🔑 | **Llave de red**: el puerto no se abre a la Wi-Fi sin `CORT_LAN_TOKEN` — pero **la crea el propio lanzador** desde `v0.14.0` y la guarda en el `.env` (0600), así que nadie teclea secretos; publicado el puerto, el WebSocket se rechaza con **4401 antes de `accept()`** y un archivo de atuendo responde **401 antes de tocar el disco** | 25 pruebas en `test_security.py` + 4 en `test_launcher.py`: matriz de `es_local`, token recortado, arranque rechazado por subprocess (código 1), `autorizado` en sus cuatro casos, lazo rechazado sin llave y aceptado con ella, y el orden 401→404. En local (`127.0.0.1`) nada cambia: no se pide nada |
 | 🧾 | **Bitácora de rechazos**: cada puerta que CORT cerró queda escrita con hora, motivo y dirección de quien la pidió, y se lee en la terminal con `make rechazos` | **Medido en vivo el 2026-10-09**: core publicado en `0.0.0.0`, tiros de `curl` contra la IP real de la Wi-Fi (`192.168.100.xxx`) → `401` sin llave, `401` con llave mala, `404` de `notas.txt` teniendo la buena, `200` del PNG legítimo, `403` en el apretón de manos del WebSocket sin token, y **cuatro líneas en el registro** (`acceso-sin-llave`, `llave-incorrecta`, `extension-no-permitida`, `acceso-sin-llave WS /ws`) **comprobadas sin la llave dentro** con `grep`. 20 pruebas en `test_audit.py` + 6 nuevas en `test_avatars.py`: `\n` en el detalle no fabrica una línea, un motivo fuera de la lista cerrada no se escribe, la carpeta de destino cae en `data/` (ignorada por git), un disco que no escribe devuelve `False` y no revienta nada, y el archivo se recorta conservando lo más nuevo. **Y desde el 2026-10-14 el registro se avisa solo**: medido en vivo en esta máquina —tres `acceso-sin-llave` en la bitácora → `rechazos_de_acceso()` devuelve 3 y la primera regla que se dice es `rechazos`, con el número escrito en la frase—; 4 pruebas nuevas en `test_audit.py` y 3 en `test_initiative.py`, ventana de diez minutos y umbral de tres |
 | 🧠 | **Memoria persistente** (SQLite). Se mata el proceso, al levantarlo saluda: *"Hola de nuevo, Sandra"*. Y al armar el prompt **rescata por contenido, no por fecha**: con 303 recuerdos de prueba los tres datos del usuario van delante, no los seis más recientes. Los hechos nuevos viajaron a la nube: «uso un Samsung A16» o «mi teléfono es un Redmi Note 12» se guardan solos —el recuento del umbral y la lista cerrada de marcas están en `facts.py`—, y esos recuerdos ahora **llegan al modelo remoto** mergeados en un solo `system`: hasta aquí Claude los barría del historial y la nube olvidaba justo lo que la dueña no quiere repetir | Probado matando y reiniciando el proceso; 32 pruebas de memoria, una cronometrada en 2,42 ms; 6 nuevas de dispositivo y `system` de la nube, ejecutadas en vivo el 2026-10-14 |
 | 🗣️ | **Cerebro local con Ollama** y **cadena de sustitución**: responde el primer modelo que funcione, y los que no caben en RAM se descartan antes de intentarlos | 10 pruebas con un Ollama de mentira; medición real del LLM |
@@ -408,7 +408,8 @@ Todo se ajusta en **`.env`**, que se lee solo al arrancar —el core y el lanzad
 | `CORT_SYSTEM_ACTIONS` | `0` apaga la capa de permisos: sigue hablando, pero no toca el sistema |
 | `CORT_MEMORY_DB` | otra ruta para `memory.db`, para experimentar sin escribir encima de la memoria real |
 | `CORT_AVATAR_DIR` | la carpeta de atuendos que ve el mosaico táctil. **Sin esta variable el selector sale vacío y el reactor no se apaga nunca**: los modelos VRM y las imágenes no van en el repositorio porque pesan 16-21 MB cada uno, tienen licencia de terceros y son datos personales |
-| `CORT_LAN_TOKEN` | **sólo hace falta si vas a usar `--lan`** (paso 7). Vacío = el portátil no abre el puerto a la Wi-Fi: el lanzador se niega y sale con código 1. No se sube nunca a git |
+| `CORT_LAN_TOKEN` | **te lo crea el propio `--lan`** (paso 7): vacío + red pedida = el lanzador inventa el secreto, lo escribe aquí y arranca. Se puede cambiar por uno tuyo. Sin llave y sin disco donde escribir, no se abre el puerto. No se sube nunca a git |
+| `CORT_LAN` | `1` = publicar en la Wi-Fi en **cada** arranque, sin escribir `--lan` (es lo que hace que el doble clic deje a CORT en el teléfono). `0` o ausente = sólo cuando pasas `--lan`; `--sin-lan` lo niega ese arranque. La llave es obligatoria en los dos casos |
 
 Para que conteste un modelo local en vez del modo eco:
 
@@ -435,31 +436,23 @@ El core **no adivina ninguna carpeta**: sin la variable, el mosaico de atuendos 
 
 ### Paso 7 · CORT en el teléfono
 
-Portátil y móvil, en **la misma red Wi-Fi**. Dos pasos, y el primero es una línea en el `.env`:
+Portátil y móvil, en **la misma red Wi-Fi**. Un solo comando, y ni una variable que escribir:
 
 ```bash
-# .env — el lanzador te genera uno si lo necesitas
-CORT_LAN_TOKEN=un-secreto-tuyo-de-unos-20-caracteres
-
 python3 scripts/cort.py --lan
 ```
 
-**Sin esa variable el puerto no se abre**, y el lanzador lo dice en vez de arrancar a medias (salida ejecutada en esta máquina):
+**La llave de red se crea sola** (desde `v0.14.0`): si `CORT_LAN_TOKEN` está vacío, el lanzador inventa un secreto, lo añade al `.env` —archivo ignorado por git, permiso `0600`— y arranca. Salida ejecutada en esta máquina:
 
 ```text
---lan cancelado: no hay CORT_LAN_TOKEN en el .env.
- Añade esta línea a …/CORT/.env —o cambia el secreto por uno tuyo, de unos 20 caracteres— y vuelve a arrancar:
-   CORT_LAN_TOKEN=SF8PsVQ4uFCmyWpMMSaWGi5f
- Sin eso el core sigue en 127.0.0.1: arráncalo sin --lan si el teléfono no hace falta.
+ llave de red: CORT la creó sola y la guardó en …/CORT/.env — no vuelve a pedirla
+ ● red          el móvil abre http://192.168.100.xxx:8780/?token=…
+ ↳ eso, ENTERO, es lo que se pega en la app la primera vez (viaja en claro por tu Wi-Fi: no hay HTTPS). Después la app lo guarda y ya no lo pregunta.
 ```
 
-Con la llave puesta, la barra de **red** —la séptima, sólo con `--lan`— imprime la dirección **ya con el token**, porque adivinar la propia IP no es un paso razonable. Salida medida aquí:
+Lo que **no** cambió: sin llave —y sin disco donde escribirla— el puerto no se abre, y `python -m cort_core.server` con `CORT_HOST=0.0.0.0` sigue negándose con código 1. La protección no se quitó; se dejó de teclear. Si quieres que **el doble clic del escritorio** publique siempre para el teléfono, pon `CORT_LAN=1` en el `.env` (en el `.env` de esta máquina ya está puesto); para negarlo un arranque, `--sin-lan`. Sin `--lan` y sin esa variable todo escucha sólo en `127.0.0.1` y no se pide ninguna llave: **por ese WebSocket se cambia el volumen, se abren aplicaciones y se captura la pantalla**, así que publicarlo es decisión explícita de quien lo arranca. El por qué de cada regla está en [La red y su llave](#la-red-y-su-llave).
 
-```text
- ● red          el móvil abre http://192.168.100.xxx:8780/?token=… — sin HTTPS: la llave viaja en claro por tu Wi-Fi
-```
-
-Esa URL es la que se escribe en el teléfono. Sin `--lan` todo escucha sólo en `127.0.0.1` y no se pide ninguna llave: **por ese WebSocket se cambia el volumen, se abren aplicaciones y se captura la pantalla**, así que publicarlo es decisión explícita de quien lo arranca y dura lo que dura ese proceso. El por qué de cada regla está en [La red y su llave](#la-red-y-su-llave).
+**En el teléfono**: instalar el `CORT-v<versión>.apk` de la Release, abrirlo y pegar **el enlace entero** del paso anterior en el único campo que pide. La pantalla de estreno es oscura, con el anillo de la marca girando, y guarda el enlace en `SharedPreferences`: la siguiente vez entra directo a la cara. Mantener pulsado (o «atrás») permite cambiar la dirección sin reinstalar.
 
 Verificado en esta red, con el core escuchando en `0.0.0.0` y dos archivos de atuendo de prueba en disco: `GET http://192.168.100.xxx:8765/avatars/p.png` sin llave → **401**; con `?token=…` → **200**; con la llave mal → **401**; y el mismo `GET` por `127.0.0.1` sin llave → **200** (en local no se pide nada). Antes de este corte, `--lan` ya había dejado el core y la interfaz escuchando en `0.0.0.0`, la página contestando `200` desde la IP de red y un WebSocket abierto contra esa IP saludando y respondiendo. **Sin verificar en un móvil físico**: hace falta el teléfono delante.
 
@@ -473,7 +466,7 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 490 pruebas del core, ~68-120 s en esta máquina (según carga)
+make test      # 497 pruebas del core, ~68-120 s en esta máquina (según carga)
 make test-web  #  56 pruebas de la cara (Node 20, sin navegador), ~10 s
 ```
 
@@ -498,7 +491,7 @@ make rechazos  # quién intentó lo que CORT no dejó, y desde dónde
 | «Sin conexión con el core» en el cabezal | el core no está o el puerto no es 8765 | `make launch` (no `make dev`, que no sirve interfaz); si cambiaste `CORT_PORT`, el navegador necesita el mismo puerto |
 | `El core murió al arrancar (código 1)` | el puerto está ocupado por otro CORT | `pkill -f cort_core.server` y volver a arrancar |
 | El móvil no abre la dirección | `--lan` no usado, otra red Wi-Fi, o el cortafuegos | arrancar con `--lan`; `sudo ufw status` si hay cortafuegos |
-| `--lan cancelado: no hay CORT_LAN_TOKEN en el .env.` | es la puerta de red funcionando, no un fallo: publicado el puerto sin secreto, cualquier dispositivo del Wi-Fi podría cambiarle el volumen al portátil o abrirle aplicaciones | pegar la línea `CORT_LAN_TOKEN=…` que el propio lanzador imprime en el `.env` y volver a arrancar |
+| `no se pudo escribir la llave en …/.env` | es la puerta de red funcionando, no un fallo: sin secreto no se publica, y el `.env` no se pudo crear (permisos, disco lleno, carpeta de sólo lectura). Publicado el puerto sin secreto, cualquier dispositivo del Wi-Fi podría cambiarle el volumen al portátil o abrirle aplicaciones | arreglar el permiso del `.env` (`chmod 600`) o escribir a mano la línea `CORT_LAN_TOKEN=…` con un secreto tuyo |
 | El cabezal dice «Falta la llave de la red» | la página se abrió desde la IP de red **sin** `?token=`, o con una llave que no es la del `.env` | usar la URL completa que imprime la barra de red (lleva el token pegado); si la escribiste a mano, añádele `?token=…` |
 | CORT no suena | el navegador no tiene a dónde hablar: sin altavoz ni auriculares el sink es *Dummy Output* y no hay voz que oír | conectar auriculares o altavoz y darle a «que me hable»; en Edge/Chrome las voces *Natural* son las que suenan mejor |
 | El micrófono no aparece en Linux aunque los auriculares estén por Bluetooth | PipeWire puede dar el sink sin exponer el *Source*: medido con unos auriculares conectados, `wpctl status` seguía sin **ninguna** entrada y el único sink era *Dummy Output*. Es lo que le pasó al colaborador al probar «hablarle» aquí | comprobar primero con `wpctl status` si hay *Sources*; si no hay ninguno no es un fallo de CORT sino del sistema de sonido (perfiles Bluetooth, `pactl set-card-profile`, o un micrófono USB). **Sin verificar en esta máquina**: aquí no hay ningún dispositivo de captura con el que probar la solución |

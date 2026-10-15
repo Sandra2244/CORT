@@ -23,26 +23,92 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > falló y no colgó artefacto. El arreglo del pipeline vive en `v0.13.1`, que es la primera Release que
 > lleva `CORT-v*.apk` descargable desde el teléfono.
 
-**La lista de tareas para cortar la siguiente (v0.13.1), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.14.0), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.13.1\` — …` escrita, con su línea **Zip** — la
+0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
+   pegar los dos secretos `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS` en Settings → Secrets and
+   variables → Actions, con el contenido de `apps/apk/llave/cort.keystore.b64` y
+   `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
+   firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
+   no hace falta abrir una log que es privada.
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.0\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
-3. Se etiqueta el commit de `main`: `git tag v0.13.1 && git push origin v0.13.1`. Ahí se dispara
+3. Se etiqueta el commit de `main`: `git tag v0.14.0 && git push origin v0.14.0`. Ahí se dispara
    `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
    esa es el acta «.zip como proyecto profesional» sin construir nada. Y desde este corte se dispara
    también `compilar-apk.yml`, que compila `CORT.apk` con el SDK del runner y lo sube a la Release
-   como `CORT-v0.13.1.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
+   como `CORT-v0.14.0.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
    **antes** de etiquetar (y así se cumplió: verde en el run 38679448057 sobre `main`).
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.13.1 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.0 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.14.0` — el teléfono deja de ser un muro: la llave se crea sola y la app arranca con su cara
+
+Lo que se quitó aquí no es una regla de seguridad, es **fricción medida por la dueña del proyecto**
+(2026-10-15): «sale una pantalla de `py --lan` y hay que colocar el token de arranque; ¿no puede
+iniciar con su animación como una IA normal?», y «en el teléfono dice que la app es desconocida».
+Tres cosas cambiaron, y la protección de la red quedó entera.
+
+- **El lanzador se inventa la llave y la guarda** (`scripts/cort.py`: `asegurar_token_lan()` +
+  `llave_de_red()`). Con `--lan` y `CORT_LAN_TOKEN` vacío, genera un secreto con `secrets`, lo añade
+  al `.env` con una nota encima y **permiso `0600`**, y sigue arrancando. **Medido en esta máquina**:
+  `cort.py --lan --demo` dejó `llave de red: CORT la creó sola y la guardó en …/CORT/.env — no vuelve
+  a pedirla`, la barra `red` imprimió `http://192.168.100.xxx:8780/?token=…` y CORT salió en línea sin
+  panel rojo; el `.env` quedó con una sola línea `CORT_LAN_TOKEN=` y `stat -c %a` dando `600`.
+  Se añade además `CORT_LAN=1` (la red se publica en **cada** arranque, sin banderas — es lo que hace
+  que el doble clic deje a CORT accesible desde el teléfono; ya está puesto en el `.env` de esta
+  máquina) y `--sin-lan` para negarla un arranque. Lo que **no** cambió: sin secreto y sin disco donde
+  escribir, `--lan` no abre el puerto, y `python -m cort_core.server` con `CORT_HOST=0.0.0.0` sin
+  token sigue saliendo con código 1 (lo prueba `test_security` por subprocess). El valor **no se
+  imprime en el aviso** — la terminal de arranque acaba en una captura —, la llave viaja una sola vez:
+  en la dirección de la barra. **7 pruebas nuevas** en `test_launcher.py`.
+- **La primera vez en el teléfono es la cara de CORT** (`apps/apk/…/MainActivity.java`, reescrito).
+  Fondo espacial `#02040c`, el **anillo de la marca dibujado con `Canvas` girando** (misma geometría
+  que `scripts/marca.py`: banda cian, halo violeta por dentro, núcleo caliente; el `ValueAnimator` se
+  cancela al descolgar la vista), **un solo campo** — la llave ya viene dentro del enlace, así que el
+  segundo cuadro sobraba—, botón de 54 dp, `Enter` del teclado igual que el botón, `http://` añadido
+  si se pega sólo `IP:puerto`, aviso en español si el enlace llega sin `?token=`, WebView **con fondo
+  oscuro desde el primer fotograma** (nada de destello blanco), y si el portátil está apagado el
+  error se dice en español con diálogo para reescribir la dirección en vez de la página de error del
+  navegador. El diálogo muestra la dirección **con la llave tapada**. Persisten `SharedPreferences`,
+  mantener pulsado para reconfigurar y el «atrás» que no sale a la calle a la primera.
+  **Sin verificar en dedo**: se compila en el pipeline, y en esta máquina no hay `javac` (medido: hay
+  JRE 21 y su `keytool`, no el compilador).
+- **La firma estable existe** (`apps/apk/llave/`, ignorada por git **antes** de escribir nada, regla
+  7): `keytool` generó el keystore PKCS12 — RSA 2048, validez 10 000 días, huella SHA-256
+  `6e4ec4ce7a0cd6c0d3480ec7e0abc5a16849e2a9b383623fbfc230204a6b67f6`— y `compilar.sh` firma con él si
+  el repo tiene los secretos `CORT_APK_KEYSTORE_B64` / `CORT_APK_KEYSTORE_PASS`. Con esa llave, **un
+  APK nuevo se instala encima del viejo**; sin ella cada Release pedía desinstalar. Como las logs de
+  Actions no son públicas, cada run sube a la Release un `CORT-v<etiqueta>-firma.txt` con el modo de
+  firma y la huella del certificado: así se comprueba desde fuera, sin sesión, con qué llave salió.
+  **Falta que la dueña pegue los dos secretos** (dos clics en Settings → Secrets and variables →
+  Actions; la guía está en `apps/apk/README.md`), y eso es decisión suya, no un ticket de código.
+- **El aviso de Android («app desconocida / puede ser dañina») no se puede quitar, y aquí se dice en
+  vez de simularlo**: lo pone Play Protect a *cualquier* APK que no venga de la Play Store, y eso pide
+  una cuenta de desarrollador y una subida, no un commit. Lo que sí se arregló es el conflicto de
+  firma. `apps/apk/README.md` gana la sección **«Instalar aunque Android avise»**, con los pasos de un
+  Samsung One UI — «Detalles → Instalar de todos modos», el interruptor de apps desconocidas y el
+  aviso de volver a apagarlo — y la nota de que **la llave merece una copia fuera del portátil**:
+  perderla es no poder volver a instalar encima.
+
+Pruebas de este corte: **497** del core en verde — `Ran 497 tests in 72,545 s … OK`, y 80,990 s la
+primera vez con la máquina más cargada —, con `--lan` y `CORT_LAN=1` ejecutados de verdad en esta
+máquina, y **56** de la cara (`# pass 56`, sin navegador).
+Documentado en `docs/ARCHITECTURE.md` (regla 1 de «La red», reescrita), `README.md` (paso 7, la tabla
+de variables con `CORT_LAN`, el aviso de la tabla de problemas) y `docs/FUNCTIONS.md` (funciones
+**95**, **96** y **97**; el recuento sube a 97 funciones: 39 hechas, 20 en curso, 38 pendientes).
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.0.zip`
 
 ---
 
