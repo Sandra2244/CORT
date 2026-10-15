@@ -2,7 +2,24 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (9)** (`TMPDIR=/tmp make test` **571** en verde en
+> Última verificación: **2026-10-15 (10)** (`TMPDIR=/tmp make test` **653** en verde en **93,912 s**,
+> y vuelta a ejecutar al cerrar los docs — las **82** pruebas nuevas son **el puente de memoria**, la
+> deuda 2 del acuerdo Java: **39** en `test_puente.py` (el cuadro, `exportar`/`fusionar`/`canoniza`,
+> los cuatro topes y la pureza leída por AST), **23** en `test_puente_red.py` (las dos rutas HTTP
+> detrás de la misma `autorizada()` del WebSocket, y la escena de **ida y vuelta** con dos bases
+> reales y sin Java delante), **8** en `test_memory.py` para `facts.desde_el_telefono` y **12** en
+> `test_apk_manifesta.py`, que pasa de 33 a **45** cosiendo `Puente.java` contra `puente.py` y contra
+> `PUERTO_CORE` del lanzador; `make test-web` **56**, **709** en total—. **El Java del puente compiló
+> en el runner** — que sigue siendo el único compilador real del proyecto—: run **38795867977** de
+> `compilar-apk`, `completed` con **success** sobre `a6095ee`. **Dos bugs que salieron de mí, y ambos
+> eran del test, no del producto**: el primer `solo_codigo()` — tres `re.sub` encadenados— se comía el
+> resto de una línea cuando un literal contenía `http://` y declaraba `MainActivity.java` con **58
+> llaves de 60** (ahora consume literales antes que comentarios, el orden de `javac`); y un
+> `assertNotIn("El usuario se llama", fuente)` me fallaba contra **mi propio comentario** en
+> `server.py` — ahora mira `NOMBRE.format`, que es el uso real, no la mención—. Toda guarda nueva se
+> comprobó **no vacía** rompiéndola a mano (`PUERTO_API = 9999` → un fallo; borrar un `)` de
+> `filasQueCaben` → dos). **Sin verificar**: que el puente cruce en el Samsung A16 — eso es un dedo,
+> no una suite—. Verificación anterior, **2026-10-15 (9)** (`TMPDIR=/tmp make test` **571** en verde en
 > **76,873 s**, y **80,320 s** en la pasada de repaso justo antes de etiquetar — doce pruebas nuevas: **11** de `TestAjustesDeNube`, en `test_apk_manifesta.py`,
 > que llega a **33**, sobre la pantalla de ajustes de la nube que **faltaba** (el chip bajo el
 > anillo, la clave que nunca se vuelve a mostrar, «en blanco: no la cambio», el botón de
@@ -107,6 +124,26 @@
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.15.2` (2026-10-15): el puente de memoria — dos cabezas que se hablan.**
+La dueña lo pidió con una frase: «no estar todo el tiempo recordando quién soy o mi dispositivo».
+`v0.15.0` le dio razón a medias: hay memoria en el teléfono (`cort.db`) y memoria en el portátil
+(`memory.db`), y **nunca se habían hablado**. Cuatro commits cierran la deuda 2 de
+`docs/PLATFORM.md`: `da27b35` (`cort_core/puente.py` puro), `d988507` (`GET`/`POST /memoria/puente`
+con la **misma** llave del WebSocket y sin CORS), `ac6fd7e` (`puente.canoniza` +
+`facts.desde_el_telefono`: lo que entra se guarda en la plantilla del que recibe) y `a6095ee`
+(`Puente.java` espejo puro, `Sincroniza.java` como única clase con socket, `Recuerdos`
+implementando `Puente.Cabeza`, y la fila `↔ traer y llevar mis recuerdos al portátil` dentro del
+`⚙`). Cinco reglas: la llave de red nunca viaja dentro de un recuerdo, fusionar no borra nunca,
+dedupe normalizado con tildes, topes escritos (300 / 500 / 256 KiB) y traducción al entrar. La
+dirección del core se **deriva** del enlace ya guardado (puerto 8765), atada por prueba entre
+`scripts/cort.py` y el Java, así que el UDP de la función 98 no se toca. **Medido**: `make test`
+**653** en verde (93,912 s) + `make test-web` **56** = **709**; `compilar-apk` run **38795867977**
+**success** sobre `a6095ee`; la cara nativa pasa a **once archivos / 2 943 líneas / 118 KB**.
+**Sin verificar en dedo**: el cruce real en el Samsung — lo ejecutado es `make test` con dos bases,
+no un teléfono—. **Queda una deuda de tres**: `herramientas.py` (19 herramientas) y
+`habilidades.json` (once acciones) siguen siendo dos cuerpos de reglas separados; ésa es la
+siguiente casilla, y ahora es la única.
+
 **Corte `v0.15.1` (2026-10-15): la nube del teléfono se enciende desde el teléfono.**
 `v0.15.0` dejó una promesa sin cumplir: la dueña eligió «nube si hay internet, local si no», y
 `Nube.java` existía, pero **leía la clave de un almacén que nadie podía escribir desde el

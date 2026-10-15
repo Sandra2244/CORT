@@ -8,26 +8,31 @@ SQLite, su voz y su micrófono, sin servidor y sin abrir el portátil.
 
 **Por qué** — el número lo puso la dueña del proyecto, no una sugerencia externa:
 «que funcione de forma local en mi cel, que no tengo servidor y mi PC no tiene
-recursos para eso». Está escrito en `docs/PLATFORM.md`, con su coste (dos
-memorias que hoy no se sincronizan).
+recursos para eso». Está escrito en `docs/PLATFORM.md`, con su coste: de las
+**tres deudas** de ese acuerdo quedan cerradas dos (la pantalla de la clave de
+nube, `v0.15.1`, y **el puente que sincroniza las dos memorias**, `v0.15.2`) y
+abierta una (los dos cuerpos de reglas).
 
 **Por qué un WebView y no Capacitor**: en el portátil de desarrollo (1,8 GiB) un
 `gradle build` de Capacitor congela la máquina — está medido y escrito en
 `docs/PLATFORM.md`—, y además aquí no hace falta: `javac` no está (lo que hay es
 el JRE 21 y su `keytool`, medido 2026-10-15), así que no hay nada que compilar
-en esta máquina ni que descargar. Nueve archivos de Java puro contra el SDK,
-cuatro herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`,
-`d8`, `apksigner`) y un script, `compilar.sh`, que **nunca corre en el portátil**.
+en esta máquina ni que descargar. **Once archivos de Java puro** contra el SDK
+(2 943 líneas, 118 KB medidos el 2026-10-15), cuatro herramientas que el runner
+de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
+`compilar.sh`, que **nunca corre en el portátil**.
 
 ## Qué hay dentro
 
 | archivo | qué decide |
 |---|---|
 | `MainActivity.java` | **qué superficie se ve**: el WebView si el portátil contesta, la cara nativa si no, el campo de pegar sólo si nadie tiene la culpa |
-| `Cara.java` | la interfaz nativa: registro, campo, micrófono, el lazo oír → tabla → ejecutar → (nube) → proponer aprender, y la **pantalla de ajustes de nube** (`⚙` bajo el anillo, `v0.15.1`) |
+| `Cara.java` | la interfaz nativa: registro, campo, micrófono, el lazo oír → tabla → ejecutar → (nube) → proponer aprender, la **pantalla de ajustes de nube** (`⚙` bajo el anillo, `v0.15.1`) y la fila que **cruza el puente** (`↔ traer y llevar mis recuerdos al portátil`, `v0.15.2`) |
 | `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. **No ejecuta nada** |
 | `Acciones.java` | las manos: once acciones, todas con intenciones públicas de Android o `AudioManager`. Sin shell, sin `QUERY_ALL_PACKAGES` |
-| `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende |
+| `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende. Desde `v0.15.2` es además **la cabeza** que el puente lee y en la que escribe, y Traduce al revés: `El usuario se llama Sandra` que viene del portátil se guarda con la clave `nombre` |
+| `Puente.java` | el **espejo exacto** de `cort_core/puente.py`: el cuadro, `exportar`, `fusionar`, `normaliza`, los topes. Puro — sólo `java.util` y `org.json`, y una prueba le prohíbe nombrar red, disco o Android |
+| `Sincroniza.java` | la **única** clase del APK que abre un socket: baja el cuadro del portátil, lo fusiona, sube el de aquí, y devuelve el recuento o `null` con su motivo en español |
 | `Voz.java` | `TextToSpeech` y `SpeechRecognizer`: hablar **y escuchar**, que el WebView no podía |
 | `Nube.java` | la nube opcional, con la clave escrita una vez en el aparato |
 | `Paleta.java`, `Anillo.java` | los literales de la marca y el anillo dibujado con `Canvas`, compartidos por las dos caras |
@@ -82,6 +87,17 @@ cuatro herramientas que el runner de GitHub Actions ya trae (`aapt2`, `javac`,
    vuelve a mostrar nunca** (el campo arranca vacío y sólo dice cuántos caracteres hay),
    dejarla en blanco al guardar **la conserva** (no la borra), y sin internet o sin
    clave responde la tabla local y punto.
+8. **Que lo aprendido en un aparato se sepa en el otro** (función 106, desde
+   `v0.15.2`): el mismo `⚙` tiene la fila `↔ traer y llevar mis recuerdos al
+   portátil`. Con el portátil lanzado (`cort.py --lan`) y en la misma Wi-Fi, un
+   toque baja lo que hay en `memory.db`, lo guarda en `cort.db`, sube lo de aquí,
+   y cuenta los números: cuántos son nuevos, cuántos ya estaban, cuántos se
+   descartaron y cuántos se quedó cada lado guardando para sí. **No pide ninguna
+   dirección nueva** — la del core se deriva del enlace que ya guardó el
+   descubrimiento, cambiando el puerto —, **no borra nada en ningún lado**, y si
+   el portátil no contesta lo dice en español en vez de quedarse callado. La
+   llave de red viaja en la URL, como en `/ws`, y **nunca dentro de un recuerdo**:
+   una fila que la contenga no sale del teléfono.
 
 **Qué va a la nube y qué no**: sólo la frase dicha y un resumen de los hechos
 guardados (van en el `system`, no en el historial — el bug que ya cazó
@@ -89,6 +105,12 @@ guardados (van en el `system`, no en el historial — el bug que ya cazó
 una vez en el aparato y vive en su almacenamiento privado, que es en claro —es
 suficiente para un prototipo propio, y se dice aquí en vez de prometer un
 cifrado que pediría Gradle—.
+
+**Qué sale del teléfono hacia el portátil** por el puente: el texto de los
+recuerdos y su fecha, con tres topes escritos (`MAX_CONTENIDO` 300 caracteres por
+fila, `MAX_BYTES` 256 KiB de cuerpo, y un tope de filas **calculado** — 271 — para
+que el cuerpo nunca sobre-pase los 256 KiB y el server conteste 413). La clave de
+nube **no** viaja: vive en `SharedPreferences` y el puente sólo mueve `hechos`.
 
 ## Instalar aunque Android avise
 
@@ -124,7 +146,7 @@ necesita al portátil encendido**.
 | **Que CORT hable** | 🔨 en WebView con `speechSynthesis`, medido sólo en escritorio | 🔨 `TextToSpeech` del sistema: código escrito, **sin oírse en dedo** |
 | **Que CORT escuche** | ❌ **límite real del WebView**: el API de reconocimiento no corre en un WebView embebido; ahí la escucha se usa desde la **PWA** de `apps/web` | 🔨 **ésta es la vía que abre la cara nativa**: `SpeechRecognizer` con su permiso de micrófono pedido en pantalla. Sin verificar en dedo |
 | Volumen, alarma, cronómetro, abrir apps del sistema | 🔨 a través del core del portátil | 🔨 once acciones con intenciones públicas de Android y `AudioManager`, validadas contra el diccionario AOSP; **sin ejecutar en el teléfono** |
-| Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 **otra memoria**: `cort.db` en SQLite, propia del teléfono. **No se sincroniza con la del core** (coste escrito en `docs/PLATFORM.md`) |
+| Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 `cort.db` en SQLite, propia del teléfono y **con puente desde `v0.15.2`**: la fila `↔` del `⚙` trae lo que hay en el portátil y lleva lo de aquí. **Sin verificar en dedo** — lo ejecutó `make test` con dos bases, no un Samsung |
 | Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`) **y ya escribible desde el teléfono** (`v0.15.1`): el chip `⚙` bajo el anillo abre la pantalla donde se pega la clave. Responde cuando hay clave; sin ella, la tabla local. **Sin ver en dedo** |
 | Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo | ❌ no existen en la cara nativa |
 

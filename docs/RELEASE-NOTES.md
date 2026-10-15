@@ -68,6 +68,79 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
 
 ---
 
+## `v0.15.2` — el puente de memoria: lo que CORT aprende en un aparato ya se sabe en el otro
+
+La segunda deuda del acuerdo Java, la que se veía con sólo usar los dos aparatos:
+`memory.db` del portátil y `cort.db` del teléfono **no se habían hablado nunca**. La dueña le
+dice a CORT su nombre en el teléfono y, al abrir la cara del portátil, CORT no sabe cómo
+llamarla. Este corte cruza el puente en los dos sentidos y en los dos lenguajes, con cuatro
+commits: `da27b35` (el módulo puro), `d988507` (sus dos rutas HTTP), `ac6fd7e` (la traducción al
+entrar) y `a6095ee` (la mitad del teléfono).
+
+- **Un dato viaja como un cuadro, no como un volcado de tabla**:
+  `{"tipo": "memoria", "version": 1, "origen": "escritorio"|"telefono", "total": N, "ocultados": N,
+  "recuerdos": [{"contenido": …, "cuando": …}]}`. Sale por `GET /memoria/puente` y entra por
+  `POST /memoria/puente`, **detrás de la misma `autorizada()`** que el WebSocket y los atuendos —
+  un criterio, tres puertas—, y sin cabecera CORS: esto no lo llama ninguna pestaña del
+  navegador, lo llama una app.
+- **Cinco reglas, cada una contra un modo en que sincronizar sale *peor* que no sincronizar**:
+  la **llave de red nunca viaja dentro de un recuerdo** (la fila que la lleva no sale y se cuenta
+  en `ocultados`); **fusionar no borra nunca** (podar en un lado sería borrar en el otro, y
+  podar es una operación que aquí existe); el **dedupe es normalizado y no literal** (`casefold`
+  + espacios colapsados, **con tildes**); los **topes están escritos** (300 caracteres, 500 filas,
+  256 KiB) y lo que no cabe **se cuenta**, no se guarda a medias; y **lo que entra se traduce a la
+  plantilla del que recibe**, que es la regla que da el valor.
+- **Un «nombre: Sandra» dicho en el teléfono deja de ser una nota muerta**: al entrar pasa por
+  `facts.desde_el_telefono`, se guarda como `El usuario se llama Sandra` — la plantilla dueña de
+  `name_of_user()` del core — y en la prueba de la escena, tras subirlo, el core contesta
+  «El usuario se llama Sandra» a «¿qué sabes de mí?». Al revés igual: esa misma fila, bajada al
+  teléfono, se guarda con la clave `nombre`, que es la que `quienSoy()` lee para decir
+  «Eres Sandra.» La traducción vive en `facts.py` (dueña de las plantillas) y llega al puente
+  **inyectada** como callable: `puente.py` sigue importando sólo `re`.
+- **La mitad del teléfono está cortada por el mismo sitio**: `Puente.java` es el espejo puro de
+  `puente.py` (mismos topes, mismos recuentos, sólo `java.util` y `org.json`, y una prueba le
+  prohíbe nombrar red, disco o Android) y habla con la memoria a través de
+  `interface Cabeza { filas(int) ; recuerda(String) }`, que implementa `Recuerdos`.
+  `Sincroniza.java` es **la única clase del APK que abre un socket**.
+- **No pide ni guarda una dirección nueva**: la del core se deriva del enlace que ya guardó el
+  descubrimiento por Wi-Fi (función 98), cambiándole el puerto. `PUERTO_CORE` en
+  `scripts/cort.py` y `PUERTO_API` en `Puente.java` son el mismo número **porque una prueba los
+  obliga**, así que el protocolo UDP no se toca ni se le sube de versión por este camino.
+- **El viaje se ve**: la fila `↔  traer y llevar mis recuerdos al portátil`, dentro del `⚙` que ya
+  existía, imprime los recuentos de los dos sentidos — cuántos nuevos, cuántos ya estaban,
+  cuántos descartados y cuántos se quedó cada lado guardando para sí—, o el motivo en español si
+  el portátil no contesta. Corre en su `Thread`, con `runOnUiThread` para escribir.
+- **El tope de filas va calculado, no elegido**: `min(500, 262144 ÷ (300·3 + 64))` = **271**,
+  porque 300 caracteres con tildes son 600 bytes UTF-8 y el envoltorio JSON algo más. Un teléfono
+  no manda nunca un cuerpo que el server devuelva con 413, y lo que no entra en el viaje aparece
+  en el aviso en vez de desaparecer.
+- **82 pruebas nuevas sobre las 571 del corte anterior** (`test_puente.py` 39, `test_puente_red.py` 23,
+  8 en `test_memory.py`, y `test_apk_manifesta.py` de 33 a **45**). La prueba que justifica el corte
+  es la de la **ida y vuelta**: dos bases de verdad, las dos rutas, un dato que entra por el
+  teléfono y sale por el portátil, y un segundo viaje que trae **0 nuevos**.
+- **Lo que cuesta comprobar lo que no se puede compilar**, escrito porque dos bugs salieron de ahí:
+  el primer `solo_codigo()` — tres `re.sub` encadenados— se comía el resto de una línea si un
+  literal contenía `http://` y declaraba `MainActivity.java` con **58 llaves de 60**; el bug era del
+  test, no del Java, y ahora consume literales antes que comentarios, que es el orden de `javac`. Y
+  cada guarda nueva se comprobó **no vacía rompiéndola a mano**: `PUERTO_API = 9999` da exactamente
+  un fallo, borrar un `)` de `filasQueCaben` da dos.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **653** en verde en **93,912 s** y
+  `make test-web` **56** — **709** en total—. El Java del puente **compiló en el runner** — en esta
+  máquina no hay `javac`, y ésa es la única comprobación de compilado que existe—: run
+  **38795867977** de `compilar-apk`, `completed` con **success** sobre `a6095ee`. La cara nativa pasa
+  de **nueve archivos / 2 290 líneas / 90 KB** a **once / 2 943 líneas / 118 KB**.
+- **Sin verificar**: que el cruce ocurra en el Samsung A16. Nadie ha pulsado la fila con el
+  portátil lanzado en la misma Wi-Fi; lo ejecutado es `make test` con dos bases y las dos rutas, y
+  el `javac` de un runner. Sigue sin verificarse en dedo todo lo de `v0.15.0` y `v0.15.1` (la cara
+  instalada, el micrófono, la voz por el altavoz, las once acciones y la pantalla de la clave).
+- **Queda una deuda de las tres**: `herramientas.py` (19 herramientas) y `habilidades.json` (once
+  acciones) siguen siendo **dos cuerpos de reglas** que se parecen pero no son el mismo dato, así
+  que una mejora en un lado no viaja al otro. Es la casilla siguiente.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.2.zip`
+
+---
+
 ## `v0.15.1` — la nube del teléfono se enciende desde el teléfono (y dos bugs que sobraba por el camino)
 
 `v0.15.0` escribió la promesa y su código, pero dejó la **mitad de la nube inaccesible**: la dueña

@@ -54,9 +54,10 @@ otro».
 Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
 - **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
-  nada: las 557 pruebas de `services/core`, el WebSocket, el cuerpo 3D y la
-  memoria del portátil se quedan donde están. Un segundo CORT en Java en el PC
-  sería pagar una segunda implementación sin ganar ni un dispositivo.
+  nada: las **653** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+  WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
+  segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
+  ni un dispositivo.
 - **En el teléfono sí hay Java nativo** (`apps/apk/src`), y no es el core
   portado: es una **segunda cara** con su propio cerebro de once acciones, su
   SQLite y su voz. Cuando el portátil aparece por la Wi-Fi se usa el core de
@@ -66,12 +67,18 @@ Lo que se decidió, dicho sin eufemismos sobre su alcance:
   1. ~~No había forma de escribir la clave de nube desde el teléfono~~: **cerrada el
      2026-10-15 con `v0.15.1`** (`Cara.abrirAjustes()` — función 105; la clave se teclea una
      vez en el aparato, nunca vuelve a la pantalla y nunca entra al repo, regla 7).
-  2. **Abierta**: `memory.db` (el portátil) y `cort.db` (el teléfono) **no se sincronizan**.
-     Lo que CORT aprende en uno no lo sabe en el otro.
+  2. ~~`memory.db` (el portátil) y `cort.db` (el teléfono) **no se sincronizan**~~:
+     **cerrada el 2026-10-15 con `v0.15.2`** (función 106). Son dos rutas HTTP
+     (`GET`/`POST /memoria/puente`) detrás de la **misma** llave del WebSocket, un módulo
+     puro espejado en los dos lenguajes (`puente.py` ↔ `Puente.java`) y una sola clase que
+     abre el socket (`Sincroniza.java`). Sólo suma, nunca borra, la llave de red no viaja
+     dentro de un recuerdo, y lo que llega con forma `nombre: Sandra` se guarda en la
+     plantilla que el otro lado entiende. **Sin verificar en dedo**: el cruce lo ejecutó
+     `make test` con dos bases y las dos rutas, no un Samsung.
   3. **Abierta**: conviven **dos cuerpos de reglas** — `herramientas.py` en Python
      (19 herramientas) y `habilidades.json` en Java (once acciones)— que se parecen pero no
      son el mismo archivo, así que una mejora en un lado no viaja al otro.
-  Mientras el teléfono esté solo, 2 y 3 son invisibles; en cuanto se usen los dos, se notan.
+  Mientras el teléfono esté solo, 3 es invisible; en cuanto se usen los dos, se nota.
 - **La verificación se compra con datos, no con fe**: como aquí no hay `javac`,
   la tabla de frases es un JSON probado por `make test`, y las constantes de
   Android que puede nombrar el Java salen de un diccionario descargado de AOSP
