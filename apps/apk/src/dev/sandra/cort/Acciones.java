@@ -190,16 +190,19 @@ public class Acciones {
 
     private String cronometro(String resto) {
         long millis = duracionAMillis(resto);
-        if (millis <= 0) {
+        // `EXTRA_LENGTH` (entero, **segundos**, de 1 a 86 400) es lo que AOSP
+        // define para `ACTION_SET_TIMER`. Aquí llegaron a escribirse
+        // `EXTRA_TIME_IN_MILLIS` y `EXTRA_COUNTDOWN`, y los dos **no existen**:
+        // dos Runs rojos por confiar en la memoria. La lista de constantes
+        // verificadas está en `apps/apk/simbolos-android.json`, generada con
+        // `scripts/simbolos_android.py`, y la prueba de esa costura es
+        // `test_apk_cerebro.py`.
+        int segundos = (int) Math.min(86400L, Math.max(0L, millis / 1000L));
+        if (segundos < 1) {
             return null;
         }
-        // `ACTION_SET_TIMER` + `EXTRA_COUNTDOWN` (milisegundos, API 14): es lo que
-        // la documentación de Android define para temporizadores. `ACTION_SHOW_TIMER`
-        // y `EXTRA_TIME_IN_MILLIS` **no existen** — los escribí de memoria en el
-        // primer borrador y habrían costado un Run rojo, que aquí es el único
-        // `javac` que hay—. Se deja la UI: ver arrancar el cronómetro es el trato.
         Intent intento = new Intent(AlarmClock.ACTION_SET_TIMER)
-                .putExtra(AlarmClock.EXTRA_COUNTDOWN, millis)
+                .putExtra(AlarmClock.EXTRA_LENGTH, segundos)
                 .putExtra(AlarmClock.EXTRA_MESSAGE, "CORT")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {

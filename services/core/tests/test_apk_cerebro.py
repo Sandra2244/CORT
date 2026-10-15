@@ -31,6 +31,7 @@ FUENTE = APK / "src" / "dev" / "sandra" / "cort"
 ACCIONES_JAVA = FUENTE / "Acciones.java"
 CARA_JAVA = FUENTE / "Cara.java"
 CEREBRO_JAVA = FUENTE / "Cerebro.java"
+SIMBOLOS = APK / "simbolos-android.json"
 
 HUECOS = {"hora", "fecha", "resto", "lista", "valor"}
 
@@ -171,71 +172,53 @@ class TestCosturaConJava(unittest.TestCase):
 class TestSimbolosDeAndroid(unittest.TestCase):
     """El único `javac` que tiene este proyecto vive en un runner, y un símbolo
     inventado de `android.provider.*` cuesta un Run rojo y veinte minutos de
-    cuota. Esta lista es la documentación pública de Android copiada aquí: lo que
-    no esté, no existe, y se detecta en dos segundos de `make test`.
+    cuota. Aquí la lista cerrada **no la escribe nadie de memoria**: es
+    `apps/apk/simbolos-android.json`, descargada de AOSP por
+    `scripts/simbolos_android.py`.
 
-    Nace de un fallo propio y medido en el código: el primer borrador de
-    `Acciones.cronometro` usaba `AlarmClock.ACTION_SHOW_TIMER` y
-    `AlarmClock.EXTRA_TIME_IN_MILLIS`, dos constantes que **no** están en el SDK.
+    Nace de dos fallos propios y medidos en el código: `Acciones.cronometro`
+    usó `AlarmClock.ACTION_SHOW_TIMER` y `AlarmClock.EXTRA_TIME_IN_MILLIS` (run
+    de `e519f35`), y al corregirlo escribí `EXTRA_COUNTDOWN`, que tampoco existe
+    (run de `a27f018`). Lo que sí existe es `EXTRA_LENGTH`, en segundos. Dos
+    Runs por fiarme del recuerdo: la lección es traer el dato de su fuente.
     """
-
-    # android.provider.AlarmClock
-    ALARMCLOCK = {"ACTION_SET_ALARM", "ACTION_SET_TIMER", "ACTION_SHOW_ALARMS",
-                  "ACTION_SHOW_TIMERS", "ACTION_DISMISS_ALARM", "ACTION_INSPECT_ALARM",
-                  "EXTRA_HOUR", "EXTRA_MINUTES", "EXTRA_SECONDS", "EXTRA_MESSAGE",
-                  "EXTRA_SKIP_UI", "EXTRA_VIBRATE", "EXTRA_DAYS_OF_WEEK",
-                  "EXTRA_RINGTONE", "EXTRA_COUNTDOWN", "EXTRA_SILENT"}
-    # android.provider.Settings
-    SETTINGS = {"ACTION_SETTINGS", "ACTION_DATE_SETTINGS", "ACTION_INPUT_METHOD_SETTINGS",
-                "ACTION_SOUND_SETTINGS", "ACTION_DISPLAY_SETTINGS", "ACTION_LOCALE_SETTINGS",
-                "ACTION_WIFI_SETTINGS", "ACTION_APPLICATION_SETTINGS", "ACTION_ACCESSIBILITY_SETTINGS"}
-    # android.content.Intent (sólo las constantes que el APK usa o podría usar)
-    INTENT = {"ACTION_MAIN", "ACTION_DIAL", "ACTION_WEB_SEARCH", "ACTION_VIEW",
-              "ACTION_SEND", "ACTION_SET_ALARM",
-              "CATEGORY_APP_BROWSER", "CATEGORY_APP_MUSIC", "CATEGORY_APP_MESSAGING",
-              "CATEGORY_APP_EMAIL", "CATEGORY_APP_CALENDAR", "CATEGORY_APP_CONTACTS",
-              "CATEGORY_APP_CLOCK", "CATEGORY_APP_CALCULATOR",
-              "FLAG_ACTIVITY_NEW_TASK", "FLAG_ACTIVITY_CLEAR_TOP", "EXTRA_TEXT"}
-    # android.media.AudioManager
-    AUDIO = {"STREAM_MUSIC", "STREAM_RING", "STREAM_ALARM", "STREAM_NOTIFICATION",
-             "ADJUST_RAISE", "ADJUST_LOWER", "ADJUST_MUTE", "ADJUST_UNMUTE",
-             "FLAG_SHOW_UI", "FLAG_ALLOW_RINGER_MODES", "RINGER_MODE_NORMAL",
-             "RINGER_MODE_SILENT", "MODE_NORMAL"}
-    # android.speech.*
-    VOZ = {"ACTION_RECOGNIZE_SPEECH", "EXTRA_LANGUAGE", "EXTRA_LANGUAGE_MODEL",
-           "EXTRA_MAX_RESULTS", "EXTRA_CALLING_PACKAGE", "EXTRA_PARTIAL_RESULTS",
-           "LANGUAGE_MODEL_FREE_FORM", "LANGUAGE_MODEL_WEB_SEARCH",
-           "RESULTS_RECOGNITION", "ERROR_AUDIO", "ERROR_CLIENT",
-           "ERROR_INSUFFICIENT_PERMISSIONS", "ERROR_NETWORK", "ERROR_NETWORK_TIMEOUT",
-           "ERROR_NO_MATCH", "ERROR_RECOGNIZER_BUSY", "ERROR_SERVER", "ERROR_SPEECH_TIMEOUT",
-           "LANG_MISSING_DATA", "LANG_NOT_SUPPORTED", "QUEUE_FLUSH", "QUEUE_ADD", "SUCCESS",
-           "ERROR"}
-    CERRADA = {
-        "AlarmClock": ALARMCLOCK, "Settings": SETTINGS, "Intent": INTENT,
-        "AudioManager": AUDIO, "RecognizerIntent": VOZ, "SpeechRecognizer": VOZ,
-        "TextToSpeech": VOZ,
-    }
-    # Constantes de una sola clase, para no mezclarlas con las de arriba.
-    OTROS = {"EditorInfo": {"IME_ACTION_SEND", "IME_ACTION_GO", "IME_ACTION_DONE"},
-             "PackageManager": {"PERMISSION_GRANTED", "PERMISSION_DENIED"},
-             "Build": {"MANUFACTURER", "MODEL", "VERSION", "SDK_INT"},
-             "View": {"FOCUS_DOWN", "FOCUS_UP", "VISIBLE", "INVISIBLE", "GONE"}}
 
     @classmethod
     def setUpClass(cls):
         cls.fuentes = {p.name: p.read_text(encoding="utf-8")
                        for p in sorted(FUENTE.glob("*.java"))}
+        diccionario = json.loads(SIMBOLOS.read_text(encoding="utf-8"))
+        cls.clases = diccionario["clases"]
+        cls.verificado = diccionario.get("verificado", "?")
+
+    def test_el_diccionario_tiene_las_clases_que_el_java_nombra(self):
+        nombradas = set()
+        for texto in self.fuentes.values():
+            nombradas |= set(re.findall(
+                r"\b(AlarmClock|Settings|Intent|AudioManager|RecognizerIntent"
+                r"|SpeechRecognizer|TextToSpeech|EditorInfo|PackageManager|Build|View)"
+                r"\.[A-Z]", texto))
+        self.assertEqual(set(), nombradas - set(self.clases),
+                         "el Java nombra una clase que no está en el diccionario: "
+                         "hay que añadir su archivo de AOSP a `scripts/simbolos_android.py`")
 
     def test_ninguna_constante_de_android_esta_inventada(self):
+        # El `(?![\w.])` del final deja pasar `Build.VERSION.SDK_INT`: `VERSION`
+        # es una **clase anidada**, no una constante, y el diccionario sólo lista
+        # constantes. (El `[\w` no es adorno: con `(?![a-z.])` el motor de regex
+        # retrocedía y devolvía `VERSIO`, que por supuesto no existe.) Es el único
+        # hueco del filtro, y se dice aquí en vez de fingir que cubre todo: un
+        # `Build.VERSIONS.SDK_INT` mal escrito se colaría, y lo cazará el `javac`
+        # del runner.
         for nombre, texto in self.fuentes.items():
             for clase, simbolo in re.findall(
                     r"\b(AlarmClock|Settings|Intent|AudioManager|RecognizerIntent"
                     r"|SpeechRecognizer|TextToSpeech|EditorInfo|PackageManager|Build|View)"
-                    r"\.([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(?![a-z])", texto):
-                permitidas = self.CERRADA.get(clase) or self.OTROS.get(clase)
-                self.assertIsNotNone(permitidas, f"{clase} fuera del diccionario")
+                    r"\.([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*)(?![\w.])", texto):
+                permitidas = self.clases[clase]
                 self.assertIn(simbolo, permitidas,
-                              f"{nombre}: {clase}.{simbolo} no existe en el SDK de Android")
+                              f"{nombre}: {clase}.{simbolo} no existe en AOSP "
+                              f"(diccionario verificado el {self.verificado})")
 
     def test_los_simbolos_de_api_reciente_estan_detras_de_su_comprobacion(self):
         """`ACTION_SHOW_ALARMS` es de API 29 y el suelo del APK es 26: usarla sin
