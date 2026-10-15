@@ -137,6 +137,8 @@ entrar) y `a6095ee` (la mitad del teléfono).
   acciones) siguen siendo **dos cuerpos de reglas** que se parecen pero no son el mismo dato, así
   que una mejora en un lado no viaja al otro. Es la casilla siguiente.
 
+- **Comprobado sobre el binario publicado** (escrito en el repo después de salir la página; el pipeline es idempotente y no reescribe una Release ya abierta): `CORT-v0.15.2.apk` de **78 718 B**, sha-256 `24035908…cf5d53`, doce entradas en su ZIP, `classes.dex` de **66 628 B** con las **once** clases `dev/sandra/cort/*` (50 descriptores contando los generados; 44 en `v0.15.1`), manifiesto binario UTF-16 con `0.15.2` y **sin** rastro de `0.15.1` ni `0.15.0`, y dentro del `dex` el puente entero: `/memoria/puente` (2), `8765` (2), `traer y llevar`, `cruzando el puente`, `Memoria compartida`. **Sin** `Runtime`, `ProcessBuilder`, `/system/bin`, `QUERY_ALL_PACKAGES` ni una sola cadena con forma de `sk-`. Su `…-firma.txt` (421 B) arranca con `APK de CORT 0.15.2 (versionCode 1502)` y `llave: desechable` — hay que desinstalar el anterior, y eso se quita pegando los dos secretos de firma).
+
 **Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.2.zip`
 
 ---

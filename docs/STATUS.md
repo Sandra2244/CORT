@@ -140,7 +140,7 @@ dirección del core se **deriva** del enlace ya guardado (puerto 8765), atada po
 **653** en verde (93,912 s) + `make test-web` **56** = **709**; `compilar-apk` run **38795867977**
 **success** sobre `a6095ee`; la cara nativa pasa a **once archivos / 2 943 líneas / 118 KB**.
 **Sin verificar en dedo**: el cruce real en el Samsung — lo ejecutado es `make test` con dos bases,
-no un teléfono—. **Queda una deuda de tres**: `herramientas.py` (19 herramientas) y
+no un teléfono—. **Y está publicado, bajado y abierto en esta máquina** el 2026-10-15: `CORT-v0.15.2.apk` de **78 718 B**, sha-256 `24035908…cf5d53`, doce entradas en su ZIP, `classes.dex` de 66 628 B con las **once** clases `dev/sandra/cort/*` (50 descriptores; 44 en `v0.15.1`), manifiesto UTF-16 con `0.15.2` y sin rastro del `0.15.1`, y dentro del binario `/memoria/puente`, `8765`, `traer y llevar`, `cruzando el puente` y `Memoria compartida`; **sin** `Runtime`/`ProcessBuilder`/`/system/bin`/`QUERY_ALL_PACKAGES` ni una cadena `sk-`. Su `…-firma.txt` dice `APK de CORT 0.15.2 (versionCode 1502)` y `llave: desechable`. **Queda una deuda de tres**: `herramientas.py` (19 herramientas) y
 `habilidades.json` (once acciones) siguen siendo dos cuerpos de reglas separados; ésa es la
 siguiente casilla, y ahora es la única.
 
