@@ -85,6 +85,19 @@ class MemoryStore:
         return [row["content"] for row in
                 self.conn.execute("SELECT content FROM memories ORDER BY id")]
 
+    def filas(self, tope: int = 500) -> list[dict]:
+        """Las filas completas —`id`, `content`, `created_at`— para el puente de memoria.
+
+        `all()` sólo devuelve texto, y `puente.py` necesita la marca de tiempo para
+        que el otro lado sepa cuándo se dijo cada cosa. Con tope, porque el puente
+        viaja por HTTP y un `SELECT *` sin límite sobre una memoria que crece años es
+        una respuesta que no cabe en la petición.
+        """
+        return [dict(row) for row in self.conn.execute(
+            "SELECT id, content, created_at FROM memories ORDER BY id DESC LIMIT ?",
+            (tope,),
+        ).fetchall()]
+
     def count(self) -> int:
         """Cuántos recuerdos hay, sin traerlos.
 
