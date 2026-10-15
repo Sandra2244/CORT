@@ -2,10 +2,46 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (3)** (`make test` **497** en verde en **72,324 s** y `make test-web` **56** (`# pass 56`), ejecutadas **después** del barrido de documentos; el run 15 de `compilar-apk` sobre `9e67156` quedó **verde**, así que el Java nuevo de la pantalla de estreno **sí compila** — medido por API pública, no por ojo —. Y salió un hueco de verdad: la Release `v0.14.0` se abrió con su texto y sus `.zip` de fuente **sin ningún adjunto**, porque la etiqueta la creó `gh release create` dentro del workflow y GitHub no dispara otros trabajos con eventos generados por su propio `GITHUB_TOKEN`; el paso del APK sólo escuchaba `refs/tags/v*`. Se arregló en `v0.14.1` buscando la etiqueta que apunta al commit del run, con dos minutos de espera para la hermana que abre la página. Verificación anterior, **2026-10-15 (2)**: `cort.py --lan --demo` y `CORT_LAN=1` **ejecutados en esta máquina**: el lanzador creó la llave, el `.env` quedó en permiso `600` con una sola línea, la barra `red` imprimió `http://192.168.100.xxx:8780/?token=…` y CORT salió en línea **sin panel rojo**. El `keytool` del JRE 21 local generó la llave de firma estable (`apps/apk/llave/`, ignorada por git). El Java nuevo del APK **no se ha compilado aquí** — sin `javac`, medido: lo hizo el runner —, y **ninguna de las dos pantallas nuevas se ha visto en un dedo** (regla 11). Verificación aún anterior: 490 en verde en 64,966 s tras aislar los rechazos en `TestBucle`, y el pipeline del APK **verde** en el run 38679448057 sobre `main` — APK de 38 442 bytes —. El corte de funciones es `v0.13.0` (página publicada, id 413388728, sin APK porque su etiqueta cayó sobre el commit con el `compilar.sh` roto); `v0.13.1` es el parche que deja el pipeline del APK verde y estrena la Release con `CORT-v0.13.1.apk` descargable.
+> Última verificación: **2026-10-15 (4)** (`make test` **507** en verde en **74,434 s** — 10 nuevas del
+> resolutor `scripts/etiqueta_del_commit.py` — y `make test-web` **56** (`# pass 56`), **563** en total; el
+> corte `v0.14.1` **comprobado descargando sus adjuntos** por la API pública sin credenciales:
+> `CORT-v0.14.1.apk` de 49 977 B y `CORT-v0.14.1-firma.txt` de 400 B, con `llave: desechable` y la huella
+> SHA-256 del certificado dentro, y en el `classes.dex` de ese APK las cadenas de la pantalla nueva
+> (`LA VENTANA A TU PORTÁTIL`, `Falta la llave`, `No se ve a CORT en …`) más la clase `Anillo` con su
+> `ValueAnimator` — el Java nuevo compila y viaja, que era lo que no se podía saber desde esta máquina —).
+> Lo que esa descarga también destapó: el APK venía rotulado con `versionName «main»`, porque el run llegó
+> por rama y el YAML leía `GITHUB_REF_NAME`; se arregla en `v0.14.2`. Verificación anterior, **2026-10-15 (3)**:
+> `make test` **497** en verde en **72,324 s**; el run 15 de `compilar-apk` sobre `9e67156` quedó **verde**.
+> Y salió un hueco de verdad: la Release `v0.14.0` se abrió con su texto y sus `.zip` de fuente **sin ningún
+> adjunto**, porque la etiqueta la creó `gh release create` dentro del workflow y GitHub no dispara otros
+> trabajos con eventos generados por su propio `GITHUB_TOKEN`; el paso del APK sólo escuchaba
+> `refs/tags/v*`. Se arregló en `v0.14.1` buscando la etiqueta que apunta al commit del run, con dos minutos
+> de espera para la hermana que abre la página. Verificación aún anterior, **2026-10-15 (2)**:
+> `cort.py --lan --demo` y `CORT_LAN=1` **ejecutados en esta máquina**: el lanzador creó la llave, el `.env`
+> quedó en permiso `600` con una sola línea, la barra `red` imprimió `http://192.168.100.xxx:8780/?token=…`
+> y CORT salió en línea **sin panel rojo**. El `keytool` del JRE 21 local generó la llave de firma estable
+> (`apps/apk/llave/`, ignorada por git). **Ninguna de las dos pantallas nuevas se ha visto en un dedo**, y
+> el APK no lo ha instalado nadie en el Samsung (regla 11). Más atrás: 490 en verde en 64,966 s tras aislar
+> los rechazos en `TestBucle`, y el pipeline del APK **verde** en el run 38679448057 sobre `main` — APK de
+> 38 442 bytes —. El corte de funciones es `v0.13.0` (página publicada, id 413388728, sin APK porque su
+> etiqueta cayó sobre el commit con el `compilar.sh` roto); `v0.13.1` es el parche que deja el pipeline del
+> APK verde y estrena la Release con `CORT-v0.13.1.apk` descargable.
 > Las **IPs de la red de esta máquina van sustituidas por `xxx`** donde se midieron: el repositorio es público y una dirección LAN dice cómo se organiza su casa. Lo medido sigue siendo lo medido; sólo se disfraza el número.
 
 ## Fase actual
+**Corte `v0.14.2` (2026-10-15): el APK sale rotulado con su versión, no con el nombre de la rama.** Se
+descubrió **descargando** el `CORT-v0.14.1.apk` de la Release: `compilar.sh` había recibido `main` como
+versión, porque el run vino por rama y el YAML sacaba la versión de `GITHUB_REF_NAME`. Ahora un paso
+anterior a compilar pregunta a `scripts/etiqueta_del_commit.py` (10 pruebas en `test_etiqueta_commit.py`)
+qué etiqueta apunta al commit del run y le pasa `0.14.2`; sin etiqueta, el build sale como `0.0.0` para que
+un comprobador del Java no se disfrace de Release. Arrastrado detrás: `versionCode` ya no vale 1 siempre
+(`0.14.2` → 1402), que es lo que hace que «instalar encima» con la llave estable sea *actualizar* y no
+*lo mismo de antes*, y el `android:versionName="0.13.0"` fijado del manifiesto se fue — dos verdades de la
+versión, y la del manifiesto era la que mentía—. Medido localmente: `bash -n` de los tres guiones, la
+derivación del código con cinco versiones, `make test` **507** y `make test-web` **56**. **Sin estrenar
+todavía**: el camino «existe la etiqueta y el APK sale con su número» se comprueba en la página de este
+mismo corte, y nadie ha instalado ninguno de los dos en el teléfono.
+
 **Corte `v0.14.1` (2026-10-15): que la Release salga con su APK sin que nadie tenga que etiquetar a mano.**
 Nada de cara cambia: es el mismo código de `v0.14.0` (llave auto-creada, pantalla de estreno, firma
 estable opcional) más el arreglo del `compilar-apk.yml`. Lo que se aprendió midiendo la página recién
@@ -13,10 +49,11 @@ abierta: `publicar-release.yml` crea la etiqueta él solo con `gh release create
 el tag no, **y ese `push` no genera trabajo** (token propio) — de ahí que `v0.14.0` quedara con cero
 adjuntos. El paso de subida ahora resuelve la etiqueta por SHA, espera dos minutos a que la hermana abra
 la página, y si no hay etiqueta sobre su commit sale **0** en vez de fallar: cada `push` de `main` sigue
-sirviendo para comprobar el Java sin crear nada. Comprobado antes de empujar: `bash -n` del guion
-extraído del YAML y el resolutor ejecutado contra la respuesta real de `api.github.com/…/tags`. Lo
-pendiente después de empujar es lo que se puede ver sin sesión: `CORT-v0.14.1.apk` y su
-`CORT-v0.14.1-firma.txt` adjuntos, y la huella de la firma dentro de ese archivo.
+sirviendo para comprobar el Java sin crear nada. **Comprobado después de empujar, por la API pública sin
+credenciales**: la Release `v0.14.1` salió a las `05:52:47Z` con `CORT-v0.14.1.apk` (49 977 B) y
+`CORT-v0.14.1-firma.txt` (400 B) adjuntos, runs 17 y 25 en verde, y el `dex` de ese APK contiene la
+pantalla nueva. Lo que ese APK no traía era su número de versión — `main` —, que es justo lo que arregla
+`v0.14.2`.
 
 **Corte `v0.14.0` (2026-10-15): quitar los dos muros que separaban a CORT del teléfono.** La dueña lo
 dijo con sus palabras: «sale una pantalla de `py --lan` y hay que colocar el token de arranque, ¿no

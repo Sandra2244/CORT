@@ -102,10 +102,26 @@ del `.keystore`.
 con otra firma obliga a desinstalar. `apps/apk/llave/` es, por tanto, un archivo
 que merece una copia fuera del portátil.
 
+## Qué versión lleva escrita el APK
+
+Desde `v0.14.2` el binario sabe de qué corte es: `compilar.sh` recibe la versión
+(`0.14.2`) y con ella fija `versionName` y un `versionCode` derivado (`1402`).
+Antes el número estaba fijado en el manifiesto (`0.13.0`) y el pipeline, cuando
+el run llegaba por rama, pasaba el nombre de la rama: el `CORT-v0.14.1.apk` se
+instaló rotulado como **`main`**, y así lo enseña Ajustes → Aplicaciones → CORT.
+Para comprobar el rotulado sin instalar nada, el primer renglón del
+`CORT-v<etiqueta>-firma.txt` de la Release dice `APK de CORT 0.14.2 (versionCode
+1402)`.
+
+El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
+estable** sea una actualización y no la misma versión repetida; con firma
+desechable, en cambio, cada APK nuevo exige desinstalar el anterior aunque el
+número suba.
+
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.14.0     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.14.2     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un

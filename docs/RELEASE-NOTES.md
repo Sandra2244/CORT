@@ -29,7 +29,7 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
 > con el hueco cerrado.
 
-**La lista de tareas para cortar la siguiente (v0.14.2), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.14.3), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
 0. Si se quiere **la firma estable** (que el APK nuevo se instale encima del viejo sin desinstalar):
@@ -38,27 +38,63 @@ pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit
    `apps/apk/llave/cort.keystore.pass` (archivos locales, ignorados por git). Sin ellos el pipeline
    firma desechable y lo dice — se comprueba leyendo el `CORT-v<etiqueta>-firma.txt` de la Release,
    no hace falta abrir una log que es privada.
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.2\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.14.3\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
 3. Se empuja `main`. **Con eso basta** desde `v0.14.1`: `publicar-release.yml` lee las notas de la rama,
-   ve que `v0.14.2` tiene sección y no tiene página, llama a `gh release create v0.14.2` —que crea la
+   ve que `v0.14.3` tiene sección y no tiene página, llama a `gh release create v0.14.3` —que crea la
    etiqueta sobre el commit si no existía— y GitHub adjunta solos el código fuente en `.zip` y
    `.tar.gz`: ésa es el acta «.zip como proyecto profesional» sin construir nada. En paralelo
    `compilar-apk.yml` compila `CORT.apk` con el SDK del runner y, al terminar, busca la etiqueta que
    apunta a *su* commit: si la encuentra (o aparece en los dos minutos siguientes) sube
-   `CORT-v0.14.2.apk` y su `CORT-v0.14.2-firma.txt` a esa Release. Etiquetar a mano
-   (`git tag v0.14.2 && git push origin v0.14.2`) sigue siendo válido y dispara el mismo camino por la
+   `CORT-v0.14.3.apk` y su `CORT-v0.14.3-firma.txt` a esa Release. Etiquetar a mano
+   (`git tag v0.14.3 && git push origin v0.14.3`) sigue siendo válido y dispara el mismo camino por la
    vía del evento de etiqueta; lo que **no** hay que hacer es empujar la etiqueta antes de tener la
    sección en `main`, o la página saldría con notas generadas.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
    justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
-   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.2 <archivo>`; el
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.14.3 <archivo>`; el
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.14.2` — el APK lleva escrita su versión, y el pipeline la encuentra él solo
+
+Corte pequeño y de obra, pero **se ve desde el teléfono**: hasta ahora el `versionName` del APK salía con
+el nombre de la rama. Medido descargando el `CORT-v0.14.1.apk` que subió el pipeline del corte anterior —
+`compilar.sh` recibió `main` como versión porque el run vino por rama y el YAML hacía
+`${GITHUB_REF_NAME#v}`, y eso es lo que se lee en Ajustes → Aplicaciones.
+
+- **`scripts/etiqueta_del_commit.py`** (nuevo, con sus **10 pruebas** en `test_etiqueta_commit.py`): dada
+  la lista de tags de la API pública, devuelve la etiqueta cuyo commit es el del run. Acepta el SHA corto
+  de siete que escriben los pasos y las mayúsculas, y **devuelve cadena vacía en vez de explotar** con un
+  JSON roto, sin forma de lista, sin `commit`, o con un prefijo tan corto que casaría con medio repo. El
+  fallo que cubre es justo ése: adivinar la versión por dónde llegó el evento.
+- **El paso «Averiguar la versión» corre antes de compilar** y deja `version` y `etiqueta` en los outputs
+  del trabajo. Sin etiqueta sobre el commit sale `0.0.0`: un build de comprobación del Java no se disfraza
+  de Release. Que la API falle no lo pone rojo (aquí el `|| true` es deliberado y está explicado en el
+  propio YAML); el paso de subida, en cambio, **sí falla** si no puede leer los tags —quedarse sin adjunto
+  en silencio es peor que un run en rojo—.
+- **`versionCode` deja de valer 1 para siempre**: se deriva de la versión — `0.14.2` → **1402**,
+  `0.15.0` → 1500, y cualquier cosa que no sea `X.Y.Z` vuelve a 1, con suelo 1 porque un APK con código 0 no
+  lo instala Android—. Con el código fijado en 1 el sistema creía que cada Release era *la misma*
+  aplicación ya instalada; con código creciente, el «instalar encima» de la llave estable significa
+  actualizar de verdad.
+- **Una sola verdad de la versión**: el manifiesto llevaba `android:versionName="0.13.0"` fijado, que
+  sobrevivía a todas las Releases. Se quitó; ahora lo escribe `aapt2 link` desde `compilar.sh`, y la prueba
+  pública `CORT-v<etiqueta>-firma.txt` cabecea con `APK de CORT 0.14.2 (versionCode 1402)` — se lee sin
+  abrir el APK ni tener sesión.
+- **Medido antes de empujar**: `bash -n` de los tres guiones del YAML, la derivación de `versionCode`
+  ejecutada con cinco versiones de mentira (`0.14.1`→1401, `0.15.0`→1500, `1.2.3`→10203, `0.0.0`→1,
+  `main`→1), y `make test` **507** en verde en **74,4 s** (las 10 nuevas del resolutor) con
+  `make test-web` **56**. **Lo que no se ha visto todavía**: este APK instalado en el Samsung — nadie lo ha
+  encendido en un dedo, regla 11.
+
+**Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.2.zip
 
 ---
 
