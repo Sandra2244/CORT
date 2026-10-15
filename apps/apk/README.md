@@ -46,7 +46,11 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 ## Usarlo
 
 1. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
-   e instalarlo (lea «Instalar aunque Android avise» abajo).
+   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: la página de
+   `v0.15.3` está publicada con su texto pero **sin APK** — su compilado cayó con un `Pattern` pasado
+   a `String.split`—; el binario que hay que bajar es **`CORT-v0.15.4.apk`**, que lleva las funciones
+   de `v0.15.3` arregladas. Se comprueba mirando los adjuntos de la página, no una log de Actions que
+   es privada.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
    aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa

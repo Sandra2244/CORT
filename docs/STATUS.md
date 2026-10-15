@@ -2,7 +2,21 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (11)** (`TMPDIR=/tmp make test` **686** en verde en **78,228 s**,
+> Última verificación: **2026-10-15 (12)** (`TMPDIR=/tmp make test` **688** en verde en **85,311 s**,
+> `make test-web` **56** — **744** en total—): **`v0.15.4` es el arreglo de un error que sólo existía al
+> compilar.** `Cerebro.partir()` llamaba a `split` sobre el `String` pasándole el `Pattern`
+> (`normaliza(entrada).split(UNION)`), `javac` dijo «incompatible types: Pattern cannot be converted to
+> String», el run **38810161046** de `compilar-apk` cayó con un solo error y **`v0.15.3` quedó publicado
+> con su página de texto y sin `CORT-v0.15.3.apk`** — medido por la API pública: 0 adjuntos; 18 páginas,
+> 11 sin APK y 7 con—. Se corrige **hacia adelante**, que es la única forma: la etiqueta publicada no se
+> mueve. La línea buena es `UNION.split(normaliza(entrada))`, y `test_apk_manifesta.py` llega a **67** con
+> dos guardias que prohíben volver a pasar un `Pattern` a `String.split` en los quince Java (comprobadas
+> **no vacías**: reintegrando el bug fallan las dos). **Una de esas dos pruebas estaba mal y lo confieso**:
+> exigía `.split(` para todo `Pattern` declarado y se cayó contra `HORA.matcher(...)` de `Acciones.java`,
+> un uso legítimo —el fallo era del test, no del producto—. Las funciones de `v0.15.3` (abrir cualquier
+> app, música, marcador, linterna, cadena de mandatos, traje de asistente) **siguen sin verificarse en
+> dedo**, y ahora también que este Java compile: el veredicto es del runner. Verificación anterior,
+> **2026-10-15 (11)** (`TMPDIR=/tmp make test` **686** en verde en **78,228 s**,
 > `make test-web` **56** — **742** en total—; **33** pruebas nuevas cosiendo `apps/apk/`: **13** en
 > `test_apk_cerebro.py` (21 → **34**), que trae el espejo en Python de `Cerebro.cadena` y fue el que
 > sacó el **bug de diseño real** del corte —probar la frase entera antes de partir hacía que la

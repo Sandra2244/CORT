@@ -54,7 +54,7 @@ otro».
 Lo que se decidió, dicho sin eufemismos sobre su alcance:
 
 - **El core de escritorio sigue siendo Python + React + Ollama.** No se reescribe
-  nada: las **686** pruebas de `services/core` (ejecutadas el 2026-10-15), el
+  nada: las **688** pruebas de `services/core` (ejecutadas el 2026-10-15), el
   WebSocket, el cuerpo 3D y la memoria del portátil se quedan donde están. Un
   segundo CORT en Java en el PC sería pagar una segunda implementación sin ganar
   ni un dispositivo.

@@ -29,11 +29,14 @@ crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido 
 > fuente, sin `CORT-v0.14.0.apk`. **La descarga válida de estas funciones es `v0.14.1`**, mismo código
 > con el hueco cerrado.
 
-> **Diez de las trece páginas publicadas no tienen APK** (medido por la API, sin credenciales), y ya se sabe
-> por qué cada vez: ocho nacieron antes de que existiera el pipeline del APK, `v0.14.0` vio su etiqueta
-> creada por el propio workflow —y eso no dispara el trabajo del APK—, y `v0.14.2` tuvo el manifiesto mal
-> formado. Las tres con adjunto — `v0.13.1`, `v0.14.1`, `v0.14.3` — se comprobaron **descargándolas**, no
-> leyendo una log que es privada.
+> **Once de las dieciocho páginas publicadas no tienen APK** (medido por la API, sin credenciales, el
+> 2026-10-15), y ya se sabe por qué cada vez: ocho nacieron antes de que existiera el pipeline del APK,
+> `v0.14.0` vio su etiqueta creada por el propio workflow —y eso no dispara el trabajo del APK—, `v0.14.2`
+> tuvo el manifiesto mal formado, y `v0.15.3` un `Pattern` pasado a `String.split`: un error de tipos que
+> **sólo existe cuando alguien compila**, y en esta máquina no hay `javac`. Las siete con adjunto — `v0.13.1`,
+> `v0.14.1`, `v0.14.3`, `v0.14.4`, `v0.15.0`, `v0.15.1`, `v0.15.2` — se comprobaron **descargándolas**, no
+> leyendo una log que es privada. La lección de forma: una Release se corrige **hacia adelante** con una
+> etiqueta nueva; la publicada no se mueve.
 
 **La lista de tareas para cortar la siguiente, en orden** — el orden importa porque el pipeline lee las
 notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta. Está escrita con
@@ -67,6 +70,41 @@ todas esas cadenas como `v<etiqueta>`:
    **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
    artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
    y una actualización no los borra.
+
+---
+
+## `v0.15.4` — el error que sólo se entera compilando: `Pattern.split`, y la Release corregida hacia adelante
+
+Un commit de arreglo, dos pruebas nuevas y la lección escrita donde se lee antes de tocar el Java.
+
+- **Lo que pasó**: `Cerebro.partir()` llamaba a `split` sobre el `String` pasándole el `Pattern`
+  —`normaliza(entrada).split(UNION)`, la forma de Python—. `javac` responde **«incompatible
+  types: Pattern cannot be converted to String»**, el run **38810161046** de `compilar-apk` cayó
+  con **un solo** error, y **`v0.15.3` salió con su página de texto y sin `CORT-v0.15.3.apk`**
+  (medido por la API pública: **0** adjuntos). Es la cuarta página sin binario por causas
+  distintas — `v0.13.0`, `v0.14.0`, `v0.14.2` y ahora `v0.15.3`— y la única forma de corregirla
+  sin romper nada es **hacia adelante**: una etiqueta nueva sobre el arreglo; la publicada no se
+  mueve, no se reescribe y no se fuerza.
+- **El arreglo cabe en una línea**: `UNION.split(normaliza(entrada))` —el `Pattern` es el otro
+  dueño de ese método—, partiendo siempre sobre la forma normalizada, que es lo que hace que «Y»
+  y «y» valgan lo mismo.
+- **Dos pruebas nuevas** en `TestLoQueJavacNoDejaPasar` (`test_apk_manifesta.py`): se listan los
+  `Pattern` declarados en los quince Java y **se prohíbe** que aparezcan como argumento de un
+  `split` llamado sobre un texto, y se exige que cada uno reciba uno de sus dos métodos reales
+  (`split` o `matcher`). Las dos se comprobaron **no vacías rompiéndolas a mano**: reintegrando
+  el bug fallan las dos, y con él fuera pasan las dos.
+- **Confesado**: la primera versión de esa guarda exigía que todo `Pattern` se usara con `.split(`,
+  y se cayó contra `Acciones.java`, que usa `HORA.matcher(...)` —un uso legítimo—. El fallo era del
+  test, no del producto, y la guarda ahora es la alternativa correcta.
+- **Contado por la API pública, sin credenciales**: **18** páginas publicadas hasta `v0.15.3`,
+  **11 sin APK** y **7 con** — `v0.13.1`, `v0.14.1`, `v0.14.3`, `v0.14.4`, `v0.15.0`, `v0.15.1`,
+  `v0.15.2`—. `v0.15.4` es la que tiene que traer el binario de las funciones de `v0.15.3`.
+- **Medido en esta máquina**: `TMPDIR=/tmp make test` **688** en verde en **85,311 s** y
+  `make test-web` **56** — **744** en total—; `test_apk_manifesta.py` llega a **67** y entre las
+  dos carpetas del APK vigilan **101** pruebas. **Sin verificar**: el `javac` de este commit es el
+  del runner, y no se afirmará nada del binario hasta bajarlo y abrirlo aquí.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.15.4.zip`
 
 ---
 
