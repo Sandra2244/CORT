@@ -9,30 +9,124 @@ que no tenga sección se publica con notas generadas antes que con una página m
 
 Las etiquetas `v0.7.0`, `v0.8.0`, `v0.9.0`, `v0.10.0` y `v0.10.1` nacieron **antes** de este pipeline,
 y como un `push` de etiqueta busca su YAML en el commit de esa etiqueta, quien las convirtió en
-Release fue el disparo por `main` — no hizo falta borrar ni recrear ninguna. **Las seis
-(`v0.7.0` … `v0.11.0`) están publicadas**, `v0.11.0` desde el 2026-10-11 con su nota recortada de
-este documento — comprobado con `curl` a la API pública sin credenciales el 2026-10-12: seis
-páginas, y cada cuerpo terminando en su propia línea `**Zip**`—, en
-[github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases). Sigue sin poder
+Release fue el disparo por `main` — no hizo falta borrar ni recrear ninguna. **Las siete
+(`v0.7.0` … `v0.12.0`) están publicadas**: `v0.11.0` desde el 2026-10-11 y `v0.12.0` desde el
+2026-10-13 con su nota recortada de este documento — `v0.12.0` comprobado por la API pública sin
+credenciales el mismo día de su corte: id `411249554`, `published_at` `2026-10-13T03:58:21Z`, cuerpo
+de 6 378 caracteres terminando en su línea `**Zip**`, y `…/archive/refs/tags/v0.12.0.zip` → `200` —,
+en [github.com/Sandra2244/CORT/releases](https://github.com/Sandra2244/CORT/releases). Sigue sin poder
 crearse una Release por API desde esta máquina: no hay sesión de `gh` (medido tres veces), ni
 `GH_TOKEN` en el entorno, ni `~/.config/gh`.
 
-**La lista de tareas para cortar la siguiente (v0.12.0), en orden** — el orden importa porque el
+**La lista de tareas para cortar la siguiente (v0.13.0), en orden** — el orden importa porque el
 pipeline lee las notas **siempre desde la rama por defecto**, no desde el commit de la etiqueta:
 
-1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.12.0\` — …` escrita, con su línea **Zip** — la
+1. `docs/RELEASE-NOTES.md` tiene la sección `## \`v0.13.0\` — …` escrita, con su línea **Zip** — la
    prueba `test_cada_etiqueta_del_documento_tiene_su_nota` la exige y `make test` lo recuerda.
 2. La rama se revisa y **se fusiona a `main`** (fast-forward, sin `--force`: `main` es ancestro de
    `cort-local-verified`, comprobado con `git merge-base --is-ancestor`). Sin este paso la Release
    saldría con `--generate-notes`: el workflow busca la sección en `main`, y ahí todavía no existiría.
-3. Se etiqueta el commit de `main`: `git tag v0.12.0 && git push origin v0.12.0`. Ahí se dispara
+3. Se etiqueta el commit de `main`: `git tag v0.13.0 && git push origin v0.13.0`. Ahí se dispara
    `publicar-release.yml` y GitHub ya adjunta solos el código fuente en `.zip` y `.tar.gz` —
-   esa es el acta «.zip como proyecto profesional» sin construir nada.
+   esa es el acta «.zip como proyecto profesional» sin construir nada. Y desde este corte se dispara
+   también `compilar-apk.yml`, que compila `CORT.apk` con el SDK del runner y lo sube a la Release
+   como `CORT-v0.13.0.apk` — el workflow corre además con cada `push` de `main`, para verlo verde
+   **antes** de etiquetar.
 4. Los **instaladores reales** (setup de Windows, APK) no los produce esta máquina —medido y
-   justificado en `docs/PLATFORM.md`—: se construyen en un PC Windows con la receta de
-   `packaging/` y se adjuntan a la Release ya abierta con `gh release upload v0.12.0 <archivo>`.
-   Nunca hace falta tocar nada de datos: la Release son artefactos nuevos; el historial, los
-   recuerdos y el `.env` de quien usa CORT viven fuera del repo y una actualización no los borra.
+   justificado en `docs/PLATFORM.md`—: el Windows se construye en un PC Windows con la receta de
+   `packaging/` y se adjunta a la Release ya abierta con `gh release upload v0.13.0 <archivo>`; el
+   **APK se hace solo**, desde el pipeline. Nunca hace falta tocar nada de datos: la Release son
+   artefactos nuevos; el historial, los recuerdos y el `.env` de quien usa CORT viven fuera del repo
+   y una actualización no los borra.
+
+---
+
+## `v0.13.0` — el cerebro que actúa solo, la bitácora que avisa, la alarma que suena y la ventana al teléfono
+
+Lo que pidió el colaborador después de usarlo fue exactamente esto: *«su lógica y cerebro fallan al
+ejecutar acciones»*. Y lo que pidió la dueña: usarlo en su teléfono, sin tener que repetirle quién es
+ni qué aparato usa. Esta Release trae el **cerebro JARVIS** portado desde el árbol verificado a
+`main` —registro cerrado de 19 herramientas, agenda que despierta, un lazo que propone, ejecuta y
+**mide el después**—, la bitácora de rechazos convertida en **aviso**, la memoria del **dispositivo**,
+un cerebro **opcionalmente en la nube** que por defecto no saca un solo paquete de la máquina, y el
+**primer APK compilado por el pipeline**. Cuesta un marco nuevo en el protocolo —`alarm`, el duodécimo
+tipo—, documentado antes en `docs/ARCHITECTURE.md` como manda la regla 5. La pila no cambia (Python +
+React + Ollama, todo local) y no entra ninguna dependencia.
+
+- **19 herramientas de lista cerrada** (`cort_core/herramientas.py`, función 84): «pon una alarma a
+  las 7», «qué hora es», «qué día es hoy», «cuántos días faltan para mi cumpleaños», «baja el brillo»,
+  «escribe una nota», «abre la calculadora», «abre YouTube con lo de Bach», «pon música relajante»,
+  «cuánto llevo». Van **delante** de `intents` y del LLM — preguntar «pon una alarma» a un modelo que
+  tarda 15-60 s por turno en este portátil es pagar caro lo que es una tabla —, y cada ejecución pasa
+  por la misma frontera de `actions.py`: **el modelo elige claves, no comandos** (regla 6). Se apaga
+  todo con `CORT_TOOLS=0` y vuelve el CORT de antes sin tocar código. Una prueba le **lee el fuente**
+  al registro buscando `subprocess` y `os.system`, y `TestHerramientasPorElSocket` le habla por
+  WebSocket de verdad con `TestClient`.
+- **El lazo que comprueba** (`agente.py` + `planner.dicho()`, funciones 87 y 88): cuando lo pedido
+  encadena, CORT propone un paso, lo ejecuta, **mide el resultado en el mundo** y devuelve la medida
+  al modelo antes de afirmar nada — tope 4 vueltas, no por estética sino por latencia medida—, con
+  forma fija de decir «No pude hacer eso: …». El cierre del plan lo escribe el **recuento de lo
+  medido**, no la prosa del modelo. Si la frase se entiende sólo a medias, el cabo suelto viaja a la
+  nube — nunca la conversación entera, y nunca el cabo a Ollama.
+- **La agenda suena** (`agenda.py` + el marco nuevo `alarm`, función 86): alarmas y recordatorios
+  quedan en SQLite y se difunden a **todas** las pestañas abiertas; si no había ninguna, el aviso
+  queda **pendiente** y llega al conectar — una alarma nunca se da por entregada sin haberla
+  entregado—, y `atrasada: true` avisa cuando tocaba hace más de dos minutos. El `timer` preexistente
+  aprendió dos estados más: `sube` y `para` son un **cronómetro** que cuenta hacia arriba en el anillo
+  (`total: 0`, y el aro se llena entero en vez de fingir una cuenta que no es).
+- **Nube opcional, local por defecto** (`brain.py`, función 89): `CORT_LLM_PROVIDER=ollama|anthropic|openai`
+  — con `ollama` como siempre, **cero paquetes salen de la máquina si nadie lo enciende**—; si la nube
+  falla, el turno se cierra con un aviso visible («[nube no disponible: …]») en vez de quedarse
+  callado, y las claves nunca se cuelan en los mensajes. En el camino salió un bug silencioso: los
+  hechos de la usuaria viajaban como mensaje `system` dentro del historial, y `_alternating` los
+  barría antes de llegar a Claude — o sea, la nube olvidaba justo lo que la dueña no quiere repetir.
+  Ahora van **mergeados en un solo `system`**, con dos pruebas que leen el cuerpo exacto de la
+  petición. 18 pruebas en `test_brain.py` con `httpx.MockTransport`: **ninguna llamada real**, la
+  cuota de la dueña no se gastó para probar.
+- **La bitácora convertida en aviso** (`audit.rechazos_de_acceso()` + primera regla de `initiative.py`,
+  función 92): tres intentos de puerta sin llave en diez minutos y CORT **lo dice solo**, delante de
+  todas las demás reglas y con el número medido en la frase — «He bloqueado 3 intentos de entrar sin
+  la llave. Si no fuiste tú, `make rechazos` enseña quién y desde dónde.». Contar vive en `audit` y
+  en el server; `initiative.py` sigue sin importar nada ejecutable, y la guarda AST del reloj del
+  server se actualizó **a mano** para aceptar la nueva llamada — que es exactamente para lo que esa
+  guarda existe. Medido en vivo: tres rechazos escritos → la regla `rechazos` es la primera que habla.
+- **Ya sabe qué teléfono usas** (`memory/facts.py`, función 93): «uso un Samsung A16» o «mi teléfono
+  es un Redmi Note 12» se guardan como hechos, junto al nombre, y viajan con los prompts — locales y
+  de la nube. La lista de marcas es **cerrada** porque «uso el cronómetro» es una frase real y
+  guardarla sería llenar la memoria de basura: hay una prueba de la trampa.
+- **El teléfono ve a CORT** (`apps/apk/` + `.github/workflows/compilar-apk.yml`, función 94): **una
+  sola actividad Java pura, sin Gradle ni AndroidX ni Capacitor** — estas máquinas no tienen RAM para
+  esa fiesta (`docs/PLATFORM.md`) — que abre la URL que imprime `cort.py --lan` con su llave pegada y
+  la recuerda en `SharedPreferences`; el icono se **dibuja** con `scripts/marca.py` en cada build,
+  como el resto de la marca. El pipeline lo compila con las herramientas del SDK preinstalado del
+  runner (`aapt2`/`javac`/`d8`/`zipalign`/`apksigner`) y sube `CORT-v0.13.0.apk` a esta misma
+  Release; corre también con cada `push` de `main`, para verlo verde **antes** de etiquetar. Límites
+  escritos en `apps/apk/README.md`, no escondidos: `SpeechRecognition` **no existe dentro del
+  WebView** — escuchar es la PWA en Chrome, ya instalable—, y sin el secreto `CORT_APK_KEYSTORE_B64`
+  la firma es desechable.
+- **La cara entiende lo nuevo** (función 91): `connection.ts` pinta la alarma como mensaje con su
+  hora y su «llegó tarde», y `Temporizador.tsx` distingue cuenta atrás de cronómetro — en `sube` el
+  aro va **lleno**, porque un aro que diera la vuelta cada minuto sería un reloj que miente—; `termina`
+  y `para` dejan el cartel seis segundos y se apaga solo.
+
+- **Medido en esta máquina** (2 núcleos, 1,8 GiB, sin GPU): `make test` → **Ran 490 tests in 70,169 s
+  — OK** (137 desde `v0.12.0: 87 del registro y su lazo, 37 del server cableado, la agenda y el
+  cronómetro, 6 de la memoria de dispositivo y el `system` de la nube, 7 del aviso), `make test-web`
+  → **56/56 en 11,4 s**, `npx tsc --noEmit` limpio y `npm run build` limpio. El aviso de rechazos,
+  medido **en vivo** fuera de la suite: tres puertas cerradas escritas → `rechazos_de_acceso()` da 3,
+  y `initiative.sugerir` responde `rechazos` delante de todas.
+
+**Sin verificar aquí** (regla 11, con su motivo): **el APK en un dedo** — no hay `javac` ni SDK en
+esta máquina (así está medido en `docs/PLATFORM.md`) y el pipeline nunca había corrido; lo que se
+afirme de él será la Release que devuelva la API pública, no un log—; **la alarma vista sonar en una
+pantalla y el anillo del cronómetro pintado** — el navegador va cerrado por pedido expreso de la dueña
+desde el 2026-10-12—; **la voz dentro del WebView** (escuchar no: ahí no existe `SpeechRecognition`,
+y hablar está escrito pero nadie lo oyó salir de un teléfono—); **el hecho del dispositivo recordado
+por un modelo real** en una charla de verdad —probado contra cuerpos de petición simulados, sin gastar
+cuota—; y la nube con cuenta real sigue sin medición: su falta de TLS en la LAN es la misma deuda
+escrita desde `v0.7.0`, ahora con la bitácora avisando de quien prueba la puerta.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.13.0.zip`
 
 ---
 

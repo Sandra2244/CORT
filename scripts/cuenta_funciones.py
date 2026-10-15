@@ -34,6 +34,9 @@ SECCIONES = [
                                 "notificaciones…)"),
     ("Sensores y contexto", "Sensores y contexto (cámara en el arranque, "
                             "temperatura, red, MQTT, preferencias)"),
+    ("El asistente que actúa", "El asistente que actúa (herramientas de lista "
+                              "cerrada, reloj en español, agenda que suena, bucle "
+                              "proponer→ejecutar→medir, nube opcional, APK)"),
 ]
 
 HECHA, CURSO, PEND = "✅", "🔨", "⬜"
