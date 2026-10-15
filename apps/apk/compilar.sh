@@ -78,7 +78,15 @@ mkdir -p build/obj build/apk
     build/obj/res.zip --auto-add-overlay
 
 # -- El Java (una actividad, sin AndroidX) ------------------------------------
-javac -source 11 -target 11 -bootclasspath "$PLAT/android.jar" \
+# `--release` en vez de `-source/-target` + `-bootclasspath`: esa combinación
+# está prohibida desde target 9 (medido en el run 38678109143 — el `javac` del
+# runner salió con 2: "option --boot-class-path not allowed with target 11").
+# `android.jar` va ahora al classpath: el `java.*` lo pone el módulo del JDK y
+# el `android.*` lo da la plataforma; para una actividad que sólo usa
+# `android.app` + `android.webkit` sale el mismo bytecode. Nota honesta: este
+# script no puede probarse en el portátil (sin JDK, medido) — la verificación
+# es la del pipeline, leída por annotation.
+javac --release 11 -classpath "$PLAT/android.jar" \
     -d build/obj $(find src -name '*.java')
 "$BT/d8" --release --lib "$PLAT/android.jar" --output build/apk \
     $(find build/obj -name '*.class')
