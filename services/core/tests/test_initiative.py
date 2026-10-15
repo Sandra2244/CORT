@@ -188,6 +188,16 @@ class TestBucle(unittest.IsolatedAsyncioTestCase):
         # Sin ciudad configurada no hay clima, y el clima real dependería de la red.
         self.clima = mock.patch.object(weather, "snapshot", return_value=None)
         self.clima.start()
+        # Y sin rechazos en el disco: `_cuidar_iniciativa` llama a
+        # `audit.rechazos_de_acceso()`, que lee el `CORT_AUDIT_LOG` real del
+        # proceso. En el `discover` completo `test_audit` (por orden alfabético)
+        # deja rechazos escritos en ese mismo archivo, y la regla `rechazos` —que
+        # por diseño habla DELANTE de todas— tapaba a `sin_nombre` y falsaba tres
+        # pruebas de este bucle. Se aísla el recuento igual que el clima: esta
+        # clase prueba la mecánica del reloj (deshacer, silencio, apagador), y la
+        # medición de puertas cerradas tiene sus propias pruebas en `TestReglas`.
+        self.rechazos = mock.patch.object(server.audit, "rechazos_de_acceso", return_value=0)
+        self.rechazos.start()
         self.intervalo = mock.patch.object(server, "INICIATIVA_S", 0.02)
         self.intervalo.start()
         self.silencio = mock.patch.object(server, "INICIATIVA_QUIET_S", 0.0)
