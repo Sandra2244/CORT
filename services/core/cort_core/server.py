@@ -1,10 +1,11 @@
 import asyncio
+import json
 import os
 import re
 import time
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import uvicorn
 
 # El `.env` se lee **antes** del resto de los imports del paquete: `memory/store.py`
@@ -27,6 +28,7 @@ from . import brain
 from . import audit
 from . import initiative
 from . import planner
+from . import puente
 from . import security
 from . import timer
 from . import agenda as agenda_mod
@@ -173,6 +175,74 @@ async def get_avatar(nombre: str, solicitud: Request):
         raise HTTPException(status_code=404, detail="atuendo no disponible")
     return FileResponse(ruta, media_type=avatars.tipo_de(ruta),
                         headers={"Access-Control-Allow-Origin": "*"})
+
+
+# -- El puente de memoria ---------------------------------------------------------
+# `v0.15.0` dejó dos cabezas (`memory.db` y `cort.db`) sin hablarse; `puente.py` es
+# la lógica pura y estas dos rutas son su única asomada a la red. El protocolo está
+# documentado **antes** en `docs/ARCHITECTURE.md` (regla 5), y no es un marco nuevo
+# de WebSocket: es HTTP corto, con la misma `autorizada()` de siempre.
+
+_MAX_CUERPO = puente.MAX_BYTES
+
+
+def _memoria_para_el_puente() -> dict:
+    """El cuadro del portátil, con la llave fuera (regla 1 del puente).
+
+    Se exporta desde el almacén real con su tope: un `SELECT` sin límite sobre una
+    memoria que crece años es una respuesta que no cabe en la máquina.
+    """
+    return puente.exportar(memory.filas(tope=puente.MAX_FILAS),
+                           origen="escritorio",
+                           llave=security.token_configurado())
+
+
+@app.get("/memoria/puente")
+async def get_memoria(solicitud: Request):
+    """Lo que CORT sabe de la dueña, para que el teléfono lofuse en su `cort.db`.
+
+    Sale con la misma llave que el WebSocket y los atuendos, y **la llave nunca viaja
+    dentro del cuadro**: `exportar` descarta cualquier recuerdo que la contenga. No
+    hay `Access-Control-Allow-Origin` aquí: lo llama una app Java (`HttpURLConnection`),
+    no una pestaña, y abrir el CORS sería regalarle a cualquier página del navegador
+    algo que leer sobre la dueña.
+    """
+    if not autorizada(solicitud):
+        raise HTTPException(status_code=401, detail="falta el token de la red")
+    return JSONResponse(_memoria_para_el_puente())
+
+
+@app.post("/memoria/puente")
+async def post_memoria(solicitud: Request):
+    """Recibiendo el cuadro del teléfono y **sumándolo** a la memoria del portátil.
+
+    Tres frenos antes de tocar disco: el cuerpo no puede pasar `MAX_BYTES`, el JSON
+    tiene que ser un objeto con la `version` del puente, y `fusionar` rechaza fila por
+    fila lo vacío, lo desmedido y lo que lleva la llave dentro. Un cuadro malo responde
+    400 con el motivo en español y **no deja memoria a medias**.
+
+    Fusionar nunca borra: lo que el teléfono no mande no desaparece del portátil.
+    """
+    if not autorizada(solicitud):
+        raise HTTPException(status_code=401, detail="falta el token de la red")
+    anunciado = (solicitud.headers.get("content-length") or "").strip()
+    if anunciado.isdigit() and int(anunciado) > _MAX_CUERPO:
+        raise HTTPException(status_code=413,
+                            detail=f"el cuadro pasa {_MAX_CUERPO} bytes")
+    cuerpo = await solicitud.body()
+    if len(cuerpo) > _MAX_CUERPO:
+        raise HTTPException(status_code=413, detail=f"el cuadro pasa {_MAX_CUERPO} bytes")
+    try:
+        cuadro = json.loads(cuerpo.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise HTTPException(status_code=400, detail="el cuadro no es JSON")
+    try:
+        recuento = puente.fusionar(memory, cuadro,
+                                   llave=security.token_configurado())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return JSONResponse({"tipo": "memoria", "version": puente.VERSION,
+                         "origen": "escritorio", **recuento})
 
 
 # -- La agenda y el asistente -------------------------------------------------------

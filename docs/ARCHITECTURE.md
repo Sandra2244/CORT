@@ -257,6 +257,29 @@ Tres piezas, nacidas cada una de un fallo medido:
 
 Lo que **ninguna** de las tres puede comprobar sigue marcado como sin verificar en `docs/FUNCTIONS.md`: que la cara nativa se vea, que el micrófono oiga y que la voz salga por el altavoz de un Samsung concreto.
 
+## El puente de memoria (`cort_core/puente.py`) — dos cabezas, un cuadro
+
+La segunda deuda del acuerdo Java (`docs/PLATFORM.md`): `memory.db` (el portátil) y `cort.db` (el teléfono) no se sabían nada la una de la otra, así que lo que la dueña enseñaba en un aparato no existía en el otro. El puente es un **cuadro JSON** que viaja por HTTP y una fusión que sólo suma. **Ningún marco nuevo de WebSocket** (regla 5): esto no pasa por `/ws`, pasa por dos rutas HTTP cortas, y el protocolo del lazo no se toca.
+
+`GET /memoria/puente?token=…` responde el cuadro; `POST /memoria/puente?token=…` recibe uno y lo fusiona. Las dos pasan por la **misma** `autorizada()` de `security.py` que el WebSocket y `/avatars/{nombre}` — un criterio, tres puertas—, y un rechazo se apunta en la bitácora con el detalle **sin el query** (`GET /memoria/puente`, nunca `?token=`).
+
+**La forma del cuadro** (`version: 1`):
+
+```
+{"tipo": "memoria", "version": 1, "origen": "escritorio"|"telefono",
+ "total": 2, "ocultados": 0,
+ "recuerdos": [{"contenido": "El usuario se llama Sandra", "cuando": "2026-10-15T10:00:00+00:00"}]}
+```
+
+Cuatro reglas, y las cuatro vienen de un modo concreto en que sincronizar sale **peor** que no sincronizar:
+
+1. **La llave de red no viaja dentro de un recuerdo.** Al exportar se le pasa `security.token_configurado()`: una fila que contenga la llave **no sale** y se cuenta en `ocultados`. Sería un autorrobo elegante que el endpoint protegido por token se llevara el token puesto.
+2. **Fusionar no borra nunca** (`fusionar` sólo llama a `remember`). Un lado que se poda no es un lado que olvidó: es un lado que hizo borrar en el otro, y aquí podar es una operación que existe (`prune()`).
+3. **El dedupe es normalizado, no literal.** `remember()` compara cadenas exactas y su límite está escrito en `docs/STATUS.md`; si el puente comparara igual, «Me llamo Sandra» y «me llamo Sandra» multiplicarían un dato por sincronía. La clave es `normaliza()`: `casefold` y espacios colapsados, **con tildes** («canción» y «cancion» son dos cosas distintas y eso no lo decide el código).
+4. **Topes escritos y bajos**: `MAX_CONTENIDO` 300 caracteres por fila, `MAX_FILAS` 500 por viaje, `MAX_BYTES` 256 KiB de cuerpo. Lo que no cabe se **cuenta** como `rechazados`, no se guarda a medias. `fusionar` valida la `version` y la forma **antes** de tocar disco: un cuadro malo no deja memoria partida.
+
+El módulo es puro a prueba de lectura: sólo importa `re` (una prueba le el AST y compara el conjunto de imports), no abre archivos, y no nombra `socket`/`http`/`sqlite3`/`subprocess`. Eso es lo que permite probar el puente entero en esta máquina sin teléfono y sin servidor, y dejar el riesgo para la capa que sí toca red — que se prueba aparte, con `TestClient`.
+
 ## La bitácora de rechazos (`cort_core/audit.py`)
 
 `security.py` decide; hasta `v0.7.0` lo decidido se iba con la respuesta. Quedaba sin responder la pregunta que la dueña del proyecto pone como «base y proyección contra malware»: **¿alguien estuvo probando, y por cuál puerta?** Un registro es lo único que la responde, y es lo que añade este módulo. Cuatro decisiones de diseño, cada una contra un modo concreto en que un log se vuelve inútil o peligroso:
