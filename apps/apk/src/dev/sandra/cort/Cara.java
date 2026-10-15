@@ -48,6 +48,7 @@ public class Cara implements Voz.AlOir {
     private final Cerebro cerebro;
     private final Acciones acciones;
     private final Nube nube;
+    private final Sincroniza sincroniza;
     private final Voz voz;
 
     private LinearLayout registro;
@@ -64,6 +65,10 @@ public class Cara implements Voz.AlOir {
         this.cerebro = new Cerebro(actividad.getApplicationContext(), recuerdos);
         this.acciones = new Acciones(actividad, recuerdos);
         this.nube = new Nube(actividad.getApplicationContext());
+        // El puente no decide solo: vive en la hoja de ajustes, y lee el enlace que
+        // `MainActivity` ya guardó («cort» → `url`). Sin ese enlace, `hayPortatil()`
+        // dice que no y la fila ni se intenta.
+        this.sincroniza = new Sincroniza(actividad.getApplicationContext(), recuerdos);
         this.voz = new Voz(actividad.getApplicationContext());
         sembrar();
     }
@@ -338,6 +343,16 @@ public class Cara implements Voz.AlOir {
         });
         caja.addView(borrar, par(-1, -2));
 
+        // El puente de memoria (deuda 2 del acuerdo Java). Va en esta hoja y no en un
+        // botón de la pantalla en reposo por dos motivos: la superficie de herramientas
+        // es una sola, y sincronizar es algo que se hace de vez en cuando, no en cada
+        // frase. La fila **no** desaparece si no hay portátil: explica por qué.
+        TextView sincronizar = texto("↔  traer y llevar mis recuerdos al portátil",
+                13f, Paleta.CIAN);
+        sincronizar.setPadding(0, dp(12), 0, dp(6));
+        sincronizar.setOnClickListener(v -> sincronizando(salida));
+        caja.addView(sincronizar, par(-1, -2));
+
         new AlertDialog.Builder(actividad)
                 .setView(desplegable)
                 .setPositiveButton("Guardar", (d, w) -> guardandoAjustes(
@@ -374,6 +389,34 @@ public class Cara implements Voz.AlOir {
                     ? "No contestó: " + nube.ultimoFallo()
                     : "Contestó: " + respuesta;
             actividad.runOnUiThread(() -> salida.setText(aviso));
+        }).start();
+    }
+
+    /**
+     * El puente, en su propio hilo, exactamente como la nube y que el UDP: dos
+     * `HttpURLConnection` seguidos en el hilo de la interfaz congelan el anillo, y un
+     * portátil apagado no puede quedarse con la cara colgada. El aviso vuelve por
+     * `runOnUiThread`, y si hubo datos nuevos se escribe también en el registro, que es
+     * donde la dueña los va a ver la próxima vez que abra la cara.
+     */
+    private void sincronizando(final TextView salida) {
+        if (!sincroniza.hayPortatil()) {
+            salida.setText("Todavía no sé dónde está tu portátil: busca la Wi-Fi o pega su "
+                    + "enlace en la pantalla de estreno.");
+            return;
+        }
+        salida.setText("cruzando el puente…");
+        new Thread(() -> {
+            final String recuento = sincroniza.sincronizar();
+            final String aviso = recuento == null
+                    ? "No sincronizó: " + sincroniza.ultimoFallo()
+                    : recuento;
+            actividad.runOnUiThread(() -> {
+                salida.setText(aviso);
+                if (recuento != null) {
+                    linea("Memoria compartida con el portátil. " + recuento, Paleta.AVISO);
+                }
+            });
         }).start();
     }
 

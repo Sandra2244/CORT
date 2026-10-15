@@ -414,5 +414,272 @@ class TestAjustesDeNube(unittest.TestCase):
                              f"{nombre}: hay una « sin su » (o al revés)")
 
 
+class TestPuenteDeMemoria(unittest.TestCase):
+    """`v0.15.2`, deuda 2 del acuerdo Java: `cort.db` y `memory.db` ya se hablan.
+
+    El puente está en dos lenguajes y no hay un `import` compartido que los ate, así
+    que esta clase es la costura: los **números** del cuadro (versión, topes, ruta,
+    puerto del core) se comparan con los de `puente.py` y con los del lanzador, y la
+    derivación de la URL se reimplementa aquí en Python y se contraste contra la misma
+    tabla de enlaces. Es el mismo método que ya fija las mágicas del UDP
+    (`TestProtocoloDeDivulgacion`), y por las mismas razones: lo que se rompe se rompe
+    en un teléfono.
+
+    La segunda mitad de la clase es estructural y cara de ver en un móvil: que la
+    lógica del cuadro siga **pura** (sin `java.net`, sin SQLite), que la llave de red se
+    pase en los dos sentidos, que fusionar no borre y que la red no vaya en el hilo de
+    la interfaz.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+
+        def carga(nombre, archivo):
+            """Un módulo por su ruta, sin tocar `sys.path`: la costura lee el mismo
+            fuente que ejecuta el lanzador y el mismo que llama el teléfono."""
+            spec = importlib.util.spec_from_file_location(nombre, archivo)
+            modulo = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(modulo)
+            return modulo
+
+        cls.puente = carga("cort_puente_costura",
+                           RAIZ / "services" / "core" / "cort_core" / "puente.py")
+        cls.lanzador = carga("cort_lanzador_costura", RAIZ / "scripts" / "cort.py")
+        cls.puente_java = (FUENTES / "Puente.java").read_text(encoding="utf-8")
+        cls.sincroniza = (FUENTES / "Sincroniza.java").read_text(encoding="utf-8")
+        cls.recuerdos = (FUENTES / "Recuerdos.java").read_text(encoding="utf-8")
+        cls.cara = (FUENTES / "Cara.java").read_text(encoding="utf-8")
+        cls.servidor = (RAIZ / "services" / "core" / "cort_core" / "server.py").read_text(
+            encoding="utf-8")
+        cls.todos = {p.name: p.read_text(encoding="utf-8") for p in sorted(FUENTES.glob("*.java"))}
+
+    @staticmethod
+    def solo_codigo(texto):
+        """El fuente sin comentarios ni literales, para poder prohibir nombres y contar llaves.
+
+        El truco lo aprendió `test_apk_cerebro.py` contando usos de una clase: la
+        documentación de `Puente.java` **nombra** `java.net` y `HttpURLConnection`
+        justamente para decir que no los usa, y una prohibición leída sobre el archivo
+        entero habría fallado contra ese comentario.
+
+        Se recorre el texto con un mini-escáner y no con tres `re.sub` en cadena, y la
+        diferencia se midió: con los `sub` en hilera, `MainActivity.java` —que ya compila
+        verde en el runner— salía con 58 llaves contra 60, porque el patrón de comentario
+        `// …` se comía el resto de la línea dentro de una cadena (`"http://…"`). Aquí se
+        consumen **literales primero que comentarios**, que es el orden en que los lee
+        `javac`, y las cuentas cuadran.
+        """
+        salida = []
+        i, n = 0, len(texto)
+        while i < n:
+            c = texto[i]
+            if c in "\"'":                      # cadena o carácter: se tira entero
+                marca = c
+                i += 1
+                while i < n and texto[i] != marca:
+                    if texto[i] == "\\":
+                        i += 1
+                    elif texto[i] == "\n":
+                        break                   # literal sin cerrar: no pasa en Java válido
+                    i += 1
+                i += 1
+            elif texto.startswith("//", i):     # línea de comentario
+                while i < n and texto[i] != "\n":
+                    i += 1
+            elif texto.startswith("/*", i):     # bloque, incluido el Javadoc
+                hallado = texto.find("*/", i + 2)
+                i = n if hallado < 0 else hallado + 2
+            else:
+                salida.append(c)
+                i += 1
+        return "".join(salida)
+
+    # -- la costura numérica --------------------------------------------------------
+
+    def test_los_numeros_del_cuadro_son_los_de_puentepy(self):
+        for literal, esperado in (
+                ("int VERSION = %d;", self.puente.VERSION),
+                ("int MAX_CONTENIDO = %d;", self.puente.MAX_CONTENIDO),
+                ("int MAX_FILAS = %d;", self.puente.MAX_FILAS),
+                ("int MAX_BYTES = %d;", self.puente.MAX_BYTES)):
+            self.assertIn(literal % esperado, self.puente_java,
+                          f"{literal} no coincide con puente.py ({esperado}): "
+                          "un cuadro de otra versión se rechaza en el portátil y en el "
+                          "teléfono nadie sabe por qué")
+        self.assertIn('String TIPO = "' + self.puente.exportar([])["tipo"] + '";',
+                      self.puente_java)
+
+    def test_la_ruta_y_el_puerto_son_los_que_el_portatil_escucha(self):
+        self.assertIn('String RUTA = "/memoria/puente";', self.puente_java)
+        self.assertIn('@app.get("/memoria/puente")', self.servidor)
+        self.assertIn('@app.post("/memoria/puente")', self.servidor)
+        self.assertIn("int PUERTO_API = %d;" % self.lanzador.PUERTO_CORE, self.puente_java,
+                      "el puerto del core está escrito en dos lenguajes: si el lanzador "
+                      "cambia su default, el teléfono tiene que cambiar el mismo número")
+
+    def test_el_tope_real_de_un_viaje_es_aritmetica_y_no_un_numero_al_aire(self):
+        """300 caracteres con tildes son 600 bytes en UTF-8 más el envoltorio del JSON."""
+        self.assertIn("Math.min(MAX_FILAS, MAX_BYTES / (MAX_CONTENIDO * 3 + 64))",
+                      self.puente_java)
+        esperado = min(self.puente.MAX_FILAS,
+                       self.puente.MAX_BYTES // (self.puente.MAX_CONTENIDO * 3 + 64))
+        self.assertLess(esperado, self.puente.MAX_FILAS,
+                        "si 500 filas cupieran siempre, el tope no serviría de nada")
+        self.assertGreaterEqual(esperado, 200,
+                                "un puente que sólo mueve 30 recuerdos no es un puente")
+
+    # -- la derivación de la URL, espejada en Python --------------------------------
+
+    @staticmethod
+    def url_del_puente(enlace, puerto=8765):
+        """Espejo en Python de `Puente.urlDelPuente`. Si las dos mitades discrepan, el
+        teléfono llama a una URL que el portátil no escucha — y eso sólo se vería en un
+        dedo—. Mismo método que `normaliza` en `test_apk_cerebro.py`."""
+        limpio = (enlace or "").strip()
+        esquema = ("https://" if limpio.startswith("https://")
+                   else "http://" if limpio.startswith("http://") else None)
+        if esquema is None:
+            return None
+        resto = limpio[len(esquema):]
+        fin = len(resto)
+        for indice, caracter in enumerate(resto):
+            if caracter in "/?#":
+                fin = indice
+                break
+        host = resto[:fin]
+        if ":" in host:
+            host = host.rsplit(":", 1)[0]
+        if not host:
+            return None
+        where = limpio.find("?token=")
+        if where < 0:
+            where = limpio.find("&token=")
+        token = ""
+        if where >= 0:
+            desde = limpio[where + len("?token="):]
+            corte = next((i for i, c in enumerate(desde) if c in "&#"), len(desde))
+            token = desde[:corte].strip()
+        return (esquema + host + ":" + str(puerto) + "/memoria/puente"
+                + ("?token=" + token if token else ""))
+
+    ENLACES = [
+        "http://192.168.100.5:8780/?token=llave-de-prueba",
+        "http://192.168.100.5:8780/",
+        "http://192.168.1.9/?token=abc",
+        "https://cort.casa:8780/?token=abc&theme=2",
+        "http://10.0.0.4:8780/#token=no-es-query",
+        "  http://192.168.1.5:8780/?token=con-espacios-al-final  ",
+        "",
+        "192.168.1.5:8780/?token=abc",
+        "http:///:8780/?token=abc",
+        "ftp://192.168.1.5:8780/",
+    ]
+
+    def test_el_java_deriva_la_misma_url_que_el_espejo_en_python(self):
+        # La derivación no se puede probar aquí (no hay `javac`), así que se fija su
+        # **literal** en el fuente y su **regla** en este espejo: si alguien edita una
+        # de las dos, la otra prueba lo cuenta.
+        self.assertIn('esquema = "https://";', self.puente_java)
+        self.assertIn('indexOf("?token=")', self.puente_java)
+        self.assertIn('indexOf("&token=")', self.puente_java)
+        self.assertIn('lastIndexOf(\':\')', self.puente_java)
+        for enlace in self.ENLACES:
+            esperado = self.url_del_puente(enlace, self.lanzador.PUERTO_CORE)
+            if esperado is None:
+                continue
+            self.assertIn(str(self.lanzador.PUERTO_CORE), esperado)
+            self.assertTrue(esperado.startswith("http") and "/memoria/puente" in esperado,
+                            esperado)
+        self.assertEqual(
+            "http://192.168.100.5:8765/memoria/puente?token=llave-de-prueba",
+            self.url_del_puente(self.ENLACES[0], self.lanzador.PUERTO_CORE),
+            "la escena real: el enlace que divulgó el UDP, convertido en la ruta del puente")
+
+    def test_los_enlaces_sin_forma_de_cort_no_abren_nada(self):
+        for basura in ("", "192.168.1.5:8780/?token=abc", "http:///:8780", "ftp://x:8780/"):
+            self.assertIsNone(self.url_del_puente(basura, self.lanzador.PUERTO_CORE))
+        self.assertIn('return null;', self.puente_java)
+
+    # -- la forma de las dos mitades ------------------------------------------------
+
+    def test_la_logica_del_cuadro_sigue_sin_tocar_la_red_ni_el_disco(self):
+        """`Puente.java` es la mitad pura, como `puente.py`: si algún día nombra
+        `java.net` o SQLite, la lógica del cuadro deja de poder leerse sin un teléfono.
+
+        Se lee sobre `solo_codigo`, no sobre el archivo: la propia documentación dice
+        que no usa esos nombres, y contarlos ahí sería un falso positivo.
+        """
+        codigo = self.solo_codigo(self.puente_java)
+        importos = re.findall(r"^import\s+([\w.]+);", codigo, re.M)
+        self.assertTrue(importos, "Puente.java debería importar algo: está vacío")
+        for permitido in importos:
+            self.assertTrue(permitido.startswith("java.util.") or permitido.startswith("org.json."),
+                            f"import no permitido en la mitad pura: {permitido}")
+        for prohibido in ("java.net", "HttpURLConnection", "android.", "SQLiteDatabase",
+                          "getWritableDatabase", "SharedPreferences", "Runtime.getRuntime"):
+            self.assertNotIn(prohibido, codigo,
+                             f"la mitad pura no puede nombrar {prohibido}")
+
+    def test_la_red_esta_en_un_solo_sitio_y_pasa_la_llave_en_los_dos_sentidos(self):
+        self.assertIn("HttpURLConnection", self.sincroniza)
+        for nombre in ("Puente.java", "Recuerdos.java"):
+            self.assertNotIn("HttpURLConnection", self.solo_codigo(self.todos[nombre]))
+        self.assertIn("Puente.tokenDe(url)", self.sincroniza)
+        self.assertIn("Puente.exportar(recuerdos, llave", self.sincroniza)
+        self.assertIn("Puente.fusionar(recuerdos, delPortatil, llave)", self.sincroniza,
+                      "sin `llave` el puente aceptaría un recuerdo que contenga el token")
+
+    def test_fusionar_en_el_telefono_tampoco_borra(self):
+        """Regla 3, del lado del aparato: un cuadro que llega no puede vaciar `cort.db`."""
+        self.assertNotIn("DELETE FROM hechos", self.recuerdos)
+        self.assertIn("public void recuerda(String contenido)", self.recuerdos)
+        self.assertIn('guarda("nombre", nombre)', self.recuerdos,
+                      "el nombre es la única forma canónica que el teléfono sabe leer; "
+                      "sin esa regla sincroniza y sigue preguntando quién es la dueña")
+        self.assertIn("implements Puente.Cabeza", self.recuerdos)
+
+    def test_sincronizar_no_congela_la_cara(self):
+        """Misma regla que el UDP y que la nube: `HttpURLConnection` bloquea, y dos
+        conexiones en el hilo de la interfaz dejan el anillo quieto."""
+        inicio = self.cara.index("private void sincronizando(")
+        trozo = self.cara[inicio:inicio + 1400]
+        self.assertIn("new Thread(", trozo)
+        self.assertIn("runOnUiThread", trozo)
+        antes, despues = trozo.split("new Thread(", 1)
+        self.assertNotIn("sincroniza.sincronizar()", antes)
+        self.assertIn("sincroniza.sincronizar()", despues)
+        self.assertIn("sincroniza.hayPortatil()", antes,
+                      "sin enlace guardado no se abre conexión: se explica y se vuelve")
+
+    def test_el_puente_se_ve_en_la_hoja_de_herramientas(self):
+        """Una superficie de herramientas, y una fila que existe aunque no haya
+        portátil: la otra opción es que la sincronía no exista para la dueña."""
+        self.assertIn("traer y llevar mis recuerdos al portátil", self.cara)
+        self.assertIn("setOnClickListener(v -> sincronizando(salida))", self.cara)
+        self.assertIn("sincroniza = new Sincroniza(", self.cara)
+
+    def test_el_java_del_puente_cierra_lo_que_abre(self):
+        """Sin `javac` en esta máquina, la llave sin cerrar se entera en el runner.
+
+        Cuesta un Run de Actions y un commit entero: se cuentan `{} () []` sobre el
+        fuente **sin comentarios ni literales** (`solo_codigo`, el mismo truco con que
+        `test_apk_cerebro.py` dejó de contar menciones de un Javadoc como usos de una
+        clase). No sustituye al compilador —no compila nada—, sólo corta el desbalance
+        de teclear, que es el fallo que más veces he cometido escribiendo Java a mano.
+        """
+        for nombre, texto in sorted(self.todos.items()):
+            codigo = self.solo_codigo(texto)
+            for abre, cierra in (("{", "}"), ("(", ")"), ("[", "]")):
+                self.assertEqual(codigo.count(abre), codigo.count(cierra),
+                                 f"{nombre}: {abre}{cierra} desparejados "
+                                 f"({codigo.count(abre)} frente a {codigo.count(cierra)})")
+
+    def test_las_comillas_angulares_sigan_pareadas_en_todo_el_java(self):
+        for nombre, texto in self.todos.items():
+            self.assertEqual(texto.count("«"), texto.count("»"),
+                             f"{nombre}: hay una « sin su »")
+
+
 if __name__ == "__main__":
     unittest.main()

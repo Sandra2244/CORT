@@ -370,6 +370,14 @@ DESCUBRIR = "CORT-ENCONTRARSO-1"
 DESCUBRIR_RESPUESTA = "CORT-AQUI-1"
 DESCUBRIR_PUERTO = 8781        # el 8780 es la página; éste es sólo el «¿estás ahí?»
 
+# El puerto del **core** (la API y el WebSocket), que no es el de la página. Vive aquí
+# y no dentro de `main()` porque el teléfono lo necesita para llamar al puente de
+# memoria: `apps/apk/src/dev/sandra/cort/Puente.java` lo tiene escrito, y la costura
+# `test_apk_manifesta.py::TestPuenteDeMemoria` exige que los dos números sean el mismo.
+# Sin esa prueba, cambiar el `--port` por defecto dejaría la sincronía muda dentro de
+# un aparato — y el único sitio donde se vería es un teléfono que nadie tiene delante.
+PUERTO_CORE = 8765
+
 
 def puerto_descubrimiento(env: dict[str, str]) -> int:
     """El puerto de divulgación: el que diga `CORT_DISCOVERY_PORT`, o 8781.
@@ -534,7 +542,7 @@ def main() -> int:
     added_keys = load_dotenv()
 
     ap = argparse.ArgumentParser(description="Arranca CORT (core + interfaz + navegador).")
-    ap.add_argument("--port", type=int, default=int(os.getenv("CORT_PORT", "8765")))
+    ap.add_argument("--port", type=int, default=int(os.getenv("CORT_PORT", str(PUERTO_CORE))))
     ap.add_argument("--web-port", type=int, default=8780, help="puerto del servidor estático")
     ap.add_argument("--serve", choices=["auto", "dist", "dev"], default="auto")
     ap.add_argument("--no-browser", action="store_true", help="no abre el navegador")

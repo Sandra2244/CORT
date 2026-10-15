@@ -5,8 +5,12 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
 
 /**
  * La memoria de CORT **dentro del teléfono**: una tabla en SQLite, el motor que
@@ -22,7 +26,7 @@ import java.util.List;
  * clave y un valor de texto. Regla 6 de `AGENTS.md` — nada de comandos
  * arbitrarios — se respeta igual que en el core de Python.
  */
-public class Recuerdos extends SQLiteOpenHelper {
+public class Recuerdos extends SQLiteOpenHelper implements Puente.Cabeza {
     private static final String NOMBRE = "cort.db";
     private static final int VERSION = 1;
 
@@ -193,6 +197,106 @@ public class Recuerdos extends SQLiteOpenHelper {
         if (valor(clave) == null) {
             guarda(clave, valorPropuesto);
         }
+    }
+
+    /* ------------------------------------------------------------- el puente */
+
+    /**
+     * Las filas que `Puente.exportar` sube al portátil, en la forma del teléfono:
+     * `clave: valor`. El `cuando` sale en ISO-8601 UTC porque es lo que viaja en el
+     * cuadro del portátil (`memory.db` guarda el `created_at` así) y un número de
+     * milisegundos en el JSON de la otra cabeza sería una segunda verdad del tiempo.
+     *
+     * El orden es el de `lista()`: lo más nuevo primero. Si un viaje corta por
+     * `MAX_FILAS`, lo que se queda fuera es lo más viejo, no un recorte al azar.
+     */
+    @Override
+    public List<String[]> filas(int maximo) {
+        List<String[]> salida = new ArrayList<>();
+        Cursor c = getReadableDatabase().query("hechos",
+                new String[] {"clave", "valor", "cuando"},
+                null, null, null, null, "cuando DESC", String.valueOf(maximo));
+        try {
+            while (c.moveToNext()) {
+                salida.add(new String[] {Puente.contenidoDe(c.getString(0), c.getString(1)),
+                        iso(c.getLong(2))});
+            }
+        } finally {
+            c.close();
+        }
+        return salida;
+    }
+
+    /**
+     * Guardando, en **esta** cabeza, un recuerdo que llega del portátil. Es la mitad
+     * inversa del puente y la que decide si un dato sirve o no.
+     *
+     * El portátil guarda frases canónicas; el teléfono, `clave, valor` — y de la clave
+     * dependen `quienSoy()` y el saludo, que miran `nombre`, `me llamo` y `soy`. Si
+     * «El usuario se llama Sandra» se guardara como texto suelto, la dueña sincronizaría
+     * con su portátil y CORT seguiría sin saber cómo se llama **en el teléfono**, que es
+     * el aparato donde más lo necesita. De ahí las tres reglas, en orden:
+     *
+     * 1. Si la frase dice cómo se llama (`se llama`), la clave es `nombre` y el valor
+     *    la última palabra. Es la única forma canónica que el teléfono sabe leer, y es
+     *    la que paga el corte.
+     * 2. Si ya tiene forma `clave: valor` —porque el portátil está devolviendo una fila
+     *    que subió él—, se guarda con esa clave tal cual. Ida y vuelta sin deformar.
+     * 3. Cualquier otra frase se guarda como nota, con una clave **derivada del
+     *    contenido**: la misma frase produce la misma clave, así que sincronizar dos
+     *    veces no crea dos filas ni borra la primera (`CONFLICT REPLACE`).
+     *
+     * No hay `DELETE` en este método ni en `Puente.fusionar`: regla 3 del puente, un
+     * lado que se poda no es un lado que olvidó.
+     */
+    @Override
+    public void recuerda(String contenido) {
+        if (contenido == null) {
+            return;
+        }
+        String limpio = contenido.trim();
+        if (limpio.isEmpty()) {
+            return;
+        }
+        int llama = limpio.indexOf("se llama");
+        if (llama >= 0) {
+            String nombre = limpio.substring(llama + "se llama".length()).trim();
+            if (!nombre.isEmpty()) {
+                guarda("nombre", nombre);
+                return;
+            }
+        }
+        int dosPuntos = limpio.indexOf(": ");
+        if (dosPuntos > 0 && dosPuntos <= 40) {
+            String clave = limpio.substring(0, dosPuntos).trim();
+            String valor = limpio.substring(dosPuntos + 2).trim();
+            if (!clave.isEmpty() && !valor.isEmpty()) {
+                guarda(clave, valor);
+                return;
+            }
+        }
+        // La clave se **deriva del contenido** con el mismo criterio con el que el
+        // puente deduplica (`Puente.normaliza`), no con una copia del algoritmo: la
+        // misma frase produce la misma clave, así que sincronizar dos veces no crea dos
+        // filas ni borra la primera (`CONFLICT REPLACE` de `guarda`).
+        guarda("nota " + Integer.toHexString(Puente.normaliza(limpio).hashCode()), limpio);
+    }
+
+    /** Cuántos hechos hay, para el recuento que la cara enseña tras sincronizar. */
+    public int cuentasDeHechos() {
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM hechos", null);
+        try {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        } finally {
+            c.close();
+        }
+    }
+
+    /** `millis` en ISO-8601 UTC, como lo escribe SQLite en la otra cabeza. */
+    private static String iso(long millis) {
+        SimpleDateFormat formato = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
+        formato.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return formato.format(new Date(millis));
     }
 
     private static String limpia(String texto) {
