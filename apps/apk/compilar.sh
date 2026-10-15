@@ -104,12 +104,14 @@ if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
     [ -n "$KS_PASS" ] || { echo "hay keystore pero falta CORT_APK_KEYSTORE_PASS"; exit 1; }
     echo "firmando con la llave del repo (el APK se puede actualizar instalando encima)"
 else
-    # La contraseña desechable tiene 6+ caracteres porque `keytool` lo exige:
-    # en el run 8 (medido 2026-10-15) salió "keytool error: java.lang.E…" con
-    # la `cort` de cuatro letras — JDK rechaza contraseñas cortas y el `>/dev/null`
-    # que lo tapaba se quitó en c10f10a. No es un secreto: vive y muere en el
-    # runner, y el README lo dice.
+    # La contraseña desechable tiene 6+ caracteres porque `keytool` lo exige, y
+    # hay que nombrar el algoritmo porque el JDK del runner no trae uno por
+    # defecto (los dos medidos por annotation: run 38678972941 "Password too
+    # short" con `cort` de 4 letras, run 38679183347 "The -keyalg option must
+    # be specified"). RSA 2048 es lo que firma cualquier APK de prototype.
+    # Nada de esto es un secreto: la llave vive y muere en el runner.
     keytool -genkeypair -keystore build/cort.keystore -alias cort \
+        -keyalg RSA -keysize 2048 \
         -storepass cortapk -keypass cortapk -validity 3650 \
         -dname "CN=CORT, OU=prototipo local, O=local"
     KS_PASS="cortapk"
