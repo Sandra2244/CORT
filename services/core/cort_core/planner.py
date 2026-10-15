@@ -87,3 +87,20 @@ def resumen(hechos) -> str:
     if mal:
         dicho += ". No pude: " + ", ".join(f"{e} ({m})" if m else e for e, m in mal)
     return dicho
+
+
+
+def dicho(hechos) -> str:
+    """La frase de cierre para una lista de `(etiqueta, ok, texto)`.
+
+    Con **un** paso devuelve la frase cruda de la acción —que lleva el número
+    medido: «Volumen al 45 %.»—, sin envolverla en un recuento de uno. Con dos
+    o más, el recuento de `resumen`. Es la misma regla que ya regía en
+    `server._ejecutar_herramientas`; vive aquí porque ahora la comparten también
+    el bucle de `agente.turno`, y dos sitios diciendo cuándo contar y cuándo no
+    es una promesa que se rompe sola.
+    """
+    if len(hechos) == 1:
+        _, ok, texto = hechos[0]
+        return texto if ok else f"No pude: {texto}."
+    return resumen([(e, ok, "" if ok else t) for e, ok, t in hechos])
