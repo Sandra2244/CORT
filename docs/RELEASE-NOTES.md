@@ -104,8 +104,8 @@ vez que el formulario.
   llave`, un `HOLA` y un `CORT-ENCONTRARSO-1x` **no sacaron respuesta**, y la barra `red` cambió de texto:
   ya no manda a pegar nada. Suite completa: `TMPDIR=/tmp make test` **532** en verde y `make test-web`
   **56** — **588**.
-- **Sin verificar**: que el Java compile (aquí no hay `javac`; lo dirá el run de `compilar-apk` que dispara
-  este mismo `push`) y, otra vez, que nadie lo ha visto ocurrir en el Samsung A16.
+- **Comprobado después de empujar** (2026-10-15, por la API pública y bajando el archivo): `publicar-release` run **29** abrió la etiqueta `v0.14.4` sobre `3217007` y `compilar-apk` run **21** salió **verde** sobre ese commit —es la primera vez que el Java del descubrimiento pasa por `javac` y `d8`, y ocurre en el runner porque en esta máquina no hay SDK—. La página quedó con `CORT-v0.14.4.apk` (49 977 B, sha-256 `2c1c272b…1d04db`: otro binario, no el de `v0.14.3` repetido) y `CORT-v0.14.4-firma.txt` (421 B), que arranca con `APK de CORT 0.14.4 (versionCode 1404)` y sigue diciendo `llave: desechable`. **Abierto aquí**: el manifiesto binario lleva la cadena `0.14.4` (y no `0.14.3`) y el entero **1404**, y en su `classes.dex` están `CORT-ENCONTRARSO-1`, `CORT-AQUI-1|`, `Buscando a CORT en tu Wi-Fi`, `Encontrado: ` y `No encontré a CORT`.
+- **Sin verificar**: que nadie lo ha visto ocurrir en el Samsung A16 —la búsqueda, el anillo, que el WebView conceda cámara y micrófono—; y la firma sigue desechable hasta que Sandra pegue los dos secretos.
 
 **Zip**: https://github.com/Sandra2244/CORT/archive/refs/tags/v0.14.4.zip
 

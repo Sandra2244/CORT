@@ -11,9 +11,15 @@
 > línea `↳ el APK abre CORT solo: pregunta por UDP en el puerto 8781…`, y al mandarle
 > la sonda `CORT-ENCONTRARSO-1` desde otro proceso contestó `CORT-AQUI-1|http://…` y
 > apuntó `[red] 127.0.0.1 preguntó por CORT: se le dio el enlace con su llave`; una
-> sonda con basura **no recibió nada**. **Sin verificar**: el Java de este corte no lo
-> ha compilado todavía un runner ni nadie lo ha visto buscar en el Samsung —aquí no hay
-> `javac`, medido—. Verificación anterior, **2026-10-15 (6)** (`v0.14.3` **comprobado en la página**: el `publicar-release` run 27 abrió la etiqueta `v0.14.3` sobre `923b396` y el `compilar-apk` run 19 quedó **verde** sobre ese mismo commit — el manifiesto arreglado en `a4327e8` ya enlaza —; la Release trae `CORT-v0.14.3.apk` (49 977 B) y `CORT-v0.14.3-firma.txt` (421 B), y el `.apk` **descargado y abierto en esta máquina**: su `AndroidManifest.xml` binario contiene la cadena `0.14.3` — no `main`, no `0.13.0` — y entre sus enteros está **1403** (y 26 / 34 de SDK). Censo por API: **trece Releases**, tres con adjunto (`v0.13.1`, `v0.14.1`, `v0.14.3`) y diez sin él. Firma: `llave: desechable`, así que Sandra todavía no pegó los dos secretos. Verificación anterior, **2026-10-15 (5)** (`TMPDIR=/tmp make test` **517** en verde en **72,516 s** — las
+> sonda con basura **no recibió nada**. **Comprobado tras el `push`** (API pública y descarga en esta
+> máquina): `publicar-release` run **29** abrió `v0.14.4` sobre `3217007`, `compilar-apk` run **21** quedó
+> **verde** sobre ese commit —el Java del descubrimiento se compiló en el runner, que es lo único con SDK—,
+> y la página trae `CORT-v0.14.4.apk` (49 977 B, sha-256 `2c1c272b…1d04db`: otro binario, no `v0.14.3`
+> repetido) con su `…-firma.txt` (421 B) que arranca `APK de CORT 0.14.4 (versionCode 1404)`; en el APK
+> abierto aquí el manifiesto binario lleva la cadena `0.14.4` y el entero **1404**, y su `classes.dex`
+> contiene `CORT-ENCONTRARSO-1`, `CORT-AQUI-1|`, `Buscando a CORT en tu Wi-Fi` y `Encontrado: `. Censo: **14
+> Releases**, cuatro con adjunto. **Sin verificar en el teléfono**: nadie lo ha visto buscarse en el Samsung
+> A16 (regla 11) y la firma sigue `desechable`. Verificación anterior, **2026-10-15 (6)** (`v0.14.3` **comprobado en la página**: el `publicar-release` run 27 abrió la etiqueta `v0.14.3` sobre `923b396` y el `compilar-apk` run 19 quedó **verde** sobre ese mismo commit — el manifiesto arreglado en `a4327e8` ya enlaza —; la Release trae `CORT-v0.14.3.apk` (49 977 B) y `CORT-v0.14.3-firma.txt` (421 B), y el `.apk` **descargado y abierto en esta máquina**: su `AndroidManifest.xml` binario contiene la cadena `0.14.3` — no `main`, no `0.13.0` — y entre sus enteros está **1403** (y 26 / 34 de SDK). Censo por API: **trece Releases**, tres con adjunto (`v0.13.1`, `v0.14.1`, `v0.14.3`) y diez sin él. Firma: `llave: desechable`, así que Sandra todavía no pegó los dos secretos. Verificación anterior, **2026-10-15 (5)** (`TMPDIR=/tmp make test` **517** en verde en **72,516 s** — las
 > **10** nuevas de `test_apk_manifesta.py`, que leen el manifiesto y el `compilar.sh` sin runner — y
 > `make test-web` **56** (`# pass 56`), **573** en total; **12 Releases** por la API pública, y sólo tres
 > con adjunto: `v0.14.2` salió **con cero**, otra vez. Ésa es la medida nueva del corte: el run **18** de
@@ -67,9 +73,7 @@ pida desde dentro de su propia Wi-Fi —sin TLS ya viajaba al pegarla; ahora no 
 falta ni eso—. **Medido en esta máquina**: `make test` **532** en verde (15 nuevas:
 10 del lanzador con viaje real de datagrama en `127.0.0.1`, 5 que cosen los literales
 del Java a las constantes de `cort.py`), `make test-web` **56**, y el lanzador
-arrancado con `--lan` contestó la sonda y apuntó al que preguntó. **Sin verificar en
-el teléfono**: el Java nuevo no lo ha compilado un runner todavía y nadie lo ha visto
-buscar en el Samsung A16 (regla 11), y sigue en pie que el aviso de Play Protect
+arrancado con `--lan` contestó la sonda y apuntó al que preguntó. **Comprobado tras el `push`**: `compilar-apk` run **21** quedó **verde** sobre `3217007` y la Release `v0.14.4` salió con `CORT-v0.14.4.apk` (49 977 B) y su `…-firma.txt` (`APK de CORT 0.14.4 (versionCode 1404)`); bajado y abierto aquí, su `classes.dex` trae `CORT-ENCONTRARSO-1`, `CORT-AQUI-1|` y `Buscando a CORT en tu Wi-Fi`, y su manifiesto binario dice `0.14.4` con el entero **1404**. **Sin verificar en el teléfono**: nadie lo ha visto buscarse en el Samsung A16 (regla 11), y sigue en pie que el aviso de Play Protect
 «app desconocida / dañina» **no se quita con código** mientras no haya publicación en
 la Play Store; lo que sí depende de Sandra es pegar los dos secretos de la llave de
 firma estable.

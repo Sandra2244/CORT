@@ -118,9 +118,14 @@ renglón dice exacto `APK de CORT 0.14.3 (versionCode 1403)`, y en el manifiesto
 binario del propio APK aparece la cadena `0.14.3` y el entero `1403` — no el `main`
 que salió en `v0.14.1`, ni el `0.13.0` que vivía fijado en el archivo—.
 
-Para `v0.14.4` el número que le toca por derivación es **1404**, y **todavía no se
-ha comprobado**: el APK de ese corte lo tiene que colgar el pipeline, y en esta
-máquina no hay `javac` ni SDK con que compilarlo (regla 11).
+`v0.14.4` ya está comprobado (**medido el 2026-10-15**, bajando el `.apk` de la
+Release): su `…-firma.txt` arranca con `APK de CORT 0.14.4 (versionCode 1404)`, en
+el manifiesto binario aparece la cadena `0.14.4` y el entero **1404**, y el
+`classes.dex` trae las palabras del descubrimiento (`CORT-ENCONTRARSO-1`,
+`CORT-AQUI-1|`, `Buscando a CORT en tu Wi-Fi`). El sha-256 del archivo es distinto
+del de `v0.14.3`, así que no es el mismo binario repetido. Lo compiló el run **21**
+de `compilar-apk` —en esta máquina no hay `javac`, así que el SDK es del runner—,
+y sigue sin verlo un dedo.
 
 El `versionCode` creciente es lo que hace que «instalar encima» con la **llave
 estable** sea una actualización y no la misma versión repetida; con firma
@@ -179,7 +184,7 @@ archivo, todas corriendo con `make test`.
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.14.3     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.14.4     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un
