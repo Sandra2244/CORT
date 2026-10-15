@@ -19,9 +19,14 @@
   `apps/apk/README.md`, no en un comentario que nadie lee.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="dev.sandra.cort"
-          android:versionCode="1"
-          android:versionName="0.13.0">
+          package="dev.sandra.cort">
+
+    <!-- `versionCode` y `versionName` **no** se escriben aquí: los pone
+         `compilar.sh` al enlazar (`aapt2 link --version-code/--version-name`),
+         derivados de la etiqueta del corte — `v0.14.1` → código 1401 y nombre
+         «0.14.1»—. Aquí vivía un `versionName="0.13.0"` fijo que sobrevivía a
+         todas las Release: dos verdades de la versión, y la del manifiesto era
+         la que mentía. -->
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />

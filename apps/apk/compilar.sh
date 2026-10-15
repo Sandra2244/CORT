@@ -26,6 +26,25 @@ fi
 # Versión visible del APK: `compilar.sh 0.13.0`. La etiqueta `v0.13.0` del
 # pipeline la pasa sin la `v`; el default es para cuando se dispara a mano.
 VERSION="${1:-0.13.0}"
+# `versionCode` es el número con el que Android decide si esto **es una
+# actualización** o hay que desinstalar para meterlo. Estaba fijado en 1: con la
+# llave estable se podía instalar encima, sí, pero el sistema creía que el APK
+# nuevo era *la misma* versión que el viejo, y no había forma de contar «voy por
+# la 0.14.1». Se deriva de la versión que llega: 0.14.1 → 1401, 0.15.0 → 1500, y
+# cualquier cosa que no sea `X.Y.Z` (el `0.0.0` de un build de comprobación, el
+# `main` de un run viejo) vuelve a 1.
+case "$VERSION" in
+    [0-9]*.[0-9]*.[0-9]*)
+        IFS=. read -r MA MI PA <<<"$VERSION"
+        CODE=$(( 10#$MA * 10000 + 10#$MI * 100 + 10#$PA ))
+        ;;
+    *) CODE=1 ;;
+esac
+# Suelo en 1: el `0.0.0` de un build de comprobación daría código 0, y un APK con
+# `versionCode` 0 no lo instala un Android. El techo del parcheo es dos dígitos
+# (`0.14.99` sigue siendo 1499; un `0.14.100` se solaparía con `0.15.0`), y en
+# este repo los parches no pasan de la docena.
+[ "$CODE" -ge 1 ] || CODE=1
 # El `|| true` dentro de la sustitución NO es decoración: con `set -o pipefail`
 # un `ls` que no encuentra el globo devuelve 2, ese 2 sale del `$( )` como código
 # de la asignación, y `set -e` mata el script **antes** de la guarda de vacío
@@ -74,7 +93,7 @@ mkdir -p build/obj build/apk
     -I "$PLAT/android.jar" \
     --manifest AndroidManifest.xml \
     --min-sdk-version 26 --target-sdk-version 34 \
-    --version-code 1 --version-name "$VERSION" \
+    --version-code "$CODE" --version-name "$VERSION" \
     build/obj/res.zip --auto-add-overlay
 
 # -- El Java (una actividad, sin AndroidX) ------------------------------------
@@ -131,7 +150,7 @@ fi
 # compara contra la llave guardada. Un APK firmado con llave distinta es, ante
 # Android, otra aplicación: por eso este archivo se sube al lado del APK.
 {
-    echo "APK de CORT $VERSION"
+    echo "APK de CORT $VERSION (versionCode $CODE)"
     if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
         echo "llave: la del repo (se puede instalar encima de la versión anterior)"
     else

@@ -58,6 +58,48 @@ jobs:
       - name: Bajar el repo
         uses: actions/checkout@v4
 
+      - name: Averiguar la versión que lleva escrita el APK
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          buscar() {
+            # El `|| true` es deliberado **aquí** y no en el paso de subida: si la
+            # API falla, este build es un comprobador del Java y no debe ponerse
+            # rojo por un etiqueta que no pudo leer —sale como `0.0.0` y sigue—; el
+            # paso de subida sí debe fallar, porque ahí quedarse sin etiqueta
+            # significa dejar la Release sin su APK y eso no se tapa con un 0.
+            gh api "repos/$GITHUB_REPOSITORY/tags?per_page=30" 2>/dev/null \
+              | python3 scripts/etiqueta_del_commit.py "${1:-$GITHUB_SHA}" || true
+          }
+          case "${GITHUB_REF_NAME:-}" in
+            v*) etiqueta="$GITHUB_REF_NAME" ;;
+            *)
+              # Run de rama: la etiqueta la está creando **ahora mismo** su hermana
+              # `publicar-release.yml` con `gh release create`, así que se buscan
+              # tres veces con cinco segundos de por medio. Si no aparece, no pasa
+              # nada: esto es un build de comprobación y sale como `0.0.0`.
+              etiqueta="$(buscar)"
+              for i in 1 2 3; do
+                [ -n "$etiqueta" ] && break
+                sleep 5
+                etiqueta="$(buscar)"
+              done
+              ;;
+          esac
+          version="${etiqueta#v}"
+          [ -n "$version" ] || version="0.0.0"
+          {
+            echo "etiqueta=$etiqueta"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$etiqueta" ]; then
+            echo "Este commit es $etiqueta: el APK sale con versionName $version."
+          else
+            echo "Sin etiqueta sobre ${GITHUB_SHA:0:7}: el APK sale como 0.0.0 (build de comprobación)."
+          fi
+
       - name: Compilar
         run: |
           # `set +e` es obligatorio, no cosmético: el shell por defecto de GitHub
@@ -66,7 +108,11 @@ jobs:
           # del annotation. Sin esta línea el paso falla en 1 s y no cuenta por
           # qué, que es exactamente el problema que este bloque quiere resolver.
           set +e
-          TAG="${GITHUB_REF_NAME#v}"
+          # La versión **no** se lee del ref: medido el 2026-10-15, el
+          # `CORT-v0.14.1.apk` salió con `versionName «main»` porque el run vino por
+          # rama y `${GITHUB_REF_NAME#v}` dejaba `main`. Ahora la pone el paso de
+          # arriba, que mira qué etiqueta apunta a este commit.
+          TAG="${{ steps.ver.outputs.version }}"
           # Las logs de Actions **no son públicas** (medido 2026-10-15: la API de
           # logs pide `admin:read` y la URL web pide sesión — el comentario que
           # decía lo contrario estaba mal). Los *annotations* del check-run sí se
@@ -109,38 +155,25 @@ jobs:
         run: |
           set -euo pipefail
           buscar_etiqueta_del_commit() {
+            # Una sola verdad: el resolutor vive en `scripts/etiqueta_del_commit.py`
+            # y lleva sus 10 pruebas en `test_etiqueta_commit.py`.
             gh api "repos/$GITHUB_REPOSITORY/tags?per_page=30" \
-              | python3 -c '
-          import json, os, sys
-          sha = os.environ["GITHUB_SHA"]
-          for t in json.load(sys.stdin):
-              if t["commit"]["sha"] == sha:
-                  print(t["name"])
-                  break
-          '
+              | python3 scripts/etiqueta_del_commit.py
           }
-          etiqueta=""
-          case "${GITHUB_REF_NAME:-}" in
-            v*) etiqueta="$GITHUB_REF_NAME" ;;
-            *)
-              # Evento de rama: buscar la etiqueta que apunta a ESTE commit. La
-              # crea `publicar-release.yml` con `gh release create` si no existía,
-              # y eso no dispara ningún evento de etiqueta — por eso el APK de
-              # v0.14.0 se quedó sin subir el 2026-10-15.
+          etiqueta="${{ steps.ver.outputs.etiqueta }}"
+          if [ -z "$etiqueta" ]; then
+            # El paso de arriba no la vio (la hermana `publicar-release` corre en
+            # paralelo y tarda ~10 s en abrir la página y crear la etiqueta).
+            # Esperar dos minutos cubre la carrera de sobra: este paso llega
+            # después de compilar, que ya dura minuto y pico. Medido con v0.14.0:
+            # la etiqueta la creó el pipeline con su token, y eso **no** dispara
+            # otro trabajo, así que el APK se quedó sin subir.
+            for i in $(seq 1 12); do
+              sleep 10
               etiqueta="$(buscar_etiqueta_del_commit)"
-              if [ -z "$etiqueta" ]; then
-                # La hermana `publicar-release` corre en paralelo y tarda ~10 s en
-                # abrir la página y crear la etiqueta. Esperar dos minutos cubre la
-                # carrera de sobra: este paso llega después de compilar, que ya dura
-                # minuto y pico.
-                for i in $(seq 1 12); do
-                  sleep 10
-                  etiqueta="$(buscar_etiqueta_del_commit)"
-                  [ -n "$etiqueta" ] && break
-                done
-              fi
-              ;;
-          esac
+              [ -n "$etiqueta" ] && break
+            done
+          fi
           if [ -z "$etiqueta" ]; then
             echo "Sin etiqueta sobre ${GITHUB_SHA:0:7}: el APK queda sólo como artefacto del run."
             exit 0
