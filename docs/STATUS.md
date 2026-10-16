@@ -2,7 +2,34 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-15 (17)** (`TMPDIR=/tmp make test` **755** en verde en **107,181 s** con
+> Última verificación: **2026-10-16 (18)**: **`CORT-v0.17.0.apk` está publicado, bajado y abierto en
+> esta máquina**, y es el primer binario que lleva dentro la cara del PC. La etiqueta la creó el propio
+> `publicar-release` al empujar `main` (apunta a `db5bf71`, el commit del corte; la probé a crear yo en
+> local y el `push` la rechazó por ya existir — **una etiqueta publicada no se mueve**, así que el
+> `git tag -a` local se borró y se volvió a traer el del remoto—). `compilar-apk` sobre `db5bf71` dio
+> **success** — es decir: el `javac` del runner aceptó `Nexo.java`, el `npm ci && npm run build` corrió y
+> el `grep 'src="./assets/'` del workflow pasó, que es lo que hace real el `base: './'`—. Medido
+> **bajando los archivos**, no leyendo una log: **652 933 B** con sha-256 `ec9ee340359c949c…e99e0067`,
+> **el mismo `digest`** que publica la API; **veintidós** entradas en el contenedor (13 en `v0.16.1`);
+> `classes.dex` de **94 968 B** con las **diecisiete** clases `dev/sandra/cort/*` —una aparición cada
+> una, `Nexo` incluida— y escritos dentro `https://cort.local`, `window.cortRecibe`,
+> `addJavascriptInterface`, `shouldInterceptRequest`, `/memoria/puente` (2), `queryIntentActivities` y
+> `setTorchMode`; **la cara viajó**: `assets/web/index.html` de 1 492 B con sus **cinco** rutas
+> relativas (`./assets/index-CM1ykqrA.js`, `./assets/index-C0STne6m.css`, `./icons/cort-180.png`,
+> `./icons/cort-192.png`, `./manifest.webmanifest`), el bundle de **1 314 921 B** —el del runner, no el
+> de esta máquina, que pesaba 1 314 003 B—, `three-vrm.module-BY7BitH4.js` de 138 570 B, el CSS de
+> 17 927 B, cuatro PNG de icono y el manifiesto de la PWA: **1 778 740 B** sin comprimir. Manifiesto
+> binario con `0.17.0` en UTF-16 **una** sola vez (offset 890) y **cero** de `0.16.1`, `versionCode`
+> **1700** little-endian en el offset 2516 y ningún 1601, `BIND_VOICE_INTERACTION`,
+> `BIND_SPEECH_RECOGNIZER`, `CAMERA`, `INTERNET`, `RECORD_AUDIO`. La caza del shell dio **cero** en todo
+> el paquete, con un matiz que vale la pena escribir: la cadena `exec(` **sí** aparece, tres veces, en
+> el bundle JavaScript —es `RegExp.prototype.exec` de three.js— y **cero** en `classes.dex`; por eso la
+> guarda del fuente sigue mirando el Java, no el `assets`. Ninguna cadena con forma `sk-`. El
+> `…-firma.txt` (421 B) dice `APK de CORT 0.17.0 (versionCode 1700)` y `llave: desechable` — huella
+> `52701547…caa40ff3`, que **no** es la de la llave estable—: **hay que desinstalar el anterior**.
+> Censo medido por la API: **23 páginas de Release, 10 con APK y 13 sin**. **Lo que sigue sin verificar
+> es el dedo**: qué cara se ve en el Samsung A16, a cuántos cuadros va three.js con WebGL ahí, que hable,
+> que oiga pulsando ● y que el puente cruce. Verificación anterior: **2026-10-15 (17)** (`TMPDIR=/tmp make test` **755** en verde en **107,181 s** con
 > exit 0, `make test-web` **56** — **811** en total—, `tsc --noEmit` **0**, **168** sobre `apps/apk/`):
 > **la cara del portátil vive dentro del APK.**
 > `apps/apk/src/dev/sandra/cort/Nexo.java` (nuevo, **17** archivos Java) abre el `dist` de `apps/web` en

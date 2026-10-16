@@ -59,26 +59,31 @@ la dueña sigue sin ejecutarse ningún `vite build`, por lo mismo de arriba.
 ## Usarlo
 
 1. Bajar `CORT-v<versión>.apk` de la [Release](https://github.com/Sandra2244/CORT/releases)
-   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-15**: hay
-   **trece páginas sin APK** (22 en total, **nueve** con — medido por la API pública, no de
+   e instalarlo (lea «Instalar aunque Android avise» abajo). **Ojo el 2026-10-16**: hay
+   **trece páginas sin APK** (23 en total, **diez** con — medido por la API pública, no de
    memoria—) porque el compilador del runner rechaza errores de tipos que en esta máquina no se
    pueden ver: el `Pattern` pasado a `String.split`, el `RemoteException` sin recoger, el
    `Set<Voice>` recibido como `List`, y el `0.6` escrito sin `f` en `Orbe.java:230`.
-   **El descargable de hoy es `CORT-v0.16.1.apk`**, bajado y abierto aquí: run
-   **38823817894** en verde, **86 977 B**, sha-256 `9bc1aaf8…275f69` — el mismo `digest` que
-   publica la API—, **trece** entradas, `classes.dex` de **82 680 B** con las **dieciséis**
-   clases `dev/sandra/cort/*` (`Orbe` está, y su `drawCircle` aparece una vez dentro del dex),
-   manifiesto con `0.16.1` escrito **una** sola vez y su `versionCode` **1601** (el entero
-   little-endian, encontrado en el offset 2516), `BIND_VOICE_INTERACTION`,
-   `BIND_SPEECH_RECOGNIZER`, `CAMERA` e `INTERNET`; **cero** de
-   `Runtime`/`ProcessBuilder`/`exec(`/`/system/bin`/`QUERY_ALL_PACKAGES`/`ACTION_CALL` y cero
-   cadenas `sk-`. Su `…-firma.txt` (421 B) dice `llave: desechable`: hay que desinstalar el
-   anterior para instalarlo. Se comprueba mirando los adjuntos de la página, no una log de
-   Actions que es privada.
-   **`CORT-v0.17.0.apk` todavía no está medido**: su `compilar-apk` tiene que
-   responder, y es el primer binario que lleva dentro la cara de `apps/web`. Se
-   espera sensiblemente más grande que los 86 977 B de `v0.16.1` — el `dist` local
-   pesa **1 630 415 B en 9 archivos**—; el número exacto, **sin verificar**.
+   **El descargable de hoy es `CORT-v0.17.0.apk`**, bajado y abierto aquí (2026-10-16):
+   **652 933 B**, sha-256 `ec9ee340…e99e0067` — el mismo `digest` que publica la API—, **veintidós**
+   entradas (13 en `v0.16.1`), `classes.dex` de **94 968 B** con las **diecisiete** clases
+   `dev/sandra/cort/*` del fuente dentro —`Nexo` entre ellas— y escritas en el dex `https://cort.local`,
+   `window.cortRecibe`, `addJavascriptInterface`, `shouldInterceptRequest`, `/memoria/puente` (2),
+   `queryIntentActivities` y `setTorchMode`. **Y la cara viajó**: `assets/web/index.html` de 1 492 B con
+   sus cinco rutas **relativas** (`./assets/index-CM1ykqrA.js`, `./assets/index-C0STne6m.css`,
+   `./icons/cort-180.png`, `./icons/cort-192.png`, `./manifest.webmanifest`), el bundle de
+   **1 314 921 B**, `three-vrm.module-BY7BitH4.js` de 138 570 B, el CSS de 17 927 B, cuatro iconos y
+   el `manifest.webmanifest` — 1 778 740 B sin comprimir en total—. Manifiesto binario con `0.17.0`
+   escrito **una** sola vez en UTF-16 (offset 890) y **cero** de `0.16.1`, `versionCode` **1700**
+   (little-endian, offset 2516, y ningún 1601), `BIND_VOICE_INTERACTION`, `BIND_SPEECH_RECOGNIZER`,
+   `CAMERA`, `INTERNET`, `RECORD_AUDIO`; **cero** de `Runtime.exec`/`ProcessBuilder`/`/system/bin`/
+   `QUERY_ALL_PACKAGES`/`ACTION_CALL` en todo el paquete — el `exec(` que aparece es
+   `RegExp.prototype.exec` del bundle JavaScript: **cero** en `classes.dex`— y **cero** cadenas con
+   forma de `sk-`. Su `…-firma.txt` (421 B) dice `APK de CORT 0.17.0 (versionCode 1700)` y
+   `llave: desechable`: **hay que desinstalar el anterior** para instalarlo. Se comprueba mirando los
+   adjuntos de la página, no una log de Actions que es privada.
+   **Lo que esto todavía no prueba**: que la cara embebida *se vea* — eso es el dedo —, y a cuántos
+   cuadros va three.js con WebGL en el A16.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
    el teléfono lo encuentra (función 98) y abre la cara completa del core. Si no
    está, **desde `v0.17.0` se abre la misma cara del PC, embebida en el APK**: el

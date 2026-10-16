@@ -145,6 +145,20 @@ teléfono **es** el paquete de `apps/web`.
   manos, la tabla y la memoria son compartidas de verdad; la coreografía no. Extraer un `Lazo.java`
   único para las dos caras queda apuntado en `docs/STATUS.md`.
 
+- **Medido después de abrir esta página** (añadido el 2026-10-16, la Release publicada no se reescribe):
+  el `compilar-apk` sobre `db5bf71` dio **success**, así que el `javac` del runner aceptó `Nexo.java`, el
+  `npm ci && npm run build` corrió y el `grep 'src="./assets/'` pasó. `CORT-v0.17.0.apk` está bajado y
+  abierto en esta máquina: **652 933 B**, sha-256 `ec9ee340359c949c44610b7755bc48b69ce0ab0c63aa7095badf3951e99e0067`
+  — el mismo `digest` que publica la API—, **veintidós** entradas, `classes.dex` de **94 968 B** con las
+  **diecisiete** clases y el puente escrito (`https://cort.local`, `window.cortRecibe`,
+  `shouldInterceptRequest`), y **la cara dentro**: `assets/web/index.html` de 1 492 B con sus cinco rutas
+  relativas, el bundle de **1 314 921 B**, `three-vrm.module` de 138 570 B, CSS de 17 927 B, cuatro
+  iconos y el `manifest.webmanifest` — **1 778 740 B** sin comprimir—. Manifiesto con `0.17.0` una sola
+  vez en UTF-16 y `versionCode` **1700**; cero shell, cero `QUERY_ALL_PACKAGES`, cero `ACTION_CALL`, cero
+  `sk-` (el `exec(` que aparece en el paquete es `RegExp.prototype.exec` del JavaScript: **cero** en el
+  dex). El `…-firma.txt` dice `llave: desechable`: **hay que desinstalar el anterior**. Queda **sin
+  verificar** lo que sólo se ve con un dedo: qué cara aparece en el Samsung A16.
+
 **Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.17.0.zip`
 
 ---
