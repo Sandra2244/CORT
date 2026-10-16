@@ -39,6 +39,17 @@
      "RemoteException"
     ]
    }
+  },
+  "AssetManager": {
+   "archivo": "core/java/android/content/res/AssetManager.java",
+   "metodos": {
+    "open": [
+     "IOException"
+    ],
+    "list": [
+     "IOException"
+    ]
+   }
   }
  }
 }

@@ -20,3 +20,8 @@ CORT.desktop
 # CORT_APK_KEYSTORE_B64, y perderla significa no poder instalar un APK nuevo
 # encima de los viejos. Es un secreto, como el `.env`: no va al repo (regla 7).
 apps/apk/llave/
+# La cara del PC dentro del APK: `apps/web/dist`, copiado por el pipeline antes de
+# enlazar. No va al repo por dos motivos: es generado (regla 7, y un `dist` de
+# 1,6 MB cambiaría en cada commit) y porque el único `npm ci` que corre es el del
+# runner. En esta máquina no se compila la cara: se comprueba con `typecheck`.
+apps/apk/assets/web/

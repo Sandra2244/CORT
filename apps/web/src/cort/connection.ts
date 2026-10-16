@@ -288,7 +288,127 @@ const WS_URL = conToken(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${lo
 let sock: WebSocket | null = null
 let timer: number | undefined
 
+/* ------------------------------------------------------------------ el puente
+
+   `v0.17.0`: la misma cara, dentro del teléfono. Cuando esta página va embebida
+   en `apps/apk` no hay core al que llamar —el aparato está solo en una
+   habitación—, y quien contesta es el Java del propio CORT. `Nexo.java` mete un
+   objeto en `window.Nexo` con `addJavascriptInterface` y los cuadros que produce
+   entran por `window.cortRecibe`, que llama al **mismo** `maneja` de abajo:
+   **un manejador, dos transportes**. Sin `Nexo` (el portátil, cualquier
+   navegador) nada de esto se toca: `nexo()` devuelve `null` y sigue el cable de
+   siempre, byte a byte el mismo código que funcionaba en `v0.16.1`.
+
+   La dirección es `https://cort.local`, un host que no existe: las peticiones a
+   ese origen se cortan en `shouldInterceptRequest` y se sirven desde los `assets`
+   del APK. No es `file://` a propósito —Chromium bloquea un módulo ES cargado
+   desde `file://` por CORS, y el `dist` de Vite lo es—, y no hace falta un
+   servidor de verdad: no hay socket abierto ni puerto que defender. */
+
+export type Nexo = {
+  enviar(texto: string): void
+  escuchar(): void
+  callar(): void
+  hablar(texto: string): void
+  pedirAvatares(): void
+}
+
+declare global {
+  interface Window {
+    Nexo?: Nexo
+    cortRecibe?: (datos: string) => void
+  }
+}
+
+/** El puente del teléfono, o `null` si esto corre en un navegador normal. */
+export function nexo(): Nexo | null {
+  return typeof window !== 'undefined' && window.Nexo ? window.Nexo : null
+}
+
+/** Lo que el Java empuja: el mismo cuadro del WebSocket, ya en texto. */
+function recibePorElPuente(datos: string) {
+  try {
+    maneja(JSON.parse(datos))
+  } catch {
+    // Un cuadro roto no debe dejar la cara a medias. El cliente ya ignoraba un
+    // frame que no entendía; aquí se ignora el que no se puede ni parsear.
+  }
+}
+
+/** Todo lo que llega —del core o del Java— pasa por aquí. Un sólo manejador. */
+function maneja(m: any) {
+  if (m.type === 'state') applyState(m)
+  if (m.type === 'status') set({ status: readStatus(m) })
+  // El saludo es por conexión, y el log sobrevive a las reconexiones: sin el
+  // `msgs.length === 0` cada reintento del WebSocket añadiría un «Hola, soy
+  // CORT.» nuevo a una conversación que ya está en curso.
+  if (m.type === 'greeting' && snapshot.msgs.length === 0) {
+    apuntarMood(m.mood)
+    set({ msgs: [{ from: 'cort', text: m.text }] })
+  }
+  if (m.type === 'assistant_message') {
+    apuntarMood(m.mood)
+    set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+  }
+  // `proactive` es lo mismo dicho por su cuenta: viaja separado porque el core
+  // decide cuándo (iniciativa, regla determinista, sin LLM) y para que alguien
+  // pueda apagarlo con `CORT_INITIATIVE=0` sin tocar cómo se pinta un mensaje.
+  if (m.type === 'proactive' && typeof m.text === 'string') {
+    apuntarMood(m.mood)
+    set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
+  }
+  if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
+  // El micrófono del teléfono oye en Java, no en la página: `Nexo.escuchar()` pone
+  // el `SpeechRecognizer` de Android y lo reconocido vuelve como cuadro. Aquí sólo
+  // se apunta la línea en el log — la frase **ya** se está ejecutando al otro lado
+  // del puente, y reenviarla sería que CORT contestara dos veces a lo mismo.
+  if (m.type === 'user_message' && typeof m.text === 'string') {
+    set({ msgs: [...snapshot.msgs, { from: 'user', text: m.text }] })
+  }
+  if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
+  if (m.type === 'avatars')
+    set({ avatars: Array.isArray(m.items) ? m.items.filter((i: any) => typeof i?.nombre === 'string') : [] })
+  // El temporizador viaja como cuadro propio y no como mensaje de texto: lo
+  // que pinta es un número que baja, no una frase. `cancela` borra el nodo,
+  // `termina` lo deja en cero para que la interfaz pueda avisar y apagarse,
+  // y `sube`/`para` son el cronómetro: el mismo cuadro con el tiempo contando
+  // hacia arriba. Un estado desconocido se pinta como `corre` en vez de
+  // desaparecer — es lo que ya hacía esta línea antes del cronómetro.
+  if (m.type === 'timer') {
+    const restante = Number.isFinite(m.restante) ? m.restante : 0
+    if (m.estado === 'cancela') set({ crono: null })
+    else {
+      const estados = ['termina', 'sube', 'para'] as const
+      const estado = (estados as readonly string[]).includes(m.estado)
+        ? (m.estado as (typeof estados)[number])
+        : 'corre'
+      set({ crono: { restante, total: Number.isFinite(m.total) ? m.total : restante, estado } })
+    }
+  }
+  // `alarm` es la agenda sonando: el core ya armó la frase, y la cara la pinta
+  // como una línea del chat. `atrasada` se muestra porque «suena ahora pero
+  // eran las 7» es información que la usuaria necesita, no un detalle técnico.
+  if (m.type === 'alarm' && typeof m.texto === 'string') {
+    const hora = typeof m.cuando === 'string' ? `${m.cuando} · ` : ''
+    const que = m.tipo === 'recordatorio' ? 'Recordatorio' : 'Alarma'
+    set({ msgs: [...snapshot.msgs, {
+      from: 'cort',
+      text: `${hora}${que}: ${m.texto}${m.atrasada ? ' (llegó tarde)' : ''}`,
+    }] })
+  }
+}
+
+
 function open() {
+  const n = nexo()
+  if (n) {
+    // Sin portátil: el puente contesta. No hay reintento ni `onclose` porque no
+    // hay cable; lo que dice si CORT está vivo son los cuadros que empuja Java.
+    window.cortRecibe = recibePorElPuente
+    set({ online: true })
+    n.pedirAvatares()
+    return
+  }
   const s = new WebSocket(WS_URL)
   sock = s
   s.onopen = () => set({ online: true })
@@ -305,61 +425,7 @@ function open() {
     set({ online: false, status: null, crono: null })
     timer = window.setTimeout(open, 3000)
   }
-  s.onmessage = (e) => {
-    const m = JSON.parse(e.data)
-    if (m.type === 'state') applyState(m)
-    if (m.type === 'status') set({ status: readStatus(m) })
-    // El saludo es por conexión, y el log sobrevive a las reconexiones: sin el
-    // `msgs.length === 0` cada reintento del WebSocket añadiría un «Hola, soy
-    // CORT.» nuevo a una conversación que ya está en curso.
-    if (m.type === 'greeting' && snapshot.msgs.length === 0) {
-      apuntarMood(m.mood)
-      set({ msgs: [{ from: 'cort', text: m.text }] })
-    }
-    if (m.type === 'assistant_message') {
-      apuntarMood(m.mood)
-      set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
-    }
-    // `proactive` es lo mismo dicho por su cuenta: viaja separado porque el core
-    // decide cuándo (iniciativa, regla determinista, sin LLM) y para que alguien
-    // pueda apagarlo con `CORT_INITIATIVE=0` sin tocar cómo se pinta un mensaje.
-    if (m.type === 'proactive' && typeof m.text === 'string') {
-      apuntarMood(m.mood)
-      set({ msgs: [...snapshot.msgs, { from: 'cort', text: m.text }] })
-    }
-    if (m.type === 'intent') set({ msgs: [...snapshot.msgs, { from: 'cort', text: `→ ${m.action}` }] })
-    if (m.type === 'effect' && EFFECTS.has(m.kind)) set({ effect: { kind: m.kind, at: Date.now() } })
-    if (m.type === 'avatars')
-      set({ avatars: Array.isArray(m.items) ? m.items.filter((i: any) => typeof i?.nombre === 'string') : [] })
-    // El temporizador viaja como cuadro propio y no como mensaje de texto: lo
-    // que pinta es un número que baja, no una frase. `cancela` borra el nodo,
-    // `termina` lo deja en cero para que la interfaz pueda avisar y apagarse,
-    // y `sube`/`para` son el cronómetro: el mismo cuadro con el tiempo contando
-    // hacia arriba. Un estado desconocido se pinta como `corre` en vez de
-    // desaparecer — es lo que ya hacía esta línea antes del cronómetro.
-    if (m.type === 'timer') {
-      const restante = Number.isFinite(m.restante) ? m.restante : 0
-      if (m.estado === 'cancela') set({ crono: null })
-      else {
-        const estados = ['termina', 'sube', 'para'] as const
-        const estado = (estados as readonly string[]).includes(m.estado)
-          ? (m.estado as (typeof estados)[number])
-          : 'corre'
-        set({ crono: { restante, total: Number.isFinite(m.total) ? m.total : restante, estado } })
-      }
-    }
-    // `alarm` es la agenda sonando: el core ya armó la frase, y la cara la pinta
-    // como una línea del chat. `atrasada` se muestra porque «suena ahora pero
-    // eran las 7» es información que la usuaria necesita, no un detalle técnico.
-    if (m.type === 'alarm' && typeof m.texto === 'string') {
-      const hora = typeof m.cuando === 'string' ? `${m.cuando} · ` : ''
-      const que = m.tipo === 'recordatorio' ? 'Recordatorio' : 'Alarma'
-      set({ msgs: [...snapshot.msgs, {
-        from: 'cort',
-        text: `${hora}${que}: ${m.texto}${m.atrasada ? ' (llegó tarde)' : ''}`,
-      }] })
-    }
-  }
+  s.onmessage = (e) => maneja(JSON.parse(e.data))
 }
 
 const GESTOS = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const
@@ -370,6 +436,13 @@ export function connect() {
   GESTOS.forEach((g) => window.addEventListener(g, tocarActividad, { passive: true }))
   return () => {
     GESTOS.forEach((g) => window.removeEventListener(g, tocarActividad))
+    if (nexo()) {
+      // No hay cable que cerrar: se suelta la ventanilla para que un React que se
+      // desmonte no siga recibiendo cuadros de un Java que ya no escucha.
+      delete window.cortRecibe
+      set({ online: false })
+      return
+    }
     if (timer) clearTimeout(timer)
     timer = undefined
     const s = sock
@@ -379,7 +452,7 @@ export function connect() {
   }
 }
 
-function applyState(m: { outfit?: string; thinking?: boolean; city?: string; temp_c?: number }) {
+function applyState(m: { outfit?: string; thinking?: boolean; city?: string; temp_c?: number; nivel?: number }) {
   const outfit = (m.outfit ?? DEFAULT_OUTFIT) as Outfit
   const tint = palette[outfit] ?? palette[DEFAULT_OUTFIT]
   const thinking = Boolean(m.thinking)
@@ -392,10 +465,23 @@ function applyState(m: { outfit?: string; thinking?: boolean; city?: string; tem
   const clima = Number.isFinite(m.temp_c) && typeof m.city === 'string'
     ? { city: m.city, temp_c: m.temp_c as number }
     : null
+  // `nivel` es el añadido del puente: en el portátil la medida sale del
+  // `AnalyserNode` de `getUserMedia` (`cort/voz.ts`), y el WebView no tiene ni una
+  // cosa ni la otra. El `SpeechRecognizer` de Android sí da un nivel cada vez que
+  // alguien habla (`onRmsChanged`), y Java lo empuja aquí. Se **sube** y no se
+  // pisa: el reactor decae solo (`nivel *= exp(-dt·4,5)`) y dos fuentes no deben
+  // pelearse por el mismo número.
+  if (Number.isFinite(m.nivel)) target.nivel = Math.max(target.nivel, Math.min(1, m.nivel as number))
   set({ online: true, outfit, thinking, clima })
 }
 
 export function send(text: string) {
+  const n = nexo()
+  if (n) {
+    n.enviar(text)
+    set({ msgs: [...snapshot.msgs, { from: 'user', text }] })
+    return
+  }
   if (!sock || sock.readyState !== WebSocket.OPEN) return
   sock.send(JSON.stringify({ type: 'user_message', text }))
   set({ msgs: [...snapshot.msgs, { from: 'user', text }] })
@@ -403,6 +489,14 @@ export function send(text: string) {
 
 /** Pedir al core la lista de atuendos que hay en disco. Va por el cable abierto. */
 export function pedirAvatares() {
+  const n = nexo()
+  if (n) {
+    // Offline no hay `.vrm` en el APK (regla 7: nada de modelos pesados en el repo)
+    // y Java contesta con `avatars` vacío. Se llama igual que por el cable para que
+    // la cara no tenga dos caminos según dónde corra.
+    n.pedirAvatares()
+    return
+  }
   if (!sock || sock.readyState !== WebSocket.OPEN) return
   sock.send(JSON.stringify({ type: 'list_avatars' }))
 }

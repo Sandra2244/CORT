@@ -74,6 +74,81 @@ todas esas cadenas como `v<etiqueta>`:
 
 ---
 
+## `v0.17.0` — la cara del PC dentro del APK: el mismo `dist`, sin PC
+
+La dueña lo pidió con una frase que no admite interpretación: *«es literalmente replicar todo el de
+PC, compilado a Android»*. Hasta aquí el teléfono tenía una cara **parecida** —escrita dos veces, en
+`Canvas` y en React—, y cada función nueva había que duplicarla a mano. Desde este corte la cara del
+teléfono **es** el paquete de `apps/web`.
+
+- **Cómo**: el pipeline `compilar-apk` ahora corre `npm ci && npm run build` **antes** de `aapt2` y
+  copia el `dist` a `apps/apk/assets/web/`, que `compilar.sh` mete en el APK con el `-A assets` que ya
+  usaba para la tabla de frases. La carpeta generada está en `.gitignore`: el repo no guarda
+  compilados (regla 7).
+- **Dónde se abre**: en un `WebView` sobre el origen inventado `https://cort.local`. Cada petición se
+  corta en `WebViewClient.shouldInterceptRequest` y se resuelve contra `getAssets()`. No se probó
+  `file://` —Chromium rechaza un módulo ES cargado desde disco y la pantalla queda en blanco— ni un
+  servidor HTTP con `ServerSocket` en el aparato: un puerto abierto es justo lo que `docs/PLATFORM.md`
+  prometió no hacer. Lo que no está en la **lista cerrada** (`index.html`, `manifest.webmanifest`,
+  `favicon.ico`, `assets/`, `icons/`) recibe **404 en la propia interceptación**, nunca una salida a la
+  red, y un camino con `..` se rechaza **antes** de mirar los prefijos. `setAllowFileAccess` no se
+  abre.
+- **Quién piensa**: el cerebro sigue siendo Java (`Cerebro`, `Acciones`, `Recuerdos`, `Voz`, `Nube`). La
+  página habla por `window.Nexo` —cinco métodos: `enviar`, `escuchar`, `callar`, `hablar`,
+  `pedirAvatares`— y Java devuelve los **mismos cuadros** del WebSocket. `connection.ts` tiene ahora
+  **un manejador y dos transportes**: si `window.Nexo` existe no se abre cable ni se programa reintento.
+  Esta es la pieza que hace cumplir la regla del mantenimiento: lo que se rediseñe en el PC llega al
+  APK en el mismo commit, porque es el mismo archivo.
+- **Protocolo** (regla 5, documentado en `docs/ARCHITECTURE.md` antes del código): ningún tipo nuevo;
+  `state` gana un campo opcional `nivel` (`0..1`, el RMS real del micrófono de Android, que el
+  navegador no puede medir desde el WebView) y `user_message` empieza a viajar **hacia** la página, para
+  que el dictado se vea antes de la respuesta. Seis de los doce tipos cruzan por el puente; `greeting`,
+  `effect`, `proactive`, `timer` y `alarm` los emite el lazo del core y aquí **no se simulan**.
+- **Lo que no engaña**: `avatars` contesta lista vacía —no hay `.vrm` en el APK—, así que el cuerpo 3D
+  se ve cuando el portátil está delante; la **vigilia** («OK CORT» siempre oído) pide captura continua y
+  el `SpeechRecognizer` de Android cierra tras una frase, así que la rama del puente la rechaza con
+  `if (!escuchaOn) return`. En el teléfono se le habla pulsando.
+- **Cuatro superficies, no tres**: `MainActivity` prueba en orden la cara embebida, la del portátil
+  encontrado por UDP y la nativa de `Cara.java`, que **sigue existiendo como respaldo**: si el `dist` no
+  viajó o el `WebView` se cae (`onReceivedError` del marco principal), la dueña ve CORT igualmente en
+  vez de una pantalla negra.
+- **La sexta clase de error que sólo existe al compilar**, cazada antes de empujar: nombres de método
+  que sólo existen en el recuerdo. Escribí `WebChromeClient.onPageFinished`; el script
+  `scripts/simbolos_android.py` se **negó** a escribir su diccionario al no encontrarlo, y bajando
+  `WebViewClient.java` de AOSP resultó estar ahí (línea 122). El mismo script amplió sus tres salidas a
+  las seis clases nuevas del puente (**26 retornos en ocho clases**, **12 firmas `throws` en dos**).
+  Y **`Nexo.java` traía un `import` que yo mismo había borrado** (`java.util.Map`, usado en el 404): la
+  quinta vez que un fallo de tipos se habría cobrado una Release, encontrado leyéndolo otra vez.
+- **Las guardas nuevas**: `services/core/tests/test_apk_web.py` (**28**) — paridad de los `type` que
+  Java empuja contra los que `maneja` lee, los cinco métodos del puente en los dos lenguajes, la lista
+  cerrada cubierta contra lo que `index.html` pide, el orden `..`-antes-del-prefijo, cero `MimeTypeMap`,
+  `Locale` en todo `String.format`, el paso `npm run build` y su assert de rutas relativas, y que el
+  destino de la copia sea **el mismo dossier** que lee Java. Se comprobaron **no vacías** reintegrando
+  los fallos (`Locale.ROOT` fuera, coma en el nivel, `Lazo` renombrado).
+- **Una guarda que se equivocó, y su corrección va escrita**: `TestLoQueElSdkDevuelve` acusó a
+  `String ruta = rutaDe(peticion.getUrl().toString())` de meter un `Uri` en un `String`. El Java estaba
+  bien; la regex no miraba el balance de paréntesis y le prestaba a la variable el tipo de una llamada
+  **anidada**. Ahora `_es_la_llamada_de_afuera` lo exige y hay dos pruebas nuevas, una de ellas con el
+  falso positivo como ejemplo. **168** pruebas sobre `apps/apk/` (34 del cerebro, 27 de paridad con el
+  orbe, 79 del manifiesto y sus llamadas al SDK, 28 de la cara embebida).
+- **Medido aquí**: `TMPDIR=/tmp make test` **755** en verde en **107,181 s** (exit 0) y
+  `make test-web` **56** (exit 0) — **811** en total—, `tsc --noEmit` **0**. El `dist` que hay en esta máquina (compilado antes de este corte) pesa
+  **1 630 415 B en 9 archivos**, con `assets/index-*.js` de **1 314 003 B**; el APK de `v0.16.1` pesaba
+  **86 977 B**, así que se espera un APK del orden de **varios cientos de KB** al comprimir los
+  `assets`. **Número exacto: sin verificar** hasta que el runner lo compile.
+- **Sin verificar**, y no se vende como verificado: que `javac` acepte `Nexo.java` (el `javac` de este
+  commit es el del runner), que el `WebView` arranque la cara embebida en un Samsung A16, que el orbe de
+  three.js vaya a cuadros por segundo aceptables con WebGL en el teléfono, que el micrófono oiga por el
+  puente y que la voz suene igual en los dos aparatos. Esto último lo puede decir **la dueña con su
+  dedo y su oído**, no esta máquina.
+- **Deuda nombrada**: el lazo de `Nexo` duplica en pequeño al de `Cara` (tabla → acción → nube). Las
+  manos, la tabla y la memoria son compartidas de verdad; la coreografía no. Extraer un `Lazo.java`
+  único para las dos caras queda apuntado en `docs/STATUS.md`.
+
+**Zip**: `https://github.com/Sandra2244/CORT/archive/refs/tags/v0.17.0.zip`
+
+---
+
 ## `v0.16.1` — un carácter: `0.6` en un sitio de `float`, y la cuarta página sin APK
 
 **El error era mío y lo digo antes de contar el arreglo**: `v0.16.0` añadió la guarda de los

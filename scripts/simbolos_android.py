@@ -97,10 +97,16 @@ LANZA = {
                            ("error", "results", "partialResults", "beginningOfSpeech",
                             "endOfSpeech", "bufferReceived", "rmsChanged",
                             "readyForSpeech", "segmentResults", "endOfSegmentedSession")),
+    "AssetManager": ("core/java/android/content/res/AssetManager.java",
+                     ("open", "list")),
+    # `v0.17.0`, la cara embebida: `getAssets().open(...)` y `.list(...)` declaran
+    # `throws IOException` en AOSP. Es justo el género de error que se cobró
+    # `v0.15.4`: llamar sin recoger lo que el fuente declara lanzar. La cara nueva
+    # vive de esas dos llamadas, así que entran en el diccionario.
 }
 
 FIRMA = re.compile(
-    r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+)*"
+    r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+|abstract\s+)*"
     r"[\w.<>@\[\] ]+?\s(\w+)\s*\([^)]*\)\s*(?:throws\s+([\w.,\s@<>]+?))?\s*[;{]")
 
 """
@@ -123,11 +129,42 @@ DEVUELVE = {
                      ("getVoices", "isSpeaking", "setVoice", "setSpeechRate",
                       "setPitch", "setLanguage")),
     "Bundle": ("core/java/android/os/Bundle.java", ("getStringArrayList",)),
+    # `v0.17.0`: la ventana que sirve la cara del PC dentro del APK. Ninguna de
+    # estas devoluciones se guarda en una variable, pero el diccionario cumple otra
+    # función igual de cara al runner: **el nombre tiene que existir en AOSP**.
+    # `MimeTypeMap.getSingletonInstance()` es el ejemplo perfecto —no existe; el
+    # real es `getSingleton()`— y escribirlo de memoria habría costado un Run.
+    "WebView": ("core/java/android/webkit/WebView.java",
+                ("addJavascriptInterface", "setWebViewClient", "setWebChromeClient",
+                 "loadUrl", "evaluateJavascript", "getSettings", "destroy")),
+    "WebSettings": ("core/java/android/webkit/WebSettings.java",
+                    ("setJavaScriptEnabled", "setDomStorageEnabled",
+                     "setMediaPlaybackRequiresUserGesture")),
+    "WebChromeClient": ("core/java/android/webkit/WebChromeClient.java",
+                        ("onPermissionRequest",)),
+    # Y aquí está el motivo de este guion: `onPageFinished` **no** es de
+    # `WebChromeClient` —lo escribí de memoria—, es de `WebViewClient`. El script
+    # lo buscó donde tocaba, no lo encontró en el otro archivo y se cayó antes de
+    # escribir un diccionario mentiroso. Cuatro Releases costó aprender que la
+    # memoria no es una fuente.
+    "WebViewClient": ("core/java/android/webkit/WebViewClient.java",
+                      ("shouldInterceptRequest", "onReceivedError", "onPageFinished")),
+    # `WebResourceRequest` es una **interfaz**: sus métodos no llevan `public`, y
+    # por eso `metodos_que_devuelven` necesita buscarlos también sin la palabra.
+    "WebResourceRequest": ("core/java/android/webkit/WebResourceRequest.java",
+                           ("getUrl", "getMethod", "isForMainFrame")),
+    "AssetManager": ("core/java/android/content/res/AssetManager.java",
+                     ("open", "list")),
 }
 
 REGRESA = re.compile(
-    r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+)*"
+    r"public\s+(?:@\w+\s+)*(?:static\s+|final\s+|synchronized\s+|abstract\s+)*"
     r"([\w.<>@\[\]]+(?:\s*\[\])?)\s+(\w+)\s*\([^)]*\)\s*(?:throws[^;{]+)?[;{]")
+
+# La misma búsqueda en una interfaz, donde el `public` va sobrentendido.
+REGRESA_INTERFACE = re.compile(
+    r"^[ \t]+(?:@\w+\s+)*([\w.<>@\[\]]+(?:\s*\[\])?)\s+(\w+)\s*\([^;)\[]*\)"
+    r"\s*(?:throws[^;{]+)?;", re.MULTILINE)
 
 
 def descargar(clase: str, ruta: str) -> list[str]:
@@ -176,6 +213,11 @@ def metodos_que_devuelven(clase: str, archivo: str,
     texto = firma_clase(archivo)
     salida: dict[str, set[str]] = {}
     for tipo, nombre in REGRESA.findall(texto):
+        if nombre in nombres:
+            salida.setdefault(nombre, set()).add(" ".join(tipo.split()))
+    # Las interfaces no escriben `public` (`WebResourceRequest.getUrl()`), y un
+    # nombre que no se encuentra es exactamente lo que este script detecta.
+    for tipo, nombre in REGRESA_INTERFACE.findall(texto):
         if nombre in nombres:
             salida.setdefault(nombre, set()).add(" ".join(tipo.split()))
     faltan = sorted(set(nombres) - set(salida))

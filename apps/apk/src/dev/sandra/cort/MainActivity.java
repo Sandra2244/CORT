@@ -42,7 +42,11 @@ import java.nio.charset.StandardCharsets;
  * - **El portátil está publicado en la Wi-Fi** → `WebView` con la página React:
  *   la cara buena, el cuerpo 3D, los atuendos. Se encuentra solo, con el
  *   protocolo UDP de `v0.14.4`.
- * - **No está** → `Cara`, la cara nativa: CORT oye por el micrófono de Android,
+ * - **No está** → `Nexo`: desde `v0.17.0` la **misma cara del PC**, servida
+ *   desde los `assets` del APK sobre el origen inventado
+ *   `https://cort.local`, con el cerebro Java detrás (`Cerebro`, `Acciones`,
+ *   `Recuerdos`, `Voz`) y los mismos cuadros que viajan por el WebSocket.
+ * - **Tampoco viajó el `dist`, o el WebView se cayó** → `Cara`, la cara nativa: CORT oye por el micrófono de Android,
  *   habla por su altavoz, maneja el aparato y recuerda en SQLite. Sin servidor,
  *   sin HTTPS y sin abrir el portátil — que es lo que la dueña pidió.
  * - **Ninguna de las dos funciona** (red aislada, core caído) → el campo de
@@ -73,6 +77,7 @@ public class MainActivity extends Activity {
     public static final String PIDE_ESCUCHAR = "cort-escuchar";
 
     private WebView web;
+    private Nexo nexo;          // la cara del PC, servida desde el propio APK
     private Cara cara;          // la superficie nativa, cuando no hay portátil
     private LinearLayout capa;  // root: una sola cara a la vez
     private TextView aviso;     // el motivo por el que el enlace no vale
@@ -118,6 +123,13 @@ public class MainActivity extends Activity {
             return;
         }
         capa.post(() -> {
+            if (nexo != null && web == null) {
+                // La cara embebida no tiene micrófono propio: el WebView no expone
+                // `SpeechRecognition`. Quien oye es el `SpeechRecognizer` de Java,
+                // por el mismo puente que usa el botón ● de la página.
+                nexo.escuchar();
+                return;
+            }
             if (cara != null && web == null) {
                 cara.escucharAhora();
             }
@@ -143,8 +155,51 @@ public class MainActivity extends Activity {
             abrir(url, prefs().getString("token", ""));
             return;
         }
-        montarCara();
+        // `v0.17.0`: sin portátil ya no hace falta montar la cara nativa. El APK
+        // trae consigo la cara del PC (`assets/web/`), y mientras ese `dist` exista
+        // es la que se ve: la misma React, el mismo orbe, los mismos paneles.
+        // `Cara` queda de respaldo, y si la página no viajó en el compilado o el
+        // WebView se cae, se monta igual.
+        if (hayCaraEmbebida()) {
+            montarWebLocal();
+        } else {
+            montarCara();
+        }
         buscarATelefonoSilencio();
+    }
+
+    private Boolean embebida;
+
+    /**
+     * Si el `dist` de la cara viajó dentro de este APK. Se mira una sola vez y se
+     * guarda: `AssetManager.list` toca disco, y esto se decide en cada `onCreate`.
+     */
+    private boolean hayCaraEmbebida() {
+        if (embebida == null) {
+            boolean encontrada = false;
+            try {
+                for (String nombre : getAssets().list(Nexo.DOSSIER)) {
+                    if ("index.html".equals(nombre)) {
+                        encontrada = true;
+                    }
+                }
+            } catch (IOException noHay) {
+                encontrada = false;   // sin dossier no hay cara embebida, y no pasa nada
+            }
+            embebida = encontrada;
+        }
+        return embebida;
+    }
+
+    /** La cara del portátil, montada sobre los archivos del propio teléfono. */
+    private void montarWebLocal() {
+        nexo = new Nexo(this, () -> {
+            // El `WebView` se cayó de verdad: sin `dist` en el APK, sin WebView en
+            // el aparato, o con el arranque cortado. La nativa funciona sin página,
+            // así que nunca se queda la dueña en blanco.
+            runOnUiThread(this::volverACara);
+        });
+        nexo.montar(capa);
     }
 
     /** La superficie nativa, con sus datos de aparato ya sembrados. */
@@ -188,6 +243,12 @@ public class MainActivity extends Activity {
                 }
                 if (web != null) {
                     return;
+                }
+                if (nexo != null) {
+                    // Apareció el portátil: la cara embebida se quita y manda el
+                    // core, que es la misma regla de siempre con la cara nativa.
+                    nexo.cerrar();
+                    nexo = null;
                 }
                 prefs().edit().putString("url", encontrado).putString("token", "").apply();
                 abrir(encontrado, "");
@@ -304,6 +365,10 @@ public class MainActivity extends Activity {
         if (web != null) {
             web.destroy();
             web = null;
+        }
+        if (nexo != null) {
+            nexo.cerrar();
+            nexo = null;
         }
         montarCara();
         buscarATelefonoSilencio();
@@ -517,6 +582,9 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (cara != null) {
             cara.cerrar();
+        }
+        if (nexo != null) {
+            nexo.cerrar();
         }
         super.onDestroy();
     }

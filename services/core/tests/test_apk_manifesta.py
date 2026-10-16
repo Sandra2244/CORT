@@ -969,7 +969,7 @@ class TestLoQueLlegaAlRunner(unittest.TestCase):
 
     def test_toda_entrada_del_build_es_seguida_por_git(self):
         """Manifiesto, guion de compilado, tabla de frases, los tres diccionarios de
-        AOSP y los dieciséis Java (con `Orbe.java` desde `v0.16.0`)."""
+        AOSP y los diecisiete Java (con `Nexo.java` desde `v0.17.0`)."""
         entradas = [MANIFIESTO, COMPILAR, APK / ".gitignore",
                     APK / "assets" / "habilidades.json",
                     APK / "res" / "xml" / "asistente.xml",
@@ -977,7 +977,9 @@ class TestLoQueLlegaAlRunner(unittest.TestCase):
                     APK / "lanza-android.json",
                     APK / "devuelve-android.json"]
         entradas += sorted((APK / "src").rglob("*.java"))
-        self.assertGreaterEqual(len(entradas), 21, "el glob no encontró fuentes")
+        self.assertGreaterEqual(len(entradas), 25, "el glob no encontró fuentes")
+        self.assertIn(APK / "src" / "dev" / "sandra" / "cort" / "Nexo.java", entradas,
+                      "`Nexo.java` no está en el árbol: la cara embebida se fue")
         for ruta in entradas:
             self.assertFalse(self.esta_ignorado(ruta),
                              f"{ruta.name}: entrada del build que git ignora")
@@ -1160,6 +1162,20 @@ class TestLoQueElSdkDevuelve(unittest.TestCase):
                 return True
         return False
 
+    @staticmethod
+    def _es_la_llamada_de_afuera(fragmento: str) -> bool:
+        """El segmento va del principio de la sentencia hasta el punto que nombra
+        al método del SDK. Si abre más paréntesis de los que cierra, esa llamada
+        está **dentro** de otra, y quien decide el tipo de la variable es la de
+        fuera —un método nuestro, que no está en ningún diccionario—.
+
+        Falso positivo medido en este corte: `Nexo.java` escribe
+        `String ruta = rutaDe(peticion.getUrl().toString())` y la guarda exigía
+        que un `String` recibiera el `Uri` de `getUrl`. El `String` es correcto y
+        `javac` lo acepta; la que se equivocaba era la regex.
+        """
+        return fragmento.count("(") == fragmento.count(")")
+
     def test_toda_variable_que_recibe_un_metodo_del_sdk_usa_su_tipo_real(self):
         """`Tipo x = objeto.metodo(...)` tiene que declarar el tipo que AOSP dice."""
         for clase, datos in sorted(self.devuelve["clases"].items()):
@@ -1172,6 +1188,8 @@ class TestLoQueElSdkDevuelve(unittest.TestCase):
                         inicio = max((codigo.rfind(c, 0, coincidencia.start())
                                       for c in ";{}"), default=-1)
                         fragmento = codigo[inicio + 1:coincidencia.start()].strip()
+                        if not self._es_la_llamada_de_afuera(fragmento):
+                            continue
                         asignacion = re.fullmatch(
                             r"(?:final\s+)?([\w.<>\[\], ]+?)\s+\w+\s*=\s*[^=]+", fragmento)
                         if not asignacion:
@@ -1187,6 +1205,31 @@ class TestLoQueElSdkDevuelve(unittest.TestCase):
         self.assertRegex(re.sub(r"\s+", " ", solo_codigo(self.java["Voz.java"])),
                          r"Set<Voice> \w+ = \w+\.getVoices\(\);",
                          "el `getVoices()` volvió a recibirse en un tipo que no es `Set`")
+
+    def test_una_llamada_anidada_no_le_presta_su_tipo_a_la_variable(self):
+        """La que falló contra `Nexo.java` al escribir la cara embebida."""
+        self.assertFalse(self._es_la_llamada_de_afuera("String ruta = rutaDe(peticion.getUrl"))
+        self.assertTrue(self._es_la_llamada_de_afuera("Set<Voice> voces = boca"))
+        # La cadena de verdad: `getUrl()` ya cerrado antes del método que decide.
+        self.assertTrue(self._es_la_llamada_de_afuera("String nombre = peticion.getUrl()"))
+
+    def test_la_guarda_de_retornos_sigue_sin_estar_decorada(self):
+        """Reintegrando el `List<Voice>` de `v0.16.0`, la guarda tiene que caer."""
+        roto = self.java["Voz.java"].replace("Set<Voice>", "List<Voice>", 1)
+        self.assertNotEqual(roto, self.java["Voz.java"], "el `Set<Voice>` ya no está en Voz.java")
+        tipos = self.devuelve["clases"]["TextToSpeech"]["metodos"]["getVoices"]
+        with self.assertRaises(AssertionError):
+            for coincidencia in re.finditer(r"\.getVoices\(", solo_codigo(roto)):
+                inicio = max((solo_codigo(roto).rfind(c, 0, coincidencia.start())
+                              for c in ";{}"), default=-1)
+                fragmento = solo_codigo(roto)[inicio + 1:coincidencia.start()].strip()
+                if not self._es_la_llamada_de_afuera(fragmento):
+                    continue
+                asignacion = re.fullmatch(
+                    r"(?:final\s+)?([\w.<>\[\], ]+?)\s+\w+\s*=\s*[^=]+", fragmento)
+                if not asignacion:
+                    continue
+                self.assertTrue(self._permite(asignacion.group(1).strip(), tipos))
 
 
 class TestLaConversionQueJavacNoPerdona(unittest.TestCase):

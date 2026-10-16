@@ -1,11 +1,11 @@
-import { getSnapshot, send, subscribe, target, tocarActividad } from './connection'
+import { getSnapshot, nexo, send, subscribe, target, tocarActividad } from './connection'
 // La frase de activación vive en su propio módulo puro (`activacion.ts`) para poder
 // probarse sin navegador. Aquí se usa.
 import { buscarActivacion } from './activacion'
 // La agenda de labios (`labios.ts`) también es pura y probada sin navegador; aquí
 // sólo se le pasa el texto que se va a decir y se la realinea con el aviso de
 // palabra, cuando el navegador se digna mandarlo.
-import { alinear, empezar, parar } from './labios'
+import { alinear, duracion, empezar, parar, silabas } from './labios'
 
 /**
  * Voz de CORT, hecha con lo que ya trae el navegador: nada que instalar y nada
@@ -222,6 +222,21 @@ function pitido() {
 }
 
 function arrancarReconocimiento() {
+  const n = nexo()
+  if (n) {
+    // El WebView no trae `SpeechRecognition` —es API del navegador de Chrome, no del
+    // WebView—, así que sin este camino el ● del micrófono no haría nada dentro del
+    // teléfono. Oye el `SpeechRecognizer` de `Voz.java`, y lo reconocido vuelve por
+    // el puente como cuadro `user_message` que esta misma cara pinta en el log.
+    if (hablando || esperando) return
+    // La vigilia («OK CORT» escuchado siempre) pide captura **continua**, y el
+    // reconocedor de Android que usa CORT cierra tras una frase. En el teléfono,
+    // por ahora, se le habla pulsando: está escrito en `apps/apk/README.md` en vez
+    // de fingirse.
+    if (!escuchaOn) return
+    n.escuchar()
+    return
+  }
   if (!SR || hablando || esperando) return
   // Dos usos del mismo reconocedor: la conversación (una frase por vez) y la
   // vigilia (continuo, sólo busca la frase de activación).
@@ -314,6 +329,8 @@ function arrancarReconocimiento() {
 }
 
 function pararReconocimiento() {
+  // El puente también tiene su escucha que apagar: `Voz.dejarDeEscuchar()`.
+  nexo()?.callar()
   const r = rec
   rec = null
   if (r) {
@@ -393,6 +410,38 @@ function apagarTodo() {
 function hablar(texto: string) {
   const limpio = limpiar(texto)
   if (!limpio) return
+  const n = nexo()
+  if (n) {
+    // Dentro del APK no manda `speechSynthesis`: el WebView de Android expone un
+    // puñado de voces y la dueña lo notó al instante —«la voz no sé si sea misma,
+    // parece otra»—. Aquí habla el `TextToSpeech` de `Voz.java` con `es-CO`,
+    // velocidad `0,95`, tono `1` y la misma lista `PREFERIDAS` de abajo: la paridad
+    // que `test_apk_orbe.py` mide contra este archivo, no la que promete un nombre
+    // bonito de voz que el aparato no tiene.
+    n.hablar(limpio)
+    n.callar()
+    // Que no se oiga a sí mismo, que es lo que hace `pararReconocimiento()` en la
+    // otra rama de abajo.
+    hablando = true
+    // La boca se agenda desde las sílabas (función 27), igual que en el PC. Lo que
+    // no hay aquí es `onboundary`: el audio no lo genera Chromium, así que no existe
+    // la posición de palabra que realinea la agenda.
+    empezar(limpio)
+    sincronizarEscena()
+    const ms = duracion(silabas(limpio)) + 400
+    window.setTimeout(() => {
+      hablando = false
+      esperando = false
+      parar()
+      sincronizarEscena()
+      if (turnoVigilia) {
+        terminarTurno()
+        return
+      }
+      if (escuchaOn || vigiliaOn) window.setTimeout(arrancarReconocimiento, 350)
+    }, ms)
+    return
+  }
   const frases = limpio.match(/[^.!?…]+[.!?…]*/g) ?? [limpio]
   const voz = elegirVoz()
   frases.forEach((frase) => {

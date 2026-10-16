@@ -35,6 +35,94 @@
      "ArrayList<String>"
     ]
    }
+  },
+  "WebView": {
+   "archivo": "core/java/android/webkit/WebView.java",
+   "metodos": {
+    "destroy": [
+     "void"
+    ],
+    "loadUrl": [
+     "void"
+    ],
+    "evaluateJavascript": [
+     "void"
+    ],
+    "setWebViewClient": [
+     "void"
+    ],
+    "setWebChromeClient": [
+     "void"
+    ],
+    "addJavascriptInterface": [
+     "void"
+    ],
+    "getSettings": [
+     "WebSettings"
+    ]
+   }
+  },
+  "WebSettings": {
+   "archivo": "core/java/android/webkit/WebSettings.java",
+   "metodos": {
+    "setMediaPlaybackRequiresUserGesture": [
+     "void"
+    ],
+    "setJavaScriptEnabled": [
+     "void"
+    ],
+    "setDomStorageEnabled": [
+     "void"
+    ]
+   }
+  },
+  "WebChromeClient": {
+   "archivo": "core/java/android/webkit/WebChromeClient.java",
+   "metodos": {
+    "onPermissionRequest": [
+     "void"
+    ]
+   }
+  },
+  "WebViewClient": {
+   "archivo": "core/java/android/webkit/WebViewClient.java",
+   "metodos": {
+    "onPageFinished": [
+     "void"
+    ],
+    "shouldInterceptRequest": [
+     "WebResourceResponse"
+    ],
+    "onReceivedError": [
+     "void"
+    ]
+   }
+  },
+  "WebResourceRequest": {
+   "archivo": "core/java/android/webkit/WebResourceRequest.java",
+   "metodos": {
+    "getUrl": [
+     "Uri"
+    ],
+    "isForMainFrame": [
+     "boolean"
+    ],
+    "getMethod": [
+     "String"
+    ]
+   }
+  },
+  "AssetManager": {
+   "archivo": "core/java/android/content/res/AssetManager.java",
+   "metodos": {
+    "open": [
+     "InputStream",
+     "return"
+    ],
+    "list": [
+     "String[]"
+    ]
+   }
   }
  }
 }

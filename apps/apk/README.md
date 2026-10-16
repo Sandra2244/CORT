@@ -1,10 +1,14 @@
 # CORT en el teléfono (APK)
 
-Desde `v0.15.0` este APK es **dos cosas**. Si el portátil está publicado en la
+Desde `v0.17.0` este APK es **tres cosas**. Si el portátil está publicado en la
 Wi-Fi, abre la página que sirve `cort.py --lan`: la cara completa, con su cuerpo
-3D y su memoria del core. Y si no lo está, **CORT funciona dentro del teléfono**:
-una cara nativa en Java con su propio cerebro de once acciones, su memoria en
-SQLite, su voz y su micrófono, sin servidor y sin abrir el portátil.
+3D y su memoria del core. **Si el portátil no está, abre la misma cara del PC
+embebida dentro del propio APK** — el `dist` de `apps/web` copiado a
+`apps/apk/assets/web/` por el pipeline y servido desde los `assets` bajo el origen
+inventado `https://cort.local`, con el cerebro Java detrás—. Y si ese `dist` no
+viajó en el compilado, o el `WebView` se cae, queda **la cara nativa en Java**: su
+propio cerebro de **quince** acciones, su memoria en SQLite, su voz y su
+micrófono, sin servidor y sin abrir el portátil.
 
 **Por qué** — el número lo puso la dueña del proyecto, no una sugerencia externa:
 «que funcione de forma local en mi cel, que no tengo servidor y mi PC no tiene
@@ -17,17 +21,22 @@ abierta una (los dos cuerpos de reglas).
 `gradle build` de Capacitor congela la máquina — está medido y escrito en
 `docs/PLATFORM.md`—, y además aquí no hace falta: `javac` no está (lo que hay es
 el JRE 21 y su `keytool`, medido 2026-10-15), así que no hay nada que compilar
-en esta máquina ni que descargar. **Dieciséis archivos de Java puro** contra el SDK
-(3 961 líneas, 164 KB medidos el 2026-10-15), cuatro herramientas que el runner
+en esta máquina ni que descargar. **Diecisiete archivos de Java puro** contra el SDK
+(4 535 líneas, 191 798 B medidos el 2026-10-15), cuatro herramientas que el runner
 de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
-`compilar.sh`, que **nunca corre en el portátil**.
+`compilar.sh`, que **nunca corre en el portátil**. Desde `v0.17.0` el runner
+también compila la cara: `npm ci && npm run build` dentro de `apps/web`, y ese
+`dist` — no el de esta máquina— es el que queda dentro del APK; en el portátil de
+la dueña sigue sin ejecutarse ningún `vite build`, por lo mismo de arriba.
 
 ## Qué hay dentro
 
 | archivo | qué decide |
 |---|---|
-| `MainActivity.java` | **qué superficie se ve**: el WebView si el portátil contesta, la cara nativa si no, el campo de pegar sólo si nadie tiene la culpa |
+| `MainActivity.java` | **qué superficie se ve**, en este orden: la URL guardada (el portátil hallado por UDP), **la cara del PC embebida en el APK si `assets/web/index.html` existe**, y la cara nativa como respaldo. El campo de pegar sólo si nadie tiene la culpa |
 | `Cara.java` | la interfaz nativa: registro, campo, micrófono, el lazo oír → tabla → ejecutar → (nube) → proponer aprender, la **pantalla de ajustes de nube** (`⚙` bajo el anillo, `v0.15.1`) y la fila que **cruza el puente** (`↔ traer y llevar mis recuerdos al portátil`, `v0.15.2`) |
+| `Nexo.java` | **la cara del PC dentro del teléfono** (`v0.17.0`): un `WebView` sobre `https://cort.local` donde cada petición se corta en `shouldInterceptRequest` y se resuelve contra `getAssets()` con una **lista cerrada** de rutas; si algo no está, responde **404** en la interceptación y no sale a la red. Delante expone `window.Nexo` con cinco métodos (`enviar`, `escuchar`, `callar`, `hablar`, `pedirAvatares`) y atrás **reutiliza los mismos cuadros del WebSocket** — `state`, `status`, `intent`, `assistant_message`, `user_message`, `avatars`— y el mismo cerebro Java. No abre `setAllowFileAccess`, no mete un `ServerSocket` y no simula los cuadros que produce el core |
+| `assets/web/` | **el `dist` de `apps/web`, escrito por el pipeline y fuera de git** (regla 7: el repo no guarda compilados). `compilar.sh` lo lleva con el mismo `-A assets` que ya usaba para la tabla de frases |
 | `Cerebro.java` | lee `assets/habilidades.json`, normaliza la frase y dice qué acción es. Desde `v0.15.3` también **parte la frase** por «y luego / luego / después / y» y dice si son **varios mandatos** (`cadena`). **No ejecuta nada** |
 | `Acciones.java` | las manos: **quince acciones**, todas con intenciones públicas de Android, `AudioManager` o `CameraManager`. Desde `v0.15.3` abre **cualquier app por su nombre** con la lista que devuelve el propio sistema (`queryIntentActivities` + `<queries>` en el manifiesto), pone música o video por URL codificada, deja el número en el marcador y enciende la linterna. Sin shell, sin `QUERY_ALL_PACKAGES`, sin `ACTION_CALL` |
 | `Recuerdos.java` | `cort.db` (SQLite): los hechos de la dueña y las habilidades que aprende. Desde `v0.15.2` es además **la cabeza** que el puente lee y en la que escribe, y Traduce al revés: `El usuario se llama Sandra` que viene del portátil se guarda con la clave `nombre` |
@@ -44,8 +53,8 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
 | `Voz.java` | además de hablar y escuchar, elige la voz con las mismas reglas de `apps/web/src/cort/voz.ts` (`es-CO`, 0,95, tono 1, lista preferida) y reenvía el nivel real del micrófono al orbe |
 | `assets/habilidades.json` | **la tabla de frases**: el dato que `make test` sí puede validar en esta máquina |
 | `simbolos-android.json` | el diccionario de constantes del SDK, descargado de AOSP por `scripts/simbolos_android.py` |
-| `devuelve-android.json` | el **tipo que devuelve** cada método del SDK cuyo resultado se guarda en una variable (`getVoices → Set<Voice>`, `isSpeaking → boolean`, …) — recibirlo en el tipo equivocado es `incompatible types` en `javac` |
-| `lanza-android.json` | las **firmas `throws`** de los métodos del SDK que llama el Java (`RecognitionService.Callback`: diez, todas con `RemoteException`) — lo que `javac` exige recoger y aquí no hay quien lo compruebe |
+| `devuelve-android.json` | el **tipo que devuelve** cada método del SDK cuyo resultado se guarda en una variable: **26 retornos en ocho clases** (`getVoices → Set<Voice>`, `isSpeaking → boolean`, `getUrl → Uri`, `shouldInterceptRequest → WebResourceResponse`, `AssetManager.open → InputStream`, …) — recibirlo en el tipo equivocado es `incompatible types` en `javac`, y en el puente de `v0.17.0` media de las ocho clases son `webkit` |
+| `lanza-android.json` | las **firmas `throws`** de los métodos del SDK que llama el Java: **12 en dos clases** (`RecognitionService.Callback`: diez, todas con `RemoteException`; `AssetManager`: `open` y `list` con `IOException`) — lo que `javac` exige recoger y aquí no hay quien lo compruebe |
 
 ## Usarlo
 
@@ -66,10 +75,19 @@ de GitHub Actions ya trae (`aapt2`, `javac`, `d8`, `apksigner`) y un script,
    cadenas `sk-`. Su `…-firma.txt` (421 B) dice `llave: desechable`: hay que desinstalar el
    anterior para instalarlo. Se comprueba mirando los adjuntos de la página, no una log de
    Actions que es privada.
+   **`CORT-v0.17.0.apk` todavía no está medido**: su `compilar-apk` tiene que
+   responder, y es el primer binario que lleva dentro la cara de `apps/web`. Se
+   espera sensiblemente más grande que los 86 977 B de `v0.16.1` — el `dist` local
+   pesa **1 630 415 B en 9 archivos**—; el número exacto, **sin verificar**.
 2. **Abrirlo y ya.** Si el portátil está lanzado con `--lan` en la misma Wi-Fi,
-   el teléfono lo encuentra (función 98) y abre la cara completa. Si no está,
-   aparece **CORT en el teléfono**: se le escribe en el campo de abajo o se pulsa
-   ● y se le habla. No hay que pegar nada en ninguno de los dos casos.
+   el teléfono lo encuentra (función 98) y abre la cara completa del core. Si no
+   está, **desde `v0.17.0` se abre la misma cara del PC, embebida en el APK**: el
+   reactor de three.js, los paneles y el chat de `apps/web`, con el cerebro Java
+   contestando detrás. Se le escribe en el campo de la página o se pulsa ● y se le
+   habla. No hay que pegar nada en ninguno de los dos casos, y si el `dist` no
+   viajó en el compilado aparece la cara nativa de siempre (fila 🤖), que hace lo
+   mismo con otras manos. **Sin verificar en dedo**: cuál de las dos se ve en un
+   Samsung A16 lo dirá la primera instalación de `CORT-v0.17.0.apk`.
 3. Frases que contesta solo, sin portátil y sin nube —**comprobadas una por una
    contra la tabla con el espejo Python de `Cerebro.encaja`**, no de oído—:
    «qué hora es» / «dime la hora», «qué día es hoy», «sube el volumen»,
@@ -203,11 +221,14 @@ En un Samsung (One UI, medido en la documentación de Android, no en esta máqui
 
 ## Lo que funciona en el teléfono y lo que no
 
-Dos columnas, porque hay dos CORT en el mismo APK. Lo de la izquierda es la cara
-del portátil (`WebView`); lo de la derecha vive dentro del teléfono y **no
-necesita al portátil encendido**.
+Tres CORT viven en el mismo APK: la del portátil, **la embebida** (`v0.17.0`) y la
+nativa. La tabla sigue dos columnas porque hay dos situaciones: lo de la izquierda
+es la cara servida por el core; lo de la derecha es lo que hay **sin el portátil
+encendido**, que desde este corte es la cara del PC metida dentro del APK con el
+cerebro Java detrás, y la nativa de `Cara.java` como respaldo si algo de eso falla.
+Lo marcado 🔨 en la columna derecha aplica a las dos.
 
-| | con el portátil en la Wi-Fi | **solo en el teléfono (v0.15.0)** |
+| | con el portátil en la Wi-Fi | **solo en el teléfono** (cara nativa `v0.15.0`, cara embebida `v0.17.0`) |
 |---|---|---|
 | Chat, reactor, ventanas, muelle, teclado táctil | ✅ la misma cara que en el navegador | 🔨 cara nativa Java (`Cara.java`): compilada y firmada, **sin verla un dedo todavía** |
 | **Que CORT hable** | 🔨 en WebView con `speechSynthesis`, medido sólo en escritorio | 🔨 `TextToSpeech` del sistema: código escrito, **sin oírse en dedo** |
@@ -218,6 +239,29 @@ necesita al portátil encendido**.
 | Memoria de quién soy, qué sé de mí | ✅ `memory.db` del core | 🔨 `cort.db` en SQLite, propia del teléfono y **con puente desde `v0.15.2`**: la fila `↔` del `⚙` trae lo que hay en el portátil y lleva lo de aquí. **Sin verificar en dedo** — lo ejecutó `make test` con dos bases, no un Samsung |
 | Hablarle a un modelo por internet | 🔨 en el core, con Ollama local | 🔨 opcional (`Nube.java`) **y ya escribible desde el teléfono** (`v0.15.1`): el chip `⚙` bajo el anillo abre la pantalla donde se pega la clave. Responde cuando hay clave; sin ella, la tabla local. **Sin ver en dedo** |
 | Gestos de cámara (`defocus.ts`, `getUserMedia`) | 🔨 sin verificar en dedo | ❌ no existen en la cara nativa |
+
+**Qué cambia con la cara embebida** (`v0.17.0`), y qué no se disfraza:
+
+- **Trae la cara de verdad**: el reactor de three.js con sus partículas, los
+  paneles de vidrio, el muelle, el reloj y el teclado táctil de `apps/web`. Es el
+  mismo archivo, así que lo que se rediseñe en el PC llega al teléfono en el mismo
+  commit — la dueña lo pidió así y `connection.ts` lo cumple con **un manejador y
+  dos transportes**.
+- **Trae el nivel real del micrófono**: `state` gana el campo opcional `nivel` con
+  el RMS que entrega `onRmsChanged`, que en el navegador se simula.
+- **No trae el core, y no finge que lo trae**: por el puente cruzan seis de los
+  doce cuadros (`state`, `status`, `intent`, `assistant_message`, `user_message`,
+  `avatars`). `greeting`, `effect`, `proactive`, `timer` y `alarm` los produce el
+  lazo del portátil, así que en el teléfono **no suenan**: el reactor no vibra al
+  responder, no hay aviso de iniciativa ni cuenta atrás en el anillo.
+- **No trae cuerpo 3D**: `avatars` contesta lista vacía porque no hay ningún
+  `.vrm` en el repo (regla 7).
+- **No oye sola**: la vigilia («OK CORT» sin pulsar) pide captura continua y el
+  `SpeechRecognizer` de Android cierra tras cada frase; la rama del puente la
+  rechaza con `if (!escuchaOn) return`. En el teléfono se le habla **pulsando ●**.
+- **Sin verificar**: que `javac` acepte `Nexo.java` (eso lo dirá el runner), que el
+  `WebView` levante la cara en un Samsung A16 y a cuántos cuadros por segundo va
+  three.js con WebGL en ese teléfono.
 
 Lo único **visto en dedo** hasta hoy (dos capturas, 2026-10-15) es lo de `v0.14.4`:
 el APK instalado, la pantalla oscura con el anillo, el aviso «No encontré a CORT
@@ -370,9 +414,12 @@ Qué hay que saber:
   (la barra `red` en verde), que están en la misma Wi-Fi y que el puerto 8781 no lo
   tiene ocupado otro programa. Si no, usa el campo.
 
-Las **33** pruebas de `test_apk_manifesta.py` (16 del manifiesto, el build y el
-paquete + 6 del protocolo de divulgación + 11 de la pantalla de ajustes de nube)
-vigilan además que los literales del
+Las **79** pruebas de `test_apk_manifesta.py` (6 del manifiesto, 5 del build, 5 del
+paquete, 6 del protocolo de divulgación, 11 de la pantalla de ajustes de nube, 12
+del puente, 17 del traje de asistente y la visibilidad, 3 de lo que llega al runner y
+**14 de las seis clases de error que sólo existen al compilar**: los decimales sin
+`f`, las firmas `throws`, los retornos del SDK y el falso positivo que la propia
+guarda se fabricó con `Nexo.java`) vigilan además que los literales del
 Java sean **los mismos** que las constantes del lanzador: `SONDA`, `RESPUESTA` y
 `PUERTO_DIVULGACION` se comparan contra `cort.py`, así que cambiar el puerto o la
 palabra mágica en un lado sin cambiarlo en el otro revienta en `make test` y no
@@ -386,17 +433,21 @@ seguidos. Escribir ahí el nombre de un flag largo es la forma más rápida de
 romper el build, y el fallo se ve en el runner, no en `make test`. Por eso
 `services/core/tests/test_apk_manifesta.py` lee el archivo y lo valida, además de
 vigilar que el `<manifest>` no vuelva a fijar su propia versión, que el paquete
-`dev.sandra.cort` sea el mismo en el manifiesto, en la actividad y en las **nueve**
+`dev.sandra.cort` sea el mismo en el manifiesto, en la actividad y en las **diecisiete**
 capas de archivo del Java, que ningún import saque de la lista cerrada (`android.*`,
 `java.*`, `org.json.*` y `dev.sandra.cort`: aquí no hay AndroidX ni Kotlin porque
 no hay Gradle), que los cuatro permisos declarados sean exactamente los cuatro que
 usa el código y que todos los que se pueden negar sean *requitable*, y que
 `compilar.sh` siga pasando el `versionCode` derivado en lugar del `1` clavado y
-siga enlazando los `assets` donde vive la tabla.
+siga enlazando los `assets` — donde vive la tabla de frases y, desde `v0.17.0`,
+**también el `dist` de la cara**.
 
-**Cincuenta y cuatro** pruebas vigilan esta carpeta desde `make test`: **33** de manifiesto,
-build, paquete, protocolo y pantalla de nube (`test_apk_manifesta.py`) y **21** del cerebro
-(`test_apk_cerebro.py`). Éstas son las que de verdad sustituyen al compilador que
+**Ciento sesenta y ocho** pruebas vigilan esta carpeta desde `make test` (medidas el
+2026-10-15: `python3 -m unittest` sobre los cuatro módulos → `Ran 168 tests in 7,626 s /
+OK`): **79** de manifiesto, build, paquete, protocolo, pantalla de nube, puente, asistente
+y SDK (`test_apk_manifesta.py`), **34** del cerebro y la tabla (`test_apk_cerebro.py`),
+**27** de paridad con el orbe y la voz del PC (`test_apk_orbe.py`) y **28** de la cara
+embebida y su puente (`test_apk_web.py`, `v0.17.0`). Éstas son las que de verdad sustituyen al compilador que
 no existe en el portátil de la dueña: validan `habilidades.json` (una acción por
 fuera de la lista cerrada, un patrón sin normalizar, un hueco prometido y no
 rellenado: todo eso revienta aquí), cosean cada acción de la tabla con su `case`
@@ -411,10 +462,14 @@ que quería usar existen, y **después** se escribieron en el Java.
 
 ## La cara nativa, en una línea por archivo
 
-`MainActivity` decide qué se ve; `Cara` la pinta; `Cerebro` lee la tabla y dice
+`MainActivity` decide qué se ve; `Nexo` monta la cara del PC embebida si el `dist`
+viajó, y `Cara` pinta la nativa cuando no; `Cerebro` lee la tabla y dice
 qué acción es; `Acciones` la ejecuta; `Recuerdos` la recuerda; `Voz` la oye y la
-habla; `Nube` la pregunta cuando hay internet. Cada una de esas piezas tiene su
-prueba en `test_apk_cerebro.py` o en `test_apk_manifesta.py`, y la regla de siempre
+habla; `Nube` la pregunta cuando hay internet. Las dos caras —la embebida y la
+nativa— usan **el mismo** cerebro, las mismas manos y la misma base: lo que está
+duplicado hoy es la coreografía, y sacarla a un `Lazo.java` único es la deuda que
+`docs/STATUS.md` apunta desde este corte. Cada una de esas piezas tiene su
+prueba en `test_apk_cerebro.py`, en `test_apk_manifesta.py` o en `test_apk_web.py`, y la regla de siempre
 sigue en pie dentro del teléfono: **las acciones son una lista cerrada** (regla 6)
 — **quince**: `abrir`, `alarma`, `app`, `buscar`, `cronometro`, `decir`, `fecha`,
 `guardar`, `hora`, `linterna`, `listar`, `llamar`, `poner`, `saber`, `volumen`.
@@ -472,8 +527,14 @@ es lo que hay que mirar al instalar este APK.
 ## Compilar a mano (no hace falta)
 
 ```
-bash apps/apk/compilar.sh 0.15.0     # requiere ANDROID_HOME con build-tools y un platform
+bash apps/apk/compilar.sh 0.17.0     # requiere ANDROID_HOME con build-tools y un platform
 ```
 
 Está pensado para el pipeline (`.github/workflows/compilar-apk.yml`); en un
 portátil con SDK completo también funciona. En el de la dueña, no: sin `javac`.
+
+Si antes de correrlo se ha hecho `npm run build` en `apps/web` y el resultado está
+copiado a `apps/apk/assets/web/`, el APK sale **con la cara embebida**; sin esa
+carpeta sale igual y el teléfono muestra la cara nativa. El pipeline siempre la
+copia, y `test_apk_web.py` exige que copie **exactamente** el dossier que `Nexo.java`
+lee, para que el «sale igual» no se convierta en un orbe negro.

@@ -100,6 +100,39 @@ jobs:
             echo "Sin etiqueta sobre ${GITHUB_SHA:0:7}: el APK sale como 0.0.0 (build de comprobación)."
           fi
 
+      # La cara del teléfono ES la cara del PC (v0.17.0): el `dist` de `apps/web`
+      # viaja dentro del APK en `apps/apk/assets/web/` y lo sirve el WebView
+      # cortando las peticiones contra `https://cort.local`. Se compila **aquí** y
+      # no en el portátil de la dueña: `npm ci` + `vite build` sobre 1,8 GiB de RAM
+      # es exactamente la máquina que este proyecto nunca congeló por no probar.
+      # El directorio está en `.gitignore`: es generado, y la única copia buena es
+      # la que sale del `package-lock.json` de este commit.
+      - name: Bajar Node para la cara
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Compilar la cara del PC (la que va dentro del APK)
+        run: |
+          set -euo pipefail
+          cd apps/web
+          npm ci --no-audit --no-fund
+          npm run build
+          # `base: './'` en `vite.config.ts` es obligatorio para que esto funcione
+          # fuera de la raíz de un servidor: con `/assets/...` el teléfono pediría
+          # esos archivos a un host que no existe.
+          grep -q 'src="./assets/' dist/index.html || {
+            echo "::error::dist/index.html no usa rutas relativas: el WebView del APK no encontraría los módulos"
+            exit 1
+          }
+          rm -rf ../apk/assets/web
+          mkdir -p ../apk/assets/web
+          cp -r dist/. ../apk/assets/web/
+          du -sh ../apk/assets/web
+          ls ../apk/assets/web
+
       - name: Compilar
         run: |
           # `set +e` es obligatorio, no cosmético: el shell por defecto de GitHub
