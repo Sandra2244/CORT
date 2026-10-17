@@ -10,12 +10,17 @@ Se importa `empaquetar.py` por ruta, igual que las pruebas del lanzador: el scri
 vive fuera del paquete `cort_core` y no piensa instalar nada para poder correr.
 """
 import importlib.util
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
 EMPAQUETAR = Path(__file__).resolve().parents[3] / "scripts" / "empaquetar.py"
 REPO = EMPAQUETAR.parent.parent
+
+# `v0.17.0`, `0.17.0-3-g…`, `v1.2`; el guion de prefijo es opcional porque una
+# etiqueta sin `v` sigue siendo una versión.
+_PARECE_VERSION = re.compile(r"^v?\d+\.\d+")
 
 
 def cargar():
@@ -100,11 +105,28 @@ class TestArchivoReal(unittest.TestCase):
 
     @unittest.skipUnless((REPO / ".git").exists(), "sin git no hay versión que leer")
     def test_el_nombre_lleva_la_version_del_commit(self):
-        """Un archivo sin versión no se puede reclamar en un foro: es el de siempre."""
+        """Un archivo sin versión no se puede reclamar en un foro: es el de siempre.
+
+        Dos formas válidas y medida cada una. En el portátil hay etiquetas y
+        `git describe` devuelve `v0.17.0-3-gea447c8`. En el run 39075588328 de
+        GitHub el clon no traía etiquetas y `--always` cayó al hash (`ea447c84…`),
+        que **también** rastrea el commit exacto: exigir sólo la primera forma
+        ponía rojo el pipeline por una diferencia del clon, no del código. Lo que
+        no puede salir nunca es un nombre vacío ni `sin-version`, porque ahí es
+        donde el ZIP anónimo vuelve a confundirse con el de la semana pasada.
+        """
         modulo = cargar()
         version = modulo.version_de(REPO)
-        self.assertTrue(version and version != "sin-version")
-        self.assertRegex(version, r"^v?\d+\.\d+")
+        self.assertTrue(version, "la guarda devolvió una versión vacía")
+        self.assertNotEqual(version, "sin-version")
+        base = version.removesuffix("-dirty")
+        cabeza = modulo.git(REPO, "rev-parse", "HEAD")
+        es_version = bool(_PARECE_VERSION.match(base))
+        es_hash = len(base) >= 7 and cabeza.startswith(base)
+        self.assertTrue(
+            es_version or es_hash,
+            f"{version!r} no es ni etiqueta ni hash de HEAD ({cabeza[:12]!r})",
+        )
 
 
 if __name__ == "__main__":

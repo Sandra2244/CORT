@@ -1,7 +1,7 @@
-# Las 811 pruebas del proyecto, corriendo en un servidor y no en el portátil.
+# Las 819 pruebas del proyecto, corriendo en un servidor y no en el portátil.
 #
 # Por qué existe: hasta el 2026-10-17 este repo tenía dos pipelines —`compilar-apk`
-# y `publicar-release`— y **ninguno ejecutaba la suite**. Las 755 pruebas del núcleo
+# y `publicar-release`— y **ninguno ejecutaba la suite**. Las 763 pruebas del núcleo
 # y las 56 de la cara sólo se habían visto en verde en una máquina de 1,8 GiB y dos
 # núcleos que tarda 78 s en recorrerlas. Eso no es una red de seguridad: es una
 # costumbre. Un cambio que las rompa desde Windows, desde el colaborador o desde
@@ -30,10 +30,18 @@ on:
 
 jobs:
   nucleo:
-    name: núcleo Python (755 pruebas)
+    name: núcleo Python (763 pruebas)
     runs-on: ubuntu-latest
     steps:
+      # `fetch-depth: 0` no es un lujo: el checkout por defecto es superficial y
+      # **sin etiquetas**, así que `git describe --tags --always` devuelve el hash
+      # y el nombre del paquete sale sin versión. Descubrimiento del run
+      # 39075588328 (2026-10-17): la prueba de la versión se cayó en CI y pasó en
+      # el portátil justamente por eso. Con las etiquetas fetchadas, lo que se
+      # nombra aquí es lo mismo que se nombrará en el instalador.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -110,7 +118,11 @@ jobs:
     name: empaquetado sin secretos
     runs-on: ubuntu-latest
     steps:
+      # Con etiquetas, otra vez: este trabajo es el que produce el ZIP que se
+      # reparte, y un `CORT-fuente-ea447c8.zip` no se puede reclamar en un foro.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
