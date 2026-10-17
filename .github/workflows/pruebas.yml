@@ -74,8 +74,16 @@ jobs:
 
       - name: huella de la suite
         run: |
-          totales=$(grep -oE "^Ran [0-9]+ tests" /tmp/test.log | tail -n 1)
-          echo "::notice::${totales:-Ran ? tests} en $(grep -oE 'in [0-9,.]+ s' /tmp/test.log | tail -n 1)"
+          totales=$(grep -oE "^Ran [0-9]+ tests?" /tmp/test.log | tail -n 1)
+          # Medido en esta máquina con un caso mínimo: `unittest` escribe
+          # `Ran 1 test in 0.001s` — **sin espacio antes de la `s`** y con **punto**
+          # decimal. El regex anterior (`in [0-9,.]+ s`) no casa nunca, así que el
+          # annotation del primer run en verde (39076032701) salió diciendo
+          # `Ran 763 tests en ` y nada más: la fábrica funcionaba y su cartel estaba
+          # vacío. Los docs del proyecto escribían `101,725s` con coma por estilo del
+          # que los escribió, no por lo que imprime Python.
+          duracion=$(grep -oE "in [0-9]+(\.[0-9]+)?s" /tmp/test.log | tail -n 1)
+          echo "::notice::${totales:-Ran ? tests} ${duracion:-in ?s} en el servidor"
 
   cara:
     name: cara web (56 pruebas + tipos + compilado)
@@ -139,4 +147,10 @@ jobs:
           st=$?
           cat /tmp/empa.log
           if [ $st -ne 0 ]; then echo "::error::el empaquetado arrastra archivos prohibidos"; fi
+          # Y cuando pasa **también** habla: sin esto, el trabajo verde no deja ningún
+          # número en los annotations y desde fuera no se sabe si empaquetó 212
+          # entradas o 3. La log no es pública; el annotation sí.
+          entradas=$(grep -oE "^entradas  : [0-9]+" /tmp/empa.log | grep -oE "[0-9]+")
+          peso=$(grep -oE "^peso      : [0-9.]+ MB" /tmp/empa.log | sed 's/^peso      : //')
+          echo "::notice::empaquetado: ${entradas:-?} entradas, ${peso:-?}, guarda limpia"
           exit $st

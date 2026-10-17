@@ -7,7 +7,8 @@
 <p align="center">
   <img alt="Versión" src="https://img.shields.io/badge/versión-v0.17.0-6f4ff2?style=flat-square">
   <a href="https://github.com/Sandra2244/CORT/releases"><img alt="Releases" src="https://img.shields.io/badge/Releases-20%20publicadas-2ea44f?style=flat-square"></a>
-  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-811%20en%20verde-2ea44f?style=flat-square">
+  <a href="https://github.com/Sandra2244/CORT/actions/workflows/pruebas.yml"><img alt="pruebas en la fábrica" src="https://github.com/Sandra2244/CORT/actions/workflows/pruebas.yml/badge.svg"></a>
+  <img alt="Pruebas" src="https://img.shields.io/badge/pruebas-819%20(763%20%2B%2056)-2ea44f?style=flat-square">
   <img alt="Licencia" src="https://img.shields.io/badge/licencia-MIT-blue?style=flat-square">
   <img alt="Python" src="https://img.shields.io/badge/python-3.13%20(stdlib%20%2B%20FastAPI)-3776ab?style=flat-square">
   <img alt="React" src="https://img.shields.io/badge/React%2019-TypeScript-61dafb?style=flat-square">
@@ -115,7 +116,7 @@ Un mensaje recorre el sistema así (cada paso está probado, `test_protocol.py`)
 | **Capa instalable** | `apps/web/public/manifest.webmanifest`, `public/icons/` | `display: standalone`, tema `#02040c` y cuatro iconos generados con código propio a partir de `palette.ts`. **Sin service worker a propósito**: cachear una interfaz que depende del core daría un CORT que parece vivo sin estarlo |
 | **Lanzador** | `scripts/cort.py` + `CORT.desktop` + `cort.bat` | La única puerta soportada para encenderlo todo: banner de marca y **siete barras de estado** (core · interfaz · ollama · memoria · **audio** · **cámara** · red). Sin dependencias, ANSI con la estándar. `--demo` manda la memoria a `/tmp`; `--lan` es lo único que saca CORT de `127.0.0.1`, y con él el lanzador **contesta por UDP** a quien pregunte desde el teléfono (puerto 8781, `--sin-descubrimiento` para callarlo) |
 | **La cara del cuerpo** | `apps/web/src/cort/afecto.ts` + `cort/labios.ts` + `scene/Vrm.tsx` | Dos módulos **puros, sin DOM y sin Three**: `afecto.ts` pasa el `mood` del core a los cinco pesos de expresión del `.vrm` (con `MOOD_MS` de caducidad, porque un gesto que no se apaga es una máscara) y `labios.ts` convierte el texto que se va a decir en una agenda de sílabas con su visema. `Vrm.tsx` sólo los persigue cada cuadro. Se escribieron así para poder probarlos: a las **56 pruebas** de la cara en Node (`make test-web`) traen **21** entre las dos, y las otras 35 `cort/activacion.ts`, `cort/teclas.ts`, `cort/comandos.ts` y `cort/asoma.ts`. El estado afectivo lo afirma `services/core/cort_core/affect.py`, que sólo sabe de señales que ya ocurrieron en el servidor — y de un léxico cuando no hay señal — |
-| **Pruebas** | `services/core/tests/` + `apps/web/tests/` | **755** en Python con la biblioteca estándar (`make test`), 168 de ellas vigilando `apps/apk/` (34 del cerebro, 27 de paridad con el orbe del PC, 79 del manifiesto y las llamadas al SDK, 28 de la cara embebida) y **56** en Node con el runner propio de la cara (`make test-web`), cuatro de las pythoneras sobre `scripts/marca.py` — la marca se dibuja con código y se prueba como código: firma PNG, cabecera ICO y forma del anillo (núcleo claro, campo medio oscuro, banda cian). Con el rediseño por capas (2026-10-10) se fue el riel, y con él `cort/paneles.ts` y sus 17 pruebas de Node; volvieron el 2026-10-12 con `cort/activacion.ts`, `cort/labios.ts` y `cort/afecto.ts`, el 2026-10-13 con `cort/teclas.ts` — la tabla del teclado, que hasta entonces estaba repartida en tres archivos escritos a mano— y el mismo 13 con `cort/comandos.ts` (6), los mandos que se escriben en la charla, y con `cort/asoma.ts` (5), los topes de la arrancada — una cuenta que ya había estado mal y estaba escrita sólo en un comentario—. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
+| **Pruebas** | `services/core/tests/` + `apps/web/tests/` | **763** en Python con la biblioteca estándar (`make test`), 168 de ellas vigilando `apps/apk/` (34 del cerebro, 27 de paridad con el orbe del PC, 79 del manifiesto y las llamadas al SDK, 28 de la cara embebida), 8 vigilando el **empaquetado** (`scripts/empaquetar.py`: que ningún `.env` pueda salir en un ZIP) y **56** en Node con el runner propio de la cara (`make test-web`), cuatro de las pythoneras sobre `scripts/marca.py` — la marca se dibuja con código y se prueba como código: firma PNG, cabecera ICO y forma del anillo (núcleo claro, campo medio oscuro, banda cian). Con el rediseño por capas (2026-10-10) se fue el riel, y con él `cort/paneles.ts` y sus 17 pruebas de Node; volvieron el 2026-10-12 con `cort/activacion.ts`, `cort/labios.ts` y `cort/afecto.ts`, el 2026-10-13 con `cort/teclas.ts` — la tabla del teclado, que hasta entonces estaba repartida en tres archivos escritos a mano— y el mismo 13 con `cort/comandos.ts` (6), los mandos que se escriben en la charla, y con `cort/asoma.ts` (5), los topes de la arrancada — una cuenta que ya había estado mal y estaba escrita sólo en un comentario—. El Ollama y el clima se fingen con `httpx.MockTransport`, el ejecutor de acciones con un `runner` inyectable, la red con un `CORT_HOST` y un `CORT_LAN_TOKEN` de mentira, y los atuendos con un directorio falso en `tempfile`: **la suite no le mueve el audio, no le escribe la memoria a nadie, no le lee su carpeta de modelos y no hace una sola petición a internet** |
 
 ## Protocolo WebSocket
 
@@ -204,8 +205,9 @@ El inventario completo, con estado y viabilidad por sistema operativo, está en 
 | Gestos y visión (desenfoque con cámara, arrastrar paneles, MediaPipe, rostro, descripción de cámara) | 13 | 1 | 1 | 11 |
 | Control de dispositivos (apps, brillo, captura, notificaciones…) | 7 | 1 | 1 | 5 |
 | Sensores y contexto (cámara en el arranque, temperatura, red, MQTT, preferencias) | 10 | 2 | 0 | 8 |
-| El asistente que actúa (herramientas de lista cerrada, reloj en español, agenda que suena, bucle proponer→ejecutar→medir, nube opcional, APK y su cerebro nativo en el teléfono) | 25 | 11 | 14 | 0 |
-| **Total** | **108** | **40** | **30** | **38** |
+| El asistente que actúa (herramientas de lista cerrada, reloj en español, agenda que suena, bucle proponer→ejecutar→medir, nube opcional, APK y su cerebro nativo en el teléfono) | 27 | 11 | 16 | 0 |
+| La fábrica (empaquetado sin secretos, la suite en el servidor, instaladores) | 2 | 2 | 0 | 0 |
+| **Total** | **112** | **42** | **32** | **38** |
 
 Las cifras las cuenta `docs/FUNCTIONS.md`, que es el inventario largo con la evidencia de cada fila, **expandiendo los rangos** (la fila «38-44» son siete funciones, no una). No se pasan a mano: las escupe `python scripts/cuenta_funciones.py`, que lee ese documento y escribe esta tabla tal cual. Antes del script el README llegó a decir 77 con 82 filas contadas en el inventario — un número tecleado a mano es un número que se desfasa solo (regla 11)—.
 
@@ -288,9 +290,9 @@ CORT/
 │   ├── lanza-android.json · devuelve-android.json # 12 `throws` (dos clases) y 26 retornos (ocho clases), leídos del mismo sitio: ni `Set<Voice>` recibido en `List`, ni `onPageFinished` en el cliente equivocado
 │   ├── AndroidManifest.xml · res/ (los iconos, dibujados por `scripts/marca.py`) · compilar.sh · llave/ (fuera de git)
 │   └── README.md             # cómo se usa, cómo se firma y qué no puede hacer este APK
-├── scripts/                  # cort.py (lanzador) · install-desktop.sh · pruebas-web.mjs · nota_release.py · cuenta_funciones.py · marca.py (dibuja el icono) · etiqueta_del_commit.py · simbolos_android.py
-├── .github/workflows/        # publicar-release.yml · compilar-apk.yml (el único sitio donde hay SDK)
-├── docs/                     # STATUS · ARCHITECTURE · ROADMAP · FUNCTIONS · PLATFORM · REFERENCIAS · VISION
+├── scripts/                  # cort.py (lanzador) · install-desktop.sh · pruebas-web.mjs · nota_release.py · cuenta_funciones.py · marca.py (dibuja el icono) · etiqueta_del_commit.py · simbolos_android.py · empaquetar.py (el ZIP que no puede llevar secretos)
+├── .github/workflows/        # pruebas.yml (819 pruebas en el servidor) · publicar-release.yml · compilar-apk.yml (el único sitio donde hay SDK)
+├── docs/                     # STATUS · ARCHITECTURE · ROADMAP · FUNCTIONS · PLATFORM · REFERENCIAS · VISION · ANALISIS-2026-10-17 (fallas medidas y plan por fases)
 ├── upstream/                 # referencias de terceros: solo lectura, con licencia
 ├── CORT.desktop · cort.bat   # doble clic en Linux y Windows
 ├── Makefile · AGENTS.md · CREDITS.md · LICENSE
@@ -490,9 +492,19 @@ Lo que esto ya trae para el teléfono: interfaz táctil (pulsaciones de 44-48 px
 ### Paso 8 · Comprobar que nada se rompió
 
 ```bash
-make test      # 571 pruebas del core, ~77-120 s en esta máquina (según carga)
+make test      # 763 pruebas del core, ~77-120 s en esta máquina (según carga)
 make test-web  #  56 pruebas de la cara (Node 20, sin navegador), ~10 s
 ```
+
+Y sin tocar nada de esto: la misma suite corre **en el servidor** en cada `push` y
+cada PR desde [`.github/workflows/pruebas.yml`](.github/workflows/pruebas.yml) (alta el 2026-10-17,
+después de `v0.17.0`) — tres trabajos, `nucleo`
+(763), `cara` (56 + `tsc` estricto + compilado) y `guarda` (el ZIP sin secretos). No es un detalle
+estético: este portátil tarda ~110 s en recorrerla y tiene 1,8 GiB, así que «acordarse de hacer
+`make test`» era la única red que había. Un cambio roto desde Windows o desde otra máquina llegaba a
+la Release sin que nadie lo notara. Si la CI se pone en rojo y no tienes sesión de `gh` para ver la
+log, el final del log está publicado como **annotation** del check-run: `make` no cambia de nombre,
+el `::error::` sí se lee sin credenciales.
 
 `test-web` tiene historia: existió hasta `v0.10.1` con 17 pruebas del riel de paneles, el rediseño por capas del 2026-10-10 borró el riel y su módulo de estado, y el objetivo se fue con lo que probaba. Volvió el 2026-10-12 con la voz reescrita por módulos, porque la frase de activación (`cort/activacion.ts`) es lógica pura y la regla 3 de `AGENTS.md` dice que eso vuelve a llevar su prueba; el mismo 2026-10-12 se le sumaron `cort/labios.ts` (11) y `cort/afecto.ts` (10), las dos mitades de la cara del cuerpo, escritas como módulo puro **precisamente** para poder probarlas sin pantalla, el 2026-10-13 `cort/teclas.ts` (12), la tabla del teclado que estaba repartida en tres archivos, y `cort/comandos.ts` (6): los mandos que se le escriben a la charla y levantaban su ventana desde una lista incrustada en el componente. El mismo día salió de `cort/arrastre.ts` la geometría pura de sus topes, `cort/asoma.ts` (5 pruebas), porque esa cuenta ya había estado equivocada una vez y su error sólo estaba en un comentario. Son **56** y se ejecutan en ~10 s. Sigue siendo **una suite aparte a propósito**: el core y sus pruebas son Python puro, y quien no tenga Node instalado tiene que poder comprobar el cerebro igual.
 

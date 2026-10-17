@@ -38,6 +38,8 @@ SECCIONES = [
                               "cerrada, reloj en español, agenda que suena, bucle "
                               "proponer→ejecutar→medir, nube opcional, APK y su "
                               "cerebro nativo en el teléfono)"),
+    ("La fábrica", "La fábrica (empaquetado sin secretos, la suite en el "
+                   "servidor, instaladores)"),
 ]
 
 HECHA, CURSO, PEND = "✅", "🔨", "⬜"

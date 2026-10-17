@@ -2,7 +2,32 @@
 
 > **Este archivo es la fuente de verdad operativa.** Cualquier agente (Qoder, OpenCode, Claude, DeepSeek)
 > lee `AGENTS.md` + este archivo y continúa desde aquí. No se confía en chats anteriores.
-> Última verificación: **2026-10-16 (18)**: **`CORT-v0.17.0.apk` está publicado, bajado y abierto en
+> Última verificación: **2026-10-17 (19)**: **la fábrica existe y lo primero que hizo fue pillarse a sí
+> misma.** Dos commits nuevos sobre `main`: `2d2b451` (`docs/ANALISIS-2026-10-17.md`: las once fallas
+> F1–F11 con su `archivo:línea`, las siete referencias vistas fotograma a fotograma, el plan en siete
+> fases) y `ea447c8` + `686bec6` (Fase 0 y media Fase 2). Lo material: `scripts/empaquetar.py` —`git
+> archive HEAD` como único camino, con la lista cerrada de lo prohibido y su prueba—,
+> `.github/workflows/pruebas.yml` —tres trabajos: `nucleo`, `cara`, `guarda`— y
+> `services/core/tests/test_empaquetar.py` (**8 pruebas**, `Ran 8 tests in 3.047s / OK` aquí; sobre el
+> commit: **215 entradas**, **3.604.796 B**, guarda limpia). **El censo sube de 811 a 819** (763 Python +
+> 56 web) y **763 es ahora un número ejecutado en el servidor, no contado en el portátil**: run
+> **39076032701** de `pruebas`, los tres trabajos **success** con `Ran 763 tests` en el annotation. Antes
+> de eso el primer run (**39075588328**) salió **rojo**, y ése es el argumento a favor: la prueba de la
+> versión exigía `^v?\d+\.\d+` sobre `git describe`, pero el checkout de GitHub es superficial **sin
+> etiquetas**, así que el comando cae al hash — medía la forma del clon, no el código—. Corregido hacia
+> adelante (`fetch-depth: 0` + la prueba acepta etiqueta **o** hash prefijo de `HEAD`, nunca la cadena
+> vacía), sin mover ninguna etiqueta publicada. Las tres decisiones de la dueña de hoy están escritas en
+> `docs/ANALISIS-2026-10-17.md` §6: **suelto sobre el escritorio** (Electron, construido sólo en CI),
+> **seguridad y fábrica antes que el ejecutor** (0 → 2 → 1 → 3) y **voz local sin nube** (Vosk + Piper).
+> `compilar-apk` dio **success** sobre `686bec6` (run **39076032790**): el `javac` del runner sigue siendo
+> el único compilador real del proyecto, y las **17** clases Java no se han compilado nunca aquí.
+> `publicar-release` terminó **success** y **no publicó nada**: este commit no está etiquetado, así que
+> `v0.17.0` sigue siendo la última Release con sus 2 archivos. **Sin verificar**: que la dueña **rote la
+> clave de API que viajó en el ZIP de Windows** — eso es suyo y ningún código lo hace—, que el
+> annotation del próximo run llegue con la duración (el regex buscaba `in … s` con espacio y `unittest`
+> imprime `in 0.001s`, así que el cartel salía vacío de número), y todo lo del dedo en el teléfono, que
+> sigue igual que anteayer.
+> Verificación anterior: **2026-10-16 (18)**: **`CORT-v0.17.0.apk` está publicado, bajado y abierto en
 > esta máquina**, y es el primer binario que lleva dentro la cara del PC. La etiqueta la creó el propio
 > `publicar-release` al empujar `main` (apunta a `db5bf71`, el commit del corte; la probé a crear yo en
 > local y el `push` la rechazó por ya existir — **una etiqueta publicada no se mueve**, así que el
