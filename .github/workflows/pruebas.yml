@@ -1,0 +1,130 @@
+# Las 811 pruebas del proyecto, corriendo en un servidor y no en el portátil.
+#
+# Por qué existe: hasta el 2026-10-17 este repo tenía dos pipelines —`compilar-apk`
+# y `publicar-release`— y **ninguno ejecutaba la suite**. Las 755 pruebas del núcleo
+# y las 56 de la cara sólo se habían visto en verde en una máquina de 1,8 GiB y dos
+# núcleos que tarda 78 s en recorrerlas. Eso no es una red de seguridad: es una
+# costumbre. Un cambio que las rompa desde Windows, desde el colaborador o desde
+# otro agente llegaría a la Release sin que nadie lo notara.
+#
+# Por qué tres trabajos y no uno: `nucleo` es Python puro y no necesita Node;
+# `cara` es TypeScript y necesita `node_modules`; `guarda` comprueba que lo
+# versionado se puede empaquetar sin secretos. Separarlos significa que un fallo
+# de npm no tape uno de Python, y que el que quiera ver su cambio verde sepa en
+# qué capa está el rojo.
+#
+# Por qué el `set +e` y el `::error::`: el shell de un paso de GitHub se comporta
+# como `bash -e`, así que la línea que falla se lleva el paso por delante antes de
+# que cualquier instrumentación pueda hablar. Se captura la salida a un fichero, se
+# mira el código de salida y, si es rojo, **el final del log se publica como
+# annotation del check-run**. Las logs de Actions de un repo público no son públicas
+# (la API de logs pide `admin:read`); los annotations sí, y esa es la única ventana
+# que tiene quien mira desde fuera sin sesión de `gh`.
+name: pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  nucleo:
+    name: núcleo Python (755 pruebas)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # `make setup` es el mismo camino que sigue la dueña en su máquina: si la CI
+      # montara el entorno por su cuenta, podría estar aprobando un arranque que en
+      # ningún sitio real funciona.
+      - name: montar el entorno
+        run: |
+          set +e
+          make setup > /tmp/setup.log 2>&1
+          st=$?
+          tail -n 25 /tmp/setup.log
+          if [ $st -ne 0 ]; then echo "::error::make setup falló (exit $st)"; exit $st; fi
+
+      - name: suite del núcleo
+        run: |
+          set +e
+          make test > /tmp/test.log 2>&1
+          st=$?
+          tail -n 40 /tmp/test.log
+          if [ $st -ne 0 ]; then
+            echo "::error::la suite del núcleo quedó en rojo (exit $st)"
+            # El resumen de unittest vive al final; se sacan también las líneas de
+            # error concretas, que son las que dicen qué prueba hubo que reescribir.
+            grep -E "^(FAIL|ERROR):" /tmp/test.log | head -n 20 | sed 's/^/::error::/'
+          fi
+          exit $st
+
+      - name: huella de la suite
+        run: |
+          totales=$(grep -oE "^Ran [0-9]+ tests" /tmp/test.log | tail -n 1)
+          echo "::notice::${totales:-Ran ? tests} en $(grep -oE 'in [0-9,.]+ s' /tmp/test.log | tail -n 1)"
+
+  cara:
+    name: cara web (56 pruebas + tipos + compilado)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: dependencias de la cara
+        working-directory: apps/web
+        run: npm ci
+
+      # `make web-build` es `typecheck` + `build`: el `tsc` estricto es el que
+      # detecta el nombre que cambió de archivo y el `useState` que se olvidó de
+      # importarse, y el compilado es lo que después viaja dentro del APK.
+      - name: tipos y compilado
+        run: |
+          set +e
+          make web-build > /tmp/build.log 2>&1
+          st=$?
+          tail -n 30 /tmp/build.log
+          if [ $st -ne 0 ]; then echo "::error::la cara no compila (exit $st)"; fi
+          exit $st
+
+      - name: pruebas de la cara
+        run: |
+          set +e
+          make test-web > /tmp/testweb.log 2>&1
+          st=$?
+          tail -n 30 /tmp/testweb.log
+          if [ $st -ne 0 ]; then echo "::error::las pruebas de la cara quedaron en rojo (exit $st)"; fi
+          exit $st
+
+  guarda:
+    name: empaquetado sin secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # La prueba de la prueba: si alguien hace `git add -f` de un `.env` o sube un
+      # `build/` de Android, este trabajo se pone rojo **antes** de que ese archivo
+      # llegue a una Release. El 2026-10-17 se encontró un ZIP del proyecto con 26
+      # variables reales dentro; esto existe para que no se repita.
+      - name: el archivo de fuente pasa la guarda
+        run: |
+          set +e
+          python3 scripts/empaquetar.py --destino /tmp > /tmp/empa.log 2>&1
+          st=$?
+          cat /tmp/empa.log
+          if [ $st -ne 0 ]; then echo "::error::el empaquetado arrastra archivos prohibidos"; fi
+          exit $st
