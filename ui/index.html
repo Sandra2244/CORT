@@ -2,184 +2,59 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>C.O.R.T.</title>
-<style>
-  html,body{margin:0;height:100%;background:#02040a;overflow:hidden;
-    font-family:'Segoe UI',system-ui,sans-serif;color:#9fdcff}
-  #scene{position:fixed;inset:0}
-  .panel{position:fixed;background:rgba(6,18,34,.55);border:1px solid rgba(80,190,255,.35);
-    border-radius:10px;backdrop-filter:blur(6px);box-shadow:0 0 24px rgba(0,150,255,.12) inset}
-  #top{top:14px;left:50%;transform:translateX(-50%);padding:6px 26px;letter-spacing:.45em;
-    font-size:13px;text-transform:uppercase;text-align:center}
-  #top b{color:#fff}
-  #status{top:14px;left:14px;padding:8px 12px;font-size:11px;line-height:1.6;max-width:250px}
-  #clock{top:14px;right:14px;padding:8px 14px;font-size:20px;font-family:Consolas,monospace;
-    letter-spacing:.15em;color:#cfefff}
-  #chat{bottom:16px;right:16px;width:min(420px,92vw);max-height:56vh;display:flex;flex-direction:column}
-  #log{overflow-y:auto;padding:10px 12px;font-size:13px;line-height:1.5;flex:1}
-  #log p{margin:.45em 0}
-  .u{color:#5fd0ff}.u::before{content:"› "}
-  .a{color:#e8f6ff}.a::before{content:"CORT › "}
-  .src{font-size:10px;color:#4b7f9e;margin-left:6px}
-  #inputrow{display:flex;border-top:1px solid rgba(80,190,255,.25)}
-  #q{flex:1;background:transparent;border:0;outline:0;color:#dff4ff;padding:10px 12px;font-size:13px}
-  #go{background:rgba(0,160,255,.15);border:0;border-left:1px solid rgba(80,190,255,.25);
-    color:#9fdcff;padding:0 16px;cursor:pointer}
-  #go:hover{background:rgba(0,160,255,.35)}
-  #mic{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);width:54px;height:54px;
-    border-radius:50%;border:1px solid rgba(80,190,255,.5);background:rgba(6,18,34,.6);
-    color:#9fdcff;font-size:20px;cursor:pointer;transition:.2s}
-  #mic.on{box-shadow:0 0 26px #19b3ff;border-color:#19b3ff;color:#fff}
-</style>
+<link rel="stylesheet" href="css/hud.css">
 </head>
 <body>
 <div id="scene"></div>
-<div class="panel" id="top"><b>C.O.R.T.</b> · Cognitive Orchestrator / Real-Time</div>
+
+<!-- secuencia de arranque -->
+<div id="boot"></div>
+
+<!-- HUD superior -->
+<div class="panel" id="top"><b>C.O.R.T.</b> · Cognitive Orchestrator / Real-Time
+  <div class="sub">a sus órdenes</div></div>
 <div class="panel" id="status">conectando…</div>
 <div class="panel" id="clock">--:--:--</div>
-<div class="panel" id="chat"><div id="log"></div>
-  <div id="inputrow"><input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
-  <button id="go">⏎</button></div></div>
+
+<!-- panel de archivos (se abre solo al arrancar, como en la referencia) -->
+<div class="panel hidden-left" id="files">
+  <header><span>Archivos · <b id="fpath">…</b></span><span>✕</span></header>
+  <div id="flist"></div>
+</div>
+
+<!-- panel de entorno: clima + barras de sensores -->
+<div class="panel hidden-right" id="env">
+  <div style="letter-spacing:.2em;font-size:10px;text-transform:uppercase;color:#5e8cab">entorno</div>
+  <div id="wx">…</div>
+  <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
+  <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
+  <div style="font-size:10px;color:#5e8cab">DISCO</div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
+  <div id="batt" style="margin-top:6px;font-size:11px"></div>
+</div>
+
+<!-- chat -->
+<div class="panel hidden-down" id="chat">
+  <div id="log"></div>
+  <div id="inputrow">
+    <input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
+    <button id="go">⏎</button>
+  </div>
+</div>
 <button id="mic" title="Hablar">🎙</button>
 
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
 </script>
 <script type="module">
-import * as THREE from 'three';
-const API = 'http://127.0.0.1:8000';
-
-/* ---------- ORB: núcleo de partículas + anillos + estrellas ---------- */
-const scene = new THREE.Scene();
-const cam = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, .1, 100);
-cam.position.z = 6;
-const ren = new THREE.WebGLRenderer({antialias:true, alpha:true});
-ren.setSize(innerWidth, innerHeight);
-ren.setPixelRatio(Math.min(devicePixelRatio, 2));
-document.getElementById('scene').appendChild(ren.domElement);
-
-// núcleo: puntos sobre esfera
-const N = 2600, pos = new Float32Array(N*3), base = new Float32Array(N*3);
-for (let i=0;i<N;i++){
-  const t=Math.acos(2*Math.random()-1), p=Math.random()*Math.PI*2, r=1.15;
-  base[i*3]=pos[i*3]=r*Math.sin(t)*Math.cos(p);
-  base[i*3+1]=pos[i*3+1]=r*Math.cos(t);
-  base[i*3+2]=pos[i*3+2]=r*Math.sin(t)*Math.sin(p);
-}
-const geo = new THREE.BufferGeometry();
-geo.setAttribute('position', new THREE.BufferAttribute(pos,3));
-const core = new THREE.Points(geo, new THREE.PointsMaterial({
-  color:0x39c2ff, size:.028, transparent:true, opacity:.95,
-  blending:THREE.AdditiveBlending, depthWrite:false}));
-scene.add(core);
-
-// halo suave
-const halo = new THREE.Mesh(new THREE.SphereGeometry(1.02, 32, 32),
-  new THREE.MeshBasicMaterial({color:0x0a66aa, transparent:true, opacity:.16}));
-scene.add(halo);
-
-// dos anillos orbitando
-function ring(rad, tilt, col){
-  const g = new THREE.TorusGeometry(rad, .004, 8, 160);
-  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({color:col, transparent:true, opacity:.6}));
-  m.rotation.x = tilt; scene.add(m); return m;
-}
-const r1 = ring(1.75, 1.35, 0x2fb9ff), r2 = ring(2.15, 1.9, 0x7f6bff);
-
-// estrellas de fondo
-const S = 900, sp = new Float32Array(S*3);
-for (let i=0;i<S*3;i++) sp[i]=(Math.random()-.5)*60;
-const starsG = new THREE.BufferGeometry();
-starsG.setAttribute('position', new THREE.BufferAttribute(sp,3));
-scene.add(new THREE.Points(starsG, new THREE.PointsMaterial({
-  color:0x9fd8ff, size:.05, transparent:true, opacity:.5, depthWrite:false})));
-
-/* dispersión: 0 = esfera compacta, 1 = explosión de estrellas en círculo */
-let energy = 0, target = 0;
-const v3 = new THREE.Vector3();
-function tick(t){
-  requestAnimationFrame(tick);
-  energy += (target-energy)*.06;
-  const p = geo.attributes.position.array;
-  for (let i=0;i<N;i++){
-    const bx=base[i*3], by=base[i*3+1], bz=base[i*3+2];
-    const d = 1 + energy*1.6 + Math.sin(t*.0016 + i)*.04*energy;
-    // al dispersar, estira hacia un anillo ecuatorial
-    p[i*3]   = bx*d + Math.sin(i*7.13)*energy*.12;
-    p[i*3+2] = bz*d + Math.cos(i*3.71)*energy*.12;
-    p[i*3+1] = by*(1-energy*.75);
-  }
-  geo.attributes.position.needsUpdate = true;
-  core.rotation.y = t*.00022 + energy*t*.0004;
-  r1.rotation.z = t*.0004; r2.rotation.y = t*.0003;
-  halo.scale.setScalar(1+Math.sin(t*.003)*.03+energy*.4);
-  core.material.size = .028 + energy*.01;
-  ren.render(scene, cam);
-}
-requestAnimationFrame(tick);
-addEventListener('resize', ()=>{
-  cam.aspect = innerWidth/innerHeight; cam.updateProjectionMatrix();
-  ren.setSize(innerWidth, innerHeight);
-});
-const speak = (ms=2600)=>{ target=1; setTimeout(()=>target=0, ms); };
-
-/* ---------- reloj + estado ---------- */
-setInterval(()=>document.getElementById('clock').textContent=
-  new Date().toLocaleTimeString('es-MX',{hour12:false}), 500);
-async function refreshStatus(){
-  try{
-    const s = await (await fetch(API+'/api/status')).json();
-    const b = s.brain;
-    const dot = ok => ok?'🟢':'';
-    document.getElementById('status').innerHTML =
-      `${dot(b.ollama)} local ${b.ollama?'· '+b.ollama_model:'(no disponible)'}<br>`+
-      `${dot(b.groq||b.gemini)} online ${b.groq?'· Groq':(b.gemini?'· Gemini':'(sin API key)')}<br>`+
-      `<span style="color:#5e8cab">${s.system}</span>`;
-  }catch{ document.getElementById('status').textContent='⚠ backend no detectado (puerto 8000)'; }
-}
-refreshStatus(); setInterval(refreshStatus, 15000);
-
-/* ---------- chat ---------- */
-const log = document.getElementById('log');
-function add(cls, text, src){
-  const p = document.createElement('p'); p.className = cls;
-  p.textContent = text;
-  if (src){ const s=document.createElement('span'); s.className='src'; s.textContent='['+src+']'; p.appendChild(s); }
-  log.appendChild(p); log.scrollTop = log.scrollHeight;
-}
-add('a','Sistemas en línea. CORT a sus órdenes.', 'sistema');
-async function send(){
-  const q = document.getElementById('q');
-  const msg = q.value.trim(); if(!msg) return;
-  q.value=''; add('u', msg); speak(900);
-  try{
-    const r = await (await fetch(API+'/api/chat',{method:'POST',
-      headers:{'content-type':'application/json'}, body:JSON.stringify({message:msg})})).json();
-    add('a', r.reply, r.source); speak(2800);
-  }catch{ add('a','Sin conexión con el backend. Ejecuta scripts/run para iniciarlo.','error'); }
-}
-document.getElementById('go').onclick = send;
-document.getElementById('q').addEventListener('keydown', e=>{ if(e.key==='Enter') send(); });
-
-/* ---------- voz (Web Speech API, gratis y local en Chrome/Edge) ---------- */
-const mic = document.getElementById('mic');
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-if (SR){
-  const rec = new SR(); rec.lang='es-MX'; rec.interimResults=false;
-  let on=false;
-  mic.onclick=()=>{ on?rec.stop():rec.start(); };
-  rec.onstart=()=>{ on=true; mic.classList.add('on'); speak(999999); };
-  rec.onend=()=>{ on=false; mic.classList.remove('on'); target=0; };
-  rec.onresult=e=>{ document.getElementById('q').value=e.results[0][0].transcript; send(); };
-} else mic.style.display='none';
-
-// CORT habla con la voz del sistema (temporal; Piper llega en F5)
-function say(text){
-  if(!('speechSynthesis' in window)) return;
-  const u=new SpeechSynthesisUtterance(text.slice(0,400));
-  u.lang='es-MX'; u.rate=1.05; speechSynthesis.speak(u);
-}
-const _add=add; add=function(c,t,s){ _add(c,t,s); if(c==='a'&&s!=='sistema') say(t); };
+import { initORB } from './js/orb.js';
+import { wireUI } from './js/hud.js';
+const orb = initORB(document.getElementById('scene'));
+wireUI(orb);
+// los paneles de chat y entorno entran deslizándose tras el arranque
+setTimeout(()=>document.getElementById('env').classList.remove('hidden-right'), 200);
+setTimeout(()=>document.getElementById('chat').classList.remove('hidden-down'), 400);
 </script>
 </body>
 </html>

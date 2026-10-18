@@ -30,7 +30,7 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 2. **Arrancar**:
    - Linux: `bash scripts/run.sh`
    - Windows: doble clic en `scripts\run.bat`
-3. **Abrir el holograma**: `cort/ui/index.html` en Chrome/Edge.
+3. **Abrir el holograma**: escribe `http://localhost:8080` en Chrome/Edge.
 
 ### Opcional — activar la IA conversacional
 
@@ -45,18 +45,22 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 
 | Ruta | Qué es |
 |------|--------|
-| `backend/app/main.py` | API FastAPI (`/api/chat`, `/api/status`, `/api/history`, `/api/profile`) |
+| `backend/app/main.py` | API FastAPI (`/api/chat`, `/api/status`, `/api/files`, `/api/weather`, `/api/history`, `/api/profile`) |
 | `backend/app/brain.py` | Cerebro híbrido y enrutador |
 | `backend/app/local_commands.py` | Comandos instantáneos sin IA |
+| `backend/app/sensors.py` | Explorador de archivos seguro + clima (Open-Meteo) |
 | `backend/app/memory.py` | Memoria persistente SQLite |
-| `ui/index.html` | Holograma: orb Three.js + HUD + voz |
+| `ui/index.html` + `ui/css` + `ui/js` | Holograma: orb Three.js + HUD + voz |
+| `docs/` | Plan de arquitectura y fotogramas de referencia |
 | `scripts/run.sh` / `run.bat` | Arranque en Linux / Windows |
 
 ## Estado del proyecto (hoja de ruta F0–F7)
 
 - [x] F1 Backend híbrido + memoria + comandos locales — **probado en Linux**
 - [x] F2 Orb Three.js + chat + reloj + micrófono — **probado en navegador**
-- [ ] F3 Paneles HUD (archivos, clima, sensores animados)
+- [x] F3 Paneles HUD: secuencia de arranque, explorador de archivos (raíces
+      seguras), clima real, barras CPU/RAM/disco animadas, orb que se dispersa
+      en círculo de estrellas — **probado en Linux**
 - [ ] F4 Gestos con MediaPipe (palma abre, pinza agarra)
 - [ ] F5 Wake word "Oye CORT" + Piper TTS + perfil personalizable
 - [ ] F6 Electron transparente + instaladores .exe / .AppImage

@@ -101,6 +101,14 @@ def local_command(message: str) -> str | None:
         return local_commands.battery()
     if re.search(r"\b(cpu|procesador|ram|memoria)\b", m):
         return local_commands.system_stats()
+    if re.search(r"\bclima|temperatura|qué tiempo|que tiempo\b", m):
+        import sensors
+        w = sensors.weather()
+        return (f"Exterior: {w['temp']:.0f} °C, {w['cielo']}, viento {w['viento']:.0f} km/h."
+                if w.get("ok") else "No pude obtener el clima (¿sin internet?).")
+    if re.search(r"\b(archivos|carpetas|explorador)\b", m) and len(m) < 30:
+        return ("Abriendo el panel de archivos en tu holograma. "
+                "También puedes decirme: muestra documentos.")
     if re.search(r"\b(hola|buenas|buenos días|buenas tardes)\b", m) and len(m) < 24:
         return local_commands.greeting()
     return None

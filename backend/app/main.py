@@ -5,6 +5,8 @@ Endpoints:
   GET  /api/status                       -> estado del cerebro híbrido + sistema
   GET  /api/history                      -> últimas respuestas recordadas
   POST /api/profile   {clave, valor}     -> memoria de preferencias
+  GET  /api/files?path=                  -> explorador de carpetas (raíces seguras)
+  GET  /api/weather                      -> clima actual (Open-Meteo, cacheado)
 """
 from __future__ import annotations
 
@@ -23,6 +25,7 @@ except ImportError:
 from brain import brain_status, think          # noqa: E402
 import memory                                   # noqa: E402
 import local_commands                           # noqa: E402
+import sensors                                  # noqa: E402
 
 from fastapi import FastAPI                     # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
@@ -34,6 +37,7 @@ app = FastAPI(title="CORT", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173",
+                   "http://localhost:8080", "http://127.0.0.1:8080",
                    "http://localhost:3000", "http://127.0.0.1:3000", "null"],
     allow_methods=["*"], allow_headers=["*"],
 )
@@ -79,3 +83,13 @@ def history(n: int = 10):
 def profile(p: Perfil):
     memory.set_profile(p.clave, p.valor)
     return {"ok": True}
+
+
+@app.get("/api/files")
+def files(path: str = ""):
+    return sensors.list_dir(path)
+
+
+@app.get("/api/weather")
+def weather():
+    return sensors.weather()
