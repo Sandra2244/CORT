@@ -123,6 +123,19 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       monoespaciada en mayúsculas, barras de ventana `▸ NN · NOMBRE`, filas de
       archivos/notas/canciones como tiras en filo con ▸, botones ─/✕ cuadrados
       y la pista "playing" crece y brilla como el panel PROPS del video.
+- [x] **Interfaz Jared Hood completa** (análisis profundo de su video, commit
+      eaccfcc): **Árbol del sistema** — columna derecha persistente con las
+      raíces numeradas `▸ 00 · Documentos` + subtira «39 items · fecha» (el
+      conteo lo calcula el backend) y pie **CORT'S BRAIN** que abre el perfil;
+      **HUD ocultable** — «oculta todo» / «muestra todo», botón ◫ OCULTAR en el
+      dock y gesto de puño (recuerda qué ventanas estaban abiertas y las
+      devuelve); **chips flotantes** — «muéstrame las notas» / «archivos
+      recientes» lanza a la pantalla virutas con borde en filo que flotan y se
+      pueden tocar (como cuando Jared agarra archivos con las manos), y al
+      arrancar CORT te saluda mostrando tus últimas notas; **chispas azules**
+      que salen eyectadas del portal toroidal al ejecutar (el anillo de fuego
+      del video, en versión CORT). Títulos de ventana con contadores en vivo
+      («raíces · 6 items»).
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre
