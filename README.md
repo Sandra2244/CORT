@@ -26,6 +26,10 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 
 ## Instalación (3 pasos)
 
+> **Si llegas por ZIP:** descomprime y entra en la carpeta `CORT-0.2-demo`
+> antes del paso 2. Si prefieres git: `git clone -b v0.2-demo
+> https://github.com/Sandra2244/CORT.git`.
+
 1. **Requisitos**: Python 3.10+ y un navegador Chrome/Edge (para voz y micrófono).
 2. **Arrancar**:
    - Linux: `bash scripts/run.sh`
