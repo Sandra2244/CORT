@@ -50,7 +50,7 @@ function buildWindows() {
   const vw = innerWidth, vh = innerHeight;
   W.files = createWin({ id: 'files', icon: '🗀', title: 'Archivos · <span id="fpath">raíces</span>',
     x: 14, y: 112, w: Math.min(300, vw - 28), h: Math.min(340, vh * .48),
-    html: '<div id="flist"></div>' });
+    html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">▦</button><button id="flistbtn" title="vista de lista">☰</button></div><div id="flist"></div>` });
   W.env = createWin({ id: 'env', icon: '◉', title: 'Entorno',
     x: vw - 254, y: 112, w: 240,
     html: `<div id="wx">…</div>
@@ -86,7 +86,85 @@ function buildWindows() {
         <option value="portugués">Português</option></select>
       <button id="pfguardar" class="pf-btn">Guardar perfil</button>
       <div id="pfmsg" class="pf-msg"></div>` });
+  W.music = createWin({ id: 'music', icon: '♪', title: 'Ejecutor de música',
+    x: 14, y: 112, w: Math.min(300, vw - 28), h: Math.min(380, vh * .55),
+    html: `<div id="nowplay">— sin reproducción —</div>
+      <div id="mbar"><i id="mprog"></i></div>
+      <div id="mrow"><button id="mprev">⏮</button><button id="mplay">▶</button>
+        <button id="mnext">⏭</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
+        <span id="mtime"></span><button id="mref" title="recargar lista">↻</button></div>
+      <div id="plist"></div>
+      <audio id="aud" crossorigin="anonymous"></audio>` });
 }
+
+/* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
+let tracks = [], tIdx = -1, AC = null, AN = null, freqData = null, mAnim = 0;
+async function loadMusic() {
+  const el = document.getElementById('plist');
+  try {
+    const r = await (await fetch(API + '/api/music')).json();
+    tracks = r.canciones || [];
+    el.innerHTML = tracks.length ? '' :
+      '<div class="row">pon canciones en ~/Música y pulsa ↻</div>';
+    tracks.forEach((t, i) => {
+      const d = document.createElement('div'); d.className = 'row track';
+      d.innerHTML = `<span>🗎 ${t.nombre.replace(/</g,'&lt;')}</span><span class="fecha">${t.artista.replace(/</g,'&lt;')}</span>`;
+      d.onclick = () => playTrack(i);
+      el.appendChild(d);
+    });
+  } catch { el.innerHTML = '<div class="row">backend no disponible</div>'; }
+}
+function playTrack(i) {
+  if (i < 0 || i >= tracks.length) return;
+  tIdx = i;
+  const aud = document.getElementById('aud');
+  aud.src = API + '/api/audio?ruta=' + encodeURIComponent(tracks[i].ruta);
+  aud.play();
+  document.getElementById('nowplay').textContent = '♪ ' + tracks[i].nombre;
+  document.getElementById('mplay').textContent = '⏸';
+  document.querySelectorAll('#plist .track').forEach((d, j) => d.classList.toggle('playing', j === i));
+  W.music.show();
+  orb.setDisc(true);                       // ¡el orbe se dispersa en disco que gira!
+  ensureAnalyser(aud);
+  term('reproduciendo: ' + tracks[i].nombre, 'música');
+  startMeter(aud);
+}
+function togglePlay() {
+  const aud = document.getElementById('aud');
+  if (tIdx < 0) { if (tracks.length) playTrack(0); return; }
+  if (aud.paused) { aud.play(); document.getElementById('mplay').textContent = '⏸'; orb.setDisc(true); startMeter(aud); }
+  else { aud.pause(); document.getElementById('mplay').textContent = '▶'; orb.setDisc(false); stopMeter(); }
+}
+function ensureAnalyser(aud) {
+  if (AC) return;
+  try {
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    const src = AC.createMediaElementSource(aud);
+    AN = AC.createAnalyser(); AN.fftSize = 256; AN.smoothingTimeConstant = .78;
+    src.connect(AN); AN.connect(AC.destination);
+    freqData = new Uint8Array(AN.frequencyBinCount);
+  } catch { AN = null; }
+}
+function startMeter(aud) {
+  stopMeter();
+  const step = () => {
+    if (AN && !aud.paused) {
+      AN.getByteFrequencyData(freqData);
+      let bass = 0; for (let i = 1; i < 8; i++) bass += freqData[i]; bass /= 7 * 255;
+      let lvl = 0; for (let i = 0; i < 64; i++) lvl += freqData[i]; lvl /= 64 * 255;
+      orb.setAudio(lvl, Math.min(1, bass * 1.6));
+    }
+    const pr = document.getElementById('mprog'), tm = document.getElementById('mtime');
+    if (aud.duration) {
+      pr.style.width = (aud.currentTime / aud.duration * 100) + '%';
+      tm.textContent = fmt(aud.currentTime) + ' / ' + fmt(aud.duration);
+    }
+    mAnim = requestAnimationFrame(step);
+  };
+  mAnim = requestAnimationFrame(step);
+}
+function stopMeter() { cancelAnimationFrame(mAnim); orb.setAudio(0, 0); }
+const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
 /* ---------- consola del sistema (log estilo JARVIS) ---------- */
 function term(txt, tag = 'sistema') {
@@ -193,7 +271,9 @@ async function refreshWeather() {
 }
 
 /* ---------- archivos ---------- */
+let fGrid = false, curFPath = '';
 async function openFiles(path = '') {
+  curFPath = path;
   W.files.show();
   const list = document.getElementById('flist');
   list.innerHTML = '<div class="row">cargando…</div>';
@@ -206,12 +286,20 @@ async function openFiles(path = '') {
     dir: path ? path + '/' + e.name : e.name, type: e.type, size: e.size,
     fecha: e.fecha });
   list.innerHTML = '';
+  list.classList.toggle('grid', fGrid);
   rows.forEach((row, i) => {
     const d = document.createElement('div');
-    d.className = 'row'; d.style.animationDelay = (i * 16) + 'ms';
-    d.innerHTML = `<span>${row.name}</span>` +
-      (row.fecha ? `<span class="fecha">${row.fecha.slice(0, 10)}</span>` : '') +
-      (row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
+    d.style.animationDelay = (i * 16) + 'ms';
+    if (fGrid) {
+      d.className = 'tile';
+      d.innerHTML = `<span class="ti">${row.type === 'file' ? '🗎' : (row.name.includes('..') ? '↩' : '🗁')}</span>
+        <span class="tn">${row.name.replace(/^(🗁|🗎)\s*/, '')}</span>`;
+    } else {
+      d.className = 'row';
+      d.innerHTML = `<span>${row.name}</span>` +
+        (row.fecha ? `<span class="fecha">${row.fecha.slice(0, 10)}</span>` : '') +
+        (row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
+    }
     d.onclick = row.type === 'file'
       ? () => { sayLine(`Archivo ${row.name} seleccionado.`); term('archivo: ' + row.name, 'archivos'); }
       : () => openFiles(row.dir);
@@ -288,6 +376,23 @@ export function wireUI(orbRef) {
   document.getElementById('notago').onclick = addNote;
   document.getElementById('nota').addEventListener('keydown', e => { if (e.key === 'Enter') addNote(); });
   document.getElementById('pfguardar').onclick = saveProfile;
+
+  /* ejecutor de música */
+  document.getElementById('mplay').onclick = togglePlay;
+  document.getElementById('mprev').onclick = () => playTrack((tIdx - 1 + tracks.length) % tracks.length);
+  document.getElementById('mnext').onclick = () => playTrack((tIdx + 1) % tracks.length);
+  document.getElementById('mvol').oninput = e => { document.getElementById('aud').volume = +e.target.value; };
+  document.getElementById('aud').addEventListener('ended', () => { if (tracks.length > 1) playTrack((tIdx + 1) % tracks.length); else { orb.setDisc(false); stopMeter(); } });
+  document.getElementById('mbar').onclick = e => {
+    const aud = document.getElementById('aud');
+    if (!aud.duration) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    aud.currentTime = (e.clientX - r.left) / r.width * aud.duration;
+  };
+  document.getElementById('mref').onclick = loadMusic;
+  loadMusic();
+  document.getElementById('fgrid').onclick = () => { fGrid = true; openFiles(curFPath); };
+  document.getElementById('flistbtn').onclick = () => { fGrid = false; openFiles(curFPath); };
 
   /* micrófono */
   const mic = document.getElementById('mic');

@@ -79,6 +79,13 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       **perfil** (nombre del asistente/usuario/tono/idioma → el cerebro lo usa
       en cada respuesta), columna de **fechas** en archivos, rejilla en
       perspectiva + arcos laterales + gemelo digital (referencia azul)
+- [x] **Ejecutor de música ♪** (descubierto en el video 07bf): reproduce tu
+      carpeta `~/Música` (API segura con streaming HTTP), lista con artistas,
+      play/pausa/anterior/siguiente/volumen, barra de progreso con búsqueda,
+      auto-siguiente al terminar. El **orbe se dispersa y forma un anillo hueco
+      de partículas que gira** al estilo de la referencia: la rotación y el
+      "latido" del núcleo van sincronizados con el bajo y el nivel de audio
+      (Web Audio Analyser). También **vista mosaico ▦** en Archivos.
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre

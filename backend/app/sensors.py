@@ -22,6 +22,7 @@ ROOTS = {
     "Imágenes": HOME / "Imágenes",
     "Pictures": HOME / "Pictures",
     "Música": HOME / "Música",
+    "Music": HOME / "Music",
     "Videos": HOME / "Videos",
 }
 
@@ -73,6 +74,48 @@ def list_dir(rel: str = "") -> dict:
     except PermissionError:
         return {"error": "sin permiso para leer esa carpeta"}
     return {"path": "/".join(parts), "entries": entries}
+
+
+AUDIO_EXT = {".mp3", ".ogg", ".wav", ".m4a", ".flac", ".opus"}
+
+
+def music_list(limit: int = 200) -> list[dict]:
+    """Canciones dentro de las raíces Música/Music (recursivo, sin salir de ellas)."""
+    out: list[dict] = []
+    for root_name in ("Música", "Music"):
+        root = ROOTS.get(root_name)
+        if not root or not root.exists():
+            continue
+        for f in sorted(root.rglob("*")):
+            if f.suffix.lower() in AUDIO_EXT and f.is_file():
+                try:
+                    rel = f.relative_to(root)
+                    out.append({"nombre": f.stem, "artista": rel.parent.name
+                                if str(rel.parent) != "." else "—",
+                                "ruta": f"{root_name}/{rel}".replace("\\", "/"),
+                                "dur": ""})
+                except ValueError:
+                    continue
+            if len(out) >= limit:
+                return out
+    return out
+
+
+def music_path(rel: str) -> Path | None:
+    """Resuelve una ruta relativa segura dentro de las raíces de música."""
+    parts = [p for p in rel.replace("\\", "/").split("/") if p]
+    if not parts or parts[0] not in ("Música", "Music"):
+        return None
+    root = ROOTS.get(parts[0])
+    if not root:
+        return None
+    target = root.joinpath(*parts[1:])
+    try:
+        target = target.resolve()
+        target.relative_to(root.resolve())
+    except (ValueError, RuntimeError):
+        return None
+    return target if target.is_file() and target.suffix.lower() in AUDIO_EXT else None
 
 
 def weather(lat: float | None = None, lon: float | None = None) -> dict:

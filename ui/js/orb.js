@@ -101,6 +101,14 @@ export function initORB(mount) {
   let energy = 0, target = 0, spinBoost = 0;
   const RING_R = 2.6;
 
+  /* ---- MODO DISCO (ejecutor de música): el orbe se dispersa y forma un
+         círculo/vinilo que gira; la velocidad y el pulso los manda el audio ---- */
+  let discMode = 0, discWant = 0, discAngle = 0, audioL = 0, audioB = 0;
+  const discEdge = new THREE.Mesh(new THREE.TorusGeometry(2.38, .012, 8, 200),
+    new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false }));
+  discEdge.rotation.x = Math.PI / 2; group.add(discEdge);
+
   /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
   const waves = [];
   function shockwave() {
@@ -123,25 +131,47 @@ export function initORB(mount) {
     requestAnimationFrame(frame);
     energy += (target - energy) * .05;
     spinBoost *= .96;
-    const e = energy, p = geo.attributes.position.array;
+    discMode += (discWant - discMode) * .04;         // transición esfera ⇄ disco
+    discAngle += .008 + audioL * .02 + audioB * .05; // ¡gira con la música!!
+    audioB *= .92;                                    // el pulso del bajo decae
+    const e = energy, dm = discMode, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
       const ang = Math.atan2(bz, bx) + e * (spinBoost * .06 + s * .35); // giro espiral al dispersar
       const rx = Math.cos(ang) * RING_R, rz = Math.sin(ang) * RING_R;
       const wob = 1 + e * .25 * Math.sin(t * .002 + s * 6);
-      p[i*3]   = (bx * (1 + e * 1.1) * wob) * (1 - e) + rx * e * wob;
-      p[i*3+2] = (bz * (1 + e * 1.1) * wob) * (1 - e) + rz * e * wob;
-      p[i*3+1] = by * (1 - e * .85) + Math.sin(t * .003 + s * 9) * .12 * e;
+      let x = (bx * (1 + e * 1.1) * wob) * (1 - e) + rx * e * wob;
+      let z = (bz * (1 + e * 1.1) * wob) * (1 - e) + rz * e * wob;
+      let y = by * (1 - e * .85) + Math.sin(t * .003 + s * 9) * .12 * e;
+      if (dm > .01) {
+        // posición en el anillo: banda brillante hueca (el "círculo que gira"
+        // de la referencia) + surcos interiores tipo vinilo en los bordes
+        const band = (i * 7919) % 100;
+        const ri = band < 78 ? 1.62 + (band / 100) * .52          // halo principal
+                             : .55 + (band / 100) * 1.0;          // surcos internos
+        const a0 = (i * 2.39996) % 6.28318;
+        const spin = a0 + discAngle * (1.6 - ri * .35);
+        const pump = 1 + audioB * .14;
+        const dx = Math.cos(spin) * ri * pump;
+        const dz = Math.sin(spin) * ri * pump;
+        const dy = Math.sin(ri * 16 + t * .0025) * .03 + (s - 3.14) * .01;
+        x += (dx - x) * dm; y += (dy - y) * dm; z += (dz - z) * dm;
+      }
+      p[i*3] = x; p[i*3+1] = y; p[i*3+2] = z;
     }
     geo.attributes.position.needsUpdate = true;
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
-    core.material.size = .028 + e * .016;
-    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5);
-    glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4);
+    core.material.size = .028 + e * .016 + dm * .008;
+    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm);
+    glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4 + audioB * 2.2 * dm);
     glow.material.opacity = .85 - e * .5;
     r1.rotation.z = t * .0004 + spinBoost * .01; r2.rotation.y = t * .0003;
+    r1.material.opacity = .6 * (1 - dm * .8); r2.material.opacity = .6 * (1 - dm * .8);
     halo.scale.setScalar(1 + Math.sin(t * .003) * .03 + e * .5);
-    floor.rotation.y = t * .00012 + spinBoost * .002;
+    halo.material.opacity = .14 * (1 - dm);
+    discEdge.material.opacity = dm * (.5 + audioB * .5);
+    discEdge.scale.setScalar(1 + audioB * .12 * dm);
+    floor.rotation.y = t * .00012 + spinBoost * .002 + discAngle * .25 * dm;
     group.position.y = Math.sin(t * .0012) * .06;
     // ondas: crecen y se desvanecen
     for (let i = waves.length - 1; i >= 0; i--) {
@@ -164,5 +194,9 @@ export function initORB(mount) {
     burst,
     stop() { target = 0; },
     listen(on) { target = on ? .35 : 0; },
+    /** activar/desactivar el modo vinilo del ejecutor de música */
+    setDisc(on) { discWant = on ? 1 : 0; if (!on) target = 0; },
+    /** nivel 0..1 (volumen) y bajo 0..1 (pulso) desde el AnalyserNode */
+    setAudio(level = 0, bass = 0) { audioL = level; audioB = Math.max(audioB, bass); },
   };
 }

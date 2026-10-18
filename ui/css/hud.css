@@ -191,3 +191,35 @@ label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8
 @keyframes tsweep{0%,100%{transform:translateY(10px)}50%{transform:translateY(126px)}}
 .twinlbl{font-size:8px;letter-spacing:.22em;color:#4b7f9e;margin-top:2px}
 @media (max-width:900px){#arcs,#twin{display:none}}
+
+/* ================= ejecutor de música ================= */
+#nowplay{font-size:12px;color:var(--text-hi);letter-spacing:.06em;padding:2px 2px 8px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 0 10px rgba(0,190,255,.5)}
+#mbar{height:6px;background:rgba(80,190,255,.15);border-radius:3px;overflow:hidden;cursor:pointer;margin-bottom:8px}
+#mbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#0a66aa,var(--cyan));border-radius:3px}
+#mrow{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+#mrow button{all:unset;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--cyan-dim);background:rgba(6,18,34,.5);color:#cfeaff;font-size:13px;cursor:pointer;transition:.15s}
+#mrow button:hover{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,180,255,.45)}
+#mplay{font-size:14px}
+#mvol{flex:1;accent-color:var(--cyan);min-width:44px}
+#mtime{font-size:10px;color:#5e8cab;white-space:nowrap;font-family:Consolas,monospace}
+#plist .track{padding:4px 6px;border-radius:6px;cursor:pointer;display:flex;gap:8px}
+#plist .track:hover{background:rgba(0,160,255,.14)}
+#plist .track.playing{background:rgba(0,160,255,.2);color:var(--text-hi);
+  border-left:2px solid var(--cyan);animation:pulse 1.6s infinite}
+
+/* ================= mosaico de archivos (vista DOSSIER) ================= */
+#ftools{display:flex;gap:6px;justify-content:flex-end;margin-bottom:4px}
+#ftools button{all:unset;padding:2px 8px;border:1px solid var(--cyan-dim);border-radius:6px;
+  font-size:11px;color:#9fdcff;cursor:pointer;background:rgba(6,18,34,.4)}
+#ftools button:hover{border-color:var(--cyan);color:#fff}
+#flist.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:6px}
+#flist.grid .tile{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;
+  border:1px solid rgba(80,190,255,.25);border-radius:8px;background:rgba(10,30,55,.45);
+  cursor:pointer;animation:rowIn .3s both;transition:.15s}
+#flist.grid .tile:hover{border-color:var(--cyan);background:rgba(0,160,255,.18);
+  box-shadow:0 0 14px rgba(0,180,255,.35);transform:translateY(-2px)}
+#flist.grid .ti{font-size:20px;filter:drop-shadow(0 0 6px rgba(0,190,255,.6))}
+#flist.grid .tn{font-size:9px;text-align:center;max-width:72px;overflow:hidden;
+  white-space:nowrap;text-overflow:ellipsis;color:#bfe8ff}

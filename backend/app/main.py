@@ -119,3 +119,17 @@ def files(path: str = ""):
 @app.get("/api/weather")
 def weather():
     return sensors.weather()
+
+
+@app.get("/api/music")
+def music():
+    return {"canciones": sensors.music_list()}
+
+
+@app.get("/api/audio")
+def audio(ruta: str):
+    from fastapi.responses import FileResponse
+    f = sensors.music_path(ruta)
+    if not f:
+        return {"error": "archivo no encontrado o fuera de Música"}
+    return FileResponse(f)
