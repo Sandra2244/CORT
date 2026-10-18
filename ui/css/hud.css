@@ -70,6 +70,9 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 .win:not(.state-closed):not(.state-min){animation:winIn .45s cubic-bezier(.2,.9,.25,1.2)}
 @keyframes winIn{from{transform:scale(.88) translateY(14px);opacity:.2}to{transform:none;opacity:1}}
 
+/* modo oficina: las ventanas se deslizan a su posición en 2 niveles */
+.win.snap{transition:left .55s cubic-bezier(.3,.8,.3,1), top .55s cubic-bezier(.3,.8,.3,1)}
+
 /* ================= DOCK (botones circulares, como la referencia) ================= */
 #dock{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:10px;
   padding:8px 14px;border-radius:26px;z-index:30}

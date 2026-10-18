@@ -1,8 +1,10 @@
 /* ===== ORB de CORT — Three.js (azul puro estilo Cortana/BLACKBOX) =====
    Sin núcleo naranja: centro azul brillante, cáscara de partículas,
-   anillos orbitales, suelo concéntrico y estrellas. Al ACTIVAR una orden
-   hace el vórtice del video francés: estalla, gira en embudo espiral,
-   se comprime en anillo (portal) y se recompone ejecutando la acción. */
+   plexus 3D (constelación con hilos de luz, video f7d16b9e), anillos
+   orbitales, suelo concéntrico y estrellas, con mecimiento de
+   profundidad. Al ACTIVAR una orden: estalla, gira en embudo espiral
+   (vórtice francés), se comprime en un TORO 3D inclinado que gira
+   (portal) y se recompone ejecutando la acción. */
 import * as THREE from 'three';
 
 export function initORB(mount) {
@@ -48,6 +50,39 @@ export function initORB(mount) {
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1.02, 32, 32),
     new THREE.MeshBasicMaterial({ color: 0x0a66aa, transparent: true, opacity: .14 }));
   group.add(halo);
+
+  /* ---- PLEXUS 3D (video f7d16b9e): partículas ancla unidas por hilos de
+         luz cuando están cerca → constelación que respira en 3D ---- */
+  const ANCH = 160, MAXSEG = 700, D2 = .42 * .42;
+  const anchors = new Uint16Array(ANCH);
+  for (let i = 0; i < ANCH; i++) anchors[i] = (i * 1453) % N;
+  const linePos = new Float32Array(MAXSEG * 6);
+  const lineGeo = new THREE.BufferGeometry();
+  lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
+    color: 0x39c2ff, transparent: true, opacity: .18,
+    blending: THREE.AdditiveBlending, depthWrite: false }));
+  group.add(lines);
+  function updatePlexus() {
+    const p = geo.attributes.position.array;
+    let seg = 0;
+    for (let a = 0; a < ANCH && seg < MAXSEG; a++) {
+      const ia = anchors[a] * 3;
+      const ax = p[ia], ay = p[ia + 1], az = p[ia + 2];
+      for (let b = a + 1; b < ANCH && seg < MAXSEG; b++) {
+        const ib = anchors[b] * 3;
+        const dx = p[ib] - ax, dy = p[ib + 1] - ay, dz = p[ib + 2] - az;
+        if (dx * dx + dy * dy + dz * dz < D2) {
+          const o = seg * 6;
+          linePos[o] = ax; linePos[o + 1] = ay; linePos[o + 2] = az;
+          linePos[o + 3] = p[ib]; linePos[o + 4] = p[ib + 1]; linePos[o + 5] = p[ib + 2];
+          seg++;
+        }
+      }
+    }
+    for (let o = seg * 6; o < linePos.length; o++) linePos[o] = 0; // sin uso → invisibles
+    lineGeo.attributes.position.needsUpdate = true;
+  }
 
   /* ---- anillos orbitales inclinados ---- */
   function ring(rad, tilt, col) {
@@ -111,8 +146,9 @@ export function initORB(mount) {
   discEdge.rotation.x = Math.PI / 2; group.add(discEdge);
 
   /* ---- VÓRTICE DE ACTIVACIÓN (video francés): estalla → gira en embudo →
-         se comprime en anillo portal → se recompone ejecutando la acción ---- */
-  let vortex = 0, vortexWant = 0, vSpin = 0, musicOn = false, actDisc = 0;
+         se comprime en un TORO 3D inclinado (portal, video f7d16b9e) → esfera ---- */
+  let vortex = 0, vortexWant = 0, vSpin = 0, musicOn = false;
+  let po = 0, poWant = 0;                     // mezcla esfera ⇄ portal toroidal
 
   /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
   const waves = [];
@@ -132,28 +168,31 @@ export function initORB(mount) {
     setTimeout(() => { target = 0; }, 1500);   // se recompone solo
   }
 
-  /** ACTIVACIÓN al recibir una orden (voz o chat): vórtice → anillo → esfera. */
+  /** ACTIVACIÓN al recibir una orden (voz o chat): vórtice → portal tórico → esfera. */
   function activate() {
     shockwave(); spinBoost = 6; vortexWant = 1;
     setTimeout(() => { shockwave(); }, 300);
-    setTimeout(() => { vortexWant = 0; actDisc = 1; }, 1700);  // del vórtice al portal
-    setTimeout(() => { actDisc = 0; }, musicOn ? 1700 : 3000); // y de vuelta en esfera
+    setTimeout(() => { vortexWant = 0; poWant = 1; }, 1700);   // del vórtice al portal 3D
+    setTimeout(() => { poWant = 0; }, musicOn ? 1700 : 3200);  // y de vuelta en esfera
   }
 
-  /* depuración por URL: ?vortex congela el vórtice, ?disc congela el anillo */
+  /* depuración por URL: ?vortex / ?portal / ?disc congelan cada estado */
   if (/[?&]vortex/.test(location.search)) vortexWant = 1;
+  if (/[?&]portal/.test(location.search)) { po = 1; poWant = 1; }
   if (/[?&]disc/.test(location.search)) musicOn = true;
 
+  let frameNo = 0;
   function frame(t) {
     requestAnimationFrame(frame);
     energy += (target - energy) * .05;
     spinBoost *= .96;
-    discMode += ((musicOn || actDisc ? 1 : 0) - discMode) * .04; // esfera ⇄ disco
+    discMode += ((musicOn ? 1 : 0) - discMode) * .04; // esfera ⇄ disco
     discAngle += .008 + audioL * .02 + audioB * .05; // ¡gira con la música!!
     audioB *= .92;                                    // el pulso del bajo decae
     vortex += (vortexWant - vortex) * .06;
     vSpin += .04 + vortex * .16;                      // el vórtice arremolina
-    const e = energy, dm = discMode, vx = vortex, p = geo.attributes.position.array;
+    po += (poWant - po) * .06;                        // esfera ⇄ portal tórico
+    const e = energy, dm = discMode, vx = vortex, pox = po, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
       const ang = Math.atan2(bz, bx) + e * (spinBoost * .06 + s * .35); // giro espiral al dispersar
@@ -186,23 +225,43 @@ export function initORB(mount) {
         const dy = Math.sin(ri * 16 + t * .0025) * .03 + (s - 3.14) * .01;
         x += (dx - x) * dm; y += (dy - y) * dm; z += (dz - z) * dm;
       }
+      if (pox > .01) {
+        // PORTAL 3D: toro inclinado que gira — los partículas se enroscan en
+        // el tubo del anillo (video f7d16b9e), con respiración del grosor
+        const uu = (i * 2.39996) % 6.28318 + discAngle * 2;
+        const vv = (i * 1.239) % 6.28318 + s;
+        const rr = .30 + Math.sin(t * .002 + s * 7) * .06;
+        const rad = 1.9 + rr * Math.cos(vv);
+        const tx = Math.cos(uu) * rad, ty = rr * Math.sin(vv), tz = Math.sin(uu) * rad;
+        const th = .55 + Math.sin(t * .0004) * .25;   // inclinación que cabecea
+        const ct = Math.cos(th), sth = Math.sin(th);
+        x += (tx - x) * pox;
+        y += (ty * ct - tz * sth - y) * pox;
+        z += (ty * sth + tz * ct - z) * pox;
+      }
       p[i*3] = x; p[i*3+1] = y; p[i*3+2] = z;
     }
     geo.attributes.position.needsUpdate = true;
+    if ((frameNo++ % 3) === 0) updatePlexus();   // hilos a 20 fps: barato y fluido
+    lines.material.opacity = .18 * (1 - e * .55) * (1 - vx * .8) + pox * .10;
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
     core.material.size = .028 + e * .016 + dm * .008;
-    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm - vx * .7);
-    nucleus.material.opacity = .95 * (1 - vx * .8);
+    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm - vx * .7 - pox * .7);
+    nucleus.material.opacity = .95 * (1 - vx * .8) * (1 - pox * .8);
     glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4 + audioB * 2.2 * dm + vx * 1.2);
-    glow.material.opacity = (.8 - e * .5) * (1 - vx * .6);
+    glow.material.opacity = (.8 - e * .5) * (1 - vx * .6) * (1 - pox * .6);
     r1.rotation.z = t * .0004 + spinBoost * .01; r2.rotation.y = t * .0003;
-    r1.material.opacity = .6 * (1 - dm * .8) * (1 - vx); r2.material.opacity = .6 * (1 - dm * .8) * (1 - vx);
+    r1.material.opacity = .6 * (1 - dm * .8) * (1 - vx) * (1 - pox * .5);
+    r2.material.opacity = .6 * (1 - dm * .8) * (1 - vx) * (1 - pox * .5);
     halo.scale.setScalar(1 + Math.sin(t * .003) * .03 + e * .5);
-    halo.material.opacity = .14 * (1 - dm) * (1 - vx);
+    halo.material.opacity = .14 * (1 - dm) * (1 - vx) * (1 - pox);
     discEdge.material.opacity = dm * (.5 + audioB * .5);
     discEdge.scale.setScalar(1 + audioB * .12 * dm);
     floor.rotation.y = t * .00012 + spinBoost * .002 + discAngle * .25 * dm;
     group.position.y = Math.sin(t * .0012) * .06;
+    // profundidad 3D: todo el conjunto cabecea suavemente en el espacio
+    group.rotation.x = Math.sin(t * .00035) * .18;
+    group.rotation.z = Math.sin(t * .00027) * .10;
     // ondas: crecen y se desvanecen
     for (let i = waves.length - 1; i >= 0; i--) {
       const w = waves[i], dt = (t - w.t0) / 900;
@@ -224,7 +283,7 @@ export function initORB(mount) {
     burst,
     /** vórtice de activación: se dispersa, gira en embudo y forma un portal */
     activate,
-    stop() { target = 0; vortexWant = 0; },
+    stop() { target = 0; vortexWant = 0; poWant = 0; },
     listen(on) { target = on ? .35 : 0; },
     /** activar/desactivar el modo vinilo del ejecutor de música */
     setDisc(on) { musicOn = !!on; if (!on) target = 0; },

@@ -136,6 +136,35 @@ function togglePlay() {
   if (aud.paused) { aud.play(); document.getElementById('mplay').textContent = '⏸'; orb.setDisc(true); startMeter(aud); }
   else { aud.pause(); document.getElementById('mplay').textContent = '▶'; orb.setDisc(false); stopMeter(); }
 }
+function pauseMusic() {
+  const aud = document.getElementById('aud');
+  if (!aud.paused) togglePlay();
+}
+function resumeMusic() {
+  const aud = document.getElementById('aud');
+  if (aud.paused) togglePlay();
+}
+
+/* ---------- MODO OFICINA (video f7d16b9e: "JARVIS MODE BUREAU") ----------
+   Las ventanas abiertas se recolocan solas en 2 niveles, con deslizamiento. */
+function organizeBureau() {
+  const open = Object.values(W).filter(w => w.open && !w.minimized);
+  if (!open.length) return 0;
+  const vw = innerWidth, vh = innerHeight;
+  const half = Math.ceil(open.length / 2);
+  const rows = [open.slice(0, half), open.slice(half)].filter(r => r.length);
+  rows.forEach((row, ri) => {
+    const gap = 12, top = ri ? Math.round(vh / 2) + 16 : 108;
+    const cellW = Math.floor((vw - gap * (row.length + 1)) / row.length);
+    row.forEach((w, i) => {
+      w.el.classList.add('snap');
+      w.el.style.left = Math.max(8, gap + i * (cellW + gap)) + 'px';
+      w.el.style.top = top + 'px';
+      setTimeout(() => w.el.classList.remove('snap'), 700);
+    });
+  });
+  return open.length;
+}
 function ensureAnalyser(aud) {
   if (AC) return;
   try {
@@ -359,6 +388,46 @@ async function send(raw) {
         speakTTS('Abriendo tu reproductor con ' + r.cancion);
       } else add('a', 'No encontré música en tu carpeta Música: ' + (r.error || ''), 'error');
     } catch { add('a', 'Sin conexión con el backend para ejecutar música.', 'error'); }
+    return;
+  }
+  /* ─── órdenes directas del repertorio de la referencia (video f7d16b9e) ─── */
+  if (/modo (oficina|bureau|escritorio)|organiza|ordena (las )?ventanas|ordenar el escritorio/i.test(msg)) {
+    const n = organizeBureau();
+    const r = n ? `Modo oficina: ${n} ventanas posicionadas en 2 niveles.`
+                : 'No hay ventanas abiertas que organizar.';
+    add('a', r, 'ejecutor'); speakTTS(r); term('bureau: ' + n + ' ventanas', 'ejecutor');
+    orb.burst(); return;
+  }
+  if (/\bpausa\b|mets pausa|det[eé]n la m[uú]sica|alto a la m[uú]sica/i.test(msg)) {
+    pauseMusic();
+    add('a', 'Música en pausa, como en la referencia.', 'ejecutor');
+    speakTTS('Pausa'); term('pausa de reproducción', 'música'); return;
+  }
+  if (/reanuda|continua (la )?m[uú]sica|sigue con la m[uú]sica|play de nuevo/i.test(msg)) {
+    resumeMusic();
+    add('a', 'Continuando la reproducción.', 'ejecutor');
+    speakTTS('Continuando'); term('reanudada', 'música'); return;
+  }
+  if (/qu[eé] hora es|dime la hora|hora actual/i.test(msg)) {
+    const h = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+    add('a', `Son las ${h} — hora local, sin necesitar internet (como en el video).`, 'sistema');
+    speakTTS('Son las ' + h); orb.burst(); term('hora local: ' + h, 'sistema'); return;
+  }
+  const mAbrir = msg.match(/\babre\b|\babrir\b|\blanza\b|\abinicia\b/i);
+  if (mAbrir && /youtube|navegador/i.test(msg)) {
+    const app = /youtube/i.test(msg) ? 'youtube' : 'navegador';
+    add('a', `Lanzando ${app}…`, 'ejecutor'); term('launch: ' + app, 'ejecutor');
+    try {
+      const r = await (await fetch(API + '/api/launch', { method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ app }) })).json();
+      add('a', r.ok ? `Aplicación lanzada: ${r.app} ✓` : 'El backend lo bloqueó: ' + (r.error || ''),
+        'ejecutor');
+      speakTTS(r.ok ? 'Aplicación lanzada' : 'No pude lanzar la aplicación');
+    } catch {
+      window.open(app === 'youtube' ? 'https://www.youtube.com' : 'https://duckduckgo.com');
+      add('a', 'Sin backend: lo abrí directo en el navegador.', 'error');
+    }
     return;
   }
   try {

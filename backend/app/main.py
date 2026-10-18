@@ -144,3 +144,14 @@ def play(p: Play):
     """Ejecutor de música en el SISTEMA: abre el reproductor predeterminado
     (VLC u otro) con una canción; sin ruta, elige una al azar de ~/Música."""
     return sensors.play_external(p.ruta)
+
+
+class Launch(BaseModel):
+    app: str = ""
+
+
+@app.post("/api/launch")
+def launch(l: Launch):
+    """«Abre YouTube» → lanza la app de la LISTA BLISTA con el navegador
+    predeterminado (referencia: APPLICATION LANCÉE del video francés)."""
+    return sensors.launch_app(l.app)

@@ -97,6 +97,18 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       <nombre de canción>») y CORT abre tu **reproductor predeterminado**
       (VLC/Strawberry/etc.) con una canción al azar de `~/Música`, o reproduce
       la que nombraste en su propio panel ♪. Probado en vivo en esta PC.
+- [x] **Orbe 3D (video f7d16b9e, Michaël JARVIS)**: **plexus** — 160 anclas
+      unidas por hilos de luz según su posición real (constelación que respira);
+      el portal de activación ahora es un **toro 3D inclinado** que gira y
+      cabecea (no un anillo plano); todo el conjunto tiene **meciimiento de
+      profundidad** (rotaciones X/Z lentas). Depuración: `?vortex` `?portal` `?disc`.
+- [x] **Modo oficina** («organiza las ventanas»): las ventanas abiertas se
+      recolocan solas en **2 niveles** deslizándose (MODE BUREAU de la referencia).
+- [x] **Más órdenes de voz del video**: «pausa» / «reanuda» el reproductor,
+      «¿qué hora es?» **offline** (reloj local, sin backend), «abre youtube /
+      navegador» → `POST /api/launch` con **lista blanca estricta** (nunca se
+      lanza nada que no esté en `LAUNCH_ALLOWLIST`). Probado en vivo: Chrome
+      abrió YouTube y la orden «terminal» fue rechazada.
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre

@@ -148,6 +148,31 @@ def play_external(rel: str = "") -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
+# Lanzador de aplicaciones (video f7d16b9e: "APPLICATION LANCÉE"):
+# LISTA BLISTA estricta — solo estas claves, con URL fija. Nunca se abre
+# nada que el usuario escriba libremente (seguridad ante todo).
+LAUNCH_ALLOWLIST = {
+    "youtube": "https://www.youtube.com",
+    "navegador": "https://duckduckgo.com",
+}
+
+
+def launch_app(name: str) -> dict:
+    """Abre una app/sitio de la lista blanca con el navegador predeterminado."""
+    import webbrowser
+
+    key = (name or "").strip().lower()
+    url = LAUNCH_ALLOWLIST.get(key)
+    if not url:
+        return {"ok": False, "error": f"no permitida: {key or '(vacío)'} "
+                f"(solo: {', '.join(LAUNCH_ALLOWLIST)})"}
+    try:
+        ok = webbrowser.open(url)  # usa el navegador predeterminado del sistema
+        return {"ok": bool(ok), "app": key, "url": url}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 def weather(lat: float | None = None, lon: float | None = None) -> dict:
     """Clima actual. Usa IP geolocation si no se pasan coordenadas. Cachea 20 min."""
     now = time.time()
