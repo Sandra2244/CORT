@@ -99,7 +99,7 @@ def local_command(message: str) -> str | None:
         return local_commands.today()
     if re.search(r"\b(batería|bateria|battery)\b", m):
         return local_commands.battery()
-    if re.search(r"\b(cpu|procesador|ram|memoria)\b", m):
+    if re.search(r"\b(cpu|procesador|ram|memoria|estado del sistema)\b", m):
         return local_commands.system_stats()
     if re.search(r"\bclima|temperatura|qué tiempo|que tiempo\b", m):
         import sensors

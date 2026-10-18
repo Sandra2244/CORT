@@ -152,7 +152,7 @@ async function send(raw) {
   try {
     const r = await (await fetch(API + '/api/chat', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) })).json();
-    add('a', r.reply, r.source); orb.speak(3200); speakTTS(r.reply);
+    add('a', r.reply, r.source); orb.burst(); speakTTS(r.reply);   // ← animación de acción
     if (/archivo|carpeta|explorador/i.test(msg)) openFiles();
   } catch { add('a', 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); }
 }
@@ -196,12 +196,12 @@ export function wireUI(orbRef) {
     video: document.getElementById('camv'), canvas: document.getElementById('gest'),
     button: document.getElementById('hand'), label: document.getElementById('gestlabel'),
     onPalm: () => {                       // palma: desplegar o plegar todas
-      orb.speak(1800);
+      orb.burst();
       const anyOpen = Object.values(W).some(w => w.open && !w.minimized);
       anyOpen ? Object.values(W).forEach(w => w.minimize())
               : Object.values(W).forEach(w => w.show());
     },
     onPinch: () => { W.chat.show(); sayLine('Canal de voz al frente.'); },
-    onFist: () => { Object.values(W).forEach(w => w.close()); orb.speak(2600); },
+    onFist: () => { Object.values(W).forEach(w => w.close()); orb.burst(); },
   }));
 }

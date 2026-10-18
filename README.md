@@ -51,8 +51,10 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 | `backend/app/sensors.py` | Explorador de archivos seguro + clima (Open-Meteo) |
 | `backend/app/memory.py` | Memoria persistente SQLite |
 | `ui/index.html` + `ui/css` + `ui/js` | Holograma: orb Three.js + HUD + voz |
+| `desktop/main.cjs` | Ventana Electron (modo cabina / modo vidrio) |
 | `docs/` | Plan de arquitectura y fotogramas de referencia |
 | `scripts/run.sh` / `run.bat` | Arranque en Linux / Windows |
+| `scripts/run-desktop.sh` | Arranque del holograma de escritorio (Electron) |
 
 ## Estado del proyecto (hoja de ruta F0–F7)
 
@@ -68,9 +70,13 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       ~4 análisis/s — palma despliega/plega ventanas, pinza trae el chat,
       puño las cierra; esqueleto dibujado en mini-vista — **código listo,
       probar con cámara física**
-- [ ] F4 Gestos con MediaPipe (palma abre, pinza agarra)
+- [x] Animación de acción: al responder, el orbe emite dos ondas de choque,
+      las partículas se dispersan en espiral y se recomponen (referencia azul)
+- [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre
+      al frente, arrastrable) probado y funcionando en Linux 1.8 GB; **modo vidrio**
+      transparente (`CORT_GLASS=1`) listo para equipos con GPU/compositor y Windows.
+      Falta: instaladores .exe / .AppImage
 - [ ] F5 Wake word "Oye CORT" + Piper TTS + perfil personalizable
-- [ ] F6 Electron transparente + instaladores .exe / .AppImage
 - [ ] F7 APK Android con Capacitor
 
 Todo el software usado es gratuito. Ningún puerto se expone a internet: backend y

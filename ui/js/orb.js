@@ -94,16 +94,35 @@ export function initORB(mount) {
   }
 
   /* ---- energía 0..1: 0 esfera compacta, 1 dispersión en anillo de estrellas ---- */
-  let energy = 0, target = 0;
+  let energy = 0, target = 0, spinBoost = 0;
   const RING_R = 2.6;
+
+  /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
+  const waves = [];
+  function shockwave() {
+    const w = new THREE.Mesh(new THREE.TorusGeometry(1.2, .02, 8, 120),
+      new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: .9,
+        blending: THREE.AdditiveBlending, depthWrite: false }));
+    w.rotation.x = Math.PI / 2.4;
+    group.add(w); waves.push({ m: w, t0: performance.now() });
+  }
+
+  /** ANIMACIÓN DE ACCIÓN de la referencia: el orbe estalla, gira disperso
+      formando un círculo de estrellas y se recompone en espiral. */
+  function burst() {
+    shockwave(); spinBoost = 6; target = 1;
+    setTimeout(() => { shockwave(); }, 260);
+    setTimeout(() => { target = 0; }, 1500);   // se recompone solo
+  }
 
   function frame(t) {
     requestAnimationFrame(frame);
     energy += (target - energy) * .05;
+    spinBoost *= .96;
     const e = energy, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
-      const ang = Math.atan2(bz, bx);
+      const ang = Math.atan2(bz, bx) + e * (spinBoost * .06 + s * .35); // giro espiral al dispersar
       const rx = Math.cos(ang) * RING_R, rz = Math.sin(ang) * RING_R;
       const wob = 1 + e * .25 * Math.sin(t * .002 + s * 6);
       p[i*3]   = (bx * (1 + e * 1.1) * wob) * (1 - e) + rx * e * wob;
@@ -111,15 +130,22 @@ export function initORB(mount) {
       p[i*3+1] = by * (1 - e * .85) + Math.sin(t * .003 + s * 9) * .12 * e;
     }
     geo.attributes.position.needsUpdate = true;
-    core.rotation.y = t * .00022 + e * t * .0006;
-    core.material.size = .028 + e * .014;
+    core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
+    core.material.size = .028 + e * .016;
     nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5);
     glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4);
-    glow.material.opacity = .85 - e * .5;              // al dispersar el corazón se apaga
-    r1.rotation.z = t * .0004; r2.rotation.y = t * .0003;
+    glow.material.opacity = .85 - e * .5;
+    r1.rotation.z = t * .0004 + spinBoost * .01; r2.rotation.y = t * .0003;
     halo.scale.setScalar(1 + Math.sin(t * .003) * .03 + e * .5);
-    floor.rotation.y = t * .00012;
-    group.position.y = Math.sin(t * .0012) * .06;      // respiración flotante
+    floor.rotation.y = t * .00012 + spinBoost * .002;
+    group.position.y = Math.sin(t * .0012) * .06;
+    // ondas: crecen y se desvanecen
+    for (let i = waves.length - 1; i >= 0; i--) {
+      const w = waves[i], dt = (t - w.t0) / 900;
+      if (dt >= 1) { group.remove(w.m); w.m.geometry.dispose(); waves.splice(i, 1); continue; }
+      w.m.scale.setScalar(1 + dt * 3.2);
+      w.m.material.opacity = .9 * (1 - dt);
+    }
     ren.render(scene, cam);
   }
   requestAnimationFrame(frame);
@@ -131,6 +157,7 @@ export function initORB(mount) {
 
   return {
     speak(ms = 2600) { target = 1; if (ms > 0) setTimeout(() => target = 0, ms); },
+    burst,
     stop() { target = 0; },
     listen(on) { target = on ? .35 : 0; },
   };

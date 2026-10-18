@@ -1,0 +1,14 @@
+{
+  "name": "cort-desktop",
+  "productName": "CORT",
+  "version": "0.1.0",
+  "description": "Ventana holográfica transparente de C.O.R.T.",
+  "main": "main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^31.3.1"
+  }
+}
