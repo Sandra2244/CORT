@@ -98,15 +98,25 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 #tree{position:fixed;right:10px;top:96px;width:196px;z-index:25;padding:0 0 8px;
   display:flex;flex-direction:column;max-height:52vh}
 #tree .winbar{padding:7px 10px}
+#tree .hint{font-size:8px;letter-spacing:.1em;color:#3f6b86;text-transform:none;
+  font-family:'Segoe UI',sans-serif}
 #treebody{overflow:auto;flex:1}
 .trow{border:1px solid rgba(80,190,255,.16);border-radius:6px;margin:4px 8px;padding:5px 9px;
   cursor:pointer;background:rgba(4,14,28,.35);transition:.15s}
 .trow b{display:block;font-family:Consolas,'Courier New',monospace;font-size:11px;
   letter-spacing:.08em;color:#bfe8ff}
 .trow b::before{content:"▸ ";color:var(--cyan)}
+.trow.open b::before{content:"▾ "}
+.trow.open{border-color:rgba(120,220,255,.55);background:rgba(0,160,255,.16);
+  box-shadow:0 0 12px rgba(0,180,255,.3)}
 .trow small{display:block;color:#4b7f9e;font-size:9px;letter-spacing:.06em;margin-top:1px}
 .trow:hover{border-color:var(--cyan);background:rgba(0,160,255,.14);transform:translateX(-3px);
   box-shadow:0 0 10px rgba(0,180,255,.25)}
+/* subcarpetas que salen al desplegar (los hijos del panel agarrado) */
+.branch{margin:0 8px 4px 14px;border-left:1px solid rgba(80,190,255,.28)}
+.trow.kid{margin:3px 0;padding:4px 8px;background:rgba(3,12,24,.5)}
+.trow.kid b{font-size:10px;letter-spacing:.06em}
+.trow.kid:hover{transform:translateX(3px)}
 #brain{margin:6px 8px 0;padding:6px 9px;border-top:1px solid rgba(80,190,255,.2);
   font-family:Consolas,'Courier New',monospace;font-size:10.5px;letter-spacing:.14em;
   color:var(--cyan);cursor:pointer}
@@ -114,15 +124,20 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 
 /* ================= CHIPS FLOTANTES (archivos que se lanzan a las manos) ================= */
 #chips{position:fixed;inset:0;pointer-events:none;z-index:26}
-.chip{position:absolute;pointer-events:auto;cursor:pointer;padding:6px 12px;border-radius:8px;
+.chip{position:absolute;pointer-events:auto;cursor:grab;padding:6px 26px 6px 12px;border-radius:8px;
   border:1px solid rgba(80,190,255,.4);background:rgba(3,12,24,.82);backdrop-filter:blur(6px);
   box-shadow:0 0 18px rgba(0,150,255,.25);animation:chipFloat 4.5s ease-in-out infinite;
-  transition:opacity .6s, transform .6s}
+  transition:opacity .6s, transform .25s, box-shadow .25s, border-color .25s;touch-action:none}
 .chip b{display:block;font-family:Consolas,'Courier New',monospace;font-size:11.5px;
   letter-spacing:.06em;color:#cfeaff;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip b::before{content:"▸ ";color:var(--cyan)}
 .chip small{color:#4b7f9e;font-size:9px}
-.chip:hover{border-color:var(--cyan);transform:scale(1.08);box-shadow:0 0 26px rgba(0,190,255,.5)}
+.chip .x{position:absolute;top:3px;right:5px;font-size:9px;color:#4b7f9e;opacity:.6}
+.chip .x:hover{color:#ff5b5b;opacity:1;text-shadow:0 0 8px #ff5b5b}
+.chip:hover{border-color:var(--cyan);box-shadow:0 0 26px rgba(0,190,255,.5)}
+/* agarrado: crece y brilla, como el panel que Jared sostiene en la mano */
+.chip.held{cursor:grabbing;transform:scale(1.14);z-index:2;
+  border-color:#7fe0ff;background:rgba(6,26,48,.94);box-shadow:0 0 34px rgba(0,200,255,.65)}
 .chip.gone{opacity:0;transform:translateY(-26px) scale(.9);pointer-events:none}
 @keyframes chipFloat{50%{translate:0 -9px}}
 
@@ -281,3 +296,42 @@ label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8
 #flist.grid .ti{font-size:20px;filter:drop-shadow(0 0 6px rgba(0,190,255,.6))}
 #flist.grid .tn{font-size:9px;text-align:center;max-width:72px;overflow:hidden;
   white-space:nowrap;text-overflow:ellipsis;color:#bfe8ff}
+
+/* ================= CEREBRO: muro de recuerdos enmarcados ================= */
+#memwall{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:9px;padding:2px}
+.frame{position:relative;border:2px solid rgba(80,190,255,.34);border-radius:3px;padding:7px 7px 5px;
+  background:linear-gradient(160deg,rgba(16,44,78,.75),rgba(3,12,24,.85));
+  outline:1px solid rgba(80,190,255,.16);outline-offset:2px;cursor:pointer;
+  min-height:78px;animation:frameIn .4s both;transition:transform .2s, box-shadow .2s, border-color .2s}
+.frame b{display:block;font-family:Consolas,monospace;font-size:8.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--cyan);margin-bottom:3px}
+.frame p{margin:0;font-size:10px;line-height:1.35;color:#cbe9ff;
+  display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.frame small{display:block;margin-top:4px;font-size:8px;color:#4b7f9e;letter-spacing:.08em}
+.frame:hover{border-color:#7fe0ff;transform:scale(1.07) translateY(-2px);z-index:2;
+  box-shadow:0 0 26px rgba(0,190,255,.55)}
+.frame.hero{grid-column:span 2;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;border-color:rgba(120,220,255,.6)}
+.frame.hero .sig{font-size:26px;color:var(--cyan);filter:drop-shadow(0 0 12px var(--cyan));
+  animation:pulse 2.6s infinite}
+.frame.hero b{font-size:12px;letter-spacing:.3em;color:#e8f6ff;margin:4px 0 2px}
+.frame.hero small{font-size:8.5px;line-height:1.5}
+.frame.empty{grid-column:1/-1;min-height:64px;display:grid;place-content:center;text-align:center}
+@keyframes frameIn{from{opacity:0;transform:translateY(12px) rotate(-1.5deg)}to{opacity:1;transform:none}}
+
+/* ================= prompt de terminal (la consola `~ $` del final del video) ========== */
+#prompt{align-self:center;padding-left:9px;white-space:nowrap;cursor:text;
+  font-family:Consolas,'Courier New',monospace;font-size:11px;letter-spacing:.04em;color:#2bff9e;
+  text-shadow:0 0 10px rgba(43,255,158,.5)}
+#prompt::after{content:" ▮";animation:blink 1.15s steps(2) infinite}
+@keyframes blink{50%{opacity:.15}}
+#q{padding-left:2px}
+
+/* ================= lámpara de estado (bombilla que cambia de color) ================= */
+#lamp{display:flex;align-items:center;gap:6px;padding:0 10px 0 8px;margin-left:4px;
+  border-left:1px solid rgba(80,190,255,.22);cursor:default}
+#lamp i{width:11px;height:11px;border-radius:50%;background:var(--lc, #4b7f9e);
+  transition:background .5s, box-shadow .5s;box-shadow:0 0 10px var(--lc, #4b7f9e)}
+#lamp.on i{background:var(--lc, #4b7f9e);box-shadow:0 0 16px var(--lc),0 0 4px var(--lc)}
+#lamp span{font-family:Consolas,'Courier New',monospace;font-size:9px;letter-spacing:.14em;
+  text-transform:uppercase;color:#7fb9d8;white-space:nowrap}

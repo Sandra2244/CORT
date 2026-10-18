@@ -38,6 +38,23 @@ def _fecha(p: Path) -> str:
         return ""
 
 
+def _counts(p: Path) -> tuple[int, int]:
+    """(carpetas, archivos) directos, ignorando ocultos — la sublínea
+    «6 folders · 2 notes» del árbol de la referencia."""
+    f = n = 0
+    try:
+        for e in p.iterdir():
+            if e.name.startswith("."):
+                continue
+            if e.is_dir():
+                f += 1
+            else:
+                n += 1
+    except OSError:
+        return 0, 0
+    return f, n
+
+
 def list_dir(rel: str = "") -> dict:
     """rel va con '/' entre raíz y subcarpetas, p.ej. 'Documentos/CORT/docs'."""
     parts = [p for p in rel.replace("\\", "/").split("/") if p]
@@ -46,11 +63,9 @@ def list_dir(rel: str = "") -> dict:
         for k, v in ROOTS.items():
             if not v.exists():
                 continue
-            try:
-                n = sum(1 for e in v.iterdir() if not e.name.startswith("."))
-            except OSError:
-                n = 0
-            out.append({"name": k, "type": "dir", "size": n, "fecha": _fecha(v)})
+            folders, files = _counts(v)
+            out.append({"name": k, "type": "dir", "size": folders + files,
+                        "folders": folders, "files": files, "fecha": _fecha(v)})
         return {"path": "", "entries": out}
     root_name = parts[0]
     if root_name not in ROOTS:
@@ -81,6 +96,33 @@ def list_dir(rel: str = "") -> dict:
     except PermissionError:
         return {"error": "sin permiso para leer esa carpeta"}
     return {"path": "/".join(parts), "entries": entries}
+
+
+def tree(rel: str = "", limit: int = 12) -> dict:
+    """Hijos DIRECTOS de una carpeta, cada uno con sus propios conteos.
+    Sirve para expandir el árbol lateral sin abrir la ventana de Archivos."""
+    d = list_dir(rel)
+    if "error" in d:
+        return d
+    kids = []
+    for e in d["entries"]:
+        if e["type"] != "dir":
+            continue
+        sub = "/".join(x for x in [d["path"], e["name"]] if x)
+        folders, files = _counts(_resolve(sub))
+        kids.append({"name": e["name"], "path": sub,
+                     "folders": folders, "files": files, "fecha": e["fecha"]})
+        if len(kids) >= limit:
+            break
+    return {"path": d["path"], "children": kids}
+
+
+def _resolve(rel: str) -> Path:
+    parts = [p for p in rel.replace("\\", "/").split("/") if p]
+    target = ROOTS[parts[0]] if parts and parts[0] in ROOTS else HOME
+    for p in parts[1:]:
+        target = target / p
+    return target
 
 
 AUDIO_EXT = {".mp3", ".ogg", ".wav", ".m4a", ".flac", ".opus"}

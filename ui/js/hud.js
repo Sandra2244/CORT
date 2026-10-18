@@ -62,7 +62,8 @@ function buildWindows() {
   W.chat = createWin({ id: 'chat', icon: '✦', title: '03 · Canal de voz',
     x: Math.max(14, Math.round(vw / 2) - 190), y: Math.max(140, vh - 386), w: Math.min(380, vw - 28), h: 288,
     html: `<div id="log"></div>
-      <div id="inputrow"><input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
+      <div id="inputrow"><span id="prompt" title="↑/↓ historial · Tab completa">cort@nave:~$</span>
+      <input id="q" placeholder="háblame, o escribe un comando y pulsa Tab…" autocomplete="off">
       <button id="go">⏎</button></div>` });
   W.notes = createWin({ id: 'notes', icon: '✎', title: '04 · Notas',
     x: Math.round(vw / 2) - 170, y: 118, w: Math.min(340, vw - 28), h: 300,
@@ -96,6 +97,11 @@ function buildWindows() {
         <option value="portugués">Português</option></select>
       <button id="pfguardar" class="pf-btn">Guardar perfil</button>
       <div id="pfmsg" class="pf-msg"></div>` });
+  /* muro de recuerdos — la "sala de cuadros" de la referencia, en azul */
+  W.cerebro = createWin({ id: 'cerebro', icon: '⌗', title: '08 · Cerebro · <span id="memcount">…</span>',
+    x: clamp(Math.round(vw / 2) - 220, 14, Math.max(14, vw - 260)), y: 124,
+    w: Math.min(440, vw - 28), h: clamp(vh * .56, 260, 420),
+    html: '<div id="memwall"></div>' });
 }
 
 /* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
@@ -166,20 +172,54 @@ function organizeBureau() {
   return open.length;
 }
 
-/* ---------- ÁRBOL DEL SISTEMA (columna persistente estilo Jared) ---------- */
+/* ---------- ÁRBOL DEL SISTEMA (columna persistente estilo Jared) ----------
+   Filas `▸ 00 — NOMBRE` con sublínea «N carpetas · M archivos». Al tocar una
+   se EXPANDE en su sitio (▾) y sus subcarpetas salen volando como chips,
+   igual que cuando Jared abre DAILY NOTES y le llueven los meses. */
+const openBranch = new Set();
 async function refreshTree() {
   const el = document.getElementById('treebody');
   try {
     const r = await (await fetch(API + '/api/files')).json();
     el.innerHTML = '';
-    (r.entries || []).forEach((e, i) => {
-      const d = document.createElement('div'); d.className = 'trow';
-      d.innerHTML = `<b>${String(i).padStart(2, '0')} · ${e.name}</b>
-        <small>${e.size} items · ${(e.fecha || '').slice(0, 10)}</small>`;
-      d.onclick = () => { W.files.show(); openFiles(e.name); };
-      el.appendChild(d);
-    });
+    (r.entries || []).forEach((e, i) => el.appendChild(treeRow(e, i)));
+    for (const root of [...openBranch]) {
+      const row = el.querySelector(`[data-root="${CSS.escape(root)}"]`);
+      if (row) expandBranch(row, root, true);
+    }
   } catch { el.innerHTML = '<div class="trow"><b>backend no disponible</b></div>'; }
+}
+function treeRow(e, i) {
+  const d = document.createElement('div');
+  d.className = 'trow'; d.dataset.root = e.name;
+  const nf = e.folders ?? 0, nx = e.files ?? 0;
+  d.innerHTML = `<b>${String(i).padStart(2, '0')} — ${e.name}</b>
+    <small>${nf} ${nf === 1 ? 'carpeta' : 'carpetas'} · ${nx} ${nx === 1 ? 'archivo' : 'archivos'}</small>`;
+  d.onclick = () => expandBranch(d, e.name);
+  return d;
+}
+async function expandBranch(row, root, silent = false) {
+  const id = 'br-' + root;
+  const old = document.getElementById(id);
+  if (old) { old.remove(); row.classList.remove('open'); openBranch.delete(root); return; }
+  row.classList.add('open'); openBranch.add(root);
+  const r = await (await fetch(API + '/api/tree?path=' + encodeURIComponent(root))).json();
+  if (r.error) { term('árbol: ' + r.error, 'error'); return; }
+  const box = document.createElement('div'); box.id = id; box.className = 'branch';
+  (r.children || []).forEach((c, i) => {
+    const k = document.createElement('div'); k.className = 'trow kid';
+    k.innerHTML = `<b>${String(i).padStart(2, '0')} — ${c.name}</b>
+      <small>${c.folders} carpetas · ${c.files} archivos</small>`;
+    k.onclick = ev => { ev.stopPropagation(); W.files.show(); openFiles(c.path); };
+    box.appendChild(k);
+  });
+  row.after(box);
+  if (!silent && (r.children || []).length) {
+    spawnChips(r.children.map(c => ({
+      txt: c.name, meta: `${c.folders + c.files} elementos · ${root}`,
+      act: () => { W.files.show(); openFiles(c.path); } })), row);
+    term('árbol: ' + root + ' desplegada → ' + r.children.length + ' subcarpetas', 'archivos');
+  }
 }
 
 /* ---------- OCULTAR / MOSTRAR todo (el HUD desaparece como en el video) ---------- */
@@ -187,32 +227,62 @@ let lastOpen = [];
 function hideAll() {
   lastOpen = Object.values(W).filter(w => w.open && !w.minimized).map(w => w.id);
   Object.values(W).forEach(w => w.close());
+  clearChips(); setState('oculto');
   term('HUD oculto — solo el orbe', 'ventanas');
 }
 function showAll() {
   const ids = lastOpen.length ? lastOpen : Object.keys(W);
   ids.forEach(id => W[id] && W[id].show());
+  setState('listo');
   term('ventanas restauradas: ' + ids.join(', '), 'ventanas');
 }
 
-/* ---------- CHIPS FLOTANTES: CORT te "lanza a las manos" notas y archivos ---------- */
+/* ---------- CHIPS FLOTANTES: CORT te "lanza a las manos" notas y archivos ----------
+   En la referencia los chips NO se borren solos: quedan flotando y se agarran
+   con la mano. Aquí: persistentes, arrastrables, con ✕ propio y tope de 14. */
 const cl = (v, a, b) => Math.max(a, Math.min(b, v));
-function spawnChips(items) {
+function spawnChips(items, anchor) {
   const layer = document.getElementById('chips');
-  const n = Math.min(items.length, 6);
-  items.slice(0, 6).forEach((it, i) => {
+  while (layer.children.length + Math.min(items.length, 8) > 14) layer.firstChild.remove();
+  const a = anchor ? anchor.getBoundingClientRect()
+                   : { left: innerWidth * .42, top: innerHeight * .38, width: 120, height: 28 };
+  const n = Math.min(items.length, 8);
+  items.slice(0, 8).forEach((it, i) => {
     const c = document.createElement('div'); c.className = 'chip';
-    c.innerHTML = `<b>${String(it.txt).replace(/</g, '&lt;')}</b><small>${String(it.meta || '').replace(/</g, '&lt;')}</small>`;
+    c.innerHTML = `<b>${String(it.txt).replace(/</g, '&lt;')}</b>
+      <small>${String(it.meta || '').replace(/</g, '&lt;')}</small><span class="x">✕</span>`;
     const ang = (i / n) * Math.PI * 2 + Math.random() * .9;
-    c.style.left = cl(Math.round(innerWidth / 2 + Math.cos(ang) * innerWidth * .21 - 70), 12, innerWidth - 200) + 'px';
-    c.style.top = cl(Math.round(innerHeight * .40 + Math.sin(ang) * innerHeight * .17 - 18), 92, innerHeight - 210) + 'px';
+    const rad = 150 + Math.random() * 100;
+    c.style.left = cl(Math.round(a.left + a.width / 2 + Math.cos(ang) * rad - 70), 12, innerWidth - 210) + 'px';
+    c.style.top = cl(Math.round(a.top + a.height / 2 + Math.sin(ang) * rad * .62 - 18), 92, innerHeight - 200) + 'px';
     c.style.animationDelay = (i * .35) + 's';
-    c.onclick = () => { it.act && it.act(); gone(c); };
+    c.querySelector('.x').onclick = ev => { ev.stopPropagation(); gone(c); };
+    dragChip(c);
+    c.onclick = () => { if (!c.dataset.moved) { it.act && it.act(); } delete c.dataset.moved; };
     layer.appendChild(c);
-    setTimeout(() => gone(c), 14000);
   });
 }
+function dragChip(c) {
+  let sx = 0, sy = 0, ox = 0, oy = 0, held = false;
+  c.addEventListener('pointerdown', e => {
+    if (e.target.classList.contains('x')) return;
+    held = true; c.classList.add('held');
+    sx = e.clientX; sy = e.clientY;
+    ox = parseFloat(c.style.left); oy = parseFloat(c.style.top);
+    c.setPointerCapture(e.pointerId);
+  });
+  c.addEventListener('pointermove', e => {
+    if (!held) return;
+    const dx = e.clientX - sx, dy = e.clientY - sy;
+    if (Math.abs(dx) + Math.abs(dy) > 6) c.dataset.moved = '1';
+    c.style.left = cl(ox + dx, 6, innerWidth - 200) + 'px';
+    c.style.top = cl(oy + dy, 88, innerHeight - 120) + 'px';
+  });
+  const up = () => { held = false; c.classList.remove('held'); };
+  c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+}
 function gone(c) { c.classList.add('gone'); setTimeout(() => c.remove(), 700); }
+function clearChips() { document.querySelectorAll('#chips .chip').forEach(c => gone(c)); }
 async function chipNotes() {
   const ns = await (await fetch(API + '/api/notes')).json();
   if (!ns.length) { sayLine('Aún no hay notas: dime «apunta …».'); return; }
@@ -327,8 +397,71 @@ async function saveProfile() {
   setTimeout(() => m.textContent = '', 4000);
 }
 
-/* ---------- reloj y estado (siempre fijos) ---------- */
-setInterval(() => document.getElementById('clock').textContent =
+/* ---------- CEREBRO: muro de recuerdos enmarcados ---------- */
+async function refreshMemories() {
+  const el = document.getElementById('memwall');
+  if (!el) return;
+  try {
+    const r = await (await fetch(API + '/api/memories')).json();
+    const ms = (r.recuerdos || []).slice().reverse();
+    const cnt = document.getElementById('memcount');
+    if (cnt) cnt.textContent = ms.length + ' recuerdos';
+    el.innerHTML = '';
+    const hero = document.createElement('div');
+    hero.className = 'frame hero';
+    hero.innerHTML = `<span class="sig">◉</span><b>C.O.R.T.</b>
+      <small>memoria persistente · ${ms.length} recuerdos<br>SQLite · sin nube</small>`;
+    el.appendChild(hero);
+    ms.forEach((m, i) => {
+      const t = String(m.texto || '');
+      const d = document.createElement('div');
+      d.className = 'frame'; d.style.animationDelay = (i * 35) + 'ms';
+      d.innerHTML = `<b>${m.tipo === 'nota' ? '✎ nota' : '✦ ' + (m.fuente || 'charla')}</b>
+        <p>${t.slice(0, 76).replace(/</g, '&lt;')}${t.length > 76 ? '…' : ''}</p>
+        <small>${m.fecha.slice(0, 10)}</small>`;
+      d.onclick = () => {
+        orb.burst(); setState('hablando');
+        sayLine((m.tipo === 'nota' ? 'Apuntaste: ' : 'Recuerdo que dije: ') + t.slice(0, 140));
+        term('recuerdo ' + m.fecha + ' · ' + m.tipo, 'cerebro');
+      };
+      el.appendChild(d);
+    });
+    if (!ms.length) {
+      const d = document.createElement('div');
+      d.className = 'frame empty';
+      d.innerHTML = '<b>aún no hay recuerdos</b><small>háblame o dime «apunta …» y este muro se llenará</small>';
+      el.appendChild(d);
+    }
+  } catch { el.innerHTML = '<div class="frame empty"><b>backend no disponible</b></div>'; }
+}
+function openCortex() { W.cerebro.show(); refreshMemories(); }
+
+/* ---------- LÁMPARA DE ESTADO (la bombilla de color de la referencia) ---------- */
+const LAMP = {
+  reposo:   ['#39c2ff', 'en reposo'],
+  escucha:  ['#8f6bff', 'escuchándote'],
+  pensando: ['#ff8a3d', 'procesando'],
+  hablando: ['#2bff9e', 'respondiendo'],
+  listo:    ['#2bff9e', 'en línea'],
+  oculto:   ['#4b7f9e', 'HUD oculto'],
+  error:    ['#ff5b5b', 'sin conexión'],
+};
+let lampTimer = 0;
+function setState(k) {
+  const el = document.getElementById('lamp');
+  if (!el) return;
+  const [c, txt] = LAMP[k] || LAMP.reposo;
+  el.classList.add('on');
+  el.style.setProperty('--lc', c);
+  el.title = 'CORT: ' + txt;
+  el.querySelector('span').textContent = txt;
+  clearTimeout(lampTimer);
+  if (k === 'pensando' || k === 'hablando' || k === 'escucha')
+    lampTimer = setTimeout(() => setState(k === 'escucha' ? 'reposo' : 'listo'),
+                           k === 'pensando' ? 12000 : 5200);
+}
+
+/* ---------- reloj y estado (siempre fijos) ---------- */setInterval(() => document.getElementById('clock').textContent =
   new Date().toLocaleTimeString('es-MX', { hour12: false }), 500);
 
 async function refreshStatus() {
@@ -417,10 +550,30 @@ function speakTTS(text) {
   const u = new SpeechSynthesisUtterance(text.slice(0, 400));
   u.lang = 'es-MX'; u.rate = 1.05; speechSynthesis.speak(u);
 }
+/* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
+const HIST = [];
+let hIdx = 0, draft = '';
+const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'muestra todo',
+  'muéstrame las notas', 'archivos recientes', 'recoge los chips', '¿qué hora es?',
+  'abre youtube', 'abre el navegador', 'apunta ', 'muéstrame tu cerebro', 'qué recuerdas'];
+function completeCmd(v) {
+  const hits = CMDS.filter(c => c.startsWith(v));
+  if (!hits.length) return null;
+  let best = hits[0];
+  for (const h of hits.slice(1)) {
+    let i = 0;
+    while (i < best.length && i < h.length && best[i] === h[i]) i++;
+    best = best.slice(0, i);
+  }
+  return best;
+}
 async function send(raw) {
   const q = document.getElementById('q');
   const msg = (raw ?? q.value).trim(); if (!msg) return;
   q.value = ''; add('u', msg);
+  if (HIST[HIST.length - 1] !== msg) HIST.push(msg);
+  hIdx = HIST.length; draft = '';
+  setState('pensando');
   document.getElementById('top').classList.add('glitch');
   setTimeout(() => document.getElementById('top').classList.remove('glitch'), 800);
   orb.activate();                                    // ← vórtice de activación (referencia)
@@ -475,6 +628,15 @@ async function send(raw) {
   if (/archivos recientes|mu[eé]strame (los )?archivos|lanza (los )?archivos/i.test(msg)) {
     add('a', 'Aquí tienes lo último de Documentos…', 'archivos'); chipRecentFiles(); return;
   }
+  if (/recoge|limpia (los )?chips|guarda los chips/i.test(msg)) {
+    clearChips(); add('a', 'Chips guardados. La pantalla vuelve a estar limpia.', 'ventanas');
+    setState('listo'); term('chips retirados', 'ventanas'); return;
+  }
+  if (/mu[eé]strame tu cerebro|qu[eé] recuerdas|abre el cerebro|tus recuerdos|muro de recuerdos/i.test(msg)) {
+    openCortex();
+    add('a', 'Este es mi muro de recuerdos: cada cuadro es algo que apunté o hablamos.', 'cerebro');
+    term('cerebro abierto', 'cerebro'); return;
+  }
   if (/\bpausa\b|mets pausa|det[eé]n la m[uú]sica|alto a la m[uú]sica/i.test(msg)) {
     pauseMusic();
     add('a', 'Música en pausa, como en la referencia.', 'ejecutor');
@@ -511,10 +673,11 @@ async function send(raw) {
     const r = await (await fetch(API + '/api/chat', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) })).json();
     add('a', r.reply, r.source); orb.burst(); speakTTS(r.reply);   // ← animación de acción
+    setState('hablando');
     term('respuesta vía ' + r.source, 'cerebro');
     if (/archivo|carpeta|explorador/i.test(msg)) openFiles();
     if (/nota|apunta|recuerda/i.test(msg)) { W.notes.show(); addNoteFromChat(msg); }
-  } catch { add('a', 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); }
+  } catch { add('a', 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); setState('error'); }
 }
 async function addNoteFromChat(msg) {
   const t = msg.replace(/^(apunta|nota|recuerda)[\s:]+/i, '').trim();
@@ -531,6 +694,7 @@ export function wireUI(orbRef) {
   buildWindows();
   term('CORT BIOS v0.4 — núcleo holográfico en línea', 'arranque');
   runBoot().then(({ backendOK }) => {
+    setState(backendOK ? 'listo' : 'error');
     term(backendOK ? 'backend conectado (localhost:8000)' : 'backend NO detectado', 'arranque');
     add('a', backendOK ? 'Sistemas en línea. CORT a sus órdenes.' :
       'Backend no detectado: ejecuta scripts/run.sh (Linux) o run.bat (Windows).',
@@ -551,7 +715,22 @@ export function wireUI(orbRef) {
   });
 
   document.getElementById('go').onclick = () => send();
-  document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  document.getElementById('q').addEventListener('keydown', e => {
+    const q = e.currentTarget;
+    if (e.key === 'Enter') return send();
+    if (e.key === 'ArrowUp') {                       // historial hacia atrás
+      if (!HIST.length) return;
+      if (hIdx === HIST.length) draft = q.value;
+      hIdx = Math.max(0, hIdx - 1); q.value = HIST[hIdx]; e.preventDefault();
+    } else if (e.key === 'ArrowDown') {
+      if (!HIST.length) return;
+      hIdx = Math.min(HIST.length, hIdx + 1);
+      q.value = hIdx === HIST.length ? draft : HIST[hIdx]; e.preventDefault();
+    } else if (e.key === 'Tab') {                    // autocompletar comandos
+      const c = completeCmd(q.value.trim().toLowerCase());
+      if (c) { q.value = c; e.preventDefault(); }
+    }
+  });
   document.getElementById('notago').onclick = addNote;
   document.getElementById('nota').addEventListener('keydown', e => { if (e.key === 'Enter') addNote(); });
   document.getElementById('pfguardar').onclick = saveProfile;
@@ -578,7 +757,7 @@ export function wireUI(orbRef) {
     Object.values(W).some(w => w.open && !w.minimized) ? hideAll() : showAll();
     orb.burst();
   };
-  document.getElementById('brain').onclick = () => { W.perfil.show(); term('cortex abierta', 'perfil'); };
+  document.getElementById('brain').onclick = () => { openCortex(); term('cerebro abierto', 'cerebro'); };
 
   /* micrófono */
   const mic = document.getElementById('mic');
@@ -587,8 +766,8 @@ export function wireUI(orbRef) {
     const rec = new SR(); rec.lang = 'es-MX'; rec.interimResults = false;
     let on = false;
     mic.onclick = () => { on ? rec.stop() : rec.start(); };
-    rec.onstart = () => { on = true; mic.classList.add('on'); orb.listen(true); };
-    rec.onend = () => { on = false; mic.classList.remove('on'); orb.listen(false); };
+    rec.onstart = () => { on = true; mic.classList.add('on'); orb.listen(true); setState('escucha'); };
+    rec.onend = () => { on = false; mic.classList.remove('on'); orb.listen(false); setState('reposo'); };
     rec.onresult = e => send(e.results[0][0].transcript);
 
     /* wake word "Oye CORT" — escucha permanente opt-in (botón 👂) */

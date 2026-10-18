@@ -136,6 +136,22 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       que salen eyectadas del portal toroidal al ejecutar (el anillo de fuego
       del video, en versión CORT). Títulos de ventana con contadores en vivo
       («raíces · 6 items»).
+- [x] **Segunda pasada por el video de Jared Hood** (lo que quedaba pendiente):
+      el **árbol ahora se EXPANDE** — cada raíz muestra «15 carpetas · 24
+      archivos» (dos conteos reales, como «6 folders · 2 notes» del video) y al
+      tocarla cambia `▸`→`▾`, inserta sus subcarpetas indentadas y **les lanza
+      chips a la mano** (`GET /api/tree` calcula los conteos hijos); los **chips
+      ya no desaparecen solos**: quedan flotando, se **arrastran** con el puntero
+      y al agarrlos crecen y brillan (14 como máximo, `✕` para retirar uno, «recoge
+      los chips» para guardarlos todos); ventana **08 · Cerebro**, el muro de
+      recuerdos enmarcados (cada nota y cada conversación es un cuadro con fecha;
+      el héroe central lleva el sello C.O.R.T. y el total — `GET /api/memories`
+      desde SQLite) que también abre **CORT'S BRAIN** o «muéstrame tu cerebro»;
+      **lámpara de estado** en el dock que cambia de color según lo que hace CORT
+      (morado escuchando, naranja procesando, verde respondiendo/en línea, gris
+      con el HUD oculto, rojo sin backend) igual que el foco del video; y el canal
+      de voz se volvió **consola de comandos**: prompt `cort@nave:~$`, historial
+      con ↑/↓ y **Tab que completa** («repro» → «reproduce»).
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre

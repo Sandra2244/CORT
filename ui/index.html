@@ -57,9 +57,9 @@
 
 <!-- árbol lateral persistente (la columna 00·–09· de Jared Hood) -->
 <div class="panel" id="tree">
-  <div class="winbar" style="cursor:default"><span class="ico">🗀</span><span class="ttl">Arbol del sistema</span></div>
+  <div class="winbar" style="cursor:default"><span class="ico">🗀</span><span class="ttl">Arbol del sistema</span><span class="hint">clic = desplegar</span></div>
   <div id="treebody"></div>
-  <div id="brain" title="el cerebro y perfil de CORT">▸ CORT'S BRAIN</div>
+  <div id="brain" title="el muro de recuerdos de CORT">▸ CORT'S BRAIN</div>
 </div>
 
 <!-- chips flotantes: archivos/notas que CORT te "lanza a las manos" (Jared) -->
@@ -74,7 +74,9 @@
   <button data-win="music" title="05 · Música"><i>♪</i><span>Musica</span></button>
   <button data-win="term" title="06 · Consola"><i>▤</i><span>Consola</span></button>
   <button data-win="perfil" title="07 · Perfil"><i>⚙</i><span>Perfil</span></button>
+  <button data-win="cerebro" title="08 · Cerebro (muro de recuerdos)"><i>⌗</i><span>Cerebro</span></button>
   <button data-act="hide" title="Ocultar / mostrar todas las ventanas"><i>◫</i><span>Ocultar</span></button>
+  <span id="lamp" title="estado de CORT"><i></i><span>arrancando</span></span>
 </div>
 
 <!-- botones flotantes: voz, escucha permanente y manos -->
@@ -84,7 +86,7 @@
 
 <!-- mini-vista de la cámara de gestos (panel 08) -->
 <div id="camwrap">
-  <div class="winbar"><span class="ico">✋</span><span class="ttl">08 · Gestos</span></div>
+  <div class="winbar"><span class="ico">✋</span><span class="ttl">09 · Gestos</span></div>
   <video id="camv" playsinline muted style="display:none"></video>
   <canvas id="gest" width="160" height="120"></canvas>
   <div id="gestlabel">apagada</div>

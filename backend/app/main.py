@@ -6,6 +6,8 @@ Endpoints:
   GET  /api/history                      -> últimas respuestas recordadas
   POST /api/profile   {clave, valor}     -> memoria de preferencias
   GET  /api/files?path=                  -> explorador de carpetas (raíces seguras)
+  GET  /api/tree?path=                   -> hijos de una carpeta con conteos (árbol lateral)
+  GET  /api/memories                     -> muro de recuerdos (notas + conversaciones)
   GET  /api/weather                      -> clima actual (Open-Meteo, cacheado)
 """
 from __future__ import annotations
@@ -114,6 +116,18 @@ def notes_del(note_id: int):
 @app.get("/api/files")
 def files(path: str = ""):
     return sensors.list_dir(path)
+
+
+@app.get("/api/tree")
+def tree(path: str = ""):
+    """Hijos de una carpeta con sus conteos — para expandir el árbol lateral."""
+    return sensors.tree(path)
+
+
+@app.get("/api/memories")
+def memories(n: int = 24):
+    """Muro de recuerdos (notas + conversaciones) para la ventana Cerebro."""
+    return {"recuerdos": memory.memories(n)}
 
 
 @app.get("/api/weather")

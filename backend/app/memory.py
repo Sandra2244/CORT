@@ -72,3 +72,24 @@ def delete_note(note_id: int) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM notas WHERE id=?", (note_id,))
         return cur.rowcount > 0
+
+
+# ------------------------------------------------- recuerdos (muro del cerebro)
+def memories(limit: int = 24) -> list[dict]:
+    """Recuerdos sueltos — notas e intercambios con el cerebro — para el muro
+    de cuadros (la 'sala de recuerdos' de la referencia)."""
+    import datetime as dt
+    def fmt(t):
+        return dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M")
+    out: list[dict] = []
+    with _conn() as c:
+        for t, texto, fuente in c.execute(
+                "SELECT t, texto, fuente FROM conversacion ORDER BY id DESC LIMIT ?",
+                (limit,)).fetchall():
+            out.append({"tipo": "charla", "texto": texto, "fuente": fuente or "—",
+                        "fecha": fmt(t)})
+        for t, texto in c.execute(
+                "SELECT t, texto FROM notas ORDER BY id DESC LIMIT 10").fetchall():
+            out.append({"tipo": "nota", "texto": texto, "fuente": "nota",
+                        "fecha": fmt(t)})
+    return sorted(out, key=lambda m: m["fecha"])[-limit:]
