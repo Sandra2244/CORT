@@ -55,6 +55,16 @@
 <div class="panel" id="status">conectando…</div>
 <div class="panel" id="clock">--:--:--</div>
 
+<!-- árbol lateral persistente (la columna 00·–09· de Jared Hood) -->
+<div class="panel" id="tree">
+  <div class="winbar" style="cursor:default"><span class="ico">🗀</span><span class="ttl">Arbol del sistema</span></div>
+  <div id="treebody"></div>
+  <div id="brain" title="el cerebro y perfil de CORT">▸ CORT'S BRAIN</div>
+</div>
+
+<!-- chips flotantes: archivos/notas que CORT te "lanza a las manos" (Jared) -->
+<div id="chips"></div>
+
 <!-- dock de ventanas (estética Jared Hood: chips rectangulares con icono + etiqueta monoespaciada) -->
 <div class="panel" id="dock">
   <button data-win="files" title="01 · Archivos"><i>🗀</i><span>Archivos</span></button>
@@ -64,6 +74,7 @@
   <button data-win="music" title="05 · Música"><i>♪</i><span>Musica</span></button>
   <button data-win="term" title="06 · Consola"><i>▤</i><span>Consola</span></button>
   <button data-win="perfil" title="07 · Perfil"><i>⚙</i><span>Perfil</span></button>
+  <button data-act="hide" title="Ocultar / mostrar todas las ventanas"><i>◫</i><span>Ocultar</span></button>
 </div>
 
 <!-- botones flotantes: voz, escucha permanente y manos -->

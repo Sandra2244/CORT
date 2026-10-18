@@ -42,9 +42,16 @@ def list_dir(rel: str = "") -> dict:
     """rel va con '/' entre raíz y subcarpetas, p.ej. 'Documentos/CORT/docs'."""
     parts = [p for p in rel.replace("\\", "/").split("/") if p]
     if not parts:
-        return {"path": "", "entries": [
-            {"name": k, "type": "dir", "size": 0, "fecha": _fecha(v)}
-            for k, v in ROOTS.items() if v.exists()]}
+        out = []
+        for k, v in ROOTS.items():
+            if not v.exists():
+                continue
+            try:
+                n = sum(1 for e in v.iterdir() if not e.name.startswith("."))
+            except OSError:
+                n = 0
+            out.append({"name": k, "type": "dir", "size": n, "fecha": _fecha(v)})
+        return {"path": "", "entries": out}
     root_name = parts[0]
     if root_name not in ROOTS:
         return {"error": f"raíz no permitida: {root_name}"}

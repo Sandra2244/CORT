@@ -53,7 +53,7 @@ function buildWindows() {
     x: 14, y: 112, w: Math.min(292, vw - 28), h: clamp(vh * .42, 200, 300),
     html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">▦</button><button id="flistbtn" title="vista de lista">☰</button></div><div id="flist"></div>` });
   W.env = createWin({ id: 'env', icon: '◉', title: '02 · Entorno',
-    x: vw - 254, y: 112, w: 240,
+    x: 14, y: clamp(112 + vh * .42 + 18, 330, 440), w: Math.min(240, vw - 28),
     html: `<div id="wx">…</div>
       <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
@@ -70,7 +70,7 @@ function buildWindows() {
       <div id="inputrow"><input id="nota" placeholder="Nueva nota…" autocomplete="off">
       <button id="notago">＋</button></div>` });
   W.music = createWin({ id: 'music', icon: '♪', title: '05 · Música',
-    x: clamp(vw - 316, 14, vw - 240), y: clamp(vh - 406, 112, 348), w: Math.min(302, vw - 28), h: clamp(vh * .5, 220, 392),
+    x: clamp(vw - 530, 14, vw - 240), y: clamp(vh - 406, 112, 348), w: Math.min(302, vw - 28), h: clamp(vh * .5, 220, 392),
     html: `<div id="nowplay">— sin reproducción —</div>
       <div id="mbar"><i id="mprog"></i></div>
       <div id="mrow"><button id="mprev">⏮</button><button id="mplay">▶</button>
@@ -164,6 +164,70 @@ function organizeBureau() {
     });
   });
   return open.length;
+}
+
+/* ---------- ÁRBOL DEL SISTEMA (columna persistente estilo Jared) ---------- */
+async function refreshTree() {
+  const el = document.getElementById('treebody');
+  try {
+    const r = await (await fetch(API + '/api/files')).json();
+    el.innerHTML = '';
+    (r.entries || []).forEach((e, i) => {
+      const d = document.createElement('div'); d.className = 'trow';
+      d.innerHTML = `<b>${String(i).padStart(2, '0')} · ${e.name}</b>
+        <small>${e.size} items · ${(e.fecha || '').slice(0, 10)}</small>`;
+      d.onclick = () => { W.files.show(); openFiles(e.name); };
+      el.appendChild(d);
+    });
+  } catch { el.innerHTML = '<div class="trow"><b>backend no disponible</b></div>'; }
+}
+
+/* ---------- OCULTAR / MOSTRAR todo (el HUD desaparece como en el video) ---------- */
+let lastOpen = [];
+function hideAll() {
+  lastOpen = Object.values(W).filter(w => w.open && !w.minimized).map(w => w.id);
+  Object.values(W).forEach(w => w.close());
+  term('HUD oculto — solo el orbe', 'ventanas');
+}
+function showAll() {
+  const ids = lastOpen.length ? lastOpen : Object.keys(W);
+  ids.forEach(id => W[id] && W[id].show());
+  term('ventanas restauradas: ' + ids.join(', '), 'ventanas');
+}
+
+/* ---------- CHIPS FLOTANTES: CORT te "lanza a las manos" notas y archivos ---------- */
+const cl = (v, a, b) => Math.max(a, Math.min(b, v));
+function spawnChips(items) {
+  const layer = document.getElementById('chips');
+  const n = Math.min(items.length, 6);
+  items.slice(0, 6).forEach((it, i) => {
+    const c = document.createElement('div'); c.className = 'chip';
+    c.innerHTML = `<b>${String(it.txt).replace(/</g, '&lt;')}</b><small>${String(it.meta || '').replace(/</g, '&lt;')}</small>`;
+    const ang = (i / n) * Math.PI * 2 + Math.random() * .9;
+    c.style.left = cl(Math.round(innerWidth / 2 + Math.cos(ang) * innerWidth * .21 - 70), 12, innerWidth - 200) + 'px';
+    c.style.top = cl(Math.round(innerHeight * .40 + Math.sin(ang) * innerHeight * .17 - 18), 92, innerHeight - 210) + 'px';
+    c.style.animationDelay = (i * .35) + 's';
+    c.onclick = () => { it.act && it.act(); gone(c); };
+    layer.appendChild(c);
+    setTimeout(() => gone(c), 14000);
+  });
+}
+function gone(c) { c.classList.add('gone'); setTimeout(() => c.remove(), 700); }
+async function chipNotes() {
+  const ns = await (await fetch(API + '/api/notes')).json();
+  if (!ns.length) { sayLine('Aún no hay notas: dime «apunta …».'); return; }
+  spawnChips(ns.slice(-5).reverse().map(x => ({
+    txt: x.texto.slice(0, 30), meta: x.fecha.slice(5, 10) + ' · nota',
+    act: () => { W.notes.show(); sayLine('Nota: ' + x.texto); } })));
+  term('chips de notas lanzados: ' + Math.min(5, ns.length), 'notas');
+}
+async function chipRecentFiles() {
+  const r = await (await fetch(API + '/api/files?path=Documentos')).json();
+  const fs = (r.entries || []).filter(e => e.type === 'file').slice(-5).reverse();
+  if (!fs.length) { sayLine('No encontré archivos recientes en Documentos.'); return; }
+  spawnChips(fs.map(e => ({ txt: e.name, meta: e.fecha.slice(0, 10) + ' · archivo',
+    act: () => { W.files.show(); openFiles('Documentos'); sayLine('Archivo ' + e.name + ' seleccionado.'); } })));
+  term('chips de archivos lanzados: ' + fs.length, 'archivos');
 }
 function ensureAnalyser(aud) {
   if (AC) return;
@@ -328,14 +392,14 @@ async function openFiles(path = '') {
       d.className = 'row';
       d.innerHTML = `<span>${row.name}</span>` +
         (row.fecha ? `<span class="fecha">${row.fecha.slice(0, 10)}</span>` : '') +
-        (row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
+        (row.type === 'file' && row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
     }
     d.onclick = row.type === 'file'
       ? () => { sayLine(`Archivo ${row.name} seleccionado.`); term('archivo: ' + row.name, 'archivos'); }
       : () => openFiles(row.dir);
     list.appendChild(d);
   });
-  document.getElementById('fpath').textContent = path || 'raíces';
+  document.getElementById('fpath').textContent = (path || 'raíces') + ' · ' + rows.length + ' items';
   term('listando ' + (path || 'raíces') + ' (' + rows.length + ' entradas)', 'archivos');
 }
 
@@ -398,6 +462,19 @@ async function send(raw) {
     add('a', r, 'ejecutor'); speakTTS(r); term('bureau: ' + n + ' ventanas', 'ejecutor');
     orb.burst(); return;
   }
+  if (/oculta (todo|las ventanas|el hud|los paneles)|esconde todo|desaparece/i.test(msg)) {
+    hideAll(); add('a', 'HUD oculto — solo quedo yo, brillando. Di «muestra todo» para volver.', 'ventanas');
+    speakTTS('Listo, solo el orbe.'); return;
+  }
+  if (/muestra (todo|las ventanas|los paneles|de vuelta)|devu[eé]lveme|aparece/i.test(msg)) {
+    showAll(); add('a', 'Ventanas de vuelta en su lugar.', 'ventanas'); speakTTS('De vuelta.'); return;
+  }
+  if (/mu[eé]strame (las )?notas|lanza (las )?notas|notas flotando/i.test(msg)) {
+    add('a', 'Tomando tus notas del archivo…', 'notas'); chipNotes(); return;
+  }
+  if (/archivos recientes|mu[eé]strame (los )?archivos|lanza (los )?archivos/i.test(msg)) {
+    add('a', 'Aquí tienes lo último de Documentos…', 'archivos'); chipRecentFiles(); return;
+  }
   if (/\bpausa\b|mets pausa|det[eé]n la m[uú]sica|alto a la m[uú]sica/i.test(msg)) {
     pauseMusic();
     add('a', 'Música en pausa, como en la referencia.', 'ejecutor');
@@ -459,16 +536,18 @@ export function wireUI(orbRef) {
       'Backend no detectado: ejecuta scripts/run.sh (Linux) o run.bat (Windows).',
       backendOK ? 'sistema' : 'error');
     if (backendOK) {
-      refreshStatus(); refreshWeather(); refreshNotes(); loadProfile();
+      refreshStatus(); refreshWeather(); refreshNotes(); loadProfile(); refreshTree();
       // los paneles se despliegan en cascada numerada, como en la referencia
       setTimeout(() => W.chat.show(), 150);
       setTimeout(() => { openFiles(); }, 500);
       setTimeout(() => W.env.show(), 800);
       setTimeout(() => W.music.show(), 1100);
       setTimeout(() => W.term.show(), 1400);
+      setTimeout(chipNotes, 2600);      // bienvenida estilo Jared: notas flotando
     }
     setInterval(refreshStatus, 10000);
     setInterval(refreshWeather, 10 * 60000);
+    setInterval(refreshTree, 5 * 60000);
   });
 
   document.getElementById('go').onclick = () => send();
@@ -493,6 +572,13 @@ export function wireUI(orbRef) {
   loadMusic();
   document.getElementById('fgrid').onclick = () => { fGrid = true; openFiles(curFPath); };
   document.getElementById('flistbtn').onclick = () => { fGrid = false; openFiles(curFPath); };
+
+  /* interfaz Jared: ocultar/mostrar desde el dock + cerebro del árbol */
+  document.querySelector('#dock [data-act=hide]').onclick = () => {
+    Object.values(W).some(w => w.open && !w.minimized) ? hideAll() : showAll();
+    orb.burst();
+  };
+  document.getElementById('brain').onclick = () => { W.perfil.show(); term('cortex abierta', 'perfil'); };
 
   /* micrófono */
   const mic = document.getElementById('mic');
@@ -546,6 +632,6 @@ export function wireUI(orbRef) {
               : Object.values(W).forEach(w => w.show());
     },
     onPinch: () => { W.chat.show(); term('gesto: pinza → canal de voz', 'gestos'); sayLine('Canal de voz al frente.'); },
-    onFist: () => { Object.values(W).forEach(w => w.close()); orb.burst(); term('gesto: puño → todo cerrado', 'gestos'); },
+    onFist: () => { hideAll(); orb.burst(); term('gesto: puño → HUD oculto (palma o «muestra todo» para volver)', 'gestos'); },
   }));
 }

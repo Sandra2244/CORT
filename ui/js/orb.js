@@ -203,6 +203,36 @@ export function initORB(mount) {
   let po = 0, poWant = 0;                     // mezcla esfera ⇄ portal toroidal
   let scatter = 0, actT0 = -1;                // explosión + barrido de enfoque
 
+  /* ---- CHISPAS DEL PORTAL (el anillo de fuego de Jared, versión CORT azul):
+         nacen en el tubo del toro y salen volando hacia afuera mientras vive ---- */
+  const SPK = 260;
+  const spkPos = new Float32Array(SPK * 3), spkSeed = new Float32Array(SPK);
+  for (let i = 0; i < SPK; i++) spkSeed[i] = Math.random();
+  const spkGeo = new THREE.BufferGeometry();
+  spkGeo.setAttribute('position', new THREE.BufferAttribute(spkPos, 3));
+  spkGeo.setAttribute('aSeed', new THREE.BufferAttribute(spkSeed, 1));
+  const spkMat = new THREE.ShaderMaterial({
+    uniforms: { uTex: { value: makeDotTexture() }, uSize: { value: .16 }, uOn: { value: 0 } },
+    vertexShader: `
+      attribute float aSeed; uniform float uSize; varying float vA;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float d = max(.1, -mv.z);
+        vA = 1. - aSeed;
+        gl_PointSize = uSize * (1.5 - aSeed) * (150. / d);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uTex; uniform float uOn; varying float vA;
+      void main() {
+        vec4 t = texture2D(uTex, gl_PointCoord);
+        gl_FragColor = vec4(vec3(.55, .85, 1.) * 1.4, t.a * vA * uOn);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const sparks = new THREE.Points(spkGeo, spkMat);
+  sparks.visible = false; group.add(sparks);
+
   /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
   const waves = [];
   function shockwave() {
@@ -305,6 +335,23 @@ export function initORB(mount) {
       p[i*3] = x; p[i*3+1] = y; p[i*3+2] = z;
     }
     geo.attributes.position.needsUpdate = true;
+    // chispas: solo viven mientras el portal está abierto
+    spkMat.uniforms.uOn.value = pox;
+    sparks.visible = pox > .05;
+    if (sparks.visible) {
+      const th2 = .55 + Math.sin(t * .0004) * .25, ct2 = Math.cos(th2), st2 = Math.sin(th2);
+      for (let i = 0; i < SPK; i++) {
+        const sd = spkSeed[i];
+        const f = (t * .0012 + sd * 7.3) % 1;                 // vida 0..1
+        const uu = sd * 6.28318 + discAngle * 2;
+        const vv = (i * 1.239) % 6.28318;
+        const rad = (1.9 + .3 * Math.cos(vv)) * (1 + f * 1.45);
+        const tx = Math.cos(uu) * rad, tz0 = Math.sin(uu) * rad;
+        const ty = .3 * Math.sin(vv) + f * (sd - .5) * 2.4;
+        spkPos[i*3] = tx; spkPos[i*3+1] = ty * ct2 - tz0 * st2; spkPos[i*3+2] = ty * st2 + tz0 * ct2;
+      }
+      spkGeo.attributes.position.needsUpdate = true;
+    }
     if ((frameNo++ % 3) === 0) updatePlexus();   // hilos a 20 fps: barato y fluido
     lines.material.opacity = .09 * (1 - e * .55) * (1 - vx * .8) + pox * .05;
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;

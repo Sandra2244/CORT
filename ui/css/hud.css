@@ -94,6 +94,38 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 #dock button.minimized::after{background:#ffb347;box-shadow:0 0 8px #ffb347;width:14px;height:3px;
   content:"";position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);border-radius:2px}
 
+/* ================= ÁRBOL DEL SISTEMA (columna persistente de Jared) ================= */
+#tree{position:fixed;right:10px;top:96px;width:196px;z-index:25;padding:0 0 8px;
+  display:flex;flex-direction:column;max-height:52vh}
+#tree .winbar{padding:7px 10px}
+#treebody{overflow:auto;flex:1}
+.trow{border:1px solid rgba(80,190,255,.16);border-radius:6px;margin:4px 8px;padding:5px 9px;
+  cursor:pointer;background:rgba(4,14,28,.35);transition:.15s}
+.trow b{display:block;font-family:Consolas,'Courier New',monospace;font-size:11px;
+  letter-spacing:.08em;color:#bfe8ff}
+.trow b::before{content:"▸ ";color:var(--cyan)}
+.trow small{display:block;color:#4b7f9e;font-size:9px;letter-spacing:.06em;margin-top:1px}
+.trow:hover{border-color:var(--cyan);background:rgba(0,160,255,.14);transform:translateX(-3px);
+  box-shadow:0 0 10px rgba(0,180,255,.25)}
+#brain{margin:6px 8px 0;padding:6px 9px;border-top:1px solid rgba(80,190,255,.2);
+  font-family:Consolas,'Courier New',monospace;font-size:10.5px;letter-spacing:.14em;
+  color:var(--cyan);cursor:pointer}
+#brain:hover{color:#fff;text-shadow:0 0 10px var(--cyan)}
+
+/* ================= CHIPS FLOTANTES (archivos que se lanzan a las manos) ================= */
+#chips{position:fixed;inset:0;pointer-events:none;z-index:26}
+.chip{position:absolute;pointer-events:auto;cursor:pointer;padding:6px 12px;border-radius:8px;
+  border:1px solid rgba(80,190,255,.4);background:rgba(3,12,24,.82);backdrop-filter:blur(6px);
+  box-shadow:0 0 18px rgba(0,150,255,.25);animation:chipFloat 4.5s ease-in-out infinite;
+  transition:opacity .6s, transform .6s}
+.chip b{display:block;font-family:Consolas,'Courier New',monospace;font-size:11.5px;
+  letter-spacing:.06em;color:#cfeaff;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip b::before{content:"▸ ";color:var(--cyan)}
+.chip small{color:#4b7f9e;font-size:9px}
+.chip:hover{border-color:var(--cyan);transform:scale(1.08);box-shadow:0 0 26px rgba(0,190,255,.5)}
+.chip.gone{opacity:0;transform:translateY(-26px) scale(.9);pointer-events:none}
+@keyframes chipFloat{50%{translate:0 -9px}}
+
 /* ================= archivos — filas tipo Jared (tira con filo y ▸) ================= */
 #flist .row{padding:4px 8px;margin:3px 0;border-radius:6px;cursor:pointer;display:flex;gap:8px;
   border:1px solid rgba(80,190,255,.16);background:rgba(4,14,28,.35);
@@ -213,7 +245,7 @@ label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8
 #twin .scan line{stroke:#2bff9e;stroke-width:2;animation:tsweep 3s ease-in-out infinite}
 @keyframes tsweep{0%,100%{transform:translateY(10px)}50%{transform:translateY(126px)}}
 .twinlbl{font-size:8px;letter-spacing:.22em;color:#4b7f9e;margin-top:2px}
-@media (max-width:900px){#arcs,#twin{display:none}}
+@media (max-width:900px){#arcs,#twin,#tree{display:none}}
 
 /* ================= ejecutor de música ================= */
 #nowplay{font-size:12px;color:var(--text-hi);letter-spacing:.06em;padding:2px 2px 8px;
