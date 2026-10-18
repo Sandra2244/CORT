@@ -53,13 +53,16 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 
 .winbar{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:grab;
   border-bottom:1px solid rgba(80,190,255,.22);user-select:none;
+  font-family:Consolas,'Courier New',monospace;
   font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#bfe8ff}
 .winbar:active{cursor:grabbing}
 .winbar .ico{filter:drop-shadow(0 0 6px var(--cyan))}
+.winbar .ttl::before{content:"▸ ";color:var(--cyan)}
 .winbar .ttl{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .winbar button{all:unset;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
-  font-size:12px;color:#9fdcff;cursor:pointer;transition:.15s}
-.winbar button:hover{background:rgba(0,160,255,.25);color:#fff;box-shadow:0 0 10px rgba(0,170,255,.5)}
+  border:1px solid rgba(80,190,255,.25);font-size:12px;color:#9fdcff;cursor:pointer;transition:.15s}
+.winbar button:hover{background:rgba(0,160,255,.25);color:#fff;border-color:var(--cyan);
+  box-shadow:0 0 10px rgba(0,170,255,.5)}
 .wcontent{flex:1;overflow:auto;padding:8px 10px}
 .win.focused{border-color:rgba(120,220,255,.75)}
 .win.focused::before,.win.focused::after{opacity:1;box-shadow:0 0 12px rgba(0,190,255,.4)}
@@ -73,24 +76,31 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 /* modo oficina: las ventanas se deslizan a su posición en 2 niveles */
 .win.snap{transition:left .55s cubic-bezier(.3,.8,.3,1), top .55s cubic-bezier(.3,.8,.3,1)}
 
-/* ================= DOCK (botones circulares, como la referencia) ================= */
-#dock{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:10px;
-  padding:8px 14px;border-radius:26px;z-index:30}
-#dock button{all:unset;width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
-  font-size:17px;cursor:pointer;position:relative;transition:.18s;color:#cfeaff;
-  border:1px solid rgba(80,190,255,.3);background:rgba(6,18,34,.5)}
-#dock button:hover{background:rgba(0,160,255,.22);transform:translateY(-5px);
+/* ================= DOCK — chips rectangulares estilo Jared Hood ================= */
+#dock{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;
+  padding:8px 12px;border-radius:14px;z-index:30;max-width:96vw;flex-wrap:wrap;justify-content:center}
+#dock button{all:unset;height:34px;padding:0 11px;border-radius:8px;display:flex;align-items:center;
+  gap:7px;cursor:pointer;position:relative;transition:.18s;color:#cfeaff;
+  border:1px solid rgba(80,190,255,.3);background:rgba(4,14,28,.65)}
+#dock button i{font-style:normal;font-size:14px;filter:drop-shadow(0 0 5px rgba(0,190,255,.6))}
+#dock button span{font-family:Consolas,'Courier New',monospace;font-size:10px;
+  letter-spacing:.16em;text-transform:uppercase}
+#dock button:hover{background:rgba(0,160,255,.22);transform:translateY(-4px) scale(1.04);
   box-shadow:0 0 16px rgba(0,170,255,.5);border-color:var(--cyan)}
-#dock button.active{border-color:var(--cyan);box-shadow:0 0 12px rgba(0,190,255,.35)}
+#dock button.active{border-color:var(--cyan);background:rgba(0,160,255,.16);
+  box-shadow:0 0 12px rgba(0,190,255,.35)}
 #dock button.active::after{content:"";position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);
   width:14px;height:3px;border-radius:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
 #dock button.minimized::after{background:#ffb347;box-shadow:0 0 8px #ffb347;width:14px;height:3px;
   content:"";position:absolute;bottom:-7px;left:50%;transform:translateX(-50%);border-radius:2px}
 
-/* ================= archivos ================= */
-#flist .row{padding:4px 8px;border-radius:6px;cursor:pointer;display:flex;gap:8px;
-  animation:rowIn .3s both}
-#flist .row:hover{background:rgba(0,160,255,.14);color:var(--text-hi)}
+/* ================= archivos — filas tipo Jared (tira con filo y ▸) ================= */
+#flist .row{padding:4px 8px;margin:3px 0;border-radius:6px;cursor:pointer;display:flex;gap:8px;
+  border:1px solid rgba(80,190,255,.16);background:rgba(4,14,28,.35);
+  font-family:Consolas,'Courier New',monospace;font-size:11.5px;
+  animation:rowIn .3s both;transition:.15s}
+#flist .row:hover{border-color:var(--cyan);background:rgba(0,160,255,.14);color:var(--text-hi);
+  transform:translateX(3px);box-shadow:0 0 10px rgba(0,180,255,.25)}
 #flist .size{margin-left:auto;color:#4b7f9e;font-size:10px}
 @keyframes rowIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 
@@ -153,8 +163,11 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 .tg{color:#2bff9e;text-transform:uppercase;font-size:9px;letter-spacing:.1em}
 
 /* ================= notas ================= */
-#notelist .row{display:flex;gap:8px;align-items:baseline;padding:4px 6px;border-radius:6px}
-#notelist .row:hover{background:rgba(0,160,255,.12)}
+#notelist .row{display:flex;gap:8px;align-items:baseline;padding:4px 8px;margin:3px 0;
+  border:1px solid rgba(80,190,255,.16);border-radius:6px;background:rgba(4,14,28,.35);
+  font-family:Consolas,'Courier New',monospace;font-size:12px;transition:.15s}
+#notelist .row::before{content:"▸";color:var(--cyan);font-size:10px}
+#notelist .row:hover{border-color:var(--cyan);background:rgba(0,160,255,.12)}
 .ntxt{flex:1;white-space:pre-wrap}
 .nota .fecha,.fecha{color:#4b7f9e;font-size:10px;white-space:nowrap;margin-left:auto}
 .nota .del{color:#ff5b5b;cursor:pointer;font-size:11px;opacity:.55}
@@ -214,10 +227,13 @@ label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8
 #mplay{font-size:14px}
 #mvol{flex:1;accent-color:var(--cyan);min-width:44px}
 #mtime{font-size:10px;color:#5e8cab;white-space:nowrap;font-family:Consolas,monospace}
-#plist .track{padding:4px 6px;border-radius:6px;cursor:pointer;display:flex;gap:8px}
-#plist .track:hover{background:rgba(0,160,255,.14)}
+#plist .track{padding:4px 8px;margin:3px 0;border-radius:6px;cursor:pointer;display:flex;gap:8px;
+  border:1px solid rgba(80,190,255,.16);background:rgba(4,14,28,.35);
+  font-family:Consolas,'Courier New',monospace;font-size:11.5px;transition:.15s}
+#plist .track:hover{border-color:var(--cyan);background:rgba(0,160,255,.14);transform:translateX(3px)}
 #plist .track.playing{background:rgba(0,160,255,.2);color:var(--text-hi);
-  border-left:2px solid var(--cyan);animation:pulse 1.6s infinite}
+  border-color:var(--cyan);border-left:3px solid var(--cyan);
+  transform:scale(1.02);box-shadow:0 0 14px rgba(0,190,255,.35);animation:pulse 1.6s infinite}
 
 /* ================= mosaico de archivos (vista DOSSIER) ================= */
 #ftools{display:flex;gap:6px;justify-content:flex-end;margin-bottom:4px}

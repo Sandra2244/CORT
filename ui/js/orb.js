@@ -20,9 +20,11 @@ export function initORB(mount) {
   const group = new THREE.Group();      // todo el conjunto respira juntos
   scene.add(group);
 
-  /* ---- núcleo azul brillante (sin naranja, como las referencias) ---- */
-  const nucleus = new THREE.Mesh(new THREE.SphereGeometry(.24, 24, 24),
-    new THREE.MeshBasicMaterial({ color: 0x8fdcff, transparent: true, opacity: .95 }));
+  /* ---- núcleo: bola de luz aditiva (ya no una esfera plana de plástico) ---- */
+  const nucleus = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: makeCoreTexture(), color: 0xaee2ff, transparent: true, opacity: .98,
+    blending: THREE.AdditiveBlending, depthWrite: false }));
+  nucleus.scale.setScalar(.85);
   group.add(nucleus);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({
     map: makeGlowTexture(), color: 0x5fc8ff, transparent: true, opacity: .8,
@@ -42,25 +44,57 @@ export function initORB(mount) {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const core = new THREE.Points(geo, new THREE.PointsMaterial({
-    color: 0x39c2ff, size: .028, transparent: true, opacity: .95,
-    blending: THREE.AdditiveBlending, depthWrite: false }));
+  const rnd = new Float32Array(N);
+  for (let i = 0; i < N; i++) rnd[i] = Math.random();
+  geo.setAttribute('aRand', new THREE.BufferAttribute(rnd, 1));
+  /* ENFOQUE/DESENFOQUE 3D (como cámara de cine): las partículas cercanas al
+     plano focal se ven pequeñas y brillantes; las desenfocadas se vuelven
+     grandes y tenues (bokeh barato en shader, sin post-proceso). */
+  const pMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTex: { value: makeDotTexture() }, uSize: { value: .18 },
+      uFocus: { value: 6 }, uColor: { value: new THREE.Color(0x4fc6ff) },
+    },
+    vertexShader: `
+      attribute float aRand;
+      uniform float uSize, uFocus;
+      varying float vBlur;
+      void main() {
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float d = max(.1, -mv.z);
+        vBlur = clamp(abs(d - uFocus) * .38, 0., 1.);
+        float s = uSize * (.8 + aRand * .55) * (1. + vBlur * 2.0);
+        gl_PointSize = s * (150. / d);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform sampler2D uTex;
+      uniform vec3 uColor;
+      varying float vBlur;
+      void main() {
+        vec4 t = texture2D(uTex, gl_PointCoord);
+        float a = t.a * (1. - vBlur * .78);
+        gl_FragColor = vec4(uColor * (1.35 - vBlur * .65), a);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const core = new THREE.Points(geo, pMat);
   group.add(core);
 
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1.02, 32, 32),
     new THREE.MeshBasicMaterial({ color: 0x0a66aa, transparent: true, opacity: .14 }));
   group.add(halo);
 
-  /* ---- PLEXUS 3D (video f7d16b9e): partículas ancla unidas por hilos de
-         luz cuando están cerca → constelación que respira en 3D ---- */
-  const ANCH = 160, MAXSEG = 700, D2 = .42 * .42;
+  /* ---- PLEXUS 3D: solo hilos MUY cortos y tenues (si se abusaba parecía
+         "pantalla con líneas"; ahora insinúan la constelación sin dibujarla) ---- */
+  const ANCH = 160, MAXSEG = 700, D2 = .26 * .26;
   const anchors = new Uint16Array(ANCH);
   for (let i = 0; i < ANCH; i++) anchors[i] = (i * 1453) % N;
   const linePos = new Float32Array(MAXSEG * 6);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
   const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
-    color: 0x39c2ff, transparent: true, opacity: .18,
+    color: 0x39c2ff, transparent: true, opacity: .09,
     blending: THREE.AdditiveBlending, depthWrite: false }));
   group.add(lines);
   function updatePlexus() {
@@ -132,6 +166,24 @@ export function initORB(mount) {
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
+  /* corazón del núcleo: punto blanco caliente → azul → transparente */
+  function makeCoreTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 2, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(190,235,255,.95)');
+    gr.addColorStop(.45, 'rgba(80,180,255,.45)'); gr.addColorStop(1, 'rgba(20,110,220,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+  /* textura suave de partícula (redonda, nunca cuadradito duro) */
+  function makeDotTexture() {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 1, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(160,220,255,.55)');
+    gr.addColorStop(1, 'rgba(60,160,255,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(c);
+  }
 
   /* ---- energía 0..1: 0 esfera compacta, 1 dispersión en anillo de estrellas ---- */
   let energy = 0, target = 0, spinBoost = 0;
@@ -149,6 +201,7 @@ export function initORB(mount) {
          se comprime en un TORO 3D inclinado (portal, video f7d16b9e) → esfera ---- */
   let vortex = 0, vortexWant = 0, vSpin = 0, musicOn = false;
   let po = 0, poWant = 0;                     // mezcla esfera ⇄ portal toroidal
+  let scatter = 0, actT0 = -1;                // explosión + barrido de enfoque
 
   /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
   const waves = [];
@@ -168,15 +221,17 @@ export function initORB(mount) {
     setTimeout(() => { target = 0; }, 1500);   // se recompone solo
   }
 
-  /** ACTIVACIÓN al recibir una orden (voz o chat): vórtice → portal tórico → esfera. */
+  /** ACTIVACIÓN al recibir una orden (voz o chat): estallido → vórtice → portal tórico → esfera. */
   function activate() {
     shockwave(); spinBoost = 6; vortexWant = 1;
+    scatter = 1; actT0 = performance.now();          // ¡explosión + la cámara enfoca!
     setTimeout(() => { shockwave(); }, 300);
     setTimeout(() => { vortexWant = 0; poWant = 1; }, 1700);   // del vórtice al portal 3D
     setTimeout(() => { poWant = 0; }, musicOn ? 1700 : 3200);  // y de vuelta en esfera
   }
 
-  /* depuración por URL: ?vortex / ?portal / ?disc congelan cada estado */
+  /* depuración por URL: ?vortex / ?portal / ?disc / ?burst congelan cada estado */
+  const FREEZE = { burst: /[?&]burst/.test(location.search) };
   if (/[?&]vortex/.test(location.search)) vortexWant = 1;
   if (/[?&]portal/.test(location.search)) { po = 1; poWant = 1; }
   if (/[?&]disc/.test(location.search)) musicOn = true;
@@ -192,6 +247,8 @@ export function initORB(mount) {
     vortex += (vortexWant - vortex) * .06;
     vSpin += .04 + vortex * .16;                      // el vórtice arremolina
     po += (poWant - po) * .06;                        // esfera ⇄ portal tórico
+    scatter *= .955;                                  // la explosión se apaga
+    if (FREEZE.burst) scatter = .8;                   // depuración: congela el estallido
     const e = energy, dm = discMode, vx = vortex, pox = po, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
@@ -239,15 +296,29 @@ export function initORB(mount) {
         y += (ty * ct - tz * sth - y) * pox;
         z += (ty * sth + tz * ct - z) * pox;
       }
+      if (scatter > .02) {
+        // estallido hacia afuera (la dispersión del video): cada partícula
+        // recibe una fuerza distinta → la esfera se rompe en esquirlas de luz
+        const k = scatter * (.35 + rnd[i] * .75);
+        x += bx / 1.15 * k; y += by / 1.15 * k * .8; z += bz / 1.15 * k;
+      }
       p[i*3] = x; p[i*3+1] = y; p[i*3+2] = z;
     }
     geo.attributes.position.needsUpdate = true;
     if ((frameNo++ % 3) === 0) updatePlexus();   // hilos a 20 fps: barato y fluido
-    lines.material.opacity = .18 * (1 - e * .55) * (1 - vx * .8) + pox * .10;
+    lines.material.opacity = .09 * (1 - e * .55) * (1 - vx * .8) + pox * .05;
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
-    core.material.size = .028 + e * .016 + dm * .008;
-    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm - vx * .7 - pox * .7);
-    nucleus.material.opacity = .95 * (1 - vx * .8) * (1 - pox * .8);
+    // PLANO FOCAL: respira lento; al activer barre de cerca a lejos →
+    // todo el orbe se DESENFOCA y vuelve a ENFOCAR como una cámara
+    let foc = 6 + Math.sin(t * .0004) * .9;
+    if (actT0 > 0) {
+      const k = (t - actT0) / 2600;
+      if (k < 1) foc = 3.4 + k * 4.6; else actT0 = -1;
+    }
+    pMat.uniforms.uFocus.value = foc;
+    pMat.uniforms.uSize.value = .18 + e * .10 + dm * .06 + scatter * .06;
+    nucleus.scale.setScalar(Math.max(.1, (1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm - vx * .7 - pox * .7) * .85));
+    nucleus.material.opacity = .98 * (1 - vx * .8) * (1 - pox * .8);
     glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4 + audioB * 2.2 * dm + vx * 1.2);
     glow.material.opacity = (.8 - e * .5) * (1 - vx * .6) * (1 - pox * .6);
     r1.rotation.z = t * .0004 + spinBoost * .01; r2.rotation.y = t * .0003;
