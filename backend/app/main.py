@@ -85,6 +85,32 @@ def profile(p: Perfil):
     return {"ok": True}
 
 
+@app.get("/api/profile")
+def profile_get():
+    return memory.get_profile()
+
+
+class Nota(BaseModel):
+    texto: str
+
+
+@app.get("/api/notes")
+def notes():
+    return memory.list_notes()
+
+
+@app.post("/api/notes")
+def notes_add(n: Nota):
+    if not n.texto.strip():
+        return {"error": "nota vacía"}
+    return {"id": memory.add_note(n.texto)}
+
+
+@app.delete("/api/notes/{note_id}")
+def notes_del(note_id: int):
+    return {"ok": memory.delete_note(note_id)}
+
+
 @app.get("/api/files")
 def files(path: str = ""):
     return sensors.list_dir(path)

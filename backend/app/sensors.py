@@ -28,12 +28,21 @@ ROOTS = {
 WEATHER_CACHE = {"t": 0.0, "data": None}
 
 
+def _fecha(p: Path) -> str:
+    """Última modificación como AAAA-MM-DD HH:MM (columna estilo JARVIS)."""
+    import datetime as _dt
+    try:
+        return _dt.datetime.fromtimestamp(p.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+    except OSError:
+        return ""
+
+
 def list_dir(rel: str = "") -> dict:
     """rel va con '/' entre raíz y subcarpetas, p.ej. 'Documentos/CORT/docs'."""
     parts = [p for p in rel.replace("\\", "/").split("/") if p]
     if not parts:
         return {"path": "", "entries": [
-            {"name": k, "type": "dir", "size": 0}
+            {"name": k, "type": "dir", "size": 0, "fecha": _fecha(v)}
             for k, v in ROOTS.items() if v.exists()]}
     root_name = parts[0]
     if root_name not in ROOTS:
@@ -57,6 +66,7 @@ def list_dir(rel: str = "") -> dict:
                 "name": e.name,
                 "type": "dir" if e.is_dir() else "file",
                 "size": e.stat().st_size if e.is_file() else 0,
+                "fecha": _fecha(e),
             })
             if len(entries) >= 300:
                 break

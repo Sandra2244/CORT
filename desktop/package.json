@@ -2,13 +2,45 @@
   "name": "cort-desktop",
   "productName": "CORT",
   "version": "0.1.0",
-  "description": "Ventana holográfica transparente de C.O.R.T.",
+  "description": "Ventana holográfica de C.O.R.T. (Cognitive Orchestrator / Real-Time)",
+  "author": "Sandra",
+  "license": "MIT",
   "main": "main.cjs",
   "private": true,
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.sandra.cort",
+    "productName": "CORT",
+    "directories": { "output": "out", "buildResources": "build" },
+    "files": ["main.cjs", "package.json"],
+    "extraResources": [
+      { "from": "../ui", "to": "ui" },
+      { "from": "../backend", "to": "backend",
+        "filter": ["**/*.py", "requirements.txt", ".env.example"] }
+    ],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "CORT"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "icon": "build/icon.png"
+    }
   },
   "devDependencies": {
-    "electron": "^31.3.1"
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
   }
 }

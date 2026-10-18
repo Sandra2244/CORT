@@ -55,6 +55,7 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 | `docs/` | Plan de arquitectura y fotogramas de referencia |
 | `scripts/run.sh` / `run.bat` | Arranque en Linux / Windows |
 | `scripts/run-desktop.sh` | Arranque del holograma de escritorio (Electron) |
+| `.github/workflows/build.yml` | CI que compila los instaladores .exe/.AppImage/.deb |
 
 ## Estado del proyecto (hoja de ruta F0–F7)
 
@@ -72,11 +73,20 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       probar con cámara física**
 - [x] Animación de acción: al responder, el orbe emite dos ondas de choque,
       las partículas se dispersan en espiral y se recomponen (referencia azul)
+- [x] Re-análisis profundo de referencias (montajes por detección de escena):
+      **consola del sistema** (registro en vivo de cada acción), **notas 01·**
+      (persistentes en SQLite, se crean desde el chat escribiendo "apunta …"),
+      **perfil** (nombre del asistente/usuario/tono/idioma → el cerebro lo usa
+      en cada respuesta), columna de **fechas** en archivos, rejilla en
+      perspectiva + arcos laterales + gemelo digital (referencia azul)
+- [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
+      falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre
       al frente, arrastrable) probado y funcionando en Linux 1.8 GB; **modo vidrio**
       transparente (`CORT_GLASS=1`) listo para equipos con GPU/compositor y Windows.
-      Falta: instaladores .exe / .AppImage
-- [ ] F5 Wake word "Oye CORT" + Piper TTS + perfil personalizable
+      electron-builder configurado (.exe NSIS / .AppImage / .deb) + icono propio;
+      los instaladores se construyen en GitHub Actions (`build.yml`), no en tu PC:
+      `git tag v0.2.0 && git push --tags`
 - [ ] F7 APK Android con Capacitor
 
 Todo el software usado es gratuito. Ningún puerto se expone a internet: backend y

@@ -18,6 +18,10 @@ def _conn() -> sqlite3.Connection:
     c.execute(
         "CREATE TABLE IF NOT EXISTS perfil (clave TEXT PRIMARY KEY, valor TEXT)"
     )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS notas ("
+        " id INTEGER PRIMARY KEY, t REAL, texto TEXT)"
+    )
     return c
 
 
@@ -44,3 +48,27 @@ def set_profile(key: str, value: str) -> None:
 def get_profile() -> dict:
     with _conn() as c:
         return dict(c.execute("SELECT clave, valor FROM perfil").fetchall())
+
+
+# ------------------------------------------------------------- notas (01 ·)
+def add_note(texto: str) -> int:
+    with _conn() as c:
+        cur = c.execute("INSERT INTO notas (t, texto) VALUES (?,?)",
+                        (time.time(), texto.strip()))
+        return cur.lastrowid
+
+
+def list_notes(limit: int = 50) -> list[dict]:
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT id, t, texto FROM notas ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+    import datetime as dt
+    return [{"id": i, "fecha": dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M"),
+             "texto": x} for i, t, x in rows][::-1]
+
+
+def delete_note(note_id: int) -> bool:
+    with _conn() as c:
+        cur = c.execute("DELETE FROM notas WHERE id=?", (note_id,))
+        return cur.rowcount > 0

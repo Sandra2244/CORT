@@ -135,3 +135,59 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 .glitch{animation:glitch .35s steps(2) 2}
 @keyframes glitch{25%{transform:translateX(-3px) skewX(4deg)}50%{transform:translateX(3px)}
   75%{transform:translateX(-1px) skewX(-2deg)}}
+
+/* ================= consola del sistema ================= */
+#termlog{font-family:Consolas,monospace;font-size:11px;line-height:1.7;color:#7fd0ff}
+.tl{animation:rowIn .25s both;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ts{color:#4b7f9e}
+.tg{color:#2bff9e;text-transform:uppercase;font-size:9px;letter-spacing:.1em}
+
+/* ================= notas ================= */
+#notelist .row{display:flex;gap:8px;align-items:baseline;padding:4px 6px;border-radius:6px}
+#notelist .row:hover{background:rgba(0,160,255,.12)}
+.ntxt{flex:1;white-space:pre-wrap}
+.nota .fecha,.fecha{color:#4b7f9e;font-size:10px;white-space:nowrap;margin-left:auto}
+.nota .del{color:#ff5b5b;cursor:pointer;font-size:11px;opacity:.55}
+.nota .del:hover{opacity:1;text-shadow:0 0 8px #ff5b5b}
+
+/* ================= perfil ================= */
+input.pf,select.pf{display:block;width:100%;box-sizing:border-box;background:rgba(2,10,22,.6);
+  border:1px solid var(--cyan-dim);border-radius:8px;color:#dff4ff;padding:7px 9px;
+  outline:none;font-size:13px;margin:2px 0 8px}
+input.pf:focus,select.pf:focus{border-color:var(--cyan);box-shadow:0 0 10px rgba(0,180,255,.3)}
+label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8cab}
+.pf-btn{all:unset;display:block;text-align:center;margin:6px auto 2px;padding:8px 22px;cursor:pointer;
+  border:1px solid var(--cyan);border-radius:20px;color:#cfeaff;background:rgba(0,160,255,.14);
+  letter-spacing:.12em;text-transform:uppercase;font-size:11px;transition:.2s}
+.pf-btn:hover{background:rgba(0,180,255,.32);box-shadow:0 0 14px rgba(0,190,255,.45)}
+.pf-msg{font-size:11px;color:#2bff9e;text-align:center;min-height:15px}
+
+/* ================= wake word fab ================= */
+#wake{left:calc(50% - 62px);bottom:132px}
+#mic{bottom:70px;left:calc(50% - 112px)}
+#hand{bottom:70px;left:calc(50% + 62px)}
+
+/* ================= arcos laterales (referencia azul) ================= */
+#arcs{position:fixed;inset:0;pointer-events:none;z-index:3}
+.arc{position:absolute;top:50%;transform:translateY(-50%);height:72vh;opacity:.5}
+.arc.left{left:6px} .arc.right{right:6px}
+.arc path{fill:none;stroke:rgba(70,190,255,.5);stroke-width:1.4;vector-effect:non-scaling-stroke}
+.arc path.in{stroke:rgba(70,190,255,.25)}
+.arc .ticks line{stroke:rgba(120,210,255,.6);stroke-width:1.4;vector-effect:non-scaling-stroke}
+.arc .lbl{fill:#6fc4ef;font:600 11px 'Segoe UI',sans-serif;letter-spacing:.3em;
+  writing-mode:vertical-rl;text-orientation:side-left}
+.arc.left .lbl{transform:rotate(180deg)}
+/* barrido de energía sobre los arcos */
+.arc path{stroke-dasharray:12 340;animation:sweep 5.5s linear infinite}
+.arc.right path{animation-delay:2.7s}
+@keyframes sweep{from{stroke-dashoffset:352}to{stroke-dashoffset:0}}
+
+/* ================= gemelo digital ================= */
+#twin{position:fixed;right:26px;bottom:86px;width:56px;z-index:4;opacity:.8;
+  text-align:center;pointer-events:none}
+#twin svg{width:44px;height:auto;filter:drop-shadow(0 0 8px rgba(0,190,255,.6))}
+#twin circle,#twin path{fill:none;stroke:#5fd0ff;stroke-width:2;vector-effect:non-scaling-stroke}
+#twin .scan line{stroke:#2bff9e;stroke-width:2;animation:tsweep 3s ease-in-out infinite}
+@keyframes tsweep{0%,100%{transform:translateY(10px)}50%{transform:translateY(126px)}}
+.twinlbl{font-size:8px;letter-spacing:.22em;color:#4b7f9e;margin-top:2px}
+@media (max-width:900px){#arcs,#twin{display:none}}

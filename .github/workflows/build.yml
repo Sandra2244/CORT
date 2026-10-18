@@ -1,0 +1,59 @@
+name: Construir instaladores CORT
+
+# Compila el holograma de escritorio para Windows y Linux SIN usar tu PC:
+# cada vez que creas una etiqueta v* (p. ej. git tag v0.2.0 && git push --tags)
+# o desde Actions → "Construir instaladores CORT" → Run workflow.
+# Los instaladores (.exe y .AppImage) aparecen como artefactos descargables
+# en la página de la ejecución y en la Release si el push fue de una etiqueta.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest   # instalador .exe (NSIS)
+            script: dist:win
+          - os: ubuntu-latest    # AppImage + .deb
+            script: dist:linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Instalar dependencias
+        run: npm install
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "0"
+      - name: Construir instalador (${{ matrix.os }})
+        run: npm run ${{ matrix.script }}
+      - name: Subir artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-${{ matrix.os }}
+          path: |
+            desktop/out/*.exe
+            desktop/out/*.AppImage
+            desktop/out/*.deb
+          if-no-files-found: error
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artefactos, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artefactos/*
+          body: Instaladores de CORT generados por CI (Windows .exe, Linux .AppImage/.deb).

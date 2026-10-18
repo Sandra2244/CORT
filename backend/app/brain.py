@@ -29,6 +29,28 @@ SYSTEM_PROMPT = (
     "algo físico, dime exactamente qué comando o botón lo haría."
 )
 
+
+def system_prompt() -> str:
+    """SYSTEM_PROMPT + preferencias del perfil (ventana PERFIL / POST /api/profile)."""
+    try:
+        try:
+            import memory  # uvicorn importa app/ en sys.path (módulo plano)
+        except ImportError:
+            from . import memory  # modo paquete (from app import brain)
+        p = memory.get_profile() or {}
+    except Exception:
+        p = {}
+    extra = []
+    if p.get("asistente"):
+        extra.append(f"Tu nombre es {p['asistente']} (el usuario lo eligió).")
+    if p.get("usuario"):
+        extra.append(f"El usuario se llama {p['usuario']}; salúdalo por su nombre.")
+    if p.get("tono"):
+        extra.append(f"Tono: {p['tono']}.")
+    if p.get("idioma"):
+        extra.append(f"Idioma preferido: {p['idioma']}.")
+    return SYSTEM_PROMPT + (" " + " ".join(extra) if extra else "")
+
 # ---------------------------------------------------------------- utilidades
 def _ollama_available() -> bool:
     try:
@@ -38,7 +60,7 @@ def _ollama_available() -> bool:
 
 
 def _ollama_chat(message: str, history: list[dict]) -> str:
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + history[-8:] + [
+    msgs = [{"role": "system", "content": system_prompt()}] + history[-8:] + [
         {"role": "user", "content": message}]
     r = requests.post(
         f"{OLLAMA_URL}/api/chat",
@@ -50,7 +72,7 @@ def _ollama_chat(message: str, history: list[dict]) -> str:
 
 
 def _groq_chat(message: str, history: list[dict]) -> str:
-    msgs = [{"role": "system", "content": SYSTEM_PROMPT}] + history[-12:] + [
+    msgs = [{"role": "system", "content": system_prompt()}] + history[-12:] + [
         {"role": "user", "content": message}]
     r = requests.post(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -70,7 +92,7 @@ def _gemini_chat(message: str, history: list[dict]) -> str:
     r = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{GEMINI_MODEL}:generateContent?key={GEMINI_KEY}",
-        json={"system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        json={"system_instruction": {"parts": [{"text": system_prompt()}]},
               "contents": contents},
         timeout=40,
     )

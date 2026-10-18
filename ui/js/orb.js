@@ -65,6 +65,10 @@ export function initORB(mount) {
     m.rotation.x = Math.PI / 2; floor.add(m);
   });
   floor.position.y = -1.75;
+  /* rejilla en perspectiva bajo el plato (referencia azul) */
+  const grid = new THREE.GridHelper(16, 26, 0x155a86, 0x0d3a5c);
+  grid.material.transparent = true; grid.material.opacity = .32;
+  grid.position.y = -.04; floor.add(grid);
   scene.add(floor);
 
   /* ---- haces de luz cayendo (ligeros, solo 4 planos aditivos) ---- */

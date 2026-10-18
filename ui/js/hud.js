@@ -63,6 +63,96 @@ function buildWindows() {
     html: `<div id="log"></div>
       <div id="inputrow"><input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
       <button id="go">⏎</button></div>` });
+  W.term = createWin({ id: 'term', icon: '▤', title: 'Consola del sistema',
+    x: 14, y: Math.max(140, vh - 268), w: Math.min(340, vw - 28), h: 240,
+    html: '<div id="termlog"></div>' });
+  W.notes = createWin({ id: 'notes', icon: '✎', title: '01 · Notas',
+    x: Math.round(vw / 2) - 170, y: 118, w: Math.min(340, vw - 28), h: 300,
+    html: `<div id="notelist"></div>
+      <div id="inputrow"><input id="nota" placeholder="Nueva nota…" autocomplete="off">
+      <button id="notago">＋</button></div>` });
+  W.perfil = createWin({ id: 'perfil', icon: '⚙', title: 'Perfil',
+    x: Math.round(vw / 2) - 150, y: 140, w: 300,
+    html: `<label class="pf">Nombre del asistente</label><input class="pf" id="pf-asistente" placeholder="CORT">
+      <label class="pf">Tu nombre</label><input class="pf" id="pf-usuario" placeholder="Sandra">
+      <label class="pf">Tono</label><select class="pf" id="pf-tono">
+        <option value="">(el de siempre: JARVIS elegante)</option>
+        <option value="formal y técnico">Formal y técnico</option>
+        <option value="cercano y desenfadado">Cercano y desenfadado</option>
+        <option value="muy breve, una frase">Muy breve</option></select>
+      <label class="pf">Idioma</label><select class="pf" id="pf-idioma">
+        <option value="">Español (es-MX)</option>
+        <option value="inglés">English</option>
+        <option value="portugués">Português</option></select>
+      <button id="pfguardar" class="pf-btn">Guardar perfil</button>
+      <div id="pfmsg" class="pf-msg"></div>` });
+}
+
+/* ---------- consola del sistema (log estilo JARVIS) ---------- */
+function term(txt, tag = 'sistema') {
+  const el = document.getElementById('termlog');
+  if (!el) return;
+  const d = document.createElement('div');
+  d.className = 'tl';
+  const hh = new Date().toLocaleTimeString('es-MX', { hour12: false });
+  d.innerHTML = `<span class="ts">${hh}</span> <span class="tg">${tag}</span> ${txt}`;
+  el.appendChild(d);
+  while (el.children.length > 120) el.firstChild.remove();
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ---------- notas ---------- */
+async function refreshNotes() {
+  const el = document.getElementById('notelist');
+  try {
+    const ns = await (await fetch(API + '/api/notes')).json();
+    el.innerHTML = ns.length ? '' : '<div class="row">sin notas — escribe abajo</div>';
+    ns.slice().reverse().forEach(n => {
+      const d = document.createElement('div'); d.className = 'row nota';
+      d.innerHTML = `<span class="ntxt">${n.texto.replace(/</g, '&lt;')}</span>
+        <span class="fecha">${n.fecha.slice(5)}</span> <span class="del" title="borrar">✕</span>`;
+      d.querySelector('.del').onclick = async () => {
+        await fetch(API + '/api/notes/' + n.id, { method: 'DELETE' });
+        term('nota #' + n.id + ' eliminada', 'notas'); refreshNotes();
+      };
+      el.appendChild(d);
+    });
+  } catch { el.innerHTML = '<div class="row">backend no disponible</div>'; }
+}
+async function addNote() {
+  const inp = document.getElementById('nota');
+  const t = inp.value.trim(); if (!t) return;
+  inp.value = '';
+  await fetch(API + '/api/notes', { method: 'POST',
+    headers: { 'content-type': 'application/json' }, body: JSON.stringify({ texto: t }) });
+  term('nota registrada: "' + t.slice(0, 32) + '"', 'notas');
+  orb.burst(); refreshNotes();
+}
+
+/* ---------- perfil ---------- */
+async function loadProfile() {
+  try {
+    const p = await (await fetch(API + '/api/profile')).json();
+    for (const k of ['asistente', 'usuario', 'tono', 'idioma'])
+      if (p[k]) document.getElementById('pf-' + k).value = p[k];
+  } catch { /* sin backend */ }
+}
+async function saveProfile() {
+  const vals = {};
+  for (const k of ['asistente', 'usuario', 'tono', 'idioma'])
+    vals[k] = document.getElementById('pf-' + k).value.trim();
+  let n = 0;
+  for (const [k, v] of Object.entries(vals)) {
+    if (!v) continue; n++;
+    await fetch(API + '/api/profile', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clave: k, valor: v }) });
+  }
+  const m = document.getElementById('pfmsg');
+  m.textContent = n ? `✓ ${n} preferencias guardadas — el cerebro las usará en la próxima respuesta`
+                    : 'nada que guardar';
+  term('perfil actualizado (' + n + ' campos)', 'perfil');
+  orb.burst();
+  setTimeout(() => m.textContent = '', 4000);
 }
 
 /* ---------- reloj y estado (siempre fijos) ---------- */
@@ -113,19 +203,22 @@ async function openFiles(path = '') {
   if (path) rows.push({ name: '↩ ..', dir: path.split('/').slice(0, -1).join('/') });
   for (const e of r.entries) rows.push({
     name: (e.type === 'dir' ? '🗁 ' : '🗎 ') + e.name,
-    dir: path ? path + '/' + e.name : e.name, type: e.type, size: e.size });
+    dir: path ? path + '/' + e.name : e.name, type: e.type, size: e.size,
+    fecha: e.fecha });
   list.innerHTML = '';
   rows.forEach((row, i) => {
     const d = document.createElement('div');
     d.className = 'row'; d.style.animationDelay = (i * 16) + 'ms';
     d.innerHTML = `<span>${row.name}</span>` +
+      (row.fecha ? `<span class="fecha">${row.fecha.slice(0, 10)}</span>` : '') +
       (row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
     d.onclick = row.type === 'file'
-      ? () => sayLine(`Archivo ${row.name} seleccionado.`)
+      ? () => { sayLine(`Archivo ${row.name} seleccionado.`); term('archivo: ' + row.name, 'archivos'); }
       : () => openFiles(row.dir);
     list.appendChild(d);
   });
   document.getElementById('fpath').textContent = path || 'raíces';
+  term('listando ' + (path || 'raíces') + ' (' + rows.length + ' entradas)', 'archivos');
 }
 
 /* ---------- chat + voz ---------- */
@@ -149,28 +242,42 @@ async function send(raw) {
   document.getElementById('top').classList.add('glitch');
   setTimeout(() => document.getElementById('top').classList.remove('glitch'), 800);
   orb.speak(900);
+  term('consulta: "' + msg.slice(0, 40) + '"', 'voz');
   try {
     const r = await (await fetch(API + '/api/chat', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) })).json();
     add('a', r.reply, r.source); orb.burst(); speakTTS(r.reply);   // ← animación de acción
+    term('respuesta vía ' + r.source, 'cerebro');
     if (/archivo|carpeta|explorador/i.test(msg)) openFiles();
+    if (/nota|apunta|recuerda/i.test(msg)) { W.notes.show(); addNoteFromChat(msg); }
   } catch { add('a', 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); }
+}
+async function addNoteFromChat(msg) {
+  const t = msg.replace(/^(apunta|nota|recuerda)[\s:]+/i, '').trim();
+  if (t && t !== msg) {
+    await fetch(API + '/api/notes', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ texto: t }) });
+    term('nota guardada desde el chat', 'notas'); refreshNotes();
+  }
 }
 
 /* ---------- todo junto ---------- */
 export function wireUI(orbRef) {
   orb = orbRef;
   buildWindows();
+  term('CORT BIOS v0.4 — núcleo holográfico en línea', 'arranque');
   runBoot().then(({ backendOK }) => {
+    term(backendOK ? 'backend conectado (localhost:8000)' : 'backend NO detectado', 'arranque');
     add('a', backendOK ? 'Sistemas en línea. CORT a sus órdenes.' :
       'Backend no detectado: ejecuta scripts/run.sh (Linux) o run.bat (Windows).',
       backendOK ? 'sistema' : 'error');
     if (backendOK) {
-      refreshStatus(); refreshWeather();
+      refreshStatus(); refreshWeather(); refreshNotes(); loadProfile();
       // las ventanas se despliegan en cascada, como en la referencia
       setTimeout(() => W.chat.show(), 150);
       setTimeout(() => { openFiles(); }, 500);
       setTimeout(() => W.env.show(), 800);
+      setTimeout(() => W.term.show(), 1100);
     }
     setInterval(refreshStatus, 10000);
     setInterval(refreshWeather, 10 * 60000);
@@ -178,6 +285,9 @@ export function wireUI(orbRef) {
 
   document.getElementById('go').onclick = () => send();
   document.getElementById('q').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+  document.getElementById('notago').onclick = addNote;
+  document.getElementById('nota').addEventListener('keydown', e => { if (e.key === 'Enter') addNote(); });
+  document.getElementById('pfguardar').onclick = saveProfile;
 
   /* micrófono */
   const mic = document.getElementById('mic');
@@ -189,19 +299,48 @@ export function wireUI(orbRef) {
     rec.onstart = () => { on = true; mic.classList.add('on'); orb.listen(true); };
     rec.onend = () => { on = false; mic.classList.remove('on'); orb.listen(false); };
     rec.onresult = e => send(e.results[0][0].transcript);
-  } else mic.style.display = 'none';
+
+    /* wake word "Oye CORT" — escucha permanente opt-in (botón 👂) */
+    const wake = document.getElementById('wake');
+    let wakeOn = false, wakeRec = null;
+    wake.onclick = () => {
+      wakeOn = !wakeOn;
+      wake.classList.toggle('on', wakeOn);
+      if (wakeOn) {
+        term('escucha de activación: «Oye CORT» — activa', 'voz');
+        startWake();
+      } else if (wakeRec) { wakeRec.stop(); wakeRec = null; }
+    };
+    function startWake() {
+      if (!wakeOn) return;
+      wakeRec = new SR(); wakeRec.lang = 'es-MX'; wakeRec.interimResults = false;
+      wakeRec.continuous = false;
+      wakeRec.onresult = e => {
+        const t = e.results[0][0].transcript;
+        if (/oye\s+cort|cort[,.]?$/i.test(t)) {
+          term('palabra de activación detectada: "' + t + '"', 'voz');
+          orb.burst(); W.chat.show();
+          sayLine('¿Sí?'); send(t.replace(/oye\s+cort[,.\s]*/i, ''));
+        }
+      };
+      wakeRec.onend = () => { if (wakeOn) setTimeout(startWake, 400); };
+      wakeRec.onerror = err => { if (wakeOn && err === 'not-allowed') { wakeOn = false; wake.classList.remove('on'); } };
+      try { wakeRec.start(); } catch { /* ya activa */ }
+    }
+  } else { mic.style.display = 'none'; document.getElementById('wake').style.display = 'none'; }
 
   /* gestos — modo ligero */
   import('./gestures.js').then(({ initGestures }) => initGestures({
     video: document.getElementById('camv'), canvas: document.getElementById('gest'),
     button: document.getElementById('hand'), label: document.getElementById('gestlabel'),
     onPalm: () => {                       // palma: desplegar o plegar todas
-      orb.burst();
+      orb.burst(); term('gesto: palma → ' +
+        (Object.values(W).some(w => w.open && !w.minimized) ? 'plegar ventanas' : 'desplegar ventanas'), 'gestos');
       const anyOpen = Object.values(W).some(w => w.open && !w.minimized);
       anyOpen ? Object.values(W).forEach(w => w.minimize())
               : Object.values(W).forEach(w => w.show());
     },
-    onPinch: () => { W.chat.show(); sayLine('Canal de voz al frente.'); },
-    onFist: () => { Object.values(W).forEach(w => w.close()); orb.burst(); },
+    onPinch: () => { W.chat.show(); term('gesto: pinza → canal de voz', 'gestos'); sayLine('Canal de voz al frente.'); },
+    onFist: () => { Object.values(W).forEach(w => w.close()); orb.burst(); term('gesto: puño → todo cerrado', 'gestos'); },
   }));
 }
