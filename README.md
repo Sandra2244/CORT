@@ -109,6 +109,20 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       navegador» → `POST /api/launch` con **lista blanca estricta** (nunca se
       lanza nada que no esté en `LAUNCH_ALLOWLIST`). Probado en vivo: Chrome
       abrió YouTube y la orden «terminal» fue rechazada.
+- [x] **Orbe con cámara de cine + estética Jared Hood** (commit 88e0fc4): las
+      partículas ahora usan un **shader con plano focal** — cercanas al foco =
+      puntos pequeños y brillantes; fuera de foco = bolas suaves tenues (bokeh
+      3D real, sin post-proceso). El plano **respira** solo y al activar una
+      orden **barre de cerca a lejos** (desenfoque → re-enfoque). El núcleo dejó
+      de ser una esfera plana: ahora es una **bola de luz aditiva** con corazón
+      blanco caliente. La activación empieza con un **estallido de esquirlas**
+      (cada partícula sale eyectada con fuerza distinta) → vórtice → portal →
+      re-enfoque. Plexus reducido a hilos cortísimos y tenues (ya no parece
+      "pantalla con líneas"). Depuración: `?burst` congela el estallido.
+      **UI estilo Jared**: dock de chips rectangulares con icono + etiqueta
+      monoespaciada en mayúsculas, barras de ventana `▸ NN · NOMBRE`, filas de
+      archivos/notas/canciones como tiras en filo con ▸, botones ─/✕ cuadrados
+      y la pista "playing" crece y brilla como el panel PROPS del video.
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre
