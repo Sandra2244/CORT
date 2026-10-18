@@ -133,3 +133,14 @@ def audio(ruta: str):
     if not f:
         return {"error": "archivo no encontrado o fuera de Música"}
     return FileResponse(f)
+
+
+class Play(BaseModel):
+    ruta: str = ""
+
+
+@app.post("/api/play")
+def play(p: Play):
+    """Ejecutor de música en el SISTEMA: abre el reproductor predeterminado
+    (VLC u otro) con una canción; sin ruta, elige una al azar de ~/Música."""
+    return sensors.play_external(p.ruta)

@@ -1,7 +1,8 @@
-/* ===== ORB de CORT — Three.js (estilo referencia azul) =====
-   Capas visibles en el video: núcleo rojo-anaranjado brillante,
-   cáscara de partículas azules, anillos orbitales, anillos de suelo
-   concéntricos y estrellas. Al hablar se dispersa en círculo de estrellas. */
+/* ===== ORB de CORT — Three.js (azul puro estilo Cortana/BLACKBOX) =====
+   Sin núcleo naranja: centro azul brillante, cáscara de partículas,
+   anillos orbitales, suelo concéntrico y estrellas. Al ACTIVAR una orden
+   hace el vórtice del video francés: estalla, gira en embudo espiral,
+   se comprime en anillo (portal) y se recompone ejecutando la acción. */
 import * as THREE from 'three';
 
 export function initORB(mount) {
@@ -17,12 +18,12 @@ export function initORB(mount) {
   const group = new THREE.Group();      // todo el conjunto respira juntos
   scene.add(group);
 
-  /* ---- núcleo rojo-anaranjado (el "corazón" de la referencia azul) ---- */
-  const nucleus = new THREE.Mesh(new THREE.SphereGeometry(.30, 24, 24),
-    new THREE.MeshBasicMaterial({ color: 0xff6a2a }));
+  /* ---- núcleo azul brillante (sin naranja, como las referencias) ---- */
+  const nucleus = new THREE.Mesh(new THREE.SphereGeometry(.24, 24, 24),
+    new THREE.MeshBasicMaterial({ color: 0x8fdcff, transparent: true, opacity: .95 }));
   group.add(nucleus);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeGlowTexture(), color: 0xff8f45, transparent: true, opacity: .85,
+    map: makeGlowTexture(), color: 0x5fc8ff, transparent: true, opacity: .8,
     blending: THREE.AdditiveBlending, depthWrite: false }));
   glow.scale.setScalar(1.6);
   group.add(glow);
@@ -91,8 +92,8 @@ export function initORB(mount) {
   function makeGlowTexture() {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 4, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(255,170,90,1)'); gr.addColorStop(.4, 'rgba(255,110,40,.35)');
-    gr.addColorStop(1, 'rgba(255,80,20,0)');
+    gr.addColorStop(0, 'rgba(190,240,255,1)'); gr.addColorStop(.4, 'rgba(70,180,255,.35)');
+    gr.addColorStop(1, 'rgba(20,110,220,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
@@ -103,11 +104,15 @@ export function initORB(mount) {
 
   /* ---- MODO DISCO (ejecutor de música): el orbe se dispersa y forma un
          círculo/vinilo que gira; la velocidad y el pulso los manda el audio ---- */
-  let discMode = 0, discWant = 0, discAngle = 0, audioL = 0, audioB = 0;
+  let discMode = 0, discAngle = 0, audioL = 0, audioB = 0;
   const discEdge = new THREE.Mesh(new THREE.TorusGeometry(2.38, .012, 8, 200),
     new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false }));
   discEdge.rotation.x = Math.PI / 2; group.add(discEdge);
+
+  /* ---- VÓRTICE DE ACTIVACIÓN (video francés): estalla → gira en embudo →
+         se comprime en anillo portal → se recompone ejecutando la acción ---- */
+  let vortex = 0, vortexWant = 0, vSpin = 0, musicOn = false, actDisc = 0;
 
   /* ---- onda de choque (shockwave) al ejecutar una acción ---- */
   const waves = [];
@@ -127,14 +132,28 @@ export function initORB(mount) {
     setTimeout(() => { target = 0; }, 1500);   // se recompone solo
   }
 
+  /** ACTIVACIÓN al recibir una orden (voz o chat): vórtice → anillo → esfera. */
+  function activate() {
+    shockwave(); spinBoost = 6; vortexWant = 1;
+    setTimeout(() => { shockwave(); }, 300);
+    setTimeout(() => { vortexWant = 0; actDisc = 1; }, 1700);  // del vórtice al portal
+    setTimeout(() => { actDisc = 0; }, musicOn ? 1700 : 3000); // y de vuelta en esfera
+  }
+
+  /* depuración por URL: ?vortex congela el vórtice, ?disc congela el anillo */
+  if (/[?&]vortex/.test(location.search)) vortexWant = 1;
+  if (/[?&]disc/.test(location.search)) musicOn = true;
+
   function frame(t) {
     requestAnimationFrame(frame);
     energy += (target - energy) * .05;
     spinBoost *= .96;
-    discMode += (discWant - discMode) * .04;         // transición esfera ⇄ disco
+    discMode += ((musicOn || actDisc ? 1 : 0) - discMode) * .04; // esfera ⇄ disco
     discAngle += .008 + audioL * .02 + audioB * .05; // ¡gira con la música!!
     audioB *= .92;                                    // el pulso del bajo decae
-    const e = energy, dm = discMode, p = geo.attributes.position.array;
+    vortex += (vortexWant - vortex) * .06;
+    vSpin += .04 + vortex * .16;                      // el vórtice arremolina
+    const e = energy, dm = discMode, vx = vortex, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
       const ang = Math.atan2(bz, bx) + e * (spinBoost * .06 + s * .35); // giro espiral al dispersar
@@ -143,6 +162,16 @@ export function initORB(mount) {
       let x = (bx * (1 + e * 1.1) * wob) * (1 - e) + rx * e * wob;
       let z = (bz * (1 + e * 1.1) * wob) * (1 - e) + rz * e * wob;
       let y = by * (1 - e * .85) + Math.sin(t * .003 + s * 9) * .12 * e;
+      if (vx > .01) {
+        // embudo/vórtice: radio crece con la altura, cada vuelta gira más
+        const yv = by / 1.15;                        // -1..1
+        const rv = .35 + (yv * .5 + .5) * 1.75;
+        const a = ang + yv * 2.6 + vSpin;
+        const jit = 1 + Math.sin(t * .006 + s * 8) * .06 * vx;
+        x += (Math.cos(a) * rv * jit - x) * vx;
+        z += (Math.sin(a) * rv * jit - z) * vx;
+        y += (yv * 1.75 - y) * vx;
+      }
       if (dm > .01) {
         // posición en el anillo: banda brillante hueca (el "círculo que gira"
         // de la referencia) + surcos interiores tipo vinilo en los bordes
@@ -162,13 +191,14 @@ export function initORB(mount) {
     geo.attributes.position.needsUpdate = true;
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
     core.material.size = .028 + e * .016 + dm * .008;
-    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm);
-    glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4 + audioB * 2.2 * dm);
-    glow.material.opacity = .85 - e * .5;
+    nucleus.scale.setScalar(1 + Math.sin(t * .004) * .08 + e * .5 + audioB * .9 * dm - vx * .7);
+    nucleus.material.opacity = .95 * (1 - vx * .8);
+    glow.scale.setScalar(1.6 + Math.sin(t * .004) * .18 + e * 1.4 + audioB * 2.2 * dm + vx * 1.2);
+    glow.material.opacity = (.8 - e * .5) * (1 - vx * .6);
     r1.rotation.z = t * .0004 + spinBoost * .01; r2.rotation.y = t * .0003;
-    r1.material.opacity = .6 * (1 - dm * .8); r2.material.opacity = .6 * (1 - dm * .8);
+    r1.material.opacity = .6 * (1 - dm * .8) * (1 - vx); r2.material.opacity = .6 * (1 - dm * .8) * (1 - vx);
     halo.scale.setScalar(1 + Math.sin(t * .003) * .03 + e * .5);
-    halo.material.opacity = .14 * (1 - dm);
+    halo.material.opacity = .14 * (1 - dm) * (1 - vx);
     discEdge.material.opacity = dm * (.5 + audioB * .5);
     discEdge.scale.setScalar(1 + audioB * .12 * dm);
     floor.rotation.y = t * .00012 + spinBoost * .002 + discAngle * .25 * dm;
@@ -192,10 +222,12 @@ export function initORB(mount) {
   return {
     speak(ms = 2600) { target = 1; if (ms > 0) setTimeout(() => target = 0, ms); },
     burst,
-    stop() { target = 0; },
+    /** vórtice de activación: se dispersa, gira en embudo y forma un portal */
+    activate,
+    stop() { target = 0; vortexWant = 0; },
     listen(on) { target = on ? .35 : 0; },
     /** activar/desactivar el modo vinilo del ejecutor de música */
-    setDisc(on) { discWant = on ? 1 : 0; if (!on) target = 0; },
+    setDisc(on) { musicOn = !!on; if (!on) target = 0; },
     /** nivel 0..1 (volumen) y bajo 0..1 (pulso) desde el AnalyserNode */
     setAudio(level = 0, bass = 0) { audioL = level; audioB = Math.max(audioB, bass); },
   };

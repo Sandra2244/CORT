@@ -116,8 +116,15 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 #mic{left:calc(50% - 62px)} #hand{left:calc(50% + 12px)}
 .fab.on{box-shadow:0 0 26px #19b3ff;border-color:#19b3ff;color:#fff;animation:pulse 1.2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 40px #19b3ff}}
-#camwrap{position:fixed;bottom:132px;left:calc(50% - 90px);width:160px;z-index:31;display:none}
+#camwrap{position:fixed;bottom:132px;left:calc(50% - 92px);width:184px;z-index:31;display:none;
+  background:linear-gradient(160deg,var(--glass-hi),var(--glass) 55%);
+  border:1px solid var(--cyan-dim);border-radius:12px;padding:0 8px 8px;
+  backdrop-filter:blur(14px) saturate(1.4);
+  box-shadow:0 0 30px rgba(0,150,255,.10) inset,0 10px 34px rgba(0,0,0,.55)}
 #camwrap.show{display:block}
+#camwrap .winbar{padding:7px 0 6px;font-size:10px;letter-spacing:.2em}
+#camwrap .winbar .ttl{flex:1}
+#camwrap .winbar .ico{filter:drop-shadow(0 0 6px var(--cyan))}
 #gest{width:160px;height:120px;border-radius:10px;border:1px solid var(--cyan-dim);
   background:rgba(0,0,0,.5);transform:scaleX(-1)}
 #gestlabel{text-align:center;font-size:10px;letter-spacing:.2em;text-transform:uppercase;

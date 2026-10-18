@@ -44,34 +44,44 @@ async function runBoot() {
   return { backendOK, brainTxt };
 }
 
-/* ---------- ventanas de vidrio ---------- */
+/* ---------- ventanas de vidrio (paneles numerados estilo referencia) ---------- */
 let W = {};
 function buildWindows() {
   const vw = innerWidth, vh = innerHeight;
-  W.files = createWin({ id: 'files', icon: '🗀', title: 'Archivos · <span id="fpath">raíces</span>',
-    x: 14, y: 112, w: Math.min(300, vw - 28), h: Math.min(340, vh * .48),
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));   // que nunca se salgan de pantalla
+  W.files = createWin({ id: 'files', icon: '🗀', title: '01 · Archivos · <span id="fpath">raíces</span>',
+    x: 14, y: 112, w: Math.min(292, vw - 28), h: clamp(vh * .42, 200, 300),
     html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">▦</button><button id="flistbtn" title="vista de lista">☰</button></div><div id="flist"></div>` });
-  W.env = createWin({ id: 'env', icon: '◉', title: 'Entorno',
+  W.env = createWin({ id: 'env', icon: '◉', title: '02 · Entorno',
     x: vw - 254, y: 112, w: 240,
     html: `<div id="wx">…</div>
       <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">DISCO</div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
       <div id="batt" style="margin-top:6px;font-size:11px"></div>` });
-  W.chat = createWin({ id: 'chat', icon: '✦', title: 'CORT · canal de voz',
-    x: Math.max(14, vw - 394), y: vh - 306, w: Math.min(380, vw - 28), h: 288,
+  W.chat = createWin({ id: 'chat', icon: '✦', title: '03 · Canal de voz',
+    x: Math.max(14, Math.round(vw / 2) - 190), y: Math.max(140, vh - 386), w: Math.min(380, vw - 28), h: 288,
     html: `<div id="log"></div>
       <div id="inputrow"><input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
       <button id="go">⏎</button></div>` });
-  W.term = createWin({ id: 'term', icon: '▤', title: 'Consola del sistema',
-    x: 14, y: Math.max(140, vh - 268), w: Math.min(340, vw - 28), h: 240,
-    html: '<div id="termlog"></div>' });
-  W.notes = createWin({ id: 'notes', icon: '✎', title: '01 · Notas',
+  W.notes = createWin({ id: 'notes', icon: '✎', title: '04 · Notas',
     x: Math.round(vw / 2) - 170, y: 118, w: Math.min(340, vw - 28), h: 300,
     html: `<div id="notelist"></div>
       <div id="inputrow"><input id="nota" placeholder="Nueva nota…" autocomplete="off">
       <button id="notago">＋</button></div>` });
-  W.perfil = createWin({ id: 'perfil', icon: '⚙', title: 'Perfil',
+  W.music = createWin({ id: 'music', icon: '♪', title: '05 · Música',
+    x: clamp(vw - 316, 14, vw - 240), y: clamp(vh - 406, 112, 348), w: Math.min(302, vw - 28), h: clamp(vh * .5, 220, 392),
+    html: `<div id="nowplay">— sin reproducción —</div>
+      <div id="mbar"><i id="mprog"></i></div>
+      <div id="mrow"><button id="mprev">⏮</button><button id="mplay">▶</button>
+        <button id="mnext">⏭</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
+        <span id="mtime"></span><button id="mref" title="recargar lista">↻</button></div>
+      <div id="plist"></div>
+      <audio id="aud" crossorigin="anonymous"></audio>` });
+  W.term = createWin({ id: 'term', icon: '▤', title: '06 · Consola del sistema',
+    x: 14, y: Math.max(140, vh - 268), w: Math.min(340, vw - 28), h: 240,
+    html: '<div id="termlog"></div>' });
+  W.perfil = createWin({ id: 'perfil', icon: '⚙', title: '07 · Perfil',
     x: Math.round(vw / 2) - 150, y: 140, w: 300,
     html: `<label class="pf">Nombre del asistente</label><input class="pf" id="pf-asistente" placeholder="CORT">
       <label class="pf">Tu nombre</label><input class="pf" id="pf-usuario" placeholder="Sandra">
@@ -86,15 +96,6 @@ function buildWindows() {
         <option value="portugués">Português</option></select>
       <button id="pfguardar" class="pf-btn">Guardar perfil</button>
       <div id="pfmsg" class="pf-msg"></div>` });
-  W.music = createWin({ id: 'music', icon: '♪', title: 'Ejecutor de música',
-    x: 14, y: 112, w: Math.min(300, vw - 28), h: Math.min(380, vh * .55),
-    html: `<div id="nowplay">— sin reproducción —</div>
-      <div id="mbar"><i id="mprog"></i></div>
-      <div id="mrow"><button id="mprev">⏮</button><button id="mplay">▶</button>
-        <button id="mnext">⏭</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
-        <span id="mtime"></span><button id="mref" title="recargar lista">↻</button></div>
-      <div id="plist"></div>
-      <audio id="aud" crossorigin="anonymous"></audio>` });
 }
 
 /* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
@@ -329,8 +330,37 @@ async function send(raw) {
   q.value = ''; add('u', msg);
   document.getElementById('top').classList.add('glitch');
   setTimeout(() => document.getElementById('top').classList.remove('glitch'), 800);
-  orb.speak(900);
+  orb.activate();                                    // ← vórtice de activación (referencia)
   term('consulta: "' + msg.slice(0, 40) + '"', 'voz');
+  /* peticiones de música: "reproduce …" — primero tu playlist (por nombre de
+     canción o artista); si no, el reproductor predeterminado del sistema */
+  if (/reproduc|suena|\bpon\b|reproductor|vlc|playlist|un tema|una canci[oó]n/i.test(msg)) {
+    const clean = msg
+      .replace(/por\s+fav?or|reproduc\w*|suena|pon(er|ga|me)?|reproductor|vlc|playlist|un[ao]?\s+(canci[oó]n|tema)|la\s+m[uú]sica|m[uú]sica|\b(de|en|mi|el|que)\b/gi, ' ')
+      .replace(/\s+/g, ' ').trim();
+    let i = -1;
+    if (clean.length > 2 && tracks.length) {
+      const c = clean.toLowerCase();
+      i = tracks.findIndex(t => t.nombre.toLowerCase().includes(c) || t.artista.toLowerCase().includes(c));
+    }
+    if (i >= 0) {
+      playTrack(i);
+      add('a', `Reproduciendo «${tracks[i].nombre}» de ${tracks[i].artista} en el ejecutor de CORT.`, 'ejecutor');
+      speakTTS('Reproduciendo ' + tracks[i].nombre);
+      return;
+    }
+    try {
+      const r = await (await fetch(API + '/api/play', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: '{}' })).json();
+      if (r.ok) {
+        add('a', (clean ? `No la encontré en tu playlist, así que abrí tu reproductor predeterminado con ` :
+                    `Abriendo tu reproductor predeterminado con `) + `«${r.cancion}».`, 'ejecutor');
+        term('ejecutado en el sistema: ' + r.cancion, 'ejecutor');
+        speakTTS('Abriendo tu reproductor con ' + r.cancion);
+      } else add('a', 'No encontré música en tu carpeta Música: ' + (r.error || ''), 'error');
+    } catch { add('a', 'Sin conexión con el backend para ejecutar música.', 'error'); }
+    return;
+  }
   try {
     const r = await (await fetch(API + '/api/chat', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) })).json();
@@ -361,11 +391,12 @@ export function wireUI(orbRef) {
       backendOK ? 'sistema' : 'error');
     if (backendOK) {
       refreshStatus(); refreshWeather(); refreshNotes(); loadProfile();
-      // las ventanas se despliegan en cascada, como en la referencia
+      // los paneles se despliegan en cascada numerada, como en la referencia
       setTimeout(() => W.chat.show(), 150);
       setTimeout(() => { openFiles(); }, 500);
       setTimeout(() => W.env.show(), 800);
-      setTimeout(() => W.term.show(), 1100);
+      setTimeout(() => W.music.show(), 1100);
+      setTimeout(() => W.term.show(), 1400);
     }
     setInterval(refreshStatus, 10000);
     setInterval(refreshWeather, 10 * 60000);
@@ -424,7 +455,7 @@ export function wireUI(orbRef) {
         const t = e.results[0][0].transcript;
         if (/oye\s+cort|cort[,.]?$/i.test(t)) {
           term('palabra de activación detectada: "' + t + '"', 'voz');
-          orb.burst(); W.chat.show();
+          orb.activate(); W.chat.show();                     // vórtice al ser llamada
           sayLine('¿Sí?'); send(t.replace(/oye\s+cort[,.\s]*/i, ''));
         }
       };

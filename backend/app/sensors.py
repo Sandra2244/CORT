@@ -118,6 +118,36 @@ def music_path(rel: str) -> Path | None:
     return target if target.is_file() and target.suffix.lower() in AUDIO_EXT else None
 
 
+def play_external(rel: str = "") -> dict:
+    """Abre una canción con el reproductor PREDETERMINADO del sistema
+    (VLC, etc.). Sin `rel` elige una al azar de tu carpeta Música.
+    Seguridad: solo archivos ya validados por music_path()."""
+    import platform
+    import random
+    import subprocess
+
+    if rel:
+        f = music_path(rel)
+        if not f:
+            return {"ok": False, "error": "canción no encontrada en Música"}
+    else:
+        songs = music_list()
+        if not songs:
+            return {"ok": False, "error": "no hay música en ~/Música"}
+        f = music_path(random.choice(songs)["ruta"])
+    try:
+        if platform.system() == "Windows":
+            import os
+            os.startfile(str(f))  # noqa: S606 — ruta validada
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", str(f)])
+        else:
+            subprocess.Popen(["xdg-open", str(f)])
+        return {"ok": True, "cancion": f.stem, "reproductor": "predeterminado"}
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
 def weather(lat: float | None = None, lon: float | None = None) -> dict:
     """Clima actual. Usa IP geolocation si no se pasan coordenadas. Cachea 20 min."""
     now = time.time()

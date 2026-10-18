@@ -86,6 +86,17 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
       de partículas que gira** al estilo de la referencia: la rotación y el
       "latido" del núcleo van sincronizados con el bajo y el nivel de audio
       (Web Audio Analyser). También **vista mosaico ▦** en Archivos.
+- [x] **Orbe 100 % azul + vórtice de activación** (segunda pasada al video
+      francés, 214–252 s): ya no hay núcleo naranja — centro azul claro como en
+      BLACKBOX. Al recibir una orden (`orb.activate()`, desde chat o wake word)
+      estalla, **gira en vórtice tipo embudo** y se comprime en un anillo-portal
+      antes de recomponerse. Paneles **numerados 01·–08·** estilo Jared/BLACKBOX
+      (archivos, entorno, canal de voz, notas, música, consola, perfil y la
+      mini-vista de gestos como panel de vidrio).
+- [x] **Ejecutor del sistema**: dile o escribe «reproduce música» (o «reproduce
+      <nombre de canción>») y CORT abre tu **reproductor predeterminado**
+      (VLC/Strawberry/etc.) con una canción al azar de `~/Música`, o reproduce
+      la que nombraste en su propio panel ♪. Probado en vivo en esta PC.
 - [x] F5 (parte) Wake word «Oye CORT» con botón 👂 (escucha permanente opt-in);
       falta Piper TTS (recomendado solo en equipos con GPU — Web Speech ya voz gratis)
 - [~] F6 Escritorio Electron: **modo cabina** (ventana sin marco, oscura, siempre

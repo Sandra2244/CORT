@@ -57,13 +57,13 @@
 
 <!-- dock de ventanas (como en la referencia azul: botones circulares abajo) -->
 <div class="panel" id="dock">
-  <button data-win="files" title="Archivos">🗀</button>
-  <button data-win="env" title="Entorno">◉</button>
-  <button data-win="chat" title="Chat">✦</button>
-  <button data-win="notes" title="Notas">✎</button>
-  <button data-win="music" title="Música">♪</button>
-  <button data-win="term" title="Consola del sistema">▤</button>
-  <button data-win="perfil" title="Perfil">⚙</button>
+  <button data-win="files" title="01 · Archivos">🗀</button>
+  <button data-win="env" title="02 · Entorno">◉</button>
+  <button data-win="chat" title="03 · Canal de voz">✦</button>
+  <button data-win="notes" title="04 · Notas">✎</button>
+  <button data-win="music" title="05 · Música">♪</button>
+  <button data-win="term" title="06 · Consola">▤</button>
+  <button data-win="perfil" title="07 · Perfil">⚙</button>
 </div>
 
 <!-- botones flotantes: voz, escucha permanente y manos -->
@@ -71,8 +71,9 @@
 <button class="fab" id="wake" title="Escucha permanente «Oye CORT»">👂</button>
 <button class="fab" id="hand" title="Gestos (modo ligero)">✋</button>
 
-<!-- mini-vista de la cámara de gestos -->
+<!-- mini-vista de la cámara de gestos (panel 08) -->
 <div id="camwrap">
+  <div class="winbar"><span class="ico">✋</span><span class="ttl">08 · Gestos</span></div>
   <video id="camv" playsinline muted style="display:none"></video>
   <canvas id="gest" width="160" height="120"></canvas>
   <div id="gestlabel">apagada</div>
@@ -85,6 +86,7 @@
 import { initORB } from './js/orb.js';
 import { wireUI } from './js/hud.js';
 const orb = initORB(document.getElementById('scene'));
+window.__orb = orb;   // depuración/consola: __orb.activate(), __orb.setDisc(true)…
 wireUI(orb);
 </script>
 </body>
