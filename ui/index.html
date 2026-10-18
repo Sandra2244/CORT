@@ -8,41 +8,31 @@
 </head>
 <body>
 <div id="scene"></div>
-
-<!-- secuencia de arranque -->
 <div id="boot"></div>
 
-<!-- HUD superior -->
+<!-- HUD fijo -->
 <div class="panel" id="top"><b>C.O.R.T.</b> · Cognitive Orchestrator / Real-Time
   <div class="sub">a sus órdenes</div></div>
 <div class="panel" id="status">conectando…</div>
 <div class="panel" id="clock">--:--:--</div>
 
-<!-- panel de archivos (se abre solo al arrancar, como en la referencia) -->
-<div class="panel hidden-left" id="files">
-  <header><span>Archivos · <b id="fpath">…</b></span><span>✕</span></header>
-  <div id="flist"></div>
+<!-- dock de ventanas (como en la referencia azul: botones circulares abajo) -->
+<div class="panel" id="dock">
+  <button data-win="files" title="Archivos">🗀</button>
+  <button data-win="env" title="Entorno">◉</button>
+  <button data-win="chat" title="Chat">✦</button>
 </div>
 
-<!-- panel de entorno: clima + barras de sensores -->
-<div class="panel hidden-right" id="env">
-  <div style="letter-spacing:.2em;font-size:10px;text-transform:uppercase;color:#5e8cab">entorno</div>
-  <div id="wx">…</div>
-  <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
-  <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
-  <div style="font-size:10px;color:#5e8cab">DISCO</div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
-  <div id="batt" style="margin-top:6px;font-size:11px"></div>
-</div>
+<!-- botones flotantes: voz y manos -->
+<button class="fab" id="mic" title="Hablar">🎙</button>
+<button class="fab" id="hand" title="Gestos (modo ligero)">✋</button>
 
-<!-- chat -->
-<div class="panel hidden-down" id="chat">
-  <div id="log"></div>
-  <div id="inputrow">
-    <input id="q" placeholder="Háblame, CORT está escuchando…" autocomplete="off">
-    <button id="go">⏎</button>
-  </div>
+<!-- mini-vista de la cámara de gestos -->
+<div id="camwrap">
+  <video id="camv" playsinline muted style="display:none"></video>
+  <canvas id="gest" width="160" height="120"></canvas>
+  <div id="gestlabel">apagada</div>
 </div>
-<button id="mic" title="Hablar">🎙</button>
 
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
@@ -52,9 +42,6 @@ import { initORB } from './js/orb.js';
 import { wireUI } from './js/hud.js';
 const orb = initORB(document.getElementById('scene'));
 wireUI(orb);
-// los paneles de chat y entorno entran deslizándose tras el arranque
-setTimeout(()=>document.getElementById('env').classList.remove('hidden-right'), 200);
-setTimeout(()=>document.getElementById('chat').classList.remove('hidden-down'), 400);
 </script>
 </body>
 </html>

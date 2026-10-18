@@ -59,8 +59,15 @@ Multiplataforma: Linux, Windows y (fase final) Android vía APK.
 - [x] F1 Backend híbrido + memoria + comandos locales — **probado en Linux**
 - [x] F2 Orb Three.js + chat + reloj + micrófono — **probado en navegador**
 - [x] F3 Paneles HUD: secuencia de arranque, explorador de archivos (raíces
-      seguras), clima real, barras CPU/RAM/disco animadas, orb que se dispersa
-      en círculo de estrellas — **probado en Linux**
+      seguras), clima real, barras CPU/RAM/disco animadas, orb con núcleo
+      naranja + cáscara azul + anillos de suelo (referencia azul) — **probado**
+- [x] F3+ Ventanas de vidrio estilo Cortana: arrastrar por barra de título,
+      ─ minimizar al dock, ✕ cerrar con animación, foco por z-order, dock con
+      indicadores de estado — **probado (cerrar/reabrir/arrastrar/minimizar)**
+- [x] F4 (modo ligero) Gestos MediaPipe: ✋ enciende cámara 160×120 con 1 mano,
+      ~4 análisis/s — palma despliega/plega ventanas, pinza trae el chat,
+      puño las cierra; esqueleto dibujado en mini-vista — **código listo,
+      probar con cámara física**
 - [ ] F4 Gestos con MediaPipe (palma abre, pinza agarra)
 - [ ] F5 Wake word "Oye CORT" + Piper TTS + perfil personalizable
 - [ ] F6 Electron transparente + instaladores .exe / .AppImage

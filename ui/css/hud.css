@@ -1,80 +1,116 @@
-/* ===== C.O.R.T. — HUD sci-fi (F3) ===== */
+/* ===== C.O.R.T. — HUD de vidrio estilo Cortana (F3+) ===== */
 :root{
-  --cyan:#39c2ff; --cyan-dim:rgba(80,190,255,.35); --bg-panel:rgba(4,14,28,.72);
+  --cyan:#39c2ff; --cyan-dim:rgba(80,190,255,.35);
+  --glass:rgba(8,20,38,.55); --glass-hi:rgba(20,45,80,.55);
   --text:#9fdcff; --text-hi:#e8f6ff;
 }
 html,body{margin:0;height:100%;background:#02040a;overflow:hidden;
-  font-family:'Segoe UI',system-ui,sans-serif;color:var(--text)}
+  font-family:'Segoe UI Variable Display','Segoe UI',system-ui,sans-serif;color:var(--text)}
 #scene{position:fixed;inset:0}
 
-/* scanlines sutiles sobre todo el holograma */
-body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
-  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(120,200,255,.018) 3px 4px)}
+/* scanlines sutiles */
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:999;
+  background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(120,200,255,.015) 3px 4px)}
 
-.panel{position:fixed;background:var(--bg-panel);border:1px solid var(--cyan-dim);
-  border-radius:10px;backdrop-filter:blur(6px);
-  box-shadow:0 0 24px rgba(0,150,255,.10) inset,0 0 14px rgba(0,120,255,.10);
-  transition:transform .45s cubic-bezier(.2,.9,.25,1),opacity .45s;z-index:10}
-.panel.hidden-left{transform:translateX(-120%);opacity:0}
-.panel.hidden-right{transform:translateX(120%);opacity:0}
-.panel.hidden-down{transform:translateY(120%);opacity:0}
-
-/* marco con esquinas brillantes tipo Iron Man */
-.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;
-  border:2px solid var(--cyan);opacity:.8}
-.panel::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:10px 0 0 0}
-.panel::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 10px 0}
+.panel{position:fixed;background:var(--glass);border:1px solid var(--cyan-dim);
+  border-radius:10px;backdrop-filter:blur(10px) saturate(1.3);
+  box-shadow:0 0 24px rgba(0,150,255,.10) inset,0 6px 22px rgba(0,0,0,.45)}
 
 #top{top:14px;left:50%;transform:translateX(-50%);padding:6px 26px;letter-spacing:.45em;
-  font-size:13px;text-transform:uppercase;text-align:center;white-space:nowrap}
+  font-size:13px;text-transform:uppercase;text-align:center;white-space:nowrap;z-index:5}
 #top b{color:#fff}
 #top .sub{letter-spacing:.12em;font-size:10px;color:#4b7f9e}
 #clock{top:14px;right:14px;padding:8px 14px;font-size:20px;font-family:Consolas,monospace;
-  letter-spacing:.15em;color:#cfefff}
-#status{top:14px;left:14px;padding:8px 12px;font-size:11px;line-height:1.6;max-width:250px}
+  letter-spacing:.15em;color:#cfefff;z-index:5}
+#status{top:14px;left:14px;padding:8px 12px;font-size:11px;line-height:1.6;max-width:250px;z-index:5}
 #status .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
 .dot.on{background:#2bff9e;box-shadow:0 0 8px #2bff9e}
 .dot.off{background:#ff5b5b;box-shadow:0 0 8px #ff5b5b}
 
-/* ---- panel de archivos (izquierda) ---- */
-#files{left:14px;top:110px;width:300px;max-height:52vh;display:flex;flex-direction:column}
-#files header{padding:8px 12px;border-bottom:1px solid var(--cyan-dim);font-size:12px;
-  letter-spacing:.2em;text-transform:uppercase;display:flex;justify-content:space-between;cursor:pointer}
-#files header:hover{background:rgba(0,160,255,.08)}
-#flist{overflow-y:auto;padding:6px;font-size:12px;line-height:1.35}
+/* ================= VENTANAS DE VIDRIO ================= */
+.win{position:fixed;display:flex;flex-direction:column;min-width:220px;
+  background:linear-gradient(160deg,var(--glass-hi),var(--glass) 55%);
+  border:1px solid var(--cyan-dim);border-radius:12px;
+  backdrop-filter:blur(14px) saturate(1.4);
+  box-shadow:0 0 30px rgba(0,150,255,.10) inset,0 10px 34px rgba(0,0,0,.55);
+  color:var(--text);font-size:13px;z-index:20;
+  transition:transform .35s cubic-bezier(.2,.9,.25,1.15),opacity .3s,filter .3s}
+/* marco con esquinas brillantes */
+.win::before,.win::after{content:"";position:absolute;width:16px;height:16px;
+  border:2px solid var(--cyan);opacity:.85;pointer-events:none}
+.win::before{top:-2px;left:-2px;border-right:0;border-bottom:0;border-radius:12px 0 0 0}
+.win::after{bottom:-2px;right:-2px;border-left:0;border-top:0;border-radius:0 0 12px 0}
+
+.winbar{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:grab;
+  border-bottom:1px solid rgba(80,190,255,.22);user-select:none;
+  font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:#bfe8ff}
+.winbar:active{cursor:grabbing}
+.winbar .ico{filter:drop-shadow(0 0 6px var(--cyan))}
+.winbar .ttl{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.winbar button{all:unset;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
+  font-size:12px;color:#9fdcff;cursor:pointer;transition:.15s}
+.winbar button:hover{background:rgba(0,160,255,.25);color:#fff;box-shadow:0 0 10px rgba(0,170,255,.5)}
+.wcontent{flex:1;overflow:auto;padding:8px 10px}
+.win.focused{border-color:rgba(120,220,255,.75)}
+.win.focused::before,.win.focused::after{opacity:1;box-shadow:0 0 12px rgba(0,190,255,.4)}
+
+/* estados: cerrada entra con lluvia de estrellas (scale desde el orb) */
+.win.state-closed{transform:scale(.25) translateY(-40vh) rotate(4deg);opacity:0;pointer-events:none;filter:blur(6px)}
+.win.state-min{transform:translateY(110vh) scale(.9);opacity:0;pointer-events:none}
+.win:not(.state-closed):not(.state-min){animation:winIn .45s cubic-bezier(.2,.9,.25,1.2)}
+@keyframes winIn{from{transform:scale(.88) translateY(14px);opacity:.2}to{transform:none;opacity:1}}
+
+/* ================= DOCK ================= */
+#dock{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:6px;
+  padding:6px 10px;border-radius:14px;z-index:30}
+#dock button{all:unset;width:40px;height:40px;display:grid;place-items:center;border-radius:10px;
+  font-size:17px;cursor:pointer;position:relative;transition:.18s;color:#cfeaff}
+#dock button:hover{background:rgba(0,160,255,.22);transform:translateY(-4px);
+  box-shadow:0 0 14px rgba(0,170,255,.45)}
+#dock button.active::after{content:"";position:absolute;bottom:2px;left:50%;transform:translateX(-50%);
+  width:14px;height:3px;border-radius:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+#dock button.minimized::after{background:#ffb347;box-shadow:0 0 8px #ffb347}
+
+/* ================= archivos ================= */
 #flist .row{padding:4px 8px;border-radius:6px;cursor:pointer;display:flex;gap:8px;
   animation:rowIn .3s both}
 #flist .row:hover{background:rgba(0,160,255,.14);color:var(--text-hi)}
 #flist .size{margin-left:auto;color:#4b7f9e;font-size:10px}
 @keyframes rowIn{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
 
-/* ---- panel clima/sensores (derecha) ---- */
-#env{right:14px;top:110px;width:230px;padding:10px 12px;font-size:12px;line-height:1.7}
-#env .big{font-size:26px;color:var(--text-hi)}
+/* ================= entorno ================= */
+.big{font-size:26px;color:var(--text-hi)}
 .bar{height:5px;background:rgba(80,190,255,.15);border-radius:3px;overflow:hidden;margin:2px 0 6px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#0a66aa,var(--cyan));
   border-radius:3px;transition:width .8s cubic-bezier(.2,.9,.3,1)}
 
-/* ---- chat ---- */
-#chat{bottom:16px;right:16px;width:min(400px,92vw);max-height:44vh;display:flex;flex-direction:column}
-#log{overflow-y:auto;padding:10px 12px;font-size:13px;line-height:1.5;flex:1}
+/* ================= chat ================= */
+#log{max-height:34vh;overflow-y:auto;font-size:13px;line-height:1.5}
 #log p{margin:.45em 0;animation:rowIn .35s both}
 .u{color:#5fd0ff}.u::before{content:"› "}
 .a{color:var(--text-hi)}.a::before{content:"CORT › "}
 .src{font-size:10px;color:#4b7f9e;margin-left:6px}
-#inputrow{display:flex;border-top:1px solid var(--cyan-dim)}
-#q{flex:1;background:transparent;border:0;outline:0;color:#dff4ff;padding:10px 12px;font-size:13px}
-#go{background:rgba(0,160,255,.15);border:0;border-left:1px solid var(--cyan-dim);
-  color:#9fdcff;padding:0 16px;cursor:pointer}
+#inputrow{display:flex;border-top:1px solid rgba(80,190,255,.22);margin:6px -4px -4px}
+#q{flex:1;background:transparent;border:0;outline:0;color:#dff4ff;padding:9px 6px;font-size:13px}
+#go{background:rgba(0,160,255,.15);border:0;color:#9fdcff;padding:0 14px;border-radius:6px;cursor:pointer}
 #go:hover{background:rgba(0,160,255,.35)}
 
-/* ---- botón mic + boot ---- */
-#mic{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);width:54px;height:54px;
-  border-radius:50%;border:1px solid var(--cyan-dim);background:var(--bg-panel);
-  color:#9fdcff;font-size:20px;cursor:pointer;transition:.2s;z-index:11}
-#mic.on{box-shadow:0 0 26px #19bff;border-color:#19b3ff;color:#fff;animation:pulse 1.2s infinite}
+/* ================= botones flotantes + gestos ================= */
+.fab{position:fixed;bottom:70px;width:50px;height:50px;border-radius:50%;z-index:31;
+  border:1px solid var(--cyan-dim);background:var(--glass);backdrop-filter:blur(8px);
+  color:#9fdcff;font-size:19px;cursor:pointer;transition:.2s;display:grid;place-items:center}
+.fab:hover{border-color:var(--cyan);box-shadow:0 0 16px rgba(0,180,255,.4)}
+#mic{left:calc(50% - 62px)} #hand{left:calc(50% + 12px)}
+.fab.on{box-shadow:0 0 26px #19b3ff;border-color:#19b3ff;color:#fff;animation:pulse 1.2s infinite}
 @keyframes pulse{50%{box-shadow:0 0 40px #19b3ff}}
+#camwrap{position:fixed;bottom:132px;left:calc(50% - 90px);width:160px;z-index:31;display:none}
+#camwrap.show{display:block}
+#gest{width:160px;height:120px;border-radius:10px;border:1px solid var(--cyan-dim);
+  background:rgba(0,0,0,.5);transform:scaleX(-1)}
+#gestlabel{text-align:center;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+  color:#7fd0ff;padding:3px 0}
 
+/* ================= boot ================= */
 #boot{position:fixed;inset:0;background:#02040a;z-index:50;display:flex;
   flex-direction:column;justify-content:center;padding:0 8vw;font-family:Consolas,monospace;
   font-size:13px;color:#5fd0ff;transition:opacity .8s}
@@ -83,7 +119,6 @@ body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:99;
 @keyframes bootIn{to{opacity:1}}
 #boot.done{opacity:0;pointer-events:none}
 
-/* glitch del título al recibir órdenes */
 .glitch{animation:glitch .35s steps(2) 2}
 @keyframes glitch{25%{transform:translateX(-3px) skewX(4deg)}50%{transform:translateX(3px)}
   75%{transform:translateX(-1px) skewX(-2deg)}}
