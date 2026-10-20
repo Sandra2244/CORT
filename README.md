@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.6-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.6--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.6-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.7-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.7--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.7-demo"></a>
   <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -110,7 +110,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android (APK del teléfono)** | instala [`CORT-IA-1.1.1.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.6-demo/CORT-IA-1.1.1.apk) | tu CORT de siempre (mismo icono, misma cara) con las once ventanas nuevas dentro |
+| **Android (APK del teléfono)** | instala [`CORT-IA-1.1.1.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.7-demo/CORT-IA-1.1.1.apk) | tu CORT de siempre (mismo icono, misma cara) con las once ventanas nuevas dentro |
 | **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -139,7 +139,7 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 
 ### 5 · Descargas ya compiladas
 
-La [Release v0.2.6-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.6-demo)
+La [Release v0.2.7-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.7-demo)
 tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
 que para eso hace falta un equipo sobrado):
 
@@ -214,7 +214,7 @@ Para regenerarlos con código nuevo, sube una etiqueta (el sufijo `-demo` es par
 no chocar con las `v0.x` que ya usa el historial de la app de Android):
 
 ```bash
-git tag -a v0.2.6-demo -m "CORT" && git push origin v0.2.6-demo   # ← dispara la compilación
+git tag -a v0.2.7-demo -m "CORT" && git push origin v0.2.7-demo   # ← dispara la compilación
 ```
 
 También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.

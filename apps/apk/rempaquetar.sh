@@ -29,7 +29,11 @@
 # Android una firma distinta es otra aplicación). Se dice en `firma.txt`, que
 # viaja al lado del APK en la Release.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# El script vive en `apps/apk/` y las rutas de abajo (`apps/apk/base/…`, `ui`)
+# están escritas **desde la raíz del repo**, así que se sube dos niveles: con uno
+# solo te quedas en `apps/` y el primer `ls` busca `apps/apps/apk/base` — así
+# cayó el run 39504821879, medido por annotation.
+cd "$(dirname "$0")/../.."
 
 VERSION="${1:-1.1.1}"
 RAIZ="$(pwd)"
