@@ -186,9 +186,12 @@ public class MainActivity extends Activity {
                                                               WebResourceRequest peticion) {
                 String url = peticion.getUrl().toString();
                 if (!url.startsWith(ORIGEN)) return null;   // modo PC: que lo vea la red
+                // Los `fetch` de la interfaz al núcleo se cortan ANTES de tocar la
+                // carpeta `ui/`: sin PC no hay `/api/*`, y la cara tiene que poder
+                // decirlo en español en vez de un 404 mudo.
+                if (url.substring(ORIGEN.length()).startsWith("/api/")) return sinNucleo();
                 String ruta = rutaDe(url);
                 if (ruta == null) return noExiste();
-                if (ruta.startsWith("api/")) return sinNucleo();
                 return sirve(ruta);
             }
 
