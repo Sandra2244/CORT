@@ -9,6 +9,8 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.0-demo"><img src="https://img.shields.io/badge/Release-v0.2.0--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Release v0.2.0-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
   <img src="https://img.shields.io/badge/macOS-soportado-000000?style=flat-square&logo=apple&logoColor=white" alt="macOS">
@@ -128,14 +130,18 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 ### 5 · Instaladores de escritorio (.exe / .AppImage / .deb)
 
 Se compilan **en GitHub Actions**, nunca en tu PC (Electron y electron-builder
-pesan demasiado para un equipo modesto):
+pesan demasiado para un equipo modesto). En esta rama la etiqueta de publicación
+es `v0.2.0-demo` — así no choca con las `v0.x` que ya usa el historial de la app
+de Android:
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0     # ← dispara la compilación
+git tag -a v0.2.0-demo -m "CORT 0.2.0" && git push origin v0.2.0-demo   # ← dispara la compilación
 ```
 
-Cuando termine, los instaladores aparecen en
-[Releases](https://github.com/Sandra2244/CORT/releases) y los registros en
+Cuando termine (10–15 min), los instaladores aparecen en
+[Releases](https://github.com/Sandra2244/CORT/releases/tag/v0.2.0-demo) —incluido
+el APK de Android, que la propia Release copia de `instaladores/`— y los
+registros en
 [Actions](https://github.com/Sandra2244/CORT/actions). También puedes lanzarlo a
 mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 
