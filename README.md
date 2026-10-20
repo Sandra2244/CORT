@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.0-demo"><img src="https://img.shields.io/badge/Release-v0.2.0--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Release v0.2.0-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.2-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.2--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.2-demo"></a>
   <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -101,7 +101,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Linux / macOS** | `bash scripts/run.sh` | `http://localhost:8000` (lo abre solo) |
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
-| **Android** | instala `instaladores/CORT-IA-1.1.0.apk` | app a pantalla completa |
+| **Android** | instala [`instaladores/CORT-IA-1.1.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.2-demo/CORT-IA-1.1.0.apk) | app a pantalla completa |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
 > (en Windows: `set CORT_PORT=8090` antes de `scripts\run.bat`). La interfaz
@@ -127,23 +127,31 @@ deja `CORT_MODE=online` o `auto`; **no** instales Ollama si tu PC tiene poca RAM
 El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 `online`, `offline`.
 
-### 5 · Instaladores de escritorio (.exe / .AppImage / .deb)
+### 5 · Descargas ya compiladas
 
-Se compilan **en GitHub Actions**, nunca en tu PC (Electron y electron-builder
-pesan demasiado para un equipo modesto). En esta rama la etiqueta de publicación
-es `v0.2.0-demo` — así no choca con las `v0.x` que ya usa el historial de la app
-de Android:
+La [Release v0.2.2-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.2-demo)
+tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
+que para eso hace falta un equipo sobrado):
+
+| Archivo | Para | Peso |
+|---|---|---|
+| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 75 MB |
+| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 103 MB |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 71 MB |
+| `CORT-IA-1.1.0.apk` | Android (también en `instaladores/`) | 1,7 MB |
+
+> El instalador de escritorio abre el mismo backend de Python: sigue necesitando
+> Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
+> arrancar mientras crea su entorno.
+
+Para regenerarlos con código nuevo, sube una etiqueta (el sufijo `-demo` es para
+no chocar con las `v0.x` que ya usa el historial de la app de Android):
 
 ```bash
-git tag -a v0.2.0-demo -m "CORT 0.2.0" && git push origin v0.2.0-demo   # ← dispara la compilación
+git tag -a v0.2.3-demo -m "CORT" && git push origin v0.2.3-demo   # ← dispara la compilación
 ```
 
-Cuando termine (10–15 min), los instaladores aparecen en
-[Releases](https://github.com/Sandra2244/CORT/releases/tag/v0.2.0-demo) —incluido
-el APK de Android, que la propia Release copia de `instaladores/`— y los
-registros en
-[Actions](https://github.com/Sandra2244/CORT/actions). También puedes lanzarlo a
-mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
+También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 
 ---
 
