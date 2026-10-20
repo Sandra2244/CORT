@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.5-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.5--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.5-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.6-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.6--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.6-demo"></a>
   <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -110,7 +110,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android (APK 1.2.0)** | instala [`CORT-IA-1.2.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.5-demo/CORT-IA-1.2.0.apk) | cara completa, voz nativa, asistente del sistema y doble toque de auriculares |
+| **Android (APK del teléfono)** | instala [`CORT-IA-1.1.1.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.6-demo/CORT-IA-1.1.1.apk) | tu CORT de siempre (mismo icono, misma cara) con las once ventanas nuevas dentro |
 | **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -139,7 +139,7 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 
 ### 5 · Descargas ya compiladas
 
-La [Release v0.2.5-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.5-demo)
+La [Release v0.2.6-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.6-demo)
 tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
 que para eso hace falta un equipo sobrado):
 
@@ -148,8 +148,8 @@ que para eso hace falta un equipo sobrado):
 | `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
 | `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
 | `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,6 MB |
-| `CORT-IA-1.2.0.apk` | Android 8+ (ocho o más): cara + voz + asistente | 0,4 MB (370 KB; lleva 1,4 MB de interfaz dentro) |
-| `CORT-IA-1.2.0-firma.txt` | con qué llave salió el APK (prueba pública) | texto |
+| `CORT-IA-1.1.1.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | ~1,8 MB |
+| `CORT-IA-1.1.1-firma.txt` | con qué llave salió y qué se le cambió (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
 > Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
@@ -157,60 +157,52 @@ que para eso hace falta un equipo sobrado):
 
 ### 6 · CORT en el teléfono
 
-**El APK se compila en el pipeline**, no en tu portátil: `apps/apk/compilar.sh`
-usa `aapt2`, `javac`, `d8`, `zipalign` y `apksigner` (las herramientas que el
-runner de Actions ya trae) y mete dentro la interfaz de este repo, copiada de
-`ui/` al commit etiquetado. Cero Gradle, cero Node, cero descargas.
+En el repo hay **dos** cosas que producen APK, y hacen cosas distintas:
 
-Qué trae la versión **1.2.0**:
+| APK | Qué es | Dónde está |
+|---|---|---|
+| `CORT-IA-1.1.1.apk` | **El tuyo de siempre, actualizado.** El cuerpo es el binario original `CORT-IA-1.1.0` (`com.cort.ia`, Kotlin, cuatro `classes.dex`, su icono de anillo adaptativo, `ListenService`, permisos de archivos/audio/almacenamiento) y lo único que se le cambia es la interfaz que lleva dentro: `assets/ui/` se sustituye por `ui/` de este commit. Después se realinea (`zipalign`) y se refirma (`apksigner`), porque tocar un entry rompe la firma vieja. | `apps/apk/rempaquetar.sh` → la Release |
+| `CORT-IA-1.2.0-asistente.apk` | **El experimental escrito desde cero aquí**: Java puro sin Gradle (`apps/apk/compilar.sh`), con el holograma del repo embebido bajo `https://cort.local`, puente de voz propio (`CortNative.java`), traje de `VoiceInteractionService` para **ser el asistente predeterminado** y `MediaSession` para el **doble toque del auricular**. Pesa ~370 KB porque es otra app: no lleva el Kotlin de archivos/apps/almacenamiento del original. | artefactos del run (NO en la Release) |
 
-- **Las once ventanas actuales**, no una foto vieja: la cara embebida viaja
-  dentro del APK (`assets/ui/`, servida bajo el origen inventado
-  `https://cort.local` y cortada petición por petición contra los assets) y
-  funciona sin PC ni red.
-- **Voz nativa**: `window.CortNative` pone el micrófono (`SpeechRecognizer`) y
-  el habla (`TextToSpeech`) del teléfono. Esto es lo que no se puede hacer desde
-  el navegador: una página en `http` de la Wi‑Fi no es origen seguro y Chrome no
-  le presta Web Speech.
-- **Reemplaza al asistente del sistema**: Ajustes ▸ Aplicaciones ▸ Aplicación de
-  asistencia predeterminada ▸ **CORT**. Es el traje de `VoiceInteractionService`
-  (`Asistente.java`, `Sesiones.java`, `Sesion.java`) más el `RecognitionService`
-  que exige el contrato de AOSP para aparecer en esa lista
-  (`Reconocimiento.java`). El botón «Poner CORT como asistente» del menú lleva
-  directo a esa pantalla.
-- **Doble toque en los auriculares**: la app declara un `MediaSession` mientras
-  está en pantalla. Dos pulsaciones de `HEADSETHOOK`/`PLAY_PAUSE` en menos de
-  500 ms abren el micrófono; **la primera se devuelve al sistema**, así que
-  pausar la música sigue funcionando en Spotify o donde la tengas.
-- **Puente con tu PC por Wi-Fi**: menú ▸ «Conectar con mi PC por Wi‑Fi» y
-  escribes `http://IP:8000` (lo imprime `bash scripts/telefono.sh`). Con esa
-  dirección puesta, el holograma del teléfono manda de verdad sobre tu portátil:
-  archivos, música, modelos de Ollama y optimizador incluidos. Si el PC no
-  contesta, la app abre sola la cara embebida.
+Por qué el del teléfono se rempaqueta y no se recompila: **el proyecto Gradle que
+generó el 1.1.0 no está en este repo** — lo que se guardó siempre fue el binario
+(`instaladores/CORT-IA-1.1.0.apk`, 1.815.389 bytes, comprobado byte a byte contra
+la copia del Escritorio: mismo SHA-256 `b5fa07fa…`). Sin ese proyecto no hay forma
+de recompilar su Kotlin en Actions; con el binario sí se le puede cambiar la cara,
+que es lo que importa cuando lo que mejora es la interfaz.
 
-Lo que **no** hace, dicho sin adornos:
+Lo que se verificó antes de meter la mano (diff real entre los `assets/ui/` del
+binario y `ui/` del repo): `android-bridge.js`, `voice.js`, `orb.js`,
+`gestures.js`, `windows.js` y `vendor/three.module.js` son **idénticos byte a
+byte**; sólo difieren `hud.js`, `index.html`, `hud.css` e `icons.js` (las ventanas
+10 · Modelos y 11 · Optimizar). Y la superficie del puente nativo que llama la
+interfaz sigue siendo la misma cuatro métodos (`CortNative.listen`,
+`stopListening`, `bgStatus`, `setBackground`, `keepAwake`), así que el Kotlin de
+dentro entiende el JavaScript nuevo. La versión que aparece en Ajustes ▸
+Aplicaciones seguirá siendo **1.1.0**: el `versionName` vive en el manifiesto
+binario y reescribirlo sin el proyecto original no se puede hacer aquí.
 
-- Se pierde el «OK Google» con la pantalla apagada: esa palabra la dice el
-  servidor de Google y no viaja con este APK.
-- No oye «Oye CORT» con la app cerrada: la escucha continua vive en el WebView.
-- La cara sin PC no tiene cerebro de nube propio: la conversación libre, los
-  modelos y el optimizador viven en el backend del portátil.
-- **La primera vez hay que desinstalar el APK anterior**, porque éste sale
-  firmado con la llave del pipeline y para Android una firma distinta es otra
-  aplicación. Si guardas el secreto `CORT_APK_KEYSTORE_B64` (y
-  `CORT_APK_KEYSTORE_PASS`) en Settings ▸ Secrets and variables ▸ Actions, las
-  Releases siguientes se instalan encima. Cada run publica al lado del APK su
-  `CORT-IA-1.2.0-firma.txt` con la huella del certificado: es la única ventana
-  pública para comprobarlo, porque los logs de Actions no son públicos.
+Lo que el del teléfono **no** trae, dicho sin adornos:
+
+- **No puede ser el asistente predeterminado ni escuchar el doble toque del
+  auricular.** Eso exige tocar su `AndroidManifest` (añadir
+  `BIND_VOICE_INTERACTION` + `res/xml/asistente.xml`) y su código de servicio, y
+  en un binario compilado por fuera no se puede editar. Vive en el APK
+  experimental de la tabla de arriba.
+- Las ventanas 10 · Modelos y 11 · Optimizar necesitan el backend del portátil:
+  sin PC muestran el aviso de «sin PC» en vez de datos, porque piden `/api/*`.
+- **La primera vez hay que desinstalar el que esté puesto**, porque la firma del
+  pipeline es distinta de la del build original (y distinta también de la del
+  1.2.0 que se publicó en `v0.2.5-demo`). Si guardas el secreto
+  `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets and
+  variables ▸ Actions, desde esa Release en adelante se instalan encima. Cada run
+  publica al lado del APK su `CORT-IA-1.1.1-firma.txt` con la huella del
+  certificado: es la única ventana pública para comprobarlo, porque los logs de
+  Actions no son públicos.
 - Nada de esto está probado con un dedo encima: en esta máquina no hay teléfono.
-  Lo que sí verifica el pipeline es que el Java compila contra la plataforma,
-  que `aapt2` enlaza el manifiesto, que `apksigner` valida la firma y que el APK
-  queda alineado.
-- El APK publicado en `v0.2.5-demo` se miró por dentro descargándolo (370 KB):
-  las once ventanas viajan dentro —11 archivos de `ui/` en `assets/ui/`, 1,4 MB
-  sin comprimir, con `three.module.js` incluido—, `classes.dex` trae las seis
-  clases de Java, `res/xml/asistente.xml` está presente y la firma sale V3 con
-  `CN=CORT`. Eso es lo que se pudo comprobar sin teléfono.
+  Lo que sí comprueba el pipeline es que el APK rempaquetado conserva los cuatro
+  `classes.dex` y los 17 archivos de `mipmap`, que `zipalign` pasa y que
+  `apksigner verify` acepta la firma.
 
 El **modo teléfono sin instalar nada** sigue disponible para ver la cara actual
 en el navegador del celular: `bash scripts/telefono.sh` (igual que `run.sh`, pero
@@ -222,7 +214,7 @@ Para regenerarlos con código nuevo, sube una etiqueta (el sufijo `-demo` es par
 no chocar con las `v0.x` que ya usa el historial de la app de Android):
 
 ```bash
-git tag -a v0.2.5-demo -m "CORT" && git push origin v0.2.5-demo   # ← dispara la compilación
+git tag -a v0.2.6-demo -m "CORT" && git push origin v0.2.6-demo   # ← dispara la compilación
 ```
 
 También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.

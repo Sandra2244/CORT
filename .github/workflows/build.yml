@@ -70,10 +70,17 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.2.0"       # la versión del producto de Android (1.1.0 → 1.2.0)
+      APK_VERSION: "1.2.0"       # la versión del APK experimental de Java
+      TELEFONO_VERSION: "1.1.1"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
     steps:
       - uses: actions/checkout@v4
-      - name: Compilar el APK (aapt2 + javac + d8, sin Gradle)
+      - name: Compilar el APK de Java (aapt2 + javac + d8, sin Gradle)
+        id: java
+        # Este APK es el **experimental**: el holograma embebido con asistente del
+        # sistema y doble toque de auriculares. No va a la Release (va a artefactos
+        # del run), así que si un día se rompe no debe costarle a la dueña la
+        # actualización del teléfono, que es la otra pata del trabajo.
+        continue-on-error: true
         shell: bash
         env:
           # Si la dueña guarda un keystore en los secretos se firma con esa llave
@@ -105,20 +112,51 @@ jobs:
             echo "::error::compilar.sh salió con $st — $msg"
             exit $st
           fi
-      - name: Bautizar el APK para la Release
+      - name: Bautizar el APK experimental de Java
+        if: steps.java.conclusion == 'success'
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p apk-out
-          cp apps/apk/build/CORT.apk "apk-out/CORT-IA-${APK_VERSION}.apk"
-          cp apps/apk/build/firma.txt "apk-out/CORT-IA-${APK_VERSION}-firma.txt"
-          ls -l apk-out
-      - name: Subir artefacto
+          mkdir -p apk-java
+          cp apps/apk/build/CORT.apk "apk-java/CORT-IA-${APK_VERSION}-asistente.apk"
+          cp apps/apk/build/firma.txt "apk-java/CORT-IA-${APK_VERSION}-asistente-firma.txt"
+      - name: Rempaquetar el APK del teléfono (cuerpo original + cara actual)
+        id: telefono
+        shell: bash
+        env:
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+        run: |
+          # `set +e` otra vez: si el paso muere con `bash -e` antes de la
+          # anotación, el fallo vuelve a ser ilegible (los logs de Actions piden
+          # sesión; la anotación del check-run no).
+          set +e
+          chmod +x apps/apk/rempaquetar.sh
+          bash -x apps/apk/rempaquetar.sh "$TELEFONO_VERSION" > /tmp/rempaq.log 2>&1
+          st=$?
+          cat /tmp/rempaq.log
+          if [ $st -ne 0 ]; then
+            errores="$(grep -E 'zip|zipalign|apksigner|PKHEAD|falta|no está' /tmp/rempaq.log | tail -12)"
+            msg=$( { echo "-- rempaquetar --"; echo "${errores:-ninguna}"; \
+                     echo "-- final del log --"; tail -c 900 /tmp/rempaq.log; } \
+                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
+            echo "::error::rempaquetar.sh salió con $st — $msg"
+            exit $st
+          fi
+      - name: Subir el APK del teléfono (el que sale en la Release)
         uses: actions/upload-artifact@v4
         with:
           name: instalador-android
-          path: apk-out/*
+          path: |
+            apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}.apk
+            apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}-firma.txt
           if-no-files-found: error
+      - name: Subir el APK experimental (sólo artefacto del run, no a la Release)
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-java-experimental
+          path: apk-java/*
+          if-no-files-found: ignore
 
   release:
     needs: [build, apk]
@@ -129,19 +167,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { path: artefactos, merge-multiple: true }
+        with:
+          path: artefactos
+          merge-multiple: true
+          # `instalador-*` a propósito: el `apk-java-experimental` se queda fuera
+          # de la Release. Los dos APK comparten paquete (`com.cort.ia`), así que
+          # en la página de descargas sólo puede haber el que la dueña va a
+          # instalar; el otro se descarga de los artefactos del run si un día
+          # hace falta el experimento del asistente.
+          pattern: instalador-*
       - uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
-            y el APK de Android compilado en el propio pipeline (`apps/apk/`).
+            y el APK del teléfono.
 
-            El APK (1.2.0) lleva dentro la interfaz actual —once ventanas, modelos de
-            Ollama y optimizador—, voz nativa del teléfono, y se puede elegir como
-            **asistente predeterminado** para que el doble toque del auricular lo
-            despierte. Firma desechable si el repo no tiene secreto: hay que
-            desinstalar el APK anterior una vez.
+            El APK (`CORT-IA-1.1.1.apk`) es **el CORT de siempre con la interfaz
+            nueva dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin,
+            su icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
+            le cambia sólo `assets/ui/` por la del commit — once ventanas, con
+            10 · Modelos y 11 · Optimizar —, realinea y refirma. La firma es
+            desechable si el repo no tiene el secreto `CORT_APK_KEYSTORE_B64`, así
+            que **la primera vez hay que desinstalar** el que esté puesto.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Instrucciones completas, incluido el modo teléfono por Wi-Fi, en el README.

@@ -1,5 +1,21 @@
 # CORT en el teléfono (APK)
 
+## Los dos APK que salen de aquí, y cuál instalar
+
+| archivo | cómo se hace | dónde se publica |
+|---|---|---|
+| `CORT-IA-1.1.1.apk` | **`rempaquetar.sh`**: el cuerpo es `base/CORT-IA-1.1.0.apk` (el APK original de la dueña: Kotlin, cuatro `classes.dex`, su icono de anillo, `ListenService`, permisos de archivos y almacenamiento) y sólo se le cambia `assets/ui/` por el `ui/` del commit, se realinea y se refirma | la **Release** — es el que hay que instalar en el teléfono |
+| `CORT-IA-1.2.0-asistente.apk` | **`compilar.sh`**: Java escrito en este repo, sin Gradle (`aapt2` + `javac` + `d8` + `apksigner`), con el holograma embebido bajo `https://cort.local`, puente de voz propio, traje de `VoiceInteractionService` (asistente predeterminado) y `MediaSession` (doble toque del auricular) | sólo **artefactos del run**: es el experimento, y comparte paquete `com.cort.ia` con el otro, así que no van los dos en la Release |
+
+El original no se recompila desde este repo porque **el proyecto Gradle que lo
+generó no está aquí**: lo que siempre se guardó fue el binario (comprobado: el
+blob de `instaladores/CORT-IA-1.1.0.apk` y la copia del Escritorio dan el mismo
+SHA-256 `b5fa07fa9f065d6545e0d6ad9d51e3d4368a41519034e763016ad3a68666fb76`).
+Por eso la actualización del teléfono se hace metiendo la cara nueva dentro del
+binario, y por eso el `versionName` que ve Ajustes sigue siendo 1.1.0.
+
+Todo lo que sigue en este archivo describe la pata de Java (`compilar.sh`).
+
 Este APK **se compila en GitHub Actions**, nunca en el portátil de la dueña:
 1,8 GiB de RAM, `javac` que no está (medido) y un `gradle build` que congeló la
 máquina. El pipeline usa las cuatro herramientas que el runner ya trae —`aapt2`,
@@ -24,8 +40,10 @@ icono lo dibuja `scripts/marca.py` (el mismo anillo del logo del README).
 
 ## Usarlo
 
-1. En la Release, descarga **`CORT-IA-1.2.0.apk`** (es el botón que ves en la
-   página de la etiqueta).
+1. En la Release, descarga **`CORT-IA-1.1.1.apk`** (el cuerpo original con la
+   interfaz nueva dentro). El `CORT-IA-1.2.0-asistente.apk` de esta carpeta no
+   está en la Release: vive en *Artifacts* de la ejecución del workflow, y
+   necesitas sesión de GitHub para bajarlo.
 2. **Desinstala el APK anterior** la primera vez. No es capricho: este APK se
    firma con una llave del pipeline, y para Android una firma distinta es otra
    aplicación. Si la dueña guarda el secreto `CORT_APK_KEYSTORE_B64` en
