@@ -1,10 +1,14 @@
 name: Construir instaladores CORT
 
 # Compila el holograma de escritorio para Windows y Linux SIN usar tu PC:
-# cada vez que creas una etiqueta v* (p. ej. git tag v0.2.0 && git push --tags)
+# cada vez que creas una etiqueta v* (p. ej. git tag -a v0.2.0-demo && git push origin v0.2.0-demo)
 # o desde Actions → "Construir instaladores CORT" → Run workflow.
 # Los instaladores (.exe y .AppImage) aparecen como artefactos descargables
 # en la página de la ejecución y en la Release si el push fue de una etiqueta.
+#
+# Si un paso falla, los registros de Actions NO son públicos: el trabajo
+# vuelca las últimas líneas del error como anotación del check, que sí se
+# puede leer desde la API pública.
 
 on:
   workflow_dispatch:
@@ -14,6 +18,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false           # que Windows no se cancele si Linux falla
       matrix:
         include:
           - os: windows-latest   # instalador .exe (NSIS)
@@ -29,11 +34,23 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20 }
       - name: Instalar dependencias
-        run: npm install
-        env:
-          ELECTRON_SKIP_BINARY_DOWNLOAD: "0"
+        shell: bash
+        run: |
+          set -o pipefail
+          npm install 2>&1 | tee /tmp/npm-install.log
       - name: Construir instalador (${{ matrix.os }})
-        run: npm run ${{ matrix.script }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run ${{ matrix.script }} 2>&1 | tee /tmp/build.log
+      - name: Volcar el fallo como anotación (los logs no son públicos)
+        if: failure()
+        shell: bash
+        run: |
+          LOG=/tmp/build.log
+          [ -s "$LOG" ] || LOG=/tmp/npm-install.log
+          MSG=$(tail -c 3200 "$LOG" | tr '\n' ' ' | sed -e 's/%/%25/g' -e 's/\r/%0D/g' -e 's/:/%3A/g')
+          echo "::error title=Fallo en ${{ matrix.script }}::$MSG"
       - name: Subir artefactos
         uses: actions/upload-artifact@v4
         with:
