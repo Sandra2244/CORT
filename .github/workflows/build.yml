@@ -51,9 +51,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: artefactos, merge-multiple: true }
+      - name: Añadir el APK de Android que vive en el repo
+        run: |
+          if ls instaladores/*.apk >/dev/null 2>&1; then
+            cp instaladores/*.apk artefactos/
+            echo "APK incluido en la Release"
+          else
+            echo "No hay APK en instaladores/: se publica sin él"
+          fi
       - uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
-          body: Instaladores de CORT generados por CI (Windows .exe, Linux .AppImage/.deb).
+          body: |
+            Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
+            y el APK de Android que hay en `instaladores/`.
+
+            Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
+            Instrucciones completas en el README.

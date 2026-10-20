@@ -7,22 +7,28 @@
      GL por software la ventana transparente queda invisible.
    Atajos:  Esc = salir · Ctrl+Alt+T = alternar "siempre al frente"
             Ctrl+Alt+C = atravesar el clic (modo fantasma)
-   Interfaz: CORT_UI=http://otro:puerto para cambiar el origen. */
+   Interfaz: CORT_UI=http://otro:puerto para cambiar el origen.
+   Cerebro: si no hay backend en CORT_PORT (8000), Electron levanta uno propio
+   con el Python del sistema; si tampoco hay Python, el holograma sigue
+   funcionando en modo local (partículas, reloj, notas del navegador). */
 const { app, BrowserWindow, globalShortcut, screen } = require('electron');
+const { spawn } = require('child_process');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
 const glass = process.env.CORT_GLASS === '1';
+const PORT = +(process.env.CORT_PORT || 8000);
 
 if (glass) app.commandLine.appendSwitch('enable-transparent-visuals');
 if (process.env.CORT_GPU !== '1') app.disableHardwareAcceleration(); // 2 GB RAM
 
 /* UI embebida: al estar empaquetado, servimos resources/ui con un mini-servidor
    http local (los módulos ES no cargan con file://). En desarrollo se sigue
-   usando http://127.0.0.1:8080 del script run. */
+   usando http://127.0.0.1:8000, que ya reparte UI + API desde el backend. */
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json',
+  '.woff': 'font/woff', '.woff2': 'font/woff2', '.ico': 'image/x-icon' };
 function serveEmbeddedUi() {
   const root = path.join(process.resourcesPath, 'ui');
   return new Promise(resolve => {
@@ -38,7 +44,57 @@ function serveEmbeddedUi() {
   });
 }
 
-let win, alwaysOnTop = true, ghost = false;
+/* ---------------------------- backend embebido ---------------------------- */
+function probeBackend() {
+  return new Promise(resolve => {
+    const req = http.get({ host: '127.0.0.1', port: PORT, path: '/api/port', timeout: 1200 },
+      res => { res.resume(); resolve(res.statusCode === 200); });
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+  });
+}
+
+function backendDir() {
+  const cands = app.isPackaged
+    ? [path.join(process.resourcesPath, 'backend')]
+    : [path.join(__dirname, '..', 'backend')];
+  return cands.find(c => fs.existsSync(path.join(c, 'app', 'main.py')));
+}
+
+function pythons() {
+  const env = process.env.CORT_PYTHON;
+  const list = env ? [env] : [];
+  list.push('python3', 'python', 'py');
+  return [...new Set(list)];
+}
+
+async function ensureBackend() {
+  if (await probeBackend()) return true;            // ya lo arrancaste con scripts/run
+  const dir = backendDir();
+  if (!dir) return false;
+  const uvicorn = path.join(path.dirname(process.execPath), 'uvicorn');
+  const bases = fs.existsSync(uvicorn)
+    ? [[uvicorn, []]]
+    : pythons().map(p => [p, ['-m', 'uvicorn']]);
+  for (const [bin, pre] of bases) {
+    try {
+      const child = spawn(bin,
+        [...pre, '--app-dir', path.join(dir), 'app.main:app', '--port', String(PORT)],
+        { env: { ...process.env, CORT_SERVE_UI: '1' }, stdio: 'ignore', detached: false });
+      child.on('error', () => { child.__fail = true; });
+      for (let i = 0; i < 25; i++) {                 // hasta ~7 s: venv + imports
+        await new Promise(r => setTimeout(r, 300));
+        if (child.__fail) break;
+        if (await probeBackend()) { backendProc = child; console.log('CORT backend listo en :', PORT); return true; }
+      }
+      try { child.kill(); } catch (e) { /* ya murió */ }
+    } catch (e) { /* siguiente candidato */ }
+  }
+  console.log('sin backend: el holograma corre en modo local');
+  return false;
+}
+
+let win, backendProc = null, alwaysOnTop = true, ghost = false;
 
 async function createWindow() {
   const { width, height } = screen.getPrimaryDisplay().bounds;
@@ -57,11 +113,18 @@ async function createWindow() {
   });
   win.setMenuBarVisibility(false);
   win.setAlwaysOnTop(true, 'screen-saver');
-  const url = app.isPackaged
-    ? await serveEmbeddedUi()
-    : (process.env.CORT_UI || 'http://127.0.0.1:8080');
+  const hasBackend = await ensureBackend();
+  const url = hasBackend
+    ? `http://127.0.0.1:${PORT}`                       // UI + API en el mismo puerto
+    : (process.env.CORT_UI || (app.isPackaged ? await serveEmbeddedUi()
+                                             : 'http://127.0.0.1:8080'));
   win.loadURL(url + (glass ? '/?glass=1' : '/'));
   win.on('closed', () => { win = null; app.quit(); });
+}
+
+function killBackend() {
+  try { backendProc && backendProc.kill(); } catch (e) { /* ya se cerró */ }
+  backendProc = null;
 }
 
 app.whenReady().then(() => {
@@ -77,4 +140,5 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { killBackend(); app.quit(); });
+app.on('before-quit', killBackend);

@@ -1,47 +1,100 @@
 /* ===== HUD de CORT: arranque, ventanas, chat, sensores, voz y gestos ===== */
 import { createWin } from './windows.js';
+import { createVoice, perms } from './voice.js';
 
-const API = 'http://127.0.0.1:8000';
-let orb;
+// Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
+// backend (mismo origen, API = ''), en el navegador de PC vive en :8000
+// mientras la interfaz va en :8080, y en el instalador de escritorio puede
+// estar en cualquier puerto — por eso `discoverApi()` lo confirma consultando
+// /api/port antes de usarlo.
+const IS_ANDROID = !!window.CortNative;
+let API = IS_ANDROID ? ''
+  : (navigator.userAgent.includes('Electron') ? 'http://127.0.0.1:8000'
+    : location.port === '8080' ? 'http://127.0.0.1:8000' : '');
+const CANDIDATES = [
+  API, '', `http://127.0.0.1:${location.port}`, 'http://127.0.0.1:8000',
+  'http://localhost:8000', 'http://127.0.0.1:8081',
+].filter((u, i, a) => a.indexOf(u) === i);
+
+async function discoverApi() {
+  const tried = [];
+  for (const base of CANDIDATES) {
+    try {
+      const r = await fetch(base + '/api/port', { signal: AbortSignal.timeout(1600) });
+      if (!r.ok) continue;
+      const j = await r.json();
+      API = base;
+      term('núcleo localizado en ' + (j.base || base || 'este origen'), 'arranque');
+      return true;
+    } catch (e) { tried.push(base || location.origin); }
+  }
+  return false;
+}
+const mobile = () => window.isMobileHUD && window.isMobileHUD();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let orb, voice;
 
 /* ---------- secuencia de arranque ---------- */
 const BOOT_LINES = [
-  ['CORT BIOS v0.4 ......................... ', 'OK'],
+  ['CORT BIOS v0.2 ......................... ', 'OK'],
   ['Núcleo holográfico (WebGL) ............. ', 'OK'],
   ['Matriz de partículas: 2600 puntos ...... ', 'OK'],
-  ['Enlace con backend (localhost:8000) .... ', null],
+  ['Enlace con backend local (127.0.0.1) ... ', null],
   ['Cerebro híbrido: local/online .......... ', null],
-  ['Micrófono (Web Speech) ................. ', null],
+  ['Ejecutor de acciones del sistema ....... ', null],
+  ['Oído y voz (reconocimiento nativo) ..... ', null],
   ['Memoria persistente (SQLite) ........... ', null],
   ['Sensor de gestos (MediaPipe ligero) .... ', 'LISTO'],
   ['Desplegando ventanas de vidrio …', ''],
 ];
 async function runBoot() {
   const boot = document.getElementById('boot');
-  let backendOK = false, brainTxt = '—';
-  try {
-    const s = await (await fetch(API + '/api/status')).json();
-    backendOK = true;
-    const b = s.brain;
-    brainTxt = [b.ollama && 'local', (b.groq || b.gemini) && 'online',
-      (!b.ollama && !b.groq && !b.gemini) && 'offline'].filter(Boolean).join('+');
-  } catch { /* sin backend */ }
+  let backendOK = false, brainTxt = '—', where = '';
+  // se localiza el núcleo MIENTRAS se dibujan las líneas (no retrasa el arranque)
+  const finding = discoverApi().then(async ok => {
+    if (!ok) return null;
+    try {
+      const s = await (await fetch(API + '/api/status')).json();
+      return { s, where: API || location.origin };
+    } catch { return null; }
+  });
+  let found = false, s = null;
   for (const [txt, fixed] of BOOT_LINES) {
     const div = document.createElement('div'); div.className = 'line';
     let val = fixed;
     if (fixed === null) {
-      if (txt.includes('backend')) val = backendOK ? 'OK' : 'SIN CONEXIÓN';
-      if (txt.includes('híbrido')) val = brainTxt;
-      if (txt.includes('Micrófono')) val = (window.SpeechRecognition || window.webkitSpeechRecognition) ? 'OK' : 'NO DISPONIBLE';
+      if (!found) {                            // se resuelve una sola vez
+        found = true;
+        const r = await finding;
+        s = r && r.s; backendOK = !!s; where = (r && r.where) || '';
+        if (s && s.version) {
+          const v = document.getElementById('hudver');
+          if (v) v.textContent = 'v' + s.version;
+        }
+      }
+      if (txt.includes('backend')) {
+        val = backendOK ? (where ? 'OK · ' + where.replace(/^https?:\/\//, '') : 'OK')
+                        : 'SIN CONEXIÓN';
+      }
+      if (txt.includes('híbrido')) {
+        if (s) {
+          const b = s.brain;
+          brainTxt = [b.ollama && 'local', (b.groq || b.gemini) && 'online',
+            (!b.ollama && !b.groq && !b.gemini) && 'offline'].filter(Boolean).join('+');
+        }
+        val = brainTxt;
+      }
+      if (txt.includes('Acciones')) val = backendOK ? 'OK' : 'EN PAUSA';
+      if (txt.includes('Oído')) val = voice && voice.available ? 'OK' : 'NO DISPONIBLE';
       if (txt.includes('Memoria')) val = backendOK ? 'OK' : 'EN PAUSA';
     }
-    div.innerHTML = txt + (val ? `<span class="${val === 'OK' ? 'ok' : ''}">[${val}]</span>` : '');
+    div.innerHTML = txt + (val ? `<span class="${String(val).startsWith('OK') ? 'ok' : ''}">[${val}]</span>` : '');
     boot.appendChild(div);
     await new Promise(r => setTimeout(r, 140 + Math.random() * 130));
   }
   await new Promise(r => setTimeout(r, 300));
   boot.classList.add('done'); setTimeout(() => boot.remove(), 900);
-  return { backendOK, brainTxt };
+  return { backendOK, brainTxt, where };
 }
 
 /* ---------- ventanas de vidrio (paneles numerados estilo referencia) ---------- */
@@ -49,40 +102,41 @@ let W = {};
 function buildWindows() {
   const vw = innerWidth, vh = innerHeight;
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));   // que nunca se salgan de pantalla
-  W.files = createWin({ id: 'files', icon: '🗀', title: '01 · Archivos · <span id="fpath">raíces</span>',
+  W.files = createWin({ id: 'files', icon: ic('folder'), title: '01 · Archivos · <span id="fpath">raíces</span>',
     x: 14, y: 112, w: Math.min(292, vw - 28), h: clamp(vh * .42, 200, 300),
-    html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">▦</button><button id="flistbtn" title="vista de lista">☰</button></div><div id="flist"></div>` });
-  W.env = createWin({ id: 'env', icon: '◉', title: '02 · Entorno',
+    html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">${ic('grid')}</button><button id="flistbtn" title="vista de lista">${ic('list')}</button></div><div id="flist"></div>` });
+  W.env = createWin({ id: 'env', onShow: () => { refreshStatus(); refreshWeather(); }, icon: '◉', title: '02 · Entorno',
     x: 14, y: clamp(112 + vh * .42 + 18, 330, 440), w: Math.min(240, vw - 28),
     html: `<div id="wx">…</div>
       <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">DISCO</div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
-      <div id="batt" style="margin-top:6px;font-size:11px"></div>` });
+      <div id="batt" style="margin-top:6px;font-size:11px"></div>
+      <div id="envbrain"></div>` });
   W.chat = createWin({ id: 'chat', icon: '✦', title: '03 · Canal de voz',
     x: Math.max(14, Math.round(vw / 2) - 190), y: Math.max(140, vh - 386), w: Math.min(380, vw - 28), h: 288,
     html: `<div id="log"></div>
       <div id="inputrow"><span id="prompt" title="↑/↓ historial · Tab completa">cort@nave:~$</span>
-      <input id="q" placeholder="háblame, o escribe un comando y pulsa Tab…" autocomplete="off">
-      <button id="go">⏎</button></div>` });
-  W.notes = createWin({ id: 'notes', icon: '✎', title: '04 · Notas',
+      <input id="q" placeholder="escribe aquí o toca el micrófono…" autocomplete="off" enterkeyhint="send">
+      <button id="go" aria-label="Enviar">${ic('send')}<span>Enviar</span></button></div>` });
+  W.notes = createWin({ id: 'notes', onShow: () => refreshNotes(), icon: '✎', title: '04 · Notas',
     x: Math.round(vw / 2) - 170, y: 118, w: Math.min(340, vw - 28), h: 300,
     html: `<div id="notelist"></div>
       <div id="inputrow"><input id="nota" placeholder="Nueva nota…" autocomplete="off">
-      <button id="notago">＋</button></div>` });
-  W.music = createWin({ id: 'music', icon: '♪', title: '05 · Música',
+      <button id="notago" aria-label="Agregar nota">${ic('plus')}</button></div>` });
+  W.music = createWin({ id: 'music', onShow: () => { if (!tracks.length) loadMusic(); }, icon: '♪', title: '05 · Música',
     x: clamp(vw - 530, 14, vw - 240), y: clamp(vh - 406, 112, 348), w: Math.min(302, vw - 28), h: clamp(vh * .5, 220, 392),
     html: `<div id="nowplay">— sin reproducción —</div>
       <div id="mbar"><i id="mprog"></i></div>
-      <div id="mrow"><button id="mprev">⏮</button><button id="mplay">▶</button>
-        <button id="mnext">⏭</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
-        <span id="mtime"></span><button id="mref" title="recargar lista">↻</button></div>
+      <div id="mrow"><button id="mprev">${ic('prev')}</button><button id="mplay">${ic('play')}</button>
+        <button id="mnext">${ic('next')}</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
+        <span id="mtime"></span><button id="mref" title="recargar lista">${ic('refresh')}</button></div>
       <div id="plist"></div>
       <audio id="aud" crossorigin="anonymous"></audio>` });
   W.term = createWin({ id: 'term', icon: '▤', title: '06 · Consola del sistema',
     x: 14, y: Math.max(140, vh - 268), w: Math.min(340, vw - 28), h: 240,
     html: '<div id="termlog"></div>' });
-  W.perfil = createWin({ id: 'perfil', icon: '⚙', title: '07 · Perfil',
+  W.perfil = createWin({ id: 'perfil', icon: ic('gear'), title: '07 · Perfil',
     x: Math.round(vw / 2) - 150, y: 140, w: 300,
     html: `<label class="pf">Nombre del asistente</label><input class="pf" id="pf-asistente" placeholder="CORT">
       <label class="pf">Tu nombre</label><input class="pf" id="pf-usuario" placeholder="Sandra">
@@ -95,13 +149,69 @@ function buildWindows() {
         <option value="">Español (es-MX)</option>
         <option value="inglés">English</option>
         <option value="portugués">Português</option></select>
-      <button id="pfguardar" class="pf-btn">Guardar perfil</button>
-      <div id="pfmsg" class="pf-msg"></div>` });
+      <div class="pf-sec">▸ Segundo plano</div>
+      <div id="bgbox">
+        <button id="bgtoggle" class="bg-toggle"><span class="sw"></span><b>Escuchar con la app cerrada</b></button>
+        <div class="bg-help">Di <b>«Oye CORT, abre WhatsApp y pon música»</b> aunque estés en otra app.
+          Android muestra un aviso fijo mientras escucha.</div>
+        <div id="bgperms"></div>
+        <label class="bg-check"><input type="checkbox" id="bgbeeps"> Dejar sonar el pitido al escuchar</label>
+      </div>
+      <div class="pf-sec">▸ Voz de CORT</div>
+      <label class="pf">Voz</label><select class="pf" id="pf-voz"><option value="">(automática: masculina, estilo JARVIS)</option></select>
+      <label class="pf">Tono de voz <span id="pf-voz_tono-v"></span></label>
+      <input class="pf" id="pf-voz_tono" type="range" min="0.5" max="1.5" step="0.02" value="0.82">
+      <label class="pf">Velocidad <span id="pf-voz_velocidad-v"></span></label>
+      <input class="pf" id="pf-voz_velocidad" type="range" min="0.6" max="1.6" step="0.02" value="1">
+      <button id="pfprobar" class="pf-btn ghost">${ic('play')} Probar voz</button>
+      <div class="pf-sec">▸ Cerebro IA</div>
+      <label class="pf">Modo</label><select class="pf" id="cf-mode">
+        <option value="auto">Automático (local → online → offline)</option>
+        <option value="online">Solo online (Groq / Gemini)</option>
+        <option value="local">Solo local (Ollama)</option>
+        <option value="offline">Sin IA (comandos locales)</option></select>
+      <label class="pf">Clave Groq <a class="pf-link" data-href="https://console.groq.com/keys">gratis aquí</a></label>
+      <input class="pf" id="cf-groq_key" placeholder="gsk_…" autocomplete="off" spellcheck="false">
+      <label class="pf">Clave Gemini <a class="pf-link" data-href="https://aistudio.google.com/apikey">gratis aquí</a></label>
+      <input class="pf" id="cf-gemini_key" placeholder="AIza…" autocomplete="off" spellcheck="false">
+      <label class="pf">Ollama (Termux o tu PC en el Wi-Fi)</label>
+      <input class="pf" id="cf-ollama_url" placeholder="http://127.0.0.1:11434" autocomplete="off" spellcheck="false">
+      <label class="pf">Modelo Ollama</label>
+      <input class="pf" id="cf-ollama_model" placeholder="qwen2.5:3b" autocomplete="off" spellcheck="false">
+      <button id="pftest" class="pf-btn ghost">${ic('brain')} Probar cerebro</button>
+      <div id="pftestout"></div>
+      <div class="pf-save"><button id="pfguardar" class="pf-btn">Guardar perfil</button>
+      <div id="pfmsg" class="pf-msg"></div></div>` });
   /* muro de recuerdos — la "sala de cuadros" de la referencia, en azul */
-  W.cerebro = createWin({ id: 'cerebro', icon: '⌗', title: '08 · Cerebro · <span id="memcount">…</span>',
+  W.cerebro = createWin({ id: 'cerebro', onShow: () => refreshMemories(), icon: '⌗', title: '08 · Cerebro · <span id="memcount">…</span>',
     x: clamp(Math.round(vw / 2) - 220, 14, Math.max(14, vw - 260)), y: 124,
     w: Math.min(440, vw - 28), h: clamp(vh * .56, 260, 420),
     html: '<div id="memwall"></div>' });
+  /* ayuda viva: órdenes, atajos y soporte (los correos llegan del backend) */
+  W.ayuda = createWin({ id: 'ayuda', onShow: refreshHelp, icon: ic('help'), title: '09 · Ayuda y soporte',
+    x: clamp(Math.round(vw / 2) - 190, 14, Math.max(14, vw - 250)), y: 132,
+    w: Math.min(380, vw - 28), h: clamp(vh * .62, 260, 430),
+    html: `<div class="hp-sec">▸ Cómo hablarle</div>
+      <div class="hp-txt">Escribe (o dicta) abajo y pulsa ⏎. <b>↑/↓</b> recuperan lo que
+        ya dijiste y <b>Tab</b> completa el comando.</div>
+      <div id="hpcmds"></div>
+      <div class="hp-sec">▸ Atajos del holograma</div>
+      <ul class="hp-keys">
+        <li><b>Tab</b> completar comando</li><li><b>↑ / ↓</b> historial</li>
+        <li><b>Enter</b> enviar</li><li><b>Esc</b> ocultar / mostrar el HUD</li>
+        <li><b>arrastrar</b> la barra superior mueve la ventana</li>
+        <li><b>doble clic</b> en la barra la minimiza al dock</li>
+        <li><b>arrastrar</b> un chip lo coloca donde quieras</li>
+      </ul>
+      <div class="hp-sec">▸ Dónde está cada cosa</div>
+      <ul class="hp-keys">
+        <li><b>01–06</b> archivos, entorno, canal, notas, música y consola</li>
+        <li><b>07 · Perfil</b> tu nombre, la voz de CORT y las claves del cerebro</li>
+        <li><b>08 · Cerebro</b> el muro de recuerdos (notas + charlas, en SQLite)</li>
+        <li><b>🎙</b> una orden · <b>👂</b> escucha «Oye CORT» · <b>✋</b> gestos con la mano</li>
+      </ul>
+      <div class="hp-sec">▸ Soporte y contacto</div>
+      <div id="hpsup">cargando…</div>` });
 }
 
 /* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
@@ -111,11 +221,12 @@ async function loadMusic() {
   try {
     const r = await (await fetch(API + '/api/music')).json();
     tracks = r.canciones || [];
+    if (r.needPermission) { el.innerHTML = ''; el.appendChild(permRow('music', 'CORT necesita permiso para ver tu música', loadMusic)); return; }
     el.innerHTML = tracks.length ? '' :
-      '<div class="row">pon canciones en ~/Música y pulsa ↻</div>';
+      '<div class="row">no encontré canciones en el teléfono · pulsa recargar</div>';
     tracks.forEach((t, i) => {
       const d = document.createElement('div'); d.className = 'row track';
-      d.innerHTML = `<span>🗎 ${t.nombre.replace(/</g,'&lt;')}</span><span class="fecha">${t.artista.replace(/</g,'&lt;')}</span>`;
+      d.innerHTML = `<span>♪ ${esc(t.nombre)}</span><span class="fecha">${esc(t.artista)}${t.dur ? ' · ' + esc(t.dur) : ''}</span>`;
       d.onclick = () => playTrack(i);
       el.appendChild(d);
     });
@@ -125,10 +236,11 @@ function playTrack(i) {
   if (i < 0 || i >= tracks.length) return;
   tIdx = i;
   const aud = document.getElementById('aud');
-  aud.src = API + '/api/audio?ruta=' + encodeURIComponent(tracks[i].ruta);
-  aud.play();
+  const k = (document.cookie.match(/(?:^|;\s*)cort=([^;]+)/) || [])[1];
+  aud.src = API + '/api/audio?ruta=' + encodeURIComponent(tracks[i].ruta) + (k ? '&k=' + k : '');
+  aud.play().catch(() => {});
   document.getElementById('nowplay').textContent = '♪ ' + tracks[i].nombre;
-  document.getElementById('mplay').textContent = '⏸';
+  document.getElementById('mplay').innerHTML = ic('pause');
   document.querySelectorAll('#plist .track').forEach((d, j) => d.classList.toggle('playing', j === i));
   W.music.show();
   orb.setDisc(true);                       // ¡el orbe se dispersa en disco que gira!
@@ -139,8 +251,8 @@ function playTrack(i) {
 function togglePlay() {
   const aud = document.getElementById('aud');
   if (tIdx < 0) { if (tracks.length) playTrack(0); return; }
-  if (aud.paused) { aud.play(); document.getElementById('mplay').textContent = '⏸'; orb.setDisc(true); startMeter(aud); }
-  else { aud.pause(); document.getElementById('mplay').textContent = '▶'; orb.setDisc(false); stopMeter(); }
+  if (aud.paused) { aud.play().catch(() => {}); document.getElementById('mplay').innerHTML = ic('pause'); orb.setDisc(true); startMeter(aud); }
+  else { aud.pause(); document.getElementById('mplay').innerHTML = ic('play'); orb.setDisc(false); stopMeter(); }
 }
 function pauseMusic() {
   const aud = document.getElementById('aud');
@@ -182,6 +294,7 @@ async function refreshTree() {
   try {
     const r = await (await fetch(API + '/api/files')).json();
     el.innerHTML = '';
+    if (r.needPermission) { el.appendChild(permRow('files', 'permiso de archivos', refreshTree)); return; }
     (r.entries || []).forEach((e, i) => el.appendChild(treeRow(e, i)));
     for (const root of [...openBranch]) {
       const row = el.querySelector(`[data-root="${CSS.escape(root)}"]`);
@@ -193,7 +306,7 @@ function treeRow(e, i) {
   const d = document.createElement('div');
   d.className = 'trow'; d.dataset.root = e.name;
   const nf = e.folders ?? 0, nx = e.files ?? 0;
-  d.innerHTML = `<b>${String(i).padStart(2, '0')} — ${e.name}</b>
+  d.innerHTML = `<b>${String(i).padStart(2, '0')} — ${esc(e.name)}</b>
     <small>${nf} ${nf === 1 ? 'carpeta' : 'carpetas'} · ${nx} ${nx === 1 ? 'archivo' : 'archivos'}</small>`;
   d.onclick = () => expandBranch(d, e.name);
   return d;
@@ -208,7 +321,7 @@ async function expandBranch(row, root, silent = false) {
   const box = document.createElement('div'); box.id = id; box.className = 'branch';
   (r.children || []).forEach((c, i) => {
     const k = document.createElement('div'); k.className = 'trow kid';
-    k.innerHTML = `<b>${String(i).padStart(2, '0')} — ${c.name}</b>
+    k.innerHTML = `<b>${String(i).padStart(2, '0')} — ${esc(c.name)}</b>
       <small>${c.folders} carpetas · ${c.files} archivos</small>`;
     k.onclick = ev => { ev.stopPropagation(); W.files.show(); openFiles(c.path); };
     box.appendChild(k);
@@ -243,18 +356,28 @@ function showAll() {
 const cl = (v, a, b) => Math.max(a, Math.min(b, v));
 function spawnChips(items, anchor) {
   const layer = document.getElementById('chips');
-  while (layer.children.length + Math.min(items.length, 8) > 14) layer.firstChild.remove();
+  const mob = mobile(), MAXC = mob ? 4 : 8, CAP = mob ? 6 : 14;
+  items = items.slice(0, MAXC);
+  while (layer.children.length + items.length > CAP) layer.firstChild.remove();
   const a = anchor ? anchor.getBoundingClientRect()
                    : { left: innerWidth * .42, top: innerHeight * .38, width: 120, height: 28 };
-  const n = Math.min(items.length, 8);
-  items.slice(0, 8).forEach((it, i) => {
+  const n = items.length;
+  items.forEach((it, i) => {
     const c = document.createElement('div'); c.className = 'chip';
     c.innerHTML = `<b>${String(it.txt).replace(/</g, '&lt;')}</b>
       <small>${String(it.meta || '').replace(/</g, '&lt;')}</small><span class="x">✕</span>`;
     const ang = (i / n) * Math.PI * 2 + Math.random() * .9;
     const rad = 150 + Math.random() * 100;
-    c.style.left = cl(Math.round(a.left + a.width / 2 + Math.cos(ang) * rad - 70), 12, innerWidth - 210) + 'px';
-    c.style.top = cl(Math.round(a.top + a.height / 2 + Math.sin(ang) * rad * .62 - 18), 92, innerHeight - 200) + 'px';
+    if (mob) {
+      // celular: los chips flotan en la franja del orbe, por encima de la hoja
+      const band = Math.max(150, innerHeight * .34 - 150);
+      c.style.left = cl(Math.round(10 + (i % 2) * innerWidth * .44 + Math.random() * 14), 8, innerWidth - 196) + 'px';
+      const row = Math.floor(i / 2), step = Math.min(56, (band - 84) / Math.max(1, Math.ceil(n / 2) - 1));
+      c.style.top = Math.round(84 + row * step + (i % 2) * 22 + Math.random() * 8) + 'px';
+    } else {
+      c.style.left = cl(Math.round(a.left + a.width / 2 + Math.cos(ang) * rad - 70), 12, innerWidth - 210) + 'px';
+      c.style.top = cl(Math.round(a.top + a.height / 2 + Math.sin(ang) * rad * .62 - 18), 92, innerHeight - 200) + 'px';
+    }
     c.style.animationDelay = (i * .35) + 's';
     c.querySelector('.x').onclick = ev => { ev.stopPropagation(); gone(c); };
     dragChip(c);
@@ -286,17 +409,21 @@ function clearChips() { document.querySelectorAll('#chips .chip').forEach(c => g
 async function chipNotes() {
   const ns = await (await fetch(API + '/api/notes')).json();
   if (!ns.length) { sayLine('Aún no hay notas: dime «apunta …».'); return; }
-  spawnChips(ns.slice(-5).reverse().map(x => ({
+  spawnChips(ns.slice(mobile() ? -2 : -5).reverse().map(x => ({
     txt: x.texto.slice(0, 30), meta: x.fecha.slice(5, 10) + ' · nota',
     act: () => { W.notes.show(); sayLine('Nota: ' + x.texto); } })));
   term('chips de notas lanzados: ' + Math.min(5, ns.length), 'notas');
 }
 async function chipRecentFiles() {
-  const r = await (await fetch(API + '/api/files?path=Documentos')).json();
-  const fs = (r.entries || []).filter(e => e.type === 'file').slice(-5).reverse();
-  if (!fs.length) { sayLine('No encontré archivos recientes en Documentos.'); return; }
-  spawnChips(fs.map(e => ({ txt: e.name, meta: e.fecha.slice(0, 10) + ' · archivo',
-    act: () => { W.files.show(); openFiles('Documentos'); sayLine('Archivo ' + e.name + ' seleccionado.'); } })));
+  let r = await (await fetch(API + '/api/files?path=Documentos')).json();
+  if (r.needPermission) { sayLine('Necesito permiso para ver tus archivos. Te abro el ajuste.'); perms.ask('files'); return; }
+  let base = 'Documentos';
+  let fs = (r.entries || []).filter(e => e.type === 'file');
+  if (!fs.length) { base = 'Descargas'; r = await (await fetch(API + '/api/files?path=Descargas')).json(); fs = (r.entries || []).filter(e => e.type === 'file'); }
+  fs = fs.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || '')).slice(0, 5);
+  if (!fs.length) { sayLine('No encontré archivos recientes en Documentos ni en Descargas.'); return; }
+  spawnChips(fs.map(e => ({ txt: e.name, meta: e.fecha.slice(0, 10) + ' · ' + base,
+    act: () => openFile(base + '/' + e.name, e.name) })));
   term('chips de archivos lanzados: ' + fs.length, 'archivos');
 }
 function ensureAnalyser(aud) {
@@ -337,7 +464,7 @@ function term(txt, tag = 'sistema') {
   const d = document.createElement('div');
   d.className = 'tl';
   const hh = new Date().toLocaleTimeString('es-MX', { hour12: false });
-  d.innerHTML = `<span class="ts">${hh}</span> <span class="tg">${tag}</span> ${txt}`;
+  d.innerHTML = `<span class="ts">${hh}</span> <span class="tg">${esc(tag)}</span> ${esc(txt)}`;
   el.appendChild(d);
   while (el.children.length > 120) el.firstChild.remove();
   el.scrollTop = el.scrollHeight;
@@ -371,30 +498,84 @@ async function addNote() {
   orb.burst(); refreshNotes();
 }
 
-/* ---------- perfil ---------- */
+/* ---------- perfil (+ voz de CORT + cerebro IA) ---------- */
+const PF_KEYS = ['asistente', 'usuario', 'tono', 'idioma', 'voz', 'voz_tono', 'voz_velocidad'];
+const CF_KEYS = ['mode', 'groq_key', 'gemini_key', 'ollama_url', 'ollama_model'];
+function fillVoices(selected) {
+  const sel = document.getElementById('pf-voz');
+  const { voices = [], default: def = '' } = voice.voices() || {};
+  sel.innerHTML = `<option value="">(automática${def ? ': ' + esc(def) : ''})</option>` +
+    voices.slice().sort((a, b) => (b.male - a.male) || a.name.localeCompare(b.name)).map(v =>
+      `<option value="${esc(v.name)}">${v.male ? '[M] ' : ''}${esc(v.name)} · ${esc(v.locale)}${v.local ? '' : ' (red)'}</option>`).join('');
+  sel.value = selected || '';
+}
+function showRange(id) {
+  const el = document.getElementById(id), out = document.getElementById(id + '-v');
+  if (el && out) out.textContent = (+el.value).toFixed(2);
+}
 async function loadProfile() {
   try {
     const p = await (await fetch(API + '/api/profile')).json();
-    for (const k of ['asistente', 'usuario', 'tono', 'idioma'])
-      if (p[k]) document.getElementById('pf-' + k).value = p[k];
+    for (const k of PF_KEYS) {
+      const el = document.getElementById('pf-' + k);
+      if (el && p[k]) el.value = p[k];
+    }
+    fillVoices(p.voz);
+    voice.configure({ voice: p.voz || '', pitch: p.voz_tono ? +p.voz_tono : undefined,
+      rate: p.voz_velocidad ? +p.voz_velocidad : undefined });
+    showRange('pf-voz_tono'); showRange('pf-voz_velocidad');
+    const c = await (await fetch(API + '/api/config')).json();
+    const bb = document.getElementById('bgbeeps'); if (bb) bb.checked = c.bg_beeps === '1';
+    for (const k of CF_KEYS) {
+      const el = document.getElementById('cf-' + k);
+      if (!el) continue;
+      if (k.endsWith('_key')) { el.value = ''; el.placeholder = c[k] ? 'guardada ' + c[k] + ' · escribe para cambiarla · «-» la borra' : 'pegar clave aquí · «-» la borra'; }
+      else { el.value = c[k] || ''; if (!c[k]) el.placeholder = '(sin ajuste · «-» lo borra del .env)'; }
+    }
   } catch { /* sin backend */ }
 }
+async function post(path, obj) {
+  return (await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(obj) })).json();
+}
 async function saveProfile() {
-  const vals = {};
-  for (const k of ['asistente', 'usuario', 'tono', 'idioma'])
-    vals[k] = document.getElementById('pf-' + k).value.trim();
-  let n = 0;
-  for (const [k, v] of Object.entries(vals)) {
-    if (!v) continue; n++;
-    await fetch(API + '/api/profile', { method: 'POST',
-      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clave: k, valor: v }) });
+  const jobs = []; jobsHadKey = false;
+  for (const k of PF_KEYS) {
+    const el = document.getElementById('pf-' + k); if (!el) continue;
+    const v = el.value.trim();
+    if (!v && k !== 'voz') continue;
+    jobs.push(post('/api/profile', { clave: k, valor: v }));
   }
+  for (const k of CF_KEYS) {
+    const el = document.getElementById('cf-' + k); if (!el) continue;
+    const v = el.value.trim();
+    if (!v && k.endsWith('_key')) continue;          // vacío = conservar la clave guardada
+    if (k.endsWith('_key')) jobsHadKey = true;
+    jobs.push(post('/api/config', { clave: k, valor: v }));
+  }
+  const n = (await Promise.all(jobs)).filter(r => r && r.ok).length;
+  voice.configure({ voice: document.getElementById('pf-voz').value,
+    pitch: +document.getElementById('pf-voz_tono').value, rate: +document.getElementById('pf-voz_velocidad').value });
   const m = document.getElementById('pfmsg');
-  m.textContent = n ? `✓ ${n} preferencias guardadas — el cerebro las usará en la próxima respuesta`
-                    : 'nada que guardar';
+  m.textContent = n ? `✓ ${n} ajustes guardados — el cerebro los usa desde la próxima respuesta` : 'nada que guardar';
   term('perfil actualizado (' + n + ' campos)', 'perfil');
-  orb.burst();
-  setTimeout(() => m.textContent = '', 4000);
+  orb.burst(); loadProfile(); refreshStatus();
+  setTimeout(() => m.textContent = '', 4500);
+  if (jobsHadKey) testBrain();                    // si pegaste una clave, la probamos al momento
+}
+let jobsHadKey = false;
+async function testBrain() {
+  const out = document.getElementById('pftestout');
+  out.innerHTML = '<div class="bt">probando cerebro…</div>';
+  try {
+    const r = await (await fetch(API + '/api/brain/test')).json();
+    out.innerHTML = r.resultados.map(x => `<div class="bt ${x.ok ? 'ok' : (x.detalle === 'sin configurar' ? 'na' : 'bad')}">
+      <b>${esc(x.proveedor)}</b> ${x.ok ? 'funciona' : esc(x.detalle)}${x.modelo ? ` <small>${esc(x.modelo)}${x.ms ? ' · ' + x.ms + ' ms' : ''}</small>` : ''}</div>`).join('');
+    const good = r.resultados.find(x => x.ok);
+    term('prueba de cerebro: ' + (good ? good.proveedor + ' OK' : 'ninguno respondió'), 'cerebro');
+    if (good) sayLine(`Cerebro ${good.proveedor} en línea.`);
+    refreshStatus();
+  } catch { out.innerHTML = '<div class="bt bad">sin conexión con el núcleo</div>'; }
 }
 
 /* ---------- CEREBRO: muro de recuerdos enmarcados ---------- */
@@ -434,7 +615,38 @@ async function refreshMemories() {
     }
   } catch { el.innerHTML = '<div class="frame empty"><b>backend no disponible</b></div>'; }
 }
-function openCortex() { W.cerebro.show(); refreshMemories(); }
+function openCortex() { W.cerebro.show(); }
+
+/* ---------- ayuda y soporte ---------- */
+async function refreshHelp() {
+  const box = document.getElementById('hpcmds');
+  if (box && !box.children.length) {
+    box.innerHTML = CMDS.map(c => `<button class="hp-cmd" data-cmd="${esc(c)}">${esc(c.trim())}</button>`).join('');
+    box.querySelectorAll('.hp-cmd').forEach(b => b.onclick = () => {
+      const cmd = b.dataset.cmd.trim();
+      W.chat.show();
+      if (/=$/.test(cmd)) { const q = document.getElementById('q'); q.value = cmd.slice(0, -1); q.focus(); }
+      else send(cmd);
+    });
+  }
+  const sup = document.getElementById('hpsup');
+  if (!sup || sup.dataset.ok) return;
+  try {
+    const s = await (await fetch(API + '/api/support')).json();
+    sup.innerHTML =
+      `<div class="hp-txt">${esc(s.proyecto)}</div>` +
+      (s.contacto || []).map(c => `<a class="hp-mail" href="mailto:${esc(c.correo)}">
+          ✉ ${esc(c.correo)} <small>${esc(c.rol)}</small></a>`).join('') +
+      `<div class="hp-note">${esc(s.nota)}</div>` +
+      (s.donaciones && s.donaciones.length
+        ? `<div class="hp-sec">▸ Invitar un café (opcional)</div>` +
+          s.donaciones.map(d => `<a class="hp-mail" href="${esc(d.url)}" target="_blank" rel="noopener">
+            ☕ ${esc(d.texto)}</a>`).join('')
+        : '') +
+      `<div class="hp-ver">CORT v${esc(s.version)} · ${esc(s.plataformas.join(' · '))}</div>`;
+    sup.dataset.ok = '1';
+  } catch { sup.innerHTML = '<div class="hp-txt">sin conexión con el núcleo: el contacto está en el README del repositorio.</div>'; }
+}
 
 /* ---------- LÁMPARA DE ESTADO (la bombilla de color de la referencia) ---------- */
 const LAMP = {
@@ -472,7 +684,11 @@ async function refreshStatus() {
     el.innerHTML =
       `${dot(b.ollama)} local ${b.ollama ? '· ' + b.ollama_model : '(no disponible)'}<br>` +
       `${dot(b.groq || b.gemini)} online ${b.groq ? '· Groq' : (b.gemini ? '· Gemini' : '(sin API key)')}<br>` +
-      `<span style="color:#5e8cab">${s.system}</span>`;
+      `<span style="color:#5e8cab">${esc(s.system)}</span>`;
+    const eb = document.getElementById('envbrain');
+    if (eb) eb.innerHTML = `${dot(b.ollama)} local ${b.ollama ? '· ' + esc(b.ollama_model) : '(sin Ollama)'}<br>` +
+      `${dot(b.groq || b.gemini)} online ${b.groq ? '· Groq' : (b.gemini ? '· Gemini' : '(sin clave · ve a Perfil)')}<br>` +
+      `<span style="color:#5e8cab">modo: ${esc(b.mode)}</span>`;
     const m = s.system.match(/CPU (\d+)\s*% · RAM (\d+)\s*% \(([\d.]+) de ([\d.]+) GB\) · Disco (\d+)\s*%/);
     if (m) {
       setBar('cpu', m[1]); setBar('ram', m[2]); setBar('disk', m[5]);
@@ -480,7 +696,7 @@ async function refreshStatus() {
     }
     document.getElementById('batt').textContent = s.battery;
   } catch {
-    el.innerHTML = `<span class="dot off"></span> backend no detectado (puerto 8000)`;
+    el.innerHTML = `<span class="dot off"></span> backend no detectado`;
   }
 }
 function setBar(id, pct) { document.getElementById('bar-' + id).style.width = pct + '%'; }
@@ -505,35 +721,97 @@ async function openFiles(path = '') {
   const list = document.getElementById('flist');
   list.innerHTML = '<div class="row">cargando…</div>';
   const r = await (await fetch(API + '/api/files?path=' + encodeURIComponent(path))).json();
-  if (r.error) { list.innerHTML = `<div class="row">⚠ ${r.error}</div>`; return; }
+  if (r.needPermission) { list.innerHTML = ''; list.appendChild(permRow('files', r.error, () => { openFiles(path); refreshTree(); })); return; }
+  if (r.error) { list.innerHTML = `<div class="row">${ic('warn')} ${esc(r.error)}</div>`; return; }
   const rows = [];
-  if (path) rows.push({ name: '↩ ..', dir: path.split('/').slice(0, -1).join('/') });
+  if (path) rows.push({ name: '..', kind: 'up', dir: path.split('/').slice(0, -1).join('/') });
   for (const e of r.entries) rows.push({
-    name: (e.type === 'dir' ? '🗁 ' : '🗎 ') + e.name,
+    name: e.name, kind: e.type === 'dir' ? 'dir' : 'file',
     dir: path ? path + '/' + e.name : e.name, type: e.type, size: e.size,
     fecha: e.fecha });
   list.innerHTML = '';
   list.classList.toggle('grid', fGrid);
+  const ICO = { up: 'back', dir: 'folder', file: 'file' };
   rows.forEach((row, i) => {
     const d = document.createElement('div');
     d.style.animationDelay = (i * 16) + 'ms';
     if (fGrid) {
       d.className = 'tile';
-      d.innerHTML = `<span class="ti">${row.type === 'file' ? '🗎' : (row.name.includes('..') ? '↩' : '🗁')}</span>
-        <span class="tn">${row.name.replace(/^(🗁|🗎)\s*/, '')}</span>`;
+      d.innerHTML = `<span class="ti">${ic(ICO[row.kind])}</span><span class="tn">${esc(row.name)}</span>`;
     } else {
       d.className = 'row';
-      d.innerHTML = `<span>${row.name}</span>` +
+      d.innerHTML = `${ic(ICO[row.kind], 'fi')}<span class="fname">${esc(row.name)}</span>` +
         (row.fecha ? `<span class="fecha">${row.fecha.slice(0, 10)}</span>` : '') +
         (row.type === 'file' && row.size ? `<span class="size">${row.size > 1e6 ? (row.size / 1e6).toFixed(1) + ' MB' : Math.round(row.size / 1e3) + ' KB'}</span>` : '');
     }
-    d.onclick = row.type === 'file'
-      ? () => { sayLine(`Archivo ${row.name} seleccionado.`); term('archivo: ' + row.name, 'archivos'); }
-      : () => openFiles(row.dir);
+    d.onclick = row.type === 'file' ? () => openFile(row.dir, row.name) : () => openFiles(row.dir);
     list.appendChild(d);
   });
   document.getElementById('fpath').textContent = (path || 'raíces') + ' · ' + rows.length + ' items';
+  if (!rows.length || (path && rows.length === 1)) list.insertAdjacentHTML('beforeend', '<div class="row">carpeta vacía</div>');
   term('listando ' + (path || 'raíces') + ' (' + rows.length + ' entradas)', 'archivos');
+}
+
+/* ---------- SEGUNDO PLANO: escuchar «Oye CORT» con la app cerrada ---------- */
+const BG_PERMS = [
+  ['mic', 'Micrófono', 'para oírte'],
+  ['notif', 'Notificaciones', 'el aviso fijo «CORT escuchando»'],
+  ['overlay', 'Burbuja flotante', 'abrir apps desde el fondo (Android 10+)'],
+  ['battery', 'Batería sin restricción', 'que Android no lo apague'],
+];
+function bgStatus() {
+  try { return IS_ANDROID ? JSON.parse(window.CortNative.bgStatus()) : null; } catch { return null; }
+}
+function renderBg(st = bgStatus()) {
+  const box = document.getElementById('bgbox'); if (!box) return;
+  if (!st) { box.innerHTML = '<div class="bg-help">Solo disponible en la app de Android.</div>'; return; }
+  const t = document.getElementById('bgtoggle');
+  t.classList.toggle('on', st.enabled);
+  t.querySelector('b').textContent = st.enabled ? (st.running ? 'Escucha de fondo ACTIVA' : 'Activando…') : 'Escuchar con la app cerrada';
+  const rows = BG_PERMS.map(([k, name, why]) => `<div class="bgp ${st[k] ? 'ok' : ''}">
+      <span class="st">${st[k] ? '✓' : '·'}</span><span class="nm">${name}<small>${why}</small></span>
+      ${st[k] ? '' : `<button data-perm="${k}">Dar</button>`}</div>`).join('');
+  const oem = /oppo|realme|oneplus|xiaomi|redmi|poco|huawei|honor|vivo|samsung|tecno|infinix/i.test(st.maker || '');
+  document.getElementById('bgperms').innerHTML = rows + (oem ? `<div class="bgp warn"><span class="st">!</span>
+      <span class="nm">${esc(st.maker)}: activa «Inicio automático» / «Actividad en segundo plano»<small>en los ajustes de la app, si no tu teléfono lo cierra</small></span>
+      <button data-perm="autostart">Abrir</button></div>` : '');
+  document.querySelectorAll('#bgperms [data-perm]').forEach(b => b.onclick = () => perms.ask(b.dataset.perm));
+}
+async function toggleBg() {
+  const st = bgStatus(); if (!st) return;
+  const on = !st.enabled;
+  window.CortNative.setBackground(on);
+  term(on ? 'escucha de fondo: activando' : 'escucha de fondo: apagada', 'voz');
+  if (on) {
+    voice.setWake(true);                                   // en pantalla también escucha «Oye CORT»
+    add('a', 'Listo. Aunque cierres la app, di «Oye CORT» y tu orden. Para que no falle, da los permisos de la lista.', 'voz');
+    speakTTS('Escucha de fondo activada.');
+  }
+  setTimeout(() => renderBg(), 700);
+}
+
+/* ---------- permisos y abrir archivos (Android) ---------- */
+const PERM_TXT = { files: 'Dar acceso a archivos', music: 'Dar acceso a la música', mic: 'Dar acceso al micrófono', camera: 'Dar acceso a la cámara' };
+const permRetry = {};
+function permRow(kind, msg, retry) {
+  permRetry[kind] = retry;
+  const d = document.createElement('div'); d.className = 'row perm';
+  d.innerHTML = `<span>${ic('lock')} ${esc(msg || 'falta permiso')}</span><button class="pf-btn">${PERM_TXT[kind] || 'Dar permiso'}</button>`;
+  d.querySelector('button').onclick = ev => { ev.stopPropagation(); perms.ask(kind); };
+  return d;
+}
+function onPermission(kind, granted) {
+  term(`permiso ${kind}: ${granted ? 'concedido' : 'denegado'}`, 'sistema');
+  if (granted) { permRetry[kind] && permRetry[kind](); if (kind === 'files') refreshTree(); if (kind === 'music') loadMusic(); }
+  else if (kind === 'mic') add('a', 'Sin permiso de micrófono no puedo escucharte. Puedes darlo en Ajustes → Apps → CORT IA → Permisos.', 'error');
+}
+async function openFile(rel, name) {
+  term('abrir: ' + rel, 'archivos');
+  try {
+    const r = await post('/api/open', { path: rel });
+    if (r.needPermission) { perms.ask('files'); return; }
+    sayLine(r.ok ? `Abriendo ${name}.` : `No pude abrir ${name}: ${r.error || 'sin app compatible'}.`);
+  } catch { sayLine(`Archivo ${name} seleccionado.`); }
 }
 
 /* ---------- chat + voz ---------- */
@@ -544,12 +822,7 @@ function add(cls, text, src) {
   log.appendChild(p); log.scrollTop = log.scrollHeight;
 }
 function sayLine(text) { add('a', text, 'voz'); orb.speak(2200); speakTTS(text); }
-function speakTTS(text) {
-  if (!('speechSynthesis' in window)) return;
-  speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text.slice(0, 400));
-  u.lang = 'es-MX'; u.rate = 1.05; speechSynthesis.speak(u);
-}
+function speakTTS(text, then) { return voice ? voice.speak(text, then) : Promise.resolve(); }
 /* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
 const HIST = [];
 let hIdx = 0, draft = '';
@@ -571,6 +844,7 @@ async function send(raw) {
   const q = document.getElementById('q');
   const msg = (raw ?? q.value).trim(); if (!msg) return;
   q.value = ''; add('u', msg);
+  if (mobile() && raw === undefined) q.blur();     // cierra el teclado para ver la respuesta
   if (HIST[HIST.length - 1] !== msg) HIST.push(msg);
   hIdx = HIST.length; draft = '';
   setState('pensando');
@@ -578,35 +852,6 @@ async function send(raw) {
   setTimeout(() => document.getElementById('top').classList.remove('glitch'), 800);
   orb.activate();                                    // ← vórtice de activación (referencia)
   term('consulta: "' + msg.slice(0, 40) + '"', 'voz');
-  /* peticiones de música: "reproduce …" — primero tu playlist (por nombre de
-     canción o artista); si no, el reproductor predeterminado del sistema */
-  if (/reproduc|suena|\bpon\b|reproductor|vlc|playlist|un tema|una canci[oó]n/i.test(msg)) {
-    const clean = msg
-      .replace(/por\s+fav?or|reproduc\w*|suena|pon(er|ga|me)?|reproductor|vlc|playlist|un[ao]?\s+(canci[oó]n|tema)|la\s+m[uú]sica|m[uú]sica|\b(de|en|mi|el|que)\b/gi, ' ')
-      .replace(/\s+/g, ' ').trim();
-    let i = -1;
-    if (clean.length > 2 && tracks.length) {
-      const c = clean.toLowerCase();
-      i = tracks.findIndex(t => t.nombre.toLowerCase().includes(c) || t.artista.toLowerCase().includes(c));
-    }
-    if (i >= 0) {
-      playTrack(i);
-      add('a', `Reproduciendo «${tracks[i].nombre}» de ${tracks[i].artista} en el ejecutor de CORT.`, 'ejecutor');
-      speakTTS('Reproduciendo ' + tracks[i].nombre);
-      return;
-    }
-    try {
-      const r = await (await fetch(API + '/api/play', { method: 'POST',
-        headers: { 'content-type': 'application/json' }, body: '{}' })).json();
-      if (r.ok) {
-        add('a', (clean ? `No la encontré en tu playlist, así que abrí tu reproductor predeterminado con ` :
-                    `Abriendo tu reproductor predeterminado con `) + `«${r.cancion}».`, 'ejecutor');
-        term('ejecutado en el sistema: ' + r.cancion, 'ejecutor');
-        speakTTS('Abriendo tu reproductor con ' + r.cancion);
-      } else add('a', 'No encontré música en tu carpeta Música: ' + (r.error || ''), 'error');
-    } catch { add('a', 'Sin conexión con el backend para ejecutar música.', 'error'); }
-    return;
-  }
   /* ─── órdenes directas del repertorio de la referencia (video f7d16b9e) ─── */
   if (/modo (oficina|bureau|escritorio)|organiza|ordena (las )?ventanas|ordenar el escritorio/i.test(msg)) {
     const n = organizeBureau();
@@ -637,47 +882,41 @@ async function send(raw) {
     add('a', 'Este es mi muro de recuerdos: cada cuadro es algo que apunté o hablamos.', 'cerebro');
     term('cerebro abierto', 'cerebro'); return;
   }
-  if (/\bpausa\b|mets pausa|det[eé]n la m[uú]sica|alto a la m[uú]sica/i.test(msg)) {
-    pauseMusic();
-    add('a', 'Música en pausa, como en la referencia.', 'ejecutor');
-    speakTTS('Pausa'); term('pausa de reproducción', 'música'); return;
+  if (/^(ayuda|help)|c[oó]mo (te )?(uso|funcionas)|qu[eé] puedes hacer/i.test(msg)) {
+    W.ayuda.show();
+    add('a', 'En 09 · Ayuda tienes las órdenes que entiendo, los atajos del teclado y el contacto de soporte.', 'ayuda');
+    term('ventana de ayuda abierta', 'ayuda'); return;
   }
-  if (/reanuda|continua (la )?m[uú]sica|sigue con la m[uú]sica|play de nuevo/i.test(msg)) {
-    resumeMusic();
-    add('a', 'Continuando la reproducción.', 'ejecutor');
-    speakTTS('Continuando'); term('reanudada', 'música'); return;
+  /* reproductor interno de CORT (cuando está abierto y sonando) */
+  const aud = document.getElementById('aud');
+  const single = !/\s(y|luego|despu[eé]s)\s/i.test(msg);
+  if (single && tIdx >= 0 && !aud.paused && /^(pausa|para|det[eé]n)\b/i.test(msg)) {
+    pauseMusic(); add('a', 'Música en pausa.', 'ejecutor'); speakTTS('Pausa'); return;
   }
-  if (/qu[eé] hora es|dime la hora|hora actual/i.test(msg)) {
-    const h = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    add('a', `Son las ${h} — hora local, sin necesitar internet (como en el video).`, 'sistema');
-    speakTTS('Son las ' + h); orb.burst(); term('hora local: ' + h, 'sistema'); return;
+  if (single && tIdx >= 0 && aud.paused && /^(reanuda|contin[uú]a|sigue|play)\b/i.test(msg)) {
+    resumeMusic(); add('a', 'Continuando la reproducción.', 'ejecutor'); speakTTS('Continuando'); return;
   }
-  const mAbrir = msg.match(/\babre\b|\babrir\b|\blanza\b|\abinicia\b/i);
-  if (mAbrir && /youtube|navegador/i.test(msg)) {
-    const app = /youtube/i.test(msg) ? 'youtube' : 'navegador';
-    add('a', `Lanzando ${app}…`, 'ejecutor'); term('launch: ' + app, 'ejecutor');
-    try {
-      const r = await (await fetch(API + '/api/launch', { method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ app }) })).json();
-      add('a', r.ok ? `Aplicación lanzada: ${r.app} ✓` : 'El backend lo bloqueó: ' + (r.error || ''),
-        'ejecutor');
-      speakTTS(r.ok ? 'Aplicación lanzada' : 'No pude lanzar la aplicación');
-    } catch {
-      window.open(app === 'youtube' ? 'https://www.youtube.com' : 'https://duckduckgo.com');
-      add('a', 'Sin backend: lo abrí directo en el navegador.', 'error');
+  if (single && tracks.length && /^(reproduce|pon|ponme|toca)\s+/i.test(msg)) {
+    const c = msg.replace(/^(reproduce|pon|ponme|toca)\s+(la canci[oó]n\s+|el tema\s+)?/i, '').trim().toLowerCase();
+    const i = c.length > 2 ? tracks.findIndex(t => t.nombre.toLowerCase().includes(c) || t.artista.toLowerCase().includes(c)) : -1;
+    if (i >= 0) {
+      playTrack(i);
+      add('a', `Reproduciendo «${tracks[i].nombre}» de ${tracks[i].artista} en el ejecutor de CORT.`, 'ejecutor');
+      speakTTS('Reproduciendo ' + tracks[i].nombre); return;
     }
-    return;
   }
+  /* todo lo demás: ACCIONES del teléfono (varias en una frase) y, si no, el cerebro */
   try {
-    const r = await (await fetch(API + '/api/chat', { method: 'POST',
-      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: msg }) })).json();
+    const r = await post('/api/command', { message: msg });
     add('a', r.reply, r.source); orb.burst(); speakTTS(r.reply);   // ← animación de acción
+    if (r.source === 'offline' && !offlineHinted) { offlineHinted = true;
+      add('a', 'Consejo: en 07 · Perfil → Cerebro IA pega una clave gratis de Groq o Gemini para conversar de verdad.', 'sistema'); }
     setState('hablando');
+    (r.done || []).forEach(d => term('acción: ' + d, 'ejecutor'));
     term('respuesta vía ' + r.source, 'cerebro');
-    if (/archivo|carpeta|explorador/i.test(msg)) openFiles();
-    if (/nota|apunta|recuerda/i.test(msg)) { W.notes.show(); addNoteFromChat(msg); }
-  } catch { add('a', 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); setState('error'); }
+    if ((r.done || []).includes('nota')) refreshNotes();
+    if (!(r.done || []).length && /^(abre |muestra )?(los )?(archivos|carpetas|explorador)$/i.test(msg)) openFiles();
+  } catch { add('a', IS_ANDROID ? 'El núcleo de CORT no respondió. Cierra y abre la app.' : 'Sin conexión con el backend. Ejecuta scripts/run.', 'error'); setState('error'); }
 }
 async function addNoteFromChat(msg) {
   const t = msg.replace(/^(apunta|nota|recuerda)[\s:]+/i, '').trim();
@@ -688,26 +927,89 @@ async function addNoteFromChat(msg) {
   }
 }
 
+let offlineHinted = false;
+
+/* ---------- botón atrás de Android: cierra lo último abierto ---------- */
+window.__cortBack = () => {
+  if (voice && voice.mode === 'cmd') { voice.listen(); return true; }
+  const chips = document.querySelectorAll('#chips .chip:not(.gone)');
+  if (chips.length) { clearChips(); return true; }
+  const open = Object.values(W).filter(w => w.open && !w.minimized)
+    .sort((a, b) => (+b.el.style.zIndex || 0) - (+a.el.style.zIndex || 0));
+  if (open.length) { open[0].minimize(); return true; }
+  return false;
+};
+
 /* ---------- todo junto ---------- */
 export function wireUI(orbRef) {
   orb = orbRef;
+  voice = createVoice({
+    lang: 'es-MX',
+    onState(mode, st) {
+      const mic = document.getElementById('mic'), wake = document.getElementById('wake');
+      mic.classList.toggle('on', mode === 'cmd');
+      wake.classList.toggle('on', st.wakeOn);
+      wake.classList.toggle('hearing', mode === 'wake');
+      document.body.classList.toggle('listening', mode === 'cmd');
+      if (mode === 'cmd') { orb.listen(true); setState('escucha'); }
+      else if (!st.speaking) { orb.listen(false); }
+    },
+    onPartial(text) {                      // texto EN VIVO mientras hablas
+      const q = document.getElementById('q');
+      q.value = text; q.classList.add('live');
+      const lv = document.getElementById('livetxt');
+      if (lv) { lv.textContent = text; lv.classList.add('show'); }
+    },
+    onFinal(text) {
+      const q = document.getElementById('q'); q.classList.remove('live');
+      document.getElementById('livetxt')?.classList.remove('show');
+      term('dictado: "' + text + '"', 'voz');
+      send(text);
+    },
+    onLevel(l) { orb.setAudio(l * .9, l); const m = document.getElementById('mic'); m.style.setProperty('--lvl', l.toFixed(2)); },
+    onSpeak(on) { if (on) { orb.speak(60000); setState('hablando'); } else { orb.speak(1); } },
+    onWake(rest) {
+      term('palabra de activación: «Oye CORT»' + (rest ? ' + "' + rest + '"' : ''), 'voz');
+      orb.activate(); W.chat.show();
+      if (rest.length > 2) send(rest);
+      else { add('a', '¿Sí?', 'voz'); speakTTS('¿Sí?', () => voice.listen()); }
+    },
+    onError(e) {
+      const lv = document.getElementById('livetxt'); lv && lv.classList.remove('show');
+      document.getElementById('q').classList.remove('live');
+      if (e === 'not-allowed') { add('a', 'Necesito permiso de micrófono para escucharte.', 'error'); document.getElementById('wake').classList.remove('on'); }
+      else if (e === 'service-not-allowed') add('a', 'Este teléfono no tiene servicio de reconocimiento de voz. Instala o actualiza la app «Google» y vuelve a intentar.', 'error');
+      else if (e === 'network') term('reconocimiento de voz sin red (reintento)', 'voz');
+      else if (e === 'no-speech') { term('no escuché nada', 'voz'); setState('reposo'); }
+    },
+    onPermission,
+  });
   buildWindows();
-  term('CORT BIOS v0.4 — núcleo holográfico en línea', 'arranque');
-  runBoot().then(({ backendOK }) => {
+  term('CORT v0.2 — núcleo holográfico en línea', 'arranque');
+  runBoot().then(({ backendOK, where }) => {
     setState(backendOK ? 'listo' : 'error');
-    term(backendOK ? 'backend conectado (localhost:8000)' : 'backend NO detectado', 'arranque');
+    term(backendOK ? 'núcleo conectado en ' + (where || 'este origen') : 'backend NO detectado', 'arranque');
     add('a', backendOK ? 'Sistemas en línea. CORT a sus órdenes.' :
-      'Backend no detectado: ejecuta scripts/run.sh (Linux) o run.bat (Windows).',
+      (IS_ANDROID ? 'El núcleo de CORT no arrancó. Cierra y vuelve a abrir la app.' :
+      'Backend no detectado: ejecuta scripts/run.sh (Linux) o run.bat (Windows).'),
       backendOK ? 'sistema' : 'error');
     if (backendOK) {
       refreshStatus(); refreshWeather(); refreshNotes(); loadProfile(); refreshTree();
-      // los paneles se despliegan en cascada numerada, como en la referencia
-      setTimeout(() => W.chat.show(), 150);
-      setTimeout(() => { openFiles(); }, 500);
-      setTimeout(() => W.env.show(), 800);
-      setTimeout(() => W.music.show(), 1100);
-      setTimeout(() => W.term.show(), 1400);
-      setTimeout(chipNotes, 2600);      // bienvenida estilo Jared: notas flotando
+      if (mobile()) {
+        // celular: una ventana a la vez; arranca en el canal de voz
+        setTimeout(() => W.chat.show(), 150);
+        setTimeout(() => { openFiles(); W.chat.show(); }, 400);
+        setTimeout(chipNotes, 2200);
+        setTimeout(() => speakTTS('Sistemas en línea. CORT a sus órdenes.'), 600);
+      } else {
+        // los paneles se despliegan en cascada numerada, como en la referencia
+        setTimeout(() => W.chat.show(), 150);
+        setTimeout(() => { openFiles(); }, 500);
+        setTimeout(() => W.env.show(), 800);
+        setTimeout(() => W.music.show(), 1100);
+        setTimeout(() => W.term.show(), 1400);
+        setTimeout(chipNotes, 2600);      // bienvenida estilo Jared: notas flotando
+      }
     }
     setInterval(refreshStatus, 10000);
     setInterval(refreshWeather, 10 * 60000);
@@ -715,6 +1017,10 @@ export function wireUI(orbRef) {
   });
 
   document.getElementById('go').onclick = () => send();
+  // teclado abierto en el celular → la hoja ocupa la pantalla
+  document.addEventListener('focusin', e => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range') document.body.classList.add('typing'); });
+  document.addEventListener('focusout', () => setTimeout(() => {
+    const a = document.activeElement; if (!a || !/INPUT|SELECT|TEXTAREA/.test(a.tagName)) document.body.classList.remove('typing'); }, 60));
   document.getElementById('q').addEventListener('keydown', e => {
     const q = e.currentTarget;
     if (e.key === 'Enter') return send();
@@ -759,45 +1065,58 @@ export function wireUI(orbRef) {
   };
   document.getElementById('brain').onclick = () => { openCortex(); term('cerebro abierto', 'cerebro'); };
 
-  /* micrófono */
-  const mic = document.getElementById('mic');
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (SR) {
-    const rec = new SR(); rec.lang = 'es-MX'; rec.interimResults = false;
-    let on = false;
-    mic.onclick = () => { on ? rec.stop() : rec.start(); };
-    rec.onstart = () => { on = true; mic.classList.add('on'); orb.listen(true); setState('escucha'); };
-    rec.onend = () => { on = false; mic.classList.remove('on'); orb.listen(false); setState('reposo'); };
-    rec.onresult = e => send(e.results[0][0].transcript);
+  /* Esc oculta/muestra el HUD (solo cuando no estás escribiendo) */
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (/INPUT|TEXTAREA|SELECT/.test((e.target.tagName || ''))) { e.target.blur(); return; }
+    Object.values(W).some(w => w.open && !w.minimized) ? hideAll() : showAll();
+  });
 
-    /* wake word "Oye CORT" — escucha permanente opt-in (botón 👂) */
-    const wake = document.getElementById('wake');
-    let wakeOn = false, wakeRec = null;
-    wake.onclick = () => {
-      wakeOn = !wakeOn;
-      wake.classList.toggle('on', wakeOn);
-      if (wakeOn) {
-        term('escucha de activación: «Oye CORT» — activa', 'voz');
-        startWake();
-      } else if (wakeRec) { wakeRec.stop(); wakeRec = null; }
-    };
-    function startWake() {
-      if (!wakeOn) return;
-      wakeRec = new SR(); wakeRec.lang = 'es-MX'; wakeRec.interimResults = false;
-      wakeRec.continuous = false;
-      wakeRec.onresult = e => {
-        const t = e.results[0][0].transcript;
-        if (/oye\s+cort|cort[,.]?$/i.test(t)) {
-          term('palabra de activación detectada: "' + t + '"', 'voz');
-          orb.activate(); W.chat.show();                     // vórtice al ser llamada
-          sayLine('¿Sí?'); send(t.replace(/oye\s+cort[,.\s]*/i, ''));
-        }
-      };
-      wakeRec.onend = () => { if (wakeOn) setTimeout(startWake, 400); };
-      wakeRec.onerror = err => { if (wakeOn && err === 'not-allowed') { wakeOn = false; wake.classList.remove('on'); } };
-      try { wakeRec.start(); } catch { /* ya activa */ }
-    }
-  } else { mic.style.display = 'none'; document.getElementById('wake').style.display = 'none'; }
+  /* dock nuevo: «abrir» la carpeta actual + ayuda la primera vez */
+  let vista = false;
+  try { vista = localStorage.getItem('cort_ayuda_vista') === '1'; } catch { /* modo privado */ }
+  if (!vista) { W.ayuda.show(); try { localStorage.setItem('cort_ayuda_vista', '1'); } catch { /* nada */ } }
+  document.querySelector('#dock [data-act=open]').onclick = () => {
+    post('/api/open', { path: curFPath }).then(r => {
+      sayLine(r.ok ? `Abriendo ${r.carpeta || r.archivo || 'la carpeta'} en el explorador.`
+                   : `No pude abrir la carpeta: ${r.error || 'sin visor'}.`);
+      term('abrir carpeta: ' + (curFPath || 'raíces') + (r.ok ? ' ✓' : ' ✗'), 'archivos');
+      orb.burst();
+    }).catch(() => sayLine('El núcleo no respondió: abre la carpeta a mano.'));
+  };
+
+  /* perfil: voz y enlaces */
+  ['pf-voz_tono', 'pf-voz_velocidad'].forEach(id => document.getElementById(id).addEventListener('input', () => showRange(id)));
+  document.getElementById('pftest').onclick = testBrain;
+  document.getElementById('bgtoggle').onclick = toggleBg;
+  document.getElementById('bgbeeps').onchange = e => post('/api/config', { clave: 'bg_beeps', valor: e.target.checked ? '1' : '0' });
+  renderBg();
+  window.__cortNative.on(ev => { if (ev.type === 'bg' || ev.type === 'resume' || ev.type === 'perm') setTimeout(() => renderBg(), 300); });
+  { const st = bgStatus(); if (st && st.enabled) setTimeout(() => voice.setWake(true), 3000); }
+  document.getElementById('pfprobar').onclick = () => {
+    voice.configure({ voice: document.getElementById('pf-voz').value,
+      pitch: +document.getElementById('pf-voz_tono').value, rate: +document.getElementById('pf-voz_velocidad').value });
+    const n = document.getElementById('pf-usuario').value.trim();
+    sayLine(`A sus órdenes${n ? ', ' + n : ''}. Todos los sistemas están en línea.`);
+  };
+  document.querySelectorAll('.pf-link').forEach(a => a.onclick = e => { e.preventDefault(); location.href = a.dataset.href; });
+  window.__cortNative.on(ev => { if (ev.type === 'tts-ready' && ev.ok) loadProfile(); });
+
+  /* micrófono: toca y habla — el texto aparece mientras hablas */
+  const mic = document.getElementById('mic');
+  mic.onclick = () => { orb.activate(); voice.listen(); };
+  document.getElementById('q').addEventListener('focus', () => { if (voice.speaking) voice.stopSpeaking(); });
+
+  /* «Oye CORT» — escucha permanente opt-in */
+  const wake = document.getElementById('wake');
+  wake.onclick = () => {
+    const on = !voice.wakeOn;
+    voice.setWake(on);
+    try { window.CortNative && window.CortNative.keepAwake(on); } catch { /* app vieja */ }
+    term(on ? 'escucha de activación: «Oye CORT» — activa' : 'escucha de activación apagada', 'voz');
+    if (on) add('a', 'Escucha permanente activa: di «Oye CORT» y tu orden.', 'voz');
+  };
+  if (!voice.available && !IS_ANDROID) { mic.style.display = 'none'; wake.style.display = 'none'; }
 
   /* gestos — modo ligero */
   import('./gestures.js').then(({ initGestures }) => initGestures({

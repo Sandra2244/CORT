@@ -2,13 +2,23 @@
 
 Endpoints:
   POST /api/chat    {message}            -> {reply, source}
+  POST /api/command {message}            -> {reply, source, done[]} (acciones del sistema)
   GET  /api/status                       -> estado del cerebro híbrido + sistema
+  GET  /api/port                         -> en qué puerto vive este backend
   GET  /api/history                      -> últimas respuestas recordadas
   POST /api/profile   {clave, valor}     -> memoria de preferencias
+  GET/POST /api/config                  -> cerebro y voz, leídos al vuelo (claves en máscara)
+  GET  /api/brain/test                  -> prueba cada proveedor, con ms y modelo
+  POST /api/open     {path}              -> abre un archivo/carpeta permitido en su visor
+  POST /api/launch   {app}               -> lanza una app de la lista blanca (youtube, navegador…)
   GET  /api/files?path=                  -> explorador de carpetas (raíces seguras)
   GET  /api/tree?path=                   -> hijos de una carpeta con conteos (árbol lateral)
   GET  /api/memories                     -> muro de recuerdos (notas + conversaciones)
   GET  /api/weather                      -> clima actual (Open-Meteo, cacheado)
+  GET  /api/support                      -> contacto y soporte de la ventana 09
+
+Si CORT_SERVE_UI=1 (o el ejecutor lo pide), el mismo backend reparte también la
+interfaz en `http://<host>:<puerto>/` — un solo proceso, cero puertos extra.
 """
 from __future__ import annotations
 
@@ -24,23 +34,30 @@ try:
 except ImportError:
     pass
 
+import actions                                  # noqa: E402
 from brain import brain_status, think          # noqa: E402
+import brain                                    # noqa: E402  (test_all / recarga de config)
+import config_store                             # noqa: E402
 import memory                                   # noqa: E402
 import local_commands                           # noqa: E402
 import sensors                                  # noqa: E402
 
-from fastapi import FastAPI                     # noqa: E402
+from fastapi import FastAPI, Request           # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse      # noqa: E402
+from fastapi.staticfiles import StaticFiles     # noqa: E402
 from pydantic import BaseModel                  # noqa: E402
 
-app = FastAPI(title="CORT", version="0.1.0")
+VERSION = "0.2.0"
+app = FastAPI(title="CORT", version=VERSION)
 
-# El holograma (Electron o navegador) habla con el backend solo desde localhost
+# El holograma habla con el backend solo desdelocalhost, pero puede vivir en
+# cualquier puerto (Electron empaquetado usa uno aleatorio, la app de Android
+# reporta https://localhost). Por eso se aceptan todos los localhost.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173",
-                   "http://localhost:8080", "http://127.0.0.1:8080",
-                   "http://localhost:3000", "http://127.0.0.1:3000", "null"],
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=["null"],
     allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -66,10 +83,48 @@ def chat(msg: Msg):
     return {"reply": reply, "source": source}
 
 
+@app.post("/api/command")
+def command(msg: Msg):
+    """Órdenes que tocan el sistema (nota, abrir carpeta/archivo, sitio, música).
+    Acepta varias en una frase («apunta esto y abre Documentos») y devuelve
+    {reply, source, done:[acciones]} para que la pantalla reaccione a cada una."""
+    return actions.run_command(msg.message)
+
+
 @app.get("/api/status")
 def status():
     return {"brain": brain_status(), "system": local_commands.system_stats(),
-            "battery": local_commands.battery()}
+            "battery": local_commands.battery(), "version": VERSION}
+
+
+@app.get("/api/port")
+def port(request: Request):
+    """Desde qué puerto está sirviendo ESTE backend. La pantalla lo consulta
+    cuando no está en el :8080 de costumbre (Electron empaquetado, Termux…)."""
+    return {"port": request.url.port, "base": str(request.base_url)}
+
+
+# Contacto que muestra la ventana 09 · Ayuda (y el README, en la sección
+# "Soporte"). Editar aquí es suficiente: la pantalla lo lee al arrancar.
+SUPPORT = {
+    "proyecto": "C.O.R.T. — Cognitive Orchestrator / Real-Time. Proyecto personal, "
+                "abierto y sin fines de lucro: si quieres hablar de él, colaborar o "
+                "apoyar el trabajo, escribe a cualquiera de estos correos.",
+    "contacto": [
+        {"correo": "sandrasofialopezgomez3@gmail.com", "rol": "creadora del proyecto"},
+        {"correo": "carlosa3325@gmail.com", "rol": "colaborador"},
+    ],
+    "nota": "¿Eres programador y quieres sumar una función, un idioma o un cerebro "
+            "nuevo? Escríbenos con el asunto «CORT» y te contamos por dónde seguir.",
+    "donaciones": [],          # añade aquí Mercado Pago / PayPal si quieres recibir apoyo
+    "plataformas": ["Windows", "Linux", "macOS", "Android"],
+    "version": VERSION,
+}
+
+
+@app.get("/api/support")
+def support():
+    return SUPPORT
 
 
 @app.get("/api/history")
@@ -90,6 +145,26 @@ def profile(p: Perfil):
 @app.get("/api/profile")
 def profile_get():
     return memory.get_profile()
+
+
+# ------------------------------------------------------------------ config
+# La ventana PERFIL puede cambiar cerebro y voz SIN tocar el .env ni
+# reiniciar: se guarda en backend/cort_config.json y se lee en cada petición.
+@app.get("/api/config")
+def config_get():
+    return config_store.masked()
+
+
+@app.post("/api/config")
+def config_set(p: Perfil):
+    ok = config_store.set_value(p.clave, p.valor)
+    return {"ok": ok, "clave": p.clave}
+
+
+@app.get("/api/brain/test")
+def brain_test():
+    """«Probar cerebro»: responde cada proveedor y mide cuánto tardó."""
+    return {"resultados": brain.test_all()}
 
 
 class Nota(BaseModel):
@@ -169,3 +244,35 @@ def launch(l: Launch):
     """«Abre YouTube» → lanza la app de la LISTA BLISTA con el navegador
     predeterminado (referencia: APPLICATION LANCÉE del video francés)."""
     return sensors.launch_app(l.app)
+
+
+class Open(BaseModel):
+    path: str = ""
+
+
+@app.post("/api/open")
+def open_file(o: Open):
+    """Abre un archivo o carpeta de las raíces permitidas con su visor
+    del sistema (documentos, imágenes, audio, video y comprimidos).
+    Nunca ejecuta: las extensiones de programa están bloqueadas."""
+    return sensors.open_path(o.path)
+
+
+# ─────────────────────────── interfaz en el mismo puerto ────────────────────
+# Con CORT_SERVE_UI=1 el backend reparte también el holograma, así que basta
+# un solo proceso y una sola dirección: http://127.0.0.1:8000/
+# (lo usa el instalador de escritorio, que no necesita abrir el puerto 8080).
+def _ui_dir() -> Path | None:
+    here = Path(__file__).resolve().parent          # .../backend/app
+    for cand in (here.parent.parent / "ui",        # repo:  CORT/ui
+                 here.parent.parent.parent / "ui",  # empaquetado: resources/backend/app → resources/ui
+                 Path(here.parent.parent.parent) / "ui",
+                 Path(os.environ.get("CORT_UI_DIR", "")) if os.environ.get("CORT_UI_DIR") else None):
+        if cand and cand.is_dir() and (cand / "index.html").is_file():
+            return cand
+    return None
+
+
+UI_DIR = _ui_dir()
+if UI_DIR and os.environ.get("CORT_SERVE_UI") == "1":
+    app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="cort-ui")

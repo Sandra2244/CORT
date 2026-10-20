@@ -3,8 +3,12 @@
 
 let zTop = 20;
 const wins = new Map();
+const isMobile = () => window.isMobileHUD && window.isMobileHUD();
 
-export function createWin({ id, icon, title, x, y, w = 300, h, html = '', dockIcon }) {
+const syncSheet = () => document.body.classList.toggle('sheet',
+  [...wins.values()].some(w => w.open && !w.minimized));
+
+export function createWin({ id, icon, title, x, y, w = 300, h, html = '', dockIcon, onShow }) {
   const el = document.createElement('div');
   el.className = 'win state-closed';
   el.id = 'win-' + id;
@@ -27,19 +31,26 @@ export function createWin({ id, icon, title, x, y, w = 300, h, html = '', dockIc
       el.classList.add('focused'); el.style.zIndex = ++zTop;
     },
     show() {
+      // en el celular las ventanas son hojas a pantalla completa: una a la vez
+      if (isMobile()) wins.forEach(o => { if (o !== win && o.open && !o.minimized) o.minimize(); });
       el.classList.remove('state-closed', 'state-min');
       win.open = true; win.minimized = false; win.focus();
       if (dockBtn) { dockBtn.classList.add('active'); dockBtn.classList.remove('minimized'); }
+      syncSheet();
+      if (onShow) try { onShow(); } catch (e) { console.warn(e); }
+      if (isMobile() && dockBtn) dockBtn.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
     },
     minimize() {
       el.classList.add('state-min'); el.classList.remove('state-closed');
       win.minimized = true;
       if (dockBtn) { dockBtn.classList.add('minimized'); }
+      syncSheet();
     },
     close() {
       el.classList.add('state-closed'); el.classList.remove('state-min');
       win.open = false; win.minimized = false;
       if (dockBtn) dockBtn.classList.remove('active', 'minimized');
+      syncSheet();
     },
     toggle() { win.open && !win.minimized ? win.minimize() : win.show(); },
   };
@@ -52,7 +63,7 @@ export function createWin({ id, icon, title, x, y, w = 300, h, html = '', dockIc
   const bar = el.querySelector('.winbar');
   let drag = null;
   bar.addEventListener('pointerdown', e => {
-    if (e.target.tagName === 'BUTTON') return;
+    if (e.target.tagName === 'BUTTON' || isMobile()) return;
     drag = { dx: e.clientX - el.offsetLeft, dy: e.clientY - el.offsetTop };
     bar.setPointerCapture(e.pointerId);
   });
@@ -63,6 +74,13 @@ export function createWin({ id, icon, title, x, y, w = 300, h, html = '', dockIc
   });
   bar.addEventListener('pointerup', () => drag = null);
   bar.addEventListener('dblclick', () => win.minimize());
+  // celular: deslizar la barra hacia abajo minimiza la hoja
+  let sy = null;
+  bar.addEventListener('touchstart', e => { if (isMobile()) sy = e.touches[0].clientY; }, { passive: true });
+  bar.addEventListener('touchend', e => {
+    if (sy !== null && e.changedTouches[0].clientY - sy > 60) win.minimize();
+    sy = null;
+  });
 
   if (dockBtn) dockBtn.onclick = () => win.open && !win.minimized ? win.minimize() : win.show();
 

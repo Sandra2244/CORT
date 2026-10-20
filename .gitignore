@@ -2,6 +2,8 @@
 __pycache__/
 *.pyc
 backend/.env
+backend/cort_config.json
 backend/cort_memory.db
 node_modules/
 dist/
+desktop/out/

@@ -1,9 +1,9 @@
 {
   "name": "cort-desktop",
   "productName": "CORT",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ventana holográfica de C.O.R.T. (Cognitive Orchestrator / Real-Time)",
-  "author": "Sandra",
+  "author": "Sandra <sandrasofialopezgomez3@gmail.com>",
   "license": "MIT",
   "main": "main.cjs",
   "private": true,

@@ -2,12 +2,17 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#02040a">
 <title>C.O.R.T.</title>
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="11" fill="none" stroke="%2339c2ff" stroke-width="2"/><circle cx="16" cy="16" r="4" fill="%2339c2ff"/></svg>'>
 <script>
   if (location.search.includes('glass')) document.documentElement.classList.add('glass');
   if (navigator.userAgent.includes('Electron')) document.documentElement.classList.add('electron');
 </script>
+<script src="js/android-bridge.js"></script>
+<script src="js/icons.js"></script>
 <link rel="stylesheet" href="css/hud.css">
 </head>
 <body>
@@ -26,7 +31,7 @@
 
 <!-- HUD fijo -->
 <div class="panel" id="top"><b>C.O.R.T.</b> · Cognitive Orchestrator / Real-Time
-  <div class="sub">a sus órdenes</div></div>
+  <div class="sub">a sus órdenes · <span id="hudver">v0.2</span></div></div>
 <!-- arcos laterales + humano digital (referencia azul 90e2) -->
 <div id="arcs">
   <svg class="arc left" viewBox="0 0 120 400">
@@ -57,7 +62,7 @@
 
 <!-- árbol lateral persistente (la columna 00·–09· de Jared Hood) -->
 <div class="panel" id="tree">
-  <div class="winbar" style="cursor:default"><span class="ico">🗀</span><span class="ttl">Arbol del sistema</span><span class="hint">clic = desplegar</span></div>
+  <div class="winbar" style="cursor:default"><span class="ico" data-ic="folder"></span><span class="ttl">Arbol del sistema</span><span class="hint">toca = desplegar</span></div>
   <div id="treebody"></div>
   <div id="brain" title="el muro de recuerdos de CORT">▸ CORT'S BRAIN</div>
 </div>
@@ -67,33 +72,37 @@
 
 <!-- dock de ventanas (estética Jared Hood: chips rectangulares con icono + etiqueta monoespaciada) -->
 <div class="panel" id="dock">
-  <button data-win="files" title="01 · Archivos"><i>🗀</i><span>Archivos</span></button>
+  <button data-win="files" title="01 · Archivos"><i data-ic="folder"></i><span>Archivos</span></button>
   <button data-win="env" title="02 · Entorno"><i>◉</i><span>Entorno</span></button>
   <button data-win="chat" title="03 · Canal de voz"><i>✦</i><span>Canal</span></button>
   <button data-win="notes" title="04 · Notas"><i>✎</i><span>Notas</span></button>
   <button data-win="music" title="05 · Música"><i>♪</i><span>Musica</span></button>
   <button data-win="term" title="06 · Consola"><i>▤</i><span>Consola</span></button>
-  <button data-win="perfil" title="07 · Perfil"><i>⚙</i><span>Perfil</span></button>
+  <button data-win="perfil" title="07 · Perfil"><i data-ic="gear"></i><span>Perfil</span></button>
   <button data-win="cerebro" title="08 · Cerebro (muro de recuerdos)"><i>⌗</i><span>Cerebro</span></button>
-  <button data-act="hide" title="Ocultar / mostrar todas las ventanas"><i>◫</i><span>Ocultar</span></button>
+  <button data-act="open" title="Abrir en el explorador la carpeta que estás viendo"><i data-ic="open"></i><span>Abrir</span></button>
+  <button data-win="ayuda" title="09 · Ayuda, atajos y soporte"><i data-ic="help"></i><span>Ayuda</span></button>
+  <button data-act="hide" title="Ocultar / mostrar todas las ventanas (Esc)"><i>◫</i><span>Ocultar</span></button>
   <span id="lamp" title="estado de CORT"><i></i><span>arrancando</span></span>
 </div>
 
 <!-- botones flotantes: voz, escucha permanente y manos -->
-<button class="fab" id="mic" title="Hablar">🎙</button>
-<button class="fab" id="wake" title="Escucha permanente «Oye CORT»">👂</button>
-<button class="fab" id="hand" title="Gestos (modo ligero)">✋</button>
+<div id="livetxt" aria-live="polite"></div>
+<button class="fab" id="mic" title="Hablar" aria-label="Hablar"><i data-ic="mic"></i></button>
+<button class="fab" id="wake" title="Escucha permanente «Oye CORT»" aria-label="Oye CORT"><i data-ic="wake"></i></button>
+<button class="fab" id="hand" title="Gestos con la mano" aria-label="Gestos"><i data-ic="hand"></i></button>
 
 <!-- mini-vista de la cámara de gestos (panel 08) -->
 <div id="camwrap">
-  <div class="winbar"><span class="ico">✋</span><span class="ttl">09 · Gestos</span></div>
+  <div class="winbar"><span class="ico" data-ic="hand"></span><span class="ttl">09 · Gestos</span></div>
+  <div id="gesthelp">palma = ventanas · pinza = canal · puño = ocultar</div>
   <video id="camv" playsinline muted style="display:none"></video>
   <canvas id="gest" width="160" height="120"></canvas>
   <div id="gestlabel">apagada</div>
 </div>
 
 <script type="importmap">
-{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}
+{"imports":{"three":"./vendor/three.module.js"}}
 </script>
 <script type="module">
 import { initORB } from './js/orb.js';

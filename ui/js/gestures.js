@@ -1,6 +1,6 @@
 /* ===== Gestos de mano — MODO LIGERO =====
    MediaPipe Hands con 1 sola mano, cámara 160×120 y análisis cada ~250 ms.
-   La cámara NO se enciende hasta pulsar ✋ (privacidad y RAM). */
+   La cámara NO se enciende hasta pulsar el botón de mano (privacidad y RAM). */
 
 const MP_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js';
 
