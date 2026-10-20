@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.2-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.2--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.2-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.3-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.3--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.3-demo"></a>
   <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -50,6 +50,7 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 | 📊 | **Sensores** | CPU / RAM / disco / batería reales y clima actual (Open-Meteo, cacheado, sin API key) |
 | ✋ | **Gestos** | MediaPipe ligero: palma despliega/plega ventanas, pinza trae el chat, puño las cierra |
 | 💡 | **Lámpara de estado** | Morado escuchando · naranja procesando · verde en línea · gris con el HUD oculto · rojo sin backend |
+| 📱 | **Modo teléfono** | `bash scripts/telefono.sh` enlaza la Wi-Fi y el celular abre el holograma actual en `http://IP-del-PC:8000` |
 | ⏻ | **Arranque BIOS** | Secuencia de encendido que comprueba en vivo cada subsistema y el puerto donde vive el núcleo |
 
 Atajo de teclado: **Esc** oculta o devuelve todas las ventanas (deja solo el orbe).
@@ -108,7 +109,8 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android** | instala [`instaladores/CORT-IA-1.1.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.2-demo/CORT-IA-1.1.0.apk) | app a pantalla completa |
+| **Android (APK)** | instala [`CORT-IA-1.1.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.3-demo/CORT-IA-1.1.0.apk) | app a pantalla completa (cara de la versión 1.1.0) |
+| **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
 > (en Windows: `set CORT_PORT=8090` antes de `scripts\run.bat`). La interfaz
@@ -136,26 +138,43 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 
 ### 5 · Descargas ya compiladas
 
-La [Release v0.2.2-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.2-demo)
+La [Release v0.2.3-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.3-demo)
 tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
 que para eso hace falta un equipo sobrado):
 
 | Archivo | Para | Peso |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 75 MB |
-| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 103 MB |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 71 MB |
-| `CORT-IA-1.1.0.apk` | Android (también en `instaladores/`) | 1,7 MB |
+| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
+| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
+| `CORT-IA-1.1.0.apk` | Android 8+ (también en `instaladores/`) | 1,8 MB |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
 > Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
 > arrancar mientras crea su entorno.
 
+### 6 · CORT en el teléfono
+
+Dos caminos, y sirven para cosas distintas:
+
+- **El APK** (`CORT-IA-1.1.0.apk`) es la app compilada por el proyecto de Android:
+  cara a pantalla completa, voz y micrófono nativos, y funciona aunque el PC
+  esté apagado. Su interfaz corresponde a la versión 1.1.0, es decir que **todavía
+  no trae las ventanas 10 · Modelos y 11 · Optimizar**. Se recompila en el pipeline
+  de Android (fuera de este repo), no aquí.
+- **El modo teléfono** no instala nada: `bash scripts/telefono.sh` (igual que
+  `run.sh`, pero enlazado a la Wi-Fi) y en el navegador del celular abres
+  `http://IP-de-tu-PC:8000`. Ahí ves el holograma **actual**, con las once ventanas
+  y mandando de verdad a tu PC (archivos, música, modelos, optimización).
+  Comprado: la página y `/api/models` responden por la red local (200 OK).
+  Su límite es el micrófono: Chrome sólo deja hablar por HTTPS, así que por Wi-Fi
+  se usa con teclado, comandos y gestos; la voz nativa queda para el APK.
+
 Para regenerarlos con código nuevo, sube una etiqueta (el sufijo `-demo` es para
 no chocar con las `v0.x` que ya usa el historial de la app de Android):
 
 ```bash
-git tag -a v0.2.3-demo -m "CORT" && git push origin v0.2.3-demo   # ← dispara la compilación
+git tag -a v0.2.4-demo -m "CORT" && git push origin v0.2.4-demo   # ← dispara la compilación
 ```
 
 También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
@@ -214,7 +233,7 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 | `desktop/main.cjs` | Ventana Electron (modo cabina / modo vidrio) |
 | `instaladores/` | APK de Android ya compilado |
 | `docs/` | Plan de arquitectura, fotogramas de referencia y capturas |
-| `scripts/` | `run.sh` (Linux/macOS), `run.bat` (Windows), `run-desktop.sh` (Electron) |
+| `scripts/` | `run.sh` (Linux/macOS), `run.bat` (Windows), `run-desktop.sh` (Electron), `instalar-linux.sh` (app instalada), `telefono.sh` (Wi-Fi) |
 | `.github/workflows/build.yml` | CI que compila los instaladores y publica la Release |
 
 ## Hoja de ruta
