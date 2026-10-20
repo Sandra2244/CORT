@@ -1,6 +1,7 @@
 name: Construir instaladores CORT
 
-# Compila el holograma de escritorio para Windows y Linux SIN usar tu PC:
+# Compila el holograma de escritorio para Windows y Linux SIN usar tu PC, y el
+# APK del teléfono con el SDK que trae el runner:
 # cada vez que creas una etiqueta v* (p. ej. git tag -a v0.2.0-demo && git push origin v0.2.0-demo)
 # o desde Actions → "Construir instaladores CORT" → Run workflow.
 # Los instaladores (.exe y .AppImage) aparecen como artefactos descargables
@@ -61,8 +62,63 @@ jobs:
             desktop/out/*.deb
           if-no-files-found: error
 
+  # El APK del teléfono se compila AQUÍ y nunca en el portátil de la dueña:
+  # 1,8 GiB de RAM y sin `javac` (medido). El runner trae el SDK de Android y
+  # `apps/apk/compilar.sh` usa `aapt2` + `javac` + `d8` + `zipalign` +
+  # `apksigner`, sin Gradle ni AndroidX. La interfaz que viaja dentro del APK es
+  # `ui/` de este mismo commit, copiada a `assets/ui/` por el propio script.
+  apk:
+    runs-on: ubuntu-latest
+    env:
+      APK_VERSION: "1.2.0"       # la versión del producto de Android (1.1.0 → 1.2.0)
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compilar el APK (aapt2 + javac + d8, sin Gradle)
+        shell: bash
+        env:
+          # Si la dueña guarda un keystore en los secretos se firma con esa llave
+          # y el APK se actualiza encima; si no, el script genera uno desechable y
+          # lo dice en `firma.txt`, que viaja al lado del APK.
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+        run: |
+          # `set +e` es obligatorio: el shell de GitHub se comporta como `bash -e`
+          # y mataría el paso antes de `st=$?` y antes de la anotación, dejando un
+          # fallo mudo que no se puede leer desde fuera.
+          set +e
+          chmod +x apps/apk/compilar.sh
+          bash -x apps/apk/compilar.sh "$APK_VERSION" > /tmp/apk.log 2>&1
+          st=$?
+          cat /tmp/apk.log
+          if [ $st -ne 0 ]; then
+            # Los registros de Actions NO son públicos (la API de logs pide
+            # permiso); los annotations del check-run sí se leen sin sesión, y
+            # `javac` imprime veinte errores seguidos: van primero, y el final del
+            # log después, con tope de 30 líneas.
+            errores="$(grep -E '\.java:[0-9]+: error:' /tmp/apk.log | head -30)"
+            msg=$( { echo "-- errores --"; echo "${errores:-ninguno}"; \
+                     echo "-- final del log --"; tail -c 900 /tmp/apk.log; } \
+                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
+            echo "::error::compilar.sh salió con $st — $msg"
+            exit $st
+          fi
+      - name: Bautizar el APK para la Release
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p apk-out
+          cp apps/apk/build/CORT.apk "apk-out/CORT-IA-${APK_VERSION}.apk"
+          cp apps/apk/build/firma.txt "apk-out/CORT-IA-${APK_VERSION}-firma.txt"
+          ls -l apk-out
+      - name: Subir artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-android
+          path: apk-out/*
+          if-no-files-found: error
+
   release:
-    needs: build
+    needs: [build, apk]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -71,20 +127,18 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { path: artefactos, merge-multiple: true }
-      - name: Añadir el APK de Android que vive en el repo
-        run: |
-          if ls instaladores/*.apk >/dev/null 2>&1; then
-            cp instaladores/*.apk artefactos/
-            echo "APK incluido en la Release"
-          else
-            echo "No hay APK en instaladores/: se publica sin él"
-          fi
       - uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
-            y el APK de Android que hay en `instaladores/`.
+            y el APK de Android compilado en el propio pipeline (`apps/apk/`).
+
+            El APK (1.2.0) lleva dentro la interfaz actual —once ventanas, modelos de
+            Ollama y optimizador—, voz nativa del teléfono, y se puede elegir como
+            **asistente predeterminado** para que el doble toque del auricular lo
+            despierte. Firma desechable si el repo no tiene secreto: hay que
+            desinstalar el APK anterior una vez.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
-            Instrucciones completas en el README.
+            Instrucciones completas, incluido el modo teléfono por Wi-Fi, en el README.

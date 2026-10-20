@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  CORT en el teléfono, compilado por GitHub Actions con `apps/apk/compilar.sh`
+  (aapt2 + javac + d8 + zipalign + apksigner). Sin Gradle ni AndroidX: el
+  portátil de la dueña tiene 1,8 GiB de RAM y un `gradle build` lo congeló.
+
+  El APK es DOS caras en la misma app:
+
+  * Si guardaste la dirección de tu portátil (botón «CORT · PC» abajo a la
+    izquierda), el WebView abre `http://IP:8000` y ves el holograma **actual**,
+    con las once ventanas, tus modelos de Ollama y el optimizador, mandando de
+    verdad sobre tu PC.
+  * Si el PC no está, el WebView abre la misma cara embebida dentro del APK
+    (`assets/ui/`, copiada de `ui/` por el pipeline) servida desde el origen
+    inventado `https://cort.local`, que se corta en `shouldInterceptRequest` y
+    se lee de los assets: ni un byte sale del teléfono.
+
+  Para las DOS caras el puente nativo se llama `window.CortNative`: ahí viven el
+  micrófono (`SpeechRecognizer`) y la voz (`TextToSpeech`) del aparato, porque
+  un `http` de red local no es origen seguro y el navegador del WebView no
+  presta Web Speech ni `getUserMedia`. La interfaz (`ui/js/android-bridge.js` y
+  `ui/js/voice.js`) ya está escrita para ese puente.
+
+  `usesCleartextTraffic="true"` es obligatorio para la primera cara: la Wi-Fi
+  habla `http` sin TLS. Sólo se activa cuando tú escribes la dirección, y el
+  backend escucha en la LAN sólo si lo arrancas con `bash scripts/telefono.sh`.
+
+  Las tres piezas del asistente (`.Asistente`, `.Sesiones`, `.Reconocimiento`)
+  son lo que permite elegir CORT como «aplicación de asistencia predeterminada»
+  en Ajustes → Aplicaciones → Aplicación de asistencia predeterminada. Con CORT
+  elegido, el doble toque del auricular y el gesto de asistente abren CORT.
+  El coste, dicho sin adornos: el «OK Google» con pantalla apagada se pierde,
+  porque esa palabra la dice el servidor de Google y no viaja con este APK.
+
+  `versionCode` y `versionName` NO se escriben aquí: los pone `compilar.sh` al
+  enlazar, derivados de la etiqueta de la Release.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          package="com.cort.ia">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.VIBRATE"
+                     android:required="false" />
+
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
+    <application
+        android:label="CORT"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:hardwareAccelerated="true"
+        android:supportsRtl="true">
+
+        <!-- `singleTop`: el asistente y el reconocedor reutilizan la cara que ya
+             está abierta en vez de montar una segunda encima. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- El traje de asistente del sistema: la puerta (`.Asistente`) sólo la
+             mira Android si está protegida con `BIND_VOICE_INTERACTION`, y la
+             meta-datos `android.voice_interaction` apunta a `res/xml/asistente.xml`
+             con el nombre de clase completo de la sesión y del reconocedor. -->
+        <service
+            android:name=".Asistente"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="CORT">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/asistente" />
+        </service>
+
+        <service
+            android:name=".Sesiones"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="CORT" />
+
+        <service
+            android:name=".Reconocimiento"
+            android:permission="android.permission.BIND_SPEECH_RECOGNIZER"
+            android:exported="true"
+            android:label="CORT">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

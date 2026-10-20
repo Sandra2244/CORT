@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.3-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.3--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.3-demo"></a>
+  <a href="https://github.com/Sandra2244/CORT/releases/tag/v0.2.4-demo"><img src="https://img.shields.io/badge/Descargar-v0.2.4--demo-blueviolet?style=flat-square&logo=github&logoColor=white" alt="Descargar Release v0.2.4-demo"></a>
   <a href="https://github.com/Sandra2244/CORT/tree/v0.2-demo"><img src="https://img.shields.io/badge/rama-v0.2--demo-orange?style=flat-square&logo=git&logoColor=white" alt="rama v0.2-demo"></a>
   <img src="https://img.shields.io/badge/Windows-soportado-0078D6?style=flat-square&logo=windows&logoColor=white" alt="Windows">
   <img src="https://img.shields.io/badge/Linux-soportado-FCC624?style=flat-square&logo=linux&logoColor=black" alt="Linux">
@@ -50,7 +50,8 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 | 📊 | **Sensores** | CPU / RAM / disco / batería reales y clima actual (Open-Meteo, cacheado, sin API key) |
 | ✋ | **Gestos** | MediaPipe ligero: palma despliega/plega ventanas, pinza trae el chat, puño las cierra |
 | 💡 | **Lámpara de estado** | Morado escuchando · naranja procesando · verde en línea · gris con el HUD oculto · rojo sin backend |
-| 📱 | **Modo teléfono** | `bash scripts/telefono.sh` enlaza la Wi-Fi y el celular abre el holograma actual en `http://IP-del-PC:8000` |
+| 📱 | **APK del teléfono** | cara embebida + voz nativa + asistente del sistema + doble toque de auriculares, y puente con tu PC por Wi-Fi (`apps/apk/`) |
+| 📡 | **Modo teléfono** | `bash scripts/telefono.sh` enlaza la Wi-Fi y el celular abre el holograma actual en `http://IP-del-PC:8000` |
 | ⏻ | **Arranque BIOS** | Secuencia de encendido que comprueba en vivo cada subsistema y el puerto donde vive el núcleo |
 
 Atajo de teclado: **Esc** oculta o devuelve todas las ventanas (deja solo el orbe).
@@ -109,7 +110,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android (APK)** | instala [`CORT-IA-1.1.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.3-demo/CORT-IA-1.1.0.apk) | app a pantalla completa (cara de la versión 1.1.0) |
+| **Android (APK 1.2.0)** | instala [`CORT-IA-1.2.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.4-demo/CORT-IA-1.2.0.apk) | cara completa, voz nativa, asistente del sistema y doble toque de auriculares |
 | **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -138,7 +139,7 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 
 ### 5 · Descargas ya compiladas
 
-La [Release v0.2.3-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.3-demo)
+La [Release v0.2.4-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.4-demo)
 tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
 que para eso hace falta un equipo sobrado):
 
@@ -147,7 +148,8 @@ que para eso hace falta un equipo sobrado):
 | `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
 | `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
 | `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
-| `CORT-IA-1.1.0.apk` | Android 8+ (también en `instaladores/`) | 1,8 MB |
+| `CORT-IA-1.2.0.apk` | Android 8+ (ocho o más): cara + voz + asistente | ~0,3 MB |
+| `CORT-IA-1.2.0-firma.txt` | con qué llave salió el APK (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
 > Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
@@ -155,20 +157,61 @@ que para eso hace falta un equipo sobrado):
 
 ### 6 · CORT en el teléfono
 
-Dos caminos, y sirven para cosas distintas:
+**El APK se compila en el pipeline**, no en tu portátil: `apps/apk/compilar.sh`
+usa `aapt2`, `javac`, `d8`, `zipalign` y `apksigner` (las herramientas que el
+runner de Actions ya trae) y mete dentro la interfaz de este repo, copiada de
+`ui/` al commit etiquetado. Cero Gradle, cero Node, cero descargas.
 
-- **El APK** (`CORT-IA-1.1.0.apk`) es la app compilada por el proyecto de Android:
-  cara a pantalla completa, voz y micrófono nativos, y funciona aunque el PC
-  esté apagado. Su interfaz corresponde a la versión 1.1.0, es decir que **todavía
-  no trae las ventanas 10 · Modelos y 11 · Optimizar**. Se recompila en el pipeline
-  de Android (fuera de este repo), no aquí.
-- **El modo teléfono** no instala nada: `bash scripts/telefono.sh` (igual que
-  `run.sh`, pero enlazado a la Wi-Fi) y en el navegador del celular abres
-  `http://IP-de-tu-PC:8000`. Ahí ves el holograma **actual**, con las once ventanas
-  y mandando de verdad a tu PC (archivos, música, modelos, optimización).
-  Comprado: la página y `/api/models` responden por la red local (200 OK).
-  Su límite es el micrófono: Chrome sólo deja hablar por HTTPS, así que por Wi-Fi
-  se usa con teclado, comandos y gestos; la voz nativa queda para el APK.
+Qué trae la versión **1.2.0**:
+
+- **Las once ventanas actuales**, no una foto vieja: la cara embebida viaja
+  dentro del APK (`assets/ui/`, servida bajo el origen inventado
+  `https://cort.local` y cortada petición por petición contra los assets) y
+  funciona sin PC ni red.
+- **Voz nativa**: `window.CortNative` pone el micrófono (`SpeechRecognizer`) y
+  el habla (`TextToSpeech`) del teléfono. Esto es lo que no se puede hacer desde
+  el navegador: una página en `http` de la Wi‑Fi no es origen seguro y Chrome no
+  le presta Web Speech.
+- **Reemplaza al asistente del sistema**: Ajustes ▸ Aplicaciones ▸ Aplicación de
+  asistencia predeterminada ▸ **CORT**. Es el traje de `VoiceInteractionService`
+  (`Asistente.java`, `Sesiones.java`, `Sesion.java`) más el `RecognitionService`
+  que exige el contrato de AOSP para aparecer en esa lista
+  (`Reconocimiento.java`). El botón «Poner CORT como asistente» del menú lleva
+  directo a esa pantalla.
+- **Doble toque en los auriculares**: la app declara un `MediaSession` mientras
+  está en pantalla. Dos pulsaciones de `HEADSETHOOK`/`PLAY_PAUSE` en menos de
+  500 ms abren el micrófono; **la primera se devuelve al sistema**, así que
+  pausar la música sigue funcionando en Spotify o donde la tengas.
+- **Puente con tu PC por Wi-Fi**: menú ▸ «Conectar con mi PC por Wi‑Fi» y
+  escribes `http://IP:8000` (lo imprime `bash scripts/telefono.sh`). Con esa
+  dirección puesta, el holograma del teléfono manda de verdad sobre tu portátil:
+  archivos, música, modelos de Ollama y optimizador incluidos. Si el PC no
+  contesta, la app abre sola la cara embebida.
+
+Lo que **no** hace, dicho sin adornos:
+
+- Se pierde el «OK Google» con la pantalla apagada: esa palabra la dice el
+  servidor de Google y no viaja con este APK.
+- No oye «Oye CORT» con la app cerrada: la escucha continua vive en el WebView.
+- La cara sin PC no tiene cerebro de nube propio: la conversación libre, los
+  modelos y el optimizador viven en el backend del portátil.
+- **La primera vez hay que desinstalar el APK anterior**, porque éste sale
+  firmado con la llave del pipeline y para Android una firma distinta es otra
+  aplicación. Si guardas el secreto `CORT_APK_KEYSTORE_B64` (y
+  `CORT_APK_KEYSTORE_PASS`) en Settings ▸ Secrets and variables ▸ Actions, las
+  Releases siguientes se instalan encima. Cada run publica al lado del APK su
+  `CORT-IA-1.2.0-firma.txt` con la huella del certificado: es la única ventana
+  pública para comprobarlo, porque los logs de Actions no son públicos.
+- Nada de esto está probado con un dedo encima: en esta máquina no hay teléfono.
+  Lo que sí verifica el pipeline es que el Java compila contra la plataforma,
+  que `aapt2` enlaza el manifiesto, que `apksigner` valida la firma y que el APK
+  queda alineado.
+
+El **modo teléfono sin instalar nada** sigue disponible para ver la cara actual
+en el navegador del celular: `bash scripts/telefono.sh` (igual que `run.sh`, pero
+enlazado a la red) y abres `http://IP-de-tu-PC:8000`. Comprado en tu equipo: la
+página y `/api/models` responden por la red local (200 OK). Su límite es el
+micrófono: por `http` no habla ni escucha; para eso está el APK.
 
 Para regenerarlos con código nuevo, sube una etiqueta (el sufijo `-demo` es para
 no chocar con las `v0.x` que ya usa el historial de la app de Android):
@@ -231,7 +274,7 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 | `ui/index.html` · `ui/css` · `ui/js` | Holograma: orbe Three.js + HUD + voz + gestos |
 | `ui/vendor/` | Three.js incluido: la interfaz funciona sin internet |
 | `desktop/main.cjs` | Ventana Electron (modo cabina / modo vidrio) |
-| `instaladores/` | APK de Android ya compilado |
+| `apps/apk/` | El proyecto Android sin Gradle: Java puro + `compilar.sh` (lo compila Actions, nunca tu PC) |
 | `docs/` | Plan de arquitectura, fotogramas de referencia y capturas |
 | `scripts/` | `run.sh` (Linux/macOS), `run.bat` (Windows), `run-desktop.sh` (Electron), `instalar-linux.sh` (app instalada), `telefono.sh` (Wi-Fi) |
 | `.github/workflows/build.yml` | CI que compila los instaladores y publica la Release |

@@ -1,0 +1,6 @@
+# Todo esto lo genera el pipeline (`apps/apk/compilar.sh`) y no vive en git:
+# la cara embebida es copia de `ui/`, los iconos los dibuja `scripts/marca.py`
+# y el APK sale de `aapt2` + `javac` + `d8` en GitHub Actions.
+build/
+assets/ui/
+res/mipmap-*/

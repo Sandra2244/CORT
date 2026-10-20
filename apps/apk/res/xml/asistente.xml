@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  La meta-datos que Android lee para decidir si CORT puede ser el asistente del
+  teléfono. Se declara desde `AndroidManifest.xml` como
+  `android:name="android.voice_interaction"` dentro del servicio `.Asistente`.
+
+  El contrato lo fija el fuente de AOSP
+  (`core/java/android/service/voice/VoiceInteractionServiceInfo.java`): si el
+  nodo no se llama `voice-interaction-service`, o si falta `sessionService` o
+  `recognitionService`, el parser devuelve error de parseo y **CORT no aparece
+  en la lista de asistentes del teléfono**, sin ninguna pantalla que avise.
+
+  Los atributos van **sin** prefijo `android:` a propósito: los constantes que
+  usa el parser son recursos *internos* del sistema
+  (`com.android.internal.R.styleable.VoiceInteractionService`), así que un
+  `android:sessionService` aquí no lo reconoce ni `aapt2 link` ni Android.
+
+  Los tres nombres tienen que seguir existiendo como archivos Java del paquete
+  `com.cort.ia`: `Sesiones.java`, `Reconocimiento.java` y `MainActivity.java`.
+-->
+<voice-interaction-service
+    sessionService="com.cort.ia.Sesiones"
+    recognitionService="com.cort.ia.Reconocimiento"
+    settingsActivity="com.cort.ia.MainActivity"
+    supportsAssist="true"
+    supportsLaunchVoiceAssistFromKeyguard="true" />
