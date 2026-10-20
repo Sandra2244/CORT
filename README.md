@@ -147,8 +147,8 @@ que para eso hace falta un equipo sobrado):
 |---|---|---|
 | `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
 | `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
-| `CORT-IA-1.2.0.apk` | Android 8+ (ocho o más): cara + voz + asistente | ~0,3 MB |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,6 MB |
+| `CORT-IA-1.2.0.apk` | Android 8+ (ocho o más): cara + voz + asistente | 0,4 MB (370 KB; lleva 1,4 MB de interfaz dentro) |
 | `CORT-IA-1.2.0-firma.txt` | con qué llave salió el APK (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
@@ -206,6 +206,11 @@ Lo que **no** hace, dicho sin adornos:
   Lo que sí verifica el pipeline es que el Java compila contra la plataforma,
   que `aapt2` enlaza el manifiesto, que `apksigner` valida la firma y que el APK
   queda alineado.
+- El APK publicado en `v0.2.5-demo` se miró por dentro descargándolo (370 KB):
+  las once ventanas viajan dentro —11 archivos de `ui/` en `assets/ui/`, 1,4 MB
+  sin comprimir, con `three.module.js` incluido—, `classes.dex` trae las seis
+  clases de Java, `res/xml/asistente.xml` está presente y la firma sale V3 con
+  `CN=CORT`. Eso es lo que se pudo comprobar sin teléfono.
 
 El **modo teléfono sin instalar nada** sigue disponible para ver la cara actual
 en el navegador del celular: `bash scripts/telefono.sh` (igual que `run.sh`, pero
