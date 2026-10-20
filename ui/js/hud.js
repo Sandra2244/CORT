@@ -17,16 +17,24 @@ const CANDIDATES = [
 ].filter((u, i, a) => a.indexOf(u) === i);
 
 async function discoverApi() {
-  const tried = [];
-  for (const base of CANDIDATES) {
-    try {
-      const r = await fetch(base + '/api/port', { signal: AbortSignal.timeout(1600) });
-      if (!r.ok) continue;
-      const j = await r.json();
-      API = base;
-      term('núcleo localizado en ' + (j.base || base || 'este origen'), 'arranque');
-      return true;
-    } catch (e) { tried.push(base || location.origin); }
+  // en el instalador de escritorio el backend arranca a la vez que la pantalla:
+  // si la primera ronda falla, se intenta unas cuantas veces más sin congelar nada
+  for (let intento = 0; intento < 4; intento++) {
+    const tried = [];
+    for (const base of CANDIDATES) {
+      try {
+        const r = await fetch(base + '/api/port', { signal: AbortSignal.timeout(1600) });
+        if (!r.ok) continue;
+        const j = await r.json();
+        API = base;
+        term('núcleo localizado en ' + (j.base || base || 'este origen'), 'arranque');
+        return true;
+      } catch (e) { tried.push(base || location.origin); }
+    }
+    if (intento < 3) {
+      term('el núcleo aún despierta… reintento ' + (intento + 2) + ' de 4', 'arranque');
+      await new Promise(r => setTimeout(r, 700));
+    }
   }
   return false;
 }
@@ -208,10 +216,30 @@ function buildWindows() {
         <li><b>01–06</b> archivos, entorno, canal, notas, música y consola</li>
         <li><b>07 · Perfil</b> tu nombre, la voz de CORT y las claves del cerebro</li>
         <li><b>08 · Cerebro</b> el muro de recuerdos (notas + charlas, en SQLite)</li>
+        <li><b>10 · Modelos</b> baja modelos de Ollama y ve cuáles caben en tu RAM</li>
+        <li><b>11 · Optimizar</b> qué come memoria y cuánta caché se puede borrar</li>
         <li><b>🎙</b> una orden · <b>👂</b> escucha «Oye CORT» · <b>✋</b> gestos con la mano</li>
       </ul>
       <div class="hp-sec">▸ Soporte y contacto</div>
       <div id="hpsup">cargando…</div>` });
+
+  /* 10 · modelos locales: catálogo de Ollama con flechas de descarga y
+     el veredicto de RAM para ESTE equipo */
+  const sep = vw >= 920 ? 250 : 0;   // en pantallas anchas van una al lado de la otra
+  W.modelos = createWin({ id: 'modelos', onShow: refreshModels, icon: ic('download'),
+    title: '10 · Modelos · <span id="molstate">…</span>',
+    x: clamp(Math.round(vw / 2) - 210 - sep, 14, Math.max(14, vw - 260)), y: 118,
+    w: Math.min(420, vw - 28), h: clamp(vh * .64, 260, 440),
+    html: `<div id="mohead" class="mo-head">consultando el equipo…</div>
+      <div id="molist"></div>` });
+
+  /* 11 · optimización: quién come la RAM y cuánta caché se puede barrer */
+  W.optimiza = createWin({ id: 'optimiza', onShow: refreshOptimize, icon: ic('gauge'),
+    title: '11 · Optimización · <span id="optram">…</span>',
+    x: clamp(Math.round(vw / 2) - 200 + sep, 14, Math.max(14, vw - 250)), y: 126,
+    w: Math.min(400, vw - 28), h: clamp(vh * .62, 260, 430),
+    html: `<div id="optr"><div class="mo-none">Pulsa «Analizar» para ver qué está comiendo
+      la memoria y cuánta caché sobra.</div></div>` });
 }
 
 /* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
@@ -648,6 +676,159 @@ async function refreshHelp() {
   } catch { sup.innerHTML = '<div class="hp-txt">sin conexión con el núcleo: el contacto está en el README del repositorio.</div>'; }
 }
 
+/* ---------- 10 · MODELOS (Ollama) y 11 · OPTIMIZACIÓN ---------- */
+let MO = null, MOtimer = null, MOrefresca = false;
+const getJSON = async (url) => await (await fetch(API + url)).json();
+
+function moBadge(m) {
+  const txt = { va: 'VA BIEN', justo: 'JUSTO', 'no cabe': 'NO CABE' }[m.estado] || '—';
+  return `<span class="mo-tag t-${(m.estado || '').replace(/ /g, '')}">${txt}</span>`;
+}
+
+async function refreshModels() {
+  const box = document.getElementById('molist'), head = document.getElementById('mohead'),
+        st = document.getElementById('molstate');
+  if (!box) return;
+  try { MO = await getJSON('/api/models'); }
+  catch { if (head) head.innerHTML = '<div class="mo-warn">sin conexión con el núcleo: abre CORT para ver los modelos.</div>'; return; }
+  const bajados = MO.modelos.filter(m => m.descargado).length;
+  if (st) st.textContent = MO.instalado ? (MO.corriendo ? 'Ollama encendido' : 'Ollama apagado') : 'sin Ollama';
+  head.innerHTML =
+    `<div class="mo-sum">RAM de este equipo <b>${MO.ram_equipo} GB</b> · libre <b>${MO.ram_libre_gb} GB</b>` +
+    ` · <b>${bajados}</b> modelo(s) en el disco (<b>${MO.disco_gb ?? '—'} GB</b>)</div>` +
+    `<div class="mo-btns"><button class="mo-b" data-mo="ollama">⏻ ${MO.corriendo ? 'Apagar Ollama' : 'Encender Ollama'}</button>` +
+    `<button class="mo-b" data-mo="refrescar">↻ Actualizar</button></div>` +
+    (MO.aviso ? `<div class="mo-warn">${esc(MO.aviso)}</div>` : '');
+  head.querySelectorAll('.mo-b').forEach(b => b.onclick = () =>
+    b.dataset.mo === 'ollama' ? moverOllama(MO.corriendo) : refreshModels());
+  box.innerHTML = MO.modelos.map(m => `
+    <div class="mo-row${m.descargado ? ' bajado' : ''}${m.activo ? ' activo' : ''}" data-m="${esc(m.modelo)}">
+      <div class="mo-top"><span class="mo-n">${esc(m.modelo)}</span>${moBadge(m)}
+        ${m.activo ? '<span class="mo-tag t-usar">EN USO</span>' : ''}</div>
+      <div class="mo-meta">${m.peso_real_gb ? 'ocupa ' + m.peso_real_gb + ' GB' : '≈' + m.gb + ' GB'} ·
+        pide ~${m.ram ?? '—'} GB de RAM · ${esc(m.para || '')}${m.nota ? ' · ' + esc(m.nota) : ''}</div>
+      <div class="mo-acc">${m.descargado
+        ? `<button class="mo-b" data-a="usar">usar</button><button class="mo-b x" data-a="rm">✕ borrar</button>`
+        : `<button class="mo-b d" data-a="pull" data-fit="${esc(m.estado || '')}">↓ descargar</button>`}</div>
+      <div class="mo-prog"></div>
+    </div>`).join('');
+  box.querySelectorAll('.mo-row').forEach(r =>
+    r.querySelectorAll('.mo-b').forEach(b => b.onclick = () => {
+      // segunda advertencia: si no cabe en la RAM, hay que confirmarlo
+      if (b.dataset.a === 'pull' && b.dataset.fit === 'no cabe' && b.dataset.ok !== '1') {
+        b.dataset.ok = '1'; b.classList.remove('d'); b.classList.add('x');
+        b.textContent = '↓ NO CABE · descargar igual';
+        sayLine('Ese modelo pide más RAM de la que tiene este equipo: va a ir lentísimo o no abrirá. ' +
+                'Púlsalo otra vez si lo quieres bajar de todos modos.');
+        return;
+      }
+      modelAcc(r.dataset.m, b.dataset.a);
+    }));
+  pintarProgresos();
+  clearInterval(MOtimer);
+  MOtimer = setInterval(pintarProgresos, 900);
+}
+
+async function moverOllama(apagar) {
+  term((apagar ? 'apagando' : 'encendiendo') + ' Ollama', 'modelos');
+  sayLine(apagar ? 'Apagando Ollama para devolver tu memoria.' : 'Encendiendo Ollama…');
+  try { const r = await post('/api/models/ollama', { accion: apagar ? 'stop' : 'start' });
+        sayLine(r.detalle || r.error || 'listo'); } catch { sayLine('El núcleo no respondió.'); }
+  setTimeout(refreshModels, 900);
+}
+
+async function modelAcc(nombre, acc) {
+  const url = { pull: '/api/models/pull', rm: '/api/models/rm', usar: '/api/models/use' }[acc];
+  term(`${acc} ${nombre}`, 'modelos');
+  try {
+    const r = await post(url, { modelo: nombre });
+    if (r && r.error) { sayLine(`No pude: ${r.error}`); return; }
+    if (acc === 'pull') { sayLine(`Descargando ${nombre}: mira la barra en 10 · Modelos.`); pintarProgresos(); }
+    else if (acc === 'usar') { sayLine(`Listo: el cerebro local usará ${nombre}.`); setTimeout(refreshModels, 700); }
+    else { sayLine(`Borrado ${nombre} del disco.`); setTimeout(refreshModels, 700); }
+  } catch { sayLine('El núcleo no respondió.'); }
+}
+
+async function pintarProgresos() {
+  const lista = document.getElementById('molist');
+  // si la ventana ya no está abierta, no sigo martillando al núcleo
+  if (!lista || !W.modelos || !W.modelos.open) { clearInterval(MOtimer); MOtimer = null; return; }
+  let p = {};
+  try { p = await getJSON('/api/models/progreso'); } catch { return; }
+  let termino = false;
+  Object.entries(p).forEach(([nombre, d]) => {
+    const fila = lista.querySelector(`.mo-row[data-m="${CSS.escape(nombre)}"]`);
+    if (!fila) return;
+    const caja = fila.querySelector('.mo-prog');
+    const pct = Math.max(0, Math.min(100, +(d.pct || 0)));
+    caja.innerHTML = `<div class="mo-bar"><i style="width:${pct}%"></i></div>` +
+      `<span class="mo-pt${d.estado === 'error' ? ' mal' : ''}">${esc(d.estado === 'error' ? (d.error || 'error') : `${d.detalle || ''} ${pct}%`)}</span>`;
+    if (d.estado === 'listo' && !MOrefresca) { termino = true; }
+  });
+  if (termino) { MOrefresca = true; setTimeout(() => { MOrefresca = false; refreshModels(); }, 1200); }
+}
+
+let OPT = null;
+async function refreshOptimize(fresco) {
+  const box = document.getElementById('optr'), st = document.getElementById('optram');
+  if (!box) return;
+  if (!OPT) box.innerHTML = '<div class="mo-none">midiendo el equipo… tarda unos segundos</div>';
+  try { OPT = await getJSON('/api/optimize' + (fresco ? '?fresco=1' : '')); }
+  catch { box.innerHTML = '<div class="mo-warn">sin conexión con el núcleo.</div>'; return; }
+  const r = OPT.ram;
+  if (st) st.textContent = `${r.usado_pct} % en uso`;
+  box.innerHTML =
+    `<div class="op-bar"><i style="width:${r.usado_pct}%"></i><span>${r.usado_pct} % de ${r.total_gb} GB</span></div>
+     <div class="mo-sum">libre <b>${r.disponible_mb} MB</b> · intercambio <b>${r.intercambio_mb} MB</b> ·
+       caché borrable <b>${OPT.liberable_mb} MB</b>${OPT.modelos_gb ? ` · modelos en el disco <b>${OPT.modelos_gb} GB</b>` : ''}</div>
+     <div class="hp-sec">▸ Lo que más come memoria</div>
+     <div class="op-procs">${OPT.procesos.map(p => `
+       <div class="op-proc"><span class="n">${esc(p.nombre)}</span><span class="mb">${Math.round(p.mb)} MB</span>
+         ${p.intocable ? '<span class="mo-tag t-no">fijo</span>'
+                       : `<button class="mo-b x" data-kill="${p.pid}" title="cerrar ${esc(p.nombre)}">✕</button>`}</div>`).join('')}</div>
+     <div class="hp-sec">▸ Caché en disco</div>
+     <div class="op-caches">${OPT.caches.map(c => `
+       <div class="op-cache ${c.nivel}"><span class="n">${esc(c.ruta.replace(/^\.?cache\//, ''))}</span>
+         <span class="mb">${Math.round(c.mb)} MB</span>
+         <small>${esc(c.que)}${c.aprox ? ' ·≈' : ''}${c.abierta ? ' · programa abierto' : ''}</small></div>`).join('')
+       || '<div class="mo-none">no encontré cachés grandes</div>'}</div>
+     <div class="mo-btns">
+       <button class="mo-b" data-op="fresco">↻ Analizar de nuevo</button>
+       <button class="mo-b d" data-op="seguro">⌁ Limpiar segura (${OPT.liberable_mb} MB)</button>
+       ${OPT.todo_mb > OPT.liberable_mb ? `<button class="mo-b x" data-op="todo">Limpiar también «cuidado» (${OPT.todo_mb} MB)</button>` : ''}
+       ${OPT.papelera_mb ? `<button class="mo-b x" data-op="papelera">✕ Vaciar papelera (${OPT.papelera_mb} MB)</button>` : ''}
+     </div>
+     <div class="hp-sec">▸ Consejos para este equipo</div>
+     <ul class="hp-keys">${OPT.sugerencias.map(s => `<li>${esc(s)}</li>`).join('')}</ul>
+     <div id="opres"></div>`;
+  box.querySelectorAll('[data-kill]').forEach(b => b.onclick = () => matarProceso(b.dataset.kill));
+  box.querySelectorAll('[data-op]').forEach(b => b.onclick = () => limpiar(b.dataset.op));
+}
+
+async function limpiar(nivel) {
+  const res = document.getElementById('opres');
+  if (nivel === 'fresco') { OPT = null; return refreshOptimize(true); }
+  if (res) res.innerHTML = '<div class="mo-none">barriendo caché…</div>';
+  try {
+    const r = await post('/api/optimize/clean', { nivel });
+    const txt = r.ok ? `Barrí ${r.borrado.length} caché(s): ${r.mb_liberados} MB liberados` +
+                       (r.ram_ganada_mb ? ` y ${r.ram_ganada_mb} MB de RAM devuelta` : '') + '.'
+                     : `No pude limpiar: ${r.error}`;
+    sayLine(txt); term(txt, 'optimizar');
+    if (res) res.innerHTML = `<div class="mo-warn${r.ok ? ' ok' : ''}">${esc(txt)} ${esc(r.nota || '')}</div>`;
+    OPT = null; setTimeout(() => refreshOptimize(true), 600);
+  } catch { if (res) res.innerHTML = '<div class="mo-warn">el núcleo no respondió.</div>'; }
+}
+
+async function matarProceso(pid) {
+  try {
+    const r = await post('/api/optimize/kill', { pid: +pid });
+    sayLine(r.ok ? r.detalle : `No lo cierro: ${r.error}`);
+    term(r.ok ? r.detalle : `negado: ${r.error}`, 'optimizar');
+    OPT = null; setTimeout(() => refreshOptimize(true), 800);
+  } catch { sayLine('El núcleo no respondió.'); }
+}
+
 /* ---------- LÁMPARA DE ESTADO (la bombilla de color de la referencia) ---------- */
 const LAMP = {
   reposo:   ['#39c2ff', 'en reposo'],
@@ -828,7 +1009,9 @@ const HIST = [];
 let hIdx = 0, draft = '';
 const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'muestra todo',
   'muéstrame las notas', 'archivos recientes', 'recoge los chips', '¿qué hora es?',
-  'abre youtube', 'abre el navegador', 'apunta ', 'muéstrame tu cerebro', 'qué recuerdas'];
+  'abre youtube', 'abre el navegador', 'apunta ', 'muéstrame tu cerebro', 'qué recuerdas',
+  'muéstrame los modelos', 'descarga el modelo ', 'usa el modelo ', 'enciende ollama',
+  '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -886,6 +1069,18 @@ async function send(raw) {
     W.ayuda.show();
     add('a', 'En 09 · Ayuda tienes las órdenes que entiendo, los atajos del teclado y el contacto de soporte.', 'ayuda');
     term('ventana de ayuda abierta', 'ayuda'); return;
+  }
+  /* abrir las ventanas nuevas sin pasar por el backend (la descarga sí pasa) */
+  if (/mu[eé]strame los modelos|lista los modelos|qu[eé] modelos|abre los modelos|modelos locales/i.test(msg)
+      && !/descarga|baja|instala|borra/i.test(msg)) {
+    W.modelos.show();
+    add('a', 'Modelos abiertos: cada uno dice si le cabe la RAM de este equipo y tiene su flecha ↓.', 'modelos');
+    return;
+  }
+  if (/abre la optimizaci[oó]n|qu[eé] come la ram|optimiza el equipo|cu[aá]nta ram|cu[aá]nta memoria/i.test(msg)) {
+    W.optimiza.show();
+    add('a', 'Estoy midiendo el equipo: memoria, procesos pesados y caché borrable.', 'optimizar');
+    return;
   }
   /* reproductor interno de CORT (cuando está abierto y sonando) */
   const aud = document.getElementById('aud');

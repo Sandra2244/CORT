@@ -29,6 +29,8 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 
 ![Pantalla real de C.O.R.T.](docs/screenshots/holograma.png)
 
+![C.O.R.T. en el escritorio de Linux](docs/screenshots/escritorio-linux.png)
+
 ---
 
 ## Qué hace hoy (todo probado en esta rama)
@@ -38,7 +40,9 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 | 🗣 | **Voz y oído** | Micrófono y voz con la Web Speech API (gratis, sin instalar nada) + palabra de activación «Oye CORT» opcional |
 | 🧠 | **Cerebro híbrido** | Enrutador `local → Groq → Gemini → modo supervivencia`; ventana **07 · Perfil** para pegar claves (se muestran en máscara) y botón que **prueba cada proveedor** con latencia en ms |
 | 🌐 | **Orbe 3D** | Plexus de partículas con desenfoque de cine (bokeh real), estallido → vórtice → portal toroidal al ejecutar una orden, y anillo giratorio sincronizado con el bajo cuando suena música |
-| 🪟 | **9 ventanas de vidrio** | `01 Archivos · 02 Entorno · 03 Canal de voz · 04 Notas · 05 Música · 06 Consola · 07 Perfil · 08 Cerebro · 09 Ayuda y soporte` — arrastrables, minimizables al dock, con contadores en vivo |
+| 🪟 | **11 ventanas de vidrio** | `01 Archivos · 02 Entorno · 03 Canal de voz · 04 Notas · 05 Música · 06 Consola · 07 Perfil · 08 Cerebro · 09 Ayuda · 10 Modelos · 11 Optimizar` — arrastrables, minimizables al dock, con contadores en vivo |
+| 👥 | **Modelos locales (Ollama)** | **10 · Modelos** enseña 14 modelos con su peso real, su flecha `↓ descargar` y el veredicto para **la RAM de este equipo** (`VA BIEN · JUSTO · NO CABE`): barra de progreso al 1 %, `usar`, `✕ borrar` y botón para encender o apagar Ollama |
+| 🧹 | **Optimización del equipo** | **11 · Optimizar** mide la RAM en vivo, quién se la come (con botón para cerrar procesos propios), cuánta caché sobra y barre la segura — sin tocar documentos, la papelera ni el escritorio |
 | ⌨ | **Consola de comandos** | Prompt `cort@nave:~$`, historial con ↑/↓ y **Tab que completa** («repro» → «reproduce») |
 | 📂 | **Archivos seguros** | Árbol lateral con doble conteo (carpetas · archivos) que se expande, vista rejilla/lista y botón **Abrir** que lanza la carpeta en el explorador del sistema |
 | 🎵 | **Música** | Escanea `~/Música`, reproduce en el panel o abre tu reproductor (VLC) con «reproduce música» |
@@ -55,17 +59,19 @@ Atajo de teclado: **Esc** oculta o devuelve todas las ventanas (deja solo el orb
 ## Arquitectura
 
 ```
-┌──────────────── Interfaz (ui/) ────────────────────────────────────────┐
-│  Three.js: orbe de partículas + portal      9 ventanas de vidrio + dock │
-│  Web Speech: micrófono y voz                MediaPipe: gestos (opt-in)  │
-│  Auto-descubre el núcleo: localhost:8000 → 8080 → puente Android        │
-└──────────────────────────┬──────────────────────────────────────────────┘
+┌───────────────── Interfaz (ui/) ─────────────────────────────────────────┐
+│  Three.js: orbe de partículas + portal     11 ventanas de vidrio + dock  │
+│  Web Speech: micrófono y voz                 MediaPipe: gestos (opt-in)  │
+│  Auto-descubre el núcleo: localhost:8000 → 8080 → puente Android         │
+└──────────────────────────┬───────────────────────────────────────────────┘
                            │  HTTP 127.0.0.1:8000  (un solo puerto)
-┌──────────────────────────┴──────────────────────────────────────────────┐
+┌──────────────────────────┴───────────────────────────────────────────────┐
 │  Backend Python · FastAPI (backend/app/)                                 │
 │  main.py ─ API + reparte la interfaz con CORT_SERVE_UI=1                 │
 │  actions.py ─ «abre / lanza / reproduce / apunta» → acciones del sistema │
 │  brain.py ─ enrutador híbrido: local → Groq → Gemini → supervivencia     │
+│  models.py ─ catálogo de Ollama, veredicto de RAM y descargas en hilo    │
+│  optimize.py ─ RAM en vivo, procesos pesados y caché borrable (seguro)   │
 │  config_store.py ─ ajustes y claves (archivo JSON, se leen al vuelo)     │
 │  sensors.py ─ archivos seguros + apertura con visor del sistema + clima  │
 │  memory.py ─ SQLite (notas, conversaciones, preferencias)                │
@@ -101,6 +107,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Linux / macOS** | `bash scripts/run.sh` | `http://localhost:8000` (lo abre solo) |
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
+| **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
 | **Android** | instala [`instaladores/CORT-IA-1.1.0.apk`](https://github.com/Sandra2244/CORT/releases/download/v0.2.2-demo/CORT-IA-1.1.0.apk) | app a pantalla completa |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -171,6 +178,11 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 | `GET /api/weather` | Clima actual (Open-Meteo, cacheado 20 min) |
 | `GET /api/history` · `POST /api/profile` | Historial reciente y preferencias |
 | `GET /api/support` | Datos de contacto y soporte que muestra la ventana **09** |
+| `GET /api/models` | Catálogo de Ollama con peso real, veredicto de RAM y lo ya descargado (**10**) |
+| `GET /api/models/progreso` | Avance al 1 % de cada descarga en curso |
+| `POST /api/models/pull · /rm · /use · /ollama` | Bajar, borrar o elegir modelo y encender/apagar Ollama |
+| `GET /api/optimize` | RAM, procesos pesados, caché borrable y consejos para este equipo (**11**) |
+| `POST /api/optimize/clean · /kill` | Barrar caché por nivel (`seguro`, `todo`, `papelera`) o cerrar un proceso propio |
 
 ## Seguridad y privacidad
 
@@ -195,6 +207,8 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 | `backend/app/config_store.py` | Ajustes y claves en `backend/cort_config.json` |
 | `backend/app/sensors.py` | Raíces seguras, apertura con visor y clima |
 | `backend/app/memory.py` | Memoria persistente SQLite |
+| `backend/app/models.py` | Catálogo de Ollama, veredicto de RAM y descargas en segundo plano |
+| `backend/app/optimize.py` | RAM, procesos y cachés: lista blanca de rutas y lista negra de procesos |
 | `ui/index.html` · `ui/css` · `ui/js` | Holograma: orbe Three.js + HUD + voz + gestos |
 | `ui/vendor/` | Three.js incluido: la interfaz funciona sin internet |
 | `desktop/main.cjs` | Ventana Electron (modo cabina / modo vidrio) |

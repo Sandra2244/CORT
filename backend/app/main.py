@@ -16,6 +16,11 @@ Endpoints:
   GET  /api/memories                     -> muro de recuerdos (notas + conversaciones)
   GET  /api/weather                      -> clima actual (Open-Meteo, cacheado)
   GET  /api/support                      -> contacto y soporte de la ventana 09
+  GET  /api/models                       -> catálogo Ollama + si cabe en este equipo
+  GET  /api/models/progreso              -> avance de las descargas en curso
+  POST /api/models/pull|rm|use|ollama    -> descargar, borrar, usar u encender Ollama
+  GET  /api/optimize                     -> quién come RAM y cuánta caché hay que borrar
+  POST /api/optimize/clean|kill          -> vaciar cachés seguras / cerrar un proceso
 
 Si CORT_SERVE_UI=1 (o el ejecutor lo pide), el mismo backend reparte también la
 interfaz en `http://<host>:<puerto>/` — un solo proceso, cero puertos extra.
@@ -40,6 +45,8 @@ import brain                                    # noqa: E402  (test_all / recarg
 import config_store                             # noqa: E402
 import memory                                   # noqa: E402
 import local_commands                           # noqa: E402
+import models                                   # noqa: E402  (Ollama: catálogo y descargas)
+import optimize                                 # noqa: E402  (RAM y caché del equipo)
 import sensors                                  # noqa: E402
 
 from fastapi import FastAPI, Request           # noqa: E402
@@ -60,6 +67,17 @@ app.add_middleware(
     allow_origins=["null"],
     allow_methods=["*"], allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def sin_cache_en_api(request, call_next):
+    """Los sensores y el estado del equipo cambian cada segundo: si el navegador
+    (o el WebView de Android, o Electron) guarda la respuesta en caché, CORT se
+    queda viendo datos viejos. La API siempre se responde sin caché."""
+    respuesta = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        respuesta.headers["cache-control"] = "no-store"
+    return respuesta
 
 
 class Msg(BaseModel):
@@ -256,6 +274,80 @@ def open_file(o: Open):
     del sistema (documentos, imágenes, audio, video y comprimidos).
     Nunca ejecuta: las extensiones de programa están bloqueadas."""
     return sensors.open_path(o.path)
+
+
+# ─────────────────────────── modelos locales (Ollama) ───────────────────────
+class Modelo(BaseModel):
+    modelo: str = ""
+
+
+class Ollama(BaseModel):
+    accion: str = "start"              # start | stop
+
+
+@app.get("/api/models")
+def models_estado():
+    """Catálogo con el peso de cada modelo, si te cabe en la RAM de ESTE
+    equipo y cuáles ya están descargados."""
+    return models.estado_completo()
+
+
+@app.get("/api/models/progreso")
+def models_progreso():
+    """Avance al 1 % de cada descarga en curso."""
+    return models.progreso()
+
+
+@app.post("/api/models/pull")
+def models_pull(m: Modelo):
+    """Descarga un modelo (`ollama pull`) en un hilo: no bloquea la interfaz."""
+    return models.descargar(m.modelo)
+
+
+@app.post("/api/models/rm")
+def models_rm(m: Modelo):
+    return models.borrar(m.modelo)
+
+
+@app.post("/api/models/use")
+def models_use(m: Modelo):
+    """Lo deja como modelo local activo del cerebro."""
+    return models.usar(m.modelo)
+
+
+@app.post("/api/models/ollama")
+def models_ollama(o: Ollama):
+    return models.arrancar_servidor() if o.accion == "start" else models.detener_servidor()
+
+
+# ─────────────────────────── optimización del equipo ────────────────────────
+class Nivel(BaseModel):
+    nivel: str = "seguro"              # seguro | todo
+
+
+class Proceso(BaseModel):
+    pid: int = 0
+
+
+@app.get("/api/optimize")
+def optimizar_informe(fresco: bool = False):
+    """Qué come la RAM ahora mismo y cuánta caché borrable hay en el disco.
+    `fresco=1` fuerza a volver a contar (tarda unos segundos)."""
+    return optimize.informe(fresco=fresco)
+
+
+@app.post("/api/optimize/clean")
+def optimizar_limpia(n: Nivel):
+    """Vacía cachés dentro de la carpeta personal (nunca documentos ni la base
+    de datos de CORT). Devuelve los MB liberados."""
+    return optimize.limpiar(n.nivel)
+
+
+@app.post("/api/optimize/kill")
+def optimizar_cierra(p: Proceso):
+    """Cierra UN proceso propio. Se niega a tocar el escritorio, el audio o
+    el propio CORT."""
+    return optimize.cerrar(p.pid)
 
 
 # ─────────────────────────── interfaz en el mismo puerto ────────────────────

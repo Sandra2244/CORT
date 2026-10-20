@@ -536,6 +536,72 @@ html.mobile #go{width:42px;min-height:42px;height:42px;padding:0}
 .hp-ver{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:#4b7f9e;margin-top:10px;
   border-top:1px solid rgba(80,190,255,.16);padding-top:6px}
 
+/* ================= 10 · MODELOS y 11 · OPTIMIZACIÓN ================= */
+.mo-head{font-size:12px;color:#bfe8ff}
+.mo-sum{font-size:11.5px;line-height:1.5;color:#9fdcff;margin:2px 0 6px}
+.mo-sum b{color:var(--text-hi);font-family:Consolas,'Courier New',monospace}
+.mo-btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 9px}
+.mo-b{all:unset;cursor:pointer;padding:5px 11px;border-radius:14px;font-size:11px;
+  font-family:Consolas,'Courier New',monospace;letter-spacing:.04em;color:#cfeaff;
+  border:1px solid rgba(80,190,255,.32);background:rgba(4,14,28,.55);transition:.15s}
+.mo-b:hover{border-color:var(--cyan);background:rgba(0,160,255,.22);color:#fff;
+  box-shadow:0 0 12px rgba(0,180,255,.4)}
+.mo-b.d{border-color:rgba(43,255,158,.5);color:#b9ffd8}
+.mo-b.d:hover{background:rgba(43,255,158,.18);border-color:#2bff9e;box-shadow:0 0 14px rgba(43,255,158,.45)}
+.mo-b.x{border-color:rgba(255,91,91,.42);color:#ffc9c9}
+.mo-b.x:hover{background:rgba(255,70,70,.18);border-color:#ff5b5b;box-shadow:0 0 12px rgba(255,90,90,.4)}
+.mo-warn{font-size:11px;line-height:1.45;color:#ffcf8f;border:1px solid rgba(255,180,80,.3);
+  background:rgba(60,35,6,.4);border-radius:7px;padding:6px 8px;margin:6px 0}
+.mo-warn.ok{color:#b9ffd8;border-color:rgba(43,255,158,.35);background:rgba(6,44,26,.45)}
+.mo-none{font-size:11px;color:#5e8cab;font-style:italic;padding:6px 2px}
+#molist{display:flex;flex-direction:column;gap:5px}
+.mo-row{border:1px solid rgba(80,190,255,.18);border-left:2px solid rgba(80,190,255,.35);
+  border-radius:7px;padding:6px 8px;background:rgba(4,14,28,.42);transition:.15s}
+.mo-row:hover{border-color:rgba(80,190,255,.4);background:rgba(6,22,42,.6)}
+.mo-row.bajado{border-left-color:#2bff9e}
+.mo-row.activo{border-left-color:#ff8a3d;background:rgba(34,18,4,.4)}
+.mo-top{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.mo-n{font-family:Consolas,'Courier New',monospace;font-size:11.5px;color:var(--text-hi);letter-spacing:.02em}
+.mo-tag{font-family:Consolas,'Courier New',monospace;font-size:8.5px;letter-spacing:.14em;
+  padding:2px 6px;border-radius:4px;border:1px solid;white-space:nowrap}
+.mo-tag.t-va{color:#2bff9e;border-color:rgba(43,255,158,.5);background:rgba(43,255,158,.09)}
+.mo-tag.t-justo{color:#ffcf6b;border-color:rgba(255,190,80,.5);background:rgba(255,190,80,.09)}
+.mo-tag.t-nocab{color:#ff8f8f;border-color:rgba(255,91,91,.5);background:rgba(255,91,91,.09)}
+.mo-tag.t-usar{color:#ffb06b;border-color:rgba(255,140,60,.6);background:rgba(255,140,60,.12)}
+.mo-tag.t-no{color:#7fa6bd;border-color:rgba(120,170,200,.32);background:rgba(10,24,40,.5)}
+.mo-meta{font-size:10.5px;color:#7fb9d8;line-height:1.4;margin:3px 0}
+.mo-acc{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+.mo-prog:empty{display:none}
+.mo-prog{display:flex;align-items:center;gap:8px;margin-top:6px}
+.mo-bar{flex:1;height:5px;border-radius:3px;background:rgba(80,190,255,.16);overflow:hidden;
+  border:1px solid rgba(80,190,255,.22)}
+.mo-bar i{display:block;height:100%;background:linear-gradient(90deg,#0aa9e6,#2bff9e);
+  box-shadow:0 0 10px rgba(43,255,158,.6);transition:width .5s}
+.mo-pt{font-family:Consolas,'Courier New',monospace;font-size:9.5px;color:#9fdcff;white-space:nowrap}
+.mo-pt.mal{color:#ff8f8f}
+
+#optr{display:flex;flex-direction:column;gap:3px}
+.op-bar{position:relative;height:16px;border-radius:8px;margin:4px 0 8px;overflow:hidden;
+  border:1px solid rgba(80,190,255,.3);background:rgba(4,14,28,.6)}
+.op-bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#0aa9e6,#8f6bff 70%,#ff5b5b);
+  opacity:.75;transition:width .6s}
+.op-bar span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-family:Consolas,'Courier New',monospace;font-size:9.5px;letter-spacing:.12em;color:#eaffff;
+  text-shadow:0 0 6px rgba(0,0,0,.8)}
+.op-procs,.op-caches{display:flex;flex-direction:column;gap:4px;margin-bottom:4px}
+.op-proc,.op-cache{display:flex;align-items:baseline;gap:8px;font-size:11px;
+  border:1px solid rgba(80,190,255,.16);border-radius:6px;padding:4px 8px;background:rgba(4,14,28,.4)}
+.op-proc .n,.op-cache .n{flex:1;font-family:Consolas,'Courier New',monospace;color:#cfeaff;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-proc .mb,.op-cache .mb{font-family:Consolas,'Courier New',monospace;color:var(--text-hi);font-size:11px}
+.op-proc .mo-b,.op-cache .mo-tag{flex:none}
+.op-cache small{color:#5e8cab;font-size:9.5px;letter-spacing:.04em}
+.op-cache.seguro{border-left:2px solid #2bff9e}
+.op-cache.cuidado{border-left:2px solid #ffcf6b}
+.op-cache.papelera{border-left:2px solid #8f6bff}
+#opres{margin-top:6px}
+#opres:empty{display:none}
+
 /* ================= dock compacto: caben las 11 ventanas en pantallas angostas ==== */
 @media (max-width:1180px){
   #dock button span{display:none}
