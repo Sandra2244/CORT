@@ -4,6 +4,7 @@
   "version": "0.2.0",
   "description": "Ventana holográfica de C.O.R.T. (Cognitive Orchestrator / Real-Time)",
   "author": "Sandra <sandrasofialopezgomez3@gmail.com>",
+  "homepage": "https://github.com/Sandra2244/CORT#readme",
   "license": "MIT",
   "main": "main.cjs",
   "private": true,
