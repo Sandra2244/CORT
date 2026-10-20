@@ -91,11 +91,14 @@ jobs:
           st=$?
           cat /tmp/apk.log
           if [ $st -ne 0 ]; then
-            # Los registros de Actions NO son públicos (la API de logs pide
-            # permiso); los annotations del check-run sí se leen sin sesión, y
-            # `javac` imprime veinte errores seguidos: van primero, y el final del
-            # log después, con tope de 30 líneas.
-            errores="$(grep -E '\.java:[0-9]+: error:' /tmp/apk.log | head -30)"
+            # Los registros de Actions NO se pueden descargar sin sesión (la API de
+            # logs responde 403), pero los annotations del check-run sí se leen por
+            # la API pública. `javac` imprime el error en una línea y el detalle
+            # (`symbol:` / `location:` / `required:`) en las siguientes: sin ellas
+            # hay que adivinar qué método no existe, y eso cuesta una compilación.
+            errores="$(grep -E -A 3 '\.java:[0-9]+: error:' /tmp/apk.log \
+                       | grep -E '\.java:[0-9]+: error:|symbol:|location:|required:|found:|reason:' \
+                       | head -40)"
             msg=$( { echo "-- errores --"; echo "${errores:-ninguno}"; \
                      echo "-- final del log --"; tail -c 900 /tmp/apk.log; } \
                    | tr '\n\r' '  ' | sed 's/%/%25/g' )

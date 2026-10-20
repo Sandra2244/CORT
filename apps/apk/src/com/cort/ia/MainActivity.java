@@ -224,8 +224,12 @@ public class MainActivity extends Activity {
             InputStream datos = getAssets().open(ruta);
             Map<String, String> cabeceras = new HashMap<>();
             cabeceras.put("Cache-Control", "no-store");
-            return new WebResourceResponse(mimeDe(ruta), "utf-8", datos,
-                                           200, "OK", cabeceras);
+            // El orden real del constructor (AOSP, API 21) es
+            // `mimeType, encoding, statusCode, reasonPhrase, headers, data`: el
+            // `InputStream` va AL FINAL, no después del coding. Intercambiarlos es
+            // el rojo que `javac` señaló como «InputStream cannot be converted to int».
+            return new WebResourceResponse(mimeDe(ruta), "utf-8", 200, "OK",
+                                           cabeceras, datos);
         } catch (Exception noEstaEnElAPK) {
             return noExiste();
         }
@@ -256,8 +260,8 @@ public class MainActivity extends Activity {
     private static WebResourceResponse noExiste() {
         Map<String, String> cabeceras = new HashMap<>();
         cabeceras.put("Cache-Control", "no-store");
-        return new WebResourceResponse("text/plain", "utf-8",
-            new java.io.ByteArrayInputStream(new byte[0]), 404, "Not Found", cabeceras);
+        return new WebResourceResponse("text/plain", "utf-8", 404, "Not Found",
+            cabeceras, new java.io.ByteArrayInputStream(new byte[0]));
     }
 
     /**
@@ -271,8 +275,8 @@ public class MainActivity extends Activity {
         cabeceras.put("Cache-Control", "no-store");
         byte[] cuerpo = "{\"error\":\"sin PC: escribe la dirección de tu portátil en el botón CORT · PC\"}"
             .getBytes(java.nio.charset.Charset.forName("UTF-8"));
-        return new WebResourceResponse("application/json", "utf-8",
-            new java.io.ByteArrayInputStream(cuerpo), 501, "Not Implemented", cabeceras);
+        return new WebResourceResponse("application/json", "utf-8", 501, "Not Implemented",
+            cabeceras, new java.io.ByteArrayInputStream(cuerpo));
     }
 
     /* ─────────────────────── doble toque del auricular ─────────────────── */
@@ -411,6 +415,17 @@ public class MainActivity extends Activity {
 
     void avisa(String texto) {
         runOnUiThread(() -> Toast.makeText(this, texto, Toast.LENGTH_LONG).show());
+    }
+
+    /**
+     * El hueco por donde el puente Java mete mensajes en la página.
+     *
+     * `evaluateJavascript` es método de `WebView`, no de `Activity`: el puente
+     * tiene `MainActivity` y por eso llama aquí. Sin este método, `javac` diría
+     * «cannot find symbol: method evaluateJavascript» en `CortNative.java`.
+     */
+    void evalua(String js) {
+        if (web != null) web.evaluateJavascript(js, null);
     }
 
     SharedPreferences prefs() {

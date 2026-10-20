@@ -273,7 +273,9 @@ public class CortNative {
         try {
             Set<Voice> disponibles = tts.getVoices();
             for (Voice v : disponibles) {
-                if (nombre.equals(v.getName()) && !v.isDeleted()) {
+                // `Voice` sólo promete `getName()` (API 21); no existe un método que
+                // diga si la voz está borrada, así que el nombre es la única guía.
+                if (nombre.equals(v.getName())) {
                     tts.setVoice(v);
                     return;
                 }
@@ -297,7 +299,7 @@ public class CortNative {
                     primero = false;
                     j.append("{\"name\":").append(comilla(v.getName()))
                      .append(",\"locale\":").append(comilla(l.toLanguageTag()))
-                     .append(",\"local\":").append(v.isLocal())
+                     .append(",\"local\":").append(!v.isNetworkConnectionRequired())
                      .append(",\"male\":").append(esMasculino(v.getName()));
                 }
             }
@@ -424,8 +426,10 @@ public class CortNative {
     /* ─────────────────────────── JSON a mano ────────────────────── */
 
     private void cuadro(final String json) {
-        act.runOnUiThread(() -> act.evaluateJavascript(
-            "window.__cortNative&&window.__cortNative.emit(" + json + ")", null));
+        // `evaluateJavascript` vive en el `WebView`, y el WebView es de
+        // `MainActivity`; el puente pide el favor por su método `evalua`.
+        act.runOnUiThread(() -> act.evalua(
+            "window.__cortNative&&window.__cortNative.emit(" + json + ")"));
     }
 
     private static String comilla(String s) {
