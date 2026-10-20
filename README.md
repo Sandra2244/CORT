@@ -147,8 +147,8 @@ que para eso hace falta un equipo sobrado):
 |---|---|---|
 | `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
 | `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,6 MB |
-| `CORT-IA-1.1.1.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | ~1,8 MB |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
+| `CORT-IA-1.1.1.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | 1,75 MB (peso real de la Release) |
 | `CORT-IA-1.1.1-firma.txt` | con qué llave salió y qué se le cambió (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
@@ -203,6 +203,14 @@ Lo que el del teléfono **no** trae, dicho sin adornos:
   Lo que sí comprueba el pipeline es que el APK rempaquetado conserva los cuatro
   `classes.dex` y los 17 archivos de `mipmap`, que `zipalign` pasa y que
   `apksigner verify` acepta la firma.
+- **El `CORT-IA-1.1.1.apk` publicado (1.752.631 bytes) se comparó entrada por
+  entrada contra el 1.1.0 original**, descargando los dos: entran tres archivos
+  de firma (`META-INF/CORT.SF`, `.RSA`, `MANIFEST.MF`), sale uno
+  (`app-metadata.properties`) y **ninguna otra entrada cambia de contenido** —
+  los cuatro `classes.dex`, los siete `kotlin/*`, los 17 `mipmap` y
+  `resources.arsc` son byte a byte los del APK de siempre. Los 11 archivos de
+  `assets/ui/` que entran son byte a byte el `ui/` del commit. O sea: cuerpo
+  original intacto, cara actualizada, icono original intacto.
 
 El **modo teléfono sin instalar nada** sigue disponible para ver la cara actual
 en el navegador del celular: `bash scripts/telefono.sh` (igual que `run.sh`, pero
@@ -286,7 +294,8 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       ventana de ayuda y soporte (wake word incluida; Piper TTS queda opcional
       porque Web Speech ya da voz gratis)
 - [x] **F6** Escritorio Electron + instaladores por CI (.exe / .AppImage / .deb)
-- [x] **F7** Android: APK 1.2.0 compilado desde el repo (`apps/apk/compilar.sh` en GitHub Actions), con voz nativa, asistente del sistema y doble toque de auriculares
+- [x] **F7** Android: `CORT-IA-1.1.1.apk` en la Release — el cuerpo original de la dueña con la interfaz actual metida en `assets/ui/` (`apps/apk/rempaquetar.sh`, firmado por CI). Aparte, `apps/apk/compilar.sh` compila desde cero un APK experimental con asistente del sistema y doble toque de auriculares (artefacto del run)
+- [ ] F7b Meter en el repo el proyecto Gradle que generó el 1.1.0 para poder recompilar el cuerpo de verdad (asistente + auriculares + su cara, en un solo APK)
 - [ ] F8 Idiomas adicionales y temas visuales
 
 Todo el software usado es gratuito.
