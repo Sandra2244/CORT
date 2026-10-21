@@ -148,11 +148,11 @@ que para eso hace falta un equipo sobrado):
 
 | Archivo | Para | Peso |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 79,0 MB |
-| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107,5 MB |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
-| `CORT-IA-1.1.4.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | ~1,75 MB (el peso real sale en la Release) |
-| `CORT-IA-1.2.3-asistente.apk` | Android 8+: el escrito desde aquí — asistente predeterminado, doble toque del auricular y lee tus avisos en voz alta | ~370 KB |
+| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 78.966.589 B |
+| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107.703.555 B |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74.828.436 B |
+| `CORT-IA-1.1.4.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | 1.756.727 B |
+| `CORT-IA-1.2.3-asistente.apk` | Android 8+: el escrito desde aquí — asistente predeterminado, doble toque del auricular y lee tus avisos en voz alta | 378.490 B |
 | `CORT-IA-1.1.4-firma.txt` · `CORT-IA-1.2.3-asistente-firma.txt` | con qué llave salió cada uno y qué lleva dentro (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
