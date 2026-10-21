@@ -131,7 +131,29 @@ public class MainActivity extends Activity {
             public void onPermissionRequest(android.webkit.PermissionRequest peticion) {
                 // Sin esto, los gestos con cámara y cualquier audio del WebView
                 // quedan denegados en silencio.
-                peticion.grant(peticion.getResources());
+                //
+                // Conceder `peticion.getResources()` a ciegas era el otro medio del
+                // fallo de «la cámara no funciona»: la página pide `VIDEO_CAPTURE`,
+                // este `grant` le dice que sí, y como el **sistema** nunca nos dio
+                // `CAMERA` el `getUserMedia` revienta con un `NotAllowedError` que la
+                // cara traducía por «sin cámara» sin decir por qué. Aquí se concede
+                // sólo lo que el aparato ya tiene concedido, y lo que falta se pide
+                // en el mismo instante: a la segunda pulsación la mano funciona.
+                boolean faltaCamara = false;
+                java.util.List<String> deja = new java.util.ArrayList<>();
+                for (String recurso : peticion.getResource()) {
+                    boolean esVideo = recurso != null &&
+                        recurso.equals(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+                    if (esVideo && checkSelfPermission(android.Manifest.permission.CAMERA)
+                            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        faltaCamara = true;
+                        continue;                       // sin `CAMERA` concedería humo
+                    }
+                    deja.add(recurso);
+                }
+                if (deja.isEmpty()) peticion.deny();
+                else peticion.grant(deja.toArray(new String[0]));
+                if (faltaCamara) pidePermiso("camara");
             }
         });
 
@@ -194,6 +216,10 @@ public class MainActivity extends Activity {
         // El oído vuelve: `pausa()` cerró el micrófono al irse a segundo plano y
         // sin este aviso la interfaz quedaría para siempre con «escucha en pausa».
         if (puente != null) puente.reanuda();
+        // Los sentidos también vuelven. Es el ÚNICO momento en que este APK escucha
+        // sensores: con la app en segundo plano se desenganchan (`onPause`) para no
+        // comer batería, que es lo que la dueña nota como «el teléfono se traba».
+        Sentidos.de(this).enMarcha(true);
         quitaAvisoDeFondo();            // ya está delante: su aviso sobra
     }
 
@@ -203,6 +229,7 @@ public class MainActivity extends Activity {
         primerPlano = false;
         if (mandos != null) mandos.setActive(false);   // la música vuelve a su dono
         if (puente != null) puente.pausa();
+        Sentidos.de(this).enMarcha(false);
         dejaAvisoDeFondo();
     }
 
@@ -211,6 +238,7 @@ public class MainActivity extends Activity {
         super.onDestroy();
         if (cara == this) cara = null;
         if (mandos != null) { mandos.setActive(false); mandos.release(); mandos = null; }
+        Sentidos.de(this).enMarcha(false);
         if (puente != null) puente.destruye();
         if (web != null) web.destroy();
     }

@@ -89,6 +89,12 @@
           package="com.cort.ia">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Saber si hay red **de verdad**, sin abrirla. La pide la ronda 2.2: sin esta
+         línea `ConnectivityManager.getActiveNetwork()` devuelve `null` aunque el
+         Wi‑Fi esté lleno, y `Nube.hayRed()` contestaba «no» para siempre — así que
+         CORT decía «sin conexión» estando conectada. No da acceso a ningún dato del
+         proveedor: sólo al estado de la conexión. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO"
                      android:required="false" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"

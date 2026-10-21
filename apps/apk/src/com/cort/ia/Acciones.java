@@ -29,9 +29,11 @@ package com.cort.ia;
  *   lanzadores porque el manifiesto declara `<queries>` con `MAIN`/`LAUNCHER`, y
  *   los paquetes sueltos que ella nombra. Fuera de esa lista `PackageManager`
  *   contesta vacío, y aquí se dice en vez de fingir que la app no existe.
- * · **No reporta la red.** `estado()` no consulta `ConnectivityManager` porque
- *   este APK no declara `ACCESS_NETWORK_STATE`; prometer «hay Wi‑Fi» sin permiso
- *   para saberlo sería peor que callarlo.
+ * · **La red la mide `Aparato`, no esta clase.** Desde la ronda 2.2 el manifiesto
+ *   declara `ACCESS_NETWORK_STATE`, así que `estado()` puede decir `wifi` o
+ *   `celular` con un número real. Antes se callaba: sin ese permiso
+ *   `ConnectivityManager` devuelve `null` y prometer «no hay Wi‑Fi» estando
+ *   conectada era peor que callarlo.
  * · **No escribe nada en disco.** El único estado que recuerda es si ella misma
  *   mandó la linterna, en RAM y para poder alternarla.
  */
@@ -870,6 +872,16 @@ public class Acciones {
         }
         j.p("atuendo", Paleta.puesto(app()));
         j.p("juego", juego());
+        // La red se puede medir desde la ronda 2.2, cuando el manifiesto declaró
+        // `ACCESS_NETWORK_STATE`. Antes se callaba a propósito (`ConnectivityManager`
+        // contesta `null` sin ese permiso) y callar seguía siendo mejor que mentir;
+        // ahora hay un número de verdad, así que la mentira desaparece.
+        try {
+            String red = Aparato.de(app()).red(app());
+            j.p("red", red.isEmpty() ? "sin conexion" : red);
+        } catch (Throwable raro) {
+            j.p("red", "sin medir");
+        }
 
         List<String> faltan = new ArrayList<>();
         if (!tiene(android.Manifest.permission.RECORD_AUDIO)) faltan.add("el micrófono");

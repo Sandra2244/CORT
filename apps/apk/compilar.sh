@@ -32,7 +32,15 @@ cd "$(dirname "$0")"
 # es más que el 20000 del 2.0.0 y que el 10300 del 1.3.0, así que Android lo ve como
 # actualización y se instala ENCIMA sin desinstalar (con la misma llave de
 # `llave.sh`).
-APK_VERSION="${APK_VERSION:-2.1.0}"   # desde aquí sale UN SOLO APK: este
+#
+# El 2.2.0 añade el cerebro ancho: `Razon` responde cuentas, porcentajes, unidades
+# y fechas sin portátil ni nube; la tabla de frases pasa de 35 reglas a 33 generadas
+# por `scripts/habilidades.py` (283 frases, cada una probada en el JDK);
+# `Aparato` y `Sentidos` dan el entorno real por el puente
+# (batería, red, RAM, luz, proximidad, acelerómetro), y la cámara pide su permiso en
+# vez de fallar en silencio. `docs/INSTALAR-APK.md` explica el error de instalación
+# que da al saltar de 1.x a 2.x: es la llave de firma distinta, no el APK roto.
+APK_VERSION="${APK_VERSION:-2.2.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"

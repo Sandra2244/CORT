@@ -16,8 +16,15 @@ package com.cort.ia;
  * De dónde sale la tabla: primero se intenta `assets/habilidades.json` (viaja
  * dentro del APK, hermano de `ui/` y NO lo borra `compilar.sh`, que sólo limpia
  * `assets/ui`); si el asset no está o viene roto, se usa la **tabla escrita en
- * el código**, que es idéntica. Es deliberado: sin el asset no puede haber un
- * fallo silencioso que deje a CORT mudo.
+ * el código**. Las dos son LA MISMA tabla, vertida de una única lista
+ * (`scripts/habilidades.py`) y vigilada por `scripts/prueba-costura.py`: si el
+ * asset falta no puede haber un fallo silencioso que deje a CORT mudo, y si las
+ * dos se separaran, la dueña oiría frases distintas según cómo cargó el APK.
+ *
+ * Lo que a propósito NO está en ninguna de las dos: la hora, el día, las cuentas,
+ * los porcentajes y los cambios de unidad. Esos los resuelve `Razon` (puro Java,
+ * sin red), y una regla suya aquí delante le robaría la frase devolviendo una
+ * respuesta de adorno — así estaban «qué hora es» hasta la ronda 2.2.
  *
  * El `Nube` del constructor se guarda pero no se usa para hacer red aquí: el
  * parser es offline por diseño. Se consulta sólo para saber si la nube está
@@ -160,105 +167,128 @@ public class Cerebro {
      * Orden = prioridad. Las exactas van antes de las de prefijo `{resto}`; y las
      * de prefijo cortas (`pon la linterna`) antes de las generales (`pon {resto}`),
      * para que una no le robe la frase a la otra.
+     *
+     * ESTO NO SE ESCRIBE A MANO: sale de `scripts/habilidades.py`, la misma lista
+     * que genera `assets/habilidades.json`. Cambiar una frase en un sitio y no en
+     * el otro es el tipo de fallo que sólo se ve en la boca del teléfono.
      */
     private void tablaDelCodigo() {
-        // — volumen —
         reglas.add(r("volumen", "sube", "Subo el volumen.",
-            "sube el volumen", "subir el volumen", "sube volumen", "mas fuerte", "mas alto"));
-        reglas.add(r("volumen", "baja", "Bajo el volumen.",
-            "baja el volumen", "bajar el volumen", "baja volumen", "mas bajo", "baja la musica"));
+             "sube el volumen", "subir el volumen", "sube volumen", "subele el volumen",
+             "sube un poco el volumen", "mas volumen", "mas fuerte", "mas alto",
+             "sube el sonido", "sube la musica", "volumen mas alto", "pon el volumen mas alto"));
+        reglas.add(r("volumen", "baja", "Lo bajo.",
+             "baja el volumen", "bajar el volumen", "baja volumen", "bajale el volumen",
+             "baja un poco el volumen", "menos volumen", "mas bajo", "mas suave",
+             "baja el sonido", "baja la musica", "volumen mas bajo", "dejalo mas bajo"));
         reglas.add(r("volumen", "max", "Volumen al máximo.",
-            "volumen al maximo", "sube todo el volumen", "ponlo al maximo", "sube al maximo"));
+             "volumen al maximo", "sube todo el volumen", "ponlo al maximo", "sube al maximo",
+             "volumen al tope", "al maximo el volumen", "sube el volumen al maximo",
+             "pon el volumen al maximo", "pon el volumen al tope"));
         reglas.add(r("volumen", "min", "Volumen al mínimo.",
-            "volumen al minimo", "baja todo el volumen", "baja al minimo"));
-        reglas.add(r("volumen", "callar", "Dejo el teléfono en silencio.",
-            "silencio", "pon silencio", "callate", "calla", "sin sonido", "mudo"));
-
-        // — linterna (antes de "pon {resto}") —
-        reglas.add(r("linterna", "on", "Enciendo la linterna.",
-            "enciende la linterna", "prende la linterna", "pon la linterna",
-            "dame luz", "enciende linterna", "necesito luz"));
-        reglas.add(r("linterna", "off", "Apago la linterna.",
-            "apaga la linterna", "apagar la linterna", "quita la linterna",
-            "apaga luz", "linterna off"));
-        reglas.add(r("linterna", "alterna", "Enciendo o apago la linterna.",
-            "linterna"));
-
-        // — modo juego (antes de "abre {resto}") —
-        reglas.add(r("juego", "on", "Modo juego activado: no aparezco ni hablo hasta que lo quites.",
-            "modo juego", "activa el modo juego", "activa modo juego", "pon el modo juego"));
-        reglas.add(r("juego", "off", "Quito el modo juego.",
-            "sal del modo juego", "desactiva el modo juego", "desactiva modo juego",
-            "quita el modo juego", "modo juego off"));
-
-        // — avisos —
-        reglas.add(r("avisos", "avisos", "Te leo lo que llegó.",
-            "lee mis avisos", "leer mis avisos", "leeme los avisos", "que me llego",
-            "ultimos avisos", "mis notificaciones", "lee mis notificaciones", "hay avisos nuevos"));
-
-        // — música (transporte, exactas) —
-        reglas.add(r("musica", "pausa", "Pause.", "pausa", "pon en pausa", "para la musica"));
-        reglas.add(r("musica", "reanuda", "Sigo.", "continua", "reanuda", "sigue la musica",
-            "vuelve la musica", "vuelve"));
-        reglas.add(r("musica", "siguiente", "Paso a la siguiente.",
-            "siguiente", "pasa", "cambia de cancion", "la siguiente", "siguiente cancion"));
+             "volumen al minimo", "baja todo el volumen", "baja al minimo",
+             "al minimo el volumen", "pon el volumen al minimo", "pon el volumen bajito"));
+        reglas.add(r("volumen", "callar", "Silencio. Sigo escuchando.",
+             "silencio", "pon silencio", "callate", "calla", "sin sonido", "mudo",
+             "quita el sonido", "apaga el sonido", "sin ruido", "calla la musica", "mute",
+             "ponlo en mudo", "en mudo"));
+        reglas.add(r("linterna", "on", "Alumbro.",
+             "enciende la linterna", "prende la linterna", "pon la linterna", "dame luz",
+             "enciende linterna", "necesito luz", "linterna encendida", "alumbrame",
+             "prendele la linterna", "ponme luz"));
+        reglas.add(r("linterna", "off", "Apago la luz.",
+             "apaga la linterna", "apagar la linterna", "quita la linterna", "apaga luz",
+             "linterna off", "apaga la luz", "linterna apagada", "ya no alumbres",
+             "apaga el foco"));
+        reglas.add(r("linterna", "alterna", "Cambio la linterna.",
+             "linterna", "la linterna", "linterna por favor"));
+        reglas.add(r("juego", "on", "Modo juego: me hago pequeña para no estorbarte.",
+             "modo juego", "activa el modo juego", "activa modo juego", "pon el modo juego",
+             "voy a jugar", "me pongo a jugar", "estoy jugando", "activar modo juego",
+             "modo gamer", "no me interrumpas mientras juego"));
+        reglas.add(r("juego", "off", "Vuelvo a por el oído.",
+             "sal del modo juego", "desactiva el modo juego", "desactiva modo juego",
+             "quita el modo juego", "modo juego off", "ya termine de jugar", "vuelve cort",
+             "desactivar modo juego", "sal de modo juego"));
+        reglas.add(r("avisos", "avisos", "Te los cuento.",
+             "lee mis avisos", "leer mis avisos", "leeme los avisos", "que me llego",
+             "ultimos avisos", "mis notificaciones", "lee mis notificaciones",
+             "hay avisos nuevos", "avisos", "mirame los avisos", "que me escribieron",
+             "hay mensajes nuevos", "leeme whatsapp", "revisa mis mensajes", "que hay de nuevo"));
+        reglas.add(r("musica", "pausa", "La dejo en pausa.",
+             "pausa", "pon en pausa", "para la musica", "pausa la musica", "deten la musica",
+             "stop", "para todo", "quieto", "apaga la musica"));
+        reglas.add(r("musica", "reanuda", "Sigo.",
+             "continua", "reanuda", "sigue la musica", "vuelve la musica", "vuelve", "dale play",
+             "reanuda la musica", "sigue sonando", "pon la musica otra vez"));
+        reglas.add(r("musica", "siguiente", "Voy con la siguiente.",
+             "siguiente", "pasa", "cambia de cancion", "la siguiente", "siguiente cancion",
+             "pista siguiente", "pon la siguiente", "otra cancion", "dale a la siguiente"));
         reglas.add(r("musica", "anterior", "Vuelvo a la anterior.",
-            "anterior", "la anterior", "cancion anterior", "retrocede"));
-        reglas.add(r("musica", "mueve", "Me muevo en la pista.",
-            "muevete", "muévete", "adelanta", "retrocede un poco"));
-
-        // — memoria (exactas de lista, antes de "que sabes de {resto}") —
-        reglas.add(r("memoria", "listar", "Esto es lo que sé de ti.",
-            "que sabes de mi", "que recuerdas", "que tengo guardado"));
-        reglas.add(r("memoria", "guardar:{resto}", "Anotado, se queda en este teléfono.",
-            "acuedate {resto}", "recuerda que {resto}", "guarda que {resto}",
-            "aprende que {resto}", "anota {resto}", "apunta {resto}"));
-        reglas.add(r("memoria", "buscar:{resto}", "Esto sé de eso.",
-            "que sabes de {resto}", "que recuerdas de {resto}", "recuerdas {resto}"));
-
-        // — alarma (prefijo, más larga primero) —
-        reglas.add(r("alarma", "{resto}", "Pongo la alarma.",
-            "pon una alarma a las {resto}", "pon alarma a las {resto}",
-            "despiertame a las {resto}", "despierta a las {resto}",
-            "alarma a las {resto}", "alerta a las {resto}", "alarma {resto}"));
-
-        // — temporizador —
-        reglas.add(r("temporizador", "{resto}", "Cuento atrás.",
-            "temporizador de {resto}", "pon un temporizador de {resto}",
-            "temporizador {resto}", "cuenta atras de {resto}", "timer {resto}"));
-
-        // — saludo / cháchara (respuesta local, sin aparato) —
+             "anterior", "la anterior", "cancion anterior", "retrocede", "la de antes",
+             "pista anterior", "pon la anterior", "vuelve a la anterior"));
+        reglas.add(r("musica", "mueve", "Me muevo un poco en la cancion.",
+             "muevete", "adelanta", "retrocede un poco", "adelanta un poco",
+             "adelanta la cancion", "atrasa la cancion"));
+        reglas.add(r("memoria", "listar", "Te leo lo que tengo guardado.",
+             "que sabes de mi", "que recuerdas", "que tengo guardado", "dime lo que sabes",
+             "que guardaste", "tus recuerdos", "mi informacion"));
         reglas.add(r("saludo", "", "Hola, te escucho.",
-            "hola", "buenos dias", "buenas tardes", "buenas noches", "oye cort", "cort"));
+             "hola", "buenos dias", "buenas tardes", "buenas noches", "oye cort", "cort",
+             "hola cort", "ey cort", "buenas", "ey"));
         reglas.add(r("saludo", "", "Soy CORT, tu asistente en este teléfono.",
-            "quien eres", "como te llamas", "que eres", "quien eres tu"));
+             "quien eres", "como te llamas", "que eres", "quien eres tu", "tu nombre",
+             "eres humana", "quien te hizo"));
         reglas.add(r("saludo", "", "Para eso estoy.",
-            "gracias", "muchas gracias", "muy amable"));
+             "gracias", "muchas gracias", "muy amable", "de nada", "gracias cort"));
         reglas.add(r("saludo", "", "Bien, aquí en el teléfono, sin tu portátil.",
-            "estas ahi", "me oyes", "funcionas", "como estas"));
-        reglas.add(r("saludo", "", "Qué bueno que estés.", "adios", "hasta luego"));
-        reglas.add(r("saludo", "hora", "Mírala en la barra de estado: yo te la pongo cuando la cara la pinte.",
-            "que hora es", "que hora", "dime la hora", "tienes la hora", "que horas son"));
-        reglas.add(r("saludo", "fecha", "Hoy es el día que marca el teléfono arriba.",
-            "que dia es hoy", "que dia es", "que fecha es", "dime la fecha"));
-        reglas.add(r("saludo", "tiempo", "Sin la nube no te sé el tiempo; actívala y te lo digo.",
-            "que tiempo hace", "que tiempo", "como esta el tiempo", "va a llover"));
-        reglas.add(r("saludo", "", "Puedo mover el volumen, la linterna, alarmas, abrir apps, poner música, llamar, buscar y acordarme de lo que me cuentes.",
-            "que puedes hacer", "para que sirves", "ayuda", "comandos"));
-
-        // — llamar, buscar, poner, abrir (las de prefijo van al final) —
+             "estas ahi", "me oyes", "funcionas", "como estas", "estas alli", "aqui estas",
+             "estas despierta", "cort estas", "me escuchas"));
+        reglas.add(r("saludo", "", "Qué bueno que estés.",
+             "adios", "hasta luego", "chao", "nos vemos", "hasta luego cort"));
+        reglas.add(r("saludo", "tiempo", "Sin la nube no te sé el tiempo; actívala en el perfil y te lo digo.",
+             "que tiempo hace", "que tiempo", "como esta el tiempo", "va a llover", "hace frio",
+             "hace calor", "lleva paraguas"));
+        reglas.add(r("saludo", "", "Mando sobre el aparato: volumen, linterna, alarmas, temporizadores, abrir apps, poner música, llamar, buscar, leer tus avisos y acordarme de lo que me cuentes. Y sin internet sé hacer cuentas, porcentajes, cambios de unidad, y darte la hora y el día. Lo que no sepa, se lo pregunto a la nube.",
+             "que puedes hacer", "para que sirves", "ayuda", "comandos", "que sabes hacer",
+             "dime que puedes", "para que sirves tu", "ayudame", "que puedes hacer por mi"));
+        reglas.add(r("memoria", "guardar:{resto}", "Me quedo con eso.",
+             "acuerdate de {resto}", "acuedate {resto}", "recuerda que {resto}",
+             "guarda que {resto}", "aprende que {resto}", "anota {resto}", "apunta {resto}",
+             "acuerdate que {resto}", "recuerdame {resto}", "ten presente {resto}",
+             "no se olvide {resto}", "memoriza {resto}"));
+        reglas.add(r("memoria", "buscar:{resto}", "Miro en mis recuerdos.",
+             "que sabes de {resto}", "que recuerdas de {resto}", "recuerdas {resto}",
+             "que te conte de {resto}", "sabes de {resto}", "en que quedo lo de {resto}"));
+        reglas.add(r("alarma", "{resto}", "Pongo la alarma.",
+             "pon una alarma a las {resto}", "pon alarma a las {resto}",
+             "despiertame a las {resto}", "despierta a las {resto}", "alarma a las {resto}",
+             "alerta a las {resto}", "alarma {resto}", "programa una alarma a las {resto}",
+             "necesito una alarma a las {resto}", "despiertame en {resto}",
+             "ponme una alarma {resto}"));
+        reglas.add(r("temporizador", "{resto}", "Cuento hacia atrás y te aviso.",
+             "pon un temporizador de {resto}", "temporizador de {resto}", "temporizador {resto}",
+             "cuenta atras de {resto}", "cuenta atras {resto}", "timer {resto}",
+             "cronometro de {resto}", "avisame en {resto}", "avisa en {resto}",
+             "me avisas en {resto}"));
         reglas.add(r("llamar", "{resto}", "Abro el marcador.",
-            "llama a {resto}", "llamar a {resto}", "marca a {resto}",
-            "llama al numero {resto}", "llama {resto}"));
+             "llama al numero {resto}", "llama a {resto}", "llamar a {resto}", "marca a {resto}",
+             "llama {resto}", "llamada a {resto}", "marcame {resto}"));
         reglas.add(r("buscar", "{resto}", "Busco en el navegador.",
-            "busca {resto}", "buscar {resto}", "googlea {resto}", "investiga {resto}"));
+             "busca en la red {resto}", "busca en internet {resto}", "buscar {resto}",
+             "busca {resto}", "googlea {resto}", "investiga {resto}",
+             "quiero saber sobre {resto}"));
         reglas.add(r("poner", "{resto}", "Pongo eso.",
-            "pon la cancion {resto}", "pon el video {resto}", "reproduce {resto}",
-            "poner {resto}", "pon {resto}", "suena {resto}"));
-        reglas.add(r("abrir", "ajustes", "Abro los ajustes.", "configuracion"));
+             "pon la cancion {resto}", "pon el video {resto}", "ponme musica de {resto}",
+             "reproduce {resto}", "poner {resto}", "pon {resto}", "suena {resto}",
+             "dale a {resto}", "escucha {resto}"));
+        reglas.add(r("abrir", "ajustes", "Abro los ajustes.",
+             "configuracion"));
         reglas.add(r("abrir", "{resto}", "Abro.",
-            "abre {resto}", "abrir {resto}", "arranca {resto}",
-            "lanza {resto}", "entra en {resto}"));
+             "abre el navegador de {resto}", "abre la aplicacion {resto}", "entra en {resto}",
+             "abreme {resto}", "abre {resto}", "abrir {resto}", "arranca {resto}",
+             "lanza {resto}", "ve a {resto}", "navega {resto}", "prende {resto}",
+             "quiero abrir {resto}"));
     }
 
     /* ───────────────────────────── procesar ─────────────────────── */
@@ -316,10 +346,21 @@ public class Cerebro {
 
     /* ───────────────────────── resolutores sueltos ──────────────── */
 
-    /** Pasa el nombre dicho por la clave que espera el puente (§1 `abrir.a`). */
+    /**
+     * Pasa el nombre dicho por la clave que espera el puente (§1 `abrir.a`).
+     *
+     * Los posesivos y los artículos se quitan ANTES de nada: «abre mis archivos»
+     * tiene que llegar al puente como `archivos`, porque `Acciones` compara su clave
+     * sin espacios («misarchivos» no está en ninguna lista y la dueña oiría «no
+     * conozco esa app» teniendo el gestor delante). Lo que no se reconoce se deja
+     * tal cual: `Acciones.app()` lo busca por el rótulo instalado, y ahí «fotos» o
+     * «telegram» sí tienen arreglo.
+     */
     private static String resuelveApp(String dicho) {
         String d = dicho.toLowerCase(java.util.Locale.ROOT)
-            .replaceAll("^(el|la|los|las|un|una|una app de|app de|aplicacion de)\\s+", "").trim();
+            .replaceAll("^(el|la|los|las|un|una|unos|unas|mi|mis|tu|tus|su|sus|nuestro|"
+                + "nuestra|nuestros|nuestras|la app de|el app de|app de|aplicacion de|"
+                + "la aplicacion de|aplicacion|el programa de|programa de)\\s+", "").trim();
         if (d.contains("whatsapp")) return "whatsapp";
         if (d.contains("spotify")) return "spotify";
         if (d.contains("youtube") || d.contains("video")) return "youtube";
@@ -332,7 +373,15 @@ public class Cerebro {
         if (d.contains("navegador") || d.contains("chrome") || d.contains("browser")) return "navegador";
         if (d.contains("ajuste") || d.contains("configuraci")) return "ajustes";
         if (d.contains("musica")) return "musica";
-        if (d.contains("telefono") || d.contains("marcador")) return "telefono";
+        if (d.contains("telefono") || d.contains("marcador") || d.contains("llamar")) return "telefono";
+        // Categorías que el puente ya tiene resueltas: se pasan con su clave exacta.
+        if (d.contains("archiv") || d.contains("carpet") || d.contains("gestor")) return "archivos";
+        if (d.contains("mensaje") || d.contains("sms")) return "mensajes";
+        if (d.contains("reloj") || d.contains("cronometro")) return "reloj";
+        if (d.contains("wifi") || d.contains("wi-fi")) return "wifi";
+        if (d.contains("bluetooth")) return "bluetooth";
+        if (d.contains("teclado")) return "teclado";
+        if (d.contains("notificaci") || d.contains("avisos")) return "avisos";
         return d.isEmpty() ? dicho : d;   // app cualquiera: la cara tira de `app`
     }
 

@@ -1,12 +1,77 @@
 /* ===== Gestos de mano — MODO LIGERO =====
    MediaPipe Hands con 1 sola mano, cámara 160×120 y análisis cada ~250 ms.
-   La cámara NO se enciende hasta pulsar el botón de mano (privacidad y RAM). */
+   La cámara NO se enciende hasta pulsar el botón de mano (privacidad y RAM).
+
+   Ronda 2.2: antes se lanzaba `getUserMedia()` a pelo. En el navegador eso abre
+   el cuadro de permiso del propio navegador; **en el WebView de Android no**:
+   ahí hay que tener concedido `CAMERA` por el sistema, y sin eso el `getUserMedia`
+   falla con `NotAllowedError`. Como el `catch` escribía sólo «sin cámara» y se
+   callaba el motivo, la dueña veía un fallo sin explicación y sin botón para
+   arreglarlo — la misma familia de bug que `notif`, `burbuja` y `files`: la cara
+   preguntaba una cosa y Java esperaba otra. Ahora se pide el permiso al puente
+   ANTES de encender nada (ni el CDN de MediaPipe, que baja el modelo a costa de
+   sus datos), y el error se traduce a español con su causa. */
+
+import { perms } from './voice.js';
 
 const MP_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js';
 
-export function initGestures({ onPalm, onPinch, onFist, video, canvas, button, label }) {
+const espera = ms => new Promise(r => setTimeout(r, ms));
+const puenteVivo = () => !!window.CortNative;
+
+/** El motivo real del fallo, en español: corto para la etiqueta, largo para el chat. */
+function porqueFallo(e) {
+  const clave = String((e && (e.name || e.message)) || '');
+  if (/NotAllowedError|Permission denied|denied/i.test(clave)) {
+    return { corto: 'permiso denegado', clase: 'camera',
+      largo: 'Android no me dejó abrir la cámara: falta el permiso de cámara.' };
+  }
+  if (/NotFoundError|DevicesNotFound/i.test(clave)) {
+    return { corto: 'sin cámara', clase: '',
+      largo: 'Este teléfono no tiene una cámara que CORT pueda usar para gestos.' };
+  }
+  if (/NotReadableError|TrackStartError|in use/i.test(clave)) {
+    return { corto: 'cámara ocupada', clase: '',
+      largo: 'Otra app tiene la cámara abierta. Ciérra y vuelve a pulsar la mano.' };
+  }
+  if (/SecurityError/i.test(clave)) {
+    return { corto: 'cámara bloqueada', clase: '',
+      largo: 'El sistema bloqueó la cámara dentro de la app (WebSettings sin permiso o sin cuadro).' };
+  }
+  if (/OverconstrainedError/i.test(clave)) {
+    return { corto: 'modo no soportado', clase: '',
+      largo: 'La cámara no admite 160×120; pídelo otra vez desde el botón.' };
+  }
+  return { corto: 'no arranca', clase: '',
+    largo: 'La cámara falló: ' + (clave || 'motivo desconocido') };
+}
+
+export function initGestures({ onPalm, onPinch, onFist, onError, video, canvas, button, label }) {
   const ctx = canvas.getContext('2d');
   let hands = null, stream = null, running = false, lastSend = 0, lastFire = 0, state = 'none';
+
+  /**
+   * El permiso de cámara, pedido al puente ANTES de tocar `getUserMedia`.
+   *
+   * Android no avisa por callback cuando el cuadro termina (el aviso existe —
+   * `type:"perm"`— pero no sabemos si la dueña lo dejó abierto un minuto), así que
+   * se pregunta `perms.has('camera')` cada seiscientos milisegundos durante quince
+   * segundos. Si vuelve concedida, se sigue; si no, se corta con `NotAllowedError`
+   * para que el mensaje sea el mismo que el de un «Denegar» explícito.
+   */
+  async function conPermisoDeCamara() {
+    if (!puenteVivo()) return true;                 // navegador y escritorio: su propio cuadro
+    let concedida = false;
+    try { concedida = perms.has('camera'); } catch { concedida = false; }
+    if (concedida) return true;
+    label.textContent = 'dame la cámara…';
+    try { perms.ask('camera'); } catch { /* sin puente no hay cuadro que abrir */ }
+    for (let n = 0; n < 25; n++) {
+      await espera(600);
+      try { if (perms.has('camera')) return true; } catch { /* sigue esperando */ }
+    }
+    return false;
+  }
 
   function loadScript(src) {
     return new Promise((res, rej) => {
@@ -54,6 +119,13 @@ export function initGestures({ onPalm, onPinch, onFist, video, canvas, button, l
 
   async function start() {
     label.textContent = 'cargando…';
+    // Primero el permiso, después todo lo demás: pedir 160×120 a una cámara que
+    // Android no concedió sólo da un error confuso y gasta el cuadro de la dueña.
+    if (!(await conPermisoDeCamara())) {
+      const negado = new Error('Android no dejó abrir la cámara');
+      negado.name = 'NotAllowedError';
+      throw negado;
+    }
     if (!hands) {
       await loadScript(MP_URL);
       hands = new window.Hands({ locateFile: f =>
@@ -90,6 +162,14 @@ export function initGestures({ onPalm, onPinch, onFist, video, canvas, button, l
     try {
       await start();
       button.classList.add('on'); document.getElementById('camwrap').classList.add('show');
-    } catch (e) { label.textContent = 'sin cámara'; console.warn(e); }
+    } catch (e) {
+      // El error se traduce y se entrega: un «sin cámara» a secas es lo que hacía
+      // que este botón pareciera roto sin decir por qué.
+      const porque = porqueFallo(e);
+      stop();                                   // suelta la cámara si llegó a abrirse a medias
+      label.textContent = porque.corto;
+      if (onError) onError(porque, e);
+      console.warn(e);
+    }
   };
 }

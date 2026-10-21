@@ -122,10 +122,12 @@ function buildWindows() {
   W.env = createWin({ id: 'env', onShow: () => { refreshStatus(); refreshWeather(); }, icon: '◉', title: '02 · Entorno',
     x: 14, y: clamp(112 + vh * .42 + 18, 330, 440), w: Math.min(240, vw - 28),
     html: `<div id="wx">…</div>
-      <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU</div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
+      <div id="envscope" style="font-size:10px;color:#5e8cab"></div>
+      <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU <span id="envcpu"></span></div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
-      <div style="font-size:10px;color:#5e8cab">DISCO</div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
+      <div style="font-size:10px;color:#5e8cab">DISCO <span id="envdisk"></span></div><div class="bar"><i id="bar-disk" style="width:0"></i></div>
       <div id="batt" style="margin-top:6px;font-size:11px"></div>
+      <div id="sens" style="margin-top:6px;font-size:10px;max-height:132px;overflow:auto"></div>
       <div id="envbrain"></div>` });
   W.chat = createWin({ id: 'chat', icon: '✦', title: '03 · Canal de voz',
     x: Math.max(14, Math.round(vw / 2) - 190), y: Math.max(140, vh - 386), w: Math.min(380, vw - 28), h: 288,
@@ -918,6 +920,10 @@ function setState(k) {
 
 async function refreshStatus() {
   const el = document.getElementById('status');
+  // En el teléfono las barras y la batería se miden AQUÍ, no en el portátil. Se
+  // pintan antes de intentar la red para que un PC apagado no borre el panel.
+  const aparato = IS_ANDROID ? leeAparato() : null;
+  if (aparato) { pintaAparato(aparato); pintaSensores(leeSensores()); }
   try {
     const s = await (await fetch(API + '/api/status')).json();
     const b = s.brain, dot = ok => `<span class="dot ${ok ? 'on' : 'off'}"></span>`;
@@ -930,16 +936,78 @@ async function refreshStatus() {
       `${dot(b.groq || b.gemini)} online ${b.groq ? '· Groq' : (b.gemini ? '· Gemini' : '(sin clave · ve a Perfil)')}<br>` +
       `<span style="color:#5e8cab">modo: ${esc(b.mode)}</span>`;
     const m = s.system.match(/CPU (\d+)\s*% · RAM (\d+)\s*% \(([\d.]+) de ([\d.]+) GB\) · Disco (\d+)\s*%/);
-    if (m) {
+    // En Android esas barras ya traen SU CPU/RAM/disco; las del PC se quedan en la
+    // línea de arriba (`s.system`), que es honesto: decir «RAM 40%» con la del
+    // portátil mientras ella mira su teléfono es la mentira que empezó todo.
+    if (m && !IS_ANDROID) {
       setBar('cpu', m[1]); setBar('ram', m[2]); setBar('disk', m[5]);
       document.getElementById('ramgb').textContent = `${m[3]} / ${m[4]} GB`;
     }
-    document.getElementById('batt').textContent = s.battery;
+    if (!IS_ANDROID || !aparato) document.getElementById('batt').textContent = s.battery;
   } catch {
-    el.innerHTML = `<span class="dot off"></span> backend no detectado`;
+    if (aparato) {
+      // Sin PC no hay «backend no detectado» que pintarrajeée el panel: el teléfono
+      // ES el backend y ya se midió arriba.
+      const red = aparato.red || '';
+      el.innerHTML = `<span class="dot ${red ? 'on' : 'off'}"></span> CORT en tu teléfono<br>` +
+        `<span style="color:#5e8cab">${esc(red ? 'red ' + red : 'sin red · el cerebro local sigue aquí dentro')}</span>`;
+    } else {
+      el.innerHTML = `<span class="dot off"></span> backend no detectado`;
+    }
   }
 }
 function setBar(id, pct) { document.getElementById('bar-' + id).style.width = pct + '%'; }
+
+/* ---------- el teléfono medido por sí mismo (Android, ronda 2.2) ---------- */
+/* La queja era «hay sensores que no funcionan». Medido: el puente no tenía ni un
+   método de sensores y estas barras sólo se llenaban con `/api/status` del
+   portátil, así que en el móvil nacían en blanco. Ahora el teléfono se lee a sí
+   mismo por `CortNative.aparato()` y `CortNative.sensores()`, y la regla es la
+   misma que en Java: **lo que no se midió se pinta `—`, nunca un cero** — un `0`
+   en luminancia se lee «a oscuras» y un `0%` de CPU se lee «tranquilo», y las dos
+   cosas serían mentira. Con PC conectado, `#status` y `#envbrain` siguen contando
+   el portátil (eso es el cerebro); estas barras cuentan el aparato. */
+function leeAparato() {
+  try { return IS_ANDROID ? JSON.parse(window.CortNative.aparato()) : null; } catch { return null; }
+}
+function leeSensores() {
+  try { return IS_ANDROID ? JSON.parse(window.CortNative.sensores()) : null; } catch { return null; }
+}
+const gmb = v => (typeof v !== 'number' || v < 0) ? '—'
+  : v >= 1024 ? (v / 1024).toFixed(1) + ' GB' : Math.round(v) + ' MB';
+function pintaAparato(a) {
+  if (!a || !a.ok) return;
+  const txt = id => { const e = document.getElementById(id); return e; };
+  setBar('cpu', a.cpu >= 0 ? a.cpu : 0);
+  const ec = txt('envcpu'); if (ec) ec.textContent = a.cpu >= 0 ? a.cpu + '%' : '—';
+  setBar('ram', a.ramPct >= 0 ? a.ramPct : 0);
+  const rg = txt('ramgb'); if (rg) rg.textContent = `${gmb(a.ramLibreMB)} / ${gmb(a.ramTotalMB)}`;
+  setBar('disk', a.discoPct >= 0 ? a.discoPct : 0);
+  const ed = txt('envdisk'); if (ed) ed.textContent = a.discoPct >= 0 ? `${gmb(a.discoLibreMB)} libres` : '—';
+  const bt = txt('batt');
+  if (bt) bt.textContent = (a.bateria >= 0 ? `batería ${a.bateria}%` : 'batería sin leer')
+    + (a.cargando ? ' · cargando' : '')
+    + (a.battTemp >= 0 ? ` · ${(a.battTemp / 10).toFixed(1)} °C` : '')
+    + (a.salud ? ` · ${a.salud}` : '')
+    + (a.memoriaBaja ? ' · memoria justa' : '');
+  const sc = txt('envscope');
+  if (sc) sc.textContent = `en tu teléfono · ${a.modelo || ''} · Android ${a.android || ''}`
+    + ` · red ${a.red || 'sin conexión'}`
+    + (a.brillo >= 0 ? ` · brillo ${a.brillo}%` : '');
+}
+function pintaSensores(s) {
+  const box = document.getElementById('sens'); if (!box) return;
+  if (!s || !s.ok) { box.innerHTML = ''; return; }
+  const fila = x => {
+    if (!x.tiene) return '';
+    const v = (x.valores || []).map(n => (typeof n === 'number'
+      ? (Math.abs(n) >= 1000 ? n.toExponential(2) : n.toFixed(2)) : n)).join(' / ');
+    const dicho = x.tieneLectura ? `${v} ${x.unidad} · hace ${x.hace}` : 'sin lectura todavía';
+    return `<div class="sensrow"><span>${esc(x.tipo)}</span> <span style="color:#5e8cab">${esc(dicho)}</span></div>`;
+  };
+  box.innerHTML = (s.sensores || []).map(fila).join('')
+    + `<div style="color:#5e8cab;margin-top:4px">${esc(s.dice || '')}</div>`;
+}
 
 /* ---------- clima ---------- */
 async function refreshWeather() {
@@ -1948,5 +2016,22 @@ export function wireUI(orbRef) {
     },
     onPinch: () => { W.chat.show(); term('gesto: pinza → canal de voz', 'gestos'); sayLine('Canal de voz al frente.'); },
     onFist: () => { hideAll(); orb.burst(); term('gesto: puño → HUD oculto (palma o «muestra todo» para volver)', 'gestos'); },
+    // El error de cámara llega TRADUCIDO desde `gestures.js` (ronda 2.2). Se cuenta
+    // en el canal, se deja la razón en la etiqueta y —si es el permiso— se pone la
+    // fila con su botón aquí mismo, en el panel de gestos. `permRow` guarda además
+    // el reintento en `permRetry.camera`, así que cuando Android avise por
+    // `type:"perm"` la cámara se reabre sola sin que ella vuelva a buscar el botón.
+    onError: p => {
+      add('a', 'Gestos: ' + p.largo + (p.clase === 'camera'
+        ? ' Toca «Dar acceso a la cámara» aquí abajo y la mano vuelve a intentarlo sola.' : ''), 'error');
+      term('cámara de gestos: ' + p.corto, 'gestos');
+      const panel = document.getElementById('camwrap');
+      if (!panel) return;
+      const vieja = panel.querySelector('.perm');
+      if (vieja) vieja.remove();
+      if (p.clase !== 'camera') return;
+      panel.appendChild(permRow('camera', 'Sin cámara: dame el permiso',
+        () => document.getElementById('hand').click()));
+    },
   }));
 }

@@ -1026,6 +1026,145 @@ else:
         dice_ok("permisos",
                 f"las {len(clases)} clases que pregunta la cara tienen rama en el cuadro y en la medición")
 
+# 10 · La ronda 2.2: el cerebro se agrandó (`Razon`), el teléfono empezó a mirar
+# lo que tiene dentro (`Aparato`, `Sentidos`) y la tabla de frases se duplicó de
+# 144 a 283. Todo eso tiene tres costuras nuevas, y las tres se ven sin teléfono.
+
+# 10.a · Las DOS tablas de frases tienen que ser las mismas frases.
+# `assets/habilidades.json` es la que viaja dentro del APK y `tablaDelCodigo` es el
+# suelo cuando el asset falta o viene roto. Si se separan, la dueña oye un CORT
+# distinto según cómo cargó su teléfono, y eso no se ve desde la cara: sólo aquí.
+import json as _json
+try:
+    _tabla = _json.loads((RAIZ / "apps" / "apk" / "assets" / "habilidades.json")
+                         .read_text(encoding="utf-8"))
+    del_asset = {r["id"]: (r["accion"], r["param"], r.get("respuesta", ""),
+                           tuple(r["patrones"]))
+                 for r in _tabla["patrones"]}
+except Exception as roto:
+    del_asset = {}
+    falla("frases", f"`habilidades.json` no se puede leer: {roto}")
+
+_java_tabla = (RAIZ / "apps" / "apk" / "src" / "com" / "cort" / "ia" / "Cerebro.java") \
+    .read_text(encoding="utf-8")
+_cuerpo = _java_tabla[_java_tabla.index("private void tablaDelCodigo()"):]
+_cuerpo = _cuerpo[:_cuerpo.index("\n    }\n")]
+del_codigo = []
+for _m in re.finditer(r'reglas\.add\(r\((.*?)\)\);', _cuerpo, re.S):
+    _args = re.findall(r'"((?:[^"\\]|\\.)*)"', _m.group(1))
+    if len(_args) < 4:
+        continue
+    del_codigo.append((_args[0], _args[1], _args[2], tuple(_args[3:])))
+
+if del_asset:
+    # Regla por regla, y la tupla ENTERA: acción, param, la respuesta que se oye y
+    # sus frases, en el orden de la tabla (el orden ES la prioridad). Antes se
+    # comparaba por pareja (acción, param), y eso era ciego: seis reglas comparten
+    # `saludo`/"" así que, mirando sólo la pareja, cinco de sus respuestas podían
+    # estar mal en una de las dos tablas y el chequeo daba por bueno.
+    del_asset_lista = [(acc, par, resp, ps) for acc, par, resp, ps in del_asset.values()]
+    if del_asset_lista != del_codigo:
+        solo_a = [f"`{a}`/`{p}`" for a, p, _r, _ps in del_asset_lista
+                  if (a, p, _r, _ps) not in del_codigo]
+        solo_c = [f"`{a}`/`{p}`" for a, p, _r, _ps in del_codigo
+                  if (a, p, _r, _ps) not in del_asset_lista]
+        partes = []
+        if solo_a:
+            partes.append("sólo en el asset: " + ", ".join(solo_a[:6]))
+        if solo_c:
+            partes.append("sólo en el código: " + ", ".join(solo_c[:6]))
+        if not partes:
+            # Mismas reglas, distinto orden: la prioridad se ha movido.
+            partes.append("el ORDEN (la prioridad) de las reglas es distinto en cada lado")
+        falla("frases", "el asset y el código no son la misma tabla: " + "; ".join(partes)
+              + " → viértelos otra vez con `python3 scripts/habilidades.py`")
+    else:
+        _frases = sum(len(ps) for _a, _p, _r, ps in del_asset_lista)
+        dice_ok("frases", f"las {len(del_asset_lista)} reglas del asset, con sus respuestas "
+                          f"y sus {_frases} frases en el mismo orden, son las {len(del_codigo)} "
+                          f"del código")
+    # Y las dos promesas que `Razon` ya cumple: si la tabla las recupera, la dueña
+    # vuelve a oír la respuesta de adorno en vez de la hora o el día de verdad.
+    _excusas = ("barra de estado", "dia que marca el telefono", "día que marca el teléfono")
+    _las_dicen = [e for e in _excusas
+                  if e in _java_tabla or e in (RAIZ / "apps" / "apk" / "assets"
+                                               / "habilidades.json").read_text(encoding="utf-8")]
+    if _las_dicen:
+        falla("frases", "la tabla otra dice " + ", ".join(f"«{e}»" for e in _las_dicen)
+              + ": `Razon` ya sabe la hora y la fecha, esa regla le roba la frase")
+    else:
+        dice_ok("frases sin excusas", "ninguna regla vuelve a negar la hora y la fecha "
+                                      "(`Razon` las dice de verdad)")
+
+def sin_comentarios_js(txt: str) -> str:
+    """`//` y `/* */` fuera: un comentario que nombra `CortNative.pausa()` no es una llamada."""
+    txt = re.sub(r"/\*.*?\*/", "", txt, flags=re.S)
+    return re.sub(r"//[^\n]*", "", txt)
+
+
+def claves_emitidas(ruta_java: str) -> set[str]:
+    t = (RAIZ / "apps" / "apk" / "src" / "com" / "cort" / "ia" / ruta_java).read_text(encoding="utf-8")
+    # `Json` tiene tres bocas: `p` (cruda), `n` (número) y `s` (texto). Contar sólo
+    # `p` era el fallo de esta misma prueba: `Aparato` escribe casi todo con `n`/`s`.
+    return set(re.findall(r'\.[pns]\("(\w+)"', t)) | set(re.findall(r'\\"(\w+)\\":', t))
+
+
+# 10.b · Cada método del puente que la cara llama existe de verdad en Java.
+# Con `const N = window.CortNative`, un `N.aparato()` mal escrito no da error: sale
+# `undefined`, la cara lo parsea como JSON roto y el panel se queda mudo. Es la
+# misma familia de fallo que `notif`, `burbuja` y `files` con los permisos, pero por
+# el lado de los métodos.
+PUENTE_JAVA = puente_texto()
+if not PUENTE_JAVA:
+    falla("puente", "no encuentro `CortNative.java` para cruzar los nombres")
+metodos_javascript = set(re.findall(
+    r'@JavascriptInterface\s+(?:public\s+)?(?:static\s+)?[A-Za-z<>\[\], ]+\s+(\w+)\s*\(',
+    PUENTE_JAVA))
+llamados = set()
+for _p in sorted((RAIZ / "ui" / "js").glob("*.js")):
+    _t = sin_comentarios_js(_p.read_text(encoding="utf-8"))
+    llamados |= set(re.findall(r"(?:window\.)?CortNative\.(\w+)\s*\(", _t))
+    # `N.` sólo es el puente en el fichero que de verdad hace `const N = window.CortNative`.
+    if re.search(r"\bN\s*=\s*window\.CortNative", _t):
+        llamados |= set(re.findall(r"\bN\.(\w+)\s*\(", _t))
+llamados -= {"emit", "available"}            # el emisor de la cara, no un método de Java
+inventados = sorted(n for n in llamados if n not in metodos_javascript)
+if inventados:
+    falla("puente", "la cara llama " + ", ".join(f"`{n}()`" for n in inventados)
+          + " y no hay ningún `@JavascriptInterface` con ese nombre → sale `undefined`")
+else:
+    dice_ok("puente", f"los {len(llamados)} métodos que la cara nombra están en Java "
+                      f"(de {len(metodos_javascript)})")
+
+
+# 10.c · `Aparato` y `Sentidos` emiten las claves que el panel «Entorno» lee.
+# Lo mismo que se exige a los permisos: si la cara pide `a.battTemp` y Java nunca
+# escribe esa clave, el panel pinta `undefined` y la dueña lee un teléfono raro en
+# vez de leer que falta un dato.
+_ap = HUD_21[HUD_21.index("function pintaAparato"):HUD_21.index("function pintaSensores")]
+lee_aparato = set(re.findall(r"\ba\.(\w+)", _ap)) - {"length", "toFixed", "map", "filter"}
+emite_aparato = claves_emitidas("Aparato.java")
+faltan_a = sorted(k for k in lee_aparato if k not in emite_aparato)
+if faltan_a:
+    falla("entorno", "`pintaAparato` lee " + ", ".join(f"`a.{k}`" for k in faltan_a)
+          + " y `Aparato.estado()` no la emite")
+else:
+    dice_ok("entorno", f"las {len(lee_aparato)} claves que pinta `pintaAparato` las emite `Aparato`")
+
+# La fila de un sensor la escribe `pintaSensores` con la variable `x`, no con `d`.
+_fin_sensores = HUD_21.index("\n}", HUD_21.index("function pintaSensores"))
+lee_sens = set(re.findall(r"\bx\.(\w+)", HUD_21[HUD_21.index("function pintaSensores"):_fin_sensores]))
+lee_sens -= {"length", "map", "filter", "toFixed", "join"}
+emite_sens = claves_emitidas("Sentidos.java")
+faltan_s = sorted(k for k in lee_sens if k not in emite_sens)
+if not lee_sens:
+    falla("entorno", "`pintaSensores` no se puede recortar: la prueba queda vacía")
+elif faltan_s:
+    falla("entorno", "`pintaSensores` lee " + ", ".join(f"`x.{k}`" for k in faltan_s)
+          + " y `Sentidos.lectura()` no la emite")
+else:
+    dice_ok("entorno", f"las {len(lee_sens)} claves de una fila de sensores las emite `Sentidos`")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

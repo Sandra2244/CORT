@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────────────────────
+# prueba-mente.sh — el cerebro del APK, probado EN EL PORTÁTIL, sin teléfono.
+#
+# Cuatro clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro:
+# `Razon` (cuentas, unidades, fechas), `Cerebro` (la tabla de frases), `Nube`
+# (el proveedor) y `Mente` (quién responde cada frase). Lo que las ata a Android
+# son cinco tipos: `Log`, `Context`, `SharedPreferences`, `AssetManager` y el
+# `org.json` del sistema. Aquí se les pone su **gemelo de papel**
+# (`apps/apk/prueba/papeles`) y con eso el JDK de a pie compila y ejecuta las
+# tres pruebas:
+#
+#   Prueba.java   · `Razon` a pelo: 43 frases suyas y seis que no lo son.
+#   Prueba2.java  · la RUTA: acción conocida → `Cerebro`; cuenta/unidad/hora →
+#                   `Razon`; lo desconocido → la nube o la respuesta honesta.
+#   Prueba3.java  · las 283 frases de la tabla, una por una, contra las DOS
+#                   tablas (la del asset y la del código) para ver los robos
+#                   por orden — sólo se ven aquí, nunca en la cara.
+#
+# `--release 11` no se pasa: en este portátil `javac` sólo existe como módulo del
+# JDK (`java -m jdk.compiler/…`) y ese punto de entrada no acepta la bandera. El
+# APK se compila con `--release 11` en GitHub Actions; aquí se comprueba LOGICA.
+#
+# Uso:  bash scripts/prueba-mente.sh
+#       JAVA_MEM=192m bash scripts/prueba-mente.sh   (si el portátil va justo)
+# Tarda ~25 s. No toca el teléfono ni la red: sólo JDK.
+# ─────────────────────────────────────────────────────────────────────────────
+set -euo pipefail
+cd "$(dirname "$0")/.."
+RAIZ=$(pwd)
+E=$RAIZ/apps/apk/src/com/cort/ia
+P=$RAIZ/apps/apk/prueba
+T=/tmp/cort-mente
+
+# 1 · el escenario, siempre limpio: fuentes + gemelos de papel + pruebas
+rm -rf "$T"; mkdir -p "$T/src/com/cort/ia" "$T/papeles" "$T/assets" "$T/assets-vacias" "$T/out"
+cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$T/src/com/cort/ia/"
+cp -r "$P"/papeles/* "$T/papeles/"
+cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$T/src/com/cort/ia/"
+cp "$RAIZ"/apps/apk/assets/habilidades.json "$T/assets/"
+
+# 2 · `javac` como orden o como módulo del JDK, según el portátil
+si_javac() {
+  if command -v javac >/dev/null 2>&1; then
+    javac "$@"
+  else
+    java -Xmx"${JAVA_MEM:-256m}" -m jdk.compiler/com.sun.tools.javac.Main "$@"
+  fi
+}
+
+LISTA=$(find "$T/papeles" "$T/src" -name '*.java')
+echo "== compilando $(echo "$LISTA" | wc -l) ficheros de papel"
+# shellcheck disable=SC2086
+si_javac -encoding UTF-8 -d "$T/out" $LISTA
+
+# 3 · las tres suites; la última manda en el código de salida
+#
+# Cada salida va a su propio `.log` y se imprime entera SI ALGO FALLA. Con
+# `java … | tail -1` se perdería el detalle justo cuando hace falta: `pipefail`
+# devuelve el código, sí, pero la línea que explica el fallo se queda arriba y
+# fuera de la pantalla. `JAVA_MEM` baja el techo del montón cuando el portátil
+# va justo de RAM (aquí son 1,8 GiB compartidos con el editor).
+MEM="${JAVA_MEM:-256m}"
+pasa=0
+fallan=0
+for suite in Prueba Prueba2 Prueba3; do
+  caso="Razon a pelo"; [ "$suite" = Prueba2 ] && caso="la ruta de Mente"
+  [ "$suite" = Prueba3 ] && caso="las frases de la tabla"
+  echo "== $caso"
+  set +e
+  java -Xmx"$MEM" -cp "$T/out" "com.cort.ia.$suite" > "$T/$suite.log" 2>&1
+  st=$?
+  set -e
+  if [ $st -eq 0 ]; then
+    tail -1 "$T/$suite.log"; pasa=$((pasa + 1))
+  else
+    fallan=$((fallan + 1))
+    cat "$T/$suite.log"                       # el fallo se lee entero
+    echo "   (sale $st — log: $T/$suite.log)"
+  fi
+done
+[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 3"; exit 1; }
+FRASES=$(python3 -c 'import json;d=json.load(open("apps/apk/assets/habilidades.json"));print(sum(len(p["patrones"]) for p in d["patrones"]))' 2>/dev/null || echo "?")
+echo "MENTE OK: las 3 suites pasan sobre las $FRASES frases de la tabla."

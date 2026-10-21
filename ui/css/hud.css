@@ -160,6 +160,11 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 .bar{height:5px;background:rgba(80,190,255,.15);border-radius:3px;overflow:hidden;margin:2px 0 6px}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,#0a66aa,var(--cyan));
   border-radius:3px;transition:width .8s cubic-bezier(.2,.9,.3,1)}
+/* Las filas de sensores del teléfono (ronda 2.2): nombre a la izquierda, la última
+   muestra a la derecha. `display:flex` con `gap` para que el valor se alinee aunque
+   el nombre del sensor sea largo — los nombres los manda el fabricante. */
+.sensrow{display:flex;justify-content:space-between;gap:8px;line-height:1.45}
+.sensrow>span:first-child{color:var(--text-hi);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ================= chat ================= */
 #log{max-height:34vh;overflow-y:auto;font-size:13px;line-height:1.5}

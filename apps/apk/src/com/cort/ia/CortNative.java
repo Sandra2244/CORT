@@ -1329,6 +1329,43 @@ public class CortNative {
         return corte >= 0 ? camino.substring(corte + 1) : camino;
     }
 
+    /* ─────────────── el teléfono medido por sí mismo (ronda 2.2) ───────────────
+     *
+     * Los dos métodos que faltaban para que la queja «hay sensores que no
+     * funcionan» tuviera respuesta honesta. El diagnóstico medido: la ventana
+     * «02 · Entorno» se llenaba **sólo** con `/api/status` del portátil
+     * (`refreshStatus` en `ui/js/hud.js`), y en el teléfono sin PC ese panel
+     * nacía vacío —no era que el acelerómetro o el giroscopio no existieran,
+     * es que el puente no tenía ni un método donde pedirlos (`SensorManager`
+     * no aparecía en ninguno de los 21 archivos Java de la 2.1).
+     *
+     * `sentido` y `aparato` son síncronos y baratos: leen la última muestra ya
+     * guardada (`Sentidos`) o el estado que el sistema contesta al momento
+     * (`Aparato`). Ninguno de los dos lanza excepción a la cara: lo que Android
+     * no deja medir sale en `dice`, y lo que no se midió sale como `-1` para
+     * que la cara pinte `—` en vez de un cero disfrazado.
+     */
+
+    /** Los once sentidos que CORT sabe leer, con su última muestra y su antigüedad. */
+    @JavascriptInterface
+    public String sensores() {
+        try {
+            return Sentidos.de(act).lectura();
+        } catch (Exception elSistemaNoPrestaNada) {
+            return mal("Android no me dejó mirar los sensores de este teléfono");
+        }
+    }
+
+    /** Batería, RAM, disco, red, CPU y brillo del propio teléfono, sin portátil. */
+    @JavascriptInterface
+    public String aparato() {
+        try {
+            return Aparato.de(act).estado(act);
+        } catch (Exception nadieDejaMedir) {
+            return mal("no pude medir el teléfono ahora mismo");
+        }
+    }
+
     /* ───────────────────────── lista y compañía ───────────────────────── */
 
     /** URIs separadas por `\n` o `;` → lista limpia, sin huecos. */

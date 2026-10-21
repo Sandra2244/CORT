@@ -24,6 +24,15 @@ package com.cort.ia;
  * `{"ok":true,"responde":"…","de":"local","accion":"volumen","param":"sube"}` y la
  * cara, al ver `accion` en el evento, la reenvía a `accion(que:accion, args:param)`.
  * Así `Mente` no necesita ni permisos ni el `WebView` para mover el aparato.
+ *
+ * Antes de la ronda local hay tres escalones, y el orden importa porque cada uno
+ * es más caro que el anterior: `Cerebro` casa la frase con su tabla (coste cero,
+ * mueve el aparato); si no casa, `Razon` mira si es cuenta, porcentaje, cambio de
+ * unidad o fecha —puro Java, sin Android y sin red, coste cero también— y devuelve
+ * `{"ok":true,"responde":"Es 51.","de":"local","eco":"…"}` SIN `accion`, que la
+ * cara se limita a hablar; y sólo si los dos callan se gasta un `preguntar` de
+ * nube. Bajar la nube por debajo de `Razon` sería pagar por algo que se resuelve
+ * en el propio teléfono.
  */
 
 import android.content.Context;
@@ -103,6 +112,14 @@ public class Mente {
                 entregar(entrega, local(r, eco));
                 return;
             }
+            // Ni acción conocida: antes de gastar red, `Razon` mira si es cuenta,
+            // porcentaje, unidad o fecha. Puro Java, sin Android y sin internet, así
+            // que responde en el hilo del puente sin riesgo de reventar nada.
+            String razon = Razon.intenta(texto);
+            if (razon != null) {
+                entregar(entrega, razon(razon, eco));
+                return;
+            }
             // Desconocida: a la nube si está lista y hay red; si no, honestidad.
             if (nube.configurada() && nube.hayRed()) {
                 nuevoHilo(() -> {
@@ -160,6 +177,16 @@ public class Mente {
              + ",\"de\":\"local\",\"accion\":" + comilla(r.accion)
              + ",\"param\":" + comilla(r.param == null ? "" : r.param)
              + ",\"eco\":" + comilla(eco40(eco)) + "}";
+    }
+
+    /**
+     * La respuesta de `Razon`: un cálculo, un cambio de unidad o la fecha, dicha
+     * aquí y ahora. Lleva `de:"local"` y NO lleva `accion`: la cara habla el texto
+     * y no reenvía nada, porque no hay aparato que mover.
+     */
+    private static String razon(String dice, String eco) {
+        return "{\"ok\":true,\"responde\":" + comilla(dice)
+             + ",\"de\":\"local\",\"eco\":" + comilla(eco40(eco)) + "}";
     }
 
     /** Sin nube y sin red: no hay cerebro, y se dice cómo encenderlo. */
