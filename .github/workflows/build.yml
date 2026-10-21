@@ -263,14 +263,19 @@ jobs:
             **mismo anillo** que el de la app del teléfono
             (`bash scripts/icono-del-telefonito.sh`).
 
-            **Y el APK se puede actualizar sin desinstalar.** La firma es siempre la
-            misma llave (`apps/apk/llave.sh`: secreto del repo si existe, si no la
-            caché del pipeline), así que los permisos concedidos —micrófono, doble
-            toque, acceso a las notificaciones— y la dirección del PC se quedan.
-            Esta Release **aún pide desinstalar una vez**, porque las anteriores
-            firmaban cada una con una llave distinta; a partir de la siguiente ya
-            no. Cada APK lleva su `-firma.txt` con la huella del certificado: si
-            dos Releases seguidas tienen la misma huella, la llave se mantuvo.
+            **Actualizar el APK: sigue pidiendo desinstalar, y así se acaba.** La firma
+            la decide `apps/apk/llave.sh` (secreto del repo ▸ caché del pipeline ▸
+            generar una nueva), y está **medido**: la huella de esta Release es
+            distinta a la de `v0.2.9-demo`, porque `actions/cache` guarda la llave en
+            el *ref* que la creó y cada etiqueta es otro ref — o sea, la caché de una
+            Release nunca se ve desde la siguiente. Mientras no haya secreto, cada
+            Release cuesta una desinstalación (se van el micrófono, el doble toque, el
+            permiso de los avisos y la dirección del PC). La solución, una sola vez,
+            en tu portátil: `bash scripts/llave-nueva.sh` y pegar los dos secretos
+            `CORT_APK_KEYSTORE_B64` / `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets
+            and variables ▸ Actions. Desde la Release siguiente la llave es siempre la
+            tuya. Cada APK lleva su `-firma.txt`: misma huella que la anterior = se
+            instala encima.
 
             Los dos APK comparten paquete (`com.cort.ia`): en el teléfono se instala
             **uno u otro**, no los dos a la vez.

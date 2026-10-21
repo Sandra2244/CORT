@@ -40,7 +40,8 @@ sin Node: la cara del teléfono es la misma carpeta `ui/` del repo.
 | `AndroidManifest.xml` | permisos (`INTERNET`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `VIBRATE`), los cuatro `<service>` —asistente y sesión con `BIND_VOICE_INTERACTION`, reconocedor con `BIND_SPEECH_RECOGNIZER` y `Avisos` con `BIND_NOTIFICATION_LISTENER_SERVICE`—, la meta-datos hacia `res/xml/asistente.xml`, y `usesCleartextTraffic` para la Wi‑Fi sin TLS. **No** se añade ningún permiso de lectura de WhatsApp, SMS o contactos: la barra de notificaciones es un interruptor que pone la dueña en Ajustes, y CORT sólo ve lo que ahí ya se muestra |
 | `res/xml/asistente.xml` | el contrato del asistente, con los atributos **sin** prefijo `android:` (son recursos internos del sistema y `aapt2` rechazaría la forma con prefijo). **Y sin `settingsActivity` a propósito**: `VoiceInteractionServiceInfo` descarta al asistente cuya pantalla de ajustes no pertenezca a una app del sistema (`FLAG_SYSTEM`), y una APK instalada a mano nunca lo es — con ese atributo puesto, CORT desaparecía de la lista de asistentes sin ningún aviso. Los ajustes se piden ahora por `RoleManager`, que es la vía pública y no cuesta aparecer |
 | `CortNative.pausa()` / `reanuda()` + `musicPlaying()` | el **freno del oído**. Al ir a segundo plano, Java cierra el `SpeechRecognizer` **y avisa** con el evento `pause`; al volver, manda `resume`. Sin ese aviso, `ui/js/voice.js` reabría la escucha cuatrocientos milisegundos después de cerrarla: un micro abierto en bucle detrás de la app, que es lo que se nota como «traba». La cara además no rearma con la pantalla apagada, mientras suena música (`musicPlaying()` → `AudioManager.isMusicActive()`, con un margen de 1,5 s para no confundir la música con la propia voz de CORT) ni mientras la ventana 11 está contando caché, y se españa cada vez más si nadie dice «Oye CORT» |
-| `llave.sh` | la **misma llave de firma en todas las Releases**, para que actualizar sea instalar encima y no desinstalar. Orden: secreto `CORT_APK_KEYSTORE_B64` ▸ la caché de Actions (`apps/apk/keystore`) ▸ generar una nueva y dejarla en esa carpeta. Escribe en `firma.txt` cuál usó y deja la huella SHA-256 como anotación del check-run. La llave está en `.gitignore`: el repo es público y con esa llave cualquiera firmaría actualizaciones de su CORT |
+| `llave.sh` | la llave de firma, en este orden: secreto `CORT_APK_KEYSTORE_B64` (+`_PASS`) ▸ la caché de Actions (`apps/apk/keystore`) ▸ generar una nueva y dejarla en esa carpeta. Escribe en `firma.txt` cuál usó y deja la huella SHA-256 como anotación del check-run. **Medido en `v0.2.10-demo`: el segundo camino no sirve entre Releases** — `actions/cache` guarda por *ref* y cada etiqueta es otro ref, así que la huella cambia y hay que desinstalar. Lo que sí es permanente es el secreto; se fabrica con `scripts/llave-nueva.sh`. La llave está en `.gitignore`: el repo es público y con esa llave cualquiera firmaría actualizaciones de su CORT |
+| `scripts/llave-nueva.sh` (en la raíz del repo) | genera en TU PC la llave definitiva con `keytool` (la misma receta que el runner) y deja `cort-llave.b64` + `cort-llave.pass` listos para pegar como los dos secretos del repo. Imprime la huella SHA-256 para cotejarla con el `-firma.txt` |
 
 `assets/ui/` y `res/mipmap-*/` están en `.gitignore`: son generados. La única
 copia buena de la cara es la que sale del `ui/` del commit etiquetado, y el
@@ -62,14 +63,23 @@ no sabe escribirlos. Se corre una vez y los dos archivos se commitean.
    de Java, que es el que puede ser asistente predeterminado y leer tus avisos).
    Los dos están publicados como archivo de la Release, así que el enlace se
    descarga con un clic. Escoja uno: van en el mismo paquete y no conviven.
-2. **Desinstala el que esté puesto, ésta última vez.** Los APK de `v0.2.8-demo`
+2. **Desinstala el que esté puesto, esta vez también.** Los APK de `v0.2.8-demo`
    para atrás salieron cada uno con una llave desechable, y para Android una firma
-   distinta es otra aplicación. Desde `v0.2.9-demo` la llave es siempre la misma
-   (`llave.sh` + la caché del pipeline), así que las actualizaciones siguientes se
-   instalan **encima** y conservan lo concedido: el micrófono, el doble toque, el
-   permiso de los avisos y la dirección del PC. Si un día la caché se pierde, el
-   `-firma.txt` de la Release lo dice: si la huella SHA-256 cambia respecto a la
-   Release anterior, vuelve a hacer falta desinstalar una vez.
+   distinta es otra aplicación. Desde `v0.2.9-demo` `llave.sh` intenta que sea siempre
+   la misma, pero **medido en `v0.2.10-demo`**: la huella cambió respecto a la Release
+   anterior, porque `actions/cache` guarda la llave en el *ref* que la creó y cada
+   etiqueta es un ref distinto — la caché de una Release nunca se ve desde la
+   siguiente. Mientras la llave viva sólo ahí, **cada Release pide desinstalar una
+   vez** y se van el micrófono, el doble toque, el permiso de los avisos y la
+   dirección del PC.
+   El `-firma.txt` de la Release es el juez: misma huella que la anterior = se
+   instala encima; huella distinta = hay que desinstalar.
+   **Para que esto se acabe, una sola vez:** en tu PC, `bash scripts/llave-nueva.sh`
+   (genera `~/cort-llave.b64` y `~/cort-llave.pass`) y pega sus contenidos como dos
+   secretos del repo — Settings ▸ Secrets and variables ▸ Actions →
+   `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`. `llave.sh` los mira **antes**
+   que la caché, así que desde la siguiente Release la llave es siempre la tuya y el
+   `-firma.txt` tendrá la huella que imprime ese script.
 3. Instálalo y concede el micrófono cuando lo pida.
 4. Para que use tu PC por Wi‑Fi: en el portátil, `bash scripts/telefono.sh` y
    anota la dirección que imprime; en el teléfono, botón **CORT · PC** ▸

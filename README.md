@@ -153,7 +153,7 @@ que para eso hace falta un equipo sobrado):
 | `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74,7 MB |
 | `CORT-IA-1.1.4.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | ~1,75 MB (el peso real sale en la Release) |
 | `CORT-IA-1.2.3-asistente.apk` | Android 8+: el escrito desde aquí — asistente predeterminado, doble toque del auricular y lee tus avisos en voz alta | ~370 KB |
-| `CORT-IA-1.1.3-firma.txt` · `CORT-IA-1.2.2-firma.txt` | con qué llave salió cada uno y qué lleva dentro (prueba pública) | texto |
+| `CORT-IA-1.1.4-firma.txt` · `CORT-IA-1.2.3-asistente-firma.txt` | con qué llave salió cada uno y qué lleva dentro (prueba pública) | texto |
 
 > El instalador de escritorio abre el mismo backend de Python: sigue necesitando
 > Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
@@ -213,19 +213,22 @@ Lo que el del teléfono **no** trae, dicho sin adornos:
   sin PC muestran el aviso de «sin PC» en vez de datos, porque piden `/api/*`.
   Lo mismo pasa con «lee mis notas» o «lee mis tareas» a pelo: la cara traduce
   el 501 del teléfono y lo dice en voz alta en lugar de quedarse callada.
-- **Hasta `v0.2.8-demo` había que desinstalar cada vez que se actualizaba el APK**,
-  porque cada run firmaba con una llave desechable distinta, y para Android una
-  firma distinta es otra aplicación. Al desinstalar se iba todo lo concedido a
+- **Actualizar el APK todavía pide desinstalar, y ya se sabe por qué.** Hasta
+  `v0.2.8-demo` cada run firmaba con una llave desechable distinta, y para Android
+  una firma distinta es otra aplicación; al desinstalar se va todo lo concedido a
   mano: el micrófono, el doble toque, el permiso de los avisos y la dirección del
-  PC. Desde esta ronda la llave **es siempre la misma** (`apps/apk/llave.sh`):
-  manda el secreto `CORT_APK_KEYSTORE_B64` si algún día existe; si no, el pipeline
-  reutiliza la llave que guardó en su caché de Actions (`apps/apk/keystore`, paso
-  «Cachear la llave de firma»), y la primera vez que no hay ninguna la genera y la
-  deja ahí. **Ésta es la última actualización que pide desinstalar.** Comprobación
-  pública: la huella SHA-256 del certificado sale en el `-firma.txt` de cada APK y
-  como anotación del check-run; dos Releases seguidas con la misma huella = la
-  llave se mantuvo. La llave nunca se sube al repo (está en `.gitignore`, y el
-  repo es público).
+  PC. `apps/apk/llave.sh` intentó arreglarlo con la caché de Actions y **está
+  medido en `v0.2.10-demo`: no basta** — `actions/cache` guarda cada llave en el
+  *ref* que la creó, una etiqueta nueva es otro ref, y la huella de esta Release no
+  coincide con la de `v0.2.9-demo` (`645fee97…`). Lo que sí es permanente es el
+  secreto del repo, y se fabrica en tu propio PC con `bash scripts/llave-nueva.sh`:
+  deja `cort-llave.b64` y `cort-llave.pass`, que se pegan como
+  `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets and
+  variables ▸ Actions. **A partir de la Release que ya use ese secreto, actualizar
+  vuelve a ser instalar encima.** Comprobación pública mientras tanto: la huella
+  SHA-256 del certificado sale en el `-firma.txt` de cada APK y como anotación del
+  check-run; dos Releases seguidas con la misma huella = la llave se mantuvo. La
+  llave nunca se sube al repo (está en `.gitignore`, y el repo es público).
 - **Tus claves de Groq/Gemini tampoco se pierden ya al actualizar el
   instalador.** `cort_config.json` y `cort_memory.db` (las notas, los recuerdos y
   las pendientes) vivían dentro de `backend/`, o sea dentro de la carpeta que el
