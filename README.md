@@ -152,13 +152,13 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
 eso hace falta un equipo sobrado):
 
-| Archivo | Tamaño (medido en la API de Releases de `v0.2.15-demo`) | Para |
+| Archivo | Tamaño (medido en la API pública de Releases de `v0.2.18-demo`, el 2026-10-21) | Para |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | 79.024.310 bytes (75,4 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
-| `CORT-0.2.0.AppImage` | 107.765.083 bytes (102,8 MB) | Linux genérico (ejecutable directo) |
-| `cort-desktop_0.2.0_amd64.deb` | 74.890.554 bytes (71,4 MB) | Debian / Ubuntu / Mint |
-| `CORT-IA-2.2.0.apk` | el que declara su `-firma.txt` (el `2.1.0` medido en `v0.2.15-demo`: 978.056 bytes) | Android 8+: **el único APK** (`versionCode` 20200). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz**, la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC y agenda) y, desde el 2.2.0, el **cerebro ancho**: cuentas, porcentajes, unidades y fechas sin portátil ni nube (`Razon`), **283 frases** en 33 reglas generadas, y el entorno real del teléfono (batería, RAM, almacenamiento, red, CPU, brillo, luz, proximidad, acelerómetro…) |
-| `CORT-IA-2.2.0-firma.txt` | ~557 bytes | con qué llave salió (huella SHA-256), si se instala encima y el peso medido por el propio run (prueba pública) |
+| `CORT.Setup.0.2.0.exe` | 79.027.560 bytes (75,4 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | 107.769.158 bytes (102,8 MB) | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | 75.025.526 bytes (71,5 MB) | Debian / Ubuntu / Mint |
+| `CORT-IA-2.2.0.apk` | **998.536 bytes** (0,95 MB) comprimidos sobre 2.397.186 sin comprimir, 42 entradas, proporción **0,42** — medidos por `compilar.sh` y confirmados bajando el archivo | Android 8+: **el único APK** (`versionCode` 20200). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz**, la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC y agenda) y, desde el 2.2.0, el **cerebro ancho**: cuentas, porcentajes, unidades y fechas sin portátil ni nube (`Razon`), **283 frases** en 33 reglas generadas, y el entorno real del teléfono (batería, RAM, almacenamiento, red, CPU, brillo, luz, proximidad, acelerómetro…) |
+| `CORT-IA-2.2.0-firma.txt` | 650 bytes | con qué llave salió (huella SHA-256 `faabef468f3a…`), si se instala encima y el peso medido por el propio run (prueba pública) |
 
 > Los tamaños del escritorio son los que declara la API pública de Releases el
 > 2026-10-21, no una estimación.
@@ -174,6 +174,16 @@ eso hace falta un equipo sobrado):
 > comprimidos**, por los **90.943** del `classes.dex` único de este Java puro. Ahí
 > están los ~828 KB de diferencia, y es el precio de mantener el método de siempre
 > (`aapt2` + `javac` + `d8`, sin Gradle, sin AndroidX, sin Kotlin).
+>
+> **Y el `2.2.0` publicado en `v0.2.18-demo` se volvió a bajar y medir**: 998.536
+> bytes sobre 2.397.186 sin comprimir, **42 entradas y proporción 0,42** — las
+> mismas cifras que declara su `-firma.txt`, así que la prueba es pública. Crece
+> **20.480 bytes** (un 2,1 %) respecto al `2.1.0`, y el crecimiento está donde tiene
+> que estar: `classes.dex` pasa de 90.943 a **108.295 bytes comprimidos** (las tres
+> clases nuevas, `Razon` con sus cuentas y fechas, `Aparato` con el entorno y
+> `Sentidos` con el `SensorManager`), y `assets/habilidades.json` de 35 patrones a
+> **33 reglas con 283 frases** (12.100 bytes sin comprimir). Aquí **no se quitó
+> ninguna función**: el archivo más pequeño de los dos sigue siendo este.
 >
 > Lo que **no** falta es contenido. Comparando las listas de entradas de ambos APK:
 > los **11 archivos de `assets/ui/`** del original están los once en el nuestro, y
