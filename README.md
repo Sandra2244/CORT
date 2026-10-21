@@ -151,23 +151,25 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
 eso hace falta un equipo sobrado):
 
-| Archivo | Tamaño (medido en `v0.2.12-demo`) | Para |
+| Archivo | Tamaño (medido en `v0.2.13-demo`) | Para |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | 78.981.454 bytes (75,3 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
-| `CORT-0.2.0.AppImage` | 107.719.962 bytes (102,7 MB) | Linux genérico (ejecutable directo) |
-| `cort-desktop_0.2.0_amd64.deb` | 74.845.560 bytes (71,4 MB) | Debian / Ubuntu / Mint |
-| `CORT-IA-2.0.0.apk` | se mide al publicarse | Android 8+: **el único APK** (`versionCode` 20000). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego** y **auto-actualización por voz**, además de las pantallas Charla / Código / Música |
-| `CORT-IA-2.0.0-firma.txt` | — | con qué llave salió y qué lleva dentro (prueba pública) |
+| `CORT.Setup.0.2.0.exe` | 79.001.375 bytes (75,3 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | 107.740.487 bytes (102,7 MB) | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | 75.011.556 bytes (71,5 MB) | Debian / Ubuntu / Mint |
+| `CORT-IA-2.0.0.apk` | 891.630 bytes (0,85 MB) | Android 8+: **el único APK** (`versionCode` 20000). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego** y **auto-actualización por voz**, además de las pantallas Charla / Código / Música |
+| `CORT-IA-2.0.0-firma.txt` | 557 bytes | con qué llave salió y qué lleva dentro (prueba pública) |
 
 > Los tamaños del escritorio son los que declara la API pública de Releases el
 > 2026-10-21, no una estimación. El APK pesa menos que el viejo de Kotlin
 > (1.756.727 bytes) porque el Java de este repo no arrastra ni Kotlin ni AndroidX:
-> dentro están los **archivos de `ui/`** del commit —comprobado contra el `ui/`
-> con `pantallas.js` de 53.235 bytes y `three.module.js` de 1.272.972 sin
-> comprimir, que es lo que ocupa de verdad—, el `classes.dex` y los quince PNG del
-> anillo. De esos PNG se hizo la prueba que había que hacer: **píxel a píxel son
-> idénticos** a los del `base/CORT-IA-1.1.0.apk` (los bytes difieren sólo porque
-> `aapt2` recompresiona el PNG). Es el logo de siempre, no uno parecido.
+> dentro están los **12 archivos de `ui/`** del commit —comprobado bajando el APK
+> publicado y listando sus entradas: `pantallas.js` de 53.235 bytes con la hoja MV,
+> `hud.js` de 104.639, `hud.css` de 57.596 y `three.module.js` de 1.272.972 sin
+> comprimir, que es lo que ocupa de verdad—, el `classes.dex` (74.020) y los
+> **17 `mipmap-*`** del anillo. De esos PNG se hizo la prueba que había que hacer:
+> **píxel a píxel son idénticos** a los del `base/CORT-IA-1.1.0.apk` (los bytes
+> difieren sólo porque `aapt2` recompresiona el PNG). Es el logo de siempre, no uno
+> parecido.
 
 > Los instaladores de escritorio abren el mismo backend de Python: siguen
 > necesitando Python 3.10+ en el equipo, y la primera vez puede tardar unos
@@ -240,12 +242,15 @@ Qué es verdad y qué no, dicho sin adornos:
   y **ya está puesto** (2026-10-21, medido en Settings ▸ Secrets and variables ▸
   Actions): `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`, fabricados en el
   portátil con `bash scripts/llave-nueva.sh`. `llave.sh` los mira **primero**, así
-  que desde esta Release la llave es siempre la misma: la huella que debe salir en
-  el `-firma.txt` es `faabef46…a31977`. Como la anterior Release firmaba con otra,
-  **la primera instalación de ésta cuesta un desinstalar**; la siguiente ya se pone
-  encima. Comprobación pública siempre: dos Releases seguidas con la misma huella =
-  se instala encima. La llave nunca se sube al repo (está en `.gitignore`, y el repo
-  es público).
+  que desde esta Release la llave es siempre la misma, y **está comprobado en la
+  propia Release**: el `CORT-IA-2.0.0-firma.txt` de `v0.2.13-demo` declara
+  `certificate SHA-256 digest: faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
+  y la línea «actualizar instalando encima: sí». Como la anterior Release firmaba
+  con otra llave, **la primera instalación de ésta cuesta un desinstalar**; la
+  siguiente ya se pone encima. Comprobación pública siempre: la huella SHA-256 del
+  certificado sale en el `-firma.txt` de cada APK y como anotación del check-run;
+  dos Releases seguidas con la misma huella = se instala encima. La llave nunca se
+  sube al repo (está en `.gitignore`, y el repo es público).
 - **Tus claves de Groq/Gemini tampoco se pierden ya al actualizar el
   instalador.** `cort_config.json` y `cort_memory.db` (las notas, los recuerdos y
   las pendientes) vivían dentro de `backend/`, o sea dentro de la carpeta que el

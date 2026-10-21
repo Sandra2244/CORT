@@ -322,10 +322,13 @@ jobs:
             micrófono concedido, el doble toque, el permiso de los avisos, la
             dirección del PC y tus gustos guardados en la app; el cerebro del PC no
             se toca). **A partir de la siguiente, actualizar es instalar encima.**
-            La huella que tiene que salir en `CORT-IA-2.0.0-firma.txt` es
-            `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`; dos
-            Releases seguidas con esa huella = se instala encima sin perder nada. La
-            llave nunca se sube al repo: el repo es público y está en `.gitignore`.
+            La huella de esta llave es
+            `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977` y
+            tiene que aparecer en el `-firma.txt` de todas las Releases; dos
+            Releases seguidas con esa huella = se instala encima sin perder nada
+            (empezó a comprobarse en `v0.2.13-demo`, con su
+            «actualizar instalando encima: sí»). La llave nunca se sube al repo: el
+            repo es público y está en `.gitignore`.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de

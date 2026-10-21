@@ -86,11 +86,13 @@ no sabe escribirlos. Se corre una vez y los dos archivos se commitean.
    Secrets and variables ▸ Actions: `CORT_APK_KEYSTORE_B64` y
    `CORT_APK_KEYSTORE_PASS`, generados en tu portátil con
    `bash scripts/llave-nueva.sh`), así que `llave.sh` firma desde ahora con **tu
-   llave fija** — huella `faabef46…a31977`, que debe aparecer en el
-   `-firma.txt` de esta Release. Como la Release previa firmaba con otra,
-   **la de hoy es la última desinstalación**: desde la siguiente, actualizar el
-   APK es instalar encima. El juez público sigue siendo el `-firma.txt`: misma
-   huella que la anterior = se instala encima.
+   llave fija** — y **está comprobado en la propia Release**: el
+   `CORT-IA-2.0.0-firma.txt` de `v0.2.13-demo` trae
+   `SHA-256 digest: faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
+   y la línea `actualizar instalando encima: sí`. Como la Release previa firmaba
+   con otra llave, **la de hoy es la última desinstalación**: desde la siguiente,
+   actualizar el APK es instalar encima. El juez público sigue siendo el
+   `-firma.txt`: misma huella que la anterior = se instala encima.
 3. Instálalo y concede el micrófono cuando lo pida.
 4. Para que use tu PC por Wi‑Fi: en el portátil, `bash scripts/telefono.sh` y
    anota la dirección que imprime; en el teléfono, botón **CORT · PC** ▸
