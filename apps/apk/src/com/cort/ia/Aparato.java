@@ -158,12 +158,21 @@ public class Aparato {
         }
     }
 
+    /**
+     * Si el sistema está apretado de RAM. OJO: `ActivityManager` **no** tiene un
+     * método `isLowMemory()` (lo dijo `javac` en el run 39685806249 de v0.2.17-demo:
+     * `cannot find symbol`). Lo que existe es el campo `lowMemory` de `MemoryInfo`,
+     * y lo rellena `getMemoryInfo`.
+     */
     @SuppressWarnings("deprecation")
     private boolean ramPobre(Context c) {
         try {
             ActivityManager am = (ActivityManager) c.getApplicationContext()
                 .getSystemService(Context.ACTIVITY_SERVICE);
-            return am != null && am.isLowMemory();
+            if (am == null) return false;
+            ActivityManager.MemoryInfo m = new ActivityManager.MemoryInfo();
+            am.getMemoryInfo(m);
+            return m.lowMemory;
         } catch (Exception tampoco) {
             return false;
         }

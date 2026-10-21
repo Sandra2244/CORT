@@ -141,7 +141,7 @@ public class MainActivity extends Activity {
                 // en el mismo instante: a la segunda pulsación la mano funciona.
                 boolean faltaCamara = false;
                 java.util.List<String> deja = new java.util.ArrayList<>();
-                for (String recurso : peticion.getResource()) {
+                for (String recurso : peticion.getResources()) {
                     boolean esVideo = recurso != null &&
                         recurso.equals(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE);
                     if (esVideo && checkSelfPermission(android.Manifest.permission.CAMERA)

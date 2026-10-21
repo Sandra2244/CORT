@@ -203,13 +203,16 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.1.0**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.1.0.apk`
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.2.0**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.2.0.apk`
             es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
             dentro todo lo que estaba repartido entre los dos. **Se instala encima
-            del 2.0.0 sin desinstalar y sin perder nada** (misma llave, `versionCode`
-            20100 > 20000): mira la huella del `-firma.txt` de las dos Releases y
-            compárala antes de instalar.
+            del 2.0.0 y del 2.1.0 sin desinstalar y sin perder nada** (misma llave,
+            `versionCode` 20200 > 20100): mira la huella del `-firma.txt` de las dos
+            Releases y compárala antes de instalar. **Si vienes de un 1.x**, el
+            primer intento dará error —es la llave distinta, medida en
+            `docs/INSTALAR-APK.md`—: desinstala una vez, instala este, y de aquí en
+            adelante todas las actualizaciones entran encima.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el
@@ -312,15 +315,55 @@ jobs:
             `Mente.java` usa la nube que tú ajustaste desde la propia pantalla (Groq,
             OpenAI, DeepSeek, Mistral, Qwen, Anthropic u Ollama en red local), y la
             **clave no sale nunca del teléfono** —se guarda en el APK y sólo se lee por
-            voz un `sí/no` de «puesta o no puesta»—. Si no hay nube, hablan los **35
-            patrones** de `assets/habilidades.json`, y esos sí **ejecutan** la orden que
-            reconocen (subir el volumen, abrir una app) en vez de quedarse en la
-            promesa. **Memoria** guarda en SQLite del teléfono lo que aprende y
+            voz un `sí/no` de «puesta o no puesta»—. Si no hay nube, hablan las **33
+            reglas y 283 frases** de `assets/habilidades.json`, y esas sí **ejecutan**
+            la orden que reconocen (subir el volumen, abrir una app) en vez de quedarse
+            en la promesa. **Memoria** guarda en SQLite del teléfono lo que aprende y
             **«sincroniza con el PC»** lo cuadra con `~/.cort` por la puerta
             `/api/memoria`; y el botón **📤 enviar** de las hojas Música/MV pasa un
             archivo tuyo a otra app (WhatsApp, correo, Drive) por el proveedor de
             archivos del propio APK, que es la única forma legal de enseñar un archivo
             en Android 8+.
+
+            **El cerebro se ensanchó, y eso es lo que pide la dueña: «que haga de todo».**
+            `Mente` piensa en tres escalones, del más barato al más caro: primero la
+            tabla de frases (acción conocida), después **`Razon`** y sólo luego la nube.
+            `Razon` es Java puro sin portátil ni red: sumas y productos, porcentajes
+            («cuánto es el 15 % de 240»), conversiones (km↔mi, kg↔lb, °C↔°F), y fechas y
+            horas reales del teléfono («qué día es hoy», «cuánto falta para el viernes»,
+            «que horas son»). Las dos frases que antes respondían con una excusa —«no
+            tengo barra de estado» a *qué hora es*— están **borradas de las dos tablas**,
+            y `scripts/prueba-costura.py` falla si vuelven. La tabla pasó de 35 a **33
+            reglas con 283 frases** y ya no se escribe a mano dos veces: sale de
+            `scripts/habilidades.py`, que vierta el JSON del APK y el cuerpo de
+            `Cerebro.tablaDelCodigo()` del mismo listado. Y se comprueba **en el
+            portátil**, que hasta ahora era imposible: `scripts/prueba-mente.sh` pone
+            gemelos de papel a las cinco clases de Android que atan esas cuatro clases,
+            las compila con el JDK de a pie y pasa las tres suites (43 cuentas de
+            `Razon`, 45 de la ruta de `Mente`, y las 283 frases una por una contra las
+            DOS tablas para ver los robos por orden). El paso
+            «Probar el cerebro en el JDK» va **delante** de compilar el APK: si la
+            lógica se rompe, el run para, porque un APK que compila y contesta tonterías
+            es peor que uno que no compila.
+
+            **El teléfono enseña lo que tiene dentro.** La hoja **Equipo** ya no deja los
+            huecos en `—` por decoración: `Aparato.java` lee batería (nivel, temperatura,
+            tecnología y si está enchufado), RAM libre y ocupada, almacenamiento, red
+            (wifi / celular / ethernet), CPU, brillo y resolución, y `Sentidos.java`
+            engancha `SensorManager` y trae luz, proximidad, acelerómetro, giroscopio,
+            brújula, presión, temperatura y humedad con su nombre real de fabricante.
+            Cada clave que la cara pinta está cruzada con la que Java emite
+            (`scripts/prueba-costura.py`, sector 10): 16 de la hoja Equipo y 6 de cada
+            fila de sensores. Y el **«sale error al instalar» tiene por fin causa
+            medida**: con `keytool -printcert -jarfile` sobre los APK publicados, el
+            2.0.0 y el 2.1.0 salen con la huella `fa:ab:ef:46:8f:3a…` y el 1.1.4 con
+            `eb:d6:25:04:41:bc…`. Cambiar de llave es, para Android, otra aplicación:
+            `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Es un coste de **una sola vez** al
+            saltar de 1.x a 2.x; desde el 2.0.0 la llave no se mueve.
+            `scripts/instala-apk.sh` baja la Release, comprueba que el peso sea el
+            anunciado, lee la firma y traduce el código de Android a español, y
+            `docs/INSTALAR-APK.md` dice qué tres cosas hay que tocar en el teléfono y
+            qué borra desinstalar.
 
             **Ordena tus archivos sin perder ni uno.** En **01 · Archivos** hay botón
             **⤢ ordena** y se dice por voz: «ordena mis archivos», «ordena mis
@@ -392,31 +435,33 @@ jobs:
             (`CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`) ya están puestos en
             Settings ▸ Secrets and variables ▸ Actions, y la Release anterior
             (`v0.2.13-demo`, con `CORT-IA-2.0.0-firma.txt`) **ya firmó con esa llave
-            fija**. Así que el `2.1.0` de ahora es el primero que se puede instalar
-            **encima** del `2.0.0`: `versionCode` 20100 por encima de 20000, mismo
-            paquete `com.cort.ia`, misma firma —y con ello se quedan el micrófono
-            concedido, el doble toque, el permiso de los avisos, la dirección del PC y
-            los gustos que CORT anotó en el teléfono—. El juez público sigue siendo el
-            `-firma.txt`: `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
-            tiene que aparecer en las dos Releases; si en la tuya no está, desinstala
-            una vez y ya no volverá a tocar. La llave nunca se sube al repo: el repo es
-            público y está en `.gitignore`.
+            fija**. Así que el `2.2.0` se instala **encima** del `2.0.0` y del `2.1.0`:
+            `versionCode` 20200 por encima de 20100, mismo paquete `com.cort.ia`, misma
+            firma —y con ello se quedan el micrófono concedido, el doble toque, el
+            permiso de los avisos, la dirección del PC y los gustos que CORT anotó en el
+            teléfono—. El juez público sigue siendo el `-firma.txt`:
+            `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977` tiene que
+            aparecer en las dos Releases; si en la tuya no está, desinstala una vez y ya
+            no volverá a tocar. La llave nunca se sube al repo: el repo es público y
+            está en `.gitignore`.
 
             **El tamaño, sin adornos y medido.** Se bajaron los dos APK y se contaron
             sus entradas. El `1.1.0` original: 1.815.389 B de archivo sobre
-            4.538.254 B sin comprimir, 45 entradas. Este `2.1.0`: 978.056 B sobre
-            2.349.202 B, 42 entradas. La proporción es la misma —**0,40 frente a
-            0,42**, o sea que no estaba apretado de más— y la diferencia de peso está
-            en el código que el original arrastraba: sus cuatro `classes*.dex` y los
-            `kotlin/*.kotlin_builtins` suman 919.207 B comprimidos, frente a los
-            90.943 B de un `classes.dex` de Java puro (aquí no hay Kotlin ni AndroidX
-            ni Gradle: `aapt2` + `javac` + `d8`, el método de siempre). Lo que la cara
-            tiene dentro **no faltó ni falta**: los 11 archivos de `assets/ui/` del
+            4.538.254 B sin comprimir, 45 entradas. El `2.1.0` que se publicó en
+            `v0.2.15-demo`: 978.056 B sobre 2.349.202 B, 42 entradas. La proporción es
+            la misma —**0,40 frente a 0,42**, o sea que no estaba apretado de más— y la
+            diferencia de peso está en el código que el original arrastraba: sus cuatro
+            `classes*.dex` y los `kotlin/*.kotlin_builtins` suman 919.207 B comprimidos,
+            frente a los 90.943 B de un `classes.dex` de Java puro (aquí no hay Kotlin ni
+            AndroidX ni Gradle: `aapt2` + `javac` + `d8`, el método de siempre). Lo que la
+            cara tiene dentro **no faltó ni falta**: los 11 archivos de `assets/ui/` del
             `1.1.0` están los once, más `habilidades.json`, `pantallas.js` y
             `telefono.js` —1.622.292 B de interfaz sin comprimir por los 1.408.297 B
-            del original: 214 KB más de cara dentro de un archivo más pequeño—. El
-            peso exacto de esta Release lo declara su propio `-firma.txt`, medido en
-            Actions por `compilar.sh`, no estimado aquí.
+            del original: 214 KB más de cara dentro de un archivo más pequeño—. Este
+            `2.2.0` mete además las dos clases nuevas del entorno, `Aparato.java` y
+            `Sentidos.java`, y su tabla de frases casi triplicada; el peso exacto que
+            salió lo declara su propio `-firma.txt`, medido en Actions por `compilar.sh`
+            y bajado por `scripts/instala-apk.sh`, no estimado aquí.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de

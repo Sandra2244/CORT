@@ -557,6 +557,15 @@ PROHIBIDOS = [
     ("isMusicMute",
      "es `@SystemApi` y `javac` la rechaza aunque el teléfono la tenga. Silencio "
      "medido con API pública: `nivel(audio) == 0`"),
+    # Las dos últimas, medida por `javac` en el run rojo de `v0.2.17-demo`
+    # (39685806249) — el primer run que llevaba ya `Aparato` y `Sentidos` dentro.
+    (".isLowMemory(",
+     "`ActivityManager` no tiene ese método; lo público es el campo `lowMemory` de "
+     "`ActivityManager.MemoryInfo`, que rellena `getMemoryInfo(m)`"),
+    (".getResource()",
+     "en `android.webkit.PermissionRequest` el método es `getResources()` (plural, "
+     "devuelve `String[]`); el singular se lo inventó quien escribió la línea y "
+     "`javac` lo paró"),
 ]
 cazas = []
 java_limpio = {}
