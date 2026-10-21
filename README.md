@@ -152,36 +152,43 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
 eso hace falta un equipo sobrado):
 
-| Archivo | Tamaño (medido en `v0.2.13-demo`) | Para |
+| Archivo | Tamaño (medido en la API de Releases de `v0.2.15-demo`) | Para |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | 79.001.375 bytes (75,3 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
-| `CORT-0.2.0.AppImage` | 107.740.487 bytes (102,7 MB) | Linux genérico (ejecutable directo) |
-| `cort-desktop_0.2.0_amd64.deb` | 75.011.556 bytes (71,5 MB) | Debian / Ubuntu / Mint |
-| `CORT-IA-2.1.0.apk` | lo mide el run de Actions (el `2.0.0` medido: 891.630 bytes) | Android 8+: **el único APK** (`versionCode` 20100). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz** y la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC y agenda), además de las pantallas Charla / Código / Música / MV / Equipo |
-| `CORT-IA-2.1.0-firma.txt` | lo mide el run | con qué llave salió, cuánto pesa y qué lleva dentro (prueba pública) |
+| `CORT.Setup.0.2.0.exe` | 79.024.310 bytes (75,4 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | 107.765.083 bytes (102,8 MB) | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | 74.890.554 bytes (71,4 MB) | Debian / Ubuntu / Mint |
+| `CORT-IA-2.1.0.apk` | **978.056 bytes** (0,93 MB), medidos en `v0.2.15-demo` | Android 8+: **el único APK** (`versionCode` 20100). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz** y la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC y agenda), además de las pantallas Charla / Código / Música / MV / Equipo |
+| `CORT-IA-2.1.0-firma.txt` | 557 bytes | con qué llave salió (huella SHA-256), si se instala encima y el peso medido por el propio run (prueba pública) |
 
 > Los tamaños del escritorio son los que declara la API pública de Releases el
-> 2026-10-21, no una estimación. El APK pesa menos que el viejo de Kotlin
-> (1.756.727 bytes) porque el Java de este repo no arrastra ni Kotlin ni AndroidX:
-> dentro están los **12 archivos de `ui/`** del commit —comprobado bajando el APK
-> publicado y listando sus entradas: `pantallas.js` de 53.235 bytes con la hoja MV,
-> `hud.js` de 104.639, `hud.css` de 57.596 y `three.module.js` de 1.272.972 sin
-> comprimir, que es lo que ocupa de verdad—, el `classes.dex` (74.020) y los
-> **17 `mipmap-*`** del anillo. De esos PNG se hizo la prueba que había que hacer:
-> **píxel a píxel son idénticos** a los del `base/CORT-IA-1.1.0.apk` (los bytes
-> difieren sólo porque `aapt2` recompresiona el PNG). Es el logo de siempre, no uno
-> parecido.
+> 2026-10-21, no una estimación.
 >
-> **Y sobre «lo comprimiste demasiado»: se midió la proporción, no el peso.** El
-> `1.1.0` original ocupa 1.815.389 bytes comprimidos sobre 4.538.254 sin comprimir
-> (proporción **0,40**) y el `2.0.0` propio, 891.630 sobre 2.129.850 (**0,42**).
-> Apretado está igual —incluso un pelo menos—, así que la diferencia de peso **no
-> era compresión sino contenido que faltaba**. Por eso la 2.1 no se dedicó a
-> empaquetar más fuerte (el método de compilación es el mismo de siempre, y `d8` y
-> `aapt2` no tienen perilla de «más comprimido») sino a meter lo que faltaba: nueve
-> clases Java, los `assets/habilidades.json` con sus 35 patrones, las cuatro reglas
-> de `res/xml` y la hoja Equipo. El tamaño del `2.1.0` lo vuelve a medir el run de
-> Actions y lo publica el propio `-firma.txt`; aquí no se estima ninguno.
+> **Y sobre «el APK no pesa lo que debería y lo comprimiste demasiado»: se bajaron
+> los dos APK y se midieron entrada por entrada.** El `CORT-IA-1.1.0.apk` original
+> ocupa 1.815.389 bytes de archivo sobre 4.538.254 de entradas sin comprimir
+> (proporción **0,40**, 45 entradas); el `CORT-IA-2.1.0.apk` publicado en
+> `v0.2.15-demo`, 978.056 sobre 2.349.202 (**0,42**, 42 entradas). Apretado está
+> igual —incluso un pelo menos apretado—, así que la diferencia **no es compresión**.
+> Es que el `1.1.0` estaba escrito en Kotlin y arrastraba su tiempo de ejecución:
+> sus cuatro `classes*.dex` más los `kotlin/*.kotlin_builtins` suman **919.207 bytes
+> comprimidos**, por los **90.943** del `classes.dex` único de este Java puro. Ahí
+> están los ~828 KB de diferencia, y es el precio de mantener el método de siempre
+> (`aapt2` + `javac` + `d8`, sin Gradle, sin AndroidX, sin Kotlin).
+>
+> Lo que **no** falta es contenido. Comparando las listas de entradas de ambos APK:
+> los **11 archivos de `assets/ui/`** del original están los once en el nuestro, y
+> además `assets/habilidades.json` (35 patrones), `pantallas.js` y `telefono.js`. La
+> cara sin comprimir pesa **1.622.292 bytes** frente a los 1.408.297 del `1.1.0`:
+> **214 KB más de interfaz dentro del mismo archivo más pequeño**. Las tres salidas
+> de `res/xml` del original (`backup_rules`, `data_extraction_rules`,
+> `network_security_config`) siguen estando, renombradas en español
+> (`respaldo`, `extraccion`, `seguridad_red`) y con dos nuevas (`archivos` para el
+> `content://` de «envíame ese archivo» y `asistente` para el rol). Los PNG del
+> anillo, **píxel a píxel idénticos** a los del `1.1.0` (difieren sólo porque
+> `aapt2` los recompresiona): es el logo de siempre, no uno parecido.
+>
+> El peso del APK lo publica ahora cada run dentro de su `-firma.txt` (`compilar.sh`
+> lo mide con `stat` y `zipfile`); en este README no se estima ninguno.
 
 > Los instaladores de escritorio abren el mismo backend de Python: siguen
 > necesitando Python 3.10+ en el equipo, y la primera vez puede tardar unos

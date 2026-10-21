@@ -219,10 +219,33 @@ echo "firmando con $LLAVE_ORIGEN — actualizar instalando encima: $LLAVE_ACTUAL
     --out build/CORT.apk build/apk/alineado.apk
 "$BT/apksigner" verify build/CORT.apk
 
+# -- Cuánto pesa lo que acaba de salir ----------------------------------------
+# La pregunta de la dueña fue «el APK no pesa lo que debería y lo comprimiste
+# demasiado». El peso, por tanto, se mide AQUÍ y se escribe en `firma.txt` al lado
+# del APK: es lo único que se puede comprobar después sin tener que fiarse de un
+# número escrito a mano en el README. Dos cifras: la del archivo tal cual se
+# descarga y la suma de sus entradas sin comprimir; de esas dos sale la proporción
+# real de compresión, que es lo que desmonta (o confirma) la queja.
+peso_apk() {
+    stat -c '%s' "$1" 2>/dev/null || wc -c < "$1" | tr -d ' '
+}
+crudo_apk() {
+    python3 - "$1" <<'PY' 2>/dev/null || unzip -l "$1" | awk 'END {print $1 + 0}'
+import sys, zipfile
+print(sum(i.file_size for i in zipfile.ZipFile(sys.argv[1]).infolist()))
+PY
+}
+PESO_APK="$(peso_apk build/CORT.apk)"
+CRUDO_APK="$(crudo_apk build/CORT.apk)"
+ENTRADAS="$(python3 -c "import zipfile; print(len(zipfile.ZipFile('build/CORT.apk').infolist()))" 2>/dev/null || unzip -l build/CORT.apk | awk 'END{print $2}')"
+PROP="$(python3 -c "p=$PESO_APK; c=$CRUDO_APK; print(f'{p / c:.2f}' if c else '?')" 2>/dev/null || echo '?')"
+echo "peso medido: $PESO_APK bytes en la Release / $CRUDO_APK sin comprimir / $ENTRADAS entradas (proporción $PROP)"
+
 # -- Con qué llave salió firmado (se sube a la Release como prueba pública) --
 {
     echo "APK de CORT $VERSION (versionCode $CODE), paquete com.cort.ia"
     echo "cara embebida: ui/ de este commit ($(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
+    echo "peso: $PESO_APK bytes comprimido / $CRUDO_APK bytes sin comprimir / $ENTRADAS entradas / proporción $PROP"
     echo "llave: $LLAVE_ORIGEN"
     echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
     "$BT/apksigner" verify --print-certs build/CORT.apk

@@ -381,14 +381,21 @@ jobs:
             una vez y ya no volverá a tocar. La llave nunca se sube al repo: el repo es
             público y está en `.gitignore`.
 
-            **El tamaño, sin adornos.** Se comparó el `1.1.0` original (1.815.389 B
-            comprimidos / 4.538.254 B sin comprimir) con el `2.0.0` propio (891.630 /
-            2.129.850). La proporción sale casi igual —**0,40 frente a 0,42**, o sea
-            que no estaba apretado de más—: la diferencia era **contenido que faltaba**,
-            no compresión. Esta ronda lo mete: nueve clases de Java nuevas, los
-            `assets/habilidades.json`, las cuatro reglas de `res/xml` y las cinco
-            hojas. El peso exacto del `2.1.0` lo publica el propio `-firma.txt` de esta
-            Release, medido en Actions, no estimado aquí.
+            **El tamaño, sin adornos y medido.** Se bajaron los dos APK y se contaron
+            sus entradas. El `1.1.0` original: 1.815.389 B de archivo sobre
+            4.538.254 B sin comprimir, 45 entradas. Este `2.1.0`: 978.056 B sobre
+            2.349.202 B, 42 entradas. La proporción es la misma —**0,40 frente a
+            0,42**, o sea que no estaba apretado de más— y la diferencia de peso está
+            en el código que el original arrastraba: sus cuatro `classes*.dex` y los
+            `kotlin/*.kotlin_builtins` suman 919.207 B comprimidos, frente a los
+            90.943 B de un `classes.dex` de Java puro (aquí no hay Kotlin ni AndroidX
+            ni Gradle: `aapt2` + `javac` + `d8`, el método de siempre). Lo que la cara
+            tiene dentro **no faltó ni falta**: los 11 archivos de `assets/ui/` del
+            `1.1.0` están los once, más `habilidades.json`, `pantallas.js` y
+            `telefono.js` —1.622.292 B de interfaz sin comprimir por los 1.408.297 B
+            del original: 214 KB más de cara dentro de un archivo más pequeño—. El
+            peso exacto de esta Release lo declara su propio `-firma.txt`, medido en
+            Actions por `compilar.sh`, no estimado aquí.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de
