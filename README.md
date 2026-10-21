@@ -147,13 +147,23 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
 eso hace falta un equipo sobrado):
 
-| Archivo | Para |
-|---|---|
-| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
-| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint |
-| `CORT-IA-1.3.0.apk` | Android 8+: **el único APK**. El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, y las pantallas Charla / Código / Música |
-| `CORT-IA-1.3.0-firma.txt` | con qué llave salió y qué lleva dentro (prueba pública) |
+| Archivo | Tamaño (medido en `v0.2.12-demo`) | Para |
+|---|---|---|
+| `CORT.Setup.0.2.0.exe` | 78.981.454 bytes (75,3 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | 107.719.962 bytes (102,7 MB) | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | 74.845.560 bytes (71,4 MB) | Debian / Ubuntu / Mint |
+| `CORT-IA-1.3.0.apk` | 879.342 bytes (0,84 MB) | Android 8+: **el único APK**. El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, y las pantallas Charla / Código / Música |
+| `CORT-IA-1.3.0-firma.txt` | 659 bytes | con qué llave salió y qué lleva dentro (prueba pública) |
+
+> Los tamaños son los que declara la API pública de Releases el 2026-10-21, no
+> una estimación. El APK pesa menos que el viejo de Kotlin (1.756.727 bytes)
+> porque el Java de este repo no arrastra ni Kotlin ni AndroidX: dentro están los
+> **12 archivos de `ui/`** —comprobado contra el `ui/` del commit, con
+> `pantallas.js` de 33.968 bytes y `three.module.js` de 1.272.972 sin comprimir,
+> que es lo que ocupa de verdad—, el `classes.dex` (72.840) y los quince PNG del
+> anillo. De esos PNG se hizo la prueba que había que hacer: **píxel a píxel son
+> idénticos** a los del `base/CORT-IA-1.1.0.apk` (los bytes difieren sólo porque
+> `aapt2` recompresiona el PNG). Es el logo de siempre, no uno parecido.
 
 > Los instaladores de escritorio abren el mismo backend de Python: siguen
 > necesitando Python 3.10+ en el equipo, y la primera vez puede tardar unos
