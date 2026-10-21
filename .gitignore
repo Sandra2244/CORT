@@ -7,3 +7,6 @@ backend/cort_memory.db
 node_modules/
 dist/
 desktop/out/
+
+# la llave de firma del APK: la genera el pipeline en su caché y NUNCA va al repo (es público)
+apps/apk/keystore/

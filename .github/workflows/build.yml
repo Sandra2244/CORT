@@ -70,22 +70,41 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.2.1"       # la versión del APK experimental de Java
-      TELEFONO_VERSION: "1.1.2"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
+      APK_VERSION: "1.2.2"       # la versión del APK experimental de Java
+      TELEFONO_VERSION: "1.1.3"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
     steps:
       - uses: actions/checkout@v4
+      # -- La misma llave de firma en todas las Releases ----------------------
+      # Sin esto, cada run firmaba con una llave nueva, y para Android una firma
+      # distinta es OTRA aplicación: actualizar == desinstalar, y al desinstalar
+      # se van el permiso del micrófono, el de los avisos y la dirección del PC
+      # escrita a mano. La caché guarda `apps/apk/keystore/` (keystore + su
+      # contraseña) y la devuelve en el siguiente run. `apps/apk/llave.sh` prefiere
+      # el secreto `CORT_APK_KEYSTORE_B64` si algún día existe: la caché es la vía
+      # que no le pide a la dueña configurar nada.
+      # Comprobación pública de que funciona: la huella SHA-256 del certificado
+      # sale en el `-firma.txt` de cada APK y como anotación del check-run. Si dos
+      # Releases seguidas tienen la misma huella, la llave se mantuvo.
+      - name: Cachear la llave de firma
+        uses: actions/cache@v4
+        with:
+          path: apps/apk/keystore
+          key: cort-apk-keystore-v1
+          restore-keys: cort-apk-keystore-v1
       - name: Compilar el APK de Java (aapt2 + javac + d8, sin Gradle)
         id: java
         # Este APK es el **experimental**: el holograma embebido con asistente del
-        # sistema y doble toque de auriculares. No va a la Release (va a artefactos
-        # del run), así que si un día se rompe no debe costarle a la dueña la
-        # actualización del teléfono, que es la otra pata del trabajo.
+        # sistema, doble toque de auriculares y lectura de avisos. Sale en la
+        # Release (paso `instalador-asistente`), pero con `continue-on-error`: si
+        # un día se rompe el Java, la dueña sigue recibiendo la actualización de su
+        # APK de siempre, que es la otra pata del trabajo.
         continue-on-error: true
         shell: bash
         env:
-          # Si la dueña guarda un keystore en los secretos se firma con esa llave
-          # y el APK se actualiza encima; si no, el script genera uno desechable y
-          # lo dice en `firma.txt`, que viaja al lado del APK.
+          # La llave de firma: secreto del repo si existe; si no, la caché de
+          # arriba (`apps/apk/keystore`). `apps/apk/llave.sh` decide en ese orden y
+          # `firma.txt` cuenta cuál se usó, que es lo que ella puede leer sin
+          # sesión de GitHub.
           CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
           CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
         run: |
@@ -192,13 +211,13 @@ jobs:
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
             y **dos** APK para el teléfono.
 
-            `CORT-IA-1.1.2.apk` es **el CORT de siempre con la interfaz nueva
+            `CORT-IA-1.1.3.apk` es **el CORT de siempre con la interfaz nueva
             dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin, su
             icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
             le cambia sólo `assets/ui/` por la del commit — once ventanas, con
             10 · Modelos y 11 · Optimizar —, realinea y refirma.
 
-            `CORT-IA-1.2.1-asistente.apk` es el APK escrito en Java desde este repo
+            `CORT-IA-1.2.2-asistente.apk` es el APK escrito en Java desde este repo
             (`apps/apk/compilar.sh`, sin Gradle). Es el que puede ponerse como
             **asistente predeterminado** (Ajustes ▸ Aplicación de asistencia
             predeterminada ▸ CORT), el que obedece al **doble toque del auricular**
@@ -206,17 +225,31 @@ jobs:
             Telegram, Signal— desde la barra de notificaciones, con un oído que
             guarda doce líneas en RAM y nunca escribe disco.
 
-            En esta ronda CORT además **te lee**: `lee mis notas`, `lee mis tareas`,
+            **Te lo lee**: `lee mis notas`, `lee mis tareas`,
             `lee el documento <nombre>` y `lee mis avisos`. Las notas y las
             pendientes («tengo que …», y `listo 1` para marcarlas hechas) viven en el
             backend del PC, así que en el teléfono hacen falta conectados por Wi-Fi
             con `bash scripts/telefono.sh`; sin PC la cara lo avisa en voz alta.
 
+            **Ya no se pierde tu clave al actualizar.** `cort_config.json` (las
+            claves de Groq/Gemini que se pegan en 07 · Perfil) y `cort_memory.db`
+            (notas, pendientes y recuerdos) estaban guardados dentro de la carpeta
+            del programa, que es justo la que sustituye un instalador nuevo. Ahora
+            viven en tu carpeta personal — `~/.cort` en Linux/macOS,
+            `%APPDATA%\CORT` en Windows, o donde diga `CORT_HOME` — y la primera
+            arrancada copia ahí lo que hubiera antes. La ruta se ve en 07 · Perfil.
+
+            **Y el APK se puede actualizar sin desinstalar.** La firma es siempre la
+            misma llave (`apps/apk/llave.sh`: secreto del repo si existe, si no la
+            caché del pipeline), así que los permisos concedidos —micrófono, doble
+            toque, acceso a las notificaciones— y la dirección del PC se quedan.
+            Esta Release **aún pide desinstalar una vez**, porque las anteriores
+            firmaban cada una con una llave distinta; a partir de la siguiente ya
+            no. Cada APK lleva su `-firma.txt` con la huella del certificado: si
+            dos Releases seguidas tienen la misma huella, la llave se mantuvo.
+
             Los dos APK comparten paquete (`com.cort.ia`): en el teléfono se instala
-            **uno u otro**, no los dos a la vez. La firma del pipeline es desechable
-            mientras el repo no tenga el secreto `CORT_APK_KEYSTORE_B64`, así que
-            **la primera vez hay que desinstalar** el que esté puesto. Cada APK lleva
-            al lado su `-firma.txt` con la huella del certificado.
+            **uno u otro**, no los dos a la vez.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Instrucciones completas, incluido el modo teléfono por Wi-Fi y el permiso

@@ -20,14 +20,15 @@
 # keepAwake`) tampoco cambió, así que el Kotlin de dentro sigue entendiendo el
 # JavaScript nuevo.
 #
-# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.2)
+# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.3)
 # Salida: apps/apk/build/CORT-IA-<versión>.apk  +  build/CORT-IA-<versión>-firma.txt
 #
-# La llave: igual que `compilar.sh`. Con el secreto `CORT_APK_KEYSTORE_B64` del
-# repo se firma con esa llave y el APK se actualiza encima; sin secreto se
-# genera una desechable, y entonces **hay que desinstalar el anterior** (para
-# Android una firma distinta es otra aplicación). Se dice en `firma.txt`, que
-# viaja al lado del APK en la Release.
+# La llave: la de `apps/apk/llave.sh` — secreto `CORT_APK_KEYSTORE_B64` si existe,
+# si no la caché de Actions (`apps/apk/keystore`), si no una nueva que se guarda
+# allí. Con la misma llave en todas las Releases el APK se actualiza instalando
+# encima; con llaves distintas hay que desinstalar el anterior (y se pierden los
+# permisos concedidos). Cada run lo cuenta en `firma.txt`, que viaja al lado del
+# APK en la Release, porque los logs de Actions no son públicos.
 set -euo pipefail
 # El script vive en `apps/apk/` y las rutas de abajo (`apps/apk/base/…`, `ui`)
 # están escritas **desde la raíz del repo**, así que se sube dos niveles: con uno
@@ -35,8 +36,13 @@ set -euo pipefail
 # cayó el run 39504821879, medido por annotation.
 cd "$(dirname "$0")/../.."
 
-VERSION="${1:-1.1.2}"
+VERSION="${1:-1.1.3}"
 RAIZ="$(pwd)"
+# La llave de firma la comparte con `compilar.sh`: la misma en todas las Releases
+# para que actualizar no obligue a desinstalar (y con eso no se borren el permiso
+# del micrófono, el de los avisos ni la dirección del PC). Se fuentea aquí, desde
+# la raíz del repo y antes del `cd` al directorio temporal.
+source apps/apk/llave.sh
 BASE="$RAIZ/apps/apk/base/CORT-IA-1.1.0.apk"
 # `SALIDA` va absoluta **a propósito**: el trabajo se hace dentro de un
 # `mktemp -d` y, con ruta relativa, `apksigner --out` escribiría dentro del
@@ -77,21 +83,15 @@ zip -q -X -r CORT.apk assets/ui
 # 2 · Alinear (obligatorio antes de firmar con v2/v3) y firmar.
 zipalign -f 4 CORT.apk alineado.apk
 
-COCO="$TRABAJO/cort.keystore"
-if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
-    echo "$CORT_APK_KEYSTORE_B64" | base64 -d > "$COCO"
-    PASS="${CORT_APK_KEYSTORE_PASS:?con CORT_APK_KEYSTORE_B64 hace falta CORT_APK_KEYSTORE_PASS}"
-    ORIGEN="la llave del secreto CORT_APK_KEYSTORE_B64"
-    ACTUALIZA="sí: se puede instalar encima del anterior"
-else
-    keytool -genkeypair -keystore "$COCO" -storepass cort-tmp -alias CORT \
-            -keyalg RSA -keysize 2048 -validity 30 \
-            -dname "CN=CORT, OU=prototipo local, O=local" >/dev/null
-    PASS="cort-tmp"
-    ORIGEN="una llave desechable de este run"
-    ACTUALIZA="no: hay que desinstalar la versión anterior"
-fi
-apksigner sign --ks "$COCO" --ks-pass pass:"$PASS" \
+# La llave NO es desechable: `llave.sh` usa el secreto del repo si existe, si no
+# la caché de Actions (`apps/apk/keystore`), y si no, genera una y la deja ahí
+# para el siguiente run. Antes se creaba una cada vez dentro de `$TRABAJO`, y por
+# eso tocar un APK publicado obligaba a desinstalar el anterior.
+preparar_llave || { echo "no se pudo preparar la llave de firma"; exit 1; }
+ORIGEN="$LLAVE_ORIGEN"; ACTUALIZA="$LLAVE_ACTUALIZA"
+# Sin `--key-pass`: `apksigner` usa la del almacén, y así funciona con un keystore
+# cuyo alias tenga otra contraseña (la que ella ponga en el secreto del repo).
+apksigner sign --ks "$LLAVE" --ks-pass pass:"$LLAVE_PASS" \
     --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
     --out "$SALIDA" alineado.apk
 apksigner verify --print-certs "$SALIDA" >/dev/null
@@ -105,6 +105,7 @@ cd "$RAIZ"
     echo "tamaño:  $(stat -c %s "$SALIDA") bytes"
     apksigner verify --print-certs "$SALIDA"
 } > "apps/apk/build/CORT-IA-${VERSION}-firma.txt"
+anotar_llave "$SALIDA"
 
 echo "== rempaquetado: $(ls -l "$SALIDA" | awk '{print $5" bytes"}')  (base $(stat -c %s "$BASE") bytes)"
 python3 - "$SALIDA" <<'PY'

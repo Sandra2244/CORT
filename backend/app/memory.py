@@ -1,4 +1,10 @@
-"""Memoria persistente de CORT — SQLite, funciona igual en Linux y Windows."""
+"""Memoria persistente de CORT — SQLite, funciona igual en Linux y Windows.
+
+La base vive en la carpeta personal (`~/.cort/cort_memory.db`), no dentro del
+programa: así, cuando la dueña actualiza el instalador, sus notas y sus
+pendientes siguen ahí. `rutas.py` se encarga de encontrar la base vieja de
+`backend/` y copiarla la primera vez.
+"""
 from __future__ import annotations
 
 import json
@@ -6,7 +12,9 @@ import sqlite3
 import time
 from pathlib import Path
 
-DB = Path(__file__).resolve().parent.parent / "cort_memory.db"
+import rutas
+
+DB = rutas.archivo("cort_memory.db")
 
 
 def _conn() -> sqlite3.Connection:

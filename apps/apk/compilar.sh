@@ -9,15 +9,19 @@
 #        (por defecto la que lleve escrito APK_VERSION arriba)
 # Salida: apps/apk/build/CORT.apk y build/firma.txt
 #
-# La firma: si el repo tiene el secreto `CORT_APK_KEYSTORE_B64` (el keystore en
-# base64) se firma con esa llave y el APK se **actualiza instalando encima**. Sin
-# secreto el runner genera una llave desechable, y entonces hay que desinstalar
-# el anterior: cada run lo cuenta en `firma.txt`, que viaja al lado del APK,
-# porque los registros de Actions no son públicos.
+# La firma: la resuelve `apps/apk/llave.sh` en este orden — secreto
+# `CORT_APK_KEYSTORE_B64` del repo, la llave guardada en la caché de Actions
+# (`apps/apk/keystore`, paso `Cachear la llave de firma` de `build.yml`), o una
+# nueva que se deja en esa carpeta para que el siguiente run la reencuentre.
+# Con la misma llave en todas las Releases el APK **se actualiza instalando
+# encima**; con llaves distintas hay que desinstalar, y al desinstalar se van los
+# permisos concedidos y la dirección del PC. Cada run escribe cuál usó en
+# `firma.txt`, que viaja al lado del APK, porque los registros de Actions no son
+# públicos.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APK_VERSION="${APK_VERSION:-1.2.1}"
+APK_VERSION="${APK_VERSION:-1.2.2}"
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"
@@ -114,26 +118,16 @@ javac --release 11 -encoding UTF-8 -classpath "$PLAT/android.jar" \
 # -- Alinear y firmar -------------------------------------------------------
 "$BT/zipalign" -f 4 build/apk/sin-alinear.apk build/apk/alineado.apk
 
-if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
-    printf '%s' "$CORT_APK_KEYSTORE_B64" | base64 -d > build/cort.keystore
-    KS_PASS="${CORT_APK_KEYSTORE_PASS:-}"
-    [ -n "$KS_PASS" ] || { echo "hay keystore pero falta CORT_APK_KEYSTORE_PASS"; exit 1; }
-    echo "firmando con la llave del repo (el APK se puede actualizar instalando encima)"
-else
-    # La contraseña tiene 6+ caracteres porque `keytool` lo exige, y hace falta
-    # nombrar el algoritmo porque el JDK del runner no trae uno por defecto
-    # (medido en runs viejos: "Password too short" y "-keyalg must be specified").
-    # Nada de esto es un secreto: la llave vive y muere en el runner.
-    keytool -genkeypair -keystore build/cort.keystore -alias cort \
-        -keyalg RSA -keysize 2048 \
-        -storepass cortapk -keypass cortapk -validity 3650 \
-        -dname "CN=CORT, OU=prototipo local, O=local"
-    KS_PASS="cortapk"
-    echo "firmando con una llave desechable (hay que desinstalar el APK anterior)"
-fi
+# La llave: la misma de siempre, resuelta por `llave.sh` (secreto del repo ▸
+# caché de Actions ▸ generar una nueva y guardarla allí). Antes cada run firmaba
+# con una llave desechable, y eso obligaba a desinstalar para actualizar.
+# shellcheck source=apps/apk/llave.sh
+source llave.sh
+preparar_llave || { echo "no se pudo preparar la llave de firma"; exit 1; }
+echo "firmando con $LLAVE_ORIGEN — actualizar instalando encima: $LLAVE_ACTUALIZA"
 
-"$BT/apksigner" sign --ks build/cort.keystore \
-    --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" \
+"$BT/apksigner" sign --ks "$LLAVE" \
+    --ks-pass pass:"$LLAVE_PASS" --key-pass pass:"$LLAVE_PASS" \
     --out build/CORT.apk build/apk/alineado.apk
 "$BT/apksigner" verify build/CORT.apk
 
@@ -141,14 +135,12 @@ fi
 {
     echo "APK de CORT $VERSION (versionCode $CODE), paquete com.cort.ia"
     echo "cara embebida: ui/ de este commit ($(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
-    if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
-        echo "llave: la del repo (se puede instalar encima de la versión anterior)"
-    else
-        echo "llave: desechable (hay que desinstalar la versión anterior)"
-    fi
+    echo "llave: $LLAVE_ORIGEN"
+    echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
     "$BT/apksigner" verify --print-certs build/CORT.apk
 } > build/firma.txt
 cat build/firma.txt
+anotar_llave build/CORT.apk "$BT/apksigner"
 
 ls -l build/CORT.apk
 echo "APK listo: build/CORT.apk"

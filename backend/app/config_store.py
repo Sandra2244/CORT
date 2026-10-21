@@ -15,7 +15,14 @@ import json
 import threading
 from pathlib import Path
 
-FILE = Path(__file__).resolve().parent.parent / "cort_config.json"
+import rutas
+
+# La config NO vive junto al código: vive en la carpeta personal (`~/.cort`,
+# `%APPDATA%\CORT`), para que actualizar el instalador —que sustituye la carpeta
+# del programa entera— no le borre a la dueña su clave de Groq. `rutas.py`
+# encuentra el `backend/cort_config.json` de siempre y lo copia allí la primera
+# vez, así que el cambio no le cuesta perder nada.
+FILE = rutas.archivo("cort_config.json")
 LOCK = threading.Lock()
 
 # claves conocidas y su valor por defecto (vacio = "sin configurar")
@@ -76,6 +83,9 @@ def masked() -> dict:
     for k in ("groq_key", "gemini_key"):
         v = c.get(k, "")
         c[k] = (v[:6] + "…" + str(len(v))) if v else ""
+    # La pantalla de Perfil lo enseña tal cual, para que se vea con los ojos que
+    # la clave no vive dentro del programa (actualizar ya no la borra).
+    c["datos"] = str(rutas.DATOS)
     return c
 
 

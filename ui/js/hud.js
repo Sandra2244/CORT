@@ -188,6 +188,7 @@ function buildWindows() {
       <input class="pf" id="cf-ollama_model" placeholder="qwen2.5:3b" autocomplete="off" spellcheck="false">
       <button id="pftest" class="pf-btn ghost">${ic('brain')} Probar cerebro</button>
       <div id="pftestout"></div>
+      <div class="pf-msg" id="pf-datos"></div>
       <div class="pf-save"><button id="pfguardar" class="pf-btn">Guardar perfil</button>
       <div id="pfmsg" class="pf-msg"></div></div>` });
   /* muro de recuerdos — la "sala de cuadros" de la referencia, en azul */
@@ -554,6 +555,12 @@ async function loadProfile() {
     showRange('pf-voz_tono'); showRange('pf-voz_velocidad');
     const c = await (await fetch(API + '/api/config')).json();
     const bb = document.getElementById('bgbeeps'); if (bb) bb.checked = c.bg_beeps === '1';
+    // Dónde vive lo suyo, dicho con palabras y con la ruta: las claves y las
+    // notas ya no están dentro del programa, así que actualizar no las borra.
+    const dt = document.getElementById('pf-datos');
+    if (dt) dt.textContent = c.datos
+      ? `Tus claves y tus notas se guardan en ${c.datos} — fuera del programa, así que actualizar CORT no las borra.`
+      : '';
     for (const k of CF_KEYS) {
       const el = document.getElementById('cf-' + k);
       if (!el) continue;
