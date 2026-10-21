@@ -70,7 +70,12 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.3.0"       # UN SOLO APK: el de Java, con todo dentro
+      APK_VERSION: "2.0.0"       # UN SOLO APK: el de Java, con todo dentro.
+                                 # Tiene que ser IGUAL que el valor por defecto de
+                                 # `APK_VERSION` en `apps/apk/compilar.sh`: el
+                                 # sector [5] de `scripts/prueba-costura.py` cruza
+                                 # los dos, y si se separan la Release anuncia un
+                                 # enlace que no es el archivo que sube.
     steps:
       - uses: actions/checkout@v4
       # -- La misma llave de firma en todas las Releases ----------------------
@@ -172,10 +177,10 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono. Se acabaron las dos
-            versiones que había que elegir: `CORT-IA-1.3.0.apk` es el CORT de
-            siempre —el anillo en el cajón de aplicaciones— y lleva dentro todo
-            lo que estaba repartido entre los dos.
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.0.0**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.0.0.apk`
+            es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
+            dentro todo lo que estaba repartido entre los dos.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el
@@ -204,19 +209,67 @@ jobs:
             guardan con nombre y se vuelven a poner. Todo eso vive en claro, en las
             preferencias de la app: se puede leer y borrar sin misterios.
 
-            **Tres pantallas que no tocan el orbe.** Además de la cara de siempre
+            **Cuatro pantallas que no tocan el orbe.** Además de la cara de siempre
             hay hojas a pantalla completa, y se cambia entre ellas con el menú de
             **tres líneas (☰)**, deslizando el dedo de lado, con `Alt+←/→` o
-            diciéndolo: «abre el chat», «pantalla de código», «vuelve al orbe».
-            **Charla** es un chat como los de siempre —burbujas, copiar la
-            respuesta, guardarla en 04 · Notas— con los modelos que tengas
-            bajados, elegibles desde la propia pantalla. **Código** es la terminal
-            y el cuaderno: lo que escribes ahí se ejecuta **en tu PC** (Android no
-            deja abrir un shell desde una app normal, y no se finge lo contrario),
-            y el cuaderno guarda lo que escribiste aunque cierres la app. **Música**
-            manda al reproductor de arriba. Cuando no es la pantalla del orbe, el
-            holograma **deja de dibujarse** (`orb.pausa()`): en un teléfono modesto
-            eso es RAM, GPU y batería, y así ninguna interfaz nueva tapa la otra.
+            diciéndolo: «abre el chat», «pantalla de código», «abre el mv», «vuelve
+            al orbe». **Charla** es un chat como los de siempre —burbujas, copiar la
+            respuesta, guardarla en 04 · Notas— con los modelos que tengas bajados,
+            elegibles desde la propia pantalla (y diciéndote, en el teléfono, que
+            los modelos viven y corren en tu portátil: allí se bajan, allí se usan).
+            **Código** es la terminal y el cuaderno: lo que escribes ahí se ejecuta
+            **en tu PC** (Android no deja abrir un shell desde una app normal, y no
+            se finge lo contrario), y el cuaderno guarda lo que escribiste aunque
+            cierres la app. **Música** manda al reproductor de arriba. Cuando no es
+            la pantalla del orbe, el holograma **deja de dibujarse** (`orb.pausa()`):
+            en un teléfono modesto eso es RAM, GPU y batería, y así ninguna
+            interfaz nueva tapa la otra.
+
+            **MV: el video con su letra, y el orbe hecho disco.** La hoja **MV** es
+            la que estaba pedida separada del reproductor: pone la imagen del
+            videoclip (`<video>` sobre la misma `content://` que reproduce CORT, con
+            `setAllowContentAccess`) y debajo la **letra sincronizada**, línea a
+            línea, con la línea activa marcada y **clic para saltar a ese segundo**.
+            La letra viene de LRCLIB (sin clave, cacheada 40 canciones, y si el
+            servidor está saturado te lo dice y la rebuscas con un botón). El
+            holograma no se va de esta hoja: se **encoge a una esquina girando como
+            un disco**, así que la esfera sigue siendo tuya mientras ves el video.
+            En audio suelto la hoja no se queda en negro: lo dice y te deja la letra.
+            El avance **cuadro a cuadro** (◂ ▸, ±1/30 s) funciona aquí también.
+
+            **Modo juego: CORT se aparte mientras juegas.** Pedida tal cual: el
+            Call of Duty se cerraba y la música desaparecía cuando el asistente le
+            robaba el micro. Con el modo juego puesto —por voz (**«modo juego»** y
+            **«vuelve CORT»**), desde el interruptor de las hojas Música/MV o desde
+            el botón `CORT · PC`— CORT **cierra el micrófono**, no pide el foco
+            audio al reproducir, y deja de susurrar por el auricular; el aviso de
+            que está callado se ve en la barra superior (🎮). Al quitarlo, todo
+            vuelve a su sitio. **No** hace falta darle ningún permiso de uso de
+            aplicaciones ni de lista de programas instalados: es un interruptor, no
+            un espía, y así queda firmado en el manifiesto.
+
+            **Ordena tus archivos sin perder ni uno.** En **01 · Archivos** hay botón
+            **⤢ ordena** y se dice por voz: «ordena mis archivos», «ordena mis
+            documentos», «ordena la música». Lo primero que sale es un **plan**:
+            cada archivo con su `de → a` y su motivo, el total, y **nada se mueve**
+            hasta que digas **«confirmar»** (o **«cancelar»**, y no se toca nada). El
+            plan caduca a los quince minutos y lleva un token, así que confirmar no
+            puede mover una carpeta distinta de la que viste. `organiza.py` **no
+            conoce ninguna primitiva de borrado**: reorganiza, y si el nombre ya
+            está ocupado añade ` (2)` en vez de pisar nada. Probado aquí, en un
+            `mktemp` con sus carpetas de mentirijillas: `scripts/prueba-organiza.py`.
+
+            **Dile que se actualice solo.** `GET /api/update` compara lo instalado
+            con la última Release de GitHub, y se pide por voz: **«revisa si hay
+            actualizaciones»**, **«actualízate»**. CORT cuenta qué hay nuevo y qué
+            pesa; si dices **«sí»**, el escritorio baja su instalador o —si pesa más
+            de 100 MB, que es lo normal y congelaría un portátil pequeño dentro de
+            una petición— deja los pasos listos y `scripts/actualiza.sh` hace la
+            reparación **con copia de seguridad** de la instalación anterior en
+            `~/Aplicaciones/CORT.anterior-<fecha>`, sin sudo y sin tocar nunca
+            `~/.cort` (tus claves, notas y recuerdos). En el teléfono Android no
+            deja que una app se reemplace a sí misma: ahí CORT te da el enlace del
+            APK y lo instalas tú encima.
 
             **Y ya no traba el teléfono.** El micro de «Oye CORT» se cierra al pasar
             a segundo plano, al apagarse la pantalla, mientras suena música y
@@ -257,18 +310,22 @@ jobs:
             **mismo anillo** que el de la app del teléfono
             (`bash scripts/icono-del-telefonito.sh`).
 
-            **Actualizar el APK sin desinstalar, una sola vez.** La firma la decide
-            `apps/apk/llave.sh` (secreto del repo ▸ caché del pipeline ▸ generar una
-            nueva), y está **medido**: sin secreto, la huella de cada Release es
-            distinta, porque `actions/cache` guarda la llave en el *ref* que la creó
-            y cada etiqueta es otro ref — la caché de una Release nunca se ve desde
-            la siguiente. Cada Release sin secreto cuesta una desinstalación (se van
-            el micrófono, el doble toque, el permiso de los avisos y la dirección del
-            PC). La solución, una sola vez, en tu portátil: `bash
-            scripts/llave-nueva.sh` y pegar los dos secretos `CORT_APK_KEYSTORE_B64`
-            / `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets and variables ▸ Actions.
-            Desde la Release siguiente la llave es siempre la tuya. Cada APK lleva su
-            `-firma.txt`: misma huella que la anterior = se instala encima.
+            **Actualizar el APK sin desinstalar: esta es la última vez que se
+            desinstala.** La firma la decide `apps/apk/llave.sh` (secreto del repo ▸
+            caché del pipeline ▸ generar una nueva). Estaba **medido**: sin secreto,
+            la huella de cada Release era distinta porque `actions/cache` guarda la
+            llave en el *ref* que la creó, y cada etiqueta es otro ref. Los dos
+            secretos (`CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`) ya están
+            puestos en Settings ▸ Secrets and variables ▸ Actions, así que **esta
+            Release es la primera que firma con tu llave definitiva** — y por eso
+            **ésta** todavía pide desinstalar el APK viejo una vez (se van el
+            micrófono concedido, el doble toque, el permiso de los avisos, la
+            dirección del PC y tus gustos guardados en la app; el cerebro del PC no
+            se toca). **A partir de la siguiente, actualizar es instalar encima.**
+            La huella que tiene que salir en `CORT-IA-2.0.0-firma.txt` es
+            `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`; dos
+            Releases seguidas con esa huella = se instala encima sin perder nada. La
+            llave nunca se sube al repo: el repo es público y está en `.gitignore`.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de

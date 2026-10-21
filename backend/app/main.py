@@ -22,6 +22,11 @@ Endpoints:
   POST /api/models/cancel                -> cortar una descarga o quitarla de la fila
   GET  /api/optimize                     -> quién come RAM y cuánta caché hay que borrar
   POST /api/optimize/clean|kill          -> vaciar cachés seguras / cerrar un proceso
+  GET  /api/letras?artista=&titulo=&duracion= -> letra (LRCLIB) sincronizada o plana
+  POST /api/organizar    {raiz, criterio}          -> PLAN de orden (no toca nada)
+  POST /api/organizar/aplicar {raiz, criterio, token} -> ejecutar el plan confirmado
+  GET  /api/update                       -> qué CORT tengo y qué hay en GitHub
+  POST /api/update/aplicar {asset}       -> descargar/preparar el instalador nuevo
 
 Si CORT_SERVE_UI=1 (o el ejecutor lo pide), el mismo backend reparte también la
 interfaz en `http://<host>:<puerto>/` — un solo proceso, cero puertos extra.
@@ -41,12 +46,15 @@ except ImportError:
     pass
 
 import actions                                  # noqa: E402
+import actualiza                                # noqa: E402  (GitHub: versión y reparación)
 from brain import brain_status, think          # noqa: E402
 import brain                                    # noqa: E402  (test_all / recarga de config)
 import config_store                             # noqa: E402
+import letras                                   # noqa: E402  (LRCLIB, sin clave)
 import memory                                   # noqa: E402
 import local_commands                           # noqa: E402
 import models                                   # noqa: E402  (Ollama: catálogo y descargas)
+import organiza                                 # noqa: E402  (plan de orden, sin borrar)
 import optimize                                 # noqa: E402  (RAM y caché del equipo)
 import sensors                                  # noqa: E402
 
@@ -356,6 +364,61 @@ def optimizar_cierra(p: Proceso):
     """Cierra UN proceso propio. Se niega a tocar el escritorio, el audio o
     el propio CORT."""
     return optimize.cerrar(p.pid)
+
+
+# ─────────────── letras, organizar archivos y actualización ─────────────────
+# Tres funciones que la dueña pidió con la boca pequeña y la cara grande:
+# «ponme mis Documentos en orden» (sin que desaparezca nada), «léeme la letra
+# de esta canción» y «comprueba si hay un CORT nuevo». Las tres viven en módulos
+# propios por el mismo motivo: `organiza` confirma antes de mover, `letras`
+# cachea para no martillar LRCLIB y `actualiza` jamás descarga 100 MB dentro
+# de una petición — el portátil es de 1,8 GiB y no debe congelarse.
+# NOMBRES Y FORMAS = CONTRATO con la cara de JS: no renombrar.
+class OrganizaReq(BaseModel):
+    raiz: str = "Documentos"
+    criterio: str = "tipo"                 # tipo | anio | mes
+
+
+class OrganizaAplicar(BaseModel):
+    raiz: str = "Documentos"
+    criterio: str = "tipo"
+    token: str = ""
+
+
+class ActualizaReq(BaseModel):
+    asset: str = ""                        # vacío = el instalador de escritorio
+
+
+@app.get("/api/letras")
+def letras_buscar(artista: str, titulo: str, duracion: int = 0):
+    """Letra de LRCLIB: sincronizada si existe, plana si no, cacheada siempre."""
+    return letras.letra(artista, titulo, duracion)
+
+
+@app.post("/api/organizar")
+def organizar_plan(r: OrganizaReq):
+    """La PROPUESTA de orden con su token: mira, clasifica y no mueve nada."""
+    return organiza.plan(r.raiz, r.criterio)
+
+
+@app.post("/api/organizar/aplicar")
+def organizar_aplicar(r: OrganizaAplicar):
+    """Ejecuta el último plan cuyo token coincida. Sin plan, o con token viejo,
+    se niega: aquí nadie ordena la casa de la dueña a traición."""
+    return organiza.aplicar(r.raiz, r.criterio, r.token)
+
+
+@app.get("/api/update")
+def update_comprobar():
+    """Versión instalada vs. última Release de GitHub, con notas y enlaces."""
+    return actualiza.comprobar()
+
+
+@app.post("/api/update/aplicar")
+def update_aplicar(r: ActualizaReq):
+    """Prepara la reparación del escritorio: descarga liviana o `scripts/actualiza.sh`.
+    El APK de Android se responde con el enlace, no con una instalación."""
+    return actualiza.aplicar(r.asset)
 
 
 # ─────────────────────────── interfaz en el mismo puerto ────────────────────

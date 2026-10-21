@@ -32,7 +32,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 | Manos | **MediaPipe Hands** (JavaScript, corre en CPU del navegador) | Detección de 21 puntos de la mano: abrir palma = desplegar, pinza = agarrar archivo |
 | Memoria | SQLite + JSON local | Persistente entre sesiones |
 | Sensores | `psutil` (Python): batería, CPU, RAM, red; API Open-Meteo para clima | Los paneles de estado del v3/v6 |
-| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`) embebiendo la misma `ui/`: **un solo APK**, `CORT-IA-1.3.0.apk`, con su reproductor en primer plano y su marcador. La vía de rempaquetar el binario de Kotlin está fuera del repo | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila. Dos APK que había que elegir eran doble trabajo y doble publicación |
+| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`) embebiendo la misma `ui/`: **un solo APK**, `CORT-IA-2.0.0.apk`, con su reproductor en primer plano y su marcador. La vía de rempaquetar el binario de Kotlin está fuera del repo | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila. Dos APK que había que elegir eran doble trabajo y doble publicación |
 | Pantallas | `ui/js/pantallas.js`: hojas a pantalla completa (Orbe · Música · Charla · Código) que se cambian con ☰, deslizando, `Alt+←/→` o por voz, y apagan el WebGL cuando no les toca | La dueña pidió interfaces separadas que **no toquen ni obstruyan** el orbe, como las apps multiventana |
 | Lectura en voz alta | PC: SQLite + `sensors.leer_texto`. Teléfono: `NotificationListenerService` en RAM | No hay API de WhatsApp: la barra de notificaciones es lo que la dueña ya ve, y no deja rastro en disco |
 
@@ -65,7 +65,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 - **F5 — Automaata**: wake word ("Oye CORT"), memoria persistente, comandos de sistema, perfil personalizable (como el instalador del v5).
 - **F6 — Empaquetar**: `electron-builder` → instalador .exe (Windows) y .AppImage/.deb (Linux).
 - **F7 — APK**: ya no Capacitor y **ya no dos APK**: sale uno solo de `apps/apk/`,
-  `CORT-IA-1.3.0.apk`, y lo compila GitHub Actions con `compilar.sh` (Java puro sin
+  `CORT-IA-2.0.0.apk`, y lo compila GitHub Actions con `compilar.sh` (Java puro sin
   Gradle: `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`). Es el que puede ser el
   asistente predeterminado (rol pedido con `RoleManager`, y `res/xml/asistente.xml`
   **sin** `settingsActivity`, que es lo que lo borraba de la lista), escucha el doble

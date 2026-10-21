@@ -21,7 +21,14 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APK_VERSION="${APK_VERSION:-1.3.0}"   # desde aquí sale UN SOLO APK: este
+# La entrega «todo en uno»: el 2.0.0 es UN solo APK de Java con la cara embebida,
+# el reproductor con su `MediaSession`, los avisos leídos en voz y el modo juego.
+# `build.yml` lleva el mismo número en su `APK_VERSION` — si se separan, el enlace
+# de la Release anuncia un archivo que no existe (`scripts/prueba-costura.py` [5]
+# lo comprueba). El `versionCode` sale solo del case de abajo: 2.0.0 → 20000, que
+# es más que el 10300 del 1.3.0, así que Android lo ve como actualización y se
+# instala ENCIMA sin desinstalar (con la misma llave de `llave.sh`).
+APK_VERSION="${APK_VERSION:-2.0.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"
@@ -32,8 +39,10 @@ fi
 [ -n "$SDK" ] || { echo "falta ANDROID_HOME: este script corre en el pipeline, no en el portátil"; exit 1; }
 
 # `versionCode` es el número con el que Android decide si esto **es una
-# actualización** o hay que desinstalar para meterlo. Se deriva de la versión:
-# 1.2.0 → 1200, 1.2.3 → 1203; algo que no sea `X.Y.Z` vuelve a 1.
+# actualización** o hay que desinstalar para meterlo. Se deriva de la versión con
+# `MA*10000 + MI*100 + PA`: 1.0.2 → 10002, 1.3.0 → 10300, 2.0.0 → 20000; algo que
+# no sea `X.Y.Z` vuelve a 1. Con esa fórmula 2.0.0 queda por delante de cualquier
+# 1.x, que es lo que quiere la dueña al actualizar encima sin desinstalar.
 case "$VERSION" in
     [0-9]*.[0-9]*.[0-9]*)
         IFS=. read -r MA MI PA <<<"$VERSION"

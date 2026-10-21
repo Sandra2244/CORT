@@ -1,4 +1,4 @@
-/* ===== Pantallas de CORT: el orbe, la música, la charla y el código =====
+/* ===== Pantallas de CORT: el orbe, la música, el MV, la charla y el código =====
  *
  * La dueña pidió **pantallas nuevas que no tengan nada que ver con el orbe y que
  * no lo obstruyan**: se cambia con el menú de tres líneas o deslizando el dedo a
@@ -8,10 +8,12 @@
  *
  * · La pantalla `orbe` **es** la interfaz actual (el holograma, el dock, las
  *   once ventanas de vidrio). No se mueve ni se duplica: sólo se le pone clase
- *   al `<html>` (`p-orbe`, `p-charla`, `p-codigo`, `p-musica`) y el CSS esconde
+ *   al `<html>` (`p-orbe`, `p-charla`, `p-codigo`, `p-musica`, `p-mv`) y el CSS esconde
  *   lo que no va. Por eso el orbe no se tapa nunca: cuando no es su pantalla, el
  *   lienzo WebGL se apaga en vez de quedarse debajo dibujando a escondidas —
- *   en un teléfono de gama media eso también es memoria y batería.
+ *   en un teléfono de gama media eso también es memoria y batería. Hay UNA
+ *   excepción, `p-mv`: ahí el holograma no se apaga, se encoge a una esquina y
+ *   hace de disco que gira mientras suena la pista.
  *
  * · Cada pantalla nueva es un `<section class="scr">` de pantalla completa, con
  *   su propia barra arriba (menú ☰ + título + estado) y su contenido debajo.
@@ -38,10 +40,18 @@ let nucleo = null;                  // null = sin comprobar, false = no hay, bas
 const PANTALLAS = [
   { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre' },
   { id: 'musica', titulo: 'Música',   sub: 'el reproductor de CORT', telefono: true },
+  { id: 'mv',     titulo: 'MV',       sub: 'el video con su letra', telefono: true },
   { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos' },
   { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar' },
 ];
 const visibles = () => PANTALLAS.filter(p => !p.telefono || enTelefono());
+
+const puede = nombre => {
+  // Mismo `typeof` que `llama()`, pero sólo para PREGUNTAR: sirve para avisar con
+  // palabras de que un APK viejo no trae el método, en vez de llamarlo a ciegas.
+  const p = N();
+  return !!p && typeof p[nombre] === 'function';
+};
 
 const llama = (nombre, ...args) => {
   const p = N();
@@ -62,7 +72,8 @@ function montaCarcasa() {
     <button id="menu3" title="Cambiar de pantalla" aria-label="Menú de pantallas">
       <i></i><i></i><i></i></button>
     <span id="pantalla-titulo">Orbe</span>
-    <span id="pantalla-sub">el holograma de siempre</span>`;
+    <span id="pantalla-sub">el holograma de siempre</span>
+    <span id="pantalla-juego" hidden title="CORT está en silencio mientras juegas">🎮 modo juego</span>`;
   document.body.appendChild(barra);
 
   const menu = document.createElement('nav');
@@ -135,7 +146,7 @@ function mueve(paso) {
   ir(l[(i + paso + l.length) % l.length]);
 }
 
-/* Teclado (PC e instalador): Alt+←/→ se mueve entre pantallas y Alt+1…4 salta a
+/* Teclado (PC e instalador): Alt+←/→ se mueve entre pantallas y Alt+1…5 salta a
    una concreta. No uso Escape: ése ya es de las ventanas de vidrio en hud.js, y
    dos dueñas para la misma tecla terminan peleándose. */
 function montaTeclas() {
@@ -164,8 +175,10 @@ export function ir(id) {
   document.querySelectorAll('#pantalla-menu [data-p]').forEach(b =>
     b.classList.toggle('activa', b.dataset.p === actual));
   if (actual === 'musica') arrancaMusica();
+  if (actual === 'mv') arrancaMV();
   if (actual === 'charla') { cargaModelos(); pintaCharla(); }
   if (actual === 'codigo') { pintaCodigo(); }
+  pintaJuego((estadoMusica() || {}).juego);
   ctx?.term?.('pantalla: ' + p.titulo, 'pantallas');
   window.dispatchEvent(new CustomEvent('cort-pantalla', { detail: actual }));
 }
@@ -187,6 +200,11 @@ async function hayNucleo() {
 const sinNucleoFrase = () => enTelefono()
   ? 'Sin tu portátil no hay cerebro que consulte: conéctalo y abre CORT con «CORT · PC», o escribe la dirección en el menú del botón. Aquí lo que sí funciona sin PC es la pantalla de Música.'
   : 'El núcleo de CORT no responde: arráncalo con scripts/run (o run.bat) y vuelve a abrir esta pantalla.';
+
+/* La misma frase, para `hud.js`: cuando el portátil no está, la cara tiene que sonar
+   igual en las pantallas que en el canal de voz — dos maneras de decir lo mismo
+   confunden más que una sola. */
+export const fraseSinNucleo = () => sinNucleoFrase();
 
 async function avisaSinNucleo(donde) {
   const ok = await hayNucleo();
@@ -311,21 +329,47 @@ function pintaCharla() {
 async function cargaModelos() {
   const caja = document.getElementById('ch-modelos');
   if (!caja) return;
-  if (!await hayNucleo()) { caja.innerHTML = '<span class="ch-cargando">' + esc(sinNucleoFrase()) + '</span>'; return; }
-  let data;
+  const enPC = !enTelefono();
+  // El teléfono no tiene modelos: los tiene Ollama, y Ollama vive en el portátil.
+  // Sin PC la lista NO se pinta vacía en silencio —eso parece un fallo de CORT—,
+  // se pone el aviso de «sin PC» con la misma frase del resto de la cara.
+  if (!await hayNucleo()) {
+    caja.innerHTML = '<span class="ch-cargando ch-sinpc">' + esc(sinNucleoFrase()) + '</span>';
+    if (enTelefono()) avisaModelosEnPC();
+    return;
+  }
+  let data = null, porque = '';
   try {
     data = await (await fetch(ctx.api() + '/api/models', { signal: AbortSignal.timeout(6000) })).json();
-  } catch {
-    caja.innerHTML = '<span class="ch-cargando">no leí la lista de modelos: el núcleo no respondió</span>';
+  } catch (e) {
+    // Dos causas distintas, dos frases distintas: «el PC está apagado/fuera de red»
+    // ya lo contesta `hayNucleo()`; aquí el PC contestó antes y ahora se calló.
+    porque = /Timeout|Abort/i.test(String(e && e.name || e))
+      ? 'tu PC está conectado pero tardó demasiado en contestar'
+      : 'tu PC está conectado pero no contestó (¿cerraste CORT en el portátil?)';
+    nucleo = false;                      // la próxima vez se vuelve a preguntar
+  }
+  if (!data) {
+    caja.innerHTML = '<span class="ch-cargando ch-sinpc">no leí la lista de modelos: ' + esc(porque) + '</span>';
     return;
   }
   const bajados = (data.modelos || []).filter(m => m.descargado);
   if (!bajados.length) {
-    caja.innerHTML = '<span class="ch-cargando">ningún modelo descargado todavía: bájalo en 10 · Modelos (flecha ↓)</span>';
+    caja.innerHTML = '<span class="ch-cargando">' + esc(enPC
+      ? 'ningún modelo descargado todavía: bájalo en 10 · Modelos (flecha ↓)'
+      : 'en el teléfono no hay modelos que bajar: viven en tu portátil. '
+        + 'Con CORT abierto ahí, la charla ya usa el que tengas puesto.') + '</span>'
+      + (enPC ? botonBajarModelos() : '');
+    if (enPC) enganchaBajarModelos(caja);
+    if (enTelefono()) avisaModelosEnPC();
     return;
   }
   caja.innerHTML = '<span class="ch-piego">modelos:</span>' + bajados.map(m =>
-    `<button class="ch-mo${m.activo ? ' activa' : ''}" data-m="${esc(m.modelo)}">${esc(m.modelo)}</button>`).join('');
+    `<button class="ch-mo${m.activo ? ' activa' : ''}" data-m="${esc(m.modelo)}">${esc(m.modelo)}</button>`).join('')
+    + (enPC ? botonBajarModelos()
+            : '<span class="ch-piego ch-nota">en el portátil: allí bajan y allí corren</span>');
+  if (enPC) enganchaBajarModelos(caja);
+  else avisaModelosEnPC();
   caja.querySelectorAll('.ch-mo').forEach(b => b.onclick = async () => {
     try {
       const r = await fetch(ctx.api() + '/api/models/use', {
@@ -337,6 +381,33 @@ async function cargaModelos() {
       caja.querySelectorAll('.ch-mo').forEach(o => o.classList.toggle('activa', o === b));
     } catch { ctx?.say?.('El núcleo no respondió el cambio de modelo.') }
   });
+}
+
+/* En el PC la pantalla Charla se limita a lo que ya sabe hacer: enseñar la lista,
+   el chip activo y UN botón que abre la ventana 10 · Modelos de `hud.js` — que es
+   donde están las flechas ↓, la barra de progreso y el veredicto de RAM. No se
+   duplica el descargador aquí: se abre el que existe. El aviso va por un evento
+   porque `hud.js` es dueño de las ventanas y `pantallas.js` no las ve. */
+const botonBajarModelos = () =>
+  '<button class="ch-mo ch-bajar" id="ch-bajar" title="Abrir 10 · Modelos">↓ bajar modelos</button>';
+
+function enganchaBajarModelos(caja) {
+  const b = caja.querySelector('#ch-bajar');
+  if (!b) return;
+  b.onclick = () => {
+    window.dispatchEvent(new CustomEvent('cort-ventana', { detail: 'modelos' }));
+    ctx?.term?.('abriendo 10 · Modelos desde la Charla', 'pantallas');
+  };
+}
+
+/* Lo de los modelos en el teléfono se dice una sola vez por arranque: si no, cada
+   vez que la dueña entra en Charla CORT le repite la misma explicación. */
+let modelosAvisados = false;
+function avisaModelosEnPC() {
+  if (modelosAvisados) return;
+  modelosAvisados = true;
+  ctx?.say?.('Tus modelos viven en el portátil: ahí se bajan y ahí corren. '
+    + 'Aquí en el teléfono sólo los elijo y converso con ellos.');
 }
 
 function copia(texto, aviso) {
@@ -473,27 +544,81 @@ function pintaCodigo() {
  */
 let musViva = false;
 
+/* ─────────────────────── el transporte, común a Música y MV ───────────────────
+   La barra de progreso, el play/pausa, el anterior/siguiente, el parar, el cuadro a
+   cuadro, el «me gusta» y el volumen son los mismos botones que mandan sobre
+   `.Reproductor`. Se pintan con un prefijo de id y se enganchan **una sola vez**:
+   duplicarlos sería tener dos transportes que un día mandan distinto. `extra` es lo
+   que sólo aporta MV (mover también la imagen). */
+const transporteHTML = p => `
+    <div class="mu-barra" id="${p}-barra"><i id="${p}-prog"></i></div>
+    <div class="mu-tiempos"><span id="${p}-t0">0:00</span><span id="${p}-t1">—</span></div>
+    <div class="mu-transporte">
+      <button id="${p}-prev" title="anterior">⏮</button>
+      <button id="${p}-play" title="play / pausa">▶</button>
+      <button id="${p}-next" title="siguiente">⏭</button>
+      <button id="${p}-stop" title="parar del todo">⏹</button>
+    </div>
+    <div class="mu-fila2">
+      <button id="${p}-gusta" class="mu-chip">👍 me gusta</button>
+      <button id="${p}-no" class="mu-chip">👎 quítala</button>
+      <button id="${p}-cuadro-a" class="mu-chip" title="un fotograma atrás (±1/30 s en vídeo)">◂ cuadro</button>
+      <button id="${p}-cuadro-b" class="mu-chip" title="un fotograma adelante (±1/30 s en vídeo)">cuadro ▸</button>
+      <button id="${p}-auto" class="mu-chip">♪ ponme algo</button>
+      <button id="${p}-juego" class="mu-chip" title="CORT se calla y no escucha mientras juegas">🎮 modo juego</button>
+    </div>
+    <div class="mu-volumen"><span>volumen</span><input id="${p}-vol" type="range" min="0" max="1" step=".05" value=".8"></div>`;
+
+function enganchaTransporte(donde, p) {
+  const $ = s => donde.querySelector('#' + p + s);
+  const ponTema = tema => {
+    const ahora = $('ahora'), artista = $('artista');
+    if (ahora) ahora.textContent = tema ? tema.titulo : 'nada puesto';
+    if (artista) artista.textContent =
+      tema ? [tema.artista, tema.genero].filter(Boolean).join(' · ') : '';
+  };
+  $('play').onclick = () => {
+    const e = estadoMusica();
+    if (!e || !e.vivo) { llama('musicaAutomatica'); return; }
+    e.suena ? llama('musicaPausa') : llama('musicaPlay');
+  };
+  $('prev').onclick = () => llama('musicaAnterior');
+  $('next').onclick = () => llama('musicaSiguiente');
+  $('stop').onclick = () => { llama('musicaParar'); ponTema(null); pintaProgreso({ vivo: false }); };
+  $('gusta').onclick = () => {
+    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para evaluar.');
+    llama('musicaGustar', e.pista.uri, true); ctx?.say?.('Anotado: te gusta esto.');
+  };
+  $('no').onclick = () => {
+    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para quitar.');
+    llama('musicaGustar', e.pista.uri, false); llama('musicaSiguiente');
+  };
+  // Cuadro a cuadro: manda al servicio (±1/30 s, lo hace Java) y, si la imagen de MV
+  // está viva, se mueve con él — es la misma pista, no tiene sentido que vayan a dos
+  // sitios. Por eso se hace aquí y no sólo en MV.
+  $('cuadro-a').onclick = () => { llama('musicaCuadro', true); mueveVideoLocal(-1 / 30); };
+  $('cuadro-b').onclick = () => { llama('musicaCuadro', false); mueveVideoLocal(1 / 30); };
+  $('auto').onclick = () => llama('musicaAutomatica');
+  $('vol').oninput = e => llama('musicaVolumen', +e.target.value);
+  $('barra').onclick = ev => {
+    const e = estadoMusica(); if (!e || !e.dur) return;
+    const r = ev.currentTarget.getBoundingClientRect();
+    const seg = (ev.clientX - r.left) / r.width * e.dur / 1000;
+    llama('musicaSalto', Math.round(seg * 1000));
+    saltaVideo(seg);
+  };
+  // El modo juego es del teléfono; el botón está en los dos transportes por si la
+  // dueña llega antes a Música que a MV. La respuesta, en voz alta, siempre.
+  $('juego').onclick = () => ctx?.say?.(modoJuego(!((estadoMusica() || {}).juego)));
+}
+
 function montaMusica() {
   const cuerpo = document.querySelector('#scr-musica .scr-cuerpo');
+  if (!cuerpo) return;
   cuerpo.innerHTML = `
     <div class="mu-ahora" id="mu-ahora">nada puesto</div>
     <div class="mu-datos"><span id="mu-artista"></span></div>
-    <div class="mu-barra" id="mu-barra"><i id="mu-prog"></i></div>
-    <div class="mu-tiempos"><span id="mu-t0">0:00</span><span id="mu-t1">—</span></div>
-    <div class="mu-transporte">
-      <button id="mu-prev" title="anterior">⏮</button>
-      <button id="mu-play" title="play / pausa">▶</button>
-      <button id="mu-next" title="siguiente">⏭</button>
-      <button id="mu-stop" title="parar del todo">⏹</button>
-    </div>
-    <div class="mu-fila2">
-      <button id="mu-gusta" class="mu-chip">👍 me gusta</button>
-      <button id="mu-no" class="mu-chip">👎 quítala</button>
-      <button id="mu-cuadro-a" class="mu-chip" title="fotograma anterior (video)">◂ cuadro</button>
-      <button id="mu-cuadro-b" class="mu-chip" title="fotograma siguiente (video)">cuadro ▸</button>
-      <button id="mu-auto" class="mu-chip">♪ ponme algo</button>
-    </div>
-    <div class="mu-volumen"><span>volumen</span><input id="mu-vol" type="range" min="0" max="1" step=".05" value=".8"></div>
+    ${transporteHTML('mu')}
     <div class="mu-lista-top">
       <input id="mu-busca" placeholder="busca título, artista o género…">
       <button id="mu-buscar">buscar</button>
@@ -511,36 +636,7 @@ function montaMusica() {
     </div>`;
 
   const q = cuerpo.querySelector('#mu-busca');
-  const ponTema = tema => {
-    cuerpo.querySelector('#mu-ahora').textContent = tema ? tema.titulo : 'nada puesto';
-    cuerpo.querySelector('#mu-artista').textContent =
-      tema ? [tema.artista, tema.genero].filter(Boolean).join(' · ') : '';
-  };
-  cuerpo.querySelector('#mu-play').onclick = () => {
-    const e = estadoMusica();
-    if (!e || !e.vivo) { llama('musicaAutomatica'); return; }
-    e.suena ? llama('musicaPausa') : llama('musicaPlay');
-  };
-  cuerpo.querySelector('#mu-prev').onclick = () => llama('musicaAnterior');
-  cuerpo.querySelector('#mu-next').onclick = () => llama('musicaSiguiente');
-  cuerpo.querySelector('#mu-stop').onclick = () => { llama('musicaParar'); ponTema(null); pintaProgreso({ vivo: false }); };
-  cuerpo.querySelector('#mu-gusta').onclick = () => {
-    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para evaluar.');
-    llama('musicaGustar', e.pista.uri, true); ctx?.say?.('Anotado: te gusta esto.');
-  };
-  cuerpo.querySelector('#mu-no').onclick = () => {
-    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para quitar.');
-    llama('musicaGustar', e.pista.uri, false); llama('musicaSiguiente');
-  };
-  cuerpo.querySelector('#mu-cuadro-a').onclick = () => llama('musicaCuadro', true);
-  cuerpo.querySelector('#mu-cuadro-b').onclick = () => llama('musicaCuadro', false);
-  cuerpo.querySelector('#mu-auto').onclick = () => llama('musicaAutomatica');
-  cuerpo.querySelector('#mu-vol').oninput = e => llama('musicaVolumen', +e.target.value);
-  cuerpo.querySelector('#mu-barra').onclick = ev => {
-    const e = estadoMusica(); if (!e || !e.dur) return;
-    const r = ev.currentTarget.getBoundingClientRect();
-    llama('musicaSalto', Math.round((ev.clientX - r.left) / r.width * e.dur));
-  };
+  enganchaTransporte(cuerpo, 'mu');
   cuerpo.querySelector('#mu-buscar').onclick = () => buscaMusica(q.value, false);
   q.addEventListener('keydown', e => { if (e.key === 'Enter') buscaMusica(q.value, false); });
   cuerpo.querySelector('#mu-gusto').onclick = () => buscaMusica(q.value, true);
@@ -652,17 +748,38 @@ function perfil() {
     : 'aún no sé qué te gusta: pulsa 👍 cuando suene algo que te guste.';
 }
 
+/* La barra, el título y el tiempo se pintan en la hoja que esté montada (Música o
+   MV): es la misma pista, y dos barras que avanzan distinto serían peor que una. */
 function pintaProgreso(e) {
-  const barra = document.getElementById('mu-prog');
-  if (!barra || !e) return;
-  const pct = e.dur ? Math.max(0, Math.min(100, e.pos / e.dur * 100)) : 0;
-  barra.style.width = pct + '%';
-  document.getElementById('mu-t0').textContent = reloj(e.pos || 0);
-  document.getElementById('mu-t1').textContent = e.dur ? reloj(e.dur) : '—';
-  const play = document.getElementById('mu-play');
-  if (play) play.textContent = e.suena ? '⏸' : '▶';
-  const video = e.pista && e.pista.video;
-  document.querySelectorAll('#mu-cuadro-a,#mu-cuadro-b').forEach(b => b.style.display = video ? '' : 'none');
+  if (!e) return;
+  ['mu', 'mv'].forEach(p => {
+    const barra = document.getElementById(p + '-prog');
+    if (!barra) return;
+    const pct = e.dur ? Math.max(0, Math.min(100, e.pos / e.dur * 100)) : 0;
+    barra.style.width = pct + '%';
+    const t0 = document.getElementById(p + '-t0');
+    const t1 = document.getElementById(p + '-t1');
+    if (t0) t0.textContent = reloj(e.pos || 0);
+    if (t1) t1.textContent = e.dur ? reloj(e.dur) : '—';
+    const play = document.getElementById(p + '-play');
+    if (play) play.textContent = e.suena ? '⏸' : '▶';
+    // cuadro a cuadro sólo sirve con vídeo delante: sin él, el botón estorba
+    const video = !!(e.pista && e.pista.video);
+    document.querySelectorAll('#' + p + '-cuadro-a,#' + p + '-cuadro-b')
+      .forEach(b => b.style.display = video ? '' : 'none');
+  });
+}
+
+/* El título y el artista, dicho una vez y pintado en las dos hojas. */
+function ponRotulos(e) {
+  ['mu', 'mv'].forEach(p => {
+    const ahora = document.getElementById(p + '-ahora');
+    if (!ahora) return;
+    ahora.textContent = e?.pista ? e.pista.titulo : 'nada puesto';
+    const art = document.getElementById(p + '-artista');
+    if (art) art.textContent = e?.pista
+      ? [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ') : '';
+  });
 }
 
 const reloj = ms => {
@@ -671,16 +788,296 @@ const reloj = ms => {
 };
 
 function arrancaMusica() {
-  pintaProgreso(estadoMusica());
   const e = estadoMusica();
-  if (e && e.pista) {
-    document.getElementById('mu-ahora').textContent = e.pista.titulo;
-    document.getElementById('mu-artista').textContent = [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
-  }
+  pintaProgreso(e);
+  ponRotulos(e);
 }
 
-/* Los avisos de Java: play, pausa, canción nueva, cuadro a cuadro. Sin ellos la
-   barra se quedaría quieta (y preguntar cada 200 ms es lo que traba un teléfono). */
+/* ─────────────────────────── 04 · MV (teléfono) ─────────────────────────── */
+/*
+ * La hoja del videoclip, al estilo Lark Player: imagen arriba y letra en karaoke
+ * debajo. **No es un reproductor nuevo**: es la misma pista que ya manda
+ * `.Reproductor`, así que el audio lo sigue poniendo el servicio (con notificación,
+ * auricular y bloqueo) y esta hoja sólo pone la imagen y la letra.
+ *
+ * El `<video>` va MUDO a propósito: si reprodujera su propio sonido, la canción se
+ * oiría doble y desfasada. Y si el WebView no puede abrir el `content://…`, se dice
+ * tal cual y el audio del servicio sigue sonando — no se inventa una imagen con un
+ * `<canvas>`, que sería mentir con el dibujo.
+ *
+ * Nada de `setInterval` preguntando la posición: la letra se desplaza con los mismos
+ * avisos `type:"music"` de Java que mueven la barra.
+ */
+let letraLineas = [];            // [{s: segundos, texto}] de la letra sincronizada
+let letraPlana = '';             // la letra sin marcas, para copiar
+let letraDe = '';                // «artista — título» de lo que hay pintado
+let lineaActiva = -1;
+let abriendo = 0;                // temporero del aviso honesto de imagen
+
+function montaMV() {
+  const cuerpo = document.querySelector('#scr-mv .scr-cuerpo');
+  if (!cuerpo) return;                       // en el PC esta hoja no existe
+  cuerpo.innerHTML = `
+    <div class="mv-pantalla">
+      <video id="mv-video" playsinline preload="metadata" muted></video>
+      <div class="mv-aviso" id="mv-aviso" hidden></div>
+    </div>
+    <div class="mu-ahora" id="mv-ahora">nada puesto</div>
+    <div class="mu-datos"><span id="mv-artista"></span></div>
+    ${transporteHTML('mv')}
+    <div class="mv-letra-top">
+      <button id="mv-rebuscar" class="mu-chip" title="volver a pedir la letra de esta canción">↻ rebuscar la letra</button>
+      <button id="mv-copiar" class="mu-chip" title="copiar la letra entera, sin marcas de tiempo">copiar letra</button>
+      <span class="mv-letra-estado" id="mv-letra-estado"></span>
+    </div>
+    <div class="scr-lista mv-letra" id="mv-letra"></div>`;
+  const video = cuerpo.querySelector('#mv-video');
+  // Sin la fila de botones de Android encima: el transporte que manda es el de CORT,
+  // y dos filas de botones en un teléfono pequeño se estorban entre sí.
+  video.controls = false;
+  video.addEventListener('error', () => avisoImagen(
+    'La imagen no abrió: este WebView no sabe qué hacer con esa dirección de vídeo '
+    + '(content://). La canción sigue sonando —el audio lo pone el servicio, no esta página.'));
+  video.addEventListener('loadeddata', () => avisoImagen(''));
+  cuerpo.querySelector('#mv-rebuscar').onclick = () => pideLetra(true);
+  cuerpo.querySelector('#mv-copiar').onclick = () => {
+    if (!letraPlana) return ctx?.say?.('Aún no hay letra que copiar: pulsa «rebuscar la letra».');
+    copia(letraPlana, 'Letra copiada.');
+  };
+  enganchaTransporte(cuerpo, 'mv');
+}
+
+function arrancaMV() {
+  if (!document.getElementById('mv-video')) return;
+  const e = estadoMusica();
+  pintaProgreso(e);
+  ponRotulos(e);
+  ponVideo(e);
+  pideLetra();
+}
+
+/* ── la imagen: misma pista, otro par de ojos ── */
+function ponVideo(e) {
+  const video = document.getElementById('mv-video');
+  if (!video) return;
+  const uri = (e && e.pista && e.pista.video) ? (e.pista.uri || e.uri || '') : '';
+  if (!uri) {                                 // audio suelto o nada puesto: hoja limpia
+    if (video.dataset.uri) { video.removeAttribute('src'); video.load(); video.dataset.uri = ''; }
+    avisoImagen(e && e.pista ? 'Esto es audio, no vídeo. La letra sí está aquí abajo.' : '');
+    return;
+  }
+  if (video.dataset.uri !== uri) {
+    video.dataset.uri = uri;
+    video.src = uri;
+    video.load();
+    avisoImagen('abriendo la imagen…');
+    // Un aviso honesto en vez de un rectángulo negro eterno: si en cuatro segundos
+    // no hay imagen, el WebView no pudo (y el audio del servicio ni se entera).
+    clearTimeout(abriendo);
+    abriendo = setTimeout(() => {
+      if (!videoListo()) avisoImagen(
+        'La imagen no abrió: este WebView no sabe qué hacer con esa dirección de vídeo '
+        + '(content://). La canción sigue sonando —el audio lo pone el servicio, no esta página.');
+    }, 4000);
+  }
+  sincronizaPlay(!!(e && e.suena));
+}
+
+function sincronizaPlay(suena) {
+  const video = document.getElementById('mv-video');
+  if (!video || !video.dataset.uri) return;
+  if (suena) {
+    // `play()` puede rechazar el `content://`: no es un error de la dueña, se dice.
+    const intento = video.play();
+    if (intento && intento.catch) intento.catch(() => avisoImagen(
+      'La imagen no quiere abrir en esta pantalla. La canción sigue sonando igual.'));
+  } else video.pause();
+}
+
+const videoListo = () => {
+  const v = document.getElementById('mv-video');
+  return (v && v.dataset.uri && v.readyState > 0 && isFinite(v.duration)) ? v : null;
+};
+
+function avisoImagen(texto) {
+  const caja = document.getElementById('mv-aviso');
+  if (!caja) return;
+  caja.textContent = texto || '';
+  caja.hidden = !texto;
+}
+
+/* Saltar es una sola cosa para las dos mitades de la hoja: se le manda al servicio
+   (`musicaSalto`, en milisegundos) y se mueve también la imagen si está viva. */
+function saltaVideo(seg) {
+  const v = videoListo();
+  if (v) v.currentTime = Math.max(0, seg);
+}
+function mueveVideoLocal(dS) {
+  const v = videoListo();
+  if (!v) return;
+  const dur = isFinite(v.duration) ? v.duration : 0;
+  v.currentTime = Math.max(0, Math.min(dur ? dur - .05 : 0, v.currentTime + dS));
+}
+
+/* ── la letra: `/api/letras` y sus marcadores [mm:ss.xx] ── */
+function parseaLetra(texto) {
+  const sale = [];
+  String(texto || '').split('\n').forEach(linea => {
+    // LRCLIB escribe `[00:13.42]`; también cabe `[0:07.5]` (un dígito de centésimas)
+    // y el punto o los dos puntos como separador. Sin marca de tiempo → no es línea.
+    const m = linea.match(/^\s*\[(\d{1,3}):(\d{2})(?:[.:](\d{1,2}))?\](.*)$/);
+    if (!m) return;
+    const textoLinea = (m[4] || '').trim();
+    if (!textoLinea) return;
+    // «.5» son 50 centésimas, no 5: se rellena a la derecha antes de dividir.
+    const cent = (m[3] || '').padEnd(2, '0');
+    sale.push({ s: (+m[1]) * 60 + (+m[2]) + (+cent) / 100, texto: textoLinea });
+  });
+  return sale;
+}
+
+async function pideLetra(forzada) {
+  const caja = document.getElementById('mv-letra');
+  if (!caja) return;
+  const estado = document.getElementById('mv-letra-estado');
+  const e = estadoMusica();
+  const pista = e && e.pista;
+  if (!pista) {
+    letraLineas = []; letraPlana = ''; letraDe = ''; lineaActiva = -1;
+    caja.innerHTML = '<div class="mu-vacio">nada puesto: en cuanto suene algo, su letra sale aquí.</div>';
+    if (estado) estado.textContent = '';
+    return;
+  }
+  const clave = (pista.artista || '') + ' — ' + (pista.titulo || '');
+  if (!forzada && letraDe === clave && (letraLineas.length || letraPlana)) return;
+  letraDe = clave; letraLineas = []; letraPlana = ''; lineaActiva = -1;
+  if (estado) estado.textContent = 'buscando…';
+  caja.innerHTML = '<div class="mu-vacio">buscando «' + esc(pista.titulo) + '» en el buscador de letras…</div>';
+  const base = await hayNucleo();
+  if (base === false) {
+    if (estado) estado.textContent = 'sin PC';
+    caja.innerHTML = '<div class="mu-vacio">' + esc(sinNucleoFrase()) + '</div>';
+    return;
+  }
+  // La duración va en segundos: es como LRCLIB desambigua las versiones de un mismo
+  // título, y `musicaEstado()` la trae en milisegundos.
+  const q = new URLSearchParams({
+    artista: pista.artista || '', titulo: pista.titulo || '',
+    duracion: String(Math.round((e.dur || 0) / 1000)),
+  });
+  let j = null, porque = '';
+  try {
+    const r = await fetch(ctx.api() + '/api/letras?' + q.toString(),
+      { signal: AbortSignal.timeout(15000) });
+    j = await r.json();
+  } catch (err) { porque = 'El buscador de letras no contestó: ' + err; }
+  if (porque) {
+    if (estado) estado.textContent = 'letra pendiente';
+    dejaAviso(porque + ' · pulsa «rebuscar la letra» cuando quieras.');
+    ctx?.term?.(porque, 'mv');
+    return;
+  }
+  if (!j || j.ok === false) {
+    const dicho = (j && j.error) || 'el núcleo no me dio la letra';
+    if (estado) estado.textContent = 'letra pendiente';
+    dejaAviso(dicho + (j && j.reintenta ? ' · vuelve a rebuscar más tarde' : ''));
+    return;
+  }
+  letraPlana = j.plana || '';
+  letraLineas = parseaLetra(j.sincronizada);
+  pintaLetra();
+  if (estado) estado.textContent = (letraLineas.length ? 'karaoke' : 'sin tiempos')
+    + (j.fuente ? ' · ' + j.fuente : '');
+  marcaLinea((estadoMusica() || {}).pos || 0);
+}
+
+function dejaAviso(texto) {
+  const caja = document.getElementById('mv-letra');
+  if (caja) caja.innerHTML = '<div class="mu-vacio">' + esc(texto) + '</div>';
+}
+
+function pintaLetra() {
+  const caja = document.getElementById('mv-letra');
+  if (!caja) return;
+  caja.innerHTML = '';
+  if (!letraLineas.length && !letraPlana) {
+    dejaAviso('no llegó letra para esta canción: prueba con «rebuscar la letra» o '
+      + 'ponte otra, que a veces el artista y el título vienen con otros nombres.');
+    return;
+  }
+  if (!letraLineas.length) {
+    // Sin marcas de tiempo se puede leer y copiar, pero no se resalta sola — se dice,
+    // no se finge un karaoke que no tiene relojes.
+    letraPlana.split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
+      const d = document.createElement('div');
+      d.className = 'mv-l sin-tiempo'; d.textContent = l;
+      caja.appendChild(d);
+    });
+    return;
+  }
+  letraLineas.forEach((l, i) => {
+    const d = document.createElement('div');
+    d.className = 'mv-l';
+    d.innerHTML = `<span class="mv-s">${esc(reloj(l.s * 1000))}</span><span class="mv-x">${esc(l.texto)}</span>`;
+    d.onclick = () => {
+      llama('musicaSalto', Math.round(l.s * 1000));
+      saltaVideo(l.s);
+      marcaLinea(l.s * 1000, true);
+    };
+    caja.appendChild(d);
+  });
+}
+
+/* La línea activa, en el centro del panel. El desplazamiento se calcula a mano:
+   `scrollIntoView` también movería la página entera y en el teléfono eso salta. */
+function marcaLinea(posMs, forzar) {
+  const caja = document.getElementById('mv-letra');
+  if (!caja || !letraLineas.length) return;
+  const t = (posMs || 0) / 1000;
+  let i = -1;
+  for (let k = 0; k < letraLineas.length; k++) { if (letraLineas[k].s <= t + .15) i = k; else break; }
+  if (i === lineaActiva && !forzar) return;
+  lineaActiva = i;
+  caja.querySelectorAll('.mv-l').forEach((el, k) => el.classList.toggle('activa', k === i));
+  const activa = caja.querySelector('.mv-l.activa');
+  if (activa) caja.scrollTop = Math.max(0, activa.offsetTop - caja.clientHeight / 2 + activa.offsetHeight / 2);
+}
+
+/* ─────────────────────────── el modo juego ───────────────────────────
+ * «Me voy a jugar»: una página no puede hacerse sorda a sí misma en Android, así
+ * que lo hace Java (`CortNative.modoJuego`): suelta el micrófono, cede el foco de
+ * audio y devuelve el toque del auricular al juego. La cara sólo lo pide y lo cuenta.
+ * Fuera del teléfono NO se finge: aquí nadie escucha «Oye CORT» mientras juegas. */
+export function modoJuego(on) {
+  if (!enTelefono()) {
+    return 'El modo juego es del teléfono, que es donde te escucho con un juego delante. '
+      + 'En el portátil no hay nada que silenciar: la música la pone el navegador.';
+  }
+  if (!puede('modoJuego')) {
+    return 'El modo juego lo trae el APK que se compila aquí (el de Java). '
+      + 'Con este cuerpo todavía no puedo callarme ni soltar el micrófono: instala el APK nuevo.';
+  }
+  llama('modoJuego', !!on);
+  const pregunta = puede('juegoActivo') ? llama('juegoActivo') : null;
+  const activo = pregunta === null ? !!on : !!pregunta;
+  pintaJuego(activo);
+  ctx?.term?.('modo juego: ' + (activo ? 'puesto' : 'quitado'), 'pantallas');
+  return activo
+    ? 'Modo juego puesto: no escucho «Oye CORT», no hablo por encima y el auricular es tuyo. Cuando termines dime «vuelve CORT».'
+    : 'Modo juego quitado: vuelvo a escucharte y a avisarte.';
+}
+
+/* El avispón vive en la barra de la pantalla activa: discreto, y no tapa el vídeo. */
+function pintaJuego(on) {
+  const aviso = document.getElementById('pantalla-juego');
+  if (!aviso) return;
+  aviso.hidden = !on;
+  aviso.classList.toggle('viva', !!on);
+}
+
+/* Los avisos de Java: play, pausa, canción nueva, cuadro a cuadro y modo juego. Sin
+   ellos la barra se quedaría quieta (y preguntar cada 200 ms es lo que traba un
+   teléfono). */
 function escuchaMusica() {
   if (musViva || !window.__cortNative) return;
   musViva = true;
@@ -688,11 +1085,16 @@ function escuchaMusica() {
     if (!ev || ev.type !== 'music') return;
     const e = ev.estado;
     pintaProgreso(e);
-    const ahora = document.getElementById('mu-ahora');
-    if (ahora) ahora.textContent = e?.pista ? e.pista.titulo : 'nada puesto';
-    const art = document.getElementById('mu-artista');
-    if (art && e?.pista) art.textContent = [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
+    ponRotulos(e);
+    if (e && typeof e.juego !== 'undefined') pintaJuego(e.juego);
     if (e?.pista) perfil();
+    if (document.getElementById('mv-video')) {
+      ponVideo(e);
+      marcaLinea(e?.pos || 0);
+      // Canción nueva → letra nueva: se pide sola, sin martillar al buscador.
+      const clave = e?.pista ? (e.pista.artista || '') + ' — ' + (e.pista.titulo || '') : '';
+      if (clave && clave !== letraDe) pideLetra();
+    }
   });
 }
 
@@ -704,10 +1106,13 @@ export function initPantallas(contexto) {
   montaGesto();
   montaTeclas();
   escuchaMusica();
-  if (enTelefono()) montaMusica();
+  if (enTelefono()) { montaMusica(); montaMV(); }
   montaCharla();
   montaCodigo();
   document.documentElement.classList.add('pantallas-montadas', 'p-orbe');
+  // El modo juego sobrevive a cerrar la app (lo guarda Java): si la dueña se fue a
+  // jugar y vuelve, el avispón tiene que estar encendido desde el primer instante.
+  pintaJuego(!!(estadoMusica() || {}).juego);
   // La interfaz nueva de Android no estaba: si el puente existe, la barra de
   // pantallas sustituye al botón flotante que ya había (no se apila encima).
   ctx?.term?.('pantallas listas: ' + visibles().map(p => p.titulo).join(' · '), 'pantallas');
@@ -716,7 +1121,19 @@ export function initPantallas(contexto) {
 /* Que la dueña lo diga y CORT se mueve: se llama desde `send()` en hud.js. */
 export function porVoz(texto) {
   const t = String(texto || '').toLowerCase();
-  if (/(vuelve|regresa|al orbe|pantalla orbe|la cara de siempre)/i.test(t)) { ir('orbe'); return 'orbe'; }
+  // «vuelve CORT» y «sal del modo juego» son del silencio del teléfono, no de hojas:
+  // sin este filtro, la dueña diría «vuelve CORT» y se cambiaría de pantalla en vez
+  // de volverle el oído. El resto de «vuelve al orbe» sigue funcionando igual.
+  if (/(vuelve|regresa|al orbe|pantalla orbe|la cara de siempre)/i.test(t)
+      && !/juego|jugando|\bcort\b/i.test(t)) { ir('orbe'); return 'orbe'; }
+  // MV es hoja de teléfono (la imagen sale del servicio de `.Reproductor`): en el PC
+  // no se ofrece, y la frase se deja pasar al backend como cualquier otra orden.
+  if (enTelefono() && (/(^|[^\w])mv([^\w]|$)/i.test(t)
+      || /(videoclip|video[ -]?clip|\bclip\b)/i.test(t)
+      || /el video\b/i.test(t)
+      || /(pantalla|abre|cambia|mu[eé]strame).{0,14}(mv|video)/i.test(t))) {
+    ir('mv'); return 'mv';
+  }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(m[uú]sica|reproductor)/i.test(t) && enTelefono()) { ir('musica'); return 'musica'; }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(charla|chat|conversa)/i.test(t)) { ir('charla'); return 'charla'; }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(c[oó]digo|programar|terminal)/i.test(t)) { ir('codigo'); return 'codigo'; }

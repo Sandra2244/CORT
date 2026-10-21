@@ -356,6 +356,10 @@ public class MainActivity extends Activity {
         String oido = Avisos.activado(this) ? "hecho" : "pendiente";
         String medios = Musica.puedeLeer(this) ? "hecho" : "pendiente";
         String suena = Reproductor.estaVivo() ? "sí" : "no";
+        // El estado se **lee**, no se recuerda: la bandera vive en `CortNative`
+        // (static volatile, con su copia en las preferencias), así que la fila dice
+        // lo que hay aunque el modo lo haya puesto la pantalla de la cara.
+        boolean juegoActivo = puente != null && puente.juegoActivo();
         String[] opciones = {
             "Conectar con mi PC por Wi‑Fi",
             "Cara dentro del teléfono (sin PC)",
@@ -367,6 +371,7 @@ public class MainActivity extends Activity {
             "Poner música que me gusta (suena: " + suena + ")",
             "Parar la música",
             "Dar permiso a la música y los archivos (" + medios + ")",
+            "Modo juego (silencio: " + (juegoActivo ? "sí" : "no") + ")",
         };
         new AlertDialog.Builder(this)
             .setTitle("CORT")
@@ -382,6 +387,10 @@ public class MainActivity extends Activity {
                     case 7: puente.musicaAutomatica(); break;
                     case 8: puente.musicaParar(); break;
                     case 9: puente.pidePermisoMedios(); break;
+                    // La fila once (índice 10) es la última: los `case` van en el
+                    // mismo orden que las filas de arriba — uno mal numerado es un
+                    // botón que hace otra cosa.
+                    case 10: puente.modoJuego(!juegoActivo); break;
                     default: arranca(); break;
                 }
             })

@@ -54,8 +54,22 @@ public class CortNative {
     private volatile boolean ttsListo = false;
     private final ArrayList<String[]> ttsPendiente = new ArrayList<>();
 
+    /**
+     * El modo juego, en **estático** porque lo leen dos sitios que no viven en
+     * esta clase: `Reproductor.pideFoco()` (para no pedir el foco) y
+     * `Reproductor.estadoJson()` (para pintar el interruptor). `volatile` porque
+     * lo escribe el hilo del puente de WebView y lo leen el hilo de la interfaz y
+     * el del `OnPreparedListener` del `MediaPlayer`.
+     */
+    private static volatile boolean juego = false;
+
     public CortNative(MainActivity actividad) {
         this.act = actividad;
+        // El modo juego sobrevive a que se cierre la app: si la última partida
+        // terminó con el interruptor puesto, CORT no debe reabrir el micro ni
+        // reclamar el foco al arrancar. La preferencia es la verdad; la bandera,
+        // su copia rápida.
+        juego = actividad.prefs().getBoolean("juego", false);
         act.runOnUiThread(() -> {
             tts = new TextToSpeech(act, estado -> {
                 if (estado == TextToSpeech.SUCCESS) {
@@ -83,6 +97,17 @@ public class CortNative {
     }
 
     private void arrancarEscucha(String lang, String modo) {
+        // Modo juego: ni micro abierto. `pausa()` ya mandó `pause` a la cara, así
+        // que voice.js no va a rearmar; estos dos eventos son sólo para que el orbe
+        // no se quede pintando «escuchando» cuando no se está escuchando nada. El
+        // error se reporta como `abort` y **no** como `not-allowed` a propósito:
+        // `voice.js` apaga la palabra de activación al ver «not-allowed», y apagarla
+        // por un capricho del interruptor sería dejarla muda para siempre.
+        if (juego) {
+            cuadro("{\"type\":\"stt-error\",\"error\":\"abort\"}");
+            cuadro("{\"type\":\"stt-end\"}");
+            return;
+        }
         if (!permiso("mic")) {
             cuadro("{\"type\":\"stt-error\",\"error\":\"not-allowed\"}");
             cuadro("{\"type\":\"stt-end\"}");
@@ -733,6 +758,62 @@ public class CortNative {
         cuadro("{\"type\":\"music\",\"estado\":" + Reproductor.estadoJson() + "}");
     }
 
+    /* ────────────────────────────── modo juego ────────────────────────────── */
+
+    /**
+     * El interruptor de «me voy a poner a jugar». Lo que resuelve es real: la dueña
+     * pasa el rato al Call of Duty Mobile y CORT le estorbaba de tres maneras —
+     * pedía `AudioFocus` (Android baja o corta el audio de lo demás), el doble
+     * toque del auricular se lo llevaba la sesión de CORT en vez del juego, y el
+     * micrófono se reabría solo cada cuatrocientos milisegundos, que en un teléfono
+     * de gama media es literalmente «se traba y me saca de la partida».
+     *
+     * Se pone **a mano**, y no puede ser de otra forma: detectar la partida sola
+     * exigiría el permiso de uso de aplicaciones (`PACKAGE_USAGE_STATS`) o
+     * `QUERY_ALL_PACKAGES`, y los dos están rechazados por ella y vigilados por
+     * `scripts/prueba-costura.py`. El contrato con la cara es sólo este nombre y
+     * `juegoActivo()`.
+     *
+     * El orden importa más de lo que parece:
+     *
+     * 1. La preferencia y la bandera se escriben **antes** de tocar nada más,
+     *    porque `Reproductor.pideFoco()` y el JSON de estado leen la bandera: si se
+     *    pusiera al final, la canción arrancaría justo dentro del silencio y el
+     *    interruptor de la cara saldría mentiroso.
+     * 2. `pausa()` es el mecanismo que ya existe — cierra el `SpeechRecognizer`
+     *    **sin rearmarlo**, limpia el habla pendiente y avisa a la cara con `pause`,
+     *    que es lo único que impide que voice.js vuelva a abrir el micro. No se
+     *    escribe aquí un cierre nuevo del reconocedor: sería una segunda versión de
+     *    la misma regla, y esa dualidad es la que antes dejó el micro en bucle.
+     * 3. `silenciar` + `soltarSesion` devuelven el foco y el auricular al juego.
+     *
+     * Al desactivar se hace justo lo contrario, y **no** se arranca música: CORT
+     * devuelve el oído y la sesión, y si quiere canción ya la pedirá ella.
+     */
+    @JavascriptInterface
+    public void modoJuego(final boolean on) {
+        act.prefs().edit().putBoolean("juego", on).apply();
+        juego = on;
+        if (on) {
+            pausa();
+            Reproductor.silenciar(act);
+            Reproductor.soltarSesion();
+        } else {
+            Reproductor.recuperarSesion();
+            reanuda();
+        }
+        // El aviso lleva el estado completo, ahora con `juego`: la cara pinta el
+        // interruptor con lo que hay de verdad, no con lo que creyó pulsar.
+        musicaCambio();
+    }
+
+    /** El estado, para que la cara pinte el interruptor (contrato con `ui/`). */
+    @JavascriptInterface
+    public boolean juegoActivo() { return juego; }
+
+    /** Lo mismo, desde Java: lo leen `Reproductor` y `MainActivity`. */
+    static boolean enJuego() { return juego; }
+
     /* ─────────────────── contactos y marcar ─────────────────── */
 
     /** Si puede marcar de una vez, o si sólo abrirá el marcador con el número puesto. */
@@ -805,8 +886,16 @@ public class CortNative {
         });
     }
 
-    /** La app vuelve al frente: `voice.js` espera este aviso para reabrir el oído. */
+    /**
+     * La app vuelve al frente: `voice.js` espera este aviso para reabrir el oído.
+     *
+     * Con el modo juego puesto **no** se devuelve el oído — se repite `pause`. Sin
+     * esta comprobación, asomar la cara dos segundos dentro del juego (un aviso,
+     * un cambio de app) habría reabierto el micrófono encima de la partida, que es
+     * exactamente lo que el interruptor promete evitar.
+     */
     void reanuda() {
+        if (juego) { cuadro("{\"type\":\"pause\"}"); return; }
         cuadro("{\"type\":\"resume\"}");
     }
 

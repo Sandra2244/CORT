@@ -1,7 +1,7 @@
 /* ===== HUD de CORT: arranque, ventanas, chat, sensores, voz y gestos ===== */
 import { createWin } from './windows.js';
 import { createVoice, perms } from './voice.js';
-import { initPantallas, porVoz, ir } from './pantallas.js';
+import { initPantallas, porVoz, ir, modoJuego, fraseSinNucleo } from './pantallas.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -113,7 +113,7 @@ function buildWindows() {
   const clamp = (v, min, max) => Math.max(min, Math.min(max, v));   // que nunca se salgan de pantalla
   W.files = createWin({ id: 'files', icon: ic('folder'), title: '01 · Archivos · <span id="fpath">raíces</span>',
     x: 14, y: 112, w: Math.min(292, vw - 28), h: clamp(vh * .42, 200, 300),
-    html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">${ic('grid')}</button><button id="flistbtn" title="vista de lista">${ic('list')}</button></div><div id="flist"></div>` });
+    html: `<div id="ftools"><button id="fgrid" title="vista de mosaico">${ic('grid')}</button><button id="flistbtn" title="vista de lista">${ic('list')}</button><button id="fordena" title="preparar el orden de esta carpeta (no mueve nada hasta que digas confirmar)">⤢ ordena</button></div><div id="fplan"></div><div id="flist"></div>` });
   W.env = createWin({ id: 'env', onShow: () => { refreshStatus(); refreshWeather(); }, icon: '◉', title: '02 · Entorno',
     x: 14, y: clamp(112 + vh * .42 + 18, 330, 440), w: Math.min(240, vw - 28),
     html: `<div id="wx">…</div>
@@ -210,7 +210,7 @@ function buildWindows() {
         <li><b>Tab</b> completar comando</li><li><b>↑ / ↓</b> historial</li>
         <li><b>Enter</b> enviar</li><li><b>Esc</b> ocultar / mostrar el HUD</li>
         <li><b>Alt + ← / →</b> cambiar de pantalla</li>
-        <li><b>Alt + 1…4</b> saltar a una pantalla</li>
+        <li><b>Alt + 1…5</b> saltar a una pantalla</li>
         <li><b>arrastrar</b> la barra superior mueve la ventana</li>
         <li><b>doble clic</b> en la barra la minimiza al dock</li>
         <li><b>arrastrar</b> un chip lo coloca donde quieras</li>
@@ -222,10 +222,18 @@ function buildWindows() {
         <li><b>08 · Cerebro</b> el muro de recuerdos (notas + charlas, en SQLite)</li>
         <li><b>10 · Modelos</b> baja modelos de Ollama y ve cuáles caben en tu RAM</li>
         <li><b>11 · Optimizar</b> qué come memoria y cuánta caché se puede borrar</li>
-        <li><b>☰ · Pantallas</b> el orbe, la música, la <b>charla</b> con tus modelos y el
-          <b>código</b> (terminal). Se cambia con ☰, deslizando el dedo a un lado,
-          con <b>Alt + ←/→</b> o diciéndolo: «abre el chat», «pantalla de código»,
-          «vuelve al orbe». En otra pantalla el orbe y sus ventanas se apagan: no se tapan</li>
+        <li><b>☰ · Pantallas</b> el orbe, la música, el <b>MV</b> (el vídeo con su letra),
+          la <b>charla</b> con tus modelos y el <b>código</b> (terminal). Se cambia con ☰,
+          deslizando el dedo a un lado, con <b>Alt + ←/→</b> o diciéndolo: «abre el chat»,
+          «pantalla de código», «abre el mv», «vuelve al orbe». En otra pantalla el orbe y
+          sus ventanas se apagan: no se tapan (en MV el orbe se queda, hecho un disco
+          chiquito en la esquina)</li>
+        <li><b>⤢ ordena</b> (en 01 · Archivos) o «ordena mis archivos / mis documentos /
+          la música»: CORT propone el plan y <b>no mueve nada</b> hasta que digas
+          «confirmar»; con «cancelar» se queda como estaba</li>
+        <li><b>🎮 modo juego</b> (en el teléfono) deja a CORT sordo y callada mientras
+          juegas; «vuelve CORT» le devuelve el oído · «revisa si hay actualizaciones»
+          compara tu CORT con la Release y, si dices «sí», prepara la reparación</li>
         <li><b>🎙</b> una orden · <b>👂</b> escucha «Oye CORT» · <b>✋</b> gestos con la mano</li>
       </ul>
       <div class="hp-sec">▸ Soporte y contacto</div>
@@ -940,6 +948,13 @@ async function refreshWeather() {
 /* ---------- archivos ---------- */
 let fGrid = false, curFPath = '';
 async function openFiles(path = '') {
+  /* Cambiar de carpeta cancela el plan viejo: confirmar movería archivos en una
+     carpeta que la dueña ya no está mirando. Es de seguridad, no de limpieza. */
+  if (planPendiente && path !== curFPath) {
+    planPendiente = null;
+    const caja = document.getElementById('fplan');
+    if (caja) caja.innerHTML = '<div class="op-none">el plan anterior ya no vale: estás en otra carpeta; vuelve a pedir «ordena».</div>';
+  }
   curFPath = path;
   W.files.show();
   const list = document.getElementById('flist');
@@ -974,6 +989,213 @@ async function openFiles(path = '') {
   document.getElementById('fpath').textContent = (path || 'raíces') + ' · ' + rows.length + ' items';
   if (!rows.length || (path && rows.length === 1)) list.insertAdjacentHTML('beforeend', '<div class="row">carpeta vacía</div>');
   term('listando ' + (path || 'raíces') + ' (' + rows.length + ' entradas)', 'archivos');
+}
+
+/* ---------- EL ORGANIZADOR (01 · Archivos): primero el plan, luego el sí ----------
+   `POST /api/organizar` sólo MIRA: devuelve la propuesta (`plan` con `de`/`a`/
+   `motivo`) y un `token`. **No se mueve ni un archivo** hasta que la dueña confirme,
+   y el `token` es lo que laCara lleva al aplicar — así el núcleo puede estar seguro
+   de que confirma EL plan que vio, no otro. Si el backend dice `error`, se dice tal
+   cual: un «no hice nada» sin motivo no es una respuesta para ella.            */
+let planPendiente = null;              // { raiz, criterio, token } · lo que falta confirmar
+const raizDe = path => String(path || '').split('/')[0];
+
+function planAviso(texto, dicta, tag) {
+  // El aviso del organizador vive en 01 · Archivos, que es donde se mira la
+  // carpeta; lo de la actualización se cuenta por el canal de voz y el chat, no
+  // dentro de la ventana de los archivos (si no, un «estás al día» quedaría
+  // escrito donde mañana se pinta un plan).
+  if (!tag || tag === 'archivos') {
+    const caja = document.getElementById('fplan');
+    if (caja) caja.innerHTML = `<div class="op-alerta">${esc(texto)}</div>`;
+  }
+  if (dicta) sayLine(texto); else add('a', texto, tag || 'archivos');
+  term(texto, 'organizar');
+}
+
+async function ordenaArchivos(path, dicta) {
+  const caja = document.getElementById('fplan');
+  W.files.show();
+  const raiz = raizDe(path);
+  if (!raiz) return planAviso('Para ordenar hay que estar dentro de una carpeta: ábrela, o dime '
+    + '«ordena mis documentos» y lo preparo ahí.', dicta);
+  const criterio = 'tipo';               // el que entiende el núcleo hoy: por clase de archivo
+  planPendiente = null;
+  if (caja) caja.innerHTML = `<div class="op-none">pensando el orden de ${esc(raiz)}…</div>`;
+  let r = null, porque = '';
+  try { r = await post('/api/organizar', { raiz, criterio }); }
+  catch { porque = fraseSinNucleo(); }   // sin núcleo: la misma frase que las pantallas
+  if (porque) return planAviso(porque, dicta);
+  if (!r || r.ok !== true) {
+    // Sin `ok:true` no hay plan que confirmar: el 501 del teléfono sin PC trae sólo
+    // `error` en español, y pintarlo como «no hay nada que mover» sería mentira.
+    const sinPc = IS_ANDROID && /sin PC/i.test((r && r.error) || '');
+    return planAviso(sinPc ? fraseSinNucleo()
+      : 'No preparé el orden: ' + ((r && r.error) || 'el núcleo no respondió')
+        + (r && r.reintenta ? ' · vuelve a pedirlo más tarde.' : '.'), dicta);
+  }
+  // El contrato llama `plan` a la lista de movimientos; se acepta también `entradas`
+  // para que la cara no se quede en blanco si el núcleo tarda un latido en renombrar.
+  const entradas = r.plan || r.entradas || [];
+  planPendiente = { raiz, criterio, token: r.token };
+  pintaPlan(entradas, r);
+  const muestra = entradas.slice(0, 3).map(e => `${e.de} pasa a ${e.a}`).join('; ');
+  const resumen = entradas.length
+    ? `Tengo el plan: ${entradas.length} archivo(s) de ${raiz}${r.total && r.total !== entradas.length ? ` (de ${r.total} que hay)` : ''}, `
+      + `ordenados por ${criterio}. Los primeros: ${muestra}. Nada se mueve hasta que me digas «confirmar».`
+    : `En ${raiz} no hay nada que mover: ya está todo en su sitio.`;
+  add('a', resumen, 'organizar');
+  term('plan de orden: ' + entradas.length + ' movimientos en ' + raiz, 'organizar');
+  if (dicta) speakTTS(resumen);
+}
+
+/* El plan se pinta en la propia ventana 01, debajo de la barra de herramientas: la
+   dueña ve la carpeta que está ordenando y el plan a la vez, sin ventana nueva. */
+function pintaPlan(entradas, r) {
+  const caja = document.getElementById('fplan');
+  if (!caja) return;
+  const tope = 12;                        // 2.000 filas no caben en 1,8 GiB ni en la pantalla
+  const filas = entradas.slice(0, tope).map(e => `<div class="pl-fila">
+      <span class="pl-de">${esc(e.de)}</span><span class="pl-flecha">→</span>
+      <span class="pl-a">${esc(e.a)}</span>${e.motivo ? `<small>${esc(e.motivo)}</small>` : ''}</div>`).join('');
+  caja.innerHTML = `<div class="pl-top">orden propuesto · <b>${entradas.length}</b> archivo(s) en ${esc(r.raiz || '')}</b>`
+    + (r.recorte ? ` · ${esc(String(r.recorte))}` : '') + '</div>'
+    + (filas || '<div class="op-none">no hay movimientos que proponer</div>')
+    + (entradas.length > tope ? `<div class="op-none">… y ${entradas.length - tope} más en la lista</div>` : '')
+    + `<div class="pl-botones"><button class="mo-b d" id="fplan-ok">confirmar</button>`
+    + `<button class="mo-b x" id="fplan-no">cancelar</button></div>`;
+  caja.querySelector('#fplan-ok').onclick = () => aplicaPlan(false);
+  caja.querySelector('#fplan-no').onclick = () => cancelaPlan(false);
+}
+
+async function aplicaPlan(dicta) {
+  if (!planPendiente) {
+    return planAviso('No hay ningún plan que confirmar: dime primero «ordena mis archivos».', dicta);
+  }
+  const { raiz, criterio, token } = planPendiente;
+  const caja = document.getElementById('fplan');
+  if (caja) caja.innerHTML = '<div class="op-none">moviendo lo confirmado…</div>';
+  let r = null, porque = '';
+  try { r = await post('/api/organizar/aplicar', { raiz, criterio, token }); }
+  catch { porque = fraseSinNucleo(); }
+  if (porque) return planAviso('No pude confirmar el orden: ' + porque, dicta);
+  if (!r || r.ok !== true) {
+    planPendiente = null;
+    return planAviso('El núcleo no movió nada: ' + ((r && r.error) || 'no respondió'), dicta);
+  }
+  planPendiente = null;
+  const errores = (r.errores || []);
+  const dicho = `Movidos ${r.movidos ?? 0} archivo(s) de ${raiz}`
+    + (errores.length ? ` · ${errores.length} lió: ${errores.slice(0, 2).join(' · ')}` : ' · sin errores');
+  if (caja) caja.innerHTML = `<div class="op-alerta${errores.length ? '' : ' ok'}">${esc(dicho)}</div>`;
+  add('a', dicho, 'organizar');
+  term(dicho, 'organizar');
+  if (dicta) speakTTS(dicho);
+  openFiles(curFPath);                     // la lista real, no la que imaginábamos
+}
+
+function cancelaPlan(dicta) {
+  if (!planPendiente) return planAviso('No había nada pendiente.', dicta);
+  const caja = document.getElementById('fplan');
+  const raiz = planPendiente.raiz;
+  planPendiente = null;
+  if (caja) caja.innerHTML = '<div class="op-none">plan cancelado: no moví nada.</div>';
+  const dicho = 'Plan cancelado: ' + raiz + ' queda tal como está. No moví nada.';
+  add('a', dicho, 'organizar');
+  term('plan cancelado por la dueña', 'organizar');
+  if (dicta) speakTTS(dicho);
+}
+
+/* ---------- AUTO-ACTUALIZACIÓN POR VOZ: mirar, contar y (si dice sí) reparar ----------
+   `GET /api/update` es de lectura: compara la versión instalada con la Release.
+   `POST /api/update/aplicar` es el que toca disco, y sólo se llama después de que
+   ella conteste «sí». En el teléfono no se instala nada desde dentro (Android no lo
+   deja): se le da el enlace y lo instala ella.                                  */
+let ultimaUpdate = null;                 // la respuesta de /api/update, para elegir el asset
+let repararPendiente = false;
+
+const MB = b => Math.max(1, Math.round((b || 0) / 1024 / 1024));
+const ASSETS_PC = ['.appimage', '.deb', '.exe'];
+
+/* El instalador de SU equipo: Windows quiere .exe y el Linux de escritorio suele
+   preferir el .AppImage (no necesita tocar permisos de empaquetado). */
+function assetDeEscritorio(enlaces) {
+  const lista = enlaces || [];
+  const win = /windows|win32/i.test(navigator.userAgent || '');
+  const orden = win ? ['.exe', '.appimage', '.deb'] : ['.appimage', '.deb', '.exe'];
+  for (const suf of orden) {
+    const d = lista.find(a => String(a.nombre || a.url || '').toLowerCase().endsWith(suf));
+    if (d) return d;
+  }
+  return lista[0] || null;
+}
+
+async function revisaActualizacion(dicta) {
+  let u = null, porque = '';
+  try { u = await getJSON('/api/update'); }
+  catch { porque = fraseSinNucleo(); }
+  if (porque) return planAviso(porque, dicta, 'actualizar');
+  // Un 501 del APK sin PC trae `error` en español y **ningún** `ok`: si aquí se
+  // leyera `u.ok === false` a secas, CORT contestaría «ya tienes el CORT undefined»
+  // con datos inventados. Se comprueba que la respuesta sea de verdad un informe.
+  if (!u || u.ok !== true || !u.instalada) {
+    const sinPc = IS_ANDROID && /sin PC/i.test((u && u.error) || '');
+    return planAviso(sinPc ? fraseSinNucleo()
+      : 'No pude mirar en GitHub: ' + ((u && u.error) || 'el núcleo no respondió'), dicta, 'actualizar');
+  }
+  ultimaUpdate = u;
+  repararPendiente = false;
+  const enlaces = u.enlaces || [];
+  const peso = enlaces.reduce((s, a) => s + (a.bytes || 0), 0);
+  if (!u.hay_actualizacion) {
+    add('a', `Ya tienes el CORT ${u.instalada}, que es el último que hay (publicado ${u.publicada || '—'}). No hay nada que reparar.`, 'actualizar');
+    return planAviso(`Estás al día: ${u.instalada}. No hay nada que reparar.`, dicta, 'actualizar');
+  }
+  const dicho = `Hay un CORT nuevo: la ${u.ultima}, y tú tienes la ${u.instalada}. `
+    + `La Release trae ${enlaces.length} archivo(s) que pesan ${MB(peso)} MB en total. ¿lo reparo?`;
+  add('a', dicho, 'actualizar');
+  if (u.notas) add('a', 'Lo que trae: ' + u.notas.slice(0, 260), 'actualizar');
+  term('hay actualización: ' + u.instalada + ' → ' + u.ultima, 'actualizar');
+  repararPendiente = true;
+  if (dicta) speakTTS(dicho);
+}
+
+async function reparaActualizacion() {
+  repararPendiente = false;
+  const elegido = assetDeEscritorio(ultimaUpdate && ultimaUpdate.enlaces);
+  const asset = elegido ? (elegido.nombre || '') : '';
+  add('a', 'Vale: pidiendo la reparación a tu núcleo' + (asset ? ' («' + asset + '»)' : '') + '…', 'actualizar');
+  let r = null, porque = '';
+  try { r = await post('/api/update/aplicar', { asset }); }
+  catch { porque = fraseSinNucleo(); }
+  if (porque) return add('a', 'No arranqué la reparación: ' + porque, 'actualizar');
+  if (r && r.apk) {
+    add('a', 'Ese archivo es el APK del teléfono: Android no deja que una app se reemplace a sí misma '
+      + 'desde dentro. Instálalo tú desde este enlace' + (r.url ? ': ' + r.url : '') +
+      '. ' + (r.aviso || ''), 'actualizar');
+    speakTTS('Ese es el APK del teléfono: lo instalas tú desde el enlace que te acabo de poner.');
+    return;
+  }
+  if (!r || r.ok !== true) {
+    // Mismo criterio que al mirar: sin `ok:true` no hubo reparación, por mucho que
+    // el 501 del teléfono no escriba `false` explícito. Decir «listo» con un error
+    // por delante sería mentirle a la dueña justo con sus archivos.
+    add('a', 'No pude repararlo: ' + ((r && r.error) || 'el núcleo no dio motivo') +
+      (r && r.url ? ' · el archivo está en ' + r.url : ''), 'actualizar');
+    speakTTS('No pude repararlo: ' + ((r && r.error) || 'el núcleo no dio motivo'));
+    return;
+  }
+  const pasos = r && r.pasos ? r.pasos : 'bash scripts/actualiza.sh';
+  const dicho = r && r.descargado
+    ? 'Descargado ' + r.descargado + '. Para terminar: ' + pasos +
+      (r.hecho === false ? ' (el script aún no está en el disco)' : '')
+    : (r && r.pendiente
+        ? 'El instalador pesa más de 100 MB, así que tu núcleo no lo baja dentro de una petición: '
+          + 'lanza ' + pasos + ' cuando no estés usando el equipo.'
+        : 'Listo lo que pude hacer desde aquí. Los pasos: ' + pasos);
+  add('a', dicho, 'actualizar');
+  term('reparación pedida: ' + dicho.slice(0, 60), 'actualizar');
+  speakTTS(dicho);
 }
 
 /* ---------- SEGUNDO PLANO: escuchar «Oye CORT» con la app cerrada ---------- */
@@ -1159,7 +1381,11 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché',
   'lee mis avisos', 'lee mis notas', 'lee mis tareas', 'tengo que ', 'lee el documento ',
   'pon CORT como asistente', 'llama a ', 'ponme algo que me guste',
-  'abre el chat', 'abre la pantalla de código', 'abre la pantalla de música', 'vuelve al orbe'];
+  'abre el chat', 'abre la pantalla de código', 'abre la pantalla de música', 'vuelve al orbe',
+  'abre el mv', 'el video con la letra',
+  'ordena mis archivos', 'ordena mis documentos', 'ordena la música',
+  'confirmar', 'cancelar', 'modo juego', 'vuelve CORT',
+  'revisa si hay actualizaciones', 'actualízate'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -1189,12 +1415,50 @@ async function send(raw) {
   const pantalla = porVoz(msg);
   if (pantalla) {
     setState('listo');
-    const titulo = { orbe: 'el orbe', musica: 'la pantalla de música',
+    const titulo = { orbe: 'el orbe', musica: 'la pantalla de música', mv: 'la pantalla del vídeo con la letra',
                      charla: 'la pantalla de charla', codigo: 'la pantalla de código' }[pantalla];
     add('a', `Cambié a ${titulo}. Con ☰ o deslizando el dedo de lado a lado te mueves entre ellas.`, 'pantallas');
     speakTTS('Aquí tienes ' + titulo + '.'); term('pantalla: ' + pantalla, 'pantallas');
     if (pantalla !== 'orbe') orb.burst();
     return;
+  }
+  /* ─── el organizador por voz: primero el plan, luego «confirmar» ───
+     «ordena mis archivos / mis documentos / la música» se dice desde cualquier
+     pantalla. Va ANTES del modo oficina porque ése se llevaba por las narices
+     cualquier frase con «organiza»: aquí lo que se organiza son archivos, no
+     ventanas. Sin carpeta a la vista se elige la raíz que nombran las palabras. */
+  if (/^(ordena|organiza)\b/i.test(msg) && !/ventana|escritorio|bureau/i.test(msg)) {
+    setState('listo');
+    const raiz = /documentos/i.test(msg) ? 'Documentos'
+      : /m[uú]sica/i.test(msg) ? 'Música'
+      : /descargas/i.test(msg) ? 'Descargas'
+      : (curFPath || 'Documentos');
+    ordenaArchivos(raiz, true); return;
+  }
+  if (/^(confirmar|confirmalo|confirmo)\b/i.test(msg)) {
+    setState('listo'); aplicaPlan(true); return;
+  }
+  if (/^cancelar\b/i.test(msg) && planPendiente) {
+    setState('listo'); cancelaPlan(true); return;
+  }
+  /* ─── modo juego: la cara sólo lo PIDE; el silencio lo guarda Java ─── */
+  if (/(modo juego|me voy a jugar|voy a jugar|silencio[, ]+cort)/i.test(msg)
+      && !/sal |quita |vuelve /i.test(msg)) {
+    setState('listo'); const dicho = modoJuego(true);
+    add('a', dicho, 'juego'); speakTTS(dicho); return;
+  }
+  if (/(vuelve[, ]+cort|sal (del|de) modo juego|quita (el )?modo juego|despierta[, ]+cort)/i.test(msg)) {
+    setState('listo'); const dicho = modoJuego(false);
+    add('a', dicho, 'juego'); speakTTS(dicho); return;
+  }
+  /* ─── auto-actualización: mirar, contar y esperar un «sí» ───
+     Aquí la cara no descarga nada por su cuenta: `GET /api/update` sólo informa
+     y `POST /api/update/aplicar` se llama después de que ella conteste. */
+  if (/(revisa si hay actualizaciones|hay versi[oó]n nueva|actual[ií]zate|nueva versi[oó]n|revisa (que hay |si hay )?actualizaci)/i.test(msg)) {
+    setState('listo'); revisaActualizacion(true); return;
+  }
+  if (repararPendiente && /^(s[ií]|dale|vale|ok|adelante|repara)\b/i.test(msg)) {
+    setState('listo'); reparaActualizacion(); return;
   }
   /* «llama a Samuel» / «marca al 611 22 33» — el teléfono, no el PC */
   const llamada = msg.match(/^(?:llama(?:r)?|marca(?:r)?|llámame|marcarme)\s+(?:a\s+|con\s+|al\s+)?(.{2,40})$/i);
@@ -1495,6 +1759,8 @@ export function wireUI(orbRef) {
   loadMusic();
   document.getElementById('fgrid').onclick = () => { fGrid = true; openFiles(curFPath); };
   document.getElementById('flistbtn').onclick = () => { fGrid = false; openFiles(curFPath); };
+  // ⤢ ordena prepara el plan de la carpeta que se está viendo; NO mueve nada.
+  document.getElementById('fordena').onclick = () => ordenaArchivos(curFPath, false);
 
   /* interfaz Jared: ocultar/mostrar desde el dock + cerebro del árbol */
   document.querySelector('#dock [data-act=hide]').onclick = () => {
@@ -1567,7 +1833,18 @@ export function wireUI(orbRef) {
   });
   // Fuera de su pantalla, el orbe no se queda dibujando a escondidas: el bucle
   // WebGL se congela (CPU, RAM y batería para el teléfono y para el portátil).
-  window.addEventListener('cort-pantalla', e => orb.pausa(e.detail !== 'orbe'));
+  // La excepción es MV: ahí el holograma no se apaga, se hace disco en la esquina
+  // (el CSS pone #scene pequeñito sobre el vídeo) y gira mientras suena la pista.
+  window.addEventListener('cort-pantalla', e => {
+    if (e.detail === 'mv') { orb.pausa(false); orb.setDisc(true); }
+    else { orb.setDisc(false); orb.pausa(e.detail !== 'orbe'); }
+  });
+  // Las pantallas piden ventanas que viven aquí: el botón «↓ bajar modelos» de la
+  // Charla abre 10 · Modelos, que es donde está el descargador de verdad — no se
+  // duplica en `pantallas.js`, se manda el aviso y se abre la que ya existe.
+  window.addEventListener('cort-ventana', e => {
+    if (e.detail === 'modelos' && W.modelos) W.modelos.show();
+  });
 
   /* gestos — modo ligero */
   import('./gestures.js').then(({ initGestures }) => initGestures({

@@ -272,6 +272,11 @@ public class Reproductor extends Service {
     /* ─────────────────────────── el foco de audio ─────────────────────────── */
     private boolean pideFoco() {
         if (audio == null) return true;
+        // Modo juego: el foco es del juego. Si CORT lo pidiera, Android **duckea**
+        // o corta el audio de Call of Duty, que es justo lo que la dueña no quiere.
+        // Devolver `false` deja en silencio al `MediaPlayer` (`pon()` y `reproducir()`
+        // sólo arrancan cuando el foco se concede), sin tocar la cola ni la notificación.
+        if (CortNative.enJuego()) return false;
         if (Build.VERSION.SDK_INT < 26) {
             int r = audio.requestAudioFocus(nuevaEscucha(), AudioManager.STREAM_MUSIC,
                     AudioManager.AUDIOFOCUS_GAIN);
@@ -410,6 +415,61 @@ public class Reproductor extends Service {
         }
     }
 
+    /* ─────────────────────────── modo juego ─────────────────────────────────
+     * Lo que necesita el juego es **silencio y foco fuera**, no apagar el
+     * reproductor: la cola y la canción tienen que seguir en su sitio para
+     * volver a sonar al desactivar el modo. De ahí que `silenciar` pause (que
+     * conserva el `MediaPlayer` preparado) en vez de `stop()`, que obligaría a
+     * `prepareAsync()` otra vez.
+     *
+     * Y lo importante es el **abandono del foco**: mientras CORT lo tenga, el
+     * sistema baja o corta el audio del juego cada vez que arranca una canción.
+     * `sueltaFoco()` ya lleva dentro la comprobación de versión (el
+     * `abandonAudioFocusRequest` de API 26 y el `abandonAudioFocus` antiguo
+     * para Android 8/9), así que se reutiliza en lugar de escribir un segundo
+     * camino. `pausadoPorFoco` se limpia a propósito: si no, el `AUDIOFOCUS_GAIN`
+     * del sistema reanudaría la música encima del juego.
+     */
+    public static void silenciar(Context c) {
+        Reproductor r = vivo;
+        if (r == null) return;
+        try { if (r.mp != null && r.mp.isPlaying()) r.mp.pause(); } catch (Exception e) { }
+        r.pausadoPorFoco = false;
+        r.sueltaFoco();
+        r.refresca();
+        avisa();
+    }
+
+    /**
+     * La sesión de medios se **desactiva** para que el auricular se lo quede el
+     * juego: con la sesión de CORT activa, el doble toque se lo llevaba CORT y
+     * la dueña salía de la partida. `setActive(false)` no libera la sesión — el
+     * `Token` de la notificación sigue siendo válido—, así que `recuperarSesion()`
+     * la devuelve tal cual estaba.
+     *
+     * Todo dentro de `try/catch` y con `sesion` comprobado: es el mismo cuidado
+     * que pone `sesionSetActiveFalso()`, y por el mismo motivo — el servicio puede
+     * estar muriéndose mientras alguien llama.
+     */
+    public static void soltarSesion() {
+        Reproductor r = vivo;
+        if (r == null) return;
+        try { if (r.sesion != null) r.sesion.setActive(false); }
+        catch (Exception elSistemaNoLoPermite) { }
+    }
+
+    /** Lo contrario: la sesión vuelve a existir para el auricular y el bloqueo. */
+    public static void recuperarSesion() {
+        Reproductor r = vivo;
+        if (r == null) return;
+        try {
+            if (r.sesion != null) {
+                r.sesion.setActive(true);
+                r.estadoSesion();
+            }
+        } catch (Exception elSistemaNoLoPermite) { }
+    }
+
     /** Parar del todo: se calla, se quita la notificación y se apaga el servicio. */
     private static void parar() {
         Reproductor r = vivo;
@@ -485,17 +545,33 @@ public class Reproductor extends Service {
         } catch (Exception e) { return 0; }
     }
 
-    /** El estado, en JSON, para `CortNative.musicaEstado()`. */
+    /**
+     * El estado, en JSON, para `CortNative.musicaEstado()`.
+     *
+     * `uri` y `video` van **también arriba**, repetidos de `pista`, porque la
+     * pantalla que pega el vídeo (la MV, con su <video> del WebView) los necesita
+     * sin tener que andar mirando si hay canción o si el objeto existe: en Java no
+     * hay `?.` de JavaScript, y un `pista == null` mal tratado sería un hueco que
+     * sólo aparece en el teléfono. La URI es la del índice de Android
+     * (`content://media/external/...`), que es precisamente lo que un <video>
+     * necesita y lo que `setAllowContentAccess(true)` de la cara deja leer.
+     * `juego` es el estado del modo juego, para que el interruptor de la cara se
+     * pinte como está de verdad y no como la última vez que se pulsó.
+     */
     public static String estadoJson() {
         Pista p = en(idx);
-        StringBuilder s = new StringBuilder(192);
+        StringBuilder s = new StringBuilder(256);
         s.append('{')
          .append("\"vivo\":").append(vivo != null)
          .append(",\"suena\":").append(sonando())
          .append(",\"pos\":").append(pos())
          .append(",\"dur\":").append(duracion())
          .append(",\"idx\":").append(idx)
-         .append(",\"total\":").append(tamanyo());
+         .append(",\"total\":").append(tamanyo())
+         .append(",\"uri\":").append(p == null || p.uri == null
+                 ? "null" : "\"" + esc(p.uri) + "\"")
+         .append(",\"video\":").append(p != null && p.video)
+         .append(",\"juego\":").append(CortNative.enJuego());
         s.append(",\"pista\":");
         if (p == null) s.append("null");
         else {

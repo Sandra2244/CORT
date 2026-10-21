@@ -493,6 +493,123 @@ elif "ACTION_PLAY" in rep:
     falla("PlaybackState", "la máscara de acciones de PlaybackState no se declara como `long`: "
                            "setState(…) no encuentra sobrecarga")
 
+# ── 8 · la ronda 2.0.0: MV, modo juego, organizador y letras ─────────────────
+# Cuatro funciones nuevas que se pueden romper sin que ningún compilador se entere:
+# una hoja que está escrita pero nunca se monta, un `<video>` al que el WebView no
+# deja entrar, un interruptor que no llega a Java o un organizador que un día
+# alguien «mejora» borrando. Cada comprobación es una duda, no diez.
+print("\n[8] la ronda 2.0.0 (MV · modo juego · organizador · letras)")
+
+lectura = lambda *p: (RAIZ.joinpath(*p)).read_text(encoding="utf-8")
+cara = lectura("ui", "js", "pantallas.js")
+hud = lectura("ui", "js", "hud.js")
+css = lectura("ui", "css", "hud.css")
+
+# 8.a · la hoja MV existe de arriba abajo: menú, montaje, CSS y el `<video>`.
+for etiqueta, condicion in (
+        ("está en PANTALLAS", re.search(r"\{\s*id:\s*'mv'", cara)),
+        ("se monta",          "montaMV()" in cara),
+        ("su cuerpo se pinta", "montaMV" in cara and "mv-video" in cara),
+        ("el CSS la enseña",  re.search(r"html\.p-mv #scr-mv", css))):
+    if condicion:
+        dice_ok("MV", f"la hoja {etiqueta}")
+    else:
+        falla("MV", f"la hoja {etiqueta}: la pantalla pediría «abre el mv» y no saldría nada")
+
+# 8.b · el `<video>` de MV apunta a una `content://` del MediaStore: sin acceso a
+# contenido del WebView, la imagen no abre nunca y el aviso honesto no lo arregla.
+main_java = lectura("apps", "apk", "src", "com", "cort", "ia", "MainActivity.java")
+if "setAllowContentAccess(true)" in main_java:
+    dice_ok("MV · contenido", "el WebView tiene setAllowContentAccess(true): lee las content:// del índice")
+else:
+    falla("MV · contenido", "falta setAllowContentAccess(true) en MainActivity: ningún <video> "
+                           "reproduciría una URI content:// del MediaStore")
+
+# 8.c · el contrato de estado: la cara lee `uri`, `video` y `juego` de una sola vez.
+# En Java las claves van ESCAPADAS dentro del literal (`\"uri\"`), así que buscar
+# `"uri"` a pelo no encuentra nada: se busca la forma con barra inclinada.
+rep_crudo = (RAIZ / "apps" / "apk" / "src" / "com" / "cort" / "ia" / "Reproductor.java").read_text(encoding="utf-8")
+inicio = rep_crudo.find("String estadoJson(")
+trozo = rep_crudo[inicio:inicio + 1600] if inicio >= 0 else ""
+faltan = [k for k in ("uri", "video", "juego", "pista") if f'\\"{k}\\"' not in trozo]
+if not trozo:
+    falla("estadoJson", "Reproductor.java no define `String estadoJson(`: la cara no tiene "
+                        "de dónde leer ni la URI del vídeo ni el estado del modo juego")
+elif faltan:
+    falla("estadoJson", f"no mete {', '.join(faltan)} en el JSON: la cara no puede pintar MV ni el "
+                        "interruptor de juego sin preguntar dos veces")
+else:
+    dice_ok("estadoJson", "uri, video, juego y pista salen en la misma lectura del puente")
+
+# 8.d · el modo juego: existe en Java, la cara lo llama con guardia, y el manifiesto
+# NO trae espionaje (la dueña rechazó `PACKAGE_USAGE_STATS` y `QUERY_ALL_PACKAGES`).
+puente = lectura("apps", "apk", "src", "com", "cort", "ia", "CortNative.java")
+if "@JavascriptInterface" in puente and re.search(r"modoJuego\s*\(", puente):
+    dice_ok("modo juego", "CortNative expone modoJuego(...)")
+else:
+    falla("modo juego", "CortNative.java no expone modoJuego: el botón diría «puesto» y Java seguiría escuchando")
+if re.search(r"llama\('modoJuego'", cara):
+    dice_ok("modo juego · cara", "la cara lo llama con `llama(…)`, así que un APK viejo no revienta")
+else:
+    falla("modo juego · cara", "la cara invoca modoJuego sin pasar por `llama(…)` o no lo invoca")
+manifiesto = lectura("apps", "apk", "AndroidManifest.xml")
+colados = [p for p in ("PACKAGE_USAGE_STATS", "QUERY_ALL_PACKAGES", "READ_SMS", "PROCESS_OUTGOING_CALLS")
+           if p in manifiesto]
+if colados:
+    falla("modo juego · permisos", f"se han colado permisos que la dueña no quiere: {', '.join(colados)}")
+else:
+    dice_ok("modo juego · permisos", "sin PACKAGE_USAGE_STATS ni QUERY_ALL_PACKAGES: es un interruptor, no un detector")
+
+# 8.e · el organizador no borra. Es la promesa que se le hizo a la dueña: «mover, y
+# sólo después de ver el plan». Si alguien añade un `remove`, esto tiene que rugir.
+# Se mira SÓLO el código: el propio módulo documenta que no borra, y esa frase no
+# puede ser la que rompa la prueba (`#` y docstrings fuera, como en [7] con Java).
+def codigo_python(txt: str) -> str:
+    salida, i, n = [], 0, len(txt)
+    while i < n:
+        ch = txt[i]
+        if txt.startswith('"""', i) or txt.startswith("'''", i):
+            marca = txt[i:i + 3]
+            j = txt.find(marca, i + 3)
+            i = n if j < 0 else j + 3
+            continue
+        if ch == "#":
+            j = txt.find("\n", i)
+            i = n if j < 0 else j
+            continue
+        if ch in "\"'":
+            cierre, i = ch, i + 1
+            while i < n:
+                if txt[i] == "\\":
+                    i += 2
+                    continue
+                if txt[i] == cierre:
+                    i += 1
+                    break
+                i += 1
+            continue
+        salida.append(ch)
+        i += 1
+    return "".join(salida)
+
+
+org = codigo_python(lectura("backend", "app", "organiza.py"))
+# Mover (`os.rename`, `shutil.move`) es LA función; lo vetado es deshacerse de algo.
+borra = [m for m in ("os.remove", "os.unlink", "shutil.rmtree", "shutil.os.remove",
+                     ".unlink(", ".rmdir(", "send2trash", "trash") if m in org]
+if borra:
+    falla("organizador", f"organiza.py conoce el borrado ({', '.join(borra)}): la promesa de «no pierdes nada» se rompió")
+else:
+    dice_ok("organizador", "organiza.py no tiene ninguna primitiva de borrado: sólo renombra y mueve")
+
+# 8.f · las letras no pueden congelar la cara: timeouts y el aviso de reintento.
+let = lectura("backend", "app", "letras.py")
+if "timeout=" in let and "reintenta" in let:
+    dice_ok("letras", "la llamada a LRCLIB lleva timeout y avisa `reintenta` si el servidor está saturado")
+else:
+    falla("letras", "letras.py se queda sin timeout o sin aviso de reintento: un 503 de LRCLIB "
+                    "dejaría la hoja MV colgada sin decir por qué")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

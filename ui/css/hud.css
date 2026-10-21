@@ -668,11 +668,27 @@ html.pantallas-montadas:not(.p-orbe) #status,html.pantallas-montadas:not(.p-orbe
 html.pantallas-montadas:not(.p-orbe) #hand{display:none!important}
 html.pantallas-montadas:not(.p-orbe) body.sheet #scene{transform:none}
 
+/* MV es la excepción: ahí el holograma no se apaga, se hace disco. `hud.js` pone
+   `orb.setDisc(true)` (orb.js ya tiene el vinilo giratorio del ejecutor de música)
+   y esta regla encoge `#scene` a la esquina superior derecha, encima del vídeo y
+   sin robar el toque: quien manda a la pista sigue siendo `.Reproductor`. Cuelga
+   de `.pantallas-montadas` igual que el apagón de arriba: si el módulo de
+   pantallas falla, no hay disco raro ni pantalla en negro: queda la cara de siempre. */
+html.pantallas-montadas.p-mv #scene{display:block!important;z-index:68;pointer-events:none;
+  opacity:.92;transform:scale(.34);transform-origin:88% 8%}
+html.mobile.pantallas-montadas.p-mv #scene{transform-origin:96% 26%}
+html.pantallas-montadas.p-mv body.sheet #scene{transform:scale(.34);transform-origin:88% 8%}
+
+/* El avispón del modo juego vive en la barra de la pantalla activa: discreto y
+   sin tapar nada (lo enciende `pintaJuego()` en pantallas.js con el estado Java). */
+#pantalla-juego{font-size:9.5px;letter-spacing:.1em;color:#ffcf6b;padding:2px 8px;
+  border:1px solid rgba(255,190,80,.4);border-radius:12px;background:rgba(40,26,6,.4)}
+
 .scr{position:fixed;inset:0;z-index:66;display:none;flex-direction:column;
   background:#02040a;padding:56px 12px 12px}
 html.glass .scr{background:rgba(2,4,10,.94)}
 html.mobile .scr{padding:12px 8px calc(96px + env(safe-area-inset-bottom))}
-html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo{display:flex}
+html.p-mv #scr-mv,html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo{display:flex}
 
 /* En las otras pantallas el micrófono no estorba: se va a la esquina y el
    contenido deja su hueco abajo para que el campo de escritura nunca quede
@@ -742,14 +758,14 @@ html.mobile.pantallas-montadas:not(.p-orbe) #mic{width:56px;height:56px;right:12
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mu-datos{font-size:11.5px;color:#5e8cab}
 .mu-barra{height:6px;border-radius:6px;background:rgba(80,190,255,.18);overflow:hidden;cursor:pointer}
-#mu-prog{display:block;height:100%;width:0;background:linear-gradient(90deg,#19b3ff,#7fd0ff);
+#mu-prog,#mv-prog{display:block;height:100%;width:0;background:linear-gradient(90deg,#19b3ff,#7fd0ff);
   box-shadow:0 0 10px rgba(0,190,255,.6)}
 .mu-tiempos{display:flex;justify-content:space-between;font-family:Consolas,monospace;font-size:10px;color:#4b7f9e}
 .mu-transporte{display:flex;justify-content:center;gap:14px}
 .mu-transporte button{all:unset;cursor:pointer;width:52px;height:52px;display:flex;align-items:center;
   justify-content:center;font-size:20px;border-radius:50%;color:#dff1ff;
   border:1px solid var(--cyan-dim);background:rgba(12,28,52,.6)}
-.mu-transporte #mu-play{border-color:var(--cyan);background:rgba(0,160,255,.24);
+.mu-transporte #mu-play,.mu-transporte #mv-play{border-color:var(--cyan);background:rgba(0,160,255,.24);
   box-shadow:0 0 18px rgba(0,180,255,.35)}
 .mu-fila2{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
 .mu-chip{all:unset;cursor:pointer;font-size:11px;color:#9fdcff;padding:6px 11px;border-radius:16px;
@@ -785,3 +801,53 @@ html.mobile.pantallas-montadas:not(.p-orbe) #mic{width:56px;height:56px;right:12
 .mu-pl-caja{display:flex;gap:7px;flex-wrap:wrap}
 .mu-perfil{font-size:11px;color:#5e8cab}
 .mu-perfil b{color:#9fdcff}
+
+/* ---- MV: imagen arriba y letra en karaoke debajo (hoja de teléfono) ----
+   No es un reproductor nuevo: `.Reproductor` sigue poniendo el audio (con
+   notificación, auricular y bloqueo) y esta hoja sólo pinta la imagen y la letra.
+   El `<video>` va MUDO a propósito: si sonara por su cuenta, la canción se oiría
+   doble y desfasada. Si el WebView no abre el `content://`, `.mv-aviso` lo dice
+   tal cual, y abajo la letra y el transporte siguen haciendo su trabajo. */
+.mv-pantalla{position:relative;flex:none;border:1px solid rgba(80,190,255,.18);
+  border-radius:12px;overflow:hidden;background:#000}
+#mv-video{display:block;width:100%;height:auto;max-height:38vh;object-fit:contain;background:#000}
+.mv-aviso{position:absolute;left:8px;right:8px;bottom:8px;font-size:11px;line-height:1.45;
+  color:#ffcf6b;background:rgba(3,9,20,.85);border:1px solid rgba(255,190,80,.45);
+  border-radius:8px;padding:7px 9px}
+.mv-letra-top{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.mv-letra-estado{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:#5e8cab}
+.mv-letra{border:1px solid rgba(80,190,255,.16);border-radius:10px;background:rgba(3,9,20,.7);
+  padding:6px 4px;scroll-behavior:smooth}
+.mv-l{display:flex;gap:10px;padding:7px 10px;border-radius:8px;cursor:pointer;
+  font-size:14.5px;line-height:1.45;color:#7fa6bd;transition:color .25s,background .25s}
+.mv-l .mv-s{flex:none;margin-top:3px;font-family:Consolas,monospace;font-size:10px;color:#3f6c88}
+.mv-l.activa{color:#eaf7ff;background:rgba(0,160,255,.16);text-shadow:0 0 14px rgba(0,190,255,.5)}
+.mv-l.sin-tiempo{cursor:default}
+
+/* ---- 01 · Archivos: el plan del organizador, dentro de la propia ventana ----
+   Se pinta arriba de la lista, donde la dueña ya está mirando la carpeta; por eso
+   vive en `#fplan` y no en una ventana nueva. `:empty` evita el hueco cuando no hay
+   nada que decir todavía. */
+#fplan:empty{display:none}
+#fplan{margin:2px 0 8px;font-size:11.5px}
+.pl-top{font-family:Consolas,'Courier New',monospace;font-size:10px;letter-spacing:.1em;
+  color:#7fd0ff;margin-bottom:5px}
+.pl-fila{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;padding:4px 7px;margin:3px 0;
+  border:1px solid rgba(80,190,255,.16);border-radius:8px;background:rgba(6,16,32,.5)}
+.pl-de{color:#dff1ff;overflow-wrap:anywhere}
+.pl-flecha{color:var(--cyan)}
+.pl-a{color:#b9ffd8;overflow-wrap:anywhere}
+.pl-fila small{flex:1 1 100%;font-size:9.5px;color:#5e8cab}
+.pl-botones{display:flex;gap:8px;margin-top:7px}
+.op-none{font-size:11px;color:#4b7f9e;padding:6px 2px}
+.op-alerta{font-size:11.5px;color:#ffcf6b;padding:7px 9px;margin:4px 0;
+  border:1px solid rgba(255,190,80,.4);border-radius:8px;background:rgba(40,26,6,.35)}
+.op-alerta.ok{color:#b9ffd8;border-color:rgba(43,255,158,.45);background:rgba(6,40,26,.35)}
+
+/* ---- Charla: el descargador se ofrece distinto en PC y en teléfono ----
+   En el PC el chip verde abre 10 · Modelos (el descargador de verdad ya vive
+   allí); en el teléfono la lista llega por Wi-Fi del portátil y `ch-sinpc` avisa
+   de «sin PC» en vez de dejar una lista vacía que parece un fallo de CORT. */
+.ch-bajar{border-color:rgba(43,255,158,.4);color:#b9ffd8;background:rgba(6,40,26,.35)}
+.ch-sinpc{flex:1 1 100%;color:#ffcf6b;line-height:1.5}
+.ch-nota{text-transform:none;letter-spacing:0;font-style:italic}
