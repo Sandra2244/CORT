@@ -418,6 +418,81 @@ if re.search(r"__cortNative\.on", scr_txt) and re.search(r"type\s*[!=]==\s*'musi
 else:
     falla("evento music en la cara", "la pantalla de música no escucha `music`: la barra no avanzaría")
 
+# ── 7 · el SDK de verdad: nada oculto, nada de AndroidX ─────────────────────
+# Aquí no hay `javac` (el portátil de la dueña lo comprobó: no está) y el APK se
+# compila en Actions. El precio de no poder compilar es escribir un símbolo que
+# el `android.jar` del runner rechaza. `v0.2.11-demo` cayó así, con 14 errores y
+# todos en `Reproductor.java`: `android.media.MediaSession` existe pero es
+# `@hide` (el público es `android.media.session.MediaSession`),
+# `MediaStyle.fromSession()` es de marco interno, y `METADATA_KEY_MEDIA_TYPE` con
+# sus `MEDIA_TYPE_MOVIE`/`MEDIA_TYPE_MUSIC` son de AndroidX
+# (`MediaMetadataCompat`), que este proyecto no usa. Se comprueba aquí, leyendo el
+# código **sin comentarios ni literales**, para que un aviso que explique el error
+# no vuelva a parecer el error.
+print("\n[7] el SDK: símbolos ocultos o de AndroidX")
+
+def sin_comentarios(txt: str) -> str:
+    """Queda sólo código: fuera comentarios y literales de texto/carácter."""
+    salida, i, n = [], 0, len(txt)
+    while i < n:
+        ch = txt[i]
+        if ch == '"' or ch == "'":
+            cierre = ch; i += 1
+            while i < n:
+                if txt[i] == "\\": i += 2; continue
+                if txt[i] == cierre: i += 1; break
+                i += 1
+            continue
+        if txt.startswith("//", i):
+            j = txt.find("\n", i); i = n if j < 0 else j; continue
+        if txt.startswith("/*", i):
+            j = txt.find("*/", i + 2); i = n if j < 0 else j + 2; continue
+        salida.append(ch); i += 1
+    return "".join(salida)
+
+PROHIBIDOS = [
+    ("android.media.MediaSession",
+     "es @hide; el público es android.media.session.MediaSession (el mismo de MainActivity)"),
+    ("MediaStyle.fromSession",
+     "es de marco interno; lo público es new Notification.MediaStyle().setMediaSession(sesion.getSessionToken())"),
+    ("METADATA_KEY_MEDIA_TYPE",
+     "es de androidx MediaMetadataCompat, no de android.media.MediaMetadata"),
+    ("MEDIA_TYPE_MOVIE", "tampoco está en android.media.MediaMetadata"),
+    ("MEDIA_TYPE_MUSIC", "tampoco está en android.media.MediaMetadata"),
+    ("androidx.", "este APK se compila sin AndroidX: el runner no tiene esas clases"),
+]
+cazas = []
+java_limpio = {}
+for p in sorted((RAIZ / "apps" / "apk" / "src" / "com" / "cort" / "ia").glob("*.java")):
+    java_limpio[p.name] = sin_comentarios(p.read_text(encoding="utf-8"))
+for nombre, motivo in PROHIBIDOS:
+    culpables = [f"{archivo}:{linea}" for archivo, codigo in java_limpio.items()
+                 for linea, texto in enumerate(codigo.splitlines(), 1)
+                 if nombre in texto]
+    if culpables:
+        cazas.append(f"{nombre} ({motivo}) en {', '.join(culpables[:4])}")
+if cazas:
+    falla("SDK", "; ".join(cazas))
+else:
+    dice_ok("SDK", f"{len(java_limpio)} archivos Java sin símbolos ocultos ni de AndroidX")
+
+# Y en positivo: la notificación tiene que colgar del Token de la sesión, que es
+# lo que hace que el auricular y la pantalla de bloqueo obedezcan.
+rep = java_limpio.get("Reproductor.java", "")
+if "setMediaSession(" in rep and "getSessionToken()" in rep:
+    dice_ok("MediaStyle", "la notificación usa setMediaSession(sesion.getSessionToken())")
+else:
+    falla("MediaStyle", "Reproductor.java no enlaza su notificación con el Token de la sesión: "
+                        "los botones de la barra y del bloqueo no mandarían nada")
+
+# El máscara de acciones de PlaybackState es de 64 bits: pasarla `int` deja a
+# javac sin sobrecarga válida de setState (error medido en v0.2.11-demo).
+if re.search(r"long\s+ACCIONES\s*=", rep):
+    dice_ok("PlaybackState", "la máscara de acciones es `long`, como pide setState(…)")
+elif "ACTION_PLAY" in rep:
+    falla("PlaybackState", "la máscara de acciones de PlaybackState no se declara como `long`: "
+                           "setState(…) no encuentra sobrecarga")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

@@ -11,8 +11,11 @@ package com.cort.ia;
  * notificación, y la cara sólo manda órdenes por el puente `CortNative`.
  *
  * Sin AndroidX, sin `MediaBrowserServiceCompat`, sin Gradle: el `MediaSession`
- * del sistema (`android.media.MediaSession`, API 21) es público y con él valen
- * el doble toque del auricular y los botones de la notificación.
+ * del sistema — `android.media.session.MediaSession`, API 21, el mismo que usa
+ * `MainActivity` para el doble toque— es público y con él valen los botones de
+ * la notificación y la pantalla de bloqueo. **No** es `android.media.MediaSession`:
+ * ése existe pero está oculto (`@hide`), y `android.jar` del SDK no lo exporta:
+ * `javac` lo llamó en la línea del `import` y el APK no salió.
  *
  * El video: `MediaPlayer` reproduce el .mp4 sin superficie y su audio sigue
  * sonando en segundo plano; la imagen y el avance «cuadro a cuadro» los hace la
@@ -32,7 +35,7 @@ import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.MediaSession;
+import android.media.session.MediaSession;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
@@ -186,7 +189,11 @@ public class Reproductor extends Service {
         b.addAction(new Notification.Action.Builder((android.graphics.drawable.Icon) null,
                 "⏭ siguiente", boton("siguiente")).build());
         if (Build.VERSION.SDK_INT >= 26 && sesion != null) {
-            b.setStyle(Notification.MediaStyle.fromSession(sesion)
+            // `MediaStyle.fromSession(...)` es de marco interno (`@hide`): lo público
+            // es pasar el `Token` de la sesión, que es lo que ven el auricular y la
+            // pantalla de bloqueo.
+            b.setStyle(new Notification.MediaStyle()
+                    .setMediaSession(sesion.getSessionToken())
                     .setShowActionsInCompactView(0, 1));
         }
         return b.build();
@@ -210,21 +217,29 @@ public class Reproductor extends Service {
         if (vivo != null && vivo.sesion != null) estadoSesion();
     }
 
+    /* Lo que CORT deja hacer desde la notificación, la pantalla de bloqueo y el
+     * auricular: play, pausa, saltar, buscar y parar. Es un `long` porque el
+     * sistema usa una máscara de 64 bits; pasarla como `int` (como hacía antes
+     * esta línea) deja a `javac` sin ninguna sobrecarga de `setState` válida. */
+    private static final long ACCIONES =
+            android.media.session.PlaybackState.ACTION_PLAY
+          | android.media.session.PlaybackState.ACTION_PAUSE
+          | android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT
+          | android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
+          | android.media.session.PlaybackState.ACTION_SEEK_TO
+          | android.media.session.PlaybackState.ACTION_STOP;
+
     private void estadoSesion() {
         Pista p = en(idx);
         android.media.session.PlaybackState.Builder sb =
-                new android.media.session.PlaybackState.Builder()
-                .setActions(android.media.session.PlaybackState.ACTION_PLAY
-                        | android.media.session.PlaybackState.ACTION_PAUSE
-                        | android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT
-                        | android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS
-                        | android.media.session.PlaybackState.ACTION_SEEK_TO
-                        | android.media.session.PlaybackState.ACTION_STOP);
+                new android.media.session.PlaybackState.Builder().setActions(ACCIONES);
         if (p != null) sb.setExtras(extrasDe(p));
+        // Sobrecarga (estado, acciones, velocidad, posición) — la más antigua que
+        // lleva posición, disponible desde API 22 y con minSdk 26 no hay que
+        // preguntar por la versión.
         sb.setState(sonando() ? android.media.session.PlaybackState.STATE_PLAYING
                               : android.media.session.PlaybackState.STATE_PAUSED,
-                p == null ? 0 : pos(), -1f, 1f,
-                p == null ? 0 : p.dur, System.currentTimeMillis());
+                ACCIONES, 1f, p == null ? -1L : pos());
         sesion.setMetadata(metaDe(p));
         sesion.setPlaybackState(sb.build());
     }
@@ -245,9 +260,11 @@ public class Reproductor extends Service {
             if (!p.genero.isEmpty())
                 m.putString(android.media.MediaMetadata.METADATA_KEY_GENRE, p.genero);
             if (p.dur > 0) m.putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, p.dur);
-            m.putInt(android.media.MediaMetadata.METADATA_KEY_MEDIA_TYPE,
-                    p.video ? android.media.MediaMetadata.MEDIA_TYPE_MOVIE
-                            : android.media.MediaMetadata.MEDIA_TYPE_MUSIC);
+            // Aquí había un `METADATA_KEY_MEDIA_TYPE` con `MEDIA_TYPE_MOVIE`/
+            // `MEDIA_TYPE_MUSIC`: esas dos constantes son de `androidx`
+            // (`MediaMetadataCompat`), no de `android.media.MediaMetadata`, y el SDK
+            // las rechazó. El vídeo ya se distingue en la cara (`Pista.video`), que es
+            // donde hace falta: aquí sólo se pinta el cartel de la canción.
         }
         return m.build();
     }
