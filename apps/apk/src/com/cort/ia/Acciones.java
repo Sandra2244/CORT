@@ -849,13 +849,11 @@ public class Acciones {
         int tope = audio == null ? 0 : tope(audio);
         j.p("volumen", audio == null ? 0 : Math.max(0, nivel(audio)));
         j.p("max", tope);
-        if (audio != null && Build.VERSION.SDK_INT >= 34) {
-            // `isMusicMute()` es de API 34: sin guarda, en un 33 revienta.
-            try {
-                j.p("mudo", audio.isMusicMute());
-            } catch (Throwable noHayForma) {
-                /* se queda sin el campo */
-            }
+        if (audio != null) {
+            // `isMusicMute()` NO está en la lista pública del SDK (es de
+            // `@SystemApi`, y `javac` la rechaza aunque el teléfono la tenga). Lo
+            // que se puede medir con API pública es el nivel: silencio es cero.
+            j.p("mudo", Math.max(0, nivel(audio)) == 0);
         }
         j.p("linterna", linternaMandada);
         j.p("superficie", aparece());

@@ -507,14 +507,20 @@ public class CortNative {
         }
         // Lo que la cara pregunta antes de prometer una canción o un contacto:
         // `hasPermission('medios')`, `hasPermission('contactos')`, `hasPermission('avisos')`.
-        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("archiv")) {
+        // Y `hasPermission('files')`, la clave corta del explorador de archivos: sin
+        // `startsWith("file")` caía en el `return true` de abajo y CORT prometía ver
+        // carpetas que el teléfono no le había dejado ver.
+        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("musica")
+            || k.startsWith("archiv") || k.startsWith("file") || k.startsWith("almacen")) {
             return Musica.puedeLeer(act);
         }
         if (k.startsWith("contacto") || k.startsWith("marcar") || k.startsWith("llam")) {
             return act.checkSelfPermission(android.Manifest.permission.READ_CONTACTS)
                    == PackageManager.PERMISSION_GRANTED;
         }
-        if (k.startsWith("aviso") || k.startsWith("notific")) {
+        // Igual que en `MainActivity.grupoDe`: el panel pregunta con la clave corta
+        // «notif», y `startsWith("notific")` no la cubría.
+        if (k.startsWith("aviso") || k.startsWith("notif")) {
             // Android 13 es el único que pregunta; antes la notificación existe sin permiso.
             if (android.os.Build.VERSION.SDK_INT < 33) return true;
             return act.checkSelfPermission("android.permission.POST_NOTIFICATIONS")
@@ -1251,7 +1257,7 @@ public class CortNative {
         return envia(destino, archivo.getName());
     }
 
-    /** El `ACTION_SEND` con eleitor de app, en la cara, que es donde Android lo deja. */
+    /** El `ACTION_SEND` con selector de app, en la cara, que es donde Android lo deja. */
     private String envia(final Uri destino, final String nombre) {
         final Intent manda = new Intent(Intent.ACTION_SEND)
             .setType(mimeDeArchivo(nombre))

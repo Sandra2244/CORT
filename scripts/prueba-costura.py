@@ -543,6 +543,20 @@ PROHIBIDOS = [
     ("MEDIA_TYPE_MOVIE", "tampoco está en android.media.MediaMetadata"),
     ("MEDIA_TYPE_MUSIC", "tampoco está en android.media.MediaMetadata"),
     ("androidx.", "este APK se compila sin AndroidX: el runner no tiene esas clases"),
+    # Los tres últimos, medidos por `javac` en el run rojo de `v0.2.14-demo`
+    # (39668659120). Ninguno está en la lista pública del SDK 34, y los tres
+    # parecían obvios: son API que uno «recuerda» haber usado.
+    ("android.content.FileProvider",
+     "no existe: `javac` dijo «cannot find symbol: class FileProvider». Lo del "
+     "framework es la clase base, `android.content.ContentProvider`, y sobre ella "
+     "está escrito `ArchivosProvider` (AndroidX queda fuera del proyecto)"),
+    ("isDefault()",
+     "sólo la trae `Voice.Style`; `android.speech.tts.Voice` no la tiene. La voz "
+     "por defecto se pide al motor con `TextToSpeech.getDefaultVoice()` y se "
+     "compara por nombre"),
+    ("isMusicMute",
+     "es `@SystemApi` y `javac` la rechaza aunque el teléfono la tenga. Silencio "
+     "medido con API pública: `nivel(audio) == 0`"),
 ]
 cazas = []
 java_limpio = {}
@@ -962,6 +976,55 @@ if bg_java:
                                    + donde + " nunca se abre")
         else:
             dice_ok(f"segundo plano · {kind}", "su botón abre " + donde)
+
+# 9.f · La misma lección de `notif` y de `files`, pero general: cada clase de
+# permiso que la cara manda a Java (`perms.ask`, `permRow`, `requestPermission` y
+# las filas del panel) tiene que tener una rama en los DOS lados del puente.
+# `MainActivity.pidePermiso` decide QUÉ se abre (cuadro o pantalla de Ajustes) y
+# `CortNative.permiso` decide si ya está concedido. Los dos terminan en una
+# reserva (`grupoDe` devuelve micrófono, `permiso` devuelve `true`) y caer en ella
+# es el fallo silencioso exacto: pedir micrófono por una carpeta, o prometer
+# archivos que el teléfono nunca concedió.
+CARA_TODA = "\n".join(p.read_text(encoding="utf-8")
+                      for p in sorted((RAIZ / "ui" / "js").glob("*.js")))
+clases = set(re.findall(r"perms\.(?:ask|has)\(\s*'([a-zA-Z_]+)'", CARA_TODA))
+clases |= set(re.findall(r"permRow\(\s*'([a-zA-Z_]+)'", CARA_TODA))
+clases |= set(re.findall(r"'requestPermission'\s*,\s*'([a-zA-Z_]+)'", CARA_TODA))
+panel_perm = HUD_21[HUD_21.index("const BG_PERMS"):HUD_21.index("function bgStatus()")]
+clases |= set(re.findall(r"^\s*\['([a-z_]+)'", panel_perm, re.M))
+clases.discard("mic")            # el micrófono ES la reserva de `grupoDe`, y está bien
+
+texto_ma = (RAIZ / "apps" / "apk" / "src" / "com" / "cort" / "ia" / "MainActivity.java").read_text(encoding="utf-8")
+i = texto_ma.find("void pidePermiso(String kind)")
+j = texto_ma.find("private static String[] permisosDeArchivos", i)
+# La ventana va desde el principio de `pidePermiso` —con sus tres salidas tempranas:
+# burbuja, batería e inicio automático— hasta el final de `grupoDe`, que es justo
+# donde empieza lo de siempre.
+CUADRO_BRUTO = texto_ma[i:j] if i >= 0 and j > i else ""
+PERMISO_BRUTO = ""
+k0 = puente_bruto.find("private boolean permiso(String kind)")
+k1 = puente_bruto.find("private void pedir(String kind)", k0)
+if k0 >= 0 and k1 > k0:
+    PERMISO_BRUTO = puente_bruto[k0:k1]
+
+if not CUADRO_BRUTO or not PERMISO_BRUTO:
+    falla("permisos", "`pidePermiso` o `permiso` no se encuentran en Java: nada que comprobar")
+elif not clases:
+    falla("permisos", "la cara no pregunta ningún permiso con clave literal: "
+                      "el puente se reformó sin avisar a la prueba")
+else:
+    sin_rama = []
+    for clase in sorted(clases):
+        for donde, cuerpo in (("cuadro", CUADRO_BRUTO), ("medición", PERMISO_BRUTO)):
+            ramificaciones = re.findall(r'k\.(?:startsWith|equals)\("([a-zA-Z_]+)"', cuerpo)
+            if not any(pref == clase or clase.startswith(pref) for pref in ramificaciones):
+                sin_rama.append(f"`{clase}` (se queda sin {donde})")
+    if sin_rama:
+        falla("permisos", "la cara pregunta y Java no tiene rama: " + ", ".join(sin_rama)
+              + " → cae en la reserva (micrófono o `true`)")
+    else:
+        dice_ok("permisos",
+                f"las {len(clases)} clases que pregunta la cara tienen rama en el cuadro y en la medición")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

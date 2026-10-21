@@ -669,7 +669,11 @@ public class MainActivity extends Activity {
         if (k.startsWith("camara") || k.startsWith("camera")) {
             return new String[] { android.Manifest.permission.CAMERA };
         }
-        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("archiv")) {
+        // Misma clase de fallo que la línea de «notif»: la cara pregunta con la
+        // clave corta `files` (`perms.ask('files')` en hud.js) y sin esto se
+        // caía en el micrófono. `archiv` sigue cubriendo «archivos».
+        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("musica")
+            || k.startsWith("archiv") || k.startsWith("file") || k.startsWith("almacen")) {
             return permisosDeArchivos();
         }
         if (k.startsWith("contacto") || k.startsWith("marcar") || k.startsWith("llam")) {
@@ -678,7 +682,10 @@ public class MainActivity extends Activity {
                 android.Manifest.permission.CALL_PHONE,
             };
         }
-        if (k.startsWith("aviso") || k.startsWith("notific")) {
+        // «notif» es la clave que usa el panel de segundo plano, y `startsWith
+        // ("notific")` no la cubre: sin esta línea el botón «Dar» de los avisos se
+        // caía en el micrófono.
+        if (k.startsWith("aviso") || k.startsWith("notif")) {
             return new String[] { "android.permission.POST_NOTIFICATIONS" };
         }
         // La ronda 2.1 pregunta por el calendario («¿qué tengo hoy?»). Se pide SOLO

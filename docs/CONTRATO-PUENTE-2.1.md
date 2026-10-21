@@ -125,6 +125,35 @@ de la app con la fila indicada en un aviso. Lo comprueba el sector [9] de
 `scripts/prueba-costura.py` en las dos direcciones.
 
 
+## 6c · las claves de permiso: `hasPermission(kind)` / `requestPermission(kind)`
+
+El `kind` es **texto libre que escribe la cara**, y Java lo reparte con
+`startsWith`. Eso funciona hasta que la cara usa una clave corta que la rama no
+prevé, y entonces los dos lados caen en su reserva: `CortNative.permiso` devuelve
+`true` (CORT promete lo que el teléfono no concedió) y `MainActivity.grupoDe`
+devuelve `RECORD_AUDIO` (el botón «Dar» de una carpeta abre el cuadro del
+micrófono). Pasó dos veces y las dos fueron silenciosas, sin un solo error en
+pantalla: `notif` (la rama ponía `notific`) y `files` (la rama ponía `archiv`).
+
+Las seis claves literales que usa hoy la cara, y a dónde van:
+
+| clave | la pregunta | qué abre |
+|---|---|---|
+| `mic` | `hasPermission('mic')` | `RECORD_AUDIO` (y es la reserva de `grupoDe`, así que sólo llega por su nombre) |
+| `notif` | fila del panel | `POST_NOTIFICATIONS` (Android 13+; antes no hay cuadro) |
+| `overlay` | fila del panel, `burbuja` y `requestPermission('burbuja')` | pantalla de «aparecer encima de otras apps» — **no** es un cuadro: `requestPermissions` tiraría `RuntimeException` |
+| `battery` | fila del panel | lista de excepciones de batería |
+| `music` / `files` / `medios` | `permRow('music')`, `perms.ask('files')` antes de listar carpetas | los permisos de medios por versión (`READ_MEDIA_*` desde 13, `READ_EXTERNAL_STORAGE` antes) |
+
+`autostart` (el aviso de Xiaomi/Samsung/Oppo) tampoco es un cuadro: abre los
+ajustes de la app. Y no se mide: `bgStatus()` no emite una clave `autostart` por
+eso, porque nadie puede leer ese interruptor del fabricante desde una app normal.
+
+El sector [9.f] de la prueba recorre las claves literales de `ui/js/*.js` y exige
+rama en **los dos** archivos Java, así que una clave nueva que se invente en la
+cara sin apoyo en Java sale roja aquí y no en el teléfono de la dueña.
+
+
 ## 7 · `agenda(que, args)` — tus citas y lo que llegó al correo
 
 `Agenda.java` lee el calendario del teléfono con `CalendarContract.Instances` y

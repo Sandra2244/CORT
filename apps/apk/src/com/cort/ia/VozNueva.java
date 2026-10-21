@@ -34,9 +34,10 @@ package com.cort.ia;
  *   desde una app normal, sólo abrir el instalador del sistema
  *   (`INSTALL_TTS_DATA`). Si nadie atiende ese intent, se escribe el camino
  *   manual en `dice` en vez de prometer un botón que no hace nada.
- * · `isDefault()` está deprecado pero existe desde API 21, y
- *   `getDefaultEngine()` desde API 1: con minSdk 26 caben los dos, y el
- *   deprecated es un aviso del compilador, no un fallo.
+ * · `Voice` NO tiene `isDefault()` (eso lo trae `Voice.Style`, otra clase), así
+ *   que la voz por defecto se pide al motor con `TextToSpeech.getDefaultVoice()`
+ *   —público desde API 21, y con minSdk 26 cabe— y se compara por nombre. Medir
+ *   «por defecto» con una clave inventada habría salido siempre `false`.
  */
 
 import android.content.ActivityNotFoundException;
@@ -234,6 +235,14 @@ public class VozNueva {
         Voice actual = null;
         try { actual = boca == null ? null : boca.getVoice(); }
         catch (Exception elMotorNoDice) { actual = null; }
+        // `Voice` no tiene `isDefault()` (eso lo trae `Voice.Style`): la voz por
+        // defecto se pide al motor con `TextToSpeech.getDefaultVoice()`, y se
+        // compara por nombre porque son objetos distintos en cada consulta.
+        String nombrePorDefecto = null;
+        try {
+            Voice predilecta = boca == null ? null : boca.getDefaultVoice();
+            nombrePorDefecto = predilecta == null ? null : predilecta.getName();
+        } catch (Exception elMotorNoDice2) { nombrePorDefecto = null; }
         boolean primero = true;
         for (Voice voz : vacias) {
             if (!primero) v.append(',');
@@ -241,7 +250,7 @@ public class VozNueva {
             Locale l = voz.getLocale();
             boolean porDefecto;
             try {
-                porDefecto = voz.isDefault()
+                porDefecto = (nombrePorDefecto != null && nombrePorDefecto.equals(voz.getName()))
                     || (actual != null && actual.getName().equals(voz.getName()));
             } catch (Exception sinCriterio) {
                 porDefecto = false;
