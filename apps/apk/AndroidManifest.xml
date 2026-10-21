@@ -40,6 +40,48 @@
   engrosa la lista de `<uses-permission>`. Lo que oye se queda en doce líneas de
   RAM y nunca se escribe en disco: leer y olvidar.
 
+  ── LO QUE VOLVIÓ EN LA RONDA 2.1.0, medido contra el `CORT-IA-1.1.0.apk` que la
+     dueña tiene en el cajón de aplicaciones y contra `CORT-TELEFONO` (la línea
+     hermana que sí mandaba en el aparato). No es compresión: era contenido:
+
+  * El `<queries>` de Android 11. Sin él `PackageManager` ve cuatro cosas en un
+    teléfono con cien apps, y «abre WhatsApp», «abre Lark player» y la rejilla de
+    aplicaciones salían vacías. Con `<intent>` de `MAIN`/`LAUNCHER` se ven los
+    lanzadores y con los paquetes nombrados las apps de ella: es la vía legal que
+    sustituye al permiso que rechazó (`QUERY_ALL_PACKAGES`).
+  * `TTS_SERVICE` dentro de `<queries>`: es lo único que hace que un motor de voz
+    instalable se vea desde Android 11. Sin eso la pantalla de Voces nacía vacía.
+  * `.ArchivosProvider` con autoridad `com.cort.ia.files`, como en el 1.1.0. Sin
+    `FileProvider` Android no deja pasar un archivo del teléfono a otra app (el
+    `file://` directo está prohibido desde API 24 y revienta con
+    `FileUriExposedException`), así que «envíame la canción» no tenía forma.
+  * `respaldo.xml` y `extraccion.xml`, que el 1.1.0 declaraba y la reescritura
+    perdió. Vuelven con una decisión tomada: las preferencias `cort` quedan FUERA
+    del backup de Google, porque ahí viven la dirección del portátil y la clave de
+    los proveedores. Se respalda la cara, no los secretos.
+  * `CAMERA` y la `flash`: sólo para `CameraManager.setTorchMode` — la linterna —,
+    que no captura imagen ni se pide en tiempo de ejecución.
+  * `SET_ALARM` (`com.android.alarm.permission.SET_ALARM`): «pon una alarma a las
+    7:30» usando el reloj del sistema, sin que CORT tenga que ser el reloj.
+  * `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Android congela el reproductor a los
+    pocos minutos con la pantalla apagada, que es el «me quitan la canción» que
+    ella reportó. El sistema no lo concede solo; la cara abre el diálogo una vez.
+  * `SYSTEM_ALERT_WINDOW` para el puntito de escucha sobre otra app (`burbuja()`).
+    Se concede desde Ajustes ▸ «Aparecer encima de otras apps»; sin concesión no
+    hay burbuja y la cara lo dice en vez de fingir que la pone.
+  * `READ_MEDIA_VISUAL_USER_SELECTED`: con target 34 Android ya no da los álbumes
+    enteros aunque se pida `READ_MEDIA_IMAGES`; ofrece elegir unas pocas fotos, y
+    sin este permiso el MV de una carpeta concreta sale negro.
+
+  Lo que NO se declara, escrito a propósito: `PACKAGE_USAGE_STATS`,
+  `QUERY_ALL_PACKAGES`, `READ_SMS`, `RECEIVE_SMS`, `PROCESS_OUTGOING_CALLS` y
+  `BIND_ACCESSIBILITY_SERVICE` (los cuatro primeros los vetó la dueña o no tienen
+  uso; el de accesibilidad es el que Google usa para matar apps del cajón). Y no
+  hay `FOREGROUND_SERVICE_MICROPHONE` porque no hay ningún servicio en primer plano
+  con el micro abierto: esa idea ya frozeó el teléfono una vez y no vuelve. El
+  doble toque del auricular se atiende por `MediaSession`, no por un micro oyendo
+  siempre.
+
   `versionCode` y `versionName` NO se escriben aquí: los pone `compilar.sh` al
   enlazar, derivados de la etiqueta de la Release.
 -->
@@ -52,6 +94,29 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
                      android:required="false" />
     <uses-permission android:name="android.permission.VIBRATE"
+                     android:required="false" />
+
+    <!-- La linterna: `CameraManager.setTorchMode`, que no captura imagen ni se
+         pide en tiempo de ejecución. Se declara porque Android filtra la linterna
+         por el permiso de cámara, no por el hardware. -->
+    <uses-permission android:name="android.permission.CAMERA"
+                     android:required="false" />
+
+    <!-- Alarma y temporizador, prestados del reloj del sistema. Sin este permiso
+         Android no deja lanzar `SET_ALARM` desde una app que no sea el reloj. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM"
+                     android:required="false" />
+
+    <!-- Que el sistema no congele el reproductor ni el auricular a los pocos
+         minutos de pantalla apagada («me quitan la canción»). La concesión la
+         hace la dueña una vez desde el diálogo que abre la cara. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+                     android:required="false" />
+
+    <!-- El puntito de CORT sobre otra app cuando se le llama desde fuera
+         (`burbuja()`). Se concede en Ajustes ▸ «Aparecer encima de otras apps»;
+         sin concesión no hay burbuja y la cara lo dice. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"
                      android:required="false" />
 
     <!-- ── Archivos: para «ordena mis descargas», «mueve estos a la carpeta de la
@@ -73,6 +138,11 @@
                      android:required="false" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
                      android:required="false" />
+    <!-- Con target 34 el sistema ya no da los álbumes enteros aunque se pida
+         `READ_MEDIA_IMAGES`: primero ofrece elegir unas pocas fotos. Sin este
+         permiso, el MV de una carpeta concreta sale negro. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
+                     android:required="false" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
                      android:required="false" />
 
@@ -84,6 +154,16 @@
     <uses-permission android:name="android.permission.CALL_PHONE"
                      android:required="false" />
     <uses-permission android:name="android.permission.READ_CONTACTS"
+                     android:required="false" />
+
+    <!-- «¿qué tengo hoy?», «apunta cena con Samuel el jueves»: la agenda es de
+         `CalendarContract`, y eso exige `READ_CALENDAR`. Se pide la primera vez
+         que se pregunta, no al abrir la app. No se declara `WRITE_CALENDAR`: CORT
+         no mete citas a traición, abre el formulario de la app del calendario con
+         el título puesto y lo guarda el dedo de la dueña. El correo no tiene
+         permiso: lo que se cuenta es lo que ya está en la barra de notificaciones
+         (`Avisos`), y eso se concede con el interruptor del sistema. -->
+    <uses-permission android:name="android.permission.READ_CALENDAR"
                      android:required="false" />
 
     <!-- ── Reproducir en segundo plano: el servicio con su notificación, el
@@ -104,14 +184,72 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <!-- Cámara y flash `required=false`: la linterna es un lujo, no una condición.
+         Un teléfono sin flash sigue con CORT entero, sólo pierde la bombilla. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <!-- ── `<queries>` (Android 11): la visibilidad filtrada que sustituye al
+         permiso que la dueña rechazó. Es la lista de LO QUE CORT PREGUNTA; fuera
+         de ella el `PackageManager` contesta vacío, y así es como «no sale nada
+         en la lista» se confundía con un fallo de compilación. -->
+    <queries>
+        <!-- Todos los lanzadores: la rejilla de apps y «abre Lark player». -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Los motores de voz instalados. Sin esta línea `TextToSpeech` no ve ni
+             a sus competidores y la pantalla de Voces nacía vacía. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- El reloj del sistema (alarma y temporizador), el navegador (búsquedas),
+             el marcador y el reconocedor de voz del aparato. -->
+        <intent>
+            <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SET_TIMER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.WEB_SEARCH" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <!-- Las apps que ella nombra a boca de jarro; estaban ya en el 1.1.0. -->
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.google.android.apps.maps" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.google.android.calendar" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <!-- El Lark Player, que es el reproductor de MV que usa, según de qué
+             tienda venga: tiene dos nombres de paquete posibles. -->
+        <package android:name="com.xiaopl.mobileplayer" />
+        <package android:name="com.ovovcx.fansclub" />
+    </queries>
 
     <application
         android:label="CORT"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/seguridad_red"
         android:hardwareAccelerated="true"
-        android:supportsRtl="true">
+        android:supportsRtl="true"
+        android:fullBackupContent="@xml/respaldo"
+        android:dataExtractionRules="@xml/extraccion"
+        android:requestLegacyExternalStorage="true">
 
         <!-- `singleTop`: el asistente y el reconocedor reutilizan la cara que ya
              está abierta en vez de montar una segunda encima. -->
@@ -186,5 +324,27 @@
             android:name=".Reproductor"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- El **mueble de los archivos**: convierte
+             `/storage/emulated/0/Descargas/tema.mp3` en un
+             `content://com.cort.ia.files/…` que otra app sí puede abrir, que es lo
+             que había en el 1.1.0 y se perdió en la reescritura. `exported=false`
+             y `grantUriPermissions=true`: nadie entra sin el permiso prestado para
+             ese archivo y ese viaje concreto. Las rutas admitidas están en
+             `res/xml/archivos.xml`: seis carpetas públicas nombradas (música,
+             vídeo, fotos, DCIM, descargas, documentos) más la raíz del
+             almacenamiento público, que hace falta porque el organizador mueve
+             archivos a carpetas que la dueña inventa. `Android/` (los datos de
+             otras apps) no se puede prestar aunque se pidiera: el sistema lo
+             esconde desde API 30. -->
+        <provider
+            android:name=".ArchivosProvider"
+            android:authorities="com.cort.ia.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/archivos" />
+        </provider>
     </application>
 </manifest>

@@ -2,6 +2,11 @@
 import { createWin } from './windows.js';
 import { createVoice, perms } from './voice.js';
 import { initPantallas, porVoz, ir, modoJuego, fraseSinNucleo } from './pantallas.js';
+/* La cara de la ronda 2.1 (`equipo`: voz, mando, cerebro, memoria y trajes). Se
+   importa SÓLO esto: `hud.js` no habla con `window.CortNative` de estas familias,
+   habla a través del módulo — él es quien sabe si el puente trae `accion()`,
+   `mente()` o `burbuja()`, y él es quien degrada con la frase honesta. */
+import { telefonoPorVoz, handleTelefonoEvento, estadoTelefono } from './telefono.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -160,9 +165,12 @@ function buildWindows() {
         <option value="portugués">Português</option></select>
       <div class="pf-sec">▸ Segundo plano</div>
       <div id="bgbox">
-        <button id="bgtoggle" class="bg-toggle"><span class="sw"></span><b>Escuchar con la app cerrada</b></button>
-        <div class="bg-help">Di <b>«Oye CORT, abre WhatsApp y pon música»</b> aunque estés en otra app.
-          Android muestra un aviso fijo mientras escucha.</div>
+        <button id="bgtoggle" class="bg-toggle"><span class="sw"></span><b>Que CORT se quede en segundo plano</b></button>
+        <div class="bg-help">Al irte de la app queda un <b>aviso fijo de CORT</b>: la música y el
+          <b>doble toque del auricular</b> siguen obedeciendo. El micrófono se cierra para no
+          trabar el teléfono, así que «Oye CORT» con la app cerrada <b>no</b> funciona —la palabra
+          de activación de Google tampoco viaja en este APK—; para eso tienes que abrir la cara o
+          tocar la <b>burbuja</b>.</div>
         <div id="bgperms"></div>
         <label class="bg-check"><input type="checkbox" id="bgbeeps"> Dejar sonar el pitido al escuchar</label>
       </div>
@@ -1198,12 +1206,18 @@ async function reparaActualizacion() {
   speakTTS(dicho);
 }
 
-/* ---------- SEGUNDO PLANO: escuchar «Oye CORT» con la app cerrada ---------- */
+/* ---------- SEGUNDO PLANO: que CORT siga vivo al irte de la app ---------- */
+/* Las cuatro filas son las que de verdad hacen falta para que el aviso de fondo
+   exista y Android no lo apague, y cada una se mide en Java (`bgStatus()`) con su
+   permiso o su interruptor real: micrófono concedido, avisos de Android (13+),
+   «aparecer encima de otras apps» para la burbuja, y la excepción de batería. El
+   botón «Dar» de cada fila no promete nada: `perms.ask(kind)` cae en Java, que
+   abre el cuadro o la pantalla de Ajustes que toque. */
 const BG_PERMS = [
-  ['mic', 'Micrófono', 'para oírte'],
-  ['notif', 'Notificaciones', 'el aviso fijo «CORT escuchando»'],
-  ['overlay', 'Burbuja flotante', 'abrir apps desde el fondo (Android 10+)'],
-  ['battery', 'Batería sin restricción', 'que Android no lo apague'],
+  ['mic', 'Micrófono', 'para oírte cuando abres la cara o la burbuja'],
+  ['notif', 'Avisos de Android', 'sin ellos no se puede poner el aviso fijo (Android 13+)'],
+  ['overlay', 'Burbuja flotante', 'el punto de CORT para llamarme sin abrir la app'],
+  ['battery', 'Batería sin restricción', 'que Android no congele el aviso ni la música'],
 ];
 function bgStatus() {
   try { return IS_ANDROID ? JSON.parse(window.CortNative.bgStatus()) : null; } catch { return null; }
@@ -1212,8 +1226,13 @@ function renderBg(st = bgStatus()) {
   const box = document.getElementById('bgbox'); if (!box) return;
   if (!st) { box.innerHTML = '<div class="bg-help">Solo disponible en la app de Android.</div>'; return; }
   const t = document.getElementById('bgtoggle');
-  t.classList.toggle('on', st.enabled);
-  t.querySelector('b').textContent = st.enabled ? (st.running ? 'Escucha de fondo ACTIVA' : 'Activando…') : 'Escuchar con la app cerrada';
+  // `enabled` es lo que la dueña pidió; `running` es la prueba de que está pasando
+  // (el aviso puesto ahora mismo). Las dos claves nuevas vienen de `bgStatus()`.
+  t.classList.toggle('on', !!st.enabled);
+  t.querySelector('b').textContent = st.enabled
+    ? (st.running ? 'Segundo plano ACTIVO (aviso puesto)'
+                  : 'Segundo plano pedido: activa CORT y lo verás en la barra')
+    : 'Que CORT se quede en segundo plano';
   const rows = BG_PERMS.map(([k, name, why]) => `<div class="bgp ${st[k] ? 'ok' : ''}">
       <span class="st">${st[k] ? '✓' : '·'}</span><span class="nm">${name}<small>${why}</small></span>
       ${st[k] ? '' : `<button data-perm="${k}">Dar</button>`}</div>`).join('');
@@ -1222,16 +1241,21 @@ function renderBg(st = bgStatus()) {
       <span class="nm">${esc(st.maker)}: activa «Inicio automático» / «Actividad en segundo plano»<small>en los ajustes de la app, si no tu teléfono lo cierra</small></span>
       <button data-perm="autostart">Abrir</button></div>` : '');
   document.querySelectorAll('#bgperms [data-perm]').forEach(b => b.onclick = () => perms.ask(b.dataset.perm));
+  if (st.dice) { const ayuda = box.querySelector('.bg-help'); if (ayuda) ayuda.innerHTML = esc(st.dice); }
 }
 async function toggleBg() {
   const st = bgStatus(); if (!st) return;
   const on = !st.enabled;
   window.CortNative.setBackground(on);
-  term(on ? 'escucha de fondo: activando' : 'escucha de fondo: apagada', 'voz');
+  term(on ? 'segundo plano: pedido' : 'segundo plano: apagado', 'voz');
   if (on) {
     voice.setWake(true);                                   // en pantalla también escucha «Oye CORT»
-    add('a', 'Listo. Aunque cierres la app, di «Oye CORT» y tu orden. Para que no falle, da los permisos de la lista.', 'voz');
-    speakTTS('Escucha de fondo activada.');
+    add('a', 'Listo: al salir de la app queda mi aviso, y con él la música y el doble toque '
+      + 'del auricular. El micrófono se cierra para no trabarte. Da los permisos de la lista '
+      + 'para que Android no me congele.', 'voz');
+    speakTTS('Me quedo en segundo plano.');
+  } else {
+    add('a', 'CORT se guarda al salir de la app: sin aviso y sin doble toque en segundo plano.', 'voz');
   }
   setTimeout(() => renderBg(), 700);
 }
@@ -1371,6 +1395,30 @@ function llamarA(quien) {
   sayLine(r.directo ? 'Llamando a ' + nombre : 'Te puse a ' + nombre + ' en el marcador.');
   term('marcar ' + nombre + ' ' + r.numero + (r.directo ? ' (directo)' : ' (marcador)'), 'teléfono');
 }
+/* ── el auricular abierto, a la vista ───────────────────────────────────────
+   `Reconocimiento.java`/`MainActivity.java` empujan `{type:'auricular',
+   escuchando:true}` cuando el micro del auricular se abre sin que la dueña esté
+   mirando la app (el doble toque, «Oye CORT» de fondo, la respuesta a un aviso).
+   Sin una señal en la cara eso se siente como una escucha escondida: se pone un
+   badge abajo a la izquierda y el micrófono brilla, y se quita al terminar. En el
+   PC este evento no llega nunca —no hay puente—, así que el badge no se crea. */
+function pintaAuricular(escuchando, nota) {
+  const raiz = document.documentElement;
+  raiz.classList.toggle('auricular-abierto', !!escuchando);
+  let badge = document.getElementById('auricular');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.id = 'auricular';
+    badge.innerHTML = '<i>🎧</i><span></span>';
+    document.body.appendChild(badge);
+  }
+  badge.querySelector('span').textContent = nota
+    || (escuchando ? 'escuchando por el auricular' : 'auricular cerrado');
+  badge.hidden = !escuchando;
+  const wake = document.getElementById('wake');
+  if (wake) wake.classList.toggle('auricular', !!escuchando);
+}
+
 /* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
 const HIST = [];
 let hIdx = 0, draft = '';
@@ -1385,7 +1433,16 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   'abre el mv', 'el video con la letra',
   'ordena mis archivos', 'ordena mis documentos', 'ordena la música',
   'confirmar', 'cancelar', 'modo juego', 'vuelve CORT',
-  'revisa si hay actualizaciones', 'actualízate'];
+  'revisa si hay actualizaciones', 'actualízate',
+  /* las órdenes del contrato 2.1: sólo tienen eco en el teléfono, y la pantalla
+     Equipo las enseña con su nombre. Se listan aquí para que el Tab y la ayuda
+     digan lo mismo en las dos caras. */
+  'abre el equipo', 'sube el volumen', 'baja el volumen', 'linterna',
+  'pon una alarma a las 7:30', 'temporizador de 10 minutos', 'abre whatsapp',
+  'busca ', 'qué sabes de mí', 'acuédate de ', 'voz de siri', 'cambia la voz',
+  'ponte azul', 'atuendo ', 'burbuja', 'piensa ', 'sincroniza con el pc',
+  '¿qué tengo hoy?', 'mi agenda', 'las citas de la semana', 'revisa el correo',
+  'apunta una cita con Samuel a las 9', 'enciende la linterna'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -1416,7 +1473,8 @@ async function send(raw) {
   if (pantalla) {
     setState('listo');
     const titulo = { orbe: 'el orbe', musica: 'la pantalla de música', mv: 'la pantalla del vídeo con la letra',
-                     charla: 'la pantalla de charla', codigo: 'la pantalla de código' }[pantalla];
+                     charla: 'la pantalla de charla', codigo: 'la pantalla de código',
+                     equipo: 'la pantalla del Equipo, con lo que CORT manda en el teléfono' }[pantalla];
     add('a', `Cambié a ${titulo}. Con ☰ o deslizando el dedo de lado a lado te mueves entre ellas.`, 'pantallas');
     speakTTS('Aquí tienes ' + titulo + '.'); term('pantalla: ' + pantalla, 'pantallas');
     if (pantalla !== 'orbe') orb.burst();
@@ -1467,6 +1525,15 @@ async function send(raw) {
     llamarA(llamada[1].replace(/^(?:el contacto de |mi amigo |mi amiga )/i, '').trim());
     return;
   }
+  /* ─── órdenes del aparato: las atiende la cara del Equipo (contrato 2.1) ───
+     «sube el volumen», «linterna», «pon una alarma a las 7:30», «abre whatsapp»,
+     «busca recetas con pollo», «qué sabes de mí», «acuédate de…», «voz de siri»,
+     «ponte azul», «burbuja», «piensa…», «sincroniza con el pc». Van AQUÍ, después
+     del modo juego y de «llama a…», y sólo si hay puente: `telefonoPorVoz()`
+     pregunta método por método (`puede('accion')`…) y devuelve `false` en el PC,
+     así que ninguna de estas frases le roba el backend a nadie. Lo que el APK no
+     trae se contesta con la frase honesta del módulo, no con un botón mudo. */
+  if (IS_ANDROID && telefonoPorVoz(msg)) { setState('listo'); return; }
   /* ─── órdenes directas del repertorio de la referencia (video f7d16b9e) ─── */
   if (/modo (oficina|bureau|escritorio)|organiza|ordena (las )?ventanas|ordenar el escritorio/i.test(msg)) {
     const n = organizeBureau();
@@ -1806,6 +1873,19 @@ export function wireUI(orbRef) {
   document.querySelectorAll('.pf-link').forEach(a => a.onclick = e => { e.preventDefault(); location.href = a.dataset.href; });
   window.__cortNative.on(ev => { if (ev.type === 'tts-ready' && ev.ok) loadProfile(); });
 
+  /* ── los avisos del contrato 2.1, juntos junto a los de siempre ─────────────
+     Java empuja `{type:'auricular'}` (el micro del auricular abierto), y `{type:
+     'mente'|'memoria'|'accion'}` cuando termina lo largo: pensar en la nube,
+     cuadrar los recuerdos con el portátil o hacer una cosa por su cuenta. Un solo
+     `on()` para las tres familias: el badge es de aquí (mandan las ventanas y el
+     oído), y la hoja del Equipo se pinta sola con `handleTelefonoEvento()`. Si el
+     evento llega con la pantalla cerrada no se pierde —`telefono.js` lo guarda. */
+  window.__cortNative.on(ev => {
+    if (!ev || typeof ev.type !== 'string') return;
+    if (ev.type === 'auricular') { pintaAuricular(!!ev.escuchando, ev.dice || ev.nota); return; }
+    handleTelefonoEvento(ev);
+  });
+
   /* micrófono: toca y habla — el texto aparece mientras hablas */
   const mic = document.getElementById('mic');
   mic.onclick = () => { orb.activate(); voice.listen(); };
@@ -1831,6 +1911,15 @@ export function wireUI(orbRef) {
     orb, term, say: sayLine,
     api: () => API,                              // el núcleo localizado por discoverApi()
   });
+  /* Qué familia del puente 2.1 trae este APK, dicho una vez y en la consola: si
+     mañana la dueña pregunta «¿por qué la linterna no está?», ahí está la respuesta
+     sin abrir el teléfono en modo depuración. `estadoTelefono()` es sólo una foto
+     del estado del módulo: no llama a Java. */
+  if (IS_ANDROID) {
+    const eq = estadoTelefono();
+    const traidos = Object.entries(eq.puente).filter(([, v]) => v).map(([k]) => k);
+    term('puente 2.1: ' + (traidos.length ? traidos.join(' · ') : 'sin métodos nuevos (APK viejo)'), 'equipo');
+  }
   // Fuera de su pantalla, el orbe no se queda dibujando a escondidas: el bucle
   // WebGL se congela (CPU, RAM y batería para el teléfono y para el portátil).
   // La excepción es MV: ahí el holograma no se apaga, se hace disco en la esquina

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Reglas de extracción (Android 12 y posteriores), la pareja de `respaldo.xml` y
+  recuperada también del `CORT-IA-1.1.0.apk` (allí 212 bytes, `<data-extraction-rules>`
+  con su `<cloud-backup>` sin contenido: «copia todo»).
+
+  Mismo criterio que en el respaldo, y por el mismo motivo: la preferencia `cort`
+  lleva la dirección del portátil y la clave de los proveedores, y la base
+  `cort-recuerdos` lleva lo que CORT recuerda de la dueña. Ni a la nube de Google
+  (`cloud-backup`) ni al cable de «migrar de teléfono» (`device-transfer`) se les
+  pasa eso por delante.
+
+  `device-transfer` se excluye con la misma lista a propósito: el paso de teléfono
+  por cable también viaja cifrado, pero es una copia que la dueña no controla, y el
+  criterio fácil de recordar es «las claves no salen del aparato».
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="cort.xml" />
+        <exclude domain="database" path="cort-recuerdos.db" />
+        <exclude domain="file" path="keystore" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="cort.xml" />
+        <exclude domain="database" path="cort-recuerdos.db" />
+        <exclude domain="file" path="keystore" />
+    </device-transfer>
+</data-extraction-rules>

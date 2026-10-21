@@ -1,0 +1,1290 @@
+/* ===== El Equipo: lo que CORT manda en el teléfono =====
+ *
+ * `docs/CONTRATO-PUENTE-2.1.md` es la LEY de los nombres. Aquí se traduce a algo
+ * que la dueña pueda tocar con el dedo: seis bloques (Voz · Mando · Cerebro ·
+ * Memoria · Atuendos · Agenda) dentro de la hoja `equipo` de `pantallas.js`.
+ *
+ * Tres reglas que gobiernan todo el fichero:
+ *
+ * · **Nada se ofrece si el puente no lo trae.** Cada llamada va por `llama()`
+ *   (devuelve `null` si el método no existe en Java) y cada botón está detrás de
+ *   `puede()`. Un APK viejo o sin permiso NO pinta un botón roto: pinta la frase
+ *   honesta que viene en `dice`, que es lo que Java decide contar.
+ *
+ * · **En el PC no hay nada que mandar.** `montaTelefono()` no encuentra su hoja
+ *   (no está en `visibles()` de `pantallas.js`) y sale con el objeto vacío: ni
+ *   errores en consola ni llamadas raras. `telefonoPorVoz()` devuelve `false` y
+ *   la frase sigue su camino de siempre por el núcleo.
+ *
+ * · **El estado vive aquí dentro.** Sin variables globales, sin `setInterval`
+ *   preguntando: lo largo (red, cerebro, sincronizar) se resuelve en Java y
+ *   vuelve como evento `{type:'mente'|'memoria'|'accion'}` que entra por
+ *   `handleTelefonoEvento()`. Como el estado se guarda ANTES de pintar, un aviso
+ *   que llega con la hoja cerrada no se pierde: sale cuando se abre.
+ */
+
+const N = () => window.CortNative || null;
+const enTelefono = () => !!N();
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Para comparar por palabras: sin mayúsculas ni tildes, porque la dueña dice
+// «mexicana», «Méxicana» o «la voz mexicana» y las tres son la misma idea.
+const normaliza = s => String(s ?? '').toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+let ctx = null;              // { orb, term, say, api, ir } — se lo pasa `initPantallas`
+let caja = null;             // el contenedor de los seis bloques
+let montada = false;         // ¿está el DOM de la hoja montado?
+
+/* Todo lo que la hoja sabe del aparato. Se pinta desde aquí y sólo desde aquí,
+   para que el evento de Java y el golpe de dedo no puedan divergir. */
+const estado = {
+  voces: [], vozActual: '', velocidad: 1, tono: 1, faltanVoces: false, motor: '',
+  nivel: null, max: null, linterna: false,
+  mente: { proveedor: '', base: '', modelo: '', clavePuesta: false, conRed: false, motores: [] },
+  ultimaMente: null,
+  hechos: 0, conPortatil: false, direccion: '', recuerdos: [], quien: '', ultimaMemoria: null,
+  atuendos: [], puesto: '', burbuja: false,
+};
+let preguntaVoz = false;     // la última pregunta/orden larga vino de la boca: hay que contestarla en voz
+
+/* ─────────────────────────── el puente, con red ─────────────────────────── */
+
+/* Igual que en `pantallas.js`: `typeof` antes de llamar. Un `TypeError` en el
+   consola del WebView es un error técnico que la dueña no ve; lo que tiene que
+   ver es una frase suya, en su pantalla. */
+const puede = nombre => {
+  const p = N();
+  return !!p && typeof p[nombre] === 'function';
+};
+
+const llama = (nombre, ...args) => {
+  const p = N();
+  if (!p || typeof p[nombre] !== 'function') return null;
+  try { return p[nombre](...args); } catch (e) { ctx?.term?.('el puente dijo: ' + e, 'equipo'); return null; }
+};
+
+/* Java devuelve SIEMPRE una cadena JSON (`{"ok":true,…}` o `{"ok":false,"dice"}`).
+   Aquí se convierte en objeto sin reventar con basura: un APK intermedio puede
+   devolver un booleano, `null` o un texto a pelo, y ninguna de esas cosas debe
+   tirar la hoja. Devuelve `null` si no hay nada que leer. */
+function parsea(texto, c) {
+  if (texto === null || typeof texto === 'undefined' || texto === '') return null;
+  if (typeof texto === 'object') return texto;              // por si el puente ya da objeto
+  if (typeof texto !== 'string') return texto;              // `true` / `false` / número
+  try { return JSON.parse(texto); }
+  catch { c?.term?.('el puente devolvió algo que no es JSON: ' + texto.slice(0, 60), 'equipo'); return null; }
+}
+
+/* La línea honesta de un bloque. Si `r` trae `dice`, se muestra LO QUE DIJO Java,
+   no una paráfrasis nuestra: él sabe si falta un permiso y qué tocar en Ajustes. */
+function avisa(donde, texto) {
+  const l = el('eq-' + donde + '-dice');
+  if (l) { l.textContent = String(texto || ''); l.classList.add('aviso'); }
+}
+function diceBien(donde, texto) {
+  const l = el('eq-' + donde + '-dice');
+  if (l) { l.textContent = String(texto || ''); l.classList.remove('aviso'); }
+}
+function linea(donde, texto) {
+  const l = el('eq-' + donde + '-est');
+  if (l) l.textContent = String(texto || '');
+}
+const el = id => (caja ? caja.querySelector('#' + id) : document.getElementById(id));
+
+/* Una orden con su JSON dentro y su castigo si no existe. Devuelve el objeto con
+   `ok:true` o `null` (ya habrá quedado la frase en el bloque). */
+function envia(metodo, cuerpo, donde, sinPuente) {
+  if (!puede(metodo)) { avisa(donde, sinPuente); ctx?.term?.(metodo + '() no está en este APK', 'equipo'); return null; }
+  const crudo = llama(metodo, JSON.stringify(cuerpo));
+  if (crudo === null) { avisa(donde, sinPuente); return null; }
+  const r = parsea(crudo, ctx);
+  if (r === null) { avisa(donde, 'El puente respondió algo que no sé leer; vuelve a intentarlo en un momento.'); return null; }
+  if (r === false) { avisa(donde, 'El teléfono no hizo esa cosa.'); return null; }
+  if (typeof r === 'object' && r.ok === false) { avisa(donde, r.dice || 'el teléfono no dejó hacerlo.'); return null; }
+  return r;
+}
+
+/* Hablar y, de paso, dejar escrito en el bloque lo que se dijo. */
+function di(texto, donde) {
+  if (donde) avisa(donde, texto);
+  ctx?.say?.(texto);
+  return true;
+}
+
+/* ─────────────────────────── la carcasa de la hoja ─────────────────────────── */
+
+const APPS = {
+  'whatsapp business': 'whatsapp-business', whatsapp: 'whatsapp', watts: 'whatsapp',
+  youtube: 'youtube', maps: 'maps', mapas: 'maps', spotify: 'spotify',
+  gmail: 'gmail', correo: 'gmail', calendario: 'calendario', agenda: 'calendario',
+  instagram: 'instagram', facebook: 'facebook', tiktok: 'tiktok',
+  navegador: 'navegador', chrome: 'navegador', archivos: 'archivos',
+  explorador: 'archivos', ajustes: 'ajustes', configuracion: 'ajustes', telefono: 'telefono',
+};
+const NOMBRES_APP = {
+  whatsapp: 'WhatsApp', 'whatsapp-business': 'WhatsApp Business', youtube: 'YouTube', maps: 'Maps',
+  spotify: 'Spotify', gmail: 'Gmail', calendario: 'Calendario', navegador: 'Navegador',
+  archivos: 'Archivos', ajustes: 'Ajustes',
+};
+const PREAJUSTES = [
+  ['siri', 'Siri'], ['alexa', 'Alexa'], ['cortana', 'Cortana'],
+  ['española', 'Española'], ['mexicana', 'Mexicana'], ['neutra', 'Neutra'],
+];
+const PROVEEDORES = ['groq', 'openai', 'deepseek', 'mistral', 'qwen', 'ollama', 'anthropic'];
+
+/* Un bloque = `<details>` con su título. Se abre por defecto: la consigna es que
+   los seis sean **visibles y usables**, no un menú dentro de otro menú. */
+function bloque(id, numero, titulo, sub, interior) {
+  const d = document.createElement('details');
+  d.className = 'eq-bloque'; d.id = 'eqb-' + id; d.open = true;
+  const s = document.createElement('summary');
+  s.innerHTML = `<b>${numero} · ${esc(titulo)}</b><span>${esc(sub)}</span>`;
+  const c = document.createElement('div');
+  c.className = 'eq-cuerpo';
+  c.innerHTML = interior;
+  d.appendChild(s); d.appendChild(c);
+  return d;
+}
+
+/* ── las seis hojas de contenido ── */
+const CARA_VOZ = `
+  <div class="eq-estado" id="eq-voz-est">leyendo las voces del teléfono…</div>
+  <div class="eq-tit">estilos que CORT imita</div>
+  <div class="eq-fila" id="eq-voz-pre"></div>
+  <div class="eq-tit">voces instaladas en tu teléfono</div>
+  <div class="eq-nube" id="eq-voz-lista"></div>
+  <div class="eq-doble">
+    <label class="eq-slider">velocidad
+      <input id="eq-voz-vel" type="range" min="0.5" max="2" step="0.05" value="1">
+      <b id="eq-voz-vel-v">1.00</b></label>
+    <label class="eq-slider">tono
+      <input id="eq-voz-tono" type="range" min="0.5" max="2" step="0.05" value="1">
+      <b id="eq-voz-tono-v">1.00</b></label>
+  </div>
+  <input id="eq-voz-texto" class="eq-lleno" placeholder="la frase de muestra"
+    value="A sus órdenes. Soy CORT, tu asistente en el teléfono.">
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-voz-prueba">▶ probar</button>
+    <button class="eq-b" id="eq-voz-descarga">↻ descargar voces</button>
+    <button class="eq-b" id="eq-voz-refresca">↺ volver a leer</button>
+  </div>
+  <div class="eq-dice" id="eq-voz-dice"></div>`;
+
+const CARA_MANDO = `
+  <div class="eq-estado" id="eq-mando-est">mirando qué hace tu teléfono…</div>
+  <div class="eq-tit">volumen del aparato</div>
+  <div class="eq-fila">
+    <button class="eq-b eq-grande" data-vol="baja">−</button>
+    <button class="eq-b eq-grande" data-vol="sube">+</button>
+    <button class="eq-b" data-vol="min">mín</button>
+    <button class="eq-b" data-vol="max">máx</button>
+    <button class="eq-b" data-vol="callar">callar</button>
+    <span class="eq-nivel" id="eq-mando-nivel"></span>
+  </div>
+  <div class="eq-fila"><button class="eq-b eq-grande" id="eq-linterna">🔦 linterna</button></div>
+  <div class="eq-tit">despertar y contar</div>
+  <div class="eq-fila">
+    <input id="eq-alarma-hora" type="time" value="07:30">
+    <input id="eq-alarma-nota" placeholder="de qué te aviso">
+    <button class="eq-b" id="eq-alarma-pon">alarma</button>
+  </div>
+  <div class="eq-fila">
+    <input id="eq-temp-min" type="number" min="0" max="600" step="1" value="10">
+    <span class="eq-nota">minutos</span>
+    <button class="eq-b" id="eq-temp-pon">temporizador</button>
+  </div>
+  <div class="eq-tit">tus apps</div>
+  <div class="eq-rejilla" id="eq-apps"></div>
+  <div class="eq-fila">
+    <input id="eq-app-busca" placeholder="el nombre de una app…">
+    <button class="eq-b" id="eq-app-ir">buscar app</button>
+    <button class="eq-b" id="eq-app-todas">mis apps</button>
+    <button class="eq-b" id="eq-red-ir">en la red</button>
+  </div>
+  <div class="eq-nube" id="eq-app-lista"></div>
+  <div class="eq-dice" id="eq-mando-dice"></div>`;
+
+const CARA_CEREBRO = `
+  <div class="eq-estado" id="eq-men-est">preguntando al cerebro del teléfono…</div>
+  <div class="eq-tit">con quién piensa CORT</div>
+  <div class="eq-fila">
+    <select id="eq-men-prov"></select>
+    <input id="eq-men-modelo" placeholder="modelo" autocomplete="off" spellcheck="false">
+  </div>
+  <input id="eq-men-base" class="eq-lleno" placeholder="https://… (base del proveedor)"
+    autocomplete="off" spellcheck="false">
+  <input id="eq-men-clave" class="eq-lleno" type="password" placeholder="pegar clave aquí"
+    autocomplete="off" spellcheck="false">
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-men-guarda">guardar</button>
+    <button class="eq-b" id="eq-men-prueba">probar</button>
+    <span class="eq-nota" id="eq-men-clave-est"></span>
+  </div>
+  <div class="eq-tit">preguntar sin el portátil delante</div>
+  <div class="eq-fila">
+    <input id="eq-men-pregunta" placeholder="piensa lo que sea…">
+    <button class="eq-b" id="eq-men-ir">▲</button>
+  </div>
+  <div class="eq-res" id="eq-men-res"></div>
+  <div class="eq-dice" id="eq-men-dice"></div>`;
+
+const CARA_MEMORIA = `
+  <div class="eq-estado" id="eq-mem-est">contando lo que recuerda el teléfono…</div>
+  <div class="eq-fila">
+    <input id="eq-mem-texto" placeholder="acuédate de…">
+    <button class="eq-b" id="eq-mem-guarda">apuntar</button>
+  </div>
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-mem-quien">¿qué sabes de mí?</button>
+    <button class="eq-b" id="eq-mem-sync">↺ sincronizar con el portátil</button>
+    <button class="eq-b" id="eq-mem-refresca">↺ la lista</button>
+  </div>
+  <div class="eq-nube" id="eq-mem-lista"></div>
+  <div class="eq-dice" id="eq-mem-dice"></div>`;
+
+const CARA_ATUENDO = `
+  <div class="eq-estado" id="eq-atu-est">mirando qué trajes hay…</div>
+  <div class="eq-paletas" id="eq-atu-lista"></div>
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-burb">● burbuja flotante</button>
+    <span class="eq-nota" id="eq-burb-est">apagada</span>
+  </div>
+  <div class="eq-dice" id="eq-atu-dice"></div>`;
+
+const CARA_AGENDA = `
+  <div class="eq-estado" id="eq-ago-est">mirando tu calendario…</div>
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-ago-hoy">hoy</button>
+    <button class="eq-b" id="eq-ago-3">próximos 3</button>
+    <button class="eq-b" id="eq-ago-7">próximos 7</button>
+    <button class="eq-b" id="eq-ago-abrir">abrir calendario</button>
+  </div>
+  <div class="eq-nube" id="eq-ago-lista"></div>
+  <div class="eq-tit">apuntar algo nuevo</div>
+  <div class="eq-fila">
+    <input id="eq-ago-titulo" placeholder="qué: cena con Samuel">
+    <input id="eq-ago-hora" type="time" value="21:00">
+    <button class="eq-b" id="eq-ago-pon">▲ apuntar</button>
+  </div>
+  <div class="eq-tit">el correo</div>
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-ago-correo">✉ lo que llegó al correo</button>
+    <span class="eq-nota" id="eq-ago-gmail"></span>
+  </div>
+  <div class="eq-dice" id="eq-ago-dice"></div>`;
+
+/* ─────────────────────────── montaje y pintura ─────────────────────────── */
+
+export function montaTelefono(contexto) {
+  ctx = contexto || ctx;
+  const cuerpo = document.querySelector('#scr-equipo .scr-cuerpo');
+  // En el PC esta hoja no se monta (no está en `visibles()`): se sale en silencio,
+  // sin errores y sin llamadas al puente que no existe.
+  if (!cuerpo) return { pinta: () => {}, abre: () => {}, viva: () => false };
+
+  caja = document.createElement('div');
+  caja.className = 'scr-lista eq-caja';
+  caja.innerHTML = '<div class="eq-piego">lo que CORT puede hacer en tu teléfono '
+    + 'sin tu portátil delante. Cada bloque dice en su propio sitio lo que este APK '
+    + 'no dejó hacer: no hay botones que parezcan romper.</div>';
+  caja.appendChild(bloque('voz', '1', 'Voz', 'la que sale por el altavoz', CARA_VOZ));
+  caja.appendChild(bloque('mando', '2', 'Mando', 'volumen, linterna, alarmas y apps', CARA_MANDO));
+  caja.appendChild(bloque('men', '3', 'Cerebro', 'quién piensa cuando no está el PC', CARA_CEREBRO));
+  caja.appendChild(bloque('mem', '4', 'Memoria', 'lo que el teléfono recuerda', CARA_MEMORIA));
+  caja.appendChild(bloque('atu', '5', 'Atuendos', 'los colores de CORT y su burbuja', CARA_ATUENDO));
+  caja.appendChild(bloque('ago', '6', 'Agenda', 'tus citas y lo que llegó al correo', CARA_AGENDA));
+  cuerpo.appendChild(caja);
+
+  enganchaVoz();
+  enganchaMando();
+  enganchaCerebro();
+  enganchaMemoria();
+  enganchaAtuendo();
+  enganchaAgenda();
+
+  montada = true;
+  pinta();
+  return { pinta, abre, viva: () => montada };
+}
+
+/* Todo lo que la pantalla puede preguntar al puente de golpe. Se llama al montar
+   y cada vez que `pantallas.js` entra en `equipo` (igual que `arrancaMusica()`). */
+function pinta() {
+  if (!montada) return;
+  pintaVoz(); pintaMando(); pintaCerebro(); pintaMemoria(); pintaAtuendo();
+  const estadoBar = document.querySelector('#scr-equipo .scr-estado');
+  if (estadoBar) {
+    const cosas = [puede('accion') && 'mando', puede('ajusteVoz') && 'voz',
+      puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes']
+      .filter(Boolean);
+    estadoBar.textContent = cosas.length ? 'puente 2.1 · ' + cosas.join(' · ') : 'puente viejo';
+    estadoBar.classList.toggle('aviso', !cosas.length);
+  }
+}
+
+/* Llevar la vista de la dueña al bloque que acaba de contestar (por voz, p.ej.). */
+function abre(id) {
+  if (!montada) return;
+  // Si estaba en el orbe (o en cualquier hoja sin video), la hoja del Equipo se
+  // trae delante: «voz de siri» o «ponte azul» contestan enseñando el panel. Con
+  // el MV, la música, la charla o el código abiertos NO se les roba la pantalla —
+  // la dueña está mirando otra cosa y eso no se interrumpe a gritos.
+  const raiz = document.documentElement;
+  const clases = String((raiz && (raiz.className || '')) || '');
+  if (typeof ctx?.ir === 'function' && !/\bp-equipo\b/.test(clases)
+      && !/(?:^|\s)p-(?:mv|musica|charla|codigo)(?:\s|$)/.test(clases)) {
+    ctx.ir('equipo');
+  }
+  const d = caja.querySelector('#eqb-' + id);
+  if (!d) return;
+  d.open = true;
+  // El desplazamiento se calcula a mano (dentro de la propia hoja, sin
+  // `scrollIntoView`, que movería la página entera). Si el aparato no da medidas,
+  // el brillo del bloque avisa igual de dónde está la respuesta: nada de esto debe
+  // tirar la hoja.
+  try {
+    const r = d.getBoundingClientRect(), c = caja.getBoundingClientRect();
+    caja.scrollTop = Math.max(0, caja.scrollTop + (r.top - c.top) - 8);
+  } catch { /* sin medidas: no pasa nada */ }
+  d.classList.add('eq-brillo');
+  setTimeout(() => d.classList.remove('eq-brillo'), 1400);
+}
+
+/* ── 1 · Voz ── */
+function enganchaVoz() {
+  const pre = el('eq-voz-pre');
+  pre.innerHTML = PREAJUSTES.map(([k, n]) =>
+    `<button class="eq-chip" data-pre="${esc(k)}">${esc(n)}</button>`).join('');
+  pre.querySelectorAll('[data-pre]').forEach(b => b.onclick = () => preajuste(b.dataset.pre));
+  el('eq-voz-vel').onchange = () => ponVoz(estado.vozActual);
+  el('eq-voz-tono').onchange = () => ponVoz(estado.vozActual);
+  ['eq-voz-vel', 'eq-voz-tono'].forEach(id => {
+    const i = el(id);
+    i.oninput = () => { const v = el(id + '-v'); if (v) v.textContent = (+i.value).toFixed(2); };
+  });
+  el('eq-voz-prueba').onclick = () => pruebaVoz();
+  el('eq-voz-descarga').onclick = () => {
+    const r = envia('ajusteVoz', { que: 'descargar' }, 'voz',
+      'Lo de descargar las voces lo trae el APK nuevo de la Release: con este cuerpo no puedo abrir el instalador de voces de Android.');
+    if (r) diceBien('voz', r.abre === 'ajustes'
+      ? 'Ahí tienes Android: entra en Idiomas y voz ▸ Voz de Google ▸ Configurar voces y baja las que quieras.'
+      : 'Pidiendo las voces al instalador de Android.');
+  };
+  el('eq-voz-refresca').onclick = () => pintaVoz();
+}
+
+function pintaVoz() {
+  if (!montada) return;
+  if (!puede('ajusteVoz')) {
+    linea('voz', 'sin puente de voces');
+    el('eq-voz-lista').innerHTML = '<span class="eq-nota">este APK todavía no me deja mirar '
+      + 'tus voces: instala el APK nuevo de la Release y aquí sale la lista.</span>';
+    return;
+  }
+  const r = envia('ajusteVoz', { que: 'lista' }, 'voz',
+    'este APK no sabe mirar las voces.');
+  if (!r) { linea('voz', 'voces: sin respuesta'); return; }
+  estado.voces = Array.isArray(r.voces) ? r.voces : [];
+  estado.vozActual = r.vozActual || '';
+  estado.velocidad = typeof r.velocidad === 'number' ? r.velocidad : estado.velocidad;
+  estado.tono = typeof r.tono === 'number' ? r.tono : estado.tono;
+  estado.faltanVoces = !!r.faltanVoces;
+  const lista = el('eq-voz-lista');
+  lista.innerHTML = estado.voces.length
+    ? estado.voces.map(v => `<button class="eq-chip${v.nombre === estado.vozActual ? ' puesta' : ''}" `
+        + `data-v="${esc(v.nombre)}">${esc(v.nombre)}<small>`
+        + `${esc(v.idioma || '')}${v.porDefecto ? ' · por defecto' : ''}</small></button>`).join('')
+    : '<span class="eq-nota">no veo ninguna voz instalada. Pulsa «↻ descargar voces» y baja '
+      + 'las de español en Android.</span>';
+  lista.querySelectorAll('[data-v]').forEach(b => b.onclick = () => ponVoz(b.dataset.v));
+  const vel = el('eq-voz-vel'), ton = el('eq-voz-tono');
+  vel.value = estado.velocidad; ton.value = estado.tono;
+  el('eq-voz-vel-v').textContent = (+estado.velocidad).toFixed(2);
+  el('eq-voz-tono-v').textContent = (+estado.tono).toFixed(2);
+  linea('voz', estado.voces.length + ' voces · ' + (estado.vozActual || 'sin voz elegida')
+    + (estado.faltanVoces ? ' · faltan voces por descargar' : ''));
+  const est = envia('ajusteVoz', { que: 'estado' }, 'voz', '');
+  if (est) { estado.motor = est.motor || ''; linea('voz', lineaTexto(est)); }
+}
+const lineaTexto = est => (est.listo ? 'motor listo' : 'el motor de voz aún no está listo')
+  + (est.motor ? ' · ' + est.motor : '') + (est.idioma ? ' · ' + est.idioma : '');
+
+function ponVoz(nombre, alVoz) {
+  if (!puede('ajusteVoz')) return di('Lo de cambiar de voz lo trae el APK nuevo de la Release; con este cuerpo no puedo tocar el motor de voz.', 'voz');
+  const cuerpo = { que: 'poner', velocidad: +(el('eq-voz-vel')?.value || estado.velocidad),
+    tono: +(el('eq-voz-tono')?.value || estado.tono) };
+  if (nombre) cuerpo.nombre = nombre;
+  const r = envia('ajusteVoz', cuerpo, 'voz', 'este APK no puede cambiar de voz.');
+  if (!r) return false;
+  if (nombre) estado.vozActual = nombre;
+  diceBien('voz', (nombre ? 'Ya hablo con ' + nombre : 'Anotada la velocidad y el tono')
+    + ' · velocidad ' + cuerpo.velocidad.toFixed(2) + ', tono ' + cuerpo.tono.toFixed(2) + '.');
+  ctx?.orb?.burst?.();
+  if (alVoz) ctx?.say?.('Listo, así sueno.');
+  pintaVoz();
+  return true;
+}
+
+function preajuste(nombre, alVoz) {
+  if (!puede('ajusteVoz')) return di('Lo de los estilos de voz lo trae el APK nuevo: con este cuerpo no puedo imitar a nadie.', 'voz');
+  const r = envia('ajusteVoz', { que: 'predefinida', nombre }, 'voz', 'este APK no tiene estilos de voz.');
+  if (!r) return false;
+  if (r.usada) estado.vozActual = r.usada;
+  const dicho = 'Voz de estilo ' + nombre + ': ' + (r.usada || 'la que había')
+    + (r.porQue ? ' — ' + r.porQue : '');
+  diceBien('voz', dicho);
+  if (alVoz) ctx?.say?.('Puesta: ' + (r.usada || nombre) + '. ' + (r.porQue || ''));
+  pintaVoz();
+  return true;
+}
+
+function pruebaVoz(alVoz) {
+  if (!puede('ajusteVoz')) return di('Probar la voz lo trae el APK nuevo de la Release.', 'voz');
+  const texto = (el('eq-voz-texto')?.value || 'A sus órdenes.').trim();
+  const r = envia('ajusteVoz', { que: 'probar', texto }, 'voz', 'este APK no puede probar la voz.');
+  if (!r) return false;
+  diceBien('voz', 'Diciendo la muestra por el altavoz.');
+  ctx?.term?.('muestra de voz: ' + texto.slice(0, 40), 'equipo');
+  if (alVoz) ctx?.say?.('Ahí la tienes.');
+  return true;
+}
+
+/* ── 2 · Mando ── */
+function enganchaMando() {
+  el('eq-apps').innerHTML = Object.keys(NOMBRES_APP).map(k =>
+    `<button class="eq-app" data-app="${esc(k)}">${esc(NOMBRES_APP[k])}</button>`).join('');
+  el('eq-apps').querySelectorAll('[data-app]').forEach(b =>
+    b.onclick = () => accionAbrir(b.dataset.app, false));
+  caja.querySelectorAll('#eqb-mando [data-vol]').forEach(b =>
+    b.onclick = () => accionVolumen(b.dataset.vol, false));
+  el('eq-linterna').onclick = () => accionLinterna('alterna', false);
+  el('eq-alarma-pon').onclick = () => {
+    const hora = (el('eq-alarma-hora')?.value || '').trim();
+    if (!/^\d{1,2}:\d{2}$/.test(hora)) return avisa('mando', 'Dime la hora del despertar: 7:30, 06:15…');
+    accionAlarma(hora, (el('eq-alarma-nota')?.value || '').trim(), false);
+  };
+  el('eq-temp-pon').onclick = () => {
+    const min = +(el('eq-temp-min')?.value || 0);
+    if (!min) return avisa('mando', 'Pon primero cuántos minutos quieres contar.');
+    accionTemporizador(min * 60, false);
+  };
+  el('eq-app-ir').onclick = () => buscaApp(el('eq-app-busca')?.value || '', false);
+  el('eq-app-todas').onclick = () => misApps();
+  el('eq-red-ir').onclick = () => buscaEnRed(el('eq-app-busca')?.value || '', false);
+  const entrada = el('eq-app-busca');
+  entrada.addEventListener('keydown', e => { if (e.key === 'Enter') buscaApp(entrada.value, false); });
+}
+
+function pintaMando() {
+  if (!montada) return;
+  if (!puede('accion')) {
+    linea('mando', 'sin puente de mando');
+    avisa('mando', 'Este APK todavía no obedece al teléfono: instala el APK nuevo de la Release '
+      + 'y aquí salen el volumen, la linterna, las alarmas y tus apps.');
+    return;
+  }
+  const r = envia('accion', { que: 'estado' }, 'mando', 'este APK no me cuenta su estado.');
+  if (!r) { linea('mando', 'mando: sin respuesta'); return; }
+  estado.nivel = typeof r.volumen === 'number' ? r.volumen : estado.nivel;
+  estado.max = typeof r.max === 'number' ? r.max : estado.max;
+  estado.linterna = !!r.linterna;
+  pintaNivel();
+  const lin = el('eq-linterna');
+  lin.classList.toggle('puesta', estado.linterna);
+  lin.textContent = '🔦 linterna ' + (estado.linterna ? 'encendida' : 'apagada');
+  linea('mando', 'volumen ' + (estado.nivel ?? '—') + '/' + (estado.max ?? '—')
+    + ' · linterna ' + (estado.linterna ? 'encendida' : 'apagada')
+    + (r.sinMiedo ? ' · en modo juego' : ''));
+}
+
+function pintaNivel() {
+  const n = el('eq-mando-nivel');
+  if (!n) return;
+  const pct = (estado.nivel != null && estado.max) ? Math.round(estado.nivel / estado.max * 100) : null;
+  n.textContent = pct === null ? '' : pct + '%';
+  n.style.setProperty('--eq-pct', (pct ?? 0) + '%');
+}
+
+const sinMando = 'Mandar sobre el teléfono (volumen, linterna, alarmas, apps) lo trae el APK nuevo de la Release; con este cuerpo no puedo tocar el aparato.';
+
+function accionVolumen(como, alVoz) {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'volumen', como }, 'mando', sinMando);
+  if (!r) return false;
+  if (typeof r.nivel === 'number') { estado.nivel = r.nivel; pintaNivel(); }
+  const palabras = { sube: 'Subo el volumen.', baja: 'Lo bajo.', max: 'Volumen al máximo.',
+    min: 'Volumen al mínimo.', callar: 'Callado el aparato.' };
+  diceBien('mando', (palabras[como] || 'Volumen ajustado.')
+    + (typeof r.nivel === 'number' ? ' Ahora en ' + r.nivel + (estado.max ? ' de ' + estado.max : '') + '.' : ''));
+  if (alVoz) ctx?.say?.(palabras[como] || 'Volumen.');
+  ctx?.orb?.burst?.();
+  return true;
+}
+
+function accionLinterna(como, alVoz) {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'linterna', como }, 'mando', sinMando);
+  if (!r) return false;
+  if (typeof r.linterna === 'boolean') estado.linterna = r.linterna;
+  const lin = el('eq-linterna');
+  if (lin) { lin.classList.toggle('puesta', estado.linterna);
+    lin.textContent = '🔦 linterna ' + (estado.linterna ? 'encendida' : 'apagada'); }
+  diceBien('mando', estado.linterna ? 'Linterna encendida.' : 'Linterna apagada.');
+  if (alVoz) ctx?.say?.(estado.linterna ? 'Linterna encendida.' : 'Linterna apagada.');
+  return true;
+}
+
+function accionAlarma(hora, nota, alVoz) {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'alarma', hora, nota: nota || '' }, 'mando', sinMando);
+  if (!r) return false;
+  diceBien('mando', 'Despertador a las ' + (r.alarma || hora) + (nota ? ' — ' + nota : '') + '.');
+  if (alVoz) ctx?.say?.('Despertador a las ' + (r.alarma || hora) + '.');
+  ctx?.term?.('alarma ' + (r.alarma || hora), 'equipo');
+  return true;
+}
+
+function accionTemporizador(segundos, alVoz) {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'temporizador', segundos }, 'mando', sinMando);
+  if (!r) return false;
+  const puesto = typeof r.segundos === 'number' ? r.segundos : segundos;
+  diceBien('mando', 'Contando ' + Math.round(puesto) + ' segundos. Te aviso al acabar.');
+  if (alVoz) ctx?.say?.('Temporizador de ' + Math.round(puesto / 60) + ' minutos.');
+  return true;
+}
+
+function accionAbrir(a, alVoz) {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'abrir', a }, 'mando', sinMando);
+  if (!r) return false;
+  const nombre = NOMBRES_APP[a] || a;
+  diceBien('mando', 'Abriendo ' + nombre + (r.abrio ? ' (' + r.abrio + ')' : '') + '.');
+  if (alVoz) ctx?.say?.('Ahí tienes ' + nombre + '.');
+  ctx?.orb?.burst?.();
+  return true;
+}
+
+function buscaApp(nombre, alVoz) {
+  const limpio = String(nombre || '').trim();
+  if (!limpio) return di('Dime el nombre de la app que busco.', 'mando');
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'app', nombre: limpio }, 'mando', sinMando);
+  if (!r) return false;
+  diceBien('mando', 'Abriendo ' + (r.abrio || limpio)
+    + (typeof r.parecido === 'number' ? ' (se parece un ' + r.parecido + '% a lo que dijiste).' : '.'));
+  if (alVoz) ctx?.say?.('Abriendo ' + (r.abrio || limpio) + '.');
+  return true;
+}
+
+function buscaEnRed(texto, alVoz) {
+  const limpio = String(texto || '').trim();
+  if (!limpio) return di('Dime qué busco.', 'mando');
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'buscar', texto: limpio }, 'mando', sinMando);
+  if (!r) return false;
+  diceBien('mando', 'Buscando «' + (r.busca || limpio) + '» en el teléfono.');
+  if (alVoz) ctx?.say?.('Buscando ' + limpio + '.');
+  return true;
+}
+
+/* `lanzadores` devuelve la lista larga; se pinta como nube de chips y cada uno
+   abre con `{que:'app', nombre}` — Java es quien sabe emparejar nombre y paquete. */
+function misApps() {
+  if (!puede('accion')) return di(sinMando, 'mando');
+  const r = envia('accion', { que: 'lanzadores' }, 'mando', sinMando);
+  if (!r) return false;
+  const apps = Array.isArray(r.apps) ? r.apps : [];
+  const nube = el('eq-app-lista');
+  if (!apps.length) {
+    nube.innerHTML = '<span class="eq-nota">Android no me deja ver la lista de apps en este '
+      + 'teléfono (pide el permiso de «todos los paquetes» en Ajustes). Escribe el nombre y la abro igual.</span>';
+    return true;
+  }
+  nube.innerHTML = '<span class="eq-nota">' + apps.length + ' apps instaladas:</span>'
+    + apps.slice(0, 80).map(a => `<button class="eq-chip" data-n="${esc(a.nombre || '')}">${esc(a.nombre || '')}</button>`).join('');
+  nube.querySelectorAll('[data-n]').forEach(b => b.onclick = () => {
+    const r2 = envia('accion', { que: 'app', nombre: b.dataset.n }, 'mando', sinMando);
+    if (r2) diceBien('mando', 'Abriendo ' + (r2.abrio || b.dataset.n) + '.');
+  });
+  return true;
+}
+
+/* ── 3 · Cerebro ── */
+function enganchaCerebro() {
+  el('eq-men-prov').innerHTML = PROVEEDORES.map(p =>
+    `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  el('eq-men-guarda').onclick = () => guardaMente(false);
+  el('eq-men-prueba').onclick = () => pruebaMente(false);
+  el('eq-men-ir').onclick = () => preguntaMente(el('eq-men-pregunta')?.value || '', false);
+  el('eq-men-pregunta').addEventListener('keydown', e => {
+    if (e.key === 'Enter') preguntaMente(e.currentTarget.value, false);
+  });
+}
+
+function pintaCerebro() {
+  if (!montada) return;
+  if (!puede('mente')) {
+    linea('men', 'sin puente de cerebro');
+    el('eq-men-res').innerHTML = '<span class="eq-nota">Pensar sin el portátil lo trae el APK nuevo '
+      + 'de la Release. Con este cuerpo CORT sólo conversa cuando tu PC está encendido.</span>';
+    return;
+  }
+  const r = envia('mente', { que: 'estado' }, 'men', 'este APK no tiene cerebro propio.');
+  if (!r) { linea('men', 'cerebro: sin respuesta'); return; }
+  estado.mente = { proveedor: r.proveedor || '', base: r.base || '', modelo: r.modelo || '',
+    clavePuesta: !!r.clavePuesta, conRed: !!r.conRed, motores: Array.isArray(r.motores) ? r.motores : [] };
+  const sel = el('eq-men-prov');
+  // Los proveedores que el aparato no conoce se ofrecen igualmente (la lista es del
+  // contrato): si Java no los trae, su `dice` lo cuenta.
+  sel.innerHTML = PROVEEDORES.map(p => `<option value="${esc(p)}">${esc(p)}${estado.mente.motores.includes(p) ? '' : ' · sin probar'}</option>`).join('');
+  if (estado.mente.proveedor) sel.value = estado.mente.proveedor;
+  if (r.motores?.length) {
+    const nuevos = r.motores.filter(m => !PROVEEDORES.includes(m));
+    if (nuevos.length) sel.innerHTML += nuevos.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+    if (estado.mente.proveedor) sel.value = estado.mente.proveedor;
+  }
+  const base = el('eq-men-base'), modelo = el('eq-men-modelo'), clave = el('eq-men-clave');
+  // La clave NUNCA se rellena de vuelta: el contrato dice que esa cadena jamás sale
+  // del teléfono hacia la cara. Aquí sólo se escribe, y se enseña si está puesta.
+  base.value = estado.mente.base || '';
+  modelo.value = estado.mente.modelo || '';
+  if (clave) { clave.value = ''; clave.placeholder = estado.mente.clavePuesta ? 'puesta ✓ (vacío = no la toco)' : 'pegar clave aquí'; }
+  el('eq-men-clave-est').textContent = estado.mente.clavePuesta ? 'clave: puesta ✓' : 'clave: ninguna';
+  linea('men', (estado.mente.proveedor || 'sin proveedor') + ' · ' + (estado.mente.modelo || 'sin modelo')
+    + ' · ' + (estado.mente.clavePuesta ? 'clave puesta ✓' : 'sin clave')
+    + ' · red ' + (estado.mente.conRed ? 'hay' : 'no hay'));
+  pintaUltimaMente();
+}
+
+function guardaMente(alVoz) {
+  if (!puede('mente')) return di('Ajustar el cerebro del teléfono lo trae el APK nuevo de la Release.', 'men');
+  const clave = (el('eq-men-clave')?.value || '').trim();
+  const r = envia('mente', {
+    que: 'ajustar', proveedor: el('eq-men-prov')?.value || '',
+    base: (el('eq-men-base')?.value || '').trim(), modelo: (el('eq-men-modelo')?.value || '').trim(),
+    clave,                                        // vacío = «no la toques», dice el contrato
+  }, 'men', 'este APK no deja ajustar su cerebro.');
+  if (!r) return false;
+  // Se vuelve a leer el estado: el contrato dice que `ajustar` contesta lo mismo
+  // que `estado`, pero un APK intermedio puede devolver sólo `{"ok":true}`.
+  diceBien('men', 'Anotado: ' + (r.proveedor || '') + ' con el modelo '
+    + (r.modelo || 'que pusiste') + (r.clavePuesta ? ' · clave puesta ✓' : ' · sin clave todavía') + '.');
+  if (alVoz) ctx?.say?.('Cerebro ajustado.');
+  pintaCerebro();
+  return true;
+}
+
+function pruebaMente(alVoz) {
+  if (!puede('mente')) return di('Probar el cerebro del teléfono lo trae el APK nuevo de la Release.', 'men');
+  const r = envia('mente', { que: 'probar' }, 'men', 'este APK no puede probar su cerebro.');
+  if (!r) return false;
+  diceBien('men', r.pendiente ? 'Probando: la respuesta larga llega en un momento.' : 'Aquí está la prueba.');
+  ctx?.term?.('prueba de cerebro pedida', 'equipo');
+  if (alVoz) ctx?.say?.('Mirando a ver quién responde.');
+  return true;
+}
+
+function preguntaMente(texto, alVoz) {
+  const pregunta = String(texto || '').trim();
+  if (!pregunta) return di('Dime qué quieres que piense.', 'men');
+  if (!puede('mente')) return di('Pensar sin el portátil lo trae el APK nuevo de la Release; con este cuerpo la pregunta se va a tu PC.', 'men');
+  preguntaVoz = !!alVoz;
+  const r = envia('mente', { que: 'preguntar', texto: pregunta }, 'men', 'este APK no puede pensar solo.');
+  if (!r) { preguntaVoz = false; return false; }
+  const res = el('eq-men-res');
+  if (res) res.innerHTML = '<span class="eq-nota">Pensándolo…</span>';
+  diceBien('men', '«' + pregunta.slice(0, 48) + '» ' + (r.pendiente ? 'se responde en un momento.' : '.'));
+  ctx?.term?.('pregunta al cerebro del teléfono: ' + pregunta.slice(0, 40), 'equipo');
+  return true;
+}
+
+function pintaUltimaMente() {
+  const res = el('eq-men-res');
+  if (!res) return;
+  const e = estado.ultimaMente;
+  if (!e) return;
+  if (e.ok === false) {
+    res.innerHTML = '<span class="eq-aviso-eq">' + esc(e.dice || 'el cerebro no respondió') + '</span>';
+    return;
+  }
+  res.innerHTML = `<span class="eq-de ${esc(e.de || '')}">${esc(e.de === 'local' ? 'local' : 'nube')}</span>`
+    + '<div class="eq-texto">' + esc(e.responde || '') + '</div>'
+    + (e.eco ? '<div class="eq-nota">a propósito de: ' + esc(e.eco) + '</div>' : '');
+}
+
+/* ── 4 · Memoria ── */
+function enganchaMemoria() {
+  el('eq-mem-guarda').onclick = () => guardaRecuerdo(el('eq-mem-texto')?.value || '', false);
+  el('eq-mem-quien').onclick = () => quienSoy(false);
+  el('eq-mem-sync').onclick = () => sincroniza(false);
+  el('eq-mem-refresca').onclick = () => pintaMemoria();
+  el('eq-mem-texto').addEventListener('keydown', e => {
+    if (e.key === 'Enter') guardaRecuerdo(e.currentTarget.value, false);
+  });
+}
+
+function pintaMemoria() {
+  if (!montada) return;
+  if (!puede('memoria')) {
+    linea('mem', 'sin puente de memoria');
+    el('eq-mem-lista').innerHTML = '<span class="eq-nota">Recordar sin el portátil lo trae el APK '
+      + 'nuevo de la Release: este cuerpo todavía apunta las cosas en tu PC.</span>';
+    return;
+  }
+  const est = envia('memoria', { que: 'estado' }, 'mem', 'este APK no cuenta lo que recuerda.');
+  if (est) {
+    estado.hechos = typeof est.hechos === 'number' ? est.hechos : estado.hechos;
+    estado.conPortatil = !!est.conPortatil;
+    estado.direccion = est.direccion || '';
+    linea('mem', estado.hechos + ' recuerdos · con el portátil: '
+      + (estado.conPortatil ? 'sí (' + estado.direccion + ')' : 'todavía no'));
+  }
+  const lista = envia('memoria', { que: 'lista' }, 'mem', '');
+  const recuerdos = (lista && Array.isArray(lista.recuerdos)) ? lista.recuerdos : [];
+  estado.recuerdos = recuerdos;
+  const nube = el('eq-mem-lista');
+  if (!recuerdos.length) {
+    nube.innerHTML = '<span class="eq-nota">la libreta está vacía: escribe arriba «acuédate de…».</span>';
+    return;
+  }
+  nube.innerHTML = '<span class="eq-nota">lo último que apunté:</span>' + recuerdos.slice(0, 12)
+    .map(r => `<div class="eq-rec"><span>${esc(r.contenido || '')}</span>`
+      + `<small>${esc(String(r.cuando || '').slice(0, 10))}</small></div>`).join('');
+}
+
+function guardaRecuerdo(texto, alVoz) {
+  const limpio = String(texto || '').trim();
+  if (!limpio) return di('Dime qué quieres que recuerde.', 'mem');
+  if (!puede('memoria')) return di('Guardar recuerdos en el teléfono lo trae el APK nuevo de la Release.', 'mem');
+  const r = envia('memoria', { que: 'guardar', texto: limpio }, 'mem', 'este APK no puede apuntar nada.');
+  if (!r) return false;
+  diceBien('mem', 'Anotado' + (r.clave ? ' como «' + r.clave + '»' : '') + ': ' + limpio.slice(0, 60) + '.');
+  if (alVoz) ctx?.say?.('Apuntado.');
+  pintaMemoria();
+  return true;
+}
+
+function quienSoy(alVoz) {
+  if (!puede('memoria')) return di('Lo de saber quién eres en el teléfono lo trae el APK nuevo de la Release.', 'mem');
+  const r = envia('memoria', { que: 'quien' }, 'mem', 'este APK no sabe qué recuerda.');
+  if (!r) return false;
+  estado.quien = r.dice || '';
+  diceBien('mem', estado.quien || 'No encontré qué sé de ti.');
+  if (alVoz) ctx?.say?.(estado.quien || 'Todavía no sé nada de ti.');
+  return true;
+}
+
+function buscaRecuerdo(texto, alVoz) {
+  const limpio = String(texto || '').trim();
+  if (!limpio) return quienSoy(alVoz);
+  if (!puede('memoria')) return di('Buscar en mi memoria del teléfono lo trae el APK nuevo de la Release.', 'mem');
+  const r = envia('memoria', { que: 'buscar', texto: limpio }, 'mem', 'este APK no puede rebuscar.');
+  if (!r) return false;
+  diceBien('mem', 'De «' + limpio + '» sé: ' + (r.encuentra || 'nada por ahora') + '.');
+  if (alVoz) ctx?.say?.(r.encuentra || 'Nada anotado sobre eso.');
+  return true;
+}
+
+function sincroniza(alVoz) {
+  if (!puede('memoria')) return di('Sincronizar con tu portátil lo trae el APK nuevo de la Release.', 'mem');
+  const r = envia('memoria', { que: 'sincronizar' }, 'mem', 'este APK no puede cuadrar recuerdos.');
+  if (!r) return false;
+  preguntaVoz = preguntaVoz || !!alVoz;
+  diceBien('mem', r.pendiente
+    ? 'Cuadrando con tu portátil por el Wi-Fi: te digo el resultado en un momento.'
+    : 'Cuadrado con el portátil.');
+  if (alVoz) ctx?.say?.('Cuadrando con tu portátil.');
+  return true;
+}
+
+/* ── 5 · Atuendos ── */
+function enganchaAtuendo() {
+  el('eq-burb').onclick = () => ponBurbuja(!estado.burbuja, false);
+}
+
+function pintaAtuendo() {
+  if (!montada) return;
+  if (!puede('atuendo')) {
+    linea('atu', 'sin puente de trajes');
+    el('eq-atu-lista').innerHTML = '<span class="eq-nota">Cambiar de traje lo trae el APK nuevo de la '
+      + 'Release; con este cuerpo CORT viste siempre los colores de siempre.</span>';
+  } else {
+    const r = envia('atuendo', { que: 'lista' }, 'atu', 'este APK no tiene trajes.');
+    if (r) {
+      estado.atuendos = Array.isArray(r.atuendos) ? r.atuendos : [];
+      estado.puesto = r.puesto || estado.puesto;
+      const nube = el('eq-atu-lista');
+      nube.innerHTML = (estado.atuendos.length
+        ? estado.atuendos.map(a => `<button class="eq-palette${a.nombre === estado.puesto ? ' puesta' : ''}" `
+            + `data-t="${esc(a.nombre || '')}" style="--p:${esc(a.primario || '#39c2ff')};--s:${esc(a.secundario || '#0a3d62')}">`
+            + `<i></i><span>${esc(a.nombre || '')}</span></button>`).join('')
+        : '<span class="eq-nota">no vine a traer ningún traje: escribe el nombre en la voz y lo intento.</span>')
+        + (estado.puesto ? '<span class="eq-nota">puesto: ' + esc(estado.puesto) + '</span>' : '');
+      nube.querySelectorAll('[data-t]').forEach(b => b.onclick = () => ponAtuendo(b.dataset.t, false));
+      linea('atu', estado.atuendos.length + ' trajes · puesto: ' + (estado.puesto || 'el de siempre'));
+    }
+  }
+  const bot = el('eq-burb');
+  if (bot) {
+    bot.classList.toggle('puesta', estado.burbuja);
+    bot.textContent = '● burbuja ' + (estado.burbuja ? 'puesta' : 'apagada');
+    const est = el('eq-burb-est');
+    if (est) est.textContent = puede('burbuja')
+      ? (estado.burbuja ? 'CORT flota encima de lo que estés usando' : 'un punto de CORT flotando, sin sacarte de nada')
+      : 'la burbuja la trae el APK nuevo de la Release';
+  }
+}
+
+/* El contrato pinta las variables CSS desde Java (`{"css":"--primario:#…;--secundario:#…"}`).
+   Se leen con try/catch y se aplican a `<html>`; además `--cyan` lleva el primario
+   para que el traje se note de verdad en el HUD de vidrio. */
+function ponVariables(css) {
+  const raiz = document.documentElement;
+  String(css || '').split(';').forEach(parte => {
+    const i = parte.indexOf(':');
+    if (i < 0) return;
+    const k = parte.slice(0, i).trim();
+    const v = parte.slice(i + 1).trim();
+    if (/^--[\w-]+$/.test(k) && /^#[0-9a-f]{3,8}$/i.test(v)) raiz.style.setProperty(k, v);
+  });
+  const p = raiz.style.getPropertyValue('--primario').trim();
+  const s = raiz.style.getPropertyValue('--secundario').trim();
+  if (/^#[0-9a-f]{3,8}$/i.test(p)) { raiz.style.setProperty('--cyan', p); raiz.style.setProperty('--text', p); }
+  if (/^#[0-9a-f]{3,8}$/i.test(s)) raiz.style.setProperty('--glass-hi', s);
+  raiz.classList.add('con-atuendo');
+}
+
+function ponAtuendo(nombre, alVoz) {
+  const limpio = String(nombre || '').trim();
+  if (!limpio) return di('Dime el traje que quiero ponerme.', 'atu');
+  if (!puede('atuendo')) return di('Cambiar de traje lo trae el APK nuevo de la Release: con este cuerpo no puedo pintarme.', 'atu');
+  const elegido = matchAtuendo(limpio);
+  const r = envia('atuendo', { que: 'poner', nombre: elegido || limpio }, 'atu', 'este APK no me deja cambiarme.');
+  if (!r) return false;
+  ponVariables(r.css);
+  estado.puesto = elegido || limpio;
+  diceBien('atu', 'Ya visto de ' + estado.puesto + (r.css ? ' (' + r.css + ')' : '') + '.');
+  if (alVoz) ctx?.say?.('Puesta de ' + estado.puesto + '.');
+  ctx?.orb?.burst?.();
+  pintaAtuendo();
+  return true;
+}
+
+/* Si la lista del aparato tiene un traje con ese nombre (o con ese color dentro),
+   se manda SU nombre exacto. Si no, se manda lo que dijo la dueña y Java contesta
+   con su `dice`: no me invento un traje que no existe. */
+function matchAtuendo(texto) {
+  const b = normaliza(texto);
+  const golpe = estado.atuendos.find(a => normaliza(a.nombre) === b)
+    || estado.atuendos.find(a => normaliza(a.nombre).includes(b) || b.includes(normaliza(a.nombre)));
+  return golpe ? golpe.nombre : '';
+}
+
+/* `burbuja(boolean)` NO lleva JSON dentro: es el único del contrato que recibe el
+   booleano a pelo. Aun así, por puede() y sin fiarse de la forma de la respuesta. */
+function ponBurbuja(on, alVoz) {
+  if (!puede('burbuja')) return di('La burbuja flotante la trae el APK nuevo de la Release. Y aunque la tuviera: en modo juego nunca aparece.', 'atu');
+  const crudo = llama('burbuja', !!on);
+  const r = parsea(crudo, ctx);
+  if (r && typeof r === 'object' && r.ok === false) {
+    avisa('atu', r.dice || 'el teléfono no dejó poner la burbuja.');
+    if (alVoz) ctx?.say?.(r.dice || 'Eso no lo puedo hacer ahora.');
+    // «aparecer encima de otras apps» no es un cuadro de permiso: es un
+    // interruptor de Ajustes, y Android se niega a pedirlo con
+    // `requestPermissions`. Java ya lo sabe (`pidePermiso('burbuja')` abre la
+    // pantalla), así que si falta eso es lo que hay que abrir, no repetir el
+    // botón esperando que la segunda vez salga solo.
+    if (/encima de otras apps|aparecer/.test(r.dice || '') && puede('requestPermission')) {
+      llama('requestPermission', 'burbuja');
+      avisa('atu', 'Te abro la pantalla de ese interruptor: actívalo y pídeme la burbuja otra vez.');
+    }
+    return true;
+  }
+  if (r === null && crudo === null) { avisa('atu', 'El puente no contesta a burbuja().'); return true; }
+  // `Flotante` contesta con la clave `burbuja`, no `puesta`: leer la que no
+  // existe hacía que APAGARLA se anunciara como «burbuja puesta».
+  const puesta = (r && typeof r === 'object')
+    ? (typeof r.burbuja === 'boolean' ? r.burbuja
+       : (typeof r.puesta === 'boolean' ? r.puesta : true))
+    : (r === undefined ? !!on : !!r);
+  estado.burbuja = puesta;
+  diceBien('atu', puesta
+    ? 'Burbuja puesta: un punto mío flotando. Tócalo y abro CORT y te escucho.'
+    : 'Burbuja quitada: vuelvo a estar dentro de la app.');
+  if (alVoz) ctx?.say?.(puesta ? 'Burbuja puesta.' : 'Burbuja quitada.');
+  pintaAtuendo();
+  return true;
+}
+
+/* ── 6 · Agenda ──
+   La cita se **lee**, nunca se escribe a escondidas: `apunta` rellena el
+   formulario del calendario de Android y el dedo de la dueña lo guarda. Es la
+   diferencia entre «te lo apunté» mentira y «te lo dejo listo» verdad, y por eso
+   el manifiesto pide `READ_CALENDAR` y no `WRITE_CALENDAR`. */
+function enganchaAgenda() {
+  el('eq-ago-hoy').onclick = () => miraAgenda({ que: 'hoy' }, false);
+  el('eq-ago-3').onclick = () => miraAgenda({ que: 'proximos', dias: 3 }, false);
+  el('eq-ago-7').onclick = () => miraAgenda({ que: 'proximos', dias: 7 }, false);
+  el('eq-ago-abrir').onclick = () => miraAgenda({ que: 'abrir' }, false);
+  el('eq-ago-correo').onclick = () => correo(false);
+  el('eq-ago-pon').onclick = () => apunta(null, null, false);
+}
+
+function pintaAgenda() {
+  if (!montada) return;
+  if (!puede('agenda')) {
+    linea('ago', 'sin puente de agenda');
+    el('eq-ago-lista').innerHTML = '<span class="eq-nota">«¿qué tengo hoy?» y el correo '
+      + 'los trae el APK nuevo de la Release: con este cuerpo no miro tu calendario.</span>';
+    return;
+  }
+  const r = envia('agenda', { que: 'proximos', dias: 3 }, 'ago',
+                  'este APK no puede leer tu calendario.');
+  if (!r) return;                       // `envia` ya dejó el `dice` de Java en la hoja
+  const citas = Array.isArray(r.eventos) ? r.eventos : [];
+  estado.citas = citas;
+  linea('ago', r.dice || (citas.length + (citas.length === 1 ? ' cosa' : ' cosas')
+    + ' en los próximos 3 días'));
+  const nube = el('eq-ago-lista');
+  if (!citas.length) {
+    nube.innerHTML = '<span class="eq-nota">no hay nada apuntado estos días. Si acabo de '
+      + 'pedir el permiso, pulsa «próximos 3» otra vez: la primera vez sólo servía para dártelo.</span>';
+    return;
+  }
+  nube.innerHTML = citas.slice(0, 12).map(c => `<div class="eq-rec"><span>`
+    + `${esc(c.titulo || 'sin título')}</span><small>${esc(c.dia || '')} · `
+    + `${esc(c.cuando || '')}</small></div>`).join('');
+}
+
+function miraAgenda(peticion, alVoz) {
+  if (!puede('agenda')) {
+    return di('Ver tus citas en el teléfono lo trae el APK nuevo de la Release.', 'ago');
+  }
+  const r = envia('agenda', peticion, 'ago', 'este APK no puede abrir el calendario.');
+  if (!r) return false;                 // ya lo cuenta `envia`, con la frase de Java
+  const dicho = r.dice || (peticion.que === 'abrir' ? 'Te abro el calendario.' : 'Listo.');
+  diceBien('ago', dicho);
+  if (alVoz) ctx?.say?.(dicho);
+  if (peticion.que === 'hoy' || peticion.que === 'proximos') pintaAgenda();
+  return true;
+}
+
+/* El correo, dicho sin mentir: CORT no entra en Gmail (ese permiso no existe),
+   cuenta los avisos que ya oyó en la barra y abre la app. Si el oído de los
+   avisos está apagado, lo dice en la misma frase. */
+function correo(alVoz) {
+  if (!puede('agenda')) {
+    return di('Mirar el correo en el teléfono lo trae el APK nuevo de la Release.', 'ago');
+  }
+  const r = envia('agenda', { que: 'correo' }, 'ago', 'este APK no puede ver el correo.');
+  if (!r) return false;
+  const dicho = r.dice || 'Te abro el correo.';
+  diceBien('ago', dicho);
+  const cuenta = el('eq-ago-gmail');
+  if (cuenta) cuenta.textContent = typeof r.gmail === 'number' ? r.gmail + ' avisos' : '';
+  if (alVoz) ctx?.say?.(dicho);
+  return true;
+}
+
+/* «apunta cena el jueves a las 9»: se rellena el formulario, no se escribe. */
+function apunta(titulo, hora, alVoz) {
+  if (!puede('agenda')) {
+    return di('Apuntar citas lo trae el APK nuevo de la Release.', 'ago');
+  }
+  const limpio = String(titulo || el('eq-ago-titulo')?.value || '').trim();
+  if (!limpio) return di('Dime qué cita: «apunta cena con Samuel a las nueve».', 'ago');
+  let ms = 0;
+  const reloj = String(hora || el('eq-ago-hora')?.value || '').trim();
+  if (/^\d{1,2}[:.]\d{2}$/.test(reloj)) {
+    const [h, m] = reloj.split(/[:.]/).map(Number);
+    const cuando = new Date();
+    cuando.setHours(h, m, 0, 0);
+    if (cuando.getTime() < Date.now()) cuando.setDate(cuando.getDate() + 1);
+    ms = cuando.getTime();
+  }
+  const r = envia('agenda', { que: 'apunta', titulo: limpio, hora: ms }, 'ago',
+                  'este APK no puede abrir el calendario.');
+  if (!r) return false;
+  const dicho = r.dice || 'Te lo abro listo para guardar.';
+  diceBien('ago', dicho);
+  if (alVoz) ctx?.say?.(dicho);
+  return true;
+}
+
+/* ─────────────────────────── los avisos de Java ─────────────────────────── */
+/* El puente empuja `{type:'mente'|'memoria'|'accion'}` cuando lo largo termina. Se
+   guarda SIEMPRE en el estado (aunque la hoja esté cerrada) y se pinta si existe.
+   Devuelve `true` si el evento era de estos. */
+export function handleTelefonoEvento(ev) {
+  if (!ev || typeof ev.type !== 'string') return false;
+  if (ev.type === 'mente') {
+    estado.ultimaMente = ev;
+    if (montada) { pintaUltimaMente(); const d = el('eq-men-dice'); if (d) d.textContent = ''; }
+    const dicho = ev.ok === false
+      ? (ev.dice || 'El cerebro del teléfono no supo contestar.')
+      : (ev.responde || 'Ya pensé lo mío, pero no volvió texto.');
+    // Java dice de dónde salió la respuesta (`nube` o `local`); si no lo dice,
+    // no se inventa ni se queda el paréntesis a medias.
+    const de = ev.de === 'local' || ev.de === 'nube' ? ' (' + ev.de + ')' : '';
+    ctx?.term?.('respuesta del cerebro' + de + ': ' + String(dicho).slice(0, 60), 'equipo');
+    if (preguntaVoz) { preguntaVoz = false; ctx?.say?.(String(dicho).slice(0, 400)); ctx?.orb?.burst?.(); }
+    // Y si la respuesta local TRAÍA una acción, se hace. `Mente.local()` nombra la
+    // cosa (`{"de":"local","accion":"volumen","param":"sube"}`) y **no la ejecuta**:
+    // quien la ejecuta es `Acciones`, desde la cara. Sin este reenvío, «sube el
+    // volumen» sin PC contestaba «vale» y no subía nada.
+    if (ev.de === 'local' && typeof ev.accion === 'string' && ev.accion) {
+      const hecha = envia('accion', { que: ev.accion, args: ev.param || '' }, 'mando',
+        'sé lo que querías hacer, pero este APK no manda sobre el aparato.');
+      if (hecha) ctx?.term?.('acción del cerebro local: ' + ev.accion, 'equipo');
+    }
+    return true;
+  }
+  if (ev.type === 'memoria') {
+    estado.ultimaMemoria = ev;
+    if (ev.ok === false) avisa('mem', ev.dice || 'no pude cuadrar con el portátil.');
+    else {
+      diceBien('mem', 'Cuadrado con el portátil: ' + (ev.subidos ?? 0) + ' subidos, '
+        + (ev.bajados ?? 0) + ' bajados.');
+      if (preguntaVoz) { preguntaVoz = false; ctx?.say?.('Cuadrado con tu portátil: '
+        + (ev.subidos ?? 0) + ' subieron y ' + (ev.bajados ?? 0) + ' bajaron.'); }
+    }
+    pintaMemoria();
+    return true;
+  }
+  if (ev.type === 'accion') {
+    // Java avisa de lo que hizo (o no hizo) por su cuenta: alarma, linterna,
+    // volumen desde el auricular. Se cuenta tal cual y se vuelve a leer el estado.
+    const dicho = ev.dice || ev.resumen
+      || (ev.ok === false ? 'El teléfono no dejó hacer esa cosa.' : 'El teléfono hizo una cosa que no me contó.');
+    avisa('mando', dicho);
+    ctx?.term?.('aviso de acción: ' + String(dicho).slice(0, 60), 'equipo');
+    pintaMando();
+    return true;
+  }
+  return false;
+}
+
+/* El estado resumido, para `hud.js` y para la consola: una foto, no una llamada. */
+export function estadoTelefono() {
+  return {
+    enTelefono: enTelefono(), montada,
+    puente: { accion: puede('accion'), voz: puede('ajusteVoz'), memoria: puede('memoria'),
+      mente: puede('mente'), atuendo: puede('atuendo'), burbuja: puede('burbuja') },
+    voces: estado.voces.length, vozActual: estado.vozActual,
+    nivel: estado.nivel, max: estado.max, linterna: estado.linterna,
+    proveedor: estado.mente.proveedor, modelo: estado.mente.modelo,
+    clavePuesta: estado.mente.clavePuesta, conRed: estado.mente.conRed,
+    recuerdos: estado.hechos, conPortatil: estado.conPortatil, direccion: estado.direccion,
+    atuendos: estado.atuendos.length, puesto: estado.puesto, burbuja: estado.burbuja,
+  };
+}
+
+/* ─────────────────────────── la voz de la dueña ─────────────────────────── */
+
+/* «sube el volumen», «linterna», «pon una alarma a las 7:30», «abre whatsapp»,
+   «busca recetas», «qué sabes de mí», «acuédate de…», «voz de siri»,
+   «ponte azul», «burbuja», «piensa…», «sincroniza con el pc».
+   Devuelve `true` si la frase era suya (y ya la mandó o ya la contestó). */
+export function telefonoPorVoz(texto) {
+  if (!enTelefono()) return false;            // en PC: nada de esto, la frase sigue al núcleo
+  const b = normaliza(texto);
+  if (!b) return false;
+
+  /* 1 · volumen — sólo con la palabra «volumen/sonido» delante, para no pisar a
+        «baja la persiana», que es de otro mundo. */
+  if (/\b(volumen|sonido)\b/.test(b)) {
+    const como = /\b(max|maximo|tope|full)\b/.test(b) ? 'max'
+      : /\b(min|minimo|bajito)\b/.test(b) ? 'min'
+      : /\b(callar|calla|callate|muted)\b/.test(b) ? 'callar'
+      : /\b(sube|subir|subid|mas fuerte|mas alto)\b/.test(b) ? 'sube'
+      : /\b(baja|bajar|bajad|suave|menos)\b/.test(b) ? 'baja' : '';
+    if (como) return accionVolumen(como, true);
+  }
+
+  /* 2 · linterna */
+  if (/\b(linterna|antorcha)\b/.test(b) || /\bluz del telefono\b/.test(b)) {
+    const como = /\b(enciende|prende|prender|on|prendida)\b/.test(b) ? 'on'
+      : /\b(apaga|apagar|off|quita|cesa|apagada)\b/.test(b) ? 'off' : 'alterna';
+    return accionLinterna(como, true);
+  }
+
+  /* 3 · alarma con hora */
+  if (/\b(alarma|despertador|despiertame|despierta)\b/.test(b)) {
+    const hora = sacaHora(texto);
+    if (!hora) return di('Dime la hora: «pon una alarma a las 7:30».', 'mando');
+    const nota = sacaNota(texto);
+    return accionAlarma(hora, nota, true);
+  }
+
+  /* 4 · temporizador */
+  if (/\b(temporizador|cuenta atras|cuenta-regresiva|crono)\b/.test(b)) {
+    const seg = sacaSegundos(b);
+    if (!seg) return di('Dime cuánto cuenta: «temporizador de 10 minutos».', 'mando');
+    return accionTemporizador(seg, true);
+  }
+
+  /* 5 · «abre whatsapp» y las demás. A propósito NO están `musica` ni
+        `reproductor-mv`: ésas ya tienen su sitio en la hoja de Música y el
+        reproductor, y se las dejo a ellos. */
+  const app = sacaApp(b);
+  if (app) return accionAbrir(app, true);
+
+  /* 6 · «busca <texto>» (app o red) */
+  if (/^(busca|buscar|buscame|googlea|investiga|encuentra)\b/.test(b)) {
+    const limpio = texto.replace(/^\s*(?:busca(?:r|me)?|googlea|investiga|encuentra)\s*(?:en (?:la )?(?:red|internet|google)|de|el|la|los|las|un|una|por|a)?\b/ig, '').trim();
+    if (!limpio) return di('Dime qué busco.', 'mando');
+    if (/\b(app|aplicacion|programa)\b/.test(b) && !/\b(red|internet|google|web)\b/.test(b)) {
+      return buscaApp(limpio.replace(/\b(?:la|el|una|un|de|app|aplicacion|que|tengo|mi)\b/ig, ' ').replace(/\s+/g, ' ').trim(), true);
+    }
+    return buscaEnRed(limpio, true);
+  }
+
+  /* 7 · memoria. Las tildes se quitan al RECONOCER (`b`), pero el texto que se le
+        manda a Java es el suyo, con sus acentos: «mi hermano» no es lo mismo que
+        «mí», y ahí es donde hay que mirar. «qué recuerdas» se queda fuera a
+        propósito: eso ya abre la ventana 08 · Cerebro del PC en `hud.js`. */
+  if (/^que sabes\b/.test(b)) {
+    const tema = texto.replace(/^.*?qu[eé]\s+sabes\s*(?:de|sobre|acerca de)?\s*/i, ' ').trim();
+    if (!tema || /^(mi|mim|yo|sobre mi|de mi)$/.test(normaliza(tema))) return quienSoy(true);
+    return buscaRecuerdo(tema, true);
+  }
+  if (/^(acuedate|acuerdate|apuntame|apunta en la memoria|guarda en la memoria|recuerdame)\b/.test(b)
+      && !/\b(agenda|calendario|cita|reunion|junta)\b/.test(b) && !sacaHora(texto)) {
+    // «apúntame» es ambiguo a propósito: puede ser memoria («apúntame que Ana
+    // cumple años») o agenda («apúntame la cena con Samuel a las nueve»). La
+    // dueña lo distingue con una hora o con la palabra cita: si las trae, esto NO
+    // es memoria y se deja caer al grupo 12, que es el del calendario.
+    const limpio = texto.replace(/^\s*(?:acu[eé]r?date(?:\s+(?:de|que))?|ap[uú]ntame|apunta en la memoria|guarda en la memoria|recu[eé]rdame)\s*(?:que|de|lo que|:)?\s*/i, '').trim();
+    if (!limpio) return di('Dime qué quiero que recuerde.', 'mem');
+    return guardaRecuerdo(limpio, true);
+  }
+  if (/\b(sincroniza|sincronizar|sincronizate|cuadra|pasa los recuerdos)\b/.test(b)
+      && /\b(pc|portatil|ordenador|memoria|recuerdos|con el pc)\b/.test(b)) {
+    return sincroniza(true);
+  }
+
+  /* 8 · voz: «voz de siri», «cambia la voz», «qué voces hay». Se aceptan las dos
+        palabras porque la dueña habla de la lista («voces»), no sólo de la suya. */
+  if (/\b(voz|voces)\b/.test(b) || /\bcomo suenas?\b/.test(b)) {
+    if (/\basistente\b/.test(b)) return false;        // ése ya lo atiende `ponAsistente()`
+    const pre = PREAJUSTES.find(([k]) => new RegExp('\\b' + normaliza(k) + '\\b').test(b));
+    if (pre) { abre('voz'); return preajuste(pre[0], true); }
+    if (/^(que|cuantas) voces\b/.test(b) || /\b(cambia|cual|cuales|cuantas|lista|otras|pon|ponme|muestra)\b/.test(b)) {
+      abre('voz');
+      if (montada) pintaVoz();
+      return di('Te enseño las voces que hay instaladas en la pantalla del Equipo. '
+        + 'Dime «voz de siri», «voz mexicana» o la que tú quieras.');
+    }
+    if (/\bprobar|prueba\b/.test(b)) { abre('voz'); return pruebaVoz(true); }
+  }
+
+  /* 9 · atuendos: «ponte azul», «atuendo Cortana» */
+  const COLOR = /\b(azul|verde|rojo|roja|morado|violeta|rosa|rosado|amarillo|dorado|ambar|naranja|gris|negro|blanco|turquesa|cian|magenta|fucsia|acero|noche|dia)\b/;
+  if (/\b(atuendo|traje|vestuario)\b/.test(b) || (/\b(ponte|ponerte|vistete|cambia|camvia)\b/.test(b) && COLOR.test(b))) {
+    const nombre = (/\b(?:atuendo|traje)\s+(?:de |del |: )?([a-záéíóúñ ]{2,24})/i.exec(texto) || [])[1]
+      || (COLOR.exec(normaliza(texto)) || [])[1] || '';
+    if (!nombre) return di('Dime el traje: «ponte azul» o «atuendo Cortana».', 'atu');
+    abre('atu');
+    return ponAtuendo(nombre, true);
+  }
+
+  /* 10 · burbuja */
+  if (/\bburbuja\b/.test(b)) {
+    const on = !/\b(quita|quitar|apaga|apagar|cesa|fuera|off|esconde)\b/.test(b);
+    return ponBurbuja(on, true);
+  }
+
+  /* 11 · «piensa <pregunta>»: el cerebro del teléfono, sin el portátil */
+  if (/^(piensa|piensalo|piensa en|medita|reflexiona|contesta|responde)\b/.test(b)) {
+    const pregunta = texto.replace(/^\s*(?:piensa(?:r?|lo)?|piensa en|medita|reflexiona|contesta|responde)\s*(?:que|lo que|sobre|de|:)?\s*/i, '').trim();
+    if (!pregunta) return di('Dime la pregunta: «piensa por qué está lloviendo».', 'men');
+    abre('men');
+    return preguntaMente(pregunta, true);
+  }
+
+  /* 12 · agenda y correo: «¿qué tengo hoy?», «mi agenda», «las citas de la
+        semana», «revisa el correo», «apunta cena con Samuel a las nueve». Se abre
+        la hoja para que la dueña vea la lista, y la cita se rellena en el
+        calendario del sistema —no se escribe a escondidas—.
+        El correo se mira ANTES: «qué hay en el correo» también casa con el «qué
+        hay» de la agenda, y contestarle con las citas sería cambiarle la pregunta. */
+  if (/\b(correo|gmail|mail)\b/.test(b)
+      && /\b(revisa|mirar|mira|que|hay|llegado|llego|leer|lee|abre|abrir)\b/.test(b)) {
+    abre('ago');
+    return correo(true);
+  }
+  if (/\b(agenda|citas|cita|calendario)\b/.test(b)
+      || (/^(que|qué)\b/.test(b) && /\b(tengo|hay|viene|espera)\b/.test(b))) {
+    if (/\b(apunta|anota|guarda|mete|agrega|anade|add)\b/.test(b)) {
+      const limpio = texto.replace(/^\s*(?:apunta|anota|guarda|agrega|mete|añade|anádeme)\s*(?:en (?:la |el )?(?:agenda|calendario)|una?|el|la|que|:)?\s*/i, '').trim();
+      return apunta(limpio, sacaHora(texto), true);
+    }
+    abre('ago');
+    if (/\b(semana|proximos|proximo|dias|vendidero|despues)\b/.test(b)) {
+      return miraAgenda({ que: 'proximos', dias: 7 }, true);
+    }
+    if (/\b(calendario|abrir|abre)\b/.test(b)) return miraAgenda({ que: 'abrir' }, true);
+    return miraAgenda({ que: 'hoy' }, true);
+  }
+
+  return false;
+}
+
+/* ── las palabras hechas números ── */
+
+/* «a las 7:30», «a las 7 y media», «a las 7», «7 y cuarto», y la tarde/noche
+   suman 12 horas porque la dueña dice «a las 7 de la tarde» y espera un despertador
+   de después de cenar, no de antes de desayunar. */
+function sacaHora(texto) {
+  const b = normaliza(texto);
+  let h = null, m = null;
+  const dos = /(\d{1,2})\s*[:.]\s*(\d{2})/.exec(String(texto));
+  if (dos) { h = +dos[1]; m = +dos[2]; }
+  const media = /\b(\d{1,2})\s+y\s+media\b/.exec(b);
+  const cuarto = /\b(\d{1,2})\s+y\s+(?:un\s+)?cuarto\b/.exec(b);
+  if (h === null && media) { h = +media[1]; m = 30; }
+  else if (h === null && cuarto) { h = +cuarto[1]; m = 15; }
+  else if (h === null) {
+    const suelta = /\b(?:a\s+las|las|a\s+la)\s+(\d{1,2})\b/.exec(b);
+    if (suelta) { h = +suelta[1]; m = 0; }
+  }
+  if (h === null) return '';
+  if (/\b(tarde|noche|pm)\b/.test(b) && h < 12) h += 12;
+  if (/\b(madrugada|manana|am)\b/.test(b) && h === 12) h = 0;
+  if (h > 23 || m > 59) return '';
+  return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+}
+
+/* La etiqueta del despertador: «para el tren», «de la reunión», «y avísame del bus». */
+function sacaNota(texto) {
+  const m = /\b(?:para|de|por|sobre)\s+([a-záéíóúñ ,._0-9]{3,40})$/i.exec(String(texto).trim());
+  return m ? m[1].replace(/[.:;]\s*$/, '').trim() : '';
+}
+
+/* «temporizador de 10 minutos» → 600; también «media hora», «un cuarto de hora»,
+   «2 horas» y «45 segundos». La unidad se mira por su primera letra: h, m o s. */
+function sacaSegundos(b) {
+  const n = /(\d+(?:[.,]\d+)?)\s*(horas?|h|minutos?|min|segundos?|s)\b/.exec(b);
+  if (n) {
+    const val = +String(n[1]).replace(',', '.');
+    const u = n[2][0];
+    return Math.round(val * (u === 'h' ? 3600 : u === 'm' ? 60 : 1));
+  }
+  if (/\bmedia hora\b/.test(b)) return 1800;
+  if (/\b(?:un )?cuarto de hora\b/.test(b)) return 900;
+  if (/\buna hora\b/.test(b)) return 3600;
+  return 0;
+}
+
+/* Qué app quiere abrir: la lista del contrato, con sus nombres de calle. */
+function sacaApp(b) {
+  if (!/\b(abre|abrir|abreme|abreel|lanza|lanzar|inicia|iniciar|arranca|arrancar|levanta|monta|activa)\b/.test(b)) return '';
+  const claves = Object.keys(APPS).sort((a, c) => c.length - a.length);
+  for (const k of claves) {
+    if (new RegExp('\\b' + k.replace(/ /g, '\\s+') + '\\b').test(b)) return APPS[k];
+  }
+  return '';
+}

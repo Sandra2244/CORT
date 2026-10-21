@@ -56,6 +56,15 @@ import java.util.Map;
  *    `TextToSpeech` del puente. El menú del botón «CORT · PC» dice si el permiso
  *    del sistema ya está dado, que es la única parte que no se puede comprobar
  *    desde el código.
+ * 5. **Qué manda en el aparato.** La ronda 2.1 (2.1.0) trae la pantalla **Equipo**
+ *    con sus seis bloques —Voz, Mando, Cerebro, Memoria, Atuendos y Agenda—, que
+ *    son lo que el APK original prometía y el nuestro había dejado fuera: subir el
+ *    volumen, la linterna, poner alarma y temporizador, abrir apps, buscar en la
+ *    red, elegir la voz (con preajustes tipo Siri/Alexa/Cortana), recordar sin el
+ *    PC y cuadrar ese recuerdo con el portátil, pensar con la nube del perfil,
+ *    cambiar los colores de CORT y dejar un punto flotante que abre el micrófono
+ *    sin sacar de la partida. El menú de este botón tiene las cinco filas que la
+ *    dueña dice más a menudo, habladas por el mismo puente.
  *
  * Sin Gradle ni AndroidX: se compila con `aapt2` + `javac` + `d8` en GitHub
  * Actions, porque el portátil de la dueña (1,8 GiB) no levanta un `gradle build`.
@@ -79,6 +88,9 @@ public class MainActivity extends Activity {
     private long ultimoToque = 0L;
     private String direccionPC = "";
     private boolean cayoUnaSolaVez = false;
+
+    /** El botón de la esquina, guardado porque el traje de CORT lo pinta. */
+    private Button botonMenu;
 
     /**
      * La cara abierta, para que el `Reproductor` pueda avisarla cuando cambia algo
@@ -123,11 +135,12 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button rincon = new Button(this);
-        rincon.setText("CORT · PC");
-        rincon.setAlpha(0.55f);
-        rincon.setTextSize(12f);
-        rincon.setOnClickListener(v -> menu());
+        botonMenu = new Button(this);
+        botonMenu.setText("CORT · PC");
+        botonMenu.setAlpha(0.55f);
+        botonMenu.setTextSize(12f);
+        botonMenu.setOnClickListener(v -> menu());
+        usaAtuendo();
         FrameLayout.LayoutParams botas = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         botas.bottomMargin = dp(14);
@@ -137,7 +150,7 @@ public class MainActivity extends Activity {
         FrameLayout cara = new FrameLayout(this);
         cara.addView(web, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        cara.addView(rincon, botas);
+        cara.addView(botonMenu, botas);
         setContentView(cara);
 
         mandos = new MediaSession(this, "cort-auriculares");
@@ -174,19 +187,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        primerPlano = true;
         direccionPC = prefs().getString("pc", "");
         if (web.getUrl() == null) arranca();
         if (mandos != null) mandos.setActive(true);
         // El oído vuelve: `pausa()` cerró el micrófono al irse a segundo plano y
         // sin este aviso la interfaz quedaría para siempre con «escucha en pausa».
         if (puente != null) puente.reanuda();
+        quitaAvisoDeFondo();            // ya está delante: su aviso sobra
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        primerPlano = false;
         if (mandos != null) mandos.setActive(false);   // la música vuelve a su dono
         if (puente != null) puente.pausa();
+        dejaAvisoDeFondo();
     }
 
     @Override
@@ -327,7 +344,10 @@ public class MainActivity extends Activity {
                                     | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                             .putExtra(PIDE_ESCUCHAR, true);
                         startActivity(abrir);
-                        puente.escuchaAhora();
+                        // `escuchaDelAuricular`, no `escuchaAhora`: la dueña no está
+                        // mirando la pantalla, así que la insignia del micro es lo
+                        // único que le dice que CORT ya la está oyendo.
+                        puente.escuchaDelAuricular();
                     });
                     return true;      // el segundo toque es de CORT
                 }
@@ -356,6 +376,9 @@ public class MainActivity extends Activity {
         String oido = Avisos.activado(this) ? "hecho" : "pendiente";
         String medios = Musica.puedeLeer(this) ? "hecho" : "pendiente";
         String suena = Reproductor.estaVivo() ? "sí" : "no";
+        String calendario = Agenda.conPermiso(this) ? "hecho" : "pendiente";
+        String flotante = Flotante.puedeAparecer(this) ? "hecho" : "pendiente";
+        String enPunto = Flotante.montada() ? "puesta" : "apagada";
         // El estado se **lee**, no se recuerda: la bandera vive en `CortNative`
         // (static volatile, con su copia en las preferencias), así que la fila dice
         // lo que hay aunque el modo lo haya puesto la pantalla de la cara.
@@ -372,6 +395,14 @@ public class MainActivity extends Activity {
             "Parar la música",
             "Dar permiso a la música y los archivos (" + medios + ")",
             "Modo juego (silencio: " + (juegoActivo ? "sí" : "no") + ")",
+            // Las cinco filas de la ronda 2.1. Están aquí, y no sólo en la pantalla
+            // Equipo, porque hay frases que se dicen sin abrir nada: «qué tengo hoy»
+            // o «cuadra la memoria». El orden de los `case` de abajo es ESTE orden.
+            "¿Qué tengo hoy? (calendario: " + calendario + ")",
+            "Mis avisos de correo",
+            "Punto flotante de CORT (" + enPunto + ", permiso: " + flotante + ")",
+            "Cuadrar la memoria con el PC",
+            "Probar el cerebro del teléfono",
         };
         new AlertDialog.Builder(this)
             .setTitle("CORT")
@@ -387,14 +418,48 @@ public class MainActivity extends Activity {
                     case 7: puente.musicaAutomatica(); break;
                     case 8: puente.musicaParar(); break;
                     case 9: puente.pidePermisoMedios(); break;
-                    // La fila once (índice 10) es la última: los `case` van en el
-                    // mismo orden que las filas de arriba — uno mal numerado es un
-                    // botón que hace otra cosa.
+                    // La fila once (índice 10) es la última del bloque viejo: los
+                    // `case` van en el mismo orden que las filas de arriba — uno mal
+                    // numerado es un botón que hace otra cosa.
                     case 10: puente.modoJuego(!juegoActivo); break;
+                    // Las cuatro filas nuevas (índices 11 a 15) son la ronda 2.1. Cada
+                    // una habla por sí sola y escribe su resultado en la cara, así que
+                    // la pantalla y la voz cuentan la misma historia.
+                    case 11: puente.leeAgenda("{\"que\":\"hoy\"}"); break;
+                    case 12: puente.leeAgenda("{\"que\":\"correo\"}"); break;
+                    case 13: {
+                        String respuesta = puente.burbuja(!Flotante.montada());
+                        avisa(textoCorto(respuesta));
+                        break;
+                    }
+                    case 14: puente.sincronizaMemoria();
+                        avisa("Cuadrando con tu portátil: te aviso al terminar"); break;
+                    case 15: puente.pruebaCerebro();
+                        avisa("Pensando: te lo digo por voz cuando termine"); break;
                     default: arranca(); break;
                 }
             })
             .show();
+    }
+
+    /**
+     * La línea que se enseña en el menú: el `dice` del JSON del puente, sin tener
+     * que meter un parser en la actividad. Si el cuadro venía torcido, se dice tal
+     * cual, que es peor de leer pero nunca mentira.
+     */
+    private static String textoCorto(String json) {
+        if (json == null) return "El teléfono no contestó";
+        int desde = json.indexOf("\"dice\"");
+        if (desde < 0) return json.length() > 90 ? json.substring(0, 90) + "…" : json;
+        int abre = json.indexOf('"', json.indexOf(':', desde) + 1);
+        int cierra = abre + 1;
+        while (cierra < json.length()) {
+            char c = json.charAt(cierra);
+            if (c == '"') break;
+            cierra += c == '\\' ? 2 : 1;
+        }
+        return abre >= 0 && cierra > abre ? json.substring(abre + 1, Math.min(cierra, json.length()))
+                                          : "El teléfono no dijo por qué";
     }
 
     private void pideDireccion() {
@@ -505,6 +570,21 @@ public class MainActivity extends Activity {
         avisa("CORT como asistente: " + estadoAsistente());
     }
 
+    /**
+     * Pinta el botón con el traje puesto (`Paleta`), para que «ponte azul» no se
+     * quede en un color de CSS que sólo se ve en la página. Es el mismo color que
+     * lee la cara por `atuendo(estado)`, así que las dos superficies no pueden
+     * contradecirse: una sola preferencia, dos pintores.
+     */
+    void usaAtuendo() {
+        runOnUiThread(() -> {
+            if (botonMenu == null) return;
+            try {
+                botonMenu.setTextColor(Paleta.primario(this));
+            } catch (Exception elTrajeNoSeLee) { /* el azul de siempre hace bien */ }
+        });
+    }
+
     private static String aseguraSlash(String url) {
         return url.endsWith("/") ? url : url + "/";
     }
@@ -520,6 +600,33 @@ public class MainActivity extends Activity {
      * contactos, y el micrófono no necesita el disco.
      */
     void pidePermiso(String kind) {
+        // La burbuja no va por cuadro: «aparecer encima de otras apps» es un
+        // interruptor de Ajustes que Android se niega a pedir con `requestPermissions`
+        // (tiraría un `RuntimeException`). Se abre la pantalla y listo.
+        String k = kind == null ? "" : kind.toLowerCase(Locale.US);
+        if (k.startsWith("burbuja") || k.startsWith("encima") || k.startsWith("flotante")
+            || k.startsWith("overlay")) {
+            if (puente != null) puente.abreAjustesBurbuja();
+            return;
+        }
+        // La restricción de batería tampoco es un cuadro de `requestPermissions`:
+        // es una excepción que la dueña mete en la lista, y el permiso
+        // `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (declarado) permite abrir ese
+        // cuadro concreto. Si el fabricante lo quita, se cae a la lista general y,
+        // si ni eso, a los ajustes de la app — siempre con la pantalla abierta
+        // delante, nunca con un ✓ de confianza.
+        if (k.startsWith("bateri") || k.startsWith("battery") || k.startsWith("ahorro")) {
+            abreAjustesDeBateria();
+            return;
+        }
+        // «Inicio automático» lo decide el fabricante (Xiaomi, Samsung, Oppo…) y no
+        // hay API para ello: lo honesto es abrir los ajustes de la app y decirle
+        // dónde está la fila.
+        if (k.startsWith("autostart") || k.startsWith("arranque") || k.startsWith("inicio")) {
+            abreAjustesDeLaApp();
+            avisa("Busca «Inicio automático» / «Segundo plano» en los ajustes de CORT");
+            return;
+        }
         final String[] permisos = grupoDe(kind);
         runOnUiThread(() -> {
             String[] faltan = sinConceder(permisos);
@@ -527,6 +634,33 @@ public class MainActivity extends Activity {
             try {
                 requestPermissions(faltan, 7);
             } catch (Exception elTelefonoNoPregunta) { /* la interfaz avisa sola */ }
+        });
+    }
+
+    /** La pantalla de excepciones de batería, con su atajo directo si el equipo lo tiene. */
+    private void abreAjustesDeBateria() {
+        runOnUiThread(() -> {
+            try {
+                startActivity(new Intent(
+                        Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+                return;
+            } catch (Exception eseFabricanteSinLista) { /* al común */ }
+            abreAjustesDeLaApp();
+            avisa("Ajustes ▸ Aplicaciones ▸ CORT ▸ Batería sin restricción");
+        });
+    }
+
+    /** Ajustes ▸ Aplicaciones ▸ CORT: la pantalla que siempre existe. */
+    private void abreAjustesDeLaApp() {
+        runOnUiThread(() -> {
+            try {
+                startActivity(new Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.fromParts("package", getPackageName(), null))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception tampoco) {
+                avisa("No se pudieron abrir los ajustes de la app");
+            }
         });
     }
 
@@ -546,6 +680,13 @@ public class MainActivity extends Activity {
         }
         if (k.startsWith("aviso") || k.startsWith("notific")) {
             return new String[] { "android.permission.POST_NOTIFICATIONS" };
+        }
+        // La ronda 2.1 pregunta por el calendario («¿qué tengo hoy?»). Se pide SOLO
+        // de lectura: CORT abre el formulario de una cita nueva y el dedo de la
+        // dueña lo guarda; escribir en su agenda sin su visto bueno no entra en el
+        // contrato, y por eso `WRITE_CALENDAR` no está ni en el manifiesto.
+        if (k.startsWith("calendari") || k.startsWith("agenda") || k.startsWith("cita")) {
+            return new String[] { android.Manifest.permission.READ_CALENDAR };
         }
         return new String[] { android.Manifest.permission.RECORD_AUDIO };
     }
@@ -602,12 +743,96 @@ public class MainActivity extends Activity {
             if (permiso.contains("MEDIA") || permiso.contains("EXTERNAL_STORAGE")) return "medios";
             if (permiso.contains("CONTACTS") || permiso.contains("CALL_PHONE")) return "contactos";
             if (permiso.contains("POST_NOTIFICATIONS")) return "avisos";
+            if (permiso.contains("CALENDAR")) return "calendario";
         }
         return "mic";
     }
 
     void avisa(String texto) {
         runOnUiThread(() -> Toast.makeText(this, texto, Toast.LENGTH_LONG).show());
+    }
+
+    /* ─────────────────── segundo plano, dicho sin mentiras ───────────────────
+       El panel «▸ Segundo plano» de 07 · Perfil promete una sola cosa real: que
+       CORT **sigue vivo** cuando te vas de la app, con su aviso de Android
+       puesto. No promete la palabra «Oye CORT» con la pantalla apagada ni con
+       la app cerrada —eso lo dice el servidor de Google y no viaja en este APK,
+       y abrir el micrófono a medias es justo lo que le trababa el teléfono a la
+       dueña (ronda «y ya no traba el teléfono»). Lo que sí sigue funcionando con
+       el aviso puesto es el `MediaSession`, o sea el **doble toque del
+       auricular**, y que la música no se caiga.
+       No es un `Service` en primer plano: es una notificación normal, así que no
+       necesita `foregroundServiceType` nuevo ni el permiso de micrófono en segundo
+       plano, y se quita en un toque desde la propia barra. */
+
+    private volatile boolean primerPlano = true;
+    private static final String CANAL_FONDO = "cort-fondo";
+    private static final int NOTA_FONDO = 4211;
+
+    /** Lo que lee la cara como `running`: si el aviso de fondo está puesto ahora. */
+    boolean avisoDeFondoPuesto() {
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            return nm != null && nm.getActiveNotifications() != null
+                   && java.util.Arrays.stream(nm.getActiveNotifications())
+                          .anyMatch(n -> n.getId() == NOTA_FONDO);
+        } catch (Exception eseAparejoNoDejaMirar) {
+            return false;
+        }
+    }
+
+    /** `setBackground` de la cara: si se cambia el interruptor, el aviso se pone o cae. */
+    void alAvisoDeFondoLeGustaCambiar() {
+        if (primerPlano) return;
+        if (prefs().getBoolean("bg", false)) dejaAvisoDeFondo();
+        else quitaAvisoDeFondo();
+    }
+
+    private void dejaAvisoDeFondo() {
+        if (!prefs().getBoolean("bg", false)) { quitaAvisoDeFondo(); return; }
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            canalDeFondo(nm);
+            Intent vuelve = new Intent(this, MainActivity.class);
+            PendingIntent quienVuelve = PendingIntent.getActivity(this, 4212, vuelve,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            android.app.Notification.Builder b =
+                    (android.os.Build.VERSION.SDK_INT >= 26)
+                    ? new android.app.Notification.Builder(this, CANAL_FONDO)
+                    : new android.app.Notification.Builder(this);
+            b.setSmallIcon(android.R.drawable.ic_media_play)
+             .setContentTitle("CORT en segundo plano")
+             .setContentText("El doble toque del auricular y la música siguen. "
+                             + "El micrófono está cerrado para no trabarte.")
+             .setContentIntent(quienVuelve)
+             .setOngoing(true)
+             .setPriority(android.app.Notification.PRIORITY_LOW);
+            nm.notify(NOTA_FONDO, b.build());
+        } catch (Exception noDejaAvisar) {
+            // Sin permiso de avisos (Android 13) no hay forma de quedarse visto:
+            // la cara lo muestra como permiso pendiente, no como «activo».
+            android.util.Log.i("MainActivity", "segundo plano sin aviso: " + noDejaAvisar);
+        }
+    }
+
+    private void quitaAvisoDeFondo() {
+        try {
+            android.app.NotificationManager nm =
+                    (android.app.NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+            if (nm != null) nm.cancel(NOTA_FONDO);
+        } catch (Exception daIgual) { /* el proceso se va igual */ }
+    }
+
+    private void canalDeFondo(android.app.NotificationManager nm) {
+        if (android.os.Build.VERSION.SDK_INT < 26 || nm.getNotificationChannel(CANAL_FONDO) != null) return;
+        android.app.NotificationChannel c = new android.app.NotificationChannel(
+                CANAL_FONDO, "CORT · segundo plano",
+                android.app.NotificationManager.IMPORTANCE_LOW);
+        c.setShowBadge(false);
+        nm.createNotificationChannel(c);
     }
 
     /**

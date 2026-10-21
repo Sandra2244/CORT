@@ -21,14 +21,18 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# La entrega «todo en uno»: el 2.0.0 es UN solo APK de Java con la cara embebida,
-# el reproductor con su `MediaSession`, los avisos leídos en voz y el modo juego.
+# La entrega «todo en uno»: el 2.1.0 es UN solo APK de Java con la cara embebida,
+# el reproductor con su `MediaSession`, los avisos leídos en voz, el modo juego y —
+# recuperado de la línea hermana `CORT-TELEFONO`, que el 2.0.0 no traía— el mando
+# del aparato: volumen, linterna, alarma, temporizador, abrir apps, voces del TTS
+# con preajustes, memoria en SQLite, cerebro en la nube sin portátil y atuendos.
 # `build.yml` lleva el mismo número en su `APK_VERSION` — si se separan, el enlace
 # de la Release anuncia un archivo que no existe (`scripts/prueba-costura.py` [5]
-# lo comprueba). El `versionCode` sale solo del case de abajo: 2.0.0 → 20000, que
-# es más que el 10300 del 1.3.0, así que Android lo ve como actualización y se
-# instala ENCIMA sin desinstalar (con la misma llave de `llave.sh`).
-APK_VERSION="${APK_VERSION:-2.0.0}"   # desde aquí sale UN SOLO APK: este
+# lo comprueba). El `versionCode` sale solo del case de abajo: 2.1.0 → 20100, que
+# es más que el 20000 del 2.0.0 y que el 10300 del 1.3.0, así que Android lo ve como
+# actualización y se instala ENCIMA sin desinstalar (con la misma llave de
+# `llave.sh`).
+APK_VERSION="${APK_VERSION:-2.1.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"

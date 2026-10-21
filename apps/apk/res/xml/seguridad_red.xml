@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Config de red, recuperada del `CORT-IA-1.1.0.apk`, donde era
+  `res/xml/network_security_config.xml` (468 bytes medidos: `base-config` +
+  `cleartextTrafficPermitted` + `trust-anchors` con `system`, sin ninguna lista de
+  dominios). Se copia esa forma y se explica el porqué, que el original no decía:
+
+  `cleartextTrafficPermitted="true"` hace falta de verdad, y no es un descuido: el
+  portátil de la dueña sirve el holograma en `http://IP:8000` sin certificado, y la
+  IP de su Wi-Fi no se puede escribir de antemano (mañana puede ser
+  `192.168.1.30` y el mes que viene `10.0.0.14`). Un `<domain-config>` con listas de
+  dominios **no sirve para esto**: Android compara cadenas, no rangos — poner
+  `192.168.0.0` no hace que `192.168.1.30` entre, y el modo PC se cae en silencio.
+  Medido antes de escribir este fichero, y por eso se queda en `base-config`.
+
+  El permiso, dicho sin adornos: en la red local de casa viaja en claro. Sale del
+  salón si alguien escucha el Wi-Fi, no sale a Internet. Las claves de los
+  proveedores (Groq, OpenAI, DeepSeek…) viajan por HTTPS a su propio servidor
+  porque ésas no están en esta lista.
+
+  Cuando el backend tenga certificado (Let's Encrypt con dominio propio, o un
+  certificado de usuario instalado en el teléfono), se pone `false` aquí y el
+  WebView empezará a rechazar el `http`: es la única línea que hay que tocar.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- Sólo las CA del sistema: si la dueña instala un certificado raro,
+                 CORT no la acepta. Sin `src="user"`, que es el agujero que sí
+                 traen otras apps. -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- El WebView del modo PC se declara aparte para que el registro de Android
+         diga qué cara es la que habla en claro, y para poder cerrarla sola algún
+         día sin tocar el resto de la app. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

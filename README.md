@@ -47,18 +47,19 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 | 📂 | **Archivos seguros** | Árbol lateral con doble conteo (carpetas · archivos) que se expande, vista rejilla/lista y botón **Abrir** que lanza la carpeta en el explorador del sistema |
 | 🎵 | **Música** | Escanea `~/Música`, reproduce en el panel o abre tu reproductor (VLC) con «reproduce música» |
 | 📝 | **Notas, pendientes y memoria** | «apunta …» guarda una nota; «tengo que comprar aceite» guarda una pendiente y «listo 1» la marca como hecha; **08 · Cerebro** muestra el muro de recuerdos enmarcados (notas + conversaciones) |
-| 🔊 | **Te lo lee en voz alta** | «lee mis notas» · «lee mis tareas» · «lee el documento recibo» · «lee mis avisos». En el PC lo lee del backend (notas, pendientes y textos de tus carpetas seguras); en el teléfono `CORT-IA-2.0.0.apk` lee el **centro de notificaciones** — WhatsApp, Gmail, Telegram, Signal — con un oído que guarda doce líneas en RAM y se borran solas: nunca se escriben a disco |
+| 🔊 | **Te lo lee en voz alta** | «lee mis notas» · «lee mis tareas» · «lee el documento recibo» · «lee mis avisos». En el PC lo lee del backend (notas, pendientes y textos de tus carpetas seguras); en el teléfono `CORT-IA-2.1.0.apk` lee el **centro de notificaciones** — WhatsApp, Gmail, Telegram, Signal — con un oído que guarda doce líneas en RAM y se borran solas: nunca se escriben a disco |
 | 📊 | **Sensores** | CPU / RAM / disco / batería reales y clima actual (Open-Meteo, cacheado, sin API key) |
 | ✋ | **Gestos** | MediaPipe ligero: palma despliega/plega ventanas, pinza trae el chat, puño las cierra |
 | 💡 | **Lámpara de estado** | Morado escuchando · naranja procesando · verde en línea · gris con el HUD oculto · rojo sin backend |
-| 🖥 | **Pantallas** | Además del orbe hay cuatro hojas a pantalla completa: **Música** y **MV** (sólo en el teléfono; MV es la del videoclip con su letra sincronizada, donde el orbe no se apaga sino que se hace disco en una esquina), **Charla** (chat normal con tus modelos de Ollama, copiar y seleccionar) y **Código** (terminal + cuaderno). Se cambia con ☰, deslizando el dedo de lado, con `Alt+←/→` o diciéndolo. Ninguna tapa el orbe: cuando no es su pantalla, el lienzo WebGL se apaga |
-| 📱 | **APK del teléfono** | **Uno solo** en la Release: `CORT-IA-2.0.0.apk` (`versionCode` 20000), el que compila `apps/apk/compilar.sh` en GitHub Actions, con el anillo de siempre como icono, el rol de asistente, su propio reproductor, el doble toque del auricular y la lectura de avisos |
+| 🖥 | **Pantallas** | Además del orbe hay cinco hojas a pantalla completa: **Música** y **MV** (sólo en el teléfono; MV es la del videoclip con su letra sincronizada, donde el orbe no se apaga sino que se hace disco en una esquina), **Charla** (chat normal con tus modelos de Ollama, copiar y seleccionar), **Código** (terminal + cuaderno) y **Equipo** (sólo en el teléfono: los seis bloques de mando —Voz · Mando · Cerebro · Memoria · Atuendos · Agenda—). Se cambia con ☰, deslizando el dedo de lado, con `Alt+←/→` o diciéndolo. Ninguna tapa el orbe: cuando no es su pantalla, el lienzo WebGL se apaga |
+| 📱 | **APK del teléfono** | **Uno solo** en la Release: `CORT-IA-2.1.0.apk` (`versionCode` 20100), el que compila `apps/apk/compilar.sh` en GitHub Actions con el mismo método de siempre (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`, sin Gradle), con el anillo de siempre como icono, el rol de asistente, su propio reproductor, el doble toque del auricular, la lectura de avisos y la **hoja Equipo** con las ocho funciones del puente (volumen, linterna, alarma, voz, atuendos, burbuja, memoria y agenda) |
+| 🫛 | **Hoja Equipo: CORT manda sobre el aparato** | `☰ ▸ Equipo` o «abre el equipo», con seis bloques y sus frases de voz: **Mando** («sube el volumen», «enciende la linterna», «pon una alarma a las 7:30», «abre whatsapp»), **Voz** («voz de siri», «cambia la voz»), **Atuendos** («ponte azul», «atuendo Cortana», «burbuja» —el punto de CORT flotando sobre otra app—), **Memoria** (SQLite del teléfono y «sincroniza con el PC»), **Cerebro** («piensa por qué está lloviendo», con la nube que ajustes tú y **35 patrones locales** que ejecutan la orden sin necesitar red) y **Agenda** («¿qué tengo hoy?», «revisa el correo»). Son las ocho funciones del puente (`docs/CONTRATO-PUENTE-2.1.md`), y cada bloque dice en su pie si lo que falta es el APK, un permiso o el PC: **no finge haber hecho lo que no hizo** |
 | 🎬 | **Pantalla MV: el video con su letra** | Hoja aparte del reproductor, en el teléfono: el videoclip se ve en la propia cara (`<video>` sobre la misma `content://` que suena), debajo va la **letra sincronizada** línea a línea con la activa marcada y **clic para saltar a ese segundo**, y el **orbe se encoge a una esquina girando como un disco** en vez de apagarse. La letra sale de LRCLIB (gratis, sin clave, cacheada); si el servidor está saturado lo dice y hay botón de **rebuscar**. En audio suelto no deja un cuadro negro: avisa y conserva la letra. |
 | 🗂 | **Ordena tus archivos sin perder ni uno** | «ordena mis archivos / mis documentos / la música» o el botón **⤢ ordena** de **01 · Archivos**. Primero sale el **plan** (`de → a` con su motivo y el total) y **no se mueve nada** hasta que digas **«confirmar»**; «cancelar» deja la carpeta tal cual. El plan caduca a los quince minutos y lleva un token, así que lo que confirmas es exactamente lo que viste. `backend/app/organiza.py` no tiene ninguna primitiva de borrado: reorganiza y, si el nombre está ocupado, añade ` (2)`. |
 | 🎮 | **Modo juego: CORT se aparte mientras juegas** | «modo juego» / «vuelve CORT», el interruptor de las hojas Música y MV, o el botón `CORT · PC`. Con él puesto, CORT **cierra el micrófono**, **no pide el foco audio** al reproducir y deja de hablar por el auricular: nada de robarle el turno a una partida. No necesita permiso de uso de aplicaciones ni lista de instalados — es un interruptor, no un espía. |
 | 🔄 | **Que se actualice solo** | «revisa si hay actualizaciones» / «actualízate» contra la última Release de GitHub. En el escritorio baja su instalador o, si pesa más de 100 MB, deja `scripts/actualiza.sh` listo: respalda la instalación anterior en `~/Aplicaciones/CORT.anterior-<fecha>`, instala sin sudo y **no toca `~/.cort`** (claves, notas y recuerdos). En el teléfono Android no deja que una app se reemplace a sí misma: CORT te da el enlace del APK y lo pones tú encima. |
 | 🎙 | **El oído no traba el teléfono** | «Oye CORT» cierra el micrófono cuando la app se va a segundo plano, cuando se apaga la pantalla, mientras suena música y mientras la ventana 11 está contando caché, y vuelve solo al pasar todo eso. Si nadie la llama, se españa cada vez más en vez de reabrir el micro cuatrocientas mil veces |
-| 🤖 | **CORT como asistente** | En `CORT-IA-2.0.0.apk`: di «pon CORT como asistente» (o usa el botón `CORT · PC` ▸ «Poner CORT como asistente») y Android abre su cuadro de rol —`RoleManager`, API 29+— para elegir CORT. El gesto del asistente, la pantalla bloqueada y el doble toque del auricular quedan entonces en CORT; el «OK Google» con la pantalla apagada se pierde, porque eso lo decide el servidor de Google |
+| 🤖 | **CORT como asistente** | En `CORT-IA-2.1.0.apk`: di «pon CORT como asistente» (o usa el botón `CORT · PC` ▸ «Poner CORT como asistente») y Android abre su cuadro de rol —`RoleManager`, API 29+— para elegir CORT. El gesto del asistente, la pantalla bloqueada y el doble toque del auricular quedan entonces en CORT; el «OK Google» con la pantalla apagada se pierde, porque eso lo decide el servidor de Google |
 | 📡 | **Modo teléfono** | `bash scripts/telefono.sh` enlaza la Wi-Fi y el celular abre el holograma actual en `http://IP-del-PC:8000` |
 | ⏻ | **Arranque BIOS** | Secuencia de encendido que comprueba en vivo cada subsistema y el puerto donde vive el núcleo |
 
@@ -118,7 +119,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android (APK del teléfono)** | instala [`CORT-IA-2.0.0.apk`](https://github.com/Sandra2244/CORT/releases/latest) | un solo APK: el anillo de siempre, las once ventanas, su reproductor, sus pantallas y el rol de asistente |
+| **Android (APK del teléfono)** | instala [`CORT-IA-2.1.0.apk`](https://github.com/Sandra2244/CORT/releases/latest) | un solo APK: el anillo de siempre, las once ventanas, su reproductor, sus pantallas y el rol de asistente. Se **instala encima** del `2.0.0` sin desinstalar y sin perder el micrófono concedido ni los gustos guardados: misma llave de firma y `versionCode` mayor |
 | **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -156,8 +157,8 @@ eso hace falta un equipo sobrado):
 | `CORT.Setup.0.2.0.exe` | 79.001.375 bytes (75,3 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
 | `CORT-0.2.0.AppImage` | 107.740.487 bytes (102,7 MB) | Linux genérico (ejecutable directo) |
 | `cort-desktop_0.2.0_amd64.deb` | 75.011.556 bytes (71,5 MB) | Debian / Ubuntu / Mint |
-| `CORT-IA-2.0.0.apk` | 891.630 bytes (0,85 MB) | Android 8+: **el único APK** (`versionCode` 20000). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego** y **auto-actualización por voz**, además de las pantallas Charla / Código / Música |
-| `CORT-IA-2.0.0-firma.txt` | 557 bytes | con qué llave salió y qué lleva dentro (prueba pública) |
+| `CORT-IA-2.1.0.apk` | lo mide el run de Actions (el `2.0.0` medido: 891.630 bytes) | Android 8+: **el único APK** (`versionCode` 20100). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz** y la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC y agenda), además de las pantallas Charla / Código / Música / MV / Equipo |
+| `CORT-IA-2.1.0-firma.txt` | lo mide el run | con qué llave salió, cuánto pesa y qué lleva dentro (prueba pública) |
 
 > Los tamaños del escritorio son los que declara la API pública de Releases el
 > 2026-10-21, no una estimación. El APK pesa menos que el viejo de Kotlin
@@ -170,6 +171,17 @@ eso hace falta un equipo sobrado):
 > **píxel a píxel son idénticos** a los del `base/CORT-IA-1.1.0.apk` (los bytes
 > difieren sólo porque `aapt2` recompresiona el PNG). Es el logo de siempre, no uno
 > parecido.
+>
+> **Y sobre «lo comprimiste demasiado»: se midió la proporción, no el peso.** El
+> `1.1.0` original ocupa 1.815.389 bytes comprimidos sobre 4.538.254 sin comprimir
+> (proporción **0,40**) y el `2.0.0` propio, 891.630 sobre 2.129.850 (**0,42**).
+> Apretado está igual —incluso un pelo menos—, así que la diferencia de peso **no
+> era compresión sino contenido que faltaba**. Por eso la 2.1 no se dedicó a
+> empaquetar más fuerte (el método de compilación es el mismo de siempre, y `d8` y
+> `aapt2` no tienen perilla de «más comprimido») sino a meter lo que faltaba: nueve
+> clases Java, los `assets/habilidades.json` con sus 35 patrones, las cuatro reglas
+> de `res/xml` y la hoja Equipo. El tamaño del `2.1.0` lo vuelve a medir el run de
+> Actions y lo publica el propio `-firma.txt`; aquí no se estima ninguno.
 
 > Los instaladores de escritorio abren el mismo backend de Python: siguen
 > necesitando Python 3.10+ en el equipo, y la primera vez puede tardar unos
@@ -181,7 +193,7 @@ Hay **un solo APK**, y es el que se compila aquí de principio a fin:
 
 | APK | Qué es | Dónde está |
 |---|---|---|
-| `CORT-IA-2.0.0.apk` | Java puro sin Gradle (`aapt2` + `javac --release 11` + `d8` + `zipalign` + `apksigner`), con el holograma del repo embebido bajo `https://cort.local` y su puente de voz propio (`CortNative.java`). Lleva el **anillo de siempre** como icono —`compilar.sh` saca los cinco `mipmap-*` y el XML adaptativo del `base/CORT-IA-1.1.0.apk`, no lo dibuja nadie—, el traje de `VoiceInteractionService` para **ser el asistente predeterminado**, `MediaSession` para el **doble toque del auricular**, `Avisos` (`NotificationListenerService`) que **lee en voz alta lo que llega**, y ahora **su propio reproductor** (`.Reproductor`, un servicio en primer plano con `foregroundServiceType="mediaPlayback"`): biblioteca leída de `MediaStore`, gustos que se aprenden con 👍/👎, listas guardadas, avance/retroceso y **cuadro a cuadro** en vídeo, todo en segundo plano sin trabar el teléfono. | `apps/apk/compilar.sh` → la Release |
+| `CORT-IA-2.1.0.apk` | Java puro sin Gradle (`aapt2` + `javac --release 11` + `d8` + `zipalign` + `apksigner`), con el holograma del repo embebido bajo `https://cort.local` y su puente de voz propio (`CortNative.java`). Lleva el **anillo de siempre** como icono —`compilar.sh` saca los cinco `mipmap-*` y el XML adaptativo del `base/CORT-IA-1.1.0.apk`, no lo dibuja nadie—, el traje de `VoiceInteractionService` para **ser el asistente predeterminado**, `MediaSession` para el **doble toque del auricular**, `Avisos` (`NotificationListenerService`) que **lee en voz alta lo que llega**, y ahora **su propio reproductor** (`.Reproductor`, un servicio en primer plano con `foregroundServiceType="mediaPlayback"`): biblioteca leída de `MediaStore`, gustos que se aprenden con 👍/👎, listas guardadas, avance/retroceso y **cuadro a cuadro** en vídeo, todo en segundo plano sin trabar el teléfono. | `apps/apk/compilar.sh` → la Release |
 
 La vía de **rempaquetar** el binario original (`rempaquetar.sh`) está borrada del
 repo y del workflow. Existía porque el proyecto Gradle que generó el `1.1.0`
@@ -227,8 +239,8 @@ Qué es verdad y qué no, dicho sin adornos:
   API: se diría «lo hago» y no es cierto. Aquí CORT **ve con quién hablas y marca
   el número** (`Telefono.java`, con permiso de contactos y de llamar concedido a
   mano); lo demás está anotado como pendiente en `docs/PLAN-CORT.md`.
-- **Actualizar el APK: con `v0.2.13-demo` empieza la última vez que hay que
-  desinstalar.** Hasta `v0.2.8-demo` cada run firmaba con una llave desechable
+- **Actualizar el APK: el `2.1.0` ya se instala encima del `2.0.0`, sin desinstalar
+  y sin perder datos.** Hasta `v0.2.8-demo` cada run firmaba con una llave desechable
   distinta, y para Android una firma distinta es otra aplicación; al desinstalar se
   va lo concedido a mano (micrófono, avisos, contactos, dirección del PC) y lo que
   CORT apuntó **en el teléfono**: tus gustos musicales y tus listas viven en las
@@ -242,15 +254,16 @@ Qué es verdad y qué no, dicho sin adornos:
   y **ya está puesto** (2026-10-21, medido en Settings ▸ Secrets and variables ▸
   Actions): `CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`, fabricados en el
   portátil con `bash scripts/llave-nueva.sh`. `llave.sh` los mira **primero**, así
-  que desde esta Release la llave es siempre la misma, y **está comprobado en la
+  que desde entonces la llave es siempre la misma, y **está comprobado en la
   propia Release**: el `CORT-IA-2.0.0-firma.txt` de `v0.2.13-demo` declara
   `certificate SHA-256 digest: faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
-  y la línea «actualizar instalando encima: sí». Como la anterior Release firmaba
-  con otra llave, **la primera instalación de ésta cuesta un desinstalar**; la
-  siguiente ya se pone encima. Comprobación pública siempre: la huella SHA-256 del
-  certificado sale en el `-firma.txt` de cada APK y como anotación del check-run;
-  dos Releases seguidas con la misma huella = se instala encima. La llave nunca se
-  sube al repo (está en `.gitignore`, y el repo es público).
+  y la línea «actualizar instalando encima: sí». Como ESA Release ya firmó con la
+  llave fija, el `2.1.0` (`versionCode` 20100 > 20000, mismo paquete `com.cort.ia`,
+  misma firma) **se pone encima**: sólo hace falta desinstalar una vez si el teléfono
+  todavía guarda un APK de antes de `v0.2.13-demo`. Comprobación pública siempre: la
+  huella SHA-256 del certificado sale en el `-firma.txt` de cada APK y como anotación
+  del check-run; dos Releases seguidas con la misma huella = se instala encima. La
+  llave nunca se sube al repo (está en `.gitignore`, y el repo es público).
 - **Tus claves de Groq/Gemini tampoco se pierden ya al actualizar el
   instalador.** `cort_config.json` y `cort_memory.db` (las notas, los recuerdos y
   las pendientes) vivían dentro de `backend/`, o sea dentro de la carpeta que el
@@ -368,10 +381,11 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       ventana de ayuda y soporte (wake word incluida; Piper TTS queda opcional
       porque Web Speech ya da voz gratis)
 - [x] **F6** Escritorio Electron + instaladores por CI (.exe / .AppImage / .deb)
-- [x] **F7** Android: **un solo APK** en la Release — `CORT-IA-2.0.0.apk`, que compila `apps/apk/compilar.sh` desde cero en Java y sin Gradle. Es el asistente predeterminado (rol por `RoleManager`), escucha el doble toque del auricular (`MediaSession`), lee en voz alta los avisos que llegan (`Avisos.java`, un `NotificationListenerService` que sólo guarda doce líneas en RAM), trae el anillo de siempre como icono (sacado de `base/CORT-IA-1.1.0.apk`) y lleva dentro su propio reproductor (`.Reproductor` + `Musica.java`: biblioteca, gustos, playlists y cuadro a cuadro en vídeo) y el marcador de contactos (`Telefono.java`). La vía de `rempaquetar.sh` está borrada del repo y del workflow: dos APK que había que elegir era trabajo doble y lío para instalar
+- [x] **F7** Android: **un solo APK** en la Release — `CORT-IA-2.1.0.apk`, que compila `apps/apk/compilar.sh` desde cero en Java y sin Gradle. Es el asistente predeterminado (rol por `RoleManager`), escucha el doble toque del auricular (`MediaSession`), lee en voz alta los avisos que llegan (`Avisos.java`, un `NotificationListenerService` que sólo guarda doce líneas en RAM), trae el anillo de siempre como icono (sacado de `base/CORT-IA-1.1.0.apk`) y lleva dentro su propio reproductor (`.Reproductor` + `Musica.java`: biblioteca, gustos, playlists y cuadro a cuadro en vídeo) y el marcador de contactos (`Telefono.java`). La vía de `rempaquetar.sh` está borrada del repo y del workflow: dos APK que había que elegir era trabajo doble y lío para instalar
 - [x] **F7a** Voz que lee: «lee mis notas / mis tareas / mis avisos / el documento …» — notas y pendientes en SQLite (`memory.py`), textos de las carpetas seguras (`sensors.leer_texto`) y avisos del teléfono por la barra de notificaciones. Comprobado sin teléfono con `scripts/prueba-lectura.py` y `scripts/prueba-costura.py`
 - [x] **F7c** Pantallas aparte del orbe (`ui/js/pantallas.js`): **Charla** (chat con burbujas, modelos de Ollama, copiar y guardar en Notas), **Código** (terminal contra `/api/command` + cuaderno de código), **Música** y **MV** en el teléfono. Se cambia con ☰, deslizando, `Alt+←/→` o por voz, y el orbe se apaga cuando no le toca para no gastar GPU ni batería — con la excepción de **MV**, donde se encoge a una esquina girando como disco.
-- [x] **F7d** La ronda «todo en uno» que pidió la dueña: `CORT-IA-2.0.0.apk` con el **modo juego** (cierra el micro y suelta el foco audio; sin permisos de uso de aplicaciones), la hoja **MV** con **letra sincronizada** de LRCLIB, el **organizador de archivos** con plan y confirmación (`backend/app/organiza.py`, sin borrar nada), la **auto-actualización por voz** contra GitHub (`backend/app/actualiza.py` + `scripts/actualiza.sh`, con respaldo y sin sudo) y la **llave de firma definitiva** ya como secreto del repo. Comprobado sin teléfono con `scripts/prueba-costura.py` (7 sectores) y `scripts/prueba-organiza.py`.
+- [x] **F7e** La ronda 2.1, «todo lo prometido dentro del APK»: nueve clases Java nuevas (`Acciones`, `VozNueva`, `Recuerdos`+`Sincroniza`, `Mente`+`Nube`+`Cerebro`, `Paleta`, `Agenda`, `Flotante`, `ArchivosProvider`) que sacan las **ocho funciones del puente** (`accion`, `ajusteVoz`, `memoria`, `mente`, `atuendo`, `agenda`, `burbuja`, `comparte`), la hoja **Equipo** con sus seis bloques, el **cerebro sin portátil** (la nube que ajustes tú, con la clave sin salir del teléfono, y 35 patrones locales que **ejecutan** la orden que reconocen), la **burbuja flotante**, la **linterna**, la **agenda de sólo lectura** y el **enviar archivo** con el proveedor del APK. Contrato en `docs/CONTRATO-PUENTE-2.1.md`; cosido y comprobado en los cuatro sitios con `scripts/prueba-costura.py` (9 sectores, sin teléfono)
+- [x] **F7d** La ronda «todo en uno» que pidió la dueña: el APK con el **modo juego** (cierra el micro y suelta el foco audio; sin permisos de uso de aplicaciones), la hoja **MV** con **letra sincronizada** de LRCLIB, el **organizador de archivos** con plan y confirmación (`backend/app/organiza.py`, sin borrar nada), la **auto-actualización por voz** contra GitHub (`backend/app/actualiza.py` + `scripts/actualiza.sh`, con respaldo y sin sudo) y la **llave de firma definitiva** ya como secreto del repo. Comprobado sin teléfono con `scripts/prueba-costura.py` (7 sectores) y `scripts/prueba-organiza.py`.
 - [ ] F7b Contestar llamadas por ti y buzón de voz: pide el rol `ROLE_CALLING` con su `InCallService` (Android no deja otra cosa); leer SMS o el contenido de WhatsApp no tiene API, así que no se finge
 - [ ] F8 Idiomas adicionales y temas visuales
 

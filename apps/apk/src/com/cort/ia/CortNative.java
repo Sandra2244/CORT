@@ -17,6 +17,9 @@ import android.webkit.JavascriptInterface;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.json.JSONObject;
 
 /**
  * El puente entre la interfaz (JavaScript, en `ui/`) y el aparato (Java).
@@ -38,6 +41,14 @@ import java.util.Set;
  * pone Android: `SpeechRecognizer` y `TextToSpeech` del propio teléfono, gratis
  * y sin red.
  *
+ * La ronda 2.1 añade los seis nombres del contrato de `docs/CONTRATO-PUENTE-2.1.md`
+ * —`accion`, `ajusteVoz`, `memoria`, `mente`, `atuendo`, `burbuja`, más `agenda` y
+ * `comparte`—, que es lo que había dentro del APK original y fuera del nuestro. El
+ * puente sigue sin librerías: cada uno de esos métodos delega en una clase del
+ * paquete (`Acciones`, `VozNueva`, `Recuerdos`, `Mente`, `Paleta`, `Flotante`,
+ * `Agenda`, `ArchivosProvider`) y le pasa/le devuelve **texto JSON**, no objetos.
+ * Todos devuelven `{"ok":true,…}` o `{"ok":false,"dice":"…"}` y ninguno lanza.
+ *
  * Hilos: los métodos `@JavascriptInterface` corren en el hilo del puente de
  * WebView, y `SpeechRecognizer` **exige** hilo con `Looper`. Por eso casi todo
  * se mete en `act.runOnUiThread(...)`: llamar el reconocedor desde el hilo
@@ -49,6 +60,9 @@ public class CortNative {
 
     private SpeechRecognizer stt;
     private volatile boolean sttVivo = false;
+
+    /** El oído que abrió el **doble toque del auricular**: su insignia se apaga con él. */
+    private volatile boolean porAuricular = false;
 
     private TextToSpeech tts;
     private volatile boolean ttsListo = false;
@@ -62,6 +76,93 @@ public class CortNative {
      * el del `OnPreparedListener` del `MediaPlayer`.
      */
     private static volatile boolean juego = false;
+
+    /* ─────────────── las piezas de la ronda 2.1 (perezosas) ────────────────
+     *
+     * Se montan **la primera vez que se piden**, no en el `onCreate`: la dueña
+     * abre CORT para poner música y para leerle avisos muchas veces sin tocar
+     * nunca la pantalla Equipo, y un `SQLiteDatabase` abierto, un segundo enlace
+     * de `TextToSpeech` y el cliente HTTP del cerebro valen memoria que en un
+     * teléfono de gama baja se nota. Cada getter es `synchronized` porque el hilo
+     * del puente de WebView y el de la cara pueden llamarlos a la vez.
+     *
+     * Los resultados largos (la nube, la sincronía con el portátil) no vuelven
+     * por el `return`: vuelven como evento `window.__cortNative.emit(...)` por
+     * el `engancha` de cada pieza, con su `type` ya puesto.
+     */
+
+    private volatile Nube nube;
+    private volatile Cerebro cerebro;
+    private volatile Mente mente;
+    private volatile Recuerdos recuerdos;
+    private volatile VozNueva boca;
+    private volatile Acciones acciones;
+    private volatile Paleta paleta;
+
+    private synchronized Nube nube() {
+        if (nube == null) nube = new Nube(act);
+        return nube;
+    }
+
+    private synchronized Cerebro cerebro() {
+        if (cerebro == null) cerebro = new Cerebro(act, nube());
+        return cerebro;
+    }
+
+    private synchronized Mente mente() {
+        if (mente == null) {
+            Mente nueva = new Mente(act, nube(), cerebro());
+            // `Mente` devuelve el cuadro SIN `type`: lo pone aquí, que es donde
+            // vive el camino de salida hacia la página.
+            nueva.engancha(json -> cuadro(conTipo(json, "mente")));
+            mente = nueva;
+        }
+        return mente;
+    }
+
+    private synchronized Recuerdos recuerdos() {
+        if (recuerdos == null) {
+            Recuerdos nueva = new Recuerdos(act);
+            // `Recuerdos` ya escribe `type:"memoria"` en su cuadro de sincronía.
+            nueva.engancha(json -> cuadro(json));
+            recuerdos = nueva;
+        }
+        return recuerdos;
+    }
+
+    /**
+     * El enlace de voz que lista e imita voces. Se monta en un hilo **con
+     * `Looper`**, y eso no es una manía: `TextToSpeech` invita a su callback en
+     * el hilo donde se construyó, y el hilo del puente de WebView no tiene
+     * `Looper`. Montarlo ahí deja el enlace esperando un aviso que nunca llega —
+     * el error que sólo se ve en el teléfono.
+     */
+    private VozNueva boca() {
+        VozNueva viva = boca;
+        if (viva != null) return viva;
+        synchronized (this) {
+            if (boca != null) return boca;
+            if (android.os.Looper.myLooper() != null) {
+                boca = new VozNueva(act);            // hilo de la cara: adelante
+            } else {
+                final CountDownLatch despierto = new CountDownLatch(1);
+                act.runOnUiThread(() -> { boca = new VozNueva(act); despierto.countDown(); });
+                try { despierto.await(3, TimeUnit.SECONDS); }
+                catch (InterruptedException elPuenteDurmio) { /* devuelve null y la cara lo dice */ }
+            }
+            return boca;
+        }
+    }
+
+    private synchronized Acciones acciones() {
+        if (acciones == null) acciones = new Acciones(act);
+        return acciones;
+    }
+
+    private synchronized Paleta paleta() {
+        if (paleta == null) paleta = new Paleta(act);
+        return paleta;
+    }
 
     public CortNative(MainActivity actividad) {
         this.act = actividad;
@@ -96,6 +197,28 @@ public class CortNative {
         act.runOnUiThread(() -> arrancarEscucha("es-MX", "cmd"));
     }
 
+    /**
+     * El doble toque del auricular, que es el único sitio donde la cara necesita
+     * una insignia: la dueña pulsa dos veces en el audífono y no ve la pantalla,
+     * así que el botón del micro de la página le tiene que decir «te estoy
+     * escuchando» o «ya terminé». Con `escuchaAhora()` a secas la página se queda
+     * con la duda, y una duda en el oído es la que hace volver a tocar.
+     */
+    void escuchaDelAuricular() {
+        porAuricular = true;
+        cuadro("{\"type\":\"auricular\",\"escuchando\":true}");
+        escuchaAhora();
+    }
+
+    /** El oído se cierra: el `stt-end` de siempre y, si era del auricular, su insignia. */
+    private void oidoCerrado() {
+        cuadro("{\"type\":\"stt-end\"}");
+        if (porAuricular) {
+            porAuricular = false;
+            cuadro("{\"type\":\"auricular\",\"escuchando\":false}");
+        }
+    }
+
     private void arrancarEscucha(String lang, String modo) {
         // Modo juego: ni micro abierto. `pausa()` ya mandó `pause` a la cara, así
         // que voice.js no va a rearmar; estos dos eventos son sólo para que el orbe
@@ -105,12 +228,12 @@ public class CortNative {
         // por un capricho del interruptor sería dejarla muda para siempre.
         if (juego) {
             cuadro("{\"type\":\"stt-error\",\"error\":\"abort\"}");
-            cuadro("{\"type\":\"stt-end\"}");
+            oidoCerrado();
             return;
         }
         if (!permiso("mic")) {
             cuadro("{\"type\":\"stt-error\",\"error\":\"not-allowed\"}");
-            cuadro("{\"type\":\"stt-end\"}");
+            oidoCerrado();
             pedir("mic");
             return;
         }
@@ -132,7 +255,7 @@ public class CortNative {
         } catch (Exception noHayServicioDeVoz) {
             sttVivo = false;
             cuadro("{\"type\":\"stt-error\",\"error\":\"service-not-allowed\"}");
-            cuadro("{\"type\":\"stt-end\"}");
+            oidoCerrado();
         }
     }
 
@@ -167,7 +290,7 @@ public class CortNative {
         @Override public void onError(int error) {
             sttVivo = false;
             cuadro("{\"type\":\"stt-error\",\"error\":" + comilla(nombreError(error)) + "}");
-            cuadro("{\"type\":\"stt-end\"}");
+            oidoCerrado();
         }
         @Override public void onResults(Bundle resultados) {
             sttVivo = false;
@@ -181,13 +304,13 @@ public class CortNative {
 
     private void finalista(Bundle resultados, boolean final_) {
         if (resultados == null) {
-            cuadro("{\"type\":\"stt-end\"}");
+            oidoCerrado();
             return;
         }
         ArrayList<String> partes =
             resultados.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
         if (partes == null || partes.isEmpty()) {
-            if (final_) cuadro("{\"type\":\"stt-end\"}");
+            if (final_) oidoCerrado();
             return;
         }
         StringBuilder alts = new StringBuilder();
@@ -198,7 +321,7 @@ public class CortNative {
         cuadro("{\"type\":\"" + (final_ ? "stt-final" : "stt-partial")
                + "\",\"text\":" + comilla(partes.get(0))
                + ",\"alts\":[" + alts + "]}");
-        if (final_) cuadro("{\"type\":\"stt-end\"}");
+        if (final_) oidoCerrado();
     }
 
     /** Los códigos de Android traducidos a los nombres que entiende `voice.js`. */
@@ -244,10 +367,21 @@ public class CortNative {
             return;
         }
         eligeIdioma();
-        if (voz != null && !voz.isEmpty()) ponVoz(voz);
+        // La voz que habla es la que la dueña eligió, venga de donde venga la orden.
+        // `ui/js/voice.js` manda siempre la suya (los valores de 07 · Perfil), así que
+        // ésa manda; cuando habla Java por su cuenta —el aviso de los mensajes, el
+        // saludo, el menú— `voz` llega vacía y `tono`/`velocidad` llegan a 0, y entonces
+        // manda lo que se escribió en la pantalla Equipo (`ajusteVoz`). Sin este orden,
+        // «pon voz de Siri» cambiaría la voz en la pantalla y no en la calle.
+        SharedPreferences preferencias = act.prefs();
+        String elegida = (voz == null || voz.isEmpty())
+            ? preferencias.getString("voz-nombre", "") : voz;
+        if (elegida != null && !elegida.isEmpty()) ponVoz(elegida);
+        double vel = velocidad > 0 ? velocidad : preferencias.getFloat("voz-velocidad", 1.0f);
+        double tonoReal = tono > 0 ? tono : preferencias.getFloat("voz-tono", 0.82f);
         try {
-            tts.setPitch((float) Math.max(0.5, Math.min(2.0, tono == 0 ? 0.82 : tono)));
-            tts.setSpeechRate((float) Math.max(0.5, Math.min(2.0, velocidad == 0 ? 1.0 : velocidad)));
+            tts.setPitch((float) Math.max(0.5, Math.min(2.0, tonoReal)));
+            tts.setSpeechRate((float) Math.max(0.5, Math.min(2.0, vel)));
         } catch (Exception sigueConLaVozDeSiempre) { /* nada */ }
         Bundle sinExtras = new Bundle();
         tts.speak(texto, TextToSpeech.QUEUE_ADD, sinExtras, uid);
@@ -257,7 +391,9 @@ public class CortNative {
         ArrayList<String[]> cola = new ArrayList<>(ttsPendiente);
         ttsPendiente.clear();
         for (String[] pedido : cola) {
-            double tono = 0.82, vel = 1.0;
+            // Cero = «no me importa el valor, mira las preferencias»: `dice` decide
+            // con lo que la dueña eligió en la pantalla Equipo.
+            double tono = 0, vel = 0;
             try { tono = Double.parseDouble(pedido[3]); vel = Double.parseDouble(pedido[4]); }
             catch (NumberFormatException malaMedida) { /* valores de siempre */ }
             dice(pedido[0], pedido[1], pedido[2], tono, vel);
@@ -384,6 +520,24 @@ public class CortNative {
             return act.checkSelfPermission("android.permission.POST_NOTIFICATIONS")
                    == PackageManager.PERMISSION_GRANTED;
         }
+        // La ronda 2.1 añade dos preguntas nuevas de la cara: el calendario para
+        // «qué tengo hoy» y aparecer encima de otras apps para la burbuja. El
+        // segundo no es un permiso de cuadro: es un interruptor de Ajustes, así que
+        // se comprueba como interruptor y la cara lo dice como interruptor.
+        if (k.startsWith("calendari") || k.startsWith("agenda") || k.startsWith("cita")) {
+            return Agenda.conPermiso(act);
+        }
+        if (k.startsWith("burbuja") || k.startsWith("encima") || k.startsWith("flotante")
+            || k.startsWith("overlay")) {
+            return Flotante.puedeAparecer(act);
+        }
+        // Las dos últimas preguntas del panel de segundo plano. `battery` es la
+        // restricción de Android (se mide, no se supone) y `autostart` es el
+        // ajuste del fabricante, que CORT no puede leer: se abre la pantalla y la
+        // dueña lo ve, en vez de marcar un ✓ que no se comprobó en ninguna parte.
+        if (k.startsWith("bateri") || k.startsWith("battery") || k.startsWith("ahorro")) {
+            return sinRestriccionDeBateria();
+        }
         return true;
     }
 
@@ -419,16 +573,61 @@ public class CortNative {
 
     /* ─────────────────── pantalla, fondo y PC de red ────────────── */
 
+    /**
+     * Lo que lee el panel «▸ Segundo plano» de 07 · Perfil.
+     *
+     * Este método es la prueba de que la pantalla no miente: antes devolvía sólo
+     * `bg` y `pc`, y la cara leía `enabled`, `running`, `mic`, `notif`, `overlay`,
+     * `battery` y `maker` —claves que no existían—, así que el interruptor nunca se
+     * iluminaba, los cuatro permisos salían siempre sin marcar y apagarlo era
+     * imposible (`on = !undefined` daba `true` todas las veces). Ahora cada clave
+     * que la cara pregunta tiene su medida real aquí, y lo que CORT **no** puede
+     * hacer con la app cerrada lo dice `dice` en vez de prometerlo.
+     */
     @JavascriptInterface
     public String bgStatus() {
         SharedPreferences p = act.prefs();
-        return "{\"bg\":" + p.getBoolean("bg", false)
-               + ",\"pc\":" + comilla(p.getString("pc", "")) + "}";
+        boolean quiereFondo = p.getBoolean("bg", false);
+        return "{\"bg\":" + quiereFondo
+               + ",\"pc\":" + comilla(p.getString("pc", ""))
+               + ",\"enabled\":" + quiereFondo
+               + ",\"running\":" + act.avisoDeFondoPuesto()
+               + ",\"mic\":" + permiso("mic")
+               + ",\"notif\":" + permiso("avisos")
+               + ",\"overlay\":" + permiso("burbuja")
+               + ",\"battery\":" + sinRestriccionDeBateria()
+               + ",\"maker\":" + comilla(android.os.Build.MANUFACTURER + " "
+                                          + android.os.Build.BRAND)
+               + ",\"microAbierto\":" + sttVivo
+               + ",\"dice\":" + comilla(quiereFondo
+                   ? "Sigo en segundo plano con mi aviso: la música y el doble toque"
+                     + " del auricular obedecen. El micrófono se queda cerrado para"
+                     + " no trabarte — «Oye CORT» con la app cerrada no viaja en este APK."
+                   : "Sin el interruptor puesto, al irte de la app CORT se guarda.")
+               + "}";
     }
 
+    /** `PowerManager.isIgnoringBatteryOptimizations` sobre su propio paquete. */
+    private boolean sinRestriccionDeBateria() {
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager)
+                    act.getSystemService(android.content.Context.POWER_SERVICE);
+            return pm != null && pm.isIgnoringBatteryOptimizations(act.getPackageName());
+        } catch (Exception eseAparejoNoLoDejaLeer) {
+            return false;      // sin dato, sin marca: la cara ofrece «Dar» y ya
+        }
+    }
+
+    /**
+     * El interruptor de «que CORT se quede en segundo plano». No abre el
+     * micrófono a escondidas: decide si al irte de la app queda puesto el aviso de
+     * Android (ver `MainActivity.dejaAvisoDeFondo`), que es lo que de verdad
+     * mantiene vivo el doble toque del auricular.
+     */
     @JavascriptInterface
     public void setBackground(boolean on) {
         act.prefs().edit().putBoolean("bg", on).apply();
+        act.alAvisoDeFondoLeGustaCambiar();
     }
 
     @JavascriptInterface
@@ -557,11 +756,13 @@ public class CortNative {
     /** Habla desde Java (el menú del botón «CORT · PC»), por el mismo camino que `speak`. */
     void diAlto(String texto) {
         act.runOnUiThread(() -> {
+            // Los ceros son el aviso de «habla con la voz que ella eligió», no con una
+            // voz impuesta desde aquí: `dice` lee `voz-nombre`/`voz-tono`/`voz-velocidad`.
             if (ttsListo && tts != null) {
-                dice(texto, "aviso", "", 0.82, 1.0);
+                dice(texto, "aviso", "", 0, 0);
                 return;
             }
-            ttsPendiente.add(new String[] { texto, "aviso", "", "0.82", "1.0" });
+            ttsPendiente.add(new String[] { texto, "aviso", "", "0", "0" });
         });
     }
 
@@ -798,6 +999,12 @@ public class CortNative {
             pausa();
             Reproductor.silenciar(act);
             Reproductor.soltarSesion();
+            // La burbuja, si estaba puesta, se quita: es un punto de CORT flotando
+            // encima de la pantalla, y «encima de la pantalla» en modo juego es
+            // encima del Call of Duty. Se retira aunque la dueña la vuelva a pedir
+            // luego — arriba, `burbuja()` se niega mientras el modo esté puesto.
+            try { Flotante.burbuja(act, false); }
+            catch (Exception noEstabaPuesta) { /* nada que retirar */ }
         } else {
             Reproductor.recuperarSesion();
             reanuda();
@@ -841,6 +1048,279 @@ public class CortNative {
     @JavascriptInterface
     public void pidePermisoTelefono() {
         act.pidePermiso("contactos");
+    }
+
+    /* ─────────────── la pantalla Equipo: lo que manda en el aparato ───────────────
+     *
+     * Los seis métodos de la ronda 2.1 (`docs/CONTRATO-PUENTE-2.1.md`) son la
+     * respuesta a «el APK pesa poco y le falta todo lo prometido»: peso en **hechos
+     * que se pueden tocar**, no en librerías. Cada uno es síncrono, devuelve una
+     * cadena JSON con `ok`, y **nunca** lanza una excepción a la cara: lo que el
+     * teléfono no dejó hacer se cuenta en `dice`, en español y con el camino de
+     * Ajustes, que es la diferencia entre un botón roto y un botón que dice
+     * «toca esto y vuelve».
+     *
+     * Lo largo —la nube, el viaje a la LAN— no espera al `return`: se contesta
+     * `{"ok":true,"pendiente":true}` enseguida y el resultado entra por el evento
+     * que engancharon `Mente` y `Recuerdos` arriba. Un `@JavascriptInterface` que
+     * tarda seis segundos congela el botón que la pulsó, y eso se llama «se traba».
+     */
+
+    /** «súbelo», «linterna», «alarma a las 7:30», «abre WhatsApp», «busca recetas». */
+    @JavascriptInterface
+    public String accion(final String peticion) {
+        String respuesta;
+        try {
+            respuesta = acciones().accion(peticion);
+        } catch (Exception elTelefonoNoDejo) {
+            return mal("el teléfono no respondió a esa orden");
+        }
+        // La linterna es el único `que` que necesita un permiso de cuadro y no lo
+        // pide solo (así lo escribió `Acciones`: sin `CAMERA` lo dice, no lo fuerza).
+        // Aquí se cierra el círculo: si la dueña la pidió y falta la cámara, se lo
+        // pregunta al sistema en este momento, para que la segunda pulsación funcione.
+        if (pideLinterna(peticion) && !permiso("camara")) pedir("camara");
+        return respuesta;
+    }
+
+    private static boolean pideLinterna(String peticion) {
+        if (peticion == null) return false;
+        try {
+            JSONObject j = new JSONObject(peticion);
+            return "linterna".equals(j.optString("que", "").toLowerCase(Locale.US));
+        } catch (Exception noEsJSON) {
+            return peticion.contains("linterna");
+        }
+    }
+
+    /** La voz: lista, elegir estilo, velocidad, tono, descargar datos, probar. */
+    @JavascriptInterface
+    public String ajusteVoz(final String peticion) {
+        VozNueva enlace = boca();
+        if (enlace == null) return mal("el teléfono no dejó montar el enlace de voz");
+        String respuesta;
+        try {
+            respuesta = enlace.ajusteVoz(peticion);
+        } catch (Exception elMotorNoContesta) {
+            return mal("el motor de voz de este teléfono no contestó");
+        }
+        // Lo elegido se aplica en el acto a la boca del puente (la que habla los
+        // avisos y el saludo), no sólo a la del bloque: `dice` ya lee las
+        // preferencias, y esto es el «ya, cámbialo ahora» que la dueña espera.
+        act.runOnUiThread(this::aplicaVozGuardada);
+        return respuesta;
+    }
+
+    /** Deja la voz del puente como lo guardado por `VozNueva` en `cort.xml`. */
+    private void aplicaVozGuardada() {
+        if (tts == null || !ttsListo) return;
+        SharedPreferences p = act.prefs();
+        String nombre = p.getString("voz-nombre", "");
+        if (nombre != null && !nombre.isEmpty()) ponVoz(nombre);
+        try {
+            tts.setSpeechRate(p.getFloat("voz-velocidad", 1.0f));
+            tts.setPitch(p.getFloat("voz-tono", 0.82f));
+        } catch (Exception eseMotorNoAcepta) { /* la voz de siempre sigue sirviendo */ }
+    }
+
+    /** «acuédate de…», «¿qué sabes de mí?», «sincroniza con el portátil». */
+    @JavascriptInterface
+    public String memoria(final String peticion) {
+        try {
+            return recuerdos().memoria(peticion);
+        } catch (Exception laBaseNoAbrio) {
+            return mal("la memoria del teléfono no se abrió");
+        }
+    }
+
+    /** «piensa…», «qué proveedor usas», «cambia el modelo y la clave». */
+    @JavascriptInterface
+    public String mente(final String peticion) {
+        try {
+            return mente().mente(peticion);
+        } catch (Exception pensandoTorcido) {
+            return mal("no pude pensar eso ahora");
+        }
+    }
+
+    /** Los trajes de CORT: `lista` y `poner`. La cara pinta el CSS, Java el botón. */
+    @JavascriptInterface
+    public String atuendo(final String peticion) {
+        String respuesta;
+        try {
+            respuesta = paleta().atuendo(peticion);
+        } catch (Exception elTrajeNoSalio) {
+            return mal("no pude cambiar el traje");
+        }
+        act.usaAtuendo();
+        return respuesta;
+    }
+
+    /** «¿qué tengo hoy?», «mis próximos planes», «el correo», «apunta una cita». */
+    @JavascriptInterface
+    public String agenda(final String peticion) {
+        String respuesta;
+        try {
+            respuesta = Agenda.agenda(act, peticion);
+        } catch (Exception elCalendarioNoContesta) {
+            return mal("no pude mirar tu calendario");
+        }
+        // Igual que la linterna: si la pregunta era de citas y falta el permiso de
+        // calendario, se pregunta **ahora**, que es cuando la dueña lo quiere dar.
+        if (pideCalendario(peticion) && !Agenda.conPermiso(act)) pedir("calendario");
+        return respuesta;
+    }
+
+    private static boolean pideCalendario(String peticion) {
+        if (peticion == null) return true;                 // sin JSON = «qué tengo hoy»
+        try {
+            String que = new JSONObject(peticion).optString("que", "hoy")
+                                                .toLowerCase(Locale.US);
+            return !("abrir".equals(que) || "correo".equals(que) || "estado".equals(que));
+        } catch (Exception noEsJSON) {
+            return true;
+        }
+    }
+
+    /**
+     * El punto de CORT flotando sobre lo que sea. Con modo juego puesto **no
+     * aparece nunca**, ni aunque se lo pidan: es la promesa del interruptor, y la
+     * rompe un solo toque que saque a la dueña de la partida.
+     */
+    @JavascriptInterface
+    public String burbuja(final boolean on) {
+        if (juego) return mal("estoy en modo juego: no me meto encima de tu partida");
+        try {
+            return Flotante.burbuja(act, on);
+        } catch (Exception elSistemaNoDeja) {
+            return mal("Android no dejó poner el punto flotante en este teléfono");
+        }
+    }
+
+    /** La pantalla del interruptor de «aparecer encima de otras apps». */
+    @JavascriptInterface
+    public void abreAjustesBurbuja() {
+        act.runOnUiThread(() -> {
+            try {
+                act.startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                             Uri.fromParts("package", act.getPackageName(), null))
+                                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                return;
+            } catch (Exception eseFabricanteNoTieneEsaPantalla) { /* al común */ }
+            openAppSettings();
+            act.avisa("Ajustes ▸ Aplicaciones ▸ CORT ▸ Aparecer encima de otras apps");
+        });
+    }
+
+    /**
+     * «Envíame ese archivo»: sale por `ACTION_SEND` con un URI del proveedor del
+     * APK (`ArchivosProvider`), que es la forma legal de enseñar un archivo a otra
+     * app sin darle el camino del disco. Sin el proveedor, Android corta el `Uri`
+     * con un `FileUriExposedException` en Android 7+, y este APK soporta 8 en
+     * adelante: sería un fallo que aparecería siempre y en ningún sitio.
+     *
+     * Acepta las dos formas que la cara tiene de nombrar un archivo: el camino del
+     * disco (`/storage/emulated/0/Download/informe.pdf`) y el URI del índice de
+     * Android (`content://media/external/audio/media/42`), que es lo único que sabe
+     * la pantalla de Música. Con el `content://` no hace falta el proveedor —el
+     * propio índice ya lo enseña— y quien lo recibe cobra permiso de lectura por la
+     * bandera del `Intent`.
+     */
+    @JavascriptInterface
+    public String comparte(final String ruta) {
+        String limpia = ruta == null ? "" : ruta.trim();
+        if (limpia.isEmpty()) return mal("no me dijiste qué archivo quieres enviar");
+        if (limpia.startsWith("content://")) {
+            final Uri delIndice = Uri.parse(limpia);
+            if (!sePuedeAbrir(delIndice)) {
+                return mal("ese archivo ya no está en el teléfono o no lo puedo leer");
+            }
+            return envia(delIndice, nombreDel(delIndice));
+        }
+        java.io.File archivo = new java.io.File(limpia);
+        if (!archivo.isFile()) {
+            return mal("eso no es un archivo que exista en el teléfono: " + nombreDe(limpia));
+        }
+        final Uri destino;
+        try {
+            destino = ArchivosProvider.de(act, archivo);
+        } catch (Exception elProveedorNoLoVe) {
+            return mal("no puedo enseñar ese archivo: está fuera de las carpetas que "
+                     + "Android me deja compartir (música, videos, fotos, descargas, documentos)");
+        }
+        return envia(destino, archivo.getName());
+    }
+
+    /** El `ACTION_SEND` con eleitor de app, en la cara, que es donde Android lo deja. */
+    private String envia(final Uri destino, final String nombre) {
+        final Intent manda = new Intent(Intent.ACTION_SEND)
+            .setType(mimeDeArchivo(nombre))
+            .putExtra(Intent.EXTRA_STREAM, destino)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        act.runOnUiThread(() -> {
+            try {
+                act.startActivity(Intent.createChooser(manda, "Enviar con CORT"));
+            } catch (Exception nadiePuedeRecibirlo) {
+                act.avisa("Ninguna app de este teléfono puede recibir ese archivo");
+            }
+        });
+        return "{\"ok\":true,\"envia\":" + comilla(nombre) + "}";
+    }
+
+    /** ¿Existe de verdad ese URI? El índice conteste `null` no es un fallo: es que no está. */
+    private boolean sePuedeAbrir(Uri uri) {
+        java.io.InputStream ahora = null;
+        try {
+            ahora = act.getContentResolver().openInputStream(uri);
+            return ahora != null;
+        } catch (Exception noLoDeja) {
+            return false;
+        } finally {
+            try { if (ahora != null) ahora.close(); }
+            catch (Exception yaEstaCerrado) { /* nada */ }
+        }
+    }
+
+    /** El nombre bonito (`DISPLAY_NAME`) del índice; si no hay, el último tramo del URI. */
+    private String nombreDel(Uri uri) {
+        try {
+            android.database.Cursor cur = act.getContentResolver().query(
+                uri, new String[] { android.provider.OpenableColumns.DISPLAY_NAME },
+                null, null, null);
+            try {
+                if (cur != null && cur.moveToFirst() && !cur.isNull(0)) return cur.getString(0);
+            } finally {
+                if (cur != null) cur.close();
+            }
+        } catch (Exception elIndiceNoContesta) { /* sigue con lo que diga el URI */ }
+        String ultimo = uri.getLastPathSegment();
+        return ultimo == null || ultimo.isEmpty() ? "archivo" : ultimo;
+    }
+
+    /** El MIME por extensión, de la lista corta que se ordena en el teléfono. */
+    private static String mimeDeArchivo(String nombre) {
+        String n = nombre == null ? "" : nombre.toLowerCase(Locale.US);
+        if (n.endsWith(".mp3") || n.endsWith(".m4a") || n.endsWith(".aac")
+            || n.endsWith(".ogg") || n.endsWith(".flac") || n.endsWith(".wav")) return "audio/*";
+        if (n.endsWith(".mp4") || n.endsWith(".mkv") || n.endsWith(".webm")
+            || n.endsWith(".mov") || n.endsWith(".avi")) return "video/*";
+        if (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png")
+            || n.endsWith(".webp") || n.endsWith(".gif")) return "image/*";
+        if (n.endsWith(".pdf")) return "application/pdf";
+        if (n.endsWith(".doc") || n.endsWith(".docx")) return "application/msword";
+        if (n.endsWith(".xls") || n.endsWith(".xlsx")) {
+            return "application/vnd.ms-excel";
+        }
+        if (n.endsWith(".zip")) return "application/zip";
+        if (n.endsWith(".apk")) return "application/vnd.android.package-archive";
+        if (n.endsWith(".txt") || n.endsWith(".md") || n.endsWith(".srt")
+            || n.endsWith(".lrc") || n.endsWith(".csv")) return "text/plain";
+        return "*/*";
+    }
+
+    private static String nombreDe(String camino) {
+        int corte = Math.max(camino.lastIndexOf('/'), camino.lastIndexOf('\\'));
+        return corte >= 0 ? camino.substring(corte + 1) : camino;
     }
 
     /* ───────────────────────── lista y compañía ───────────────────────── */
@@ -900,10 +1380,64 @@ public class CortNative {
     }
 
     void destruye() {
+        // Las piezas de la ronda 2.1 se apagan también: `VozNueva` es UN SEGUNDO
+        // enlace de `TextToSpeech` (el del puente y el de ella son bocas distintas, y
+        // dejarla abierta es dejar un motor de voz respirando en el teléfono), y
+        // `Recuerdos` es una base SQLite con su manija de disco.
+        final VozNueva enlace = boca;
+        final Recuerdos base = recuerdos;
+        boca = null;
+        recuerdos = null;
         act.runOnUiThread(() -> {
             if (stt != null) { stt.destroy(); stt = null; }
             if (tts != null) { tts.shutdown(); tts = null; ttsListo = false; }
+            if (enlace != null) enlace.suelta();
         });
+        if (base != null) {
+            try { base.close(); } catch (Exception laBaseYaEstabaCerrada) { /* nada */ }
+        }
+    }
+
+    /* ─────────────── lo que llama `MainActivity` sin pasar por JS ───────────────
+     *
+     * El menú del botón «CORT · PC» no tiene página que le responda: habla él.
+     * Estos métodos existen para que el menú pueda prometer lo mismo que la
+     * pantalla Equipo, porque la dueña usa las dos cosas y una frase suya no
+     * debería sonar distinto según por dónde entró. Todos escriben en la cara
+     * además de hablar, para que la pantalla y la voz no sean dos verdades.
+     */
+
+    /** «¿Qué tengo hoy?»: lee las citas y lo cuenta en voz, sin pasar por la página. */
+    void leeAgenda(final String peticion) {
+        new Thread(() -> {
+            String respuesta;
+            try { respuesta = Agenda.agenda(act, peticion); }
+            catch (Exception elCalendarioNoContesta) { respuesta = mal("no pude mirar el calendario"); }
+            // Sin permiso, `Agenda` ya lo dice en su `dice`; aquí además se pregunta
+            // al sistema, que es lo que hace que la segunda vez sí salgan las citas.
+            if (pideCalendario(peticion) && !Agenda.conPermiso(act)) pedir("calendario");
+            diAlto(textoDe(respuesta, "dice", "No vi nada apuntado para hoy"));
+        }, "cort-agenda").start();
+    }
+
+    /** «Probar el cerebro» desde el menú: el mismo `que` que usa la cara. */
+    void pruebaCerebro() {
+        mente("{\"que\":\"probar\"}");
+    }
+
+    /** «Cuadrar la memoria» desde el menú: el viaje largo, con su aviso al volver. */
+    void sincronizaMemoria() {
+        memoria("{\"que\":\"sincronizar\"}");
+    }
+
+    /** El `dice` del cuadro, o un sustituto honesto si no lo trae. */
+    private static String textoDe(String json, String clave, String porSiNo) {
+        try {
+            String dicho = new JSONObject(json).optString(clave, "");
+            return dicho.trim().isEmpty() ? porSiNo : dicho;
+        } catch (Exception noEsJSON) {
+            return porSiNo;
+        }
     }
 
     /* ─────────────────────────── JSON a mano ────────────────────── */
@@ -913,6 +1447,31 @@ public class CortNative {
         // `MainActivity`; el puente pide el favor por su método `evalua`.
         act.runOnUiThread(() -> act.evalua(
             "window.__cortNative&&window.__cortNative.emit(" + json + ")"));
+    }
+
+    /** `{"ok":false,"dice":"…"}` — la única forma de fallar contra la cara. */
+    private static String mal(String dice) {
+        return "{\"ok\":false,\"dice\":" + comilla(dice) + "}";
+    }
+
+    /**
+     * El cuadro de un trabajo largo, con el `type` que la cara escucha.
+     *
+     * `Mente` y `Recuerdos` devuelven su JSON sin `type`: no saben si el destino es
+     * la página o el registro. Escribirlo aquí, en el único camino de salida hacia
+     * `window.__cortNative.emit`, es lo que hace que `handleTelefonoEvento` reciba
+     * `{type:"mente", ok, responde}` tal y como promete el contrato.
+     */
+    private static String conTipo(String json, String tipo) {
+        try {
+            JSONObject cuadro = new JSONObject(json == null || json.trim().isEmpty()
+                                               ? "{}" : json);
+            cuadro.put("type", tipo);
+            return cuadro.toString();
+        } catch (Exception noEraJSON) {
+            return "{\"type\":" + comilla(tipo) + ",\"ok\":false,\"dice\":"
+                 + comilla("el teléfono contestó algo que no es JSON") + "}";
+        }
     }
 
     private static String comilla(String s) {

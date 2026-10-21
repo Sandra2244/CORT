@@ -70,7 +70,12 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.0.0"       # UN SOLO APK: el de Java, con todo dentro.
+      APK_VERSION: "2.1.0"       # UN SOLO APK: el de Java, con todo dentro:
+                                 # cara embebida, reproductor con `MediaSession`,
+                                 # avisos leídos, modo juego, MV con letra, y desde
+                                 # aquí el mando del aparato (volumen, linterna,
+                                 # alarma, temporizador, abrir apps, voces del TTS,
+                                 # memoria en SQLite, cerebro en la nube, atuendos).
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -177,10 +182,13 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.0.0**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.0.0.apk`
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.1.0**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.1.0.apk`
             es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
-            dentro todo lo que estaba repartido entre los dos.
+            dentro todo lo que estaba repartido entre los dos. **Se instala encima
+            del 2.0.0 sin desinstalar y sin perder nada** (misma llave, `versionCode`
+            20100 > 20000): mira la huella del `-firma.txt` de las dos Releases y
+            compárala antes de instalar.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el
@@ -209,11 +217,11 @@ jobs:
             guardan con nombre y se vuelven a poner. Todo eso vive en claro, en las
             preferencias de la app: se puede leer y borrar sin misterios.
 
-            **Cuatro pantallas que no tocan el orbe.** Además de la cara de siempre
+            **Cinco pantallas que no tocan el orbe.** Además de la cara de siempre
             hay hojas a pantalla completa, y se cambia entre ellas con el menú de
             **tres líneas (☰)**, deslizando el dedo de lado, con `Alt+←/→` o
-            diciéndolo: «abre el chat», «pantalla de código», «abre el mv», «vuelve
-            al orbe». **Charla** es un chat como los de siempre —burbujas, copiar la
+            diciéndolo: «abre el chat», «pantalla de código», «abre el mv», «abre el
+            equipo», «vuelve al orbe». **Charla** es un chat como los de siempre —burbujas, copiar la
             respuesta, guardarla en 04 · Notas— con los modelos que tengas bajados,
             elegibles desde la propia pantalla (y diciéndote, en el teléfono, que
             los modelos viven y corren en tu portátil: allí se bajan, allí se usan).
@@ -247,6 +255,51 @@ jobs:
             vuelve a su sitio. **No** hace falta darle ningún permiso de uso de
             aplicaciones ni de lista de programas instalados: es un interruptor, no
             un espía, y así queda firmado en el manifiesto.
+
+            **La hoja Equipo: CORT manda sobre el aparato, y se ve dónde.** Es la
+            hoja nueva (`☰ ▸ Equipo`, o «abre el equipo») y trae **seis bloques**:
+            **Voz** (voces instaladas y preajustes: «voz de siri», «cambia la voz»),
+            **Mando** (volumen, linterna, alarmas, temporizador, abrir apps: «sube el
+            volumen», «pon una alarma a las 7:30», «enciende la linterna»), **Cerebro**
+            (con quién piensa cuando no está el PC), **Memoria** (lo que CORT guarda en
+            el teléfono y su sincronía con el portátil), **Atuendos** (los seis trajes
+            de color y la burbuja: «ponte azul», «atuendo Cortana», «burbuja») y
+            **Agenda** (tus citas y los avisos de Gmail). Cada bloque avisa en su propio
+            pie si lo que le falta es el APK nuevo, un permiso, o el PC: **no** finge
+            haber hecho lo que no hizo. Son las ocho funciones del contrato del puente
+            (`docs/CONTRATO-PUENTE-2.1.md`): `accion`, `ajusteVoz`, `memoria`, `mente`,
+            `atuendo`, `agenda`, `burbuja` y `comparte`, comprobadas una por una en los
+            cuatro sitios donde viven —su clase de Java, el puente, la cara y el
+            manifiesto— por `scripts/prueba-costura.py`.
+
+            **Tres interruptores nuevos, y se dicen.** Son los que hay que dar a mano
+            la primera vez que se usan (ninguno se pide al abrir la app):
+            **«Aparecer encima de otras apps»** para la **burbuja** (el puntito de CORT
+            flotando: «burbuja»; al tocarlo abre la cara y escucha; en **modo juego
+            nunca aparece**, y al poner el modo juego la que estuviera puesta se quita
+            sola), **Cámara** para la **linterna** (va por `setTorchMode`: no enciende
+            la cámara, no captura imagen, y sin el permiso CORT lo dice en vez de
+            forzarte el cuadro), y **Calendario de sólo lectura** para «¿qué tengo
+            hoy?». `WRITE_CALENDAR` **no está pedido a propósito**: «apunta la cena con
+            Samuel a las 9» rellena el formulario del calendario del sistema y **el
+            dedo que guarda eres tú**. Del correo no se lee el contenido —no hay API
+            para el Gmail de otra app—: se cuentan los avisos que ya salieron en tu
+            barra y se abre Gmail con un toque.
+
+            **Piensa sin el portátil.** El bloque **Cerebro** y la orden **«piensa
+            <pregunta>»** contestan con la cara abierta y sin Wi-Fi con el PC:
+            `Mente.java` usa la nube que tú ajustaste desde la propia pantalla (Groq,
+            OpenAI, DeepSeek, Mistral, Qwen, Anthropic u Ollama en red local), y la
+            **clave no sale nunca del teléfono** —se guarda en el APK y sólo se lee por
+            voz un `sí/no` de «puesta o no puesta»—. Si no hay nube, hablan los **35
+            patrones** de `assets/habilidades.json`, y esos sí **ejecutan** la orden que
+            reconocen (subir el volumen, abrir una app) en vez de quedarse en la
+            promesa. **Memoria** guarda en SQLite del teléfono lo que aprende y
+            **«sincroniza con el PC»** lo cuadra con `~/.cort` por la puerta
+            `/api/memoria`; y el botón **📤 enviar** de las hojas Música/MV pasa un
+            archivo tuyo a otra app (WhatsApp, correo, Drive) por el proveedor de
+            archivos del propio APK, que es la única forma legal de enseñar un archivo
+            en Android 8+.
 
             **Ordena tus archivos sin perder ni uno.** En **01 · Archivos** hay botón
             **⤢ ordena** y se dice por voz: «ordena mis archivos», «ordena mis
@@ -310,25 +363,32 @@ jobs:
             **mismo anillo** que el de la app del teléfono
             (`bash scripts/icono-del-telefonito.sh`).
 
-            **Actualizar el APK sin desinstalar: esta es la última vez que se
-            desinstala.** La firma la decide `apps/apk/llave.sh` (secreto del repo ▸
-            caché del pipeline ▸ generar una nueva). Estaba **medido**: sin secreto,
-            la huella de cada Release era distinta porque `actions/cache` guarda la
-            llave en el *ref* que la creó, y cada etiqueta es otro ref. Los dos
-            secretos (`CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`) ya están
-            puestos en Settings ▸ Secrets and variables ▸ Actions, así que **esta
-            Release es la primera que firma con tu llave definitiva** — y por eso
-            **ésta** todavía pide desinstalar el APK viejo una vez (se van el
-            micrófono concedido, el doble toque, el permiso de los avisos, la
-            dirección del PC y tus gustos guardados en la app; el cerebro del PC no
-            se toca). **A partir de la siguiente, actualizar es instalar encima.**
-            La huella de esta llave es
-            `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977` y
-            tiene que aparecer en el `-firma.txt` de todas las Releases; dos
-            Releases seguidas con esa huella = se instala encima sin perder nada
-            (empezó a comprobarse en `v0.2.13-demo`, con su
-            «actualizar instalando encima: sí»). La llave nunca se sube al repo: el
-            repo es público y está en `.gitignore`.
+            **Actualizar el APK sin desinstalar: esta vez se instala encima.** La
+            firma la decide `apps/apk/llave.sh` (secreto del repo ▸ caché del pipeline ▸
+            generar una nueva). Estaba **medido**: sin secreto, la huella de cada
+            Release era distinta porque `actions/cache` guarda la llave en el *ref* que
+            la creó, y cada etiqueta es otro ref. Los dos secretos
+            (`CORT_APK_KEYSTORE_B64` y `CORT_APK_KEYSTORE_PASS`) ya están puestos en
+            Settings ▸ Secrets and variables ▸ Actions, y la Release anterior
+            (`v0.2.13-demo`, con `CORT-IA-2.0.0-firma.txt`) **ya firmó con esa llave
+            fija**. Así que el `2.1.0` de ahora es el primero que se puede instalar
+            **encima** del `2.0.0`: `versionCode` 20100 por encima de 20000, mismo
+            paquete `com.cort.ia`, misma firma —y con ello se quedan el micrófono
+            concedido, el doble toque, el permiso de los avisos, la dirección del PC y
+            los gustos que CORT anotó en el teléfono—. El juez público sigue siendo el
+            `-firma.txt`: `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
+            tiene que aparecer en las dos Releases; si en la tuya no está, desinstala
+            una vez y ya no volverá a tocar. La llave nunca se sube al repo: el repo es
+            público y está en `.gitignore`.
+
+            **El tamaño, sin adornos.** Se comparó el `1.1.0` original (1.815.389 B
+            comprimidos / 4.538.254 B sin comprimir) con el `2.0.0` propio (891.630 /
+            2.129.850). La proporción sale casi igual —**0,40 frente a 0,42**, o sea
+            que no estaba apretado de más—: la diferencia era **contenido que faltaba**,
+            no compresión. Esta ronda lo mete: nueve clases de Java nuevas, los
+            `assets/habilidades.json`, las cuatro reglas de `res/xml` y las cinco
+            hojas. El peso exacto del `2.1.0` lo publica el propio `-firma.txt` de esta
+            Release, medido en Actions, no estimado aquí.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
             Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de

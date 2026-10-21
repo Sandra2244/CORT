@@ -1,4 +1,4 @@
-/* ===== Pantallas de CORT: el orbe, la música, el MV, la charla y el código =====
+/* ===== Pantallas de CORT: el orbe, la música, el MV, la charla, el código y el equipo =====
  *
  * La dueña pidió **pantallas nuevas que no tengan nada que ver con el orbe y que
  * no lo obstruyan**: se cambia con el menú de tres líneas o deslizando el dedo a
@@ -26,7 +26,15 @@
  * · Donde no hay núcleo de PC (el teléfono sin Wi-Fi con el portátil) la charla y
  *   el código **lo dicen**, no inventan una respuesta: el `MainActivity` del APK
  *   corta los `/api/*` y contesta 501, así que se comprueba una vez y se avisa.
+ *
+ * · La hoja `equipo` (los cinco bloques del contrato 2.1: voz, mando, cerebro,
+ *   memoria y trajes) vive en `js/telefono.js`. Aquí sólo se **monta** y se le
+ *   pasa el mismo `ctx` de siempre más `ir`, para que una frase de voz pueda
+ *   traer la pantalla delante sin que `telefono.js` tenga que saber quién es su
+ *   vecina (nada de imports circulares ni de estado compartido por las paredes).
  */
+
+import { montaTelefono } from './telefono.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -36,6 +44,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g,
 let ctx = null;                     // { api, term, say, orb, voice }
 let actual = 'orbe';
 let nucleo = null;                  // null = sin comprobar, false = no hay, base = sí hay
+let telefono = { pinta: () => {} }; // lo que monta `telefono.js`; en el PC es un no-op
 
 const PANTALLAS = [
   { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre' },
@@ -43,8 +52,18 @@ const PANTALLAS = [
   { id: 'mv',     titulo: 'MV',       sub: 'el video con su letra', telefono: true },
   { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos' },
   { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar' },
+  // La hoja del contrato 2.1: manda sobre el aparato. Sin puente no existe — en el
+  // PC no hay volumen que subir ni linterna que encender, y un botón que no hace
+  // nada es peor que un botón que no se ofrece.
+  // `puente: 'accion'` es la segunda condición: un APK viejo sí tiene `CortNative`
+  // pero no trae los métodos del contrato 2.1, y ahí la hoja entera sobra.
+  { id: 'equipo', titulo: 'Equipo',   sub: 'lo que manda CORT en el teléfono',
+    telefono: true, puente: 'accion' },
 ];
-const visibles = () => PANTALLAS.filter(p => !p.telefono || enTelefono());
+// `visibles()` es la única lista que se pinta (menú, teclas, deslizar, `ir`). Una
+// hoja con `puente` solo se ofrece si el puente de Java trae ese método de verdad.
+const visibles = () => PANTALLAS.filter(p => (!p.telefono || enTelefono())
+  && (!p.puente || puede(p.puente)));
 
 const puede = nombre => {
   // Mismo `typeof` que `llama()`, pero sólo para PREGUNTAR: sirve para avisar con
@@ -178,6 +197,9 @@ export function ir(id) {
   if (actual === 'mv') arrancaMV();
   if (actual === 'charla') { cargaModelos(); pintaCharla(); }
   if (actual === 'codigo') { pintaCodigo(); }
+  // El Equipo se releé al entrar (voces, volumen, cerebro, recuerdos, trajes): es
+  // la foto del aparato, y el aparato cambia mientras la hoja está cerrada.
+  if (actual === 'equipo') telefono.pinta();
   pintaJuego((estadoMusica() || {}).juego);
   ctx?.term?.('pantalla: ' + p.titulo, 'pantallas');
   window.dispatchEvent(new CustomEvent('cort-pantalla', { detail: actual }));
@@ -562,6 +584,7 @@ const transporteHTML = p => `
     <div class="mu-fila2">
       <button id="${p}-gusta" class="mu-chip">👍 me gusta</button>
       <button id="${p}-no" class="mu-chip">👎 quítala</button>
+      <button id="${p}-envia" class="mu-chip" title="enviar esta pista por WhatsApp, correo o lo que quieras">📤 enviar</button>
       <button id="${p}-cuadro-a" class="mu-chip" title="un fotograma atrás (±1/30 s en vídeo)">◂ cuadro</button>
       <button id="${p}-cuadro-b" class="mu-chip" title="un fotograma adelante (±1/30 s en vídeo)">cuadro ▸</button>
       <button id="${p}-auto" class="mu-chip">♪ ponme algo</button>
@@ -592,6 +615,18 @@ function enganchaTransporte(donde, p) {
   $('no').onclick = () => {
     const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para quitar.');
     llama('musicaGustar', e.pista.uri, false); llama('musicaSiguiente');
+  };
+  // «Envíame esa canción»: `comparte` acepta el `content://` del índice, que es lo
+  // único que la cara conoce de la pista. Android saca su cuadro de apps, así que la
+  // dueña elige WhatsApp, correo o Drive sin que CORT decida por ella.
+  $('envia').onclick = () => {
+    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('No hay nada puesto que enviar.');
+    if (!puede('comparte')) return ctx?.say?.('Enviar archivos con CORT lo trae el APK nuevo de la Release.');
+    const crudo = llama('comparte', e.pista.uri || e.pista.video || '');
+    let r = null; try { r = crudo ? JSON.parse(crudo) : null; } catch (torcido) { r = null; }
+    if (!r) return ctx?.say?.('El teléfono no respondió a lo de enviar.');
+    if (r.ok === false) return ctx?.say?.(r.dice || 'ese archivo no se pudo enviar.');
+    ctx?.say?.('Te enseño ' + (r.envia || 'el archivo') + ': elige por dónde lo mandas.');
   };
   // Cuadro a cuadro: manda al servicio (±1/30 s, lo hace Java) y, si la imagen de MV
   // está viva, se mueve con él — es la misma pista, no tiene sentido que vayan a dos
@@ -1107,6 +1142,11 @@ export function initPantallas(contexto) {
   montaTeclas();
   escuchaMusica();
   if (enTelefono()) { montaMusica(); montaMV(); }
+  // El Equipo lleva el `ctx` de siempre **más `ir`**: si la dueña dice «cambia la
+  // voz» y no nombra ninguna, la hoja tiene que traer la pantalla delante, y eso
+  // es de aquí. Se lo pasamos como función para no importar este módulo desde
+  // `telefono.js` (los imports circulares en módulos ES dan sorpresas feas).
+  telefono = montaTelefono({ ...(ctx || {}), ir }) || { pinta: () => {} };
   montaCharla();
   montaCodigo();
   document.documentElement.classList.add('pantallas-montadas', 'p-orbe');
@@ -1137,5 +1177,13 @@ export function porVoz(texto) {
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(m[uú]sica|reproductor)/i.test(t) && enTelefono()) { ir('musica'); return 'musica'; }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(charla|chat|conversa)/i.test(t)) { ir('charla'); return 'charla'; }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(c[oó]digo|programar|terminal)/i.test(t)) { ir('codigo'); return 'codigo'; }
+  // La hoja del teléfono: «abre el equipo», «pantalla equipo», «qué manda CORT en
+  // el teléfono». Sólo se ofrece donde hay aparato que mandar, igual que la música.
+  // Y con una exclusión a propósito: «optimiza el equipo» / «qué come la ram de mi
+  // equipo» ya eran del PC y de 11 · Optimización, y no se los roba esta hoja.
+  if (puede('accion') && !/optimiza|qu[eé] come|ram|memoria libre/i.test(t)
+      && /(pantalla|abre|abrir|abreme|mu[eé]strame|cambia a|ven a|ens[eé]ñame|d[oó]nde est[aá]n).{0,18}(equipo|mando del tel[eé]fono|lo que manda|el tel[eé]fono)/i.test(t)) {
+    ir('equipo'); return 'equipo';
+  }
   return null;
 }

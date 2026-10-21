@@ -232,6 +232,33 @@ def memories(n: int = 24):
     return {"recuerdos": memory.memories(n)}
 
 
+class RecuerdosReq(BaseModel):
+    recuerdos: list[str] = []          # lo que CORT guardó en el teléfono
+
+
+@app.post("/api/memories")
+def memories_subir(r: RecuerdosReq):
+    """La otra mitad de «sincroniza con el PC»: el APK baja sus recuerdos por la
+    Wi-Fi para que el portátil sea la memoria grande. Entran como nota, en la
+    misma mesa de la ventana Cerebro, y **no se repite** lo que ya se sabía: si la
+    frase exacta ya está en el muro, se cuenta como ignorada en vez de duplicar.
+
+    Sin esta puerta la sincronía era de una sola dirección — el teléfono leía,
+    pero lo que aprendía se quedaba sólo en el aparato (y se perdía al cambiar de
+    móvil). NOMBRES Y FORMAS = CONTRATO con `Sincroniza.java` del APK."""
+    ya_esta = {m["texto"].strip().casefold() for m in memory.memories(400)}
+    nuevos = ignorados = 0
+    for texto in r.recuerdos[:200]:                 # techo honesto por petición
+        limpio = (texto or "").strip()
+        if len(limpio) < 3 or limpio.casefold() in ya_esta:
+            ignorados += 1
+            continue
+        memory.add_note(limpio)
+        ya_esta.add(limpio.casefold())
+        nuevos += 1
+    return {"ok": True, "guardados": nuevos, "ignorados": ignorados}
+
+
 @app.get("/api/weather")
 def weather():
     return sensors.weather()

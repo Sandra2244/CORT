@@ -3,6 +3,10 @@
   --cyan:#39c2ff; --cyan-dim:rgba(80,190,255,.35);
   --glass:rgba(8,20,38,.55); --glass-hi:rgba(20,45,80,.55);
   --text:#9fdcff; --text-hi:#e8f6ff;
+  /* Los trajes del contrato 2.1 (`atuendo {que:'poner'}`) pintan estas dos
+     variables desde Java y la cara las aplica. Sin traje puesto valen lo de
+     siempre, así que la cara se ve idéntica en el PC y en un APK viejo. */
+  --primario:#39c2ff; --secundario:#0a3d62;
 }
 html,body{margin:0;height:100%;background:#02040a;overflow:hidden;
   font-family:'Segoe UI Variable Display','Segoe UI',system-ui,sans-serif;color:var(--text)}
@@ -689,6 +693,12 @@ html.pantallas-montadas.p-mv body.sheet #scene{transform:scale(.34);transform-or
 html.glass .scr{background:rgba(2,4,10,.94)}
 html.mobile .scr{padding:12px 8px calc(96px + env(safe-area-inset-bottom))}
 html.p-mv #scr-mv,html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo{display:flex}
+/* La hoja `equipo` (contrato 2.1) cuelga ADEMÁS de `.pantallas-montadas`: si el
+   módulo de pantallas fallara, la cara de siempre queda intacta y no aparece una
+   hoja vacía encima del orbe. El orbe aquí **se congela** como en música/charla
+   (la regla de apagón de arriba lo cubre y `hud.js` llama a `orb.pausa(true)`):
+   no hay disco, porque en el Equipo no suena nada. */
+html.pantallas-montadas.p-equipo #scr-equipo{display:flex}
 
 /* En las otras pantallas el micrófono no estorba: se va a la esquina y el
    contenido deja su hueco abajo para que el campo de escritura nunca quede
@@ -851,3 +861,97 @@ html.mobile.pantallas-montadas:not(.p-orbe) #mic{width:56px;height:56px;right:12
 .ch-bajar{border-color:rgba(43,255,158,.4);color:#b9ffd8;background:rgba(6,40,26,.35)}
 .ch-sinpc{flex:1 1 100%;color:#ffcf6b;line-height:1.5}
 .ch-nota{text-transform:none;letter-spacing:0;font-style:italic}
+
+/* ================= EQUIPO: lo que CORT manda en el teléfono (contrato 2.1) =====
+   Los cinco bloques los monta `js/telefono.js` dentro de `#scr-equipo`. Nada de
+   esto se ve en el PC: la hoja no está en `visibles()`, así que su DOM no existe
+   y estas reglas no molestan a nadie. Cada bloque es un `<details>` abierto —la
+   consigna era que fueran **visibles y usables**, no un menú dentro del menú—. */
+.eq-caja{display:flex;flex-direction:column;gap:9px;padding-bottom:4px}
+.eq-piego{font-size:11px;line-height:1.5;color:#5e8cab;padding:2px 2px 4px}
+.eq-bloque{border:1px solid rgba(80,190,255,.18);border-radius:11px;background:rgba(6,16,32,.55);
+  padding:0 10px 9px;scroll-margin-top:70px}
+.eq-bloque.eq-brillo{border-color:var(--primario);box-shadow:0 0 16px rgba(0,190,255,.28)}
+.eq-bloque summary{display:flex;align-items:baseline;gap:9px;padding:9px 2px;cursor:pointer;
+  list-style:none;-webkit-tap-highlight-color:transparent}
+.eq-bloque summary::-webkit-details-marker{display:none}
+.eq-bloque summary::before{content:"▾";color:var(--primario);font-size:11px;margin-right:1px}
+.eq-bloque:not([open]) summary::before{content:"▸"}
+.eq-bloque summary b{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:#dff1ff}
+.eq-bloque summary span{font-size:10px;color:#5e8cab}
+.eq-cuerpo{display:flex;flex-direction:column;gap:8px;padding-top:2px}
+.eq-tit{font-family:Consolas,'Courier New',monospace;font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:#7fd0ff;margin-top:2px}
+.eq-estado{font-family:Consolas,monospace;font-size:10px;color:#5e8cab;line-height:1.5}
+.eq-fila{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.eq-doble{display:flex;gap:12px;flex-wrap:wrap}
+.eq-slider{display:flex;align-items:center;gap:7px;font-size:10px;color:#5e8cab;
+  letter-spacing:.08em;text-transform:uppercase;flex:1 1 150px}
+.eq-slider input{flex:1;min-width:80px;accent-color:var(--cyan)}
+.eq-slider b{font-family:Consolas,monospace;font-size:10px;color:#9fdcff}
+.eq-b{all:unset;cursor:pointer;font-size:11.5px;color:#9fdcff;padding:7px 12px;border-radius:16px;
+  border:1px solid rgba(80,190,255,.25);background:rgba(12,28,52,.5);text-align:center}
+.eq-b:active{background:rgba(0,160,255,.24)}
+.eq-b.eq-grande{min-width:46px;font-size:15px}
+.eq-b.puesta{border-color:var(--primario);color:#fff;background:rgba(0,160,255,.26)}
+.eq-lleno,.eq-fila input,.eq-nube input{background:rgba(8,20,38,.8);color:var(--text-hi);
+  border:1px solid var(--cyan-dim);border-radius:10px;padding:8px 10px;font-size:14px;
+  font-family:inherit;min-width:0}
+.eq-lleno{width:100%;box-sizing:border-box}
+.eq-fila input{flex:1 1 120px}
+#eq-men-prov{background:rgba(8,20,38,.8);color:var(--text-hi);border:1px solid var(--cyan-dim);
+  border-radius:10px;padding:8px 9px;font-size:13px;font-family:Consolas,monospace;flex:1 1 130px}
+#eq-alarma-hora{flex:0 0 auto;font-family:Consolas,monospace}
+#eq-temp-min{flex:0 0 74px;font-family:Consolas,monospace}
+.eq-nivel{font-family:Consolas,monospace;font-size:11px;color:#9fdcff;min-width:34px}
+.eq-nota{font-size:10px;color:#5e8cab;line-height:1.45}
+.eq-nube{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.eq-chip{all:unset;cursor:pointer;font-size:11px;color:#9fdcff;padding:6px 10px;border-radius:15px;
+  border:1px solid rgba(80,190,255,.25);background:rgba(12,28,52,.5)}
+.eq-chip small{display:block;font-size:9px;color:#4b7f9e;letter-spacing:.06em}
+.eq-chip.puesta{border-color:var(--primario);background:rgba(0,160,255,.24);color:#fff}
+.eq-rejilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(86px,1fr));gap:7px}
+.eq-app{all:unset;cursor:pointer;text-align:center;font-size:11.5px;color:#dff1ff;padding:11px 6px;
+  border-radius:10px;border:1px solid rgba(80,190,255,.2);background:rgba(12,28,52,.55)}
+.eq-app:active{background:rgba(0,160,255,.24)}
+.eq-dice{font-size:11.5px;line-height:1.5;color:#b9ffd8;min-height:14px}
+.eq-dice.aviso{color:#ffcf6b}
+.eq-rec{display:flex;gap:9px;align-items:baseline;flex:1 1 100%;padding:6px 8px;
+  border-bottom:1px solid rgba(80,190,255,.08);font-size:12.5px;color:#dff1ff}
+.eq-rec small{margin-left:auto;font-family:Consolas,monospace;font-size:9.5px;color:#4b7f9e}
+.eq-res{border:1px solid rgba(80,190,255,.16);border-radius:10px;background:rgba(3,9,20,.75);
+  padding:9px 10px;font-size:13.5px;line-height:1.55;color:#eaf7ff;min-height:38px}
+.eq-texto{white-space:pre-wrap;overflow-wrap:anywhere}
+.eq-de{display:inline-block;font-family:Consolas,monospace;font-size:9.5px;letter-spacing:.14em;
+  text-transform:uppercase;padding:2px 8px;border-radius:10px;margin-bottom:6px;
+  border:1px solid rgba(80,190,255,.3);color:#9fdcff}
+.eq-de.local{border-color:rgba(43,255,158,.4);color:#b9ffd8}
+.eq-de.nube{border-color:rgba(255,190,80,.45);color:#ffcf6b}
+.eq-aviso-eq{color:#ffcf6b;font-size:12.5px;line-height:1.5}
+/* Las paletas se pintan solas con las dos variables que devuelve Java (`--p`/`--s`
+   son locales al chip: así el color de muestra no se escapa al resto de la cara). */
+.eq-paletas{display:flex;gap:8px;flex-wrap:wrap}
+.eq-palette{all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;padding:7px 11px;
+  border-radius:14px;border:1px solid rgba(80,190,255,.22);background:rgba(12,28,52,.5);
+  font-size:11.5px;color:#dff1ff}
+.eq-palette i{width:16px;height:16px;border-radius:50%;
+  background:linear-gradient(135deg,var(--p) 0 55%,var(--s) 55% 100%);
+  box-shadow:0 0 8px rgba(0,190,255,.45)}
+.eq-palette.puesta{border-color:var(--p);background:rgba(0,160,255,.2)}
+/* Con traje puesto, el brillo del HUD sigue a la paleta (Java manda `--primario`). */
+html.con-atuendo .eq-bloque summary b{color:var(--primario)}
+
+/* ---- el auricular abierto, dicho sin tener la app delante ----
+   `hud.js` crea `#auricular` al primer `{type:'auricular', escuchando:true}` del
+   puente. Vive abajo a la izquierda, lejos del micrófono flotante y de la barra
+   de pantallas, y el botón del oído se ilumina igual. */
+#auricular{position:fixed;left:14px;bottom:18px;z-index:72;display:flex;align-items:center;gap:8px;
+  padding:7px 12px;border-radius:20px;font-size:11px;letter-spacing:.08em;color:#dff1ff;
+  background:rgba(4,12,26,.92);border:1px solid rgba(80,190,255,.4);
+  box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#auricular[hidden]{display:none}
+#auricular i{font-style:normal;animation:aur-pulso 1.6s ease-in-out infinite}
+@keyframes aur-pulso{0%,100%{opacity:.5}50%{opacity:1}}
+html.auricular-abierto #wake{border-color:var(--cyan);box-shadow:0 0 18px rgba(0,190,255,.5)}
+html.auricular-abierto #wake.auricular i{filter:drop-shadow(0 0 8px var(--cyan))}
+html.pantallas-montadas:not(.p-orbe) #auricular{bottom:96px}

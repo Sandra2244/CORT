@@ -23,6 +23,24 @@ peor, un botón que no hace nada en el teléfono de la dueña:
      `settingsActivity` (AOSP descarta a una app que no sea del sistema si la
      declara), el `RoleManager.ROLE_ASSISTANT` con su guard de API 29, y el
      `pause`/`resume` que evita que el micro quede abierto en segundo plano.
+  5. El reproductor, la música y el teléfono (`Reproductor.java`, `Musica.java`,
+     `Telefono.java`) están enganchados al puente con los métodos de verdad.
+  6. Cada pantalla que ofrece la cara tiene su ventana en el HUD y su puerta en el
+     núcleo, o dice que no la hay.
+  7. El SDK: ningún símbolo que `javac --release 11` o `d8` rechacen, nada de
+     AndroidX en un proyecto que compila con `aapt2`.
+  8. La ronda 2.0.0 (MV, modo juego, organizador, letras) sigue cosida después de
+     los cambios de la 2.1.
+  9. La ronda 2.1 entera, medida en **cuatro sitios a la vez** (`docs/CONTRATO-PUENTE-2.1.md`
+     es la única fuente de los nombres): la clase existe, el puente expone
+     `@JavascriptInterface` con ese `que`, la cara lo llama, y el manifiesto o el
+     backend ponen su mitad — `accion`, `ajusteVoz`, `memoria`, `mente`, `atuendo`,
+     `agenda`, `burbuja`, `comparte`. Aquí caen los bugs que en Java son silenciosos:
+     un evento que Java emite con un nombre y la cara escucha con otro, un
+     `<queries>` a medias, `assets/habilidades.json` vacío, una `/api/*` que el
+     portátil no tiene, o —que pasó de verdad— un panel entero (`bgStatus()` de
+     07 · Perfil) al que la cara le pregunta siete claves y Java sólo le devolvía
+     dos.
 
 Uso:  python3 scripts/prueba-costura.py     (una fracción de segundo)
 """
@@ -45,6 +63,11 @@ def dice_ok(label: str, detalle: str) -> None:
 def falla(label: str, detalle: str) -> None:
     FALLOS.append(f"{label}: {detalle}")
     print(f"  NO  {label}: {detalle}")
+
+
+def puente_texto() -> str:
+    """El puente como texto, para las comprobaciones que lo necesitan antes de sector [8]."""
+    return (APK / "src" / "com" / "cort" / "ia" / "CortNative.java").read_text(encoding="utf-8")
 
 
 # ── 1 · el manifiesto ────────────────────────────────────────────────────────
@@ -89,16 +112,44 @@ necesarios = {
     "READ_MEDIA_AUDIO", "READ_MEDIA_VIDEO", "READ_EXTERNAL_STORAGE",
     "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK", "WAKE_LOCK",
     "POST_NOTIFICATIONS", "READ_CONTACTS", "CALL_PHONE",
+    # Los cuatro de la ronda 2.1, cada uno con su función nombrada abajo: la cámara
+    # es la linterna (`Acciones`), `SET_ALARM` el despertador que CORT pone desde la
+    # voz, `READ_CALENDAR` el «¿qué tengo hoy?» (`Agenda`) y el superposición el
+    # punto flotante (`Flotante`). Con `READ_CALENDAR` sólo de lectura: apuntar una
+    # cita abre el formulario y lo guarda su dedo.
+    "CAMERA", "SET_ALARM", "READ_CALENDAR",
+    "SYSTEM_ALERT_WINDOW",
 }
 if necesarios <= cortos:
     dice_ok("permisos", f"{len(permisos)} declarados, los {len(necesarios)} justos están")
 else:
     falla("permisos", f"faltan {', '.join(sorted(necesarios - cortos))}")
 for prohibido in ("QUERY_ALL_PACKAGES", "READ_SMS", "SEND_SMS", "RECEIVE_MMS",
-                  "READ_CALL_LOG", "PROCESS_OUTGOING_CALLS", "SYSTEM_ALERT_WINDOW",
+                  "READ_CALL_LOG", "PROCESS_OUTGOING_CALLS",
                   "GET_ACCOUNTS", "MASTER_ACCOUNT", "WRITE_SECURE_SETTINGS"):
     if prohibido in cortos:
         falla("permiso de más", f"{prohibido}: no hace falta para lo que CORT promete")
+# `SYSTEM_ALERT_WINDOW` estaba en la lista de arriba y aquí tiene su propia regla,
+# porque la **burbuja flotante** (contrato 2.1, sector [6]) no existe sin él: es el
+# punto de CORT que abre el micrófono sin sacar de la partida. Es un permiso de
+# interruptor en Ajustes, no de cuadro, y sólo se concede si la dueña lo da. La
+# comprobación, entonces, no es «no está» sino «si está, es porque hay función que
+# lo usa y pantalla donde darlo»: un permiso sin dueño es exactamente el tipo de
+# cosa que la dueña rechazó del APK original.
+if "SYSTEM_ALERT_WINDOW" in cortos:
+    flotante = APK / "src" / "com" / "cort" / "ia" / "Flotante.java"
+    if not flotante.is_file():
+        falla("permiso de más", "SYSTEM_ALERT_WINDOW declarado sin Flotante.java: "
+                                "un permiso que no usa nadie")
+    elif "ACTION_MANAGE_OVERLAY_PERMISSION" not in puente_texto():
+        falla("permiso de más", "SYSTEM_ALERT_WINDOW sin pantalla donde la dueña lo dé "
+                                "(`abreAjustesBurbuja`)")
+    else:
+        dice_ok("permiso de la burbuja", "SYSTEM_ALERT_WINDOW con su clase y su pantalla "
+                                         "de Ajustes: se da a mano y se puede quitar")
+elif (APK / "src" / "com" / "cort" / "ia" / "Flotante.java").is_file():
+    falla("burbuja", "Flotante.java existe pero el manifiesto no declara "
+                     "SYSTEM_ALERT_WINDOW: el punto nunca aparecería")
 if 'android:foregroundServiceType="mediaPlayback"' in XML:
     dice_ok("servicio de música", "declarado con su tipo, como exige Android 14")
 else:
@@ -450,6 +501,38 @@ def sin_comentarios(txt: str) -> str:
         salida.append(ch); i += 1
     return "".join(salida)
 
+
+def literales(txt: str) -> str:
+    """Al revés que `sin_comentarios`: SOLO el contenido de los literales de texto.
+
+    Lo que el puente y la cara se dicen vive dentro de comillas
+    (`"{\"type\":\"auricular\"…}"`, `b + "/api/memories"`), y los comentarios
+    documentan también lo que NO existe («la puerta `/api/memoria` del encargo no
+    existe»). Comparar contra el archivo entero es encontrar lo que el propio
+    comentario niega, y el rojo sale del revés.
+
+    El contenido se suelta de sus escapes (`\"` → `"`) y se vuelve a entrecomillar,
+    para que sirvan las dos formas de buscar: `"mente"` como cadena suelta del puente
+    y `"type":"auricular"` dentro del JSON que Java arma a mano.
+    """
+    salida, i, n = [], 0, len(txt)
+    while i < n:
+        ch = txt[i]
+        if ch == '"':
+            j = i + 1
+            while j < n:
+                if txt[j] == "\\": j += 2; continue
+                if txt[j] == '"': break
+                j += 1
+            dentro = re.sub(r'\\(.)', r'\1', txt[i + 1:j])
+            salida.append('"' + dentro + '"'); i = j + 1; continue
+        if txt.startswith("//", i):
+            k = txt.find("\n", i); i = n if k < 0 else k; continue
+        if txt.startswith("/*", i):
+            k = txt.find("*/", i + 2); i = n if k < 0 else k + 2; continue
+        i += 1
+    return " ".join(salida)
+
 PROHIBIDOS = [
     ("android.media.MediaSession",
      "es @hide; el público es android.media.session.MediaSession (el mismo de MainActivity)"),
@@ -553,8 +636,13 @@ if re.search(r"llama\('modoJuego'", cara):
 else:
     falla("modo juego · cara", "la cara invoca modoJuego sin pasar por `llama(…)` o no lo invoca")
 manifiesto = lectura("apps", "apk", "AndroidManifest.xml")
-colados = [p for p in ("PACKAGE_USAGE_STATS", "QUERY_ALL_PACKAGES", "READ_SMS", "PROCESS_OUTGOING_CALLS")
-           if p in manifiesto]
+# Se comprueba la **declaración**, no el texto del manifiesto: la cabecera de
+# `AndroidManifest.xml` explica nombre por nombre lo que la dueña rechazó y lo que
+# este APK NO pide. Buscar en el archivo entero convertía esa explicación en un
+# fallo — y un fallo así enseña a borrar la advertencia, que es lo contrario de lo
+# que advierte.
+rechazados = ("PACKAGE_USAGE_STATS", "QUERY_ALL_PACKAGES", "READ_SMS", "PROCESS_OUTGOING_CALLS")
+colados = [p for p in rechazados if p in cortos]
 if colados:
     falla("modo juego · permisos", f"se han colado permisos que la dueña no quiere: {', '.join(colados)}")
 else:
@@ -609,6 +697,271 @@ if "timeout=" in let and "reintenta" in let:
 else:
     falla("letras", "letras.py se queda sin timeout o sin aviso de reintento: un 503 de LRCLIB "
                     "dejaría la hoja MV colgada sin decir por qué")
+
+# ── 9 · la ronda 2.1: «el APK completo», comprobado sin teléfono ─────────────
+# La dueña abrió el 2.0.0 y dijo «no pesa lo que debería». Medido: la proporción de
+# compresión era casi la misma que la del 1.1.0 original (0,42 contra 0,40); lo que
+# pesaba de menos era **contenido**: el manifiesto había perdido el `<queries>`, el
+# `FileProvider` y las reglas de respaldo, y dentro no estaba lo que se le prometió
+# (mandar sobre el aparato, elegir voz, recordar sin PC, pensar sin PC, cambiar de
+# traje, el punto flotante, la agenda y el correo). Este sector es el que impide que
+# vuelva a pasar: cada promesa nueva tiene que estar en los CUATRO sitios donde vive
+# —la clase que la hace, el puente que la expone, la cara que la llama y el
+# manifiesto o el portátil que la autoriza—. Falta uno y el botón miente.
+print("\n[9] contrato 2.1 · las funciones completas, en los cuatro sitios")
+
+METODOS_21 = {
+    # nombre en el puente → (clase que la hace, los `que` que tiene que conocer)
+    "accion":    ("Acciones.java",   ("volumen", "linterna", "alarma", "temporizador",
+                                      "abrir", "lanzadores", "buscar", "estado")),
+    "ajusteVoz": ("VozNueva.java",   ("lista", "poner", "predefinida", "descargar",
+                                      "probar", "estado")),
+    "memoria":   ("Recuerdos.java",  ("guardar", "buscar", "lista", "quien", "olvidar",
+                                      "sincronizar", "estado")),
+    "mente":     ("Mente.java",      ("estado", "ajustar", "preguntar", "probar")),
+    "atuendo":   ("Paleta.java",     ("lista", "poner")),
+    "agenda":    ("Agenda.java",     ("hoy", "proximos", "abrir", "correo", "apunta")),
+}
+CARA_21 = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+puente_bruto = puente_texto()
+puente_21 = sin_comentarios(puente_bruto)
+# Los nombres de MÉTODO y de CLASE se buscan en el código limpio de comentarios
+# (`puente_21`), para que una prosa no apruebe la prueba. Lo que vive DENTRO de las
+# comillas —los `que`, los nombres de evento, las rutas `/api/*`— se busca con
+# `literales()`: `sin_comentarios` borra justo esas cadenas, y comparar contra el
+# archivo crudo además encuentra lo que un comentario niega.
+
+for metodo, (clase, ques) in METODOS_21.items():
+    ruta = APK / "src" / "com" / "cort" / "ia" / clase
+    if not ruta.is_file():
+        falla(f"2.1 · {metodo}", f"falta {clase}: la cara ofrece el botón y nadie lo hace")
+        continue
+    bruto = ruta.read_text(encoding="utf-8")
+    dicho = literales(bruto)
+    expuesto = re.search(r"@JavascriptInterface\s+(?:public\s+)?String\s+" + metodo + r"\s*\(",
+                         puente_21)
+    if not expuesto:
+        falla(f"2.1 · {metodo}", "CortNative no lo expone con @JavascriptInterface: "
+                                 "`puede('" + metodo + "')` daría falso y la hoja saldría vacía")
+        continue
+    if clase.split(".")[0] not in puente_21:
+        falla(f"2.1 · {metodo}", f"el puente no nombra a {clase} en ningún sitio")
+        continue
+    desconocidos = [q for q in ques if f'"{q}"' not in dicho]
+    if desconocidos:
+        falla(f"2.1 · {metodo}", f"{clase} no conoce los que: {', '.join(desconocidos)} "
+                                 "(la cara los manda y Java callaría)")
+        continue
+    if not re.search(r"\b(?:puede|envia|llama)\s*\(\s*'" + metodo + "'", CARA_21):
+        falla(f"2.1 · {metodo}", "la cara no lo llama: quedó escrito en Java y olvidado en `ui/`")
+        continue
+    dice_ok(f"2.1 · {metodo}", f"{clase} + puente + cara, con sus {len(ques)} `que`")
+
+# Los dos del contrato que NO llevan JSON dentro —`burbuja(boolean)` y
+# `comparte(ruta)`—, comprobados igual: Java los expone y la cara los pregunta con su
+# `typeof`. `comparte` vive en la pantalla de Música (es donde hay un archivo a mano),
+# así que se miran los dos archivos de la cara.
+CARA_PANTALLAS = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+for metodo, donde in (("burbuja", "la hoja de Atuendos"), ("comparte", "el transporte de Música/MV")):
+    expuesto = re.search(r"@JavascriptInterface\s+(?:public\s+)?(?:String|void)\s+"
+                         + metodo + r"\s*\(", puente_21)
+    llama = re.search(r"\b(?:puede|llama|envia)\s*\(\s*'" + metodo + "'",
+                      CARA_21 + "\n" + CARA_PANTALLAS)
+    if not expuesto:
+        falla(f"2.1 · {metodo}", "CortNative no lo expone con @JavascriptInterface")
+    elif not llama:
+        falla(f"2.1 · {metodo}", f"la cara no lo llama ({donde}): quedaría en Java, sin botón")
+    else:
+        dice_ok(f"2.1 · {metodo}", f"puente + cara ({donde})")
+
+# Las piezas que sostienen lo de arriba: no todas las llama la cara directamente
+# (`Sincroniza` la llama `Recuerdos`, y `Cerebro` la llama `Mente`), así que se
+# comprueba que **algún** Java del paquete la use. Un archivo sin dueño es peso
+# muerto dentro del APK, y peso muerto es exactamente lo que se le reprochó al 2.0.
+todo_java = {p.name: p.read_text(encoding="utf-8")
+             for p in sorted((APK / "src" / "com" / "cort" / "ia").glob("*.java"))}
+for pieza in ("Nube.java", "Cerebro.java", "Sincroniza.java", "Flotante.java",
+              "ArchivosProvider.java", "Recuerdos.java"):
+    nombre = pieza.split(".")[0]
+    usa = [d for d, texto in todo_java.items()
+           if d != pieza and nombre in sin_comentarios(texto)]
+    if pieza not in todo_java:
+        falla("2.1 · piezas", f"falta {pieza}")
+    elif not usa:
+        falla("2.1 · piezas", f"{pieza} no la usa ningún otro Java: código muerto "
+                              "que además pesa en el APK")
+    else:
+        dice_ok("2.1 · pieza", f"{pieza} la usan {', '.join(sorted(usa))}")
+
+# 9.a · los eventos: lo que Java empuja y lo que la cara escucha tienen el mismo nombre
+# Se busca en los LITERALES del Java: el nombre del evento vive dentro del JSON que
+# cada clase arma a mano (`"{\"type\":\"auricular\",…}"`), con las comillas escapadas,
+# así que una comprobación sobre el texto crudo nunca lo ve.
+#
+# Y se exige que sea el **tipo** del evento, no cualquier cadena con ese nombre: la
+# primera versión de esta prueba dio `ok` para `accion` porque `Mente.java` escribe
+# `,"accion":"volumen"` como CAMPO de la respuesta de `mente`. Un campo no es un
+# evento, y confundirlo es tener una pantalla escuchando un aviso que nadie manda.
+def emitido(texto: str, evento: str) -> bool:
+    dicho = literales(texto)
+    if f'"type":"{evento}"' in dicho:
+        return True
+    # `conTipo(json, "mente")`: el puente añade el tipo en el enganche, y ese es el
+    # sitio honesto donde vive el nombre (las clases de abajo devuelven sin `type`).
+    # Se busca en el texto crudo porque el nombre ESTÁ dentro de una cadena, y
+    # `sin_comentarios` la borraría; el riesgo de que un comentario la imite es
+    # mucho menor que el de no ver la llamada de verdad.
+    return bool(re.search(r'conTipo\([^,]+,\s*"' + evento + r'"\)', texto))
+
+
+for evento in ("mente", "memoria", "auricular"):
+    sale = any(emitido(texto, evento) for texto in todo_java.values())
+    escucha = re.search(r"type\s*===?\s*'" + evento + "'", CARA_21) or \
+              re.search(r"type\s*===?\s*'" + evento + "'",
+                        (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8"))
+    if not sale:
+        falla(f"evento {evento}", "Java no lo emite: la pantalla espera un aviso que no llega")
+    elif not escucha:
+        falla(f"evento {evento}", "la cara no lo escucha: Java habla y nadie recoge el aviso")
+    else:
+        dice_ok(f"evento {evento}", "emisión en Java y escucha en la cara, con el mismo nombre")
+
+# `accion` **no** es un evento: es síncrono, y su respuesta la lee la cara del
+# `envia(...)` de vuelta. Lo que sí tiene que existir es el reenvío del cerebro
+# local: `Mente` nombra la acción (`"accion":"volumen"`) y no la ejecuta, así que la
+# cara tiene que mandarla a `accion()` o «sube el volumen» sin PC se quedaría en un
+# «vale» sin nada debajo.
+if re.search(r"ev\.accion", CARA_21) and re.search(r"envia\('accion'", CARA_21):
+    dice_ok("cerebro local · acción", "la cara reenvía `accion`/`param` del evento `mente` a `accion()`")
+else:
+    falla("cerebro local · acción", "el evento `mente` trae `accion` y la cara no la ejecuta: "
+                                    "pensar sin PC diría «vale» sin hacer la cosa")
+
+# 9.b · el manifiesto que se perdió en el 2.0 y volvió: proveedor de archivos,
+# visibilidad de paquetes y las reglas de respaldo. Cada uno es una función concreta
+# («envíame ese archivo», «abre WhatsApp», «no pierdas la dirección del PC»).
+cuatro = {"archivos": "archivos.xml", "seguridad_red": "seguridad_red.xml",
+          "respaldo": "respaldo.xml", "extraccion": "extraccion.xml"}
+for nombre, archivo in cuatro.items():
+    if "@xml/" + nombre in XML:
+        if (APK / "res" / "xml" / archivo).is_file():
+            dice_ok("res/xml", f"{archivo} declarado y existe: aapt2 lo encuentra")
+        else:
+            falla("res/xml", f"el manifiesto pide @xml/{nombre} y `res/xml/{archivo}` "
+                             "no está: el enlace falla al enlazar, en el runner")
+referencias = set(re.findall(r'"@xml/(\w+)"', XML))
+sin_archivo = [r for r in referencias if not (APK / "res" / "xml" / (r + ".xml")).is_file()]
+if sin_archivo:
+    falla("res/xml", "el manifiesto apunta a @xml/" + ", @xml/".join(sin_archivo)
+                    + " y no existen")
+
+if 'android:name=".ArchivosProvider"' in XML and 'android:authorities="com.cort.ia.files"' in XML:
+    dice_ok("FileProvider", "declarado con su autoridad: «envíame ese archivo» puede salir")
+else:
+    falla("FileProvider", "falta el `<provider>` con `com.cort.ia.files`: compartir un "
+                          "archivo con `file://` revienta en Android 7+")
+
+consultas = re.search(r"<queries>.*?</queries>", XML, re.S)
+if not consultas:
+    falla("<queries>", "el manifiesto no tiene `<queries>`: Android 11+ no deja VER a "
+                       "WhatsApp ni al motor de voz, y «abre whatsapp» diría que no está")
+else:
+    bloque = consultas.group(0)
+    # El nombre real es `android.intent.action.TTS_SERVICE` (`TtsServices` es un
+    # invento; escribir mal la acción es una visibilidad a medias: «no encuentro
+    # motor de voz» en un teléfono que sí lo tiene).
+    faltan = [f for f in ("android.intent.action.MAIN", "android.intent.action.TTS_SERVICE",
+                          "android.intent.action.SET_ALARM") if f not in bloque]
+    if faltan:
+        falla("<queries>", "sin " + ", ".join(faltan) + ": la visibilidad queda a medias")
+    else:
+        dice_ok("<queries>", f"visibilidad declarada ({len(re.findall(chr(60) + 'intent', bloque))} "
+                             "intents y " + str(len(re.findall('<package ', bloque))) + " apps nombradas), "
+                             "sin `QUERY_ALL_PACKAGES`")
+
+# 9.c · el portátil también puso su mitad: las dos puertas que cruza `Sincroniza.java`
+# Se comparan los LITERALES del código, no el archivo entero: la javadoc documenta
+# una puerta que NO existe (`/api/memoria`) y buscarla en el texto crudo la daba por
+# llamada. El backend es el que tiene que decir si una puerta está o no.
+sinc = (APK / "src" / "com" / "cort" / "ia" / "Sincroniza.java").read_text(encoding="utf-8")
+puertas = set(re.findall(r'(/api/[a-z_]+)', literales(sinc)))
+nucleo = "\n".join(p.read_text(encoding="utf-8")
+                   for p in sorted((RAIZ / "backend" / "app").glob("*.py")))
+if not puertas:
+    falla("sincronía", "`Sincroniza.java` no llama a ninguna puerta `/api/*`: "
+                       "la sincronía con el portátil sería un botón que no hace nada")
+for puerta in sorted(puertas):
+    if puerta not in nucleo:
+        falla("sincronía", f"el APK llama a {puerta} y el backend del repo no la tiene: "
+                           "la cara vería el aviso de «puerta que falta»")
+    else:
+        dice_ok("sincronía", f"{puerta} existe en `backend/app/main.py`")
+if 'setRequestProperty("Authorization", "Bearer "' in sinc:
+    dice_ok("sincronía · clave", "la clave de red viaja sólo en la cabecera `Authorization`")
+elif "Authorization" in sinc:
+    dice_ok("sincronía · clave", "la clave va en cabecera, no en la URL")
+else:
+    dice_ok("sincronía · clave", "el APK no manda ninguna clave al portátil")
+
+# 9.d · `assets/habilidades.json`: la memoria del teléfono aprende patrones, y el
+# archivo tiene que viajar dentro del APK (lo empaqueta `aapt2 link -A assets`).
+habilidades = APK / "assets" / "habilidades.json"
+if habilidades.is_file():
+    import json as _json
+    try:
+        datos = _json.loads(habilidades.read_text(encoding="utf-8"))
+        # La clave del archivo es `patrones` (la lista de frases que CORT reconoce
+        # sin PC); `habilidades` sería contar cero y conformarse con un APK mudo.
+        cuenta = len(datos.get("patrones") or [])
+        if cuenta == 0:
+            falla("habilidades", "`assets/habilidades.json` está vacío o no trae `patrones`: "
+                                 "la cara del teléfono no sabría hacer nada sin el portátil")
+        else:
+            dice_ok("habilidades", f"{cuenta} patrones dentro del APK")
+    except Exception as e:
+        falla("habilidades", f"`assets/habilidades.json` no es JSON válido: {e}")
+else:
+    falla("habilidades", "falta `apps/apk/assets/habilidades.json`: "
+                         "Recuerdos.leer() no tendría de dónde aprender")
+
+# 9.e · el panel «▸ Segundo plano» de 07 · Perfil: lee siete claves de `bgStatus()`
+# y durante una ronda entera Java sólo devolvía `bg` y `pc`. Como en `burbuja`, el
+# daño era silencioso: el interruptor nunca se iluminaba, las cuatro filas salían
+# siempre sin marcar y `on = !undefined` daba `true`, así que NO se podía apagar.
+# La comprobación es en las dos direcciones y sobre el texto crudo: toda clave que
+# la cara pregunta como `st.<clave>` tiene que estar en el JSON que arma Java.
+HUD_21 = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+try:
+    inicio = puente_bruto.index("public String bgStatus()")
+    # El método se recorta a mano (los literales llevan llaves dentro y un contador
+    # de llaves se creería cualquier cosa): hasta `setBackground`, que es el siguiente.
+    fin = puente_bruto.index("public void setBackground", inicio)
+    bg_java = literales(puente_bruto[inicio:fin])
+except ValueError:
+    bg_java = ""
+    falla("segundo plano", "`bgStatus()` no aparece en CortNative.java: el panel no tiene de dónde leer")
+if bg_java:
+    # Las claves que la cara pregunta en su panel (BG_PERMS + lo que leen renderBg).
+    panel = HUD_21[HUD_21.index("const BG_PERMS"):HUD_21.index("async function toggleBg")]
+    pedidas = set(re.findall(r"\bst\.([a-zA-Z_]+)", panel)) | {"mic", "notif", "overlay", "battery"}
+    faltan_bg = [k for k in sorted(pedidas) if f'"{k}":' not in bg_java]
+    if faltan_bg:
+        falla("segundo plano", "la cara pregunta " + ", ".join(f"`{k}`" for k in faltan_bg)
+                           + " y `bgStatus()` no la emite: el panel miente o se queda mudo")
+    else:
+        dice_ok("segundo plano", f"las {len(pedidas)} claves que lee el panel están en `bgStatus()`")
+    # Y al revés: los tres botones «Dar» del panel tienen que caer en una pantalla
+    # real de Android (cuadro, interruptor de Ajustes o lista de batería).
+    for kind, donde in (("overlay", "la pantalla de aparecer encima"),
+                        ("battery", "la pantalla de batería"),
+                        ("autostart", "los ajustes de la app")):
+        if not re.search(r'k\.startsWith\("' + kind + '"', (RAIZ / "apps" / "apk" / "src" / "com" /
+                                                            "cort" / "ia" / "MainActivity.java")
+                         .read_text(encoding="utf-8")):
+            falla("segundo plano", f"el botón «Dar» de `{kind}` no tiene a dónde ir: "
+                                   + donde + " nunca se abre")
+        else:
+            dice_ok(f"segundo plano · {kind}", "su botón abre " + donde)
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

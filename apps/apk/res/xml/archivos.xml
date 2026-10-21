@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Las rutas que `.ArchivosProvider` sabe convertir en `content://com.cort.ia.files/…`.
+
+  Por qué existe este fichero: desde Android 7 (API 24) regalar un `file://` a otra
+  app está prohibido y revienta con `FileUriExposedException`. Para que «envíame la
+  canción» o «comparte el MV» funcionen hace falta un `FileProvider` con su lista
+  de rutas, y el `CORT-IA-1.1.0.apk` de la dueña ya lo traía (`authority
+  com.cort.ia.files`); en la reescritura a Java puro se perdió y el puente se quedó
+  sin forma de sacar un archivo.
+
+  Las primeras entradas son nombradas y sueltas (así se ve `…/musica/…` en la
+  notificación de Android en vez de un nombre críptico) y la última es la raíz del
+  almacenamiento público: hace falta porque el organizador mueve archivos a
+  carpetas que la dueña inventa («Universidad», «la carrera»), y un proveedor con
+  carpetas fijos no alcanzaría a compartirlas. Aun así la puerta es estrecha: el
+  proveedor está `exported="false"`, sólo se comparten archivos uno a uno con
+  `grantUriPermissions`, y `Android/` (los datos de otras apps) no está en la lista
+  porque el sistema tampoco la deja leer.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-path name="musica"          path="Music/" />
+    <external-path name="video"           path="Movies/" />
+    <external-path name="fotos"           path="DCIM/" />
+    <external-path name="imagenes"        path="Pictures/" />
+    <external-path name="descargas"       path="Download/" />
+    <external-path name="documentos"      path="Documents/" />
+    <!-- La raíz pública, con sus subcarpetas: lo que toca el organizador. -->
+    <external-path name="almacenamiento"  path="." />
+    <!-- Lo que CORT descarga para sí (la letra de una canción, un modelo de voz):
+         vive en el cache de la app y desde aquí se puede compartir sin moverlo. -->
+    <external-cache-path name="cache-app" path="." />
+    <cache-path name="cache-interno" path="." />
+</paths>

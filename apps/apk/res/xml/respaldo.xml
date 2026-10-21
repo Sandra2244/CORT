@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Reglas de respaldo (Android 12 y anteriores), recuperadas del
+  `CORT-IA-1.1.0.apk` — donde el fichero medía 132 bytes y era un
+  `<full-backup-content/>` **vacío**, es decir: «respáldalo todo».
+
+  Aquí se reescribe con una decisión en contra de ese original, y es la razón de
+  que exista este fichero: en `SharedPreferences` «cort» viven la dirección del
+  portátil de la dueña y la **clave de los proveedores** (Groq, OpenAI, DeepSeek,
+  lo que ponga). Dejar que Google se lleve eso a la nube es prestar su secreto.
+  Se excluye la preferencia y la base de datos de recuerdos; lo demás (ajustes de
+  cara sin valor) se puede respaldar.
+
+  El coste, dicho sin adornos: al cambiar de teléfono hay que volver a escribir la
+  dirección del PC y la clave. Es una molestia de un minuto, y es menos grave que
+  una clave andando por la nube. La memoria del teléfono se recupera sola con
+  «sincroniza con el PC».
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="cort.xml" />
+    <exclude domain="database" path="cort-recuerdos.db" />
+    <exclude domain="database" path="cort-recuerdos.db-wal" />
+    <exclude domain="database" path="cort-recuerdos.db-shm" />
+    <exclude domain="file" path="keystore" />
+</full-backup-content>

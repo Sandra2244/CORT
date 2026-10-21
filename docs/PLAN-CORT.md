@@ -32,7 +32,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 | Manos | **MediaPipe Hands** (JavaScript, corre en CPU del navegador) | Detección de 21 puntos de la mano: abrir palma = desplegar, pinza = agarrar archivo |
 | Memoria | SQLite + JSON local | Persistente entre sesiones |
 | Sensores | `psutil` (Python): batería, CPU, RAM, red; API Open-Meteo para clima | Los paneles de estado del v3/v6 |
-| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`) embebiendo la misma `ui/`: **un solo APK**, `CORT-IA-2.0.0.apk`, con su reproductor en primer plano y su marcador. La vía de rempaquetar el binario de Kotlin está fuera del repo | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila. Dos APK que había que elegir eran doble trabajo y doble publicación |
+| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`) embebiendo la misma `ui/`: **un solo APK**, `CORT-IA-2.1.0.apk`, con su reproductor en primer plano y su marcador. La vía de rempaquetar el binario de Kotlin está fuera del repo | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila. Dos APK que había que elegir eran doble trabajo y doble publicación |
 | Pantallas | `ui/js/pantallas.js`: hojas a pantalla completa (Orbe · Música · **MV** · Charla · Código) que se cambian con ☰, deslizando, `Alt+←/→` o por voz, y apagan el WebGL cuando no les toca — en **MV** el orbe no se apaga: se encoge a una esquina girando como disco | La dueña pidió interfaces separadas que **no toquen ni obstruyan** el orbe, como las apps multiventana, y un visionado estilo Lark Player con la letra sincronizada |
 | Letras de canciones | **LRCLIB** (`/api/letras`, sin clave) con marcas `[mm:ss.xx]`, cacheo en memoria de 40 canciones, `timeout` y `reintenta` si el servidor está saturado | Es gratis y no pide registro; el plan de «letra sincronizada» no depende de que ella tenga una API key |
 | Orden de archivos | `backend/app/organiza.py`: **plan primero, hechos después**, con token de 15 minutos y sin primitiva de borrado | La promesa que se le hizo: «no me pierdes nada». Un `mv` a ciegas en sus Documentos sería irreparable |
@@ -69,7 +69,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 - **F5 — Automaata**: wake word ("Oye CORT"), memoria persistente, comandos de sistema, perfil personalizable (como el instalador del v5).
 - **F6 — Empaquetar**: `electron-builder` → instalador .exe (Windows) y .AppImage/.deb (Linux).
 - **F7 — APK**: ya no Capacitor y **ya no dos APK**: sale uno solo de `apps/apk/`,
-  `CORT-IA-2.0.0.apk`, y lo compila GitHub Actions con `compilar.sh` (Java puro sin
+  `CORT-IA-2.1.0.apk`, y lo compila GitHub Actions con `compilar.sh` (Java puro sin
   Gradle: `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`). Es el que puede ser el
   asistente predeterminado (rol pedido con `RoleManager`, y `res/xml/asistente.xml`
   **sin** `settingsActivity`, que es lo que lo borraba de la lista), escucha el doble
@@ -111,6 +111,36 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
   de siempre queda intacta en vez de negra. Se comprueba en
   `scripts/prueba-costura.py` apartado [6] (28 métodos del puente usados desde la
   cara, todos existentes; y las cinco rutas del núcleo, todas reales).
+- **F7e — La ronda «todo en uno» (la 2.0.0)**, pedida tal cual por la dueña: la hoja
+  **MV** con **letra sincronizada** de LRCLIB y el orbe hecho disco en una esquina, el
+  **modo juego** («modo juego» / «vuelve CORT»: cierra el micro, no pide el foco audio
+  y deja de susurrar por el auricular, **sin** permiso de uso de aplicaciones), el
+  **organizador de archivos** con plan y confirmación (`backend/app/organiza.py`, sin
+  una sola primitiva de borrado), la **auto-actualización por voz** contra GitHub
+  (`backend/app/actualiza.py` + `scripts/actualiza.sh`, con respaldo y sin sudo), y la
+  **llave de firma definitiva** ya como secreto del repo (`CORT_APK_KEYSTORE_B64` /
+  `CORT_APK_KEYSTORE_PASS`) para que actualizar sea instalar encima.
+- **F7f — La ronda 2.1: «todo lo prometido dentro del APK».** Nueve clases Java
+  nuevas (`Acciones`, `VozNueva`, `Recuerdos`+`Sincroniza`, `Mente`+`Nube`+`Cerebro`,
+  `Paleta`, `Agenda`, `Flotante`, `ArchivosProvider`) que exponen **ocho funciones** en
+  el puente —`accion`, `ajusteVoz`, `memoria`, `mente`, `atuendo`, `agenda`, `burbuja`
+  y `comparte`— con su contrato escrito en `docs/CONTRATO-PUENTE-2.1.md` (es la única
+  fuente de los nombres). Del lado de la cara, la hoja **Equipo** con **seis bloques**
+  (Voz · Mando · Cerebro · Memoria · Atuendos · Agenda) y doce grupos de frases de voz.
+  Lo que añade de fondo: **pensar sin el portátil** (la nube que la dueña ajusta desde
+  la pantalla, con la clave sin salir del teléfono, y 35 patrones de
+  `assets/habilidades.json` que además **ejecutan** la orden que reconocen), memoria en
+  SQLite del teléfono cuadradable con `~/.cort` por `/api/memories` y `/api/profile`,
+  la **burbuja** flotante (`SYSTEM_ALERT_WINDOW`, que en modo juego nunca aparece), la
+  **linterna** por `setTorchMode`, las **citas** de `CalendarContract.Instances` con
+  `READ_CALENDAR` de sólo lectura (y `apunta` abriendo el formulario del sistema:
+  `WRITE_CALENDAR` no está pedido a propósito), el correo contado desde la barra de
+  avisos, y **enviar un archivo tuyo a otra app** por `ArchivosProvider` (sin él,
+  Android corta el `Uri` con `FileUriExposedException`). Tres permisos nuevos que la
+  dueña da a mano: cámara, calendario y aparecer encima. Se comprueba sin teléfono en
+  los **nueve sectores** de `scripts/prueba-costura.py`, y en el sector [9] cada
+  función se mira en los **cuatro** sitios donde vive: su clase, el puente, la cara y
+  el manifiesto o el backend.
 
 ## 5. Riesgos honestos
 
@@ -118,6 +148,15 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 2. **Transparencia en Linux** depende del compositor (en Wayland a veces falla) — probaremos temprano en F2.
 3. **Vosk/Whisper locales** pesan: empezamos con Web Speech API (coste cero).
 4. El orb del video es de alguien más: recrearemos el *estilo* (partículas azules + anillos + estrellas) con nuestra propia escena Three.js, no copiando el archivo.
+5. **El teléfono de verdad no está en esta máquina.** Ninguna ronda del APK se ha
+   probado con un dedo encima: lo que garantía hay es que `javac` del runner revisa
+   las firmas de la plataforma, que `aapt2` enlaza el manifiesto, que `apksigner`
+   valida la firma y que `scripts/prueba-costura.py` comprueba que las tres capas se
+   nombran igual. Quedan sin probar en un aparato real: la burbuja con
+   `SYSTEM_ALERT_WINDOW` en cada fabricante, el `<video>` del MV sobre su `content://`,
+   el cuadro de `RoleManager` en los lanzadores modificados y el `ACTION_INSERT` del
+   calendario. El primer fallo que salga en el teléfono se corregirá hacia adelante
+   (etiqueta nueva), nunca moviendo la publicada.
 
 ## 6. Decisión pendiente única
 
