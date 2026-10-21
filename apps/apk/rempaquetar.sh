@@ -20,7 +20,7 @@
 # keepAwake`) tampoco cambió, así que el Kotlin de dentro sigue entendiendo el
 # JavaScript nuevo.
 #
-# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.1)
+# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.2)
 # Salida: apps/apk/build/CORT-IA-<versión>.apk  +  build/CORT-IA-<versión>-firma.txt
 #
 # La llave: igual que `compilar.sh`. Con el secreto `CORT_APK_KEYSTORE_B64` del
@@ -35,7 +35,7 @@ set -euo pipefail
 # cayó el run 39504821879, medido por annotation.
 cd "$(dirname "$0")/../.."
 
-VERSION="${1:-1.1.1}"
+VERSION="${1:-1.1.2}"
 RAIZ="$(pwd)"
 BASE="$RAIZ/apps/apk/base/CORT-IA-1.1.0.apk"
 # `SALIDA` va absoluta **a propósito**: el trabajo se hace dentro de un

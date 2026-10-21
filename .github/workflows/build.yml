@@ -70,8 +70,8 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.2.0"       # la versión del APK experimental de Java
-      TELEFONO_VERSION: "1.1.1"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
+      APK_VERSION: "1.2.1"       # la versión del APK experimental de Java
+      TELEFONO_VERSION: "1.1.2"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
     steps:
       - uses: actions/checkout@v4
       - name: Compilar el APK de Java (aapt2 + javac + d8, sin Gradle)
@@ -151,10 +151,17 @@ jobs:
             apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}.apk
             apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}-firma.txt
           if-no-files-found: error
-      - name: Subir el APK experimental (sólo artefacto del run, no a la Release)
+      - name: Subir el APK del asistente (también va a la Release)
         uses: actions/upload-artifact@v4
         with:
-          name: apk-java-experimental
+          # Se llama `instalador-asistente` para que lo recoja el mismo
+          # `pattern: instalador-*` de abajo: así el APK del asistente aparece en
+          # la Release, con enlace de descarga directo, en vez de quedar
+          # entierrado en los artefactos del run (donde hace falta sesión de
+          # GitHub para bajarlo). `if-no-files-found: ignore` sigue siendo la red
+          # de seguridad: si el Java de esta ronda no compila, la Release sale
+          # sólo con el APK del cuerpo original y el run no se tira.
+          name: instalador-asistente
           path: apk-java/*
           if-no-files-found: ignore
 
@@ -170,26 +177,47 @@ jobs:
         with:
           path: artefactos
           merge-multiple: true
-          # `instalador-*` a propósito: el `apk-java-experimental` se queda fuera
-          # de la Release. Los dos APK comparten paquete (`com.cort.ia`), así que
-          # en la página de descargas sólo puede haber el que la dueña va a
-          # instalar; el otro se descarga de los artefactos del run si un día
-          # hace falta el experimento del asistente.
+          # `instalador-*` recoge ahora los **dos** APK del teléfono:
+          # `instalador-android` (el cuerpo original con la cara nueva) y
+          # `instalador-asistente` (el de Java, con asistente predeterminado,
+          # doble toque del auricular y lectura de avisos). Van los dos a la
+          # Release porque la dueña tiene que poder descargarlos con un clic.
+          # Compartmente aviso: los dos son `com.cort.ia`, así que en el teléfono
+          # se instala **uno** u otro, no los dos a la vez.
           pattern: instalador-*
       - uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
-            y el APK del teléfono.
+            y **dos** APK para el teléfono.
 
-            El APK (`CORT-IA-1.1.1.apk`) es **el CORT de siempre con la interfaz
-            nueva dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin,
-            su icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
+            `CORT-IA-1.1.2.apk` es **el CORT de siempre con la interfaz nueva
+            dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin, su
+            icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
             le cambia sólo `assets/ui/` por la del commit — once ventanas, con
-            10 · Modelos y 11 · Optimizar —, realinea y refirma. La firma es
-            desechable si el repo no tiene el secreto `CORT_APK_KEYSTORE_B64`, así
-            que **la primera vez hay que desinstalar** el que esté puesto.
+            10 · Modelos y 11 · Optimizar —, realinea y refirma.
+
+            `CORT-IA-1.2.1-asistente.apk` es el APK escrito en Java desde este repo
+            (`apps/apk/compilar.sh`, sin Gradle). Es el que puede ponerse como
+            **asistente predeterminado** (Ajustes ▸ Aplicación de asistencia
+            predeterminada ▸ CORT), el que obedece al **doble toque del auricular**
+            y el que **lee en voz alta los avisos** que llegan —WhatsApp, Gmail,
+            Telegram, Signal— desde la barra de notificaciones, con un oído que
+            guarda doce líneas en RAM y nunca escribe disco.
+
+            En esta ronda CORT además **te lee**: `lee mis notas`, `lee mis tareas`,
+            `lee el documento <nombre>` y `lee mis avisos`. Las notas y las
+            pendientes («tengo que …», y `listo 1` para marcarlas hechas) viven en el
+            backend del PC, así que en el teléfono hacen falta conectados por Wi-Fi
+            con `bash scripts/telefono.sh`; sin PC la cara lo avisa en voz alta.
+
+            Los dos APK comparten paquete (`com.cort.ia`): en el teléfono se instala
+            **uno u otro**, no los dos a la vez. La firma del pipeline es desechable
+            mientras el repo no tenga el secreto `CORT_APK_KEYSTORE_B64`, así que
+            **la primera vez hay que desinstalar** el que esté puesto. Cada APK lleva
+            al lado su `-firma.txt` con la huella del certificado.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
-            Instrucciones completas, incluido el modo teléfono por Wi-Fi, en el README.
+            Instrucciones completas, incluido el modo teléfono por Wi-Fi y el permiso
+            de los avisos, en el README.

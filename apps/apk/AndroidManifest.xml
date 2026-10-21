@@ -32,6 +32,14 @@
   El coste, dicho sin adornos: el «OK Google» con pantalla apagada se pierde,
   porque esa palabra la dice el servidor de Google y no viaja con este APK.
 
+  La cuarta pieza (`.Avisos`) es el **oído de las notificaciones**: lo que permite
+  decirle «lee mis mensajes» y que CORT lea en voz alta lo que llegó por WhatsApp,
+  Gmail o Telegram. No pide un permiso al instalar — es el interruptor del sistema
+  (Ajustes ▸ Notificaciones ▸ Acceso a notificaciones ▸ CORT), que la dueña da una
+  sola vez —, por eso sale como `<service>` con su `android:permission` y **no**
+  engrosa la lista de `<uses-permission>`. Lo que oye se queda en doce líneas de
+  RAM y nunca se escribe en disco: leer y olvidar.
+
   `versionCode` y `versionName` NO se escriben aquí: los pone `compilar.sh` al
   enlazar, derivados de la etiqueta de la Release.
 -->
@@ -101,6 +109,20 @@
             android:label="CORT">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+
+        <!-- El oído de los avisos. `BIND_NOTIFICATION_LISTENER_SERVICE` es lo único
+             que hace que Android mire este servicio; la acción es la que el sistema
+             busca, y el interruptor lo pone la dueña a mano en Ajustes. Sin él,
+             `Avisos.resumen` lo dice en vez de inventarse un mensaje. -->
+        <service
+            android:name=".Avisos"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true"
+            android:label="CORT">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
     </application>

@@ -33,6 +33,20 @@ RE_MUSICA = re.compile(r"^(?:reproduce|pon|ponme|toca)\s+(?:m[uú]sica|la\sm[uú
                         r"[\s\.\!]*$|^(?:reproduce|pon|ponme|toca)\s+m[uú]sica", re.I)
 RE_YOUTUBE = re.compile(r"youtube", re.I)
 
+# ── leer en voz alta: la petición de la dueña («que me lea las notas, el WhatsApp,
+#    las tareas o los documentos, como Siri») ────────────────────────────────────
+# Una sola entrada: «lee …» seguido de lo que sea. Se resuelve dentro de `_leer`,
+# que es la que sabe si habla de notas, de pendientes, de un archivo o del teléfono.
+# No se confunde con `RE_CARPETA`/`RE_ARCHIVO`, que exigen «abre|muestra|muéstrame».
+RE_LEER = re.compile(r"^(?:lee|leer|l[eé]eme|l[eé]elo|cu[eé]ntame|rec[ií]tame|recita|narra)"
+                     r"\s+(?:en\s+voz\s+alta\s+)?(?:los\s+|las\s+|el\s+|la\s+|mis\s+|mi\s+)?"
+                     r"(.+)$", re.I | re.S)
+RE_PENDIENTE = re.compile(r"^(?:tengo que|hay que|me falta|apunta (?:una )?pendiente|"
+                          r"pendiente[:\s]|anota (?:una )?pendiente)\s+(.+)", re.I | re.S)
+RE_HECHO = re.compile(r"^(?:ya (?:hice|termin[eé]|acab[eé])|marca(?:me)? como hecha|listo|"
+                      r"complet[eé]|he terminado)\s+(?:la\s+(?:tarea|pendiente|cosa)\s+)?#?(\d+)\b",
+                      re.I)
+
 # ── modelos locales (Ollama) y optimización del equipo ──────────────────────
 RE_MODELO_BAJAR = re.compile(
     r"^(?:descarga|descargar|baja|bajar|instala|instalar)\s+"
@@ -104,6 +118,30 @@ def run_command(message: str) -> dict:
 
 def _one(c: str) -> tuple[str, str] | None:
     """Una orden suelta → (nombre, mensaje) o None si no es acción."""
+    # Va ANTES que `RE_NOTA` a propósito: «apunta una pendiente …» lo capturaría
+    # primero la nota y se guardaría como texto suelto en vez de como tarea.
+    m = RE_PENDIENTE.match(c)
+    if m:
+        txt = m.group(1).strip(" .,:!")
+        if len(txt) < 3:
+            return None
+        nid = memory.add_task(txt)
+        abiertas = len(memory.list_tasks(100))
+        return "pendiente", (f"Pendiente #{nid} apuntada: «{txt[:70]}». "
+                             f"Llevas {abiertas} por hacer.")
+
+    m = RE_HECHO.match(c)
+    if m:
+        if memory.finish_task(int(m.group(1))):
+            quedan = memory.list_tasks(30)
+            return "pendiente", (f"Pendiente #{m.group(1)} marcada como hecha. "
+                                 + (f"Quedan {len(quedan)}." if quedan else "Ya no queda ninguna."))
+        return "pendiente", f"No tengo abierta la pendiente #{m.group(1)}."
+
+    m = RE_LEER.match(c)
+    if m:
+        return _leer(m.group(1).strip(" .,:!"))
+
     m = RE_NOTA.match(c)
     if m:
         txt = m.group(1).strip()
@@ -206,6 +244,79 @@ def _one(c: str) -> tuple[str, str] | None:
                 if r.get("ok") else f"Sin música: {r.get('error')}")
 
     return None
+
+
+def _leer(objetivo: str) -> tuple[str, str] | None:
+    """«lee mis notas / mis tareas / el documento X» → la frase que hay que hablar.
+
+    Devuelve `None` cuando el objetivo no es ninguna de las tres cosas, para que la
+    frase siga su camino normal al cerebro («cuéntame un chiste» no es una lectura).
+    El texto sale corto y sin adornos porque **se habla entero**: la boca de CORT es
+    `speechSynthesis` en el PC y `TextToSpeech` en el teléfono, y ninguna puede
+    saltarse un párrafo.
+    """
+    o = (objetivo or "").strip().lower()
+    if not o:
+        return None
+
+    if any(k in o for k in ("whatsapp", "mensaje", "aviso", "notificaci", "telegram",
+                            "correo", "email")):
+        return "leer", ("Los avisos del teléfono los leo desde la app de CORT, no desde el "
+                        "PC: ábrela y di «lee mis avisos». Lo que llegó se me queda en la "
+                        "cabeza mientras la app esté abierta, y no lo guardo.")
+
+    if any(k in o for k in ("pendient", "tarea", "lista", "hacer")):
+        ts = memory.list_tasks(8)
+        if not ts:
+            return "leer", ("No tengo ninguna pendiente apuntada. Di «tengo que …» y la apunto, "
+                            "y «listo 1» cuando la hayas hecho.")
+        dicho = ". ".join(f"{n}: {t['texto']}" for n, t in enumerate(ts, 1))
+        unidad = "pendiente abierta" if len(ts) == 1 else "pendientes abiertas"
+        return "leer", _recorta(f"Tienes {len(ts)} {unidad}. {dicho}.", 620)
+
+    if any(k in o for k in ("nota", "apunte", "apuntes", "recuerd")):
+        ns = memory.list_notes(50)
+        if not ns:
+            return "leer", "Aún no hay notas guardadas. Di «apunta …» y la apunto."
+        ult = ns[-6:]
+        dicho = ". ".join(f"{n['texto']} ({n['fecha'][-5:]})" for n in ult)
+        pref = (f"Tus {len(ult)} notas" if len(ult) > 1 else "Tu única nota") + ": "
+        return "leer", _recorta(pref + dicho + ".", 620)
+
+    if "carpeta" in o:
+        return None                       # «lee la carpeta X» no es una lectura: es un directorio
+    nombre = re.sub(r"^(?:documento|documentos|archivo|fichero|de\s+los?\s+)\s*", "",
+                    objetivo.strip(), flags=re.I)
+    # Sólo se interpreta como archivo si lo dice (`«lee el documento X»`) o si lleva
+    # extensión (`«lee informe.txt»`). Sin eso, «cuéntame un chiste» o «lee los
+    # modelos» terminarían en un «no encuentro el archivo» cuando lo que toca es el
+    # cerebro. La regla: si no hay candidato claro, `None` y sigue su camino.
+    es_archivo = any(k in o for k in ("documento", "archivo", "fichero")) \
+        or bool(re.search(r"\.\w{2,5}$", o))
+    if not es_archivo or len(nombre) < 2:
+        return None
+    cand = _guess_file(nombre)
+    if not cand:
+        return "leer", f"No encuentro «{nombre}» dentro de tus carpetas permitidas."
+    r = sensors.leer_texto(cand, 1400)
+    if r.get("ok"):
+        corte = "" if r["entero"] else " …se corta aquí, que es largo."
+        return "leer", (f"«{r['archivo']}», en {r['carpetas']}: {r['texto']}{corte}")
+    if r.get("abrir"):
+        # Un PDF o un .docx no se puede leer letra a letra con las herramientas que
+        # trae este proyecto. **No se abre solo**: nadie espera que pedir una lectura
+        # le levante una ventana, así que se dice el camino («abre la factura.pdf»).
+        return "leer", (f"{r['error']}. Si quieres verlo, di «abre {r['abrir'].split('/')[-1]}».")
+    return "leer", r.get("error", f"{nombre} no lo puedo leer aquí.")
+
+
+def _recorta(texto: str, tope: int) -> str:
+    """Corta por palabra, que una frase partida a media sílaba suena mal hablada."""
+    if len(texto) <= tope:
+        return texto
+    corte = texto[:tope]
+    espacio = corte.rfind(" ")
+    return (corte[:espacio] if espacio > tope * 0.6 else corte).rstrip(" ,;:.") + "…"
 
 
 def _pinta_de_modelo(nombre: str) -> bool:

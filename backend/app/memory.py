@@ -22,6 +22,10 @@ def _conn() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS notas ("
         " id INTEGER PRIMARY KEY, t REAL, texto TEXT)"
     )
+    c.execute(
+        "CREATE TABLE IF NOT EXISTS pendientes ("
+        " id INTEGER PRIMARY KEY, t REAL, texto TEXT, hecho REAL)"
+    )
     return c
 
 
@@ -71,6 +75,34 @@ def list_notes(limit: int = 50) -> list[dict]:
 def delete_note(note_id: int) -> bool:
     with _conn() as c:
         cur = c.execute("DELETE FROM notas WHERE id=?", (note_id,))
+        return cur.rowcount > 0
+
+
+# ------------------------------------------------------ pendientes (tareas)
+def add_task(texto: str) -> int:
+    with _conn() as c:
+        cur = c.execute("INSERT INTO pendientes (t, texto) VALUES (?,?)",
+                        (time.time(), texto.strip()))
+        return cur.lastrowid
+
+
+def list_tasks(limit: int = 30, hechas: bool = False) -> list[dict]:
+    """La lista por hablar: las abiertas, de la más antigua a la más nueva
+    (una tarea vieja es la que se está olvidando, no la última que apuntó)."""
+    con_orden = "hecho IS NOT NULL" if hechas else "hecho IS NULL"
+    with _conn() as c:
+        rows = c.execute(
+            f"SELECT id, t, texto FROM pendientes WHERE {con_orden} ORDER BY id DESC LIMIT ?",
+            (limit,)).fetchall()
+    import datetime as dt
+    return [{"id": i, "fecha": dt.datetime.fromtimestamp(t).strftime("%Y-%m-%d %H:%M"),
+             "texto": x} for i, t, x in rows][::-1]
+
+
+def finish_task(task_id: int) -> bool:
+    with _conn() as c:
+        cur = c.execute("UPDATE pendientes SET hecho=? WHERE id=? AND hecho IS NULL",
+                        (time.time(), task_id))
         return cur.rowcount > 0
 
 

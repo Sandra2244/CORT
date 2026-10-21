@@ -49,6 +49,12 @@ import java.util.Map;
  *    `Asistente.java` + `Sesion.java`) y el **doble toque del auricular**
  *    (`MediaSession` abajo). El primer toque sigue mandando la música: sólo el
  *    segundo, dentro de 500 ms, abre el micrófono.
+ * 4. **Qué puede leer en voz alta.** Además de lo que dice el PC, CORT lee los
+ *    **avisos que llegan al teléfono** («lee mis mensajes»): los recoge
+ *    `Avisos.java` en doce líneas de RAM, sin disco, y las habla el mismo
+ *    `TextToSpeech` del puente. El menú del botón «CORT · PC» dice si el permiso
+ *    del sistema ya está dado, que es la única parte que no se puede comprobar
+ *    desde el código.
  *
  * Sin Gradle ni AndroidX: se compila con `aapt2` + `javac` + `d8` en GitHub
  * Actions, porque el portátil de la dueña (1,8 GiB) no levanta un `gradle build`.
@@ -323,10 +329,16 @@ public class MainActivity extends Activity {
     /* ─────────────────────────── el menú del botón ─────────────────────── */
 
     private void menu() {
+        // El estado del oído se escribe en la propia fila: así la dueña ve si ya dio
+        // el interruptor del sistema antes de pulsar, sin tener que bajar la cortina
+        // a media conversación para comprobarlo.
+        String oido = Avisos.activado(this) ? "hecho" : "pendiente";
         String[] opciones = {
             "Conectar con mi PC por Wi‑Fi",
             "Cara dentro del teléfono (sin PC)",
             "Poner CORT como asistente",
+            "Leer mis avisos en voz alta (permiso: " + oido + ")",
+            "Dar el permiso de los avisos",
             "Escuchar una orden ahora",
             "Recargar la cara",
         };
@@ -337,7 +349,9 @@ public class MainActivity extends Activity {
                     case 0: pideDireccion(); break;
                     case 1: guardarPC(""); break;
                     case 2: abreAjustesDeAsistente(); break;
-                    case 3: puente.escuchaAhora(); break;
+                    case 3: puente.leeAvisos(); break;
+                    case 4: puente.abreAjustesAvisos(); break;
+                    case 5: puente.escuchaAhora(); break;
                     default: arranca(); break;
                 }
             })

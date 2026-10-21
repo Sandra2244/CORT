@@ -1004,6 +1004,37 @@ function add(cls, text, src) {
 }
 function sayLine(text) { add('a', text, 'voz'); orb.speak(2200); speakTTS(text); }
 function speakTTS(text, then) { return voice ? voice.speak(text, then) : Promise.resolve(); }
+
+/* ── leer en voz alta lo que llega al teléfono ──────────────────────────────
+   `window.CortNative.avisos(n)` (Java, `Avisos.java`) devuelve los últimos avisos
+   que el sistema mostró —WhatsApp, Gmail, Telegram— ya convertidos en una frase.
+   Se habla por `speakTTS`, la misma boca del resto de CORT, y no por un camino
+   propio: así la voz, el tono y el idioma que la dueña eligió en 07 · Perfil son
+   también los de los avisos.
+   En PC sin app de teléfono no hay notificaciones que leer, y se dice en vez de
+   quedarse callada.                                                       */
+function leeAvisos() {
+  const N = window.CortNative;
+  if (!N || typeof N.avisos !== 'function') {
+    const r = 'Los avisos del teléfono los leo en la app de CORT: necesito ver tus notificaciones.';
+    add('a', r, 'avisos'); speakTTS('Eso lo leo en la app del teléfono.'); return;
+  }
+  let d = null;
+  try { d = JSON.parse(N.avisos(3)); } catch { d = null; }
+  if (!d || !d.texto) { sayLine('No tengo ningún aviso en la cabeza.'); return; }
+  add('a', d.texto, 'avisos'); orb.speak(2200); speakTTS(d.texto);
+  term('avisos: ' + (d.total ?? 0) + (d.escuchando ? ' · oído puesto' : ' · sin permiso'), 'avisos');
+  if (!d.activado) {
+    add('a', 'Para oírlos: botón CORT · PC ▸ «Dar el permiso de los avisos» ▸ y elige CORT.', 'avisos');
+  }
+}
+function olvidaAvisos() {
+  const N = window.CortNative;
+  if (!N || typeof N.vaciarAvisos !== 'function') { sayLine('Aquí no hay avisos que olvidar.'); return; }
+  N.vaciarAvisos();
+  add('a', 'Avisos olvidados. No los guardé nunca: se van de la cabeza al cerrar la app.', 'avisos');
+  speakTTS('Olvidados.');
+}
 /* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
 const HIST = [];
 let hIdx = 0, draft = '';
@@ -1011,7 +1042,8 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   'muéstrame las notas', 'archivos recientes', 'recoge los chips', '¿qué hora es?',
   'abre youtube', 'abre el navegador', 'apunta ', 'muéstrame tu cerebro', 'qué recuerdas',
   'muéstrame los modelos', 'descarga el modelo ', 'usa el modelo ', 'enciende ollama',
-  '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché'];
+  '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché',
+  'lee mis avisos', 'lee mis notas', 'lee mis tareas', 'tengo que ', 'lee el documento '];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -1052,6 +1084,14 @@ async function send(raw) {
   }
   if (/mu[eé]strame (las )?notas|lanza (las )?notas|notas flotando/i.test(msg)) {
     add('a', 'Tomando tus notas del archivo…', 'notas'); chipNotes(); return;
+  }
+  /* leer en voz alta: los avisos del teléfono son los únicos que no viven en el PC */
+  if (/^(?:lee|leer|l[eé]eme|l[eé]elo|cu[eé]ntame|recita|narra)\b/i.test(msg)
+      && /aviso|mensaje|whatsapp|telegram|se[nñ]al|lleg|correo/i.test(msg)) {
+    setState('listo'); leeAvisos(); return;
+  }
+  if (/olvida (los )?avisos|borra lo que lleg[oó]/i.test(msg)) {
+    setState('listo'); olvidaAvisos(); return;
   }
   if (/archivos recientes|mu[eé]strame (los )?archivos|lanza (los )?archivos/i.test(msg)) {
     add('a', 'Aquí tienes lo último de Documentos…', 'archivos'); chipRecentFiles(); return;
@@ -1103,7 +1143,12 @@ async function send(raw) {
   /* todo lo demás: ACCIONES del teléfono (varias en una frase) y, si no, el cerebro */
   try {
     const r = await post('/api/command', { message: msg });
-    add('a', r.reply, r.source); orb.burst(); speakTTS(r.reply);   // ← animación de acción
+    // La cara dentro del APK, sin PC, no tiene núcleo: `MainActivity` corta el
+    // `/api/*` y responde 501 con `{"error": …}` y **sin `reply`**. Hablar un
+    // «undefined» sería enseñarle a la dueña un fallo técnico en la voz de CORT,
+    // así que la respuesta del teléfono se traduce a su propia frase.
+    const dicho = r.reply || (r.error ? String(r.error) : 'No entendí la orden.');
+    add('a', dicho, r.source || 'sistema'); orb.burst(); speakTTS(dicho);   // ← animación de acción
     if (r.source === 'offline' && !offlineHinted) { offlineHinted = true;
       add('a', 'Consejo: en 07 · Perfil → Cerebro IA pega una clave gratis de Groq o Gemini para conversar de verdad.', 'sistema'); }
     setState('hablando');

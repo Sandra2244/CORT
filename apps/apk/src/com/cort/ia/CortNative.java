@@ -405,6 +405,79 @@ public class CortNative {
         act.guardarPC(url);
     }
 
+    /* ──────────────────────────────── avisos ─────────────────────────────── */
+
+    /**
+     * Lo que la cara pregunta con «lee mis mensajes» / «qué me llegó».
+     *
+     * Devuelve JSON y **no habla**: quien habla es `speak`, así que la frase sale
+     * por la misma boca que el resto de CORT y con la voz que la dueña eligió en
+     * 07 · Perfil. `total`, `escuchando` y `activado` van dentro porque la cara
+     * necesita los tres para no prometer un aviso inventado: `activado` es el
+     * interruptor del sistema, y sin él `texto` ya dice cómo se da.
+     */
+    @JavascriptInterface
+    public String avisos(final int cuantos) {
+        int n = cuantos <= 0 ? Avisos.EN_VOZ_ALTA : Math.min(cuantos, Avisos.TOPE);
+        return "{\"texto\":" + comilla(Avisos.resumen(n))
+               + ",\"total\":" + Avisos.cuantos()
+               + ",\"escuchando\":" + Avisos.escuchando()
+               + ",\"activado\":" + Avisos.activado(act)
+               + "}";
+    }
+
+    /** Para que la cara pueda decir «olvida lo que leí». */
+    @JavascriptInterface
+    public void vaciarAvisos() {
+        Avisos.vaciar();
+    }
+
+    /**
+     * La pantalla del interruptor. La acción se nombra como **cadena literal** y se
+     * prueban dos rutas con su respaldo: el enlace exacto cambia entre fabricantes y
+     * versiones de Android, y en este repo no hay `javac` local — si una constante no
+     * existe donde dice el manual, el único que se entera es el runner, un run después.
+     */
+    @JavascriptInterface
+    public void abreAjustesAvisos() {
+        act.runOnUiThread(() -> {
+            String[] rutas = {
+                "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS",
+                "android.settings.NOTIFICATION_LISTENER_SETTINGS",
+            };
+            for (String ruta : rutas) {
+                try {
+                    act.startActivity(new Intent(ruta).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    return;
+                } catch (Exception noEstaEnEseFabricante) { /* prueba la siguiente */ }
+            }
+            try {
+                act.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                             Uri.fromParts("package", act.getPackageName(), null))
+                                      .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                act.avisa("Entra en Notificaciones y dame el acceso, o elige la app CORT a mano");
+            } catch (Exception tampocoHayAjustes) {
+                act.avisa("Ajustes ▸ Notificaciones ▸ Acceso a notificaciones ▸ CORT");
+            }
+        });
+    }
+
+    /** Habla desde Java (el menú del botón «CORT · PC»), por el mismo camino que `speak`. */
+    void diAlto(String texto) {
+        act.runOnUiThread(() -> {
+            if (ttsListo && tts != null) {
+                dice(texto, "aviso", "", 0.82, 1.0);
+                return;
+            }
+            ttsPendiente.add(new String[] { texto, "aviso", "", "0.82", "1.0" });
+        });
+    }
+
+    /** Lo llama el menú: leer los avisos en voz sin pasar por la página. */
+    void leeAvisos() {
+        diAlto(Avisos.resumen(Avisos.EN_VOZ_ALTA));
+    }
+
     /* ───────────────────────── ciclo de vida ────────────────────── */
 
     void pausa() {

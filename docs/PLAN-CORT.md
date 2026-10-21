@@ -32,7 +32,8 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 | Manos | **MediaPipe Hands** (JavaScript, corre en CPU del navegador) | Detección de 21 puntos de la mano: abrir palma = desplegar, pinza = agarrar archivo |
 | Memoria | SQLite + JSON local | Persistente entre sesiones |
 | Sensores | `psutil` (Python): batería, CPU, RAM, red; API Open-Meteo para clima | Los paneles de estado del v3/v6 |
-| Móvil | **Capacitor** al final → APK Android | La misma interfaz web empaquetada |
+| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `apksigner`) embebiendo la misma `ui/`, más la vía de **rempaquetar** el APK original de Kotlin | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila |
+| Lectura en voz alta | PC: SQLite + `sensors.leer_texto`. Teléfono: `NotificationListenerService` en RAM | No hay API de WhatsApp: la barra de notificaciones es lo que la dueña ya ve, y no deja rastro en disco |
 
 ## 3. Arquitectura
 
@@ -62,7 +63,20 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 - **F4 — Manos**: MediaPipe — palma abierta despliega paneles, pinza agarra/suelta archivos, puño = dormir.
 - **F5 — Automaata**: wake word ("Oye CORT"), memoria persistente, comandos de sistema, perfil personalizable (como el instalador del v5).
 - **F6 — Empaquetar**: `electron-builder` → instalador .exe (Windows) y .AppImage/.deb (Linux).
-- **F7 — APK**: Capacitor lleva la interfaz a Android (el orb y gestos funcionan; el backend se conecta por red local).
+- **F7 — APK**: ya no Capacitor. Salen dos APK de `apps/apk/` y los compila GitHub
+  Actions: `rempaquetar.sh` mete la cara actual dentro del cuerpo original de Kotlin
+  (`base/CORT-IA-1.1.0.apk`, sólo cambia `assets/ui/`) y `compilar.sh` escribe desde
+  cero, en Java puro sin Gradle, el APK que **sí** puede ser el asistente
+  predeterminado de Android y escuchar el doble toque del auricular. Los dos viajan
+  en la Release con su `-firma.txt`.
+- **F7b — Te lo lee en voz alta** (lo que hace una SIRI): «lee mis notas», «lee mis
+  tareas», «lee el documento recibo» y «lee mis avisos». Notas y pendientes viven en
+  SQLite (`memory.py`), los documentos se leen por la lista blanca de raíces seguras
+  (`sensors.leer_texto`, solo texto plano y tope de 400 KB), y los avisos del teléfono
+  los aporta un `NotificationListenerService` (`Avisos.java`) que mantiene doce líneas
+  en RAM y nunca escribe disco. Se comprueba sin teléfono con
+  `scripts/prueba-lectura.py` (las frases y sus respuestas) y
+  `scripts/prueba-costura.py` (manifiesto ↔ Java ↔ cara).
 
 ## 5. Riesgos honestos
 

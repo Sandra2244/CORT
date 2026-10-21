@@ -289,6 +289,52 @@ def open_path(rel: str) -> dict:
             else {"ok": False, "error": "no hay visor predeterminado (xdg-open) instalado"})
 
 
+# ── leer en voz alta: sólo texto plano, con el mismo candado de raíces ────────
+# `open_path` entrega el archivo al visor del sistema; para hablarlo hace falta el
+# **contenido**, y por la boca de CORT no cabe un `.docx` ni un `.pdf`: la lista es
+# de lo que se puede leer carácter por carácter. El tope de tamaño y el
+# `errors="replace"` están a propósito —el portátil de la dueña tiene 1,8 GiB de
+# RAM y esto corre dentro del backend—: un archivo de 200 MB no puede congelar una
+# respuesta, y un `.txt` con bytes sueltos no puede cancelar la frase.
+LEE_EXT = {".txt", ".md", ".markdown", ".log"}
+LEE_MAX_KB = 400
+
+
+def leer_texto(rel: str, max_caracteres: int = 1400) -> dict:
+    """Contenido legible en voz de un archivo de texto dentro de las raíces."""
+    parts = [p for p in (rel or "").replace("\\", "/").split("/") if p]
+    if not parts or parts[0] not in ROOTS:
+        return {"ok": False, "error": "ruta fuera de las carpetas permitidas"}
+    try:
+        f = _resolve(rel).resolve()
+        f.relative_to(ROOTS[parts[0]].resolve())
+    except (ValueError, RuntimeError, OSError):
+        return {"ok": False, "error": "ruta fuera de las carpetas permitidas"}
+    if not f.is_file():
+        return {"ok": False, "error": f"no existe: {f.name}"}
+    ext = f.suffix.lower()
+    if ext not in LEE_EXT:
+        if ext in OPEN_EXT:
+            # Se marca como «abrir» para que quien lo reciba pueda ofrecer el visor,
+            # pero aquí no se abre nada: pedir una lectura no debe levantar ventanas.
+            return {"ok": False, "error": f"{f.name} no es un texto que se pueda leer letra a letra",
+                    "abrir": rel}
+        return {"ok": False, "error": f"{f.name} no es un tipo que pueda leer"}
+    try:
+        if f.stat().st_size > LEE_MAX_KB * 1024:
+            return {"ok": False, "error": f"{f.name} es muy grande para leerlo aquí"}
+        crudo = f.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {"ok": False, "error": f"sin permiso para leer {f.name}"}
+    limpio = " ".join(crudo.split()).strip()
+    if not limpio:
+        return {"ok": False, "error": f"{f.name} está vacío"}
+    cabe = limpio[:max_caracteres]
+    return {"ok": True, "archivo": f.name, "carpetas": parts[0],
+            "texto": cabe, "entero": len(limpio) <= max_caracteres,
+            "caracteres": len(limpio)}
+
+
 def open_dir(rel: str) -> dict:
     """Abrir una carpeta en el explorador del sistema (mismas reglas de raíz)."""
     import platform
