@@ -13,8 +13,14 @@ peor, un botón que no hace nada en el teléfono de la dueña:
   2. Cada `Avisos.METODO` que usan `CortNative.java` y `MainActivity.java` existe
      de verdad en `Avisos.java` (nombre y, cuando se ve, número de argumentos).
   3. Los `@JavascriptInterface` que la cara llama (`window.CortNative.avisos`,
-     `.vaciarAvisos`) están escritos, y los que no existen no se invocan: la cara
-     se degrada con un mensaje, no con un `TypeError`.
+     `.vaciarAvisos`, `.assistantState`, `.openAssistantSettings`) están escritos, y
+     los que no existen en el cuerpo Kotlin del APK del teléfono no se invocan sin
+     su `typeof`: la cara se degrada con un mensaje, no con un `TypeError`.
+  4. El **traje de asistente**, que es lo que «no sale en la lista»: el nodo
+     `voice-interaction-service` con sus dos servicios existentes, **sin**
+     `settingsActivity` (AOSP descarta a una app que no sea del sistema si la
+     declara), el `RoleManager.ROLE_ASSISTANT` con su guard de API 29, y el
+     `pause`/`resume` que evita que el micro quede abierto en segundo plano.
 
 Uso:  python3 scripts/prueba-costura.py     (una fracción de segundo)
 """
@@ -141,6 +147,103 @@ if "typeof N.avisos !== 'function'" in cara:
     dice_ok("respaldo", "la cara pregunta si el puente sabe de avisos antes de llamarlo")
 else:
     falla("respaldo", "hud.js llama a avisos() sin comprobar: crashea en el APK del cuerpo original")
+
+# Los métodos NUEVOS del puente (asistente, música) tampoco existen en el cuerpo
+# Kotlin del APK del teléfono: cada uno tiene que ir precedido de su `typeof`.
+for met in ("openAssistantSettings", "assistantState", "vaciarAvisos"):
+    if met in expuestos and re.search(r"typeof N\." + met + r"\s*[!=]==?\s*'function'", cara):
+        dice_ok(f"respaldo {met}", "la cara pregunta antes de llamar")
+    elif met in expuestos:
+        falla(f"respaldo {met}", f"hud.js llama a {met}() sin `typeof`:TypeError en el cuerpo Kotlin")
+
+voz = (RAIZ / "ui" / "js" / "voice.js").read_text(encoding="utf-8")
+if re.search(r"typeof N\.musicPlaying\s*[!=]==?\s*'function'", voz):
+    dice_ok("respaldo musicPlaying", "voice.js pregunta si el puente sabe si hay música")
+else:
+    falla("respaldo musicPlaying", "voice.js llama a musicPlaying() sin comprobar su existencia")
+if "musicPlaying" in expuestos:
+    dice_ok("CortNative.musicPlaying()", "el puente del APK lo expone")
+else:
+    falla("CortNative.musicPlaying()", "no está marcado @JavascriptInterface: el freno de música no funciona")
+
+# ── 4 · el traje de asistente, que es lo que «no sale en la lista» ───────────
+print("\n[4] res/xml/asistente.xml ↔ RoleManager ↔ pausa/reanuda")
+ASIS = (APK / "res" / "xml" / "asistente.xml").read_text(encoding="utf-8")
+try:
+    ET.fromstring(ASIS)
+    dice_ok("es XML", "el sistema lo puede parsear")
+except ET.ParseError as e:
+    falla("es XML", f"Android descartaría al asistente — {e}")
+
+nodo = re.search(r"<voice-interaction-service[^>]*>", ASIS, flags=re.S)
+if not nodo:
+    falla("nodo", "no hay <voice-interaction-service>: sin esto CORT no aparece NUNCA")
+else:
+    atrib = dict(re.findall(r'(\w+)\s*=\s*"([^"]+)"', nodo.group(0)))
+    for key in ("sessionService", "recognitionService"):
+        valor = atrib.get(key)
+        if not valor:
+            falla(key, "el parser de AOSP exige el atributo y se queda sin asistente")
+            continue
+        archivo = APK / "src" / (valor.replace("com.cort.ia.", "").replace(".", "/") + ".java")
+        if not archivo.exists() and not (APK / "src" / "com" / "cort" / "ia" / (valor.split(".")[-1] + ".java")).exists():
+            falla(key, f"apunta a {valor}, que no existe como archivo Java")
+        else:
+            dice_ok(key, valor.split(".")[-1] + ".java")
+    # LA REGLA QUE CUESTA APARECER: `VoiceInteractionServiceInfo` rechaza una
+    # `settingsActivity` que no sea de una app del sistema (`FLAG_SYSTEM`), y una
+    # APK instalada a mano nunca lo es. Con el atributo puesto, CORT desaparece de
+    # la lista de asistentes **sin ningún aviso en pantalla**. Se mira el **nodo**,
+    # no el archivo entero: la prosa que explica la regla también nombra el atributo.
+    if atrib.get("settingsActivity"):
+        falla("settingsActivity",
+              f"declarada ({atrib['settingsActivity']}) en el nodo: para una APK "
+              "sideloaded Android tira el parseo y CORT no sale en la lista de asistentes")
+    else:
+        dice_ok("settingsActivity", "ausente a propósito; los ajustes se piden por RoleManager")
+
+main = vecinos["MainActivity.java"]
+if "ROLE_ASSISTANT" in main and "createRequestRoleIntent" in main:
+    dice_ok("RoleManager", "el botón pide el rol de asistente (API 29+)")
+else:
+    falla("RoleManager", "MainActivity no usa createRequestRoleIntent(ROLE_ASSISTANT): "
+                         "el diálogo moderno de Android no se abre")
+if "SDK_INT >= 29" in main:
+    dice_ok("SDK_INT", "comprobada la versión antes de tocar RoleManager (minSdk 26)")
+else:
+    falla("SDK_INT", "falta el guard de API 29: el puente reventaría en Android 8/9")
+
+puente_txt = re.sub(r"/\*.*?\*/", "", puente).replace('\\"', '"')
+# El micro en segundo plano: Java cierra el reconocedor, pero la cara sólo deja de
+# reabrirlo si recibe el aviso. Sin `pause` el teléfono se queda con el micro
+# abierto en bucle detrás de la app —el «traba» que la dueña nota al optimizar o
+# al escuchar música.
+if '{"type":"pause"}' in puente_txt and "cuadro" in puente_txt.split("void pausa")[1][:200]:
+    dice_ok("pausa()", "avisa a la cara antes de cerrar el reconocedor")
+else:
+    falla("pausa()", "no emite el evento `pause`: voice.js reabre el micro en segundo plano")
+if '{"type":"resume"}' in puente_txt and "void reanuda" in puente_txt:
+    dice_ok("reanuda()", "devuelve el oído al volver la app al frente")
+else:
+    falla("reanuda()", "falta el método que manda `resume`: CORT se queda muda al volver")
+if "puente.reanuda()" in main:
+    dice_ok("onResume", "MainActivity avisa al puente cuando la cara vuelve")
+else:
+    falla("onResume", "nadie llama a reanuda(): el oído no vuelve nunca")
+
+for patron, etiqueta in ((r"case 'pause'", "pause"), (r"case 'resume'", "resume")):
+    if re.search(patron, voz):
+        dice_ok(f"voice.js {etiqueta}", "el evento tiene su rama")
+    else:
+        falla(f"voice.js {etiqueta}", "Java manda el evento y la cara lo ignora")
+if "motivoFreno" in voz and "enPausa" in voz:
+    dice_ok("freno del oído", "la escucha no se rearma con la app parada o con música")
+else:
+    falla("freno del oído", "voice.js no comprueba el freno antes de reabrir el micro")
+if re.search(r"scheduleWake\([^)]*\)\s*;\s*\n\s*return", voz) or "if (motivoFreno())" in voz:
+    dice_ok("retroceso", "con el freno puesto se reintenta suave en vez de abrir el micro")
+else:
+    falla("retroceso", "scheduleWake no respeta el freno")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

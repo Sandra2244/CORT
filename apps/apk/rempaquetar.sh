@@ -20,7 +20,7 @@
 # keepAwake`) tampoco cambió, así que el Kotlin de dentro sigue entendiendo el
 # JavaScript nuevo.
 #
-# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.3)
+# Uso:   rempaquetar.sh [versión-salida]     (por defecto 1.1.4)
 # Salida: apps/apk/build/CORT-IA-<versión>.apk  +  build/CORT-IA-<versión>-firma.txt
 #
 # La llave: la de `apps/apk/llave.sh` — secreto `CORT_APK_KEYSTORE_B64` si existe,
@@ -36,7 +36,7 @@ set -euo pipefail
 # cayó el run 39504821879, medido por annotation.
 cd "$(dirname "$0")/../.."
 
-VERSION="${1:-1.1.3}"
+VERSION="${1:-1.1.4}"
 RAIZ="$(pwd)"
 # La llave de firma la comparte con `compilar.sh`: la misma en todas las Releases
 # para que actualizar no obligue a desinstalar (y con eso no se borren el permiso

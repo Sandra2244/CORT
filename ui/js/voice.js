@@ -16,15 +16,51 @@ export function createVoice(h = {}) {
   let mode = 'idle';            // idle | cmd | wake
   let wakeOn = false, speaking = false, wakeTimer = 0, backoff = 400;
   let afterSpeak = null;        // acción pendiente al terminar de hablar
+  let enPausa = false;          // la app está en segundo plano: micro cerrado
+  let intentos = 0;             // siestas del «Oye CORT» en las que nadie habló
+  let ultimoHabla = 0;          // milisegundos del último `tts-end` (ver `hayMusica`)
+  const frenos = new Set();     // motivos que no dejan rearmar el micro
   const waiters = new Map();
   let seq = 0;
 
-  const emitState = () => h.onState && h.onState(mode, { wakeOn, speaking });
+  const emitState = () => h.onState && h.onState(mode, { wakeOn, speaking, freno: motivoFreno() });
+
+  function motivoFreno() {
+    if (enPausa) return 'en segundo plano';
+    if (frenos.size) return [...frenos][0];
+    if (typeof document !== 'undefined' && document.hidden) return 'pantalla apagada';
+    if (hayMusica()) return 'música sonando';
+    return '';
+  }
+
+  /** Si suena música en el aparato, el micro NO se rearma: en Android abrir el
+      micrófono baja el volumen de lo demás (y en un teléfono de gama media lo
+      traba). Es el motivo por el que CORT se calla el oído mientras escuchas.
+
+      El margen de 1,5 s es lo que evita el efecto contrario: el `TextToSpeech` de
+      Android también hace que `isMusicActive()` diga «sí», así que sin margen
+      CORT se quedaría sin oído justo después de contestarte. */
+  function hayMusica() {
+    if (!N || typeof N.musicPlaying !== 'function') return false;   // app vieja / PC
+    if (Date.now() - ultimoHabla < 1500) return false;               // era CORT hablando
+    try { return !!N.musicPlaying(); } catch { return false; }
+  }
+
+  /** El micro en bucle cerrado es lo que consume un teléfono: si tras varias
+      escucha nadie ha dicho «Oye CORT», se españa mucho más. */
+  function retroceso() {
+    const ESCALERA = [400, 1200, 2500, 5000, 10000];
+    backoff = ESCALERA[Math.min(intentos, ESCALERA.length - 1)];
+  }
 
   function scheduleWake(ms = backoff) {
     clearTimeout(wakeTimer);
     if (!wakeOn || speaking || mode !== 'idle') return;
-    wakeTimer = setTimeout(() => { if (wakeOn && !speaking && mode === 'idle') startSession('wake'); }, ms);
+    if (motivoFreno()) {                     // no hay micro que valga: se reintenta suave
+      wakeTimer = setTimeout(() => scheduleWake(2000), 2000);
+      return;
+    }
+    wakeTimer = setTimeout(() => { if (wakeOn && !speaking && mode === 'idle' && !motivoFreno()) startSession('wake'); }, ms);
   }
 
   /* ------------------------------ eventos ------------------------------ */
@@ -33,7 +69,8 @@ export function createVoice(h = {}) {
     if (m === 'cmd') { h.onFinal && h.onFinal(text); return; }
     if (m === 'wake') {
       const cand = [text, ...(alts || [])].find(t => WAKE_ONLY.test(t) || WAKE.test(t) && /oye|hey|ok/i.test(t));
-      if (!cand) return;
+      if (!cand) { intentos++; retroceso(); return; }   // nadie llamó: más siesta
+      intentos = 0; retroceso();
       const rest = cand.replace(WAKE, ' ').replace(/\s+/g, ' ').trim();
       h.onWake && h.onWake(rest, cand);
     }
@@ -50,12 +87,15 @@ export function createVoice(h = {}) {
         if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
           wakeOn = false; h.onError && h.onError(ev.error);
         } else if (ev.error === 'network') { backoff = Math.min(8000, backoff * 2); h.onError && h.onError('network'); }
+        else if (ev.error === 'busy') { intentos += 2; retroceso(); }  // el micro lo tiene otro
+        else if (mode === 'wake' && (ev.error === 'no-speech' || ev.error === 'abort')) { intentos++; retroceso(); }
         else if (mode === 'cmd' && ev.error === 'no-speech') h.onError && h.onError('no-speech');
         break;
       case 'stt-end':
         mode = 'idle'; emitState(); scheduleWake(); break;
       case 'tts-start': h.onSpeak && h.onSpeak(true); break;
       case 'tts-end': {
+        ultimoHabla = Date.now();
         const w = waiters.get(ev.id); waiters.delete(ev.id);
         if (!waiters.size) { speaking = false; h.onSpeak && h.onSpeak(false); }
         w && w();
@@ -67,8 +107,12 @@ export function createVoice(h = {}) {
         break;
       }
       case 'perm': h.onPermission && h.onPermission(ev.kind, ev.granted); break;
-      case 'pause': cancel(); break;
-      case 'resume': scheduleWake(600); break;
+      // `pause` y `resume` los manda el Java del APK (`CortNative.pausa()` y
+      // `reanuda()`) cuando la app se va a segundo plano. Sin `enPausa`, el temporizador
+      // de «Oye CORT» reabría el micrófono cuatrocientos milisegundos después de
+      // cerrarlo la actividad: así es como el teléfono se quedaba trabado.
+      case 'pause': enPausa = true; cancel(); break;
+      case 'resume': enPausa = false; intentos = 0; retroceso(); scheduleWake(600); break;
     }
   }
 
@@ -137,14 +181,32 @@ export function createVoice(h = {}) {
       if (mode === 'cmd') { if (N) N.stopListening(); else web.stop(); return; }
       if (speaking) this.stopSpeaking();
       if (mode === 'wake') { mode = 'switching'; if (N) N.cancelListening(); else web.cancel(); }
+      intentos = 0; retroceso();               // ella ha pulsado: se le hace caso ya
       setTimeout(() => startSession('cmd'), mode === 'switching' ? 250 : 0);
     },
     /** escucha permanente «Oye CORT» */
     setWake(on) {
       wakeOn = !!on;
-      if (wakeOn) { backoff = 400; scheduleWake(50); } else if (mode === 'wake') cancel();
+      if (wakeOn) { intentos = 0; retroceso(); scheduleWake(50); } else if (mode === 'wake') cancel();
       emitState();
     },
+    /**
+     * Freno del oído mientras se hace otra cosa cara. `motivo` es para que la
+     * lámpara pueda decir POR QUÉ CORT no escucha (en el teléfono el micrófono
+     * abierto en segundo plano es lo que traba el aparato y lo que baja la
+     * música), y como es un conjunto admiten solaparse: «optimizando» y «música».
+     */
+    suspender(motivo = 'ocupada') {
+      frenos.add(motivo);
+      if (mode === 'wake') cancel();
+      emitState();
+    },
+    reanudar(motivo = 'ocupada') {
+      frenos.delete(motivo);
+      if (!frenos.size && wakeOn && mode === 'idle') scheduleWake(400);
+      emitState();
+    },
+    get freno() { return motivoFreno(); },
     /** Hablar. Devuelve una promesa que se cumple al terminar. */
     speak(text, then) {
       const t = String(text || '').replace(/[*_#`>]+/g, '').replace(/https?:\/\/\S+/g, 'el enlace').trim();

@@ -17,10 +17,27 @@
 
   Los tres nombres tienen que seguir existiendo como archivos Java del paquete
   `com.cort.ia`: `Sesiones.java`, `Reconocimiento.java` y `MainActivity.java`.
+
+  **Por qué NO lleva `settingsActivity`.** En AOSP
+  (`VoiceInteractionServiceInfo.java`, rama `mReadOnly...`) el parser hace:
+
+      if (settingsComponent != null && !systemApp) { parse error }
+
+  Es decir: si el nodo declara una actividad de ajustes que no es de una app del
+  sistema (`FLAG_SYSTEM`), el XML entero se rechaza, `VoiceInteractionServiceInfo`
+  queda mal formado y **CORT desaparece de Ajustes ▸ Aplicación de asistencia
+  predeterminada sin avisar**. Una APK instalada a mano (sideload) nunca lleva
+  `FLAG_SYSTEM`, así que declarar ese atributo no da un botón de ajustes: cuesta
+  que la app no se ofrezca como asistente. Es el rojo que produce «no me sale en
+  el asistente de Google».
+
+  Los ajustes se siguen ofreciendo igual, pero por el camino moderno y supported:
+  `MainActivity.abreAjustesDeAsistente()` pide el rol con
+  `RoleManager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)` (API 29+), que
+  es la pantalla legítima de Android para «pon CORT como asistente».
 -->
 <voice-interaction-service
     sessionService="com.cort.ia.Sesiones"
     recognitionService="com.cort.ia.Reconocimiento"
-    settingsActivity="com.cort.ia.MainActivity"
     supportsAssist="true"
     supportsLaunchVoiceAssistFromKeyguard="true" />

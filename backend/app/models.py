@@ -24,7 +24,12 @@ import psutil
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 PULLS: dict[str, dict] = {}          # nombre -> progreso
+_CANCELADOS: set[str] = set()        # nombres que la dueña cortó a media bajada
 _CANDADO = threading.Lock()
+# Un solo `ollama pull` a la vez. Sin esto, dos descargas simultáneas se comen el
+# ancho de banda y, sobre todo, la RAM del equipo: en 1,8 GB el segundo modelo
+# llega a la vez que el primero y Ollama se queda sin memoria a media bajada.
+_FILA_PULL = threading.Semaphore(1)
 
 # Peso ≈ bytes descargados y RAM ≈ la que necesita para correr con soltura.
 # Los números son los que anuncia Ollama para estos tags (redondeados).
@@ -135,9 +140,13 @@ def en_disco() -> dict[str, dict]:
     return salida
 
 
-def instalados() -> dict[str, dict]:
-    """Modelos que ya están en el disco, con su peso real."""
-    if corriendo():
+def instalados(dado: bool | None = None) -> dict[str, dict]:
+    """Modelos que ya están en el disco, con su peso real.
+
+    `dado` permite pasar por escrito si Ollama está encendido, para no volver a
+    preguntarle por red dentro de una misma llamada a `/api/models`."""
+    encendido = corriendo() if dado is None else dado
+    if encendido:
         import requests
         try:
             datos = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3).json()
@@ -171,7 +180,9 @@ def uso_disco_gb() -> float:
 
 def estado_completo() -> dict:
     """Catálogo + qué hay descargado + el veredicto de cada uno."""
-    tengo = instalados()
+    hay_binario = bool(binario())
+    encendido = corriendo() if hay_binario else False
+    tengo = instalados(encendido)
     activo = ""
     try:
         import config_store
@@ -197,13 +208,13 @@ def estado_completo() -> dict:
                             "activo": nombre == activo,
                             **veredicto({"ram": est})})
     aviso = ""
-    if not binario():
+    if not hay_binario:
         aviso = ("Ollama no está instalado: bájalo de https://ollama.com/download "
                  "(solo tiene sentido en equipos con 8 GB o más de RAM)")
-    elif not corriendo():
+    elif not encendido:
         aviso = ("Ollama está apagado: los pesos se leen del disco. Al pulsar ↓ descargar "
                  "lo enciendo solo, y puedes apagarlo para devolver memoria.")
-    return {"instalado": bool(binario()), "corriendo": corriendo(),
+    return {"instalado": hay_binario, "corriendo": encendido,
             "binario": binario() or "", "ram_equipo": ram_total_gb(),
             "ram_libre_gb": round(psutil.virtual_memory().available / 1e9, 2),
             "activo": activo, "modelos": modelos, "aviso": aviso,
@@ -257,33 +268,117 @@ def detener_servidor() -> dict:
 
 
 def descargar(nombre: str) -> dict:
-    """Lanza `ollama pull nombre` en un hilo y devuelve al instante."""
+    """Apunta la descarga y devuelve **al instante**.
+
+    El arreglo de «no me deja descargar modelos de una vez»: antes esta función
+    llamaba a `arrancar_servidor()` dentro de la petición HTTP, y como Ollama
+    estaba apagado la dueña pulsaba «↓ descargar» y el botón no hacía nada visible
+    durante diez segundos (a veces más, y con el holograma congelado). Ahora el
+    POST responde en milímetros de segundo, la fila de descargas se ve en la
+    ventana 10 con su estado —`en cola`, `encendiendo`, `descargando`— y el hilo
+    se ocupa de encender Ollama si hace falta.
+
+    Se pueden apuntar varios a la vez: se van bajando **uno detrás de otro**
+    (`_FILA_PULL`), porque dos descargas simultáneas en 1,8 GB de RAM revientan la
+    primera a medias. Cada uno conserva su propia barra y su puesto en la fila.
+    """
     if not binario():
-        return {"ok": False, "error": "no hay ollama instalado"}
+        return {"ok": False,
+                "error": "no hay ollama instalado en este equipo",
+                "detalle": "bájalo de https://ollama.com/download (con 1,8 GB de RAM "
+                           "solo merece un modelo de menos de 0,6 GB)"}
     nombre = (nombre or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9._:/@-]{2,64}", nombre):
         return {"ok": False, "error": "nombre de modelo no válido"}
     with _CANDADO:
         previo = PULLS.get(nombre)
-        if previo and previo.get("estado") == "descargando":
-            return {"ok": True, "detalle": "ya se estaba descargando", "modelo": nombre}
-        PULLS[nombre] = {"estado": "descargando", "pct": 0, "detalle": "conectando…",
-                         "empezó": time.time(), "error": ""}
-    if not corriendo():
-        arrancar_servidor()
+        if previo and previo.get("estado") in ("descargando", "en cola", "encendiendo"):
+            return {"ok": True, "detalle": "ya estaba en la fila", "modelo": nombre,
+                    "estado": previo["estado"]}
+        _CANCELADOS.discard(nombre)
+        PULLS[nombre] = {"estado": "en cola", "pct": 0, "mb": 0, "mb_total": 0,
+                         "vel": 0, "detalle": "en la fila", "empezó": time.time(),
+                         "error": ""}
+        # Puesto real: se bajan de uno en uno, así que va delante de quien ya
+        # esté bajando y de quien esté esperando como él.
+        puesto = 1 + sum(1 for k, v in PULLS.items()
+                         if k != nombre
+                         and v.get("estado") in ("descargando", "encendiendo", "en cola"))
+        if puesto > 1:
+            PULLS[nombre]["detalle"] = f"en la fila, detrás de {puesto - 1}"
     threading.Thread(target=_jalar, args=(nombre,), daemon=True).start()
-    return {"ok": True, "modelo": nombre, "detalle": "descarga lanzada"}
+    return {"ok": True, "modelo": nombre, "puesto": puesto,
+            "detalle": "descarga apuntada" if puesto == 1 else f"en la fila ({puesto})"}
+
+
+def cancelar(nombre: str) -> dict:
+    """Corta una descarga en curso o la quita de la fila."""
+    nombre = (nombre or "").strip()
+    with _CANDADO:
+        if nombre not in PULLS:
+            return {"ok": False, "error": "ese modelo no se estaba bajando"}
+        _CANCELADOS.add(nombre)
+        PULLS[nombre]["estado"] = "cancelando"
+        PULLS[nombre]["detalle"] = "cortando…"
+    return {"ok": True, "modelo": nombre, "detalle": f"cancelando {nombre}"}
+
+
+# El progreso real de Ollama viene por capas (`digest`); se suman todas para que
+# la barra no salte de 100 % de una capa a 0 % de la siguiente.
+def _cortada(nombre: str) -> bool:
+    """¿La dueña canceló este modelo? Si sí, lo quita de la fila y responde True."""
+    with _CANDADO:
+        if nombre in _CANCELADOS or (PULLS.get(nombre) or {}).get("estado") in \
+                ("cancelando", "cancelado"):
+            _CANCELADOS.discard(nombre)
+            PULLS.pop(nombre, None)
+            return True
+    return False
 
 
 def _jalar(nombre: str) -> None:
+    """Espera su turno y luego baja. Con la fila vacía arranca al instante.
+
+    La comprobación se repite **después** de coger el turno: si canceló mientras
+    esperaba y el semáforo se libera justo en ese instante, el bucle no llega a
+    pasar por arriba y el modelo se bajaría igual.
+    """
+    while not _FILA_PULL.acquire(timeout=0.5):
+        if _cortada(nombre):
+            return
+        _marca(nombre, "en cola", detalle="en la fila: espera su turno")
+    try:
+        if _cortada(nombre):
+            return
+        _bajar(nombre)
+    finally:
+        _FILA_PULL.release()
+
+
+def _bajar(nombre: str) -> None:
     import requests
+    if not corriendo():
+        _marca(nombre, "encendiendo", detalle="despertando Ollama…")
+        r = arrancar_servidor()
+        if not r.get("ok"):
+            _marca(nombre, "error",
+                   error="Ollama no arrancó: " + (r.get("error") or "sin respuesta"))
+            return
+    # En cuanto tiene el turno deja de estar «en cola», aunque tarden los
+    # primeros bytes: si no, el puesto de los siguientes se calcula mal.
+    _marca(nombre, "descargando", detalle="conectando con Ollama…")
+    capas: dict[str, list[float]] = {}
     try:
         with requests.post(f"{OLLAMA_URL}/api/pull", json={"model": nombre, "stream": True},
-                           stream=True, timeout=None) as r:
+                           stream=True, timeout=(10, None)) as r:
             if r.status_code != 200:
                 _marca(nombre, "error", error=f"Ollama respondió {r.status_code}")
                 return
             for linea in r.iter_lines():
+                if nombre in _CANCELADOS:
+                    _CANCELADOS.discard(nombre)
+                    _marca(nombre, "cancelado", detalle="cancelada por ti")
+                    return
                 if not linea:
                     continue
                 try:
@@ -291,25 +386,31 @@ def _jalar(nombre: str) -> None:
                 except Exception:
                     continue
                 est = (d.get("status") or "").lower()
-                pct = d.get("completed")
-                tot = d.get("total")
-                if pct is not None and tot:
-                    _marca(nombre, "descargando", pct=round(pct / tot * 100, 1),
-                           detalle=est or "descargando")
-                elif "success" in est or d.get("done"):
-                    _marca(nombre, "listo", pct=100, detalle="en el disco")
+                if "error" in d:
+                    _marca(nombre, "error", error=str(d["error"])[:180])
                     return
+                dig, tot, done = d.get("digest"), d.get("total"), d.get("completed")
+                if dig and tot:
+                    capas[dig] = [float(done or 0), float(tot)]
+                hecha = sum(v[0] for v in capas.values())
+                total = sum(v[1] for v in capas.values())
+                if total:
+                    mb, mbt, pct = hecha / 1e6, total / 1e6, round(hecha / total * 100, 1)
+                    _marca(nombre, "descargando", pct=pct, mb=round(mb, 1),
+                           mb_total=round(mbt, 1),
+                           detalle=f"{est or 'bajando'} · {mb:.0f} de {mbt:.0f} MB")
                 else:
                     _marca(nombre, "descargando", detalle=est or "…")
-        _marca(nombre, "listo", pct=100, detalle="terminado")
+        _marca(nombre, "listo", pct=100, detalle="en el disco")
     except Exception as e:
         _marca(nombre, "error", error=f"{type(e).__name__}: {e}")
 
 
-def _marca(nombre: str, estado: str, pct: float | None = None,
-           detalle: str = "", error: str = "") -> None:
+def _marca(nombre: str, estado: str, pct: float | None = None, detalle: str = "",
+           error: str = "", mb: float | None = None, mb_total: float | None = None) -> None:
     with _CANDADO:
         p = PULLS.setdefault(nombre, {"empezó": time.time()})
+        ahora = time.time()
         p["estado"] = estado
         if pct is not None:
             p["pct"] = pct
@@ -317,12 +418,28 @@ def _marca(nombre: str, estado: str, pct: float | None = None,
             p["detalle"] = detalle
         if error:
             p["error"] = error
-        p["ahora"] = time.time()
+        if mb is not None:
+            p["mb"] = mb
+        if mb_total is not None:
+            p["mb_total"] = mb_total
+        if mb is not None:
+            # Velocidad MEDIA desde que empezó la bajada, no instantánea: con dos
+            # núcleos un pico por línea haría que el número saltara cada segundo.
+            p["vel"] = round(mb / max(1.0, ahora - p.get("empezó", ahora)), 2)
+        p["ahora"] = ahora
 
 
 def progreso() -> dict:
     with _CANDADO:
-        return {k: dict(v) for k, v in PULLS.items()}
+        copia = {k: dict(v) for k, v in PULLS.items()}
+    # limpieza: lo que ya terminó hace media hora deja de ocupar la ventana
+    corte = time.time() - 1800
+    with _CANDADO:
+        for k in [k for k, v in PULLS.items()
+                  if v.get("estado") in ("listo", "error", "cancelado")
+                  and v.get("ahora", 0) < corte]:
+            PULLS.pop(k, None)
+    return copia
 
 
 def borrar(nombre: str) -> dict:

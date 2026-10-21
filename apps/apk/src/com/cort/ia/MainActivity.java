@@ -64,6 +64,9 @@ public class MainActivity extends Activity {
     /** La bandera que mandan `Sesion.java` y `Reconocimiento.java` al invocar a CORT. */
     public static final String PIDE_ESCUCHAR = "cort.escuchar";
 
+    /** El código con el que se pide el rol de asistente a `RoleManager` (API 29+). */
+    private static final int PETICION_ROL = 42;
+
     static final String ORIGEN = "https://cort.local";
     static final String INDICE = ORIGEN + "/index.html";
     /** La carpeta de la interfaz dentro de los assets del APK. */
@@ -160,6 +163,9 @@ public class MainActivity extends Activity {
         direccionPC = prefs().getString("pc", "");
         if (web.getUrl() == null) arranca();
         if (mandos != null) mandos.setActive(true);
+        // El oído vuelve: `pausa()` cerró el micrófono al irse a segundo plano y
+        // sin este aviso la interfaz quedaría para siempre con «escucha en pausa».
+        if (puente != null) puente.reanuda();
     }
 
     @Override
@@ -336,7 +342,7 @@ public class MainActivity extends Activity {
         String[] opciones = {
             "Conectar con mi PC por Wi‑Fi",
             "Cara dentro del teléfono (sin PC)",
-            "Poner CORT como asistente",
+            "Poner CORT como asistente (" + estadoAsistente() + ")",
             "Leer mis avisos en voz alta (permiso: " + oido + ")",
             "Dar el permiso de los avisos",
             "Escuchar una orden ahora",
@@ -385,10 +391,42 @@ public class MainActivity extends Activity {
         arranca();
     }
 
+    /**
+     * «Poner CORT como asistente», por el camino que SÍ funciona con una app
+     * instalada a mano.
+     *
+     * El orden importa:
+     *
+     * 1. **`RoleManager.ROLE_ASSISTANT`** (Android 10, API 29+). Es la petición
+     *    oficial del rol: Android muestra su propio cuadro «¿Quieres que CORT sea
+     *    tu asistente?» y, al aceptar, CORT queda elegido **sin tocar los
+     *    Ajustes**. Antes de esto el botón abría una pantalla genérica y la dueña
+     *    no veía a CORT por ningún lado.
+     * 2. Las dos pantallas de Ajustes de siempre, como respaldo para Android 8 y
+     *    9 (el `minSdk` es 26) y para los fabricantes que recortan el diálogo del rol.
+     * 3. Decir el camino a mano si tampoco existe la pantalla.
+     *
+     * Y una cosa que se arregló **fuera** de este archivo: `res/xml/asistente.xml`
+     * declaraba `settingsActivity="com.cort.ia.MainActivity"`. En AOSP
+     * (`VoiceInteractionServiceInfo`) una `settingsActivity` que no pertenezca a
+     * una app del sistema (`FLAG_SYSTEM`) hace que el parseo falle y la app
+     * **desaparezca de la lista de asistentes**. Una APK instalada por Wi‑Fi nunca
+     * es del sistema: ese atributo, que parecía un detalle, era el motivo de «no
+     * me sale CORT como asistente». Ahora el acceso a los ajustes lo da este
+     * método por RoleManager, que es la API pública y no cuesta aparecer.
+     */
     void abreAjustesDeAsistente() {
-        // Android no tiene una sola pantalla para esto y el nombre cambia entre
-        // marcas: se prueban las dos rutas públicas y, si ninguna existe, se dice
-        // el camino a mano en vez de quedarse con un botón que no hizo nada.
+        if (android.os.Build.VERSION.SDK_INT >= 29) {
+            try {
+                android.app.role.RoleManager roles = getRoles();
+                if (roles != null && roles.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT)) {
+                    startActivityForResult(
+                        roles.createRequestRoleIntent(
+                            android.app.role.RoleManager.ROLE_ASSISTANT), PETICION_ROL);
+                    return;
+                }
+            } catch (Exception eseFabricanteNoOfreceElRol) { /* baja a las pantallas de siempre */ }
+        }
         try {
             startActivity(new Intent("android.settings.ASSISTANT_SETTINGS"));
             return;
@@ -399,6 +437,39 @@ public class MainActivity extends Activity {
         } catch (Exception dos) {
             avisa("Elige CORT en Ajustes ▸ Aplicaciones ▸ Aplicación de asistencia predeterminada");
         }
+    }
+
+    /** El `RoleManager` del aparato, o `null` si el sistema no lo presta (API < 29). */
+    private android.app.role.RoleManager getRoles() {
+        if (android.os.Build.VERSION.SDK_INT < 29) return null;
+        Object servicio = getSystemService(ROLE_SERVICE);
+        return servicio instanceof android.app.role.RoleManager
+            ? (android.app.role.RoleManager) servicio : null;
+    }
+
+    /** Estado del rol para escribirlo en el menú: la dueña ve si ya es asistente. */
+    private String estadoAsistente() {
+        android.app.role.RoleManager roles = getRoles();
+        if (roles == null) return "a mano (Android 8/9)";
+        try {
+            if (roles.isRoleHeld(android.app.role.RoleManager.ROLE_ASSISTANT)) return "ya elegido";
+            return roles.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT)
+                ? "pendiente" : "bloqueado por el fabricante";
+        } catch (Exception elFabricanteMiente) {
+            return "sin forma de comprobarlo";
+        }
+    }
+
+    /**
+     * Resultado del cuadro de RoleManager. Android no dice «aceptado» con un
+     * código fiable en todos los fabricantes, así que se comprueba el rol de
+     * nuevo: es la única respuesta honesta que podemos dar.
+     */
+    @Override
+    protected void onActivityResult(int codigo, int resultado, Intent datos) {
+        super.onActivityResult(codigo, resultado, datos);
+        if (codigo != PETICION_ROL) return;
+        avisa("CORT como asistente: " + estadoAsistente());
     }
 
     private static String aseguraSlash(String url) {

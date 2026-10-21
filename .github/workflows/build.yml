@@ -70,8 +70,8 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.2.2"       # la versión del APK experimental de Java
-      TELEFONO_VERSION: "1.1.3"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
+      APK_VERSION: "1.2.3"       # la versión del APK experimental de Java
+      TELEFONO_VERSION: "1.1.4"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
     steps:
       - uses: actions/checkout@v4
       # -- La misma llave de firma en todas las Releases ----------------------
@@ -211,19 +211,33 @@ jobs:
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
             y **dos** APK para el teléfono.
 
-            `CORT-IA-1.1.3.apk` es **el CORT de siempre con la interfaz nueva
+            `CORT-IA-1.1.4.apk` es **el CORT de siempre con la interfaz nueva
             dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin, su
             icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
             le cambia sólo `assets/ui/` por la del commit — once ventanas, con
             10 · Modelos y 11 · Optimizar —, realinea y refirma.
 
-            `CORT-IA-1.2.2-asistente.apk` es el APK escrito en Java desde este repo
+            `CORT-IA-1.2.3-asistente.apk` es el APK escrito en Java desde este repo
             (`apps/apk/compilar.sh`, sin Gradle). Es el que puede ponerse como
             **asistente predeterminado** (Ajustes ▸ Aplicación de asistencia
             predeterminada ▸ CORT), el que obedece al **doble toque del auricular**
             y el que **lee en voz alta los avisos** que llegan —WhatsApp, Gmail,
             Telegram, Signal— desde la barra de notificaciones, con un oído que
             guarda doce líneas en RAM y nunca escribe disco.
+
+            **Ahora sí aparece en la lista de asistentes.** Dos arreglos dentro del
+            APK del asistente: `res/xml/asistente.xml` declaraba una
+            `settingsActivity`, y Android descarta al asistente cuya pantalla de
+            ajustes no pertenezca a una app del sistema —una APK instalada a mano
+            nunca lo es—, así que CORT desaparecía de la lista sin avisar; y el
+            botón «Poner CORT como asistente» pide ahora el **rol** oficial
+            (`RoleManager`, Android 10+), que es el cuadro que de verdad te elige.
+            Se puede decir por voz: `pon CORT como asistente`.
+
+            **Y ya no traba el teléfono.** El micrófono de «Oye CORT» se cierra al
+            pasar a segundo plano, al apagarse la pantalla, mientras suena música y
+            mientras la ventana 11 está contando caché; la escucha se rearma con
+            respiros cada vez más largos si nadie la llama.
 
             **Te lo lee**: `lee mis notas`, `lee mis tareas`,
             `lee el documento <nombre>` y `lee mis avisos`. Las notas y las
@@ -238,6 +252,16 @@ jobs:
             viven en tu carpeta personal — `~/.cort` en Linux/macOS,
             `%APPDATA%\CORT` en Windows, o donde diga `CORT_HOME` — y la primera
             arrancada copia ahí lo que hubiera antes. La ruta se ve en 07 · Perfil.
+
+            **Analizar el equipo deja de ser un suplicio.** La ventana 11
+            (Optimizar) contesta **al instante** con la RAM y los procesos: lo que
+            tarda —contar la caché del disco— se mide en un hilo aparte y se va
+            pintando cuando llega, en vez de dejar la pantalla congelada esperando.
+            En 10 · Modelos, «descargar» ya no deja la interfaz colgada: pone el
+            modelo **en cola**, arranca Ollama él solo, enseña el avance en MB y MB/s
+            y tiene su `✕ cancelar`. Y el logo de los instaladores es ahora el
+            **mismo anillo** que el de la app del teléfono
+            (`bash scripts/icono-del-telefonito.sh`).
 
             **Y el APK se puede actualizar sin desinstalar.** La firma es siempre la
             misma llave (`apps/apk/llave.sh`: secreto del repo si existe, si no la

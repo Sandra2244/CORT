@@ -405,6 +405,58 @@ public class CortNative {
         act.guardarPC(url);
     }
 
+    /* ─────────────────── qué está pasando en el aparato ─────────────────── */
+
+    /**
+     * ¿Suena música ahora mismo? Lo pregunta `ui/js/voice.js` antes de reabrir el
+     * micrófono de «Oye CORT».
+     *
+     * En Android abrir el micro **duckea** lo demás (baja el volumen de la música)
+     * y en un teléfono de gama media además lo traba: rearma tras rearma,
+     * sesión tras sesión. Con esto, mientras la dueña escucha algo, CORT cierra el
+     * oído y lo reabre cuando el audio termina.
+     *
+     * El detalle honesto: `isMusicActive()` también es `true` mientras CORT habla
+     * por `TextToSpeech` (el TTS va por el stream de multimedia). Por eso la cara
+     * ignora el freno durante el primer segundo y medio después de cada frase —
+     * sin ese margen, CORT se quedaría muda justo después de responderte.
+     */
+    @JavascriptInterface
+    public boolean musicPlaying() {
+        Object servicio = act.getSystemService(android.content.Context.AUDIO_SERVICE);
+        if (!(servicio instanceof android.media.AudioManager)) return false;
+        try {
+            return ((android.media.AudioManager) servicio).isMusicActive();
+        } catch (Exception elSistemaNoContesta) {
+            return false;
+        }
+    }
+
+    /**
+     * Si CORT puede ser el asistente y si ya lo es. La cara lo pregunta para no
+     * prometer un botón que el teléfono no va a cumplir.
+     *
+     * El rol de asistente es API 29 (Android 10); con `minSdk` 26 hay que
+     * comprobar la versión antes de tocar `RoleManager`, y devolver `rol:false`
+     * para que la interfaz diga «elígeme a mano en Ajustes» en los antiguos.
+     */
+    @JavascriptInterface
+    public String assistantState() {
+        boolean hayRol = android.os.Build.VERSION.SDK_INT >= 29;
+        boolean puede = false, tiene = false;
+        if (hayRol) {
+            try {
+                Object servicio = act.getSystemService(android.content.Context.ROLE_SERVICE);
+                if (servicio instanceof android.app.role.RoleManager) {
+                    android.app.role.RoleManager roles = (android.app.role.RoleManager) servicio;
+                    puede = roles.isRoleAvailable(android.app.role.RoleManager.ROLE_ASSISTANT);
+                    tiene = roles.isRoleHeld(android.app.role.RoleManager.ROLE_ASSISTANT);
+                }
+            } catch (Exception eseFabricanteNoTieneRoles) { /* quedan los false */ }
+        }
+        return "{\"rol\":" + hayRol + ",\"puede\":" + puede + ",\"esAsistente\":" + tiene + "}";
+    }
+
     /* ──────────────────────────────── avisos ─────────────────────────────── */
 
     /**
@@ -480,13 +532,30 @@ public class CortNative {
 
     /* ───────────────────────── ciclo de vida ────────────────────── */
 
+    /**
+     * La app se va a segundo plano: se cierra el micro **y se avisa a la cara**.
+     *
+     * El aviso es la parte que faltaba. `ui/js/voice.js` rearma la escucha de
+     * «Oye CORT» cuatrocientos milisegundos después de cada sesión, así que
+     * cerrar el reconocedor aquí sin decir nada hacía que la página lo volviera
+     * a abrir inmediatamente: un micrófono abierto en bucle detrás de la app. En
+     * un teléfono de gama media eso es exactamente lo que se nota como «traba»
+     * mientras CORT optimiza o suena música. Con `pause`, la cara se marca
+     * «en segundo plano», deja de rearma y reintenta suave cada dos segundos.
+     */
     void pausa() {
         act.runOnUiThread(() -> {
+            cuadro("{\"type\":\"pause\"}");
             if (sttVivo && stt != null) stt.cancel();
             sttVivo = false;
             if (tts != null) tts.stop();
             ttsPendiente.clear();
         });
+    }
+
+    /** La app vuelve al frente: `voice.js` espera este aviso para reabrir el oído. */
+    void reanuda() {
+        cuadro("{\"type\":\"resume\"}");
     }
 
     void destruye() {

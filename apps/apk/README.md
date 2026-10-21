@@ -4,13 +4,13 @@
 
 | archivo | cómo se hace | dónde se publica |
 |---|---|---|
-| `CORT-IA-1.1.3.apk` | **`rempaquetar.sh`**: el cuerpo es `base/CORT-IA-1.1.0.apk` (el APK original de la dueña: Kotlin, cuatro `classes.dex`, su icono de anillo, `ListenService`, permisos de archivos y almacenamiento) y sólo se le cambia `assets/ui/` por el `ui/` del commit, se realinea y se refirma | la **Release** — es el que se parece al de siempre |
-| `CORT-IA-1.2.2-asistente.apk` | **`compilar.sh`**: Java escrito en este repo, sin Gradle (`aapt2` + `javac` + `d8` + `apksigner`), con el holograma embebido bajo `https://cort.local`, puente de voz propio, traje de `VoiceInteractionService` (asistente predeterminado), `MediaSession` (doble toque del auricular) y `Avisos` (lee en voz alta lo que llega a la barra de notificaciones) | la **Release** desde `v0.2.8-demo`: antes era sólo artefacto del run y había que tener sesión de GitHub para bajarlo |
+| `CORT-IA-1.1.4.apk` | **`rempaquetar.sh`**: el cuerpo es `base/CORT-IA-1.1.0.apk` (el APK original de la dueña: Kotlin, cuatro `classes.dex`, su icono de anillo, `ListenService`, permisos de archivos y almacenamiento) y sólo se le cambia `assets/ui/` por el `ui/` del commit, se realinea y se refirma | la **Release** — es el que se parece al de siempre |
+| `CORT-IA-1.2.3-asistente.apk` | **`compilar.sh`**: Java escrito en este repo, sin Gradle (`aapt2` + `javac` + `d8` + `apksigner`), con el holograma embebido bajo `https://cort.local`, puente de voz propio, traje de `VoiceInteractionService` (asistente predeterminado), `MediaSession` (doble toque del auricular) y `Avisos` (lee en voz alta lo que llega a la barra de notificaciones) | la **Release** desde `v0.2.8-demo`: antes era sólo artefacto del run y había que tener sesión de GitHub para bajarlo |
 
 > Los dos comparten el paquete `com.cort.ia`, así que **en el teléfono sólo puede
 > vivir uno a la vez** — y como salen firmados con llaves distintas, cambiar de
-> uno a otro obliga a desinstalar. El 1.1.3 es el cuerpo de siempre con la cara
-> nueva; el 1.2.2 es el que tiene asistente predeterminado y el oído de los avisos.
+> uno a otro obliga a desinstalar. El 1.1.4 es el cuerpo de siempre con la cara
+> nueva; el 1.2.3 es el que tiene asistente predeterminado y el oído de los avisos.
 
 El original no se recompila desde este repo porque **el proyecto Gradle que lo
 generó no está aquí**: lo que siempre se guardó fue el binario (comprobado: el
@@ -33,24 +33,32 @@ sin Node: la cara del teléfono es la misma carpeta `ui/` del repo.
 |---|---|
 | `MainActivity.java` | un `WebView` a pantalla completa y **tres** superficies en una: la dirección del PC guardada (`http://IP:8000`, el holograma actual con sus once ventanas y su backend real), la cara embebida en el APK (`assets/ui/`, servida bajo `https://cort.local` y cortada en `shouldInterceptRequest` contra los assets), y el menú del botón «CORT · PC» para cambiar entre ellas |
 | `CortNative.java` | `window.CortNative`: el micrófono (`SpeechRecognizer`), la voz (`TextToSpeech`), los permisos, el bloqueo de pantalla y la dirección del PC. Hace falta porque una página en `http` de red local **no es origen seguro** y Chrome no le presta Web Speech ni `getUserMedia` |
-| `Asistente.java` + `Sesiones.java` + `Sesion.java` | el traje de **asistente predeterminado**: Ajustes ▸ Aplicaciones ▸ Aplicación de asistencia predeterminada ▸ CORT. Desde ahí, el gesto de asistente, la tecla del auricular y la pantalla bloqueada abren CORT y lo ponen a escuchar |
+| `Asistente.java` + `Sesiones.java` + `Sesion.java` | el traje de **asistente predeterminado**. `MainActivity.abreAjustesDeAsistente()` pide el **rol** con `RoleManager.createRequestRoleIntent(ROLE_ASSISTANT)` (Android 10+), que es el cuadro de Android que de verdad te elige; en Android 8 y 9 cae a las pantallas de Ajustes de siempre, y si ninguna existe lo dice con el camino a mano. Desde ahí, el gesto de asistente, la tecla del auricular y la pantalla bloqueada abren CORT y lo ponen a escuchar. También se puede pedir por voz: **«pon CORT como asistente»** |
 | `Reconocimiento.java` | el `RecognitionService` que el contrato de AOSP **exige** para aparecer en esa lista. CORT no trae modelo propio de palabra de activación, así que cede el oído al micrófono de la cara y cierra con `ERROR_NO_MATCH` |
 | `MediaSession` (dentro de `MainActivity`) | el **doble toque del auricular**: dos pulsaciones de `HEADSETHOOK` / `PLAY_PAUSE` en menos de 500 ms abren el micrófono. La primera pulsación se devuelve `false`, así que pausar la música sigue siendo cosa de Spotify o de quien la mande |
 | `Avisos.java` | el **oído de la barra de notificaciones** (`NotificationListenerService`): cada aviso que llega —WhatsApp, Messenger, Instagram, Facebook, Gmail, Telegram, Signal— se convierte en una línea `de quién: texto` y se guarda en una `ArrayDeque` de **doce entradas en RAM**, se van solas, y nunca se escriben a disco ni se envían a ningún sitio. `resumen(3)` es lo que CORT habla cuando dices «lee mis avisos» |
 | `AndroidManifest.xml` | permisos (`INTERNET`, `RECORD_AUDIO`, `MODIFY_AUDIO_SETTINGS`, `VIBRATE`), los cuatro `<service>` —asistente y sesión con `BIND_VOICE_INTERACTION`, reconocedor con `BIND_SPEECH_RECOGNIZER` y `Avisos` con `BIND_NOTIFICATION_LISTENER_SERVICE`—, la meta-datos hacia `res/xml/asistente.xml`, y `usesCleartextTraffic` para la Wi‑Fi sin TLS. **No** se añade ningún permiso de lectura de WhatsApp, SMS o contactos: la barra de notificaciones es un interruptor que pone la dueña en Ajustes, y CORT sólo ve lo que ahí ya se muestra |
-| `res/xml/asistente.xml` | el contrato del asistente, con los atributos **sin** prefijo `android:` (son recursos internos del sistema y `aapt2` rechazaría la forma con prefijo) |
+| `res/xml/asistente.xml` | el contrato del asistente, con los atributos **sin** prefijo `android:` (son recursos internos del sistema y `aapt2` rechazaría la forma con prefijo). **Y sin `settingsActivity` a propósito**: `VoiceInteractionServiceInfo` descarta al asistente cuya pantalla de ajustes no pertenezca a una app del sistema (`FLAG_SYSTEM`), y una APK instalada a mano nunca lo es — con ese atributo puesto, CORT desaparecía de la lista de asistentes sin ningún aviso. Los ajustes se piden ahora por `RoleManager`, que es la vía pública y no cuesta aparecer |
+| `CortNative.pausa()` / `reanuda()` + `musicPlaying()` | el **freno del oído**. Al ir a segundo plano, Java cierra el `SpeechRecognizer` **y avisa** con el evento `pause`; al volver, manda `resume`. Sin ese aviso, `ui/js/voice.js` reabría la escucha cuatrocientos milisegundos después de cerrarla: un micro abierto en bucle detrás de la app, que es lo que se nota como «traba». La cara además no rearma con la pantalla apagada, mientras suena música (`musicPlaying()` → `AudioManager.isMusicActive()`, con un margen de 1,5 s para no confundir la música con la propia voz de CORT) ni mientras la ventana 11 está contando caché, y se españa cada vez más si nadie dice «Oye CORT» |
 | `llave.sh` | la **misma llave de firma en todas las Releases**, para que actualizar sea instalar encima y no desinstalar. Orden: secreto `CORT_APK_KEYSTORE_B64` ▸ la caché de Actions (`apps/apk/keystore`) ▸ generar una nueva y dejarla en esa carpeta. Escribe en `firma.txt` cuál usó y deja la huella SHA-256 como anotación del check-run. La llave está en `.gitignore`: el repo es público y con esa llave cualquiera firmaría actualizaciones de su CORT |
 
 `assets/ui/` y `res/mipmap-*/` están en `.gitignore`: son generados. La única
 copia buena de la cara es la que sale del `ui/` del commit etiquetado, y el
-icono lo dibuja `scripts/marca.py` (el mismo anillo del logo del README).
+icono lo dibuja `scripts/marca.py` (el anillo cian sobre fondo espacial). El
+logo de los **instaladores de escritorio** es el anillo tal cual lo enseña el
+teléfono: `bash scripts/icono-del-telefonito.sh` recompone el icono adaptativo
+del APK original (`base/CORT-IA-1.1.0.apk` ▸ `ic_launcher_foreground.png` a
+288 px sobre `#02040a`, que es la proporción 72/108 con la que Android lo
+recorta) y escribe `desktop/build/icon.png` e `icon.ico` — el `.ico` lo embolsa
+`scripts/empaqueta-ico.py`, porque el ImageMagick de este portátil lee ICO pero
+no sabe escribirlos. Se corre una vez y los dos archivos se commitean.
 `apps/apk/keystore/` también está ignorado, pero por lo contrario: es lo que
 **no** puede salir de la caché del pipeline.
 
 ## Usarlo
 
-1. En la Release, descarga el que quieras usar: **`CORT-IA-1.1.3.apk`** (el cuerpo
-   original con la interfaz nueva dentro) o **`CORT-IA-1.2.2-asistente.apk`** (el
+1. En la Release, descarga el que quieras usar: **`CORT-IA-1.1.4.apk`** (el cuerpo
+   original con la interfaz nueva dentro) o **`CORT-IA-1.2.3-asistente.apk`** (el
    de Java, que es el que puede ser asistente predeterminado y leer tus avisos).
    Los dos están publicados como archivo de la Release, así que el enlace se
    descarga con un clic. Escoja uno: van en el mismo paquete y no conviven.
@@ -69,10 +77,13 @@ icono lo dibuja `scripts/marca.py` (el mismo anillo del logo del README).
    Los dos tienen que estar en la misma red. Si el PC no contesta, la app abre
    sola la cara embebida y funciona sin servidor.
 5. Para que mande el doble toque de los audífonos: botón **CORT · PC** ▸ «Poner
-   CORT como asistente» (o Ajustes ▸ Aplicaciones ▸ Aplicación de asistencia
-   predeterminada ▸ **CORT**). En los Galaxy Buds, la acción del doble toque se
-   deja en «Asistente digital».
-6. Para que te lea los avisos (sólo en el `1.2.2`): botón **CORT · PC** ▸ «Dar el
+   CORT como asistente» (o di **«pon CORT como asistente»**), y acepta el cuadro
+   de Android. En Android 8 y 9, o si el fabricante no ofrece el cuadro, Ajustes ▸
+   Aplicaciones ▸ Aplicación de asistencia predeterminada ▸ **CORT**. La propia
+   fila del menú dice en qué estado está (`ya elegido` / `pendiente` / `bloqueado
+   por el fabricante`). En los Galaxy Buds, la acción del doble toque se deja en
+   «Asistente digital».
+6. Para que te lea los avisos (sólo en el `1.2.3`): botón **CORT · PC** ▸ «Dar el
    permiso de los avisos» y activa CORT en la lista del sistema. Desde ahí, di
    **«lee mis avisos»** y te cuenta en voz alta los últimos tres, y el menú te
    muestra si el oído está puesto o pendiente. «olvida los avisos» los borra de
@@ -99,9 +110,11 @@ icono lo dibuja `scripts/marca.py` (el mismo anillo del logo del README).
   líneas en RAM del proceso, se van solas al pasar y «olvida los avisos» las tira.
   El permiso se quita en Ajustes en un segundo, y el menú lo muestra en su
   etiqueta («permiso: hecho» / «permiso: pendiente»).
-- En el `1.1.3` (el cuerpo original) **no** hay lectura de avisos: ese Kotlin
-  nunca tuvo el puente `CortNative.avisos()`, y la cara lo comprueba antes de
-  llamar; en vez de romperse, te dice que eso lo trae el APK del asistente.
+- En el `1.1.4` (el cuerpo original) **no** hay lectura de avisos ni asistente:
+  ese Kotlin nunca tuvo el puente `CortNative.avisos()` ni declara
+  `VoiceInteractionService`, y la cara lo comprueba (`typeof`) antes de llamar a
+  cada método nuevo; en vez de romperse, te dice que eso lo trae el APK del
+  asistente.
 - Nada de esto está verificado con un dedo encima: no hay teléfono en esta
   máquina. Lo que sí comprueba el pipeline es que el Java compila contra la
   plataforma (`javac` revisa las firmas de `VoiceInteractionSession.onShow`,

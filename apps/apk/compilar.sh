@@ -21,7 +21,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APK_VERSION="${APK_VERSION:-1.2.2}"
+APK_VERSION="${APK_VERSION:-1.2.3}"
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"

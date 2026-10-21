@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -85,8 +86,15 @@ def ram() -> dict:
             "intercambio_mb": _mb(psutil.swap_memory().used)}
 
 
-def procesos_top(n: int = 8) -> list[dict]:
-    """Los que más memoria real están ocupando ahora mismo (solo tu usuario)."""
+def _instantanea() -> list[dict]:
+    """UNA pasada por la lista de procesos del sistema, para reutilizarla.
+
+    Antes costaba más de lo que parecía: `informe()` llamaba a `procesos_top()`
+    dos veces (una para la ventana y otra dentro de `_sugerencias`) y `caches()`
+    hacía su propia pasada con `abiertos()`. En un portátil de 2 núcleos eso son
+    cuatro recorridos de `/proc` por cada «analiza el equipo». Ahora se recorre
+    una vez y se reparte.
+    """
     try:
         miusuario = os.getlogin()
     except OSError:
@@ -100,12 +108,20 @@ def procesos_top(n: int = 8) -> list[dict]:
                 continue
             if not dueno and p.uids().real != uid:
                 continue
-            mi = p.info["memory_info"]
-            if mi and mi.rss > 30 * 1024 * 1024:
-                fila.append({"pid": p.info["pid"], "nombre": p.info["name"] or "?",
-                             "mb": _mb(mi.rss)})
+            fila.append(p.info)
         except Exception:
             continue
+    return fila
+
+
+def procesos_top(n: int = 8, instantanea: list[dict] | None = None) -> list[dict]:
+    """Los que más memoria real están ocupando ahora mismo (solo tu usuario)."""
+    fila = []
+    for info in (instantanea if instantanea is not None else _instantanea()):
+        mi = info["memory_info"]
+        if mi and mi.rss > 30 * 1024 * 1024:
+            fila.append({"pid": info["pid"], "nombre": info["name"] or "?",
+                         "mb": _mb(mi.rss)})
     fila.sort(key=lambda d: -d["mb"])
     top = fila[:n]
     for d in top:
@@ -113,25 +129,23 @@ def procesos_top(n: int = 8) -> list[dict]:
     return top
 
 
-def abiertos() -> set[str]:
+def abiertos(instantanea: list[dict] | None = None) -> set[str]:
     """Nombres de programas que ahora mismo tienen cosas abiertas (Chrome, Electron…)."""
     salida = set()
-    for p in psutil.process_iter(["name"]):
-        try:
-            n = (p.info["name"] or "").lower()
-            if any(x in n for x in ("chrome", "firefox", "electron", "thunar", "vlc")):
-                salida.add(n)
-        except Exception:
-            continue
+    for info in (instantanea if instantanea is not None else _instantanea()):
+        n = (info["name"] or "").lower()
+        if any(x in n for x in ("chrome", "firefox", "electron", "thunar", "vlc")):
+            salida.add(n)
     return salida
 
 
 def caches(con_tamaño: bool = True, solo_seguro: bool = False,
-           presupuesto_s: float = 8.0) -> list[dict]:
+           presupuesto_s: float = 4.0,
+           instantanea: list[dict] | None = None) -> list[dict]:
     """Tamaño de cada caché. `solo_seguro=True` es el modo rápido: no cuenta los
     nidos enormes de modelos y metadatos. Hay presupuesto global de tiempo porque
     contar archivos cuesta en 2 núcleos: lo que no entra, se reporta sin medir."""
-    corriendo = " ".join(abiertos())
+    corriendo = " ".join(abiertos(instantanea))
     fin = time.time() + presupuesto_s
     salida = []
     for rel, que, nivel in CACHES:
@@ -154,38 +168,81 @@ def caches(con_tamaño: bool = True, solo_seguro: bool = False,
     return salida
 
 
-_MEMORIA: dict = {}                   # caché de 90 s: contar archivos es caro
+_MEMORIA: dict = {}                   # caché de las mediciones caras (contar archivos)
+_MIDIENDO = threading.Event()         # está un hilo contando ahora mismo
+_CANDADO = threading.Lock()
+TTL_S = 300                           # 5 minutos valen las cachés medidas
+
+
+def _medir_en_hilo() -> None:
+    """Cuenta cachés y disco FUERA de la petición HTTP.
+
+    Es el arreglo del «analiza el equipo dura bastante»: antes la ventana 11
+    esperaba sentada a que el servidor terminara de recorrer `~/.cache` entero
+    (hasta 8 s de disco en un portátil de 2 núcleos) y mientras tanto no pintaba
+    nada. Ahora `informe()` contesta al instante con la RAM y los procesos —que
+    son baratos—, y la parte cara se calcula en un hilo que va actualizando esta
+    memoria. La interfaz pregunta otra vez dos segundos después y ya lo tiene.
+    """
+    if _MIDIENDO.is_set():
+        return
+    _MIDIENDO.set()
+
+    def trabajo():
+        try:
+            instantanea = _instantanea()
+            c = caches(instantanea=instantanea)
+            try:
+                import models
+                disc = models.uso_disco_gb()
+            except Exception:
+                disc = 0
+            with _CANDADO:
+                _MEMORIA.update(caches=c, discos=disc, cuando=time.time())
+        finally:
+            _MIDIENDO.clear()
+
+    threading.Thread(target=trabajo, daemon=True).start()
+
+
+def invalidar() -> None:
+    """Tira la medición guardada (después de barrer cachés, que ya no vale)."""
+    with _CANDADO:
+        _MEMORIA.pop("caches", None)
 
 
 def informe(fresco: bool = False) -> dict:
+    """Lo que ve la ventana 11. Tarda ~una décima: RAM y procesos se miden en el
+    acto; las cachés vienen de la medición en segundo plano (o avisan de que van)."""
     ahora = time.time()
-    if not fresco and _MEMORIA.get("caches") and ahora - _MEMORIA.get("cuando", 0) < 90:
-        c, disc = _MEMORIA["caches"], _MEMORIA.get("discos", 0)
-    else:
-        c = caches()
-        try:
-            import models
-            disc = models.uso_disco_gb()
-        except Exception:
-            disc = 0
-        _MEMORIA.update(caches=c, discos=disc, cuando=ahora)
-    return {"ram": ram(), "procesos": procesos_top(), "caches": c,
+    with _CANDADO:
+        c = _MEMORIA.get("caches")
+        disc = _MEMORIA.get("discos", 0)
+        cuando = _MEMORIA.get("cuando", 0)
+    caducado = c is None or (ahora - cuando) > TTL_S
+    if fresco or caducado:
+        c = None if fresco else c        # «fresco» empieza de cero, en el hilo
+        _medir_en_hilo()
+    instantanea = _instantanea()
+    procs = procesos_top(instantanea=instantanea)
+    return {"ram": ram(), "procesos": procs, "caches": c or [],
+            "midiendo": _MIDIENDO.is_set() or c is None,
             "modelos_gb": disc,
-            "liberable_mb": round(sum(x["mb"] for x in c if x["nivel"] == "seguro"), 1),
-            "todo_mb": round(sum(x["mb"] for x in c if x["nivel"] != "papelera"), 1),
-            "papelera_mb": round(sum(x["mb"] for x in c if x["nivel"] == "papelera"), 1),
-            "medido_hace": int(ahora - _MEMORIA.get("cuando", ahora)),
-            "sugerencias": _sugerencias(disc)}
+            "liberable_mb": round(sum(x["mb"] for x in (c or []) if x["nivel"] == "seguro"), 1),
+            "todo_mb": round(sum(x["mb"] for x in (c or []) if x["nivel"] != "papelera"), 1),
+            "papelera_mb": round(sum(x["mb"] for x in (c or []) if x["nivel"] == "papelera"), 1),
+            "medido_hace": int(ahora - cuando) if c else None,
+            "sugerencias": _sugerencias(disc, procs)}
 
 
-def _sugerencias(modelos_gb: float = 0) -> list[str]:
+def _sugerencias(modelos_gb: float = 0, procs: list[dict] | None = None) -> list[str]:
     s = []
     v = psutil.virtual_memory()
     if v.percent > 85:
         s.append(f"RAM al {v.percent} %: cierra el navegador y las ventanas de "
                  "Electron antes de pedirle nada pesado a CORT.")
     pesados = {}
-    for d in procesos_top(20):
+    for d in (procs if procs is not None else procesos_top(20))[:20]:
         pesados[d["nombre"]] = pesados.get(d["nombre"], 0) + d["mb"]
     for nombre, mb in sorted(pesados.items(), key=lambda kv: -kv[1])[:3]:
         if mb > 250:
@@ -231,7 +288,7 @@ def limpiar(nivel: str = "seguro") -> dict:
         except OSError as e:
             errores.append(f"{c['ruta']}: {e.strerror}")
     tiempo = time.time()
-    _MEMORIA.pop("caches", None)          # ya no vale lo medido antes de barrer
+    invalidar()                             # ya no vale lo medido antes de barrer
     return {"ok": True, "borrado": borrado, "mb_liberados": round(mb, 1),
             "ram_ganada_mb": _mb(max(0, psutil.virtual_memory().available - antes)),
             "errores": errores[:6], "cuando": tiempo,

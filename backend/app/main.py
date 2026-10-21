@@ -19,6 +19,7 @@ Endpoints:
   GET  /api/models                       -> catálogo Ollama + si cabe en este equipo
   GET  /api/models/progreso              -> avance de las descargas en curso
   POST /api/models/pull|rm|use|ollama    -> descargar, borrar, usar u encender Ollama
+  POST /api/models/cancel                -> cortar una descarga o quitarla de la fila
   GET  /api/optimize                     -> quién come RAM y cuánta caché hay que borrar
   POST /api/optimize/clean|kill          -> vaciar cachés seguras / cerrar un proceso
 
@@ -300,8 +301,15 @@ def models_progreso():
 
 @app.post("/api/models/pull")
 def models_pull(m: Modelo):
-    """Descarga un modelo (`ollama pull`) en un hilo: no bloquea la interfaz."""
+    """Apunta la descarga (`ollama pull`) y devuelve al instante: no bloquea la
+    interfaz ni espera a que Ollama despierte (eso lo hace el hilo)."""
     return models.descargar(m.modelo)
+
+
+@app.post("/api/models/cancel")
+def models_cancel(m: Modelo):
+    """Corta una descarga en curso o la quita de la fila."""
+    return models.cancelar(m.modelo)
 
 
 @app.post("/api/models/rm")

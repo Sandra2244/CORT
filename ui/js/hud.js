@@ -756,6 +756,8 @@ async function modelAcc(nombre, acc) {
   } catch { sayLine('El núcleo no respondió.'); }
 }
 
+const ACTIVOS = ['descargando', 'en cola', 'encendiendo', 'cancelando'];
+
 async function pintarProgresos() {
   const lista = document.getElementById('molist');
   // si la ventana ya no está abierta, no sigo martillando al núcleo
@@ -768,40 +770,60 @@ async function pintarProgresos() {
     if (!fila) return;
     const caja = fila.querySelector('.mo-prog');
     const pct = Math.max(0, Math.min(100, +(d.pct || 0)));
+    const detalle = d.estado === 'error' ? (d.error || 'error')
+      : `${d.detalle || d.estado}${d.mb_total ? ` · ${d.vel || 0} MB/s` : ''}`;
     caja.innerHTML = `<div class="mo-bar"><i style="width:${pct}%"></i></div>` +
-      `<span class="mo-pt${d.estado === 'error' ? ' mal' : ''}">${esc(d.estado === 'error' ? (d.error || 'error') : `${d.detalle || ''} ${pct}%`)}</span>`;
+      `<span class="mo-pt${d.estado === 'error' ? ' mal' : (ACTIVOS.includes(d.estado) ? '' : ' ok')}">${esc(detalle)}</span>` +
+      (ACTIVOS.includes(d.estado)
+        ? `<button class="mo-b x" data-cancel="${esc(nombre)}">✕ cancelar</button>` : '');
     if (d.estado === 'listo' && !MOrefresca) { termino = true; }
   });
+  lista.querySelectorAll('[data-cancel]').forEach(b => b.onclick = () => cancelarDescarga(b.dataset.cancel));
   if (termino) { MOrefresca = true; setTimeout(() => { MOrefresca = false; refreshModels(); }, 1200); }
 }
 
-let OPT = null;
+async function cancelarDescarga(nombre) {
+  try {
+    const r = await post('/api/models/cancel', { modelo: nombre });
+    sayLine(r.ok ? `Corto la descarga de ${nombre}.` : `No lo corté: ${r.error || 'ya había terminado'}`);
+    term(`cancelar ${nombre}: ${r.ok ? 'cortando' : (r.error || '')}`, 'modelos');
+    pintarProgresos();
+  } catch { sayLine('El núcleo no respondió.'); }
+}
+
+let OPT = null, OPTtimer = 0;
 async function refreshOptimize(fresco) {
   const box = document.getElementById('optr'), st = document.getElementById('optram');
   if (!box) return;
-  if (!OPT) box.innerHTML = '<div class="mo-none">midiendo el equipo… tarda unos segundos</div>';
+  if (!OPT) box.innerHTML = '<div class="mo-none">midiendo memoria y procesos…</div>';
+  // Mientras el núcleo recorre el disco, el micrófono del teléfono (o del
+  // navegador) no debe estar alborotado: se suspende y se reanuda al terminar.
+  voice.suspender('optimizando');
   try { OPT = await getJSON('/api/optimize' + (fresco ? '?fresco=1' : '')); }
-  catch { box.innerHTML = '<div class="mo-warn">sin conexión con el núcleo.</div>'; return; }
+  catch { voice.reanudar('optimizando'); box.innerHTML = '<div class="mo-warn">sin conexión con el núcleo.</div>'; return; }
   const r = OPT.ram;
   if (st) st.textContent = `${r.usado_pct} % en uso`;
+  const contando = OPT.midiendo && !OPT.caches.length;
   box.innerHTML =
     `<div class="op-bar"><i style="width:${r.usado_pct}%"></i><span>${r.usado_pct} % de ${r.total_gb} GB</span></div>
      <div class="mo-sum">libre <b>${r.disponible_mb} MB</b> · intercambio <b>${r.intercambio_mb} MB</b> ·
-       caché borrable <b>${OPT.liberable_mb} MB</b>${OPT.modelos_gb ? ` · modelos en el disco <b>${OPT.modelos_gb} GB</b>` : ''}</div>
+       ${contando ? 'contando la caché del disco…'
+                  : `caché borrable <b>${OPT.liberable_mb} MB</b>${OPT.modelos_gb ? ` · modelos en el disco <b>${OPT.modelos_gb} GB</b>` : ''}`}</div>
      <div class="hp-sec">▸ Lo que más come memoria</div>
      <div class="op-procs">${OPT.procesos.map(p => `
        <div class="op-proc"><span class="n">${esc(p.nombre)}</span><span class="mb">${Math.round(p.mb)} MB</span>
          ${p.intocable ? '<span class="mo-tag t-no">fijo</span>'
                        : `<button class="mo-b x" data-kill="${p.pid}" title="cerrar ${esc(p.nombre)}">✕</button>`}</div>`).join('')}</div>
-     <div class="hp-sec">▸ Caché en disco</div>
+     <div class="hp-sec">▸ Caché en disco${OPT.medido_hace != null && !OPT.midiendo ? ` · medido hace ${OPT.medido_hace} s` : ''}</div>
      <div class="op-caches">${OPT.caches.map(c => `
        <div class="op-cache ${c.nivel}"><span class="n">${esc(c.ruta.replace(/^\.?cache\//, ''))}</span>
          <span class="mb">${Math.round(c.mb)} MB</span>
          <small>${esc(c.que)}${c.aprox ? ' ·≈' : ''}${c.abierta ? ' · programa abierto' : ''}</small></div>`).join('')
-       || '<div class="mo-none">no encontré cachés grandes</div>'}</div>
+       || (contando ? '<div class="mo-none">el núcleo está recorriendo las carpetas: vuelve a preguntar en un momento</div>'
+                    : '<div class="mo-none">no encontré cachés grandes</div>')}</div>
      <div class="mo-btns">
        <button class="mo-b" data-op="fresco">↻ Analizar de nuevo</button>
-       <button class="mo-b d" data-op="seguro">⌁ Limpiar segura (${OPT.liberable_mb} MB)</button>
+       <button class="mo-b d" data-op="seguro" ${contando ? 'disabled' : ''}>⌁ Limpiar segura (${OPT.liberable_mb} MB)</button>
        ${OPT.todo_mb > OPT.liberable_mb ? `<button class="mo-b x" data-op="todo">Limpiar también «cuidado» (${OPT.todo_mb} MB)</button>` : ''}
        ${OPT.papelera_mb ? `<button class="mo-b x" data-op="papelera">✕ Vaciar papelera (${OPT.papelera_mb} MB)</button>` : ''}
      </div>
@@ -810,12 +832,18 @@ async function refreshOptimize(fresco) {
      <div id="opres"></div>`;
   box.querySelectorAll('[data-kill]').forEach(b => b.onclick = () => matarProceso(b.dataset.kill));
   box.querySelectorAll('[data-op]').forEach(b => b.onclick = () => limpiar(b.dataset.op));
+  // Las cachés se miden en un hilo aparte del servidor: si aún van, se pregunta
+  // otra vez sin esperar y sin congelar la ventana.
+  clearTimeout(OPTtimer);
+  if (OPT.midiendo) OPTtimer = setTimeout(() => refreshOptimize(false), 2500);
+  voice.reanudar('optimizando');
 }
 
 async function limpiar(nivel) {
   const res = document.getElementById('opres');
   if (nivel === 'fresco') { OPT = null; return refreshOptimize(true); }
   if (res) res.innerHTML = '<div class="mo-none">barriendo caché…</div>';
+  voice.suspender('barriendo');
   try {
     const r = await post('/api/optimize/clean', { nivel });
     const txt = r.ok ? `Barrí ${r.borrado.length} caché(s): ${r.mb_liberados} MB liberados` +
@@ -825,6 +853,7 @@ async function limpiar(nivel) {
     if (res) res.innerHTML = `<div class="mo-warn${r.ok ? ' ok' : ''}">${esc(txt)} ${esc(r.nota || '')}</div>`;
     OPT = null; setTimeout(() => refreshOptimize(true), 600);
   } catch { if (res) res.innerHTML = '<div class="mo-warn">el núcleo no respondió.</div>'; }
+  voice.reanudar('barriendo');
 }
 
 async function matarProceso(pid) {
@@ -1042,6 +1071,45 @@ function olvidaAvisos() {
   add('a', 'Avisos olvidados. No los guardé nunca: se van de la cabeza al cerrar la app.', 'avisos');
   speakTTS('Olvidados.');
 }
+
+/* ── que CORT sea EL ASISTENTE del teléfono ────────────────────────────────
+   En Android el asistente predeterminado es un **rol** (`RoleManager.ROLE_ASSISTANT`,
+   API 29+). Lo pide Java —`MainActivity.abreAjustesDeAsistente()`— porque una página
+   no puede pedir roles: sólo puede abrir el cuadro que Android muestra. Con CORT
+   elegido, el gesto del asistente, la pantalla bloqueada y el **doble toque del
+   auricular** abren CORT en vez de Google. El coste, dicho sin adornos: el «OK
+   Google» con la pantalla apagada se pierde, porque esa palabra la decide el
+   servidor de Google y no viaja con este APK.
+   `assistantState()` sólo existe en el puente de este repo: en el cuerpo Kotlin
+   original (el APK del teléfono sin función de asistente) la cara se degrada a
+   las palabras, sin llamar a nada.                                          */
+function ponAsistente() {
+  const N = window.CortNative;
+  if (!N || typeof N.openAssistantSettings !== 'function') {
+    // `openAssistantSettings` sólo existe en el puente Java de `apps/apk`. Si la
+    // cara está corriendo dentro del cuerpo Kotlin de siempre (el APK
+    // `CORT-IA-x.y.z.apk`, que no declara `VoiceInteractionService`), elegir
+    // CORT en Ajustes no lo va a listar: decirle a la dueña que busque en el
+    // menú sería mentirle. Se le dice cuál instalar.
+    const r = 'Ponerme como asistente lo trae el APK del asistente: baja «CORT-IA-…-asistente.apk» de la Release e instálalo encima. Con el de siempre no aparezco en esa lista, porque no llevo puesto el traje de asistente de Android.';
+    sayLine(r);
+    return;
+  }
+  let st = null;
+  try { st = JSON.parse(typeof N.assistantState === 'function' ? N.assistantState() : 'null'); }
+  catch { st = null; }
+  if (st && st.esAsistente) {
+    sayLine('Ya soy tu asistente: dos toques en el auricular o el gesto del asistente me abren.');
+    return;
+  }
+  N.openAssistantSettings();
+  if (st && st.rol === false) {
+    add('a', 'Tu Android es anterior al 10 y no trae el rol de asistente: elígeme a mano en Ajustes ▸ Aplicaciones ▸ Aplicación de asistencia predeterminada.', 'sistema');
+    return;
+  }
+  add('a', 'Ahí sale el cuadro de Android: pulsa «Establecer asistente». Con eso el doble toque del auricular y el gesto del asistente pasan a ser míos.', 'sistema');
+  term('rol de asistente solicitado' + (st && st.puede === false ? ' (no disponible en este fabricante)' : ''), 'sistema');
+}
 /* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
 const HIST = [];
 let hIdx = 0, draft = '';
@@ -1050,7 +1118,8 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   'abre youtube', 'abre el navegador', 'apunta ', 'muéstrame tu cerebro', 'qué recuerdas',
   'muéstrame los modelos', 'descarga el modelo ', 'usa el modelo ', 'enciende ollama',
   '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché',
-  'lee mis avisos', 'lee mis notas', 'lee mis tareas', 'tengo que ', 'lee el documento '];
+  'lee mis avisos', 'lee mis notas', 'lee mis tareas', 'tengo que ', 'lee el documento ',
+  'pon CORT como asistente'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -1099,6 +1168,12 @@ async function send(raw) {
   }
   if (/olvida (los )?avisos|borra lo que lleg[oó]/i.test(msg)) {
     setState('listo'); olvidaAvisos(); return;
+  }
+  /* «pon CORT como asistente» / «sé el asistente predeterminado» */
+  if (/(?:pon|poner|ponme|colocate|convert|ser|activa|quiero|puedes|reemplaz)\w{0,3}[^.]{0,24}asistente/i.test(msg)
+      || /asistente (?:predeterminad\w*|por defecto|de google)/i.test(msg)
+      || /reemplaz\w* (?:a )?(?:google|el asistente)/i.test(msg)) {
+    setState('listo'); ponAsistente(); return;
   }
   if (/archivos recientes|mu[eé]strame (los )?archivos|lanza (los )?archivos/i.test(msg)) {
     add('a', 'Aquí tienes lo último de Documentos…', 'archivos'); chipRecentFiles(); return;
@@ -1197,6 +1272,11 @@ export function wireUI(orbRef) {
       mic.classList.toggle('on', mode === 'cmd');
       wake.classList.toggle('on', st.wakeOn);
       wake.classList.toggle('hearing', mode === 'wake');
+      // Si el oído está en pausa (música, optimizando, segundo plano) se ve y se
+      // lee: sin esto parece que CORT «no funciona», cuando es que no le toca.
+      wake.title = st.freno ? 'Oído en pausa: ' + st.freno
+                            : (st.wakeOn ? 'escuchando «Oye CORT»' : '«Oye CORT» apagado');
+      wake.style.opacity = (st.wakeOn && st.freno) ? '.45' : '';
       document.body.classList.toggle('listening', mode === 'cmd');
       if (mode === 'cmd') { orb.listen(true); setState('escucha'); }
       else if (!st.speaking) { orb.listen(false); }
@@ -1294,6 +1374,16 @@ export function wireUI(orbRef) {
   document.getElementById('mnext').onclick = () => playTrack((tIdx + 1) % tracks.length);
   document.getElementById('mvol').oninput = e => { document.getElementById('aud').volume = +e.target.value; };
   document.getElementById('aud').addEventListener('ended', () => { if (tracks.length > 1) playTrack((tIdx + 1) % tracks.length); else { orb.setDisc(false); stopMeter(); } });
+
+  /* Mientras suena música, el oído permanente NO se rearma. En Android abrir el
+     micrófono baja el volumen de la canción y, en un teléfono medio, lo traba:
+     por eso CORT guarda el oído mientras ella escucha. */
+  {
+    const altavoz = document.getElementById('aud');
+    altavoz.addEventListener('play', () => voice.suspender('música'));
+    altavoz.addEventListener('pause', () => voice.reanudar('música'));
+    altavoz.addEventListener('ended', () => voice.reanudar('música'));
+  }
   document.getElementById('mbar').onclick = e => {
     const aud = document.getElementById('aud');
     if (!aud.duration) return;

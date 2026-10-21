@@ -77,6 +77,16 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
   en RAM y nunca escribe disco. Se comprueba sin teléfono con
   `scripts/prueba-lectura.py` (las frases y sus respuestas) y
   `scripts/prueba-costura.py` (manifiesto ↔ Java ↔ cara).
+- **F7c — Que se pueda usar de verdad** (lo que dijo el dedo encima del teléfono):
+  el anillo del teléfono como logo de los instaladores
+  (`scripts/icono-del-telefonito.sh` + `scripts/empaqueta-ico.py`); `/api/optimize`
+  que contesta al instante y cuenta la caché del disco en un hilo aparte; las
+  descargas de Ollama **en cola**, con MB y MB/s reales y su `✕ cancelar`
+  (`POST /api/models/cancel`); CORT **dentro de la lista de asistentes** — fuera la
+  `settingsActivity` que hacía descartar el contrato por no ser app del sistema,
+  dentro el rol `RoleManager.ROLE_ASSISTANT`—; y el **freno del oído**, que cierra
+  el micro al ir a segundo plano (`pause`/`resume` entre Java y la cara), con música
+  sonando, con la pantalla apagada y mientras se cuenta la caché.
 
 ## 5. Riesgos honestos
 
