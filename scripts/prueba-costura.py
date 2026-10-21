@@ -7,9 +7,11 @@ peor, un botón que no hace nada en el teléfono de la dueña:
 
   1. `AndroidManifest.xml` declara los **cuatro** servicios con su
      `android:permission` y su `<action>`; sin ellos Android no mira el asistente
-     ni el oído de los avisos. Y la lista de `<uses-permission>` sigue teniendo
-     cuatro líneas: `.Avisos` entra por el interruptor del sistema, no por un
-     permiso nuevo.
+     ni el oído de los avisos. Y el quinto (`.Reproductor`) con su
+     `foregroundServiceType`, que Android 14 exige para que la música suene con la
+     cara cerrada. La lista de `<uses-permission>` se comprueba por conjunto: están
+     los que justifican las funciones (música, archivos, marcar, notificaciones) y
+     no se ha colado ninguno desproporcionado (`READ_SMS`, `QUERY_ALL_PACKAGES`…).
   2. Cada `Avisos.METODO` que usan `CortNative.java` y `MainActivity.java` existe
      de verdad en `Avisos.java` (nombre y, cuando se ve, número de argumentos).
   3. Los `@JavascriptInterface` que la cara llama (`window.CortNative.avisos`,
@@ -78,14 +80,33 @@ for accion in ("android.service.voice.VoiceInteractionService",
         falla("acción", f"falta {accion} — el sistema busca exactamente esta")
 
 permisos = re.findall(r'<uses-permission android:name="([^"]+)"', XML)
-if len(permisos) == 4:
-    dice_ok("permisos", f"siguen siendo cuatro: {', '.join(p.split('.')[-1] for p in permisos)}")
+# Con UN solo APK (el de Java) la lista de permisos ya no son cuatro: el
+# reproductor, los contactos y «ordena mis archivos» piden los suyos. Se comprueba
+# el conjunto **necesario** y que no se cuele ninguno **desproporcionado**.
+cortos = {p.rsplit(".", 1)[-1] for p in permisos}
+necesarios = {
+    "INTERNET", "RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "VIBRATE",
+    "READ_MEDIA_AUDIO", "READ_MEDIA_VIDEO", "READ_EXTERNAL_STORAGE",
+    "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MEDIA_PLAYBACK", "WAKE_LOCK",
+    "POST_NOTIFICATIONS", "READ_CONTACTS", "CALL_PHONE",
+}
+if necesarios <= cortos:
+    dice_ok("permisos", f"{len(permisos)} declarados, los {len(necesarios)} justos están")
 else:
-    falla("permisos", f"se pidieron {len(permisos)}: {permisos}")
-for prohibido in ("QUERY_ALL_PACKAGES", "ACTION_CALL", "READ_CONTACTS",
-                  "READ_EXTERNAL_STORAGE", "READ_SMS"):
-    if prohibido in XML:
-        falla("permiso de más", f"{prohibido} aparece en el manifiesto")
+    falla("permisos", f"faltan {', '.join(sorted(necesarios - cortos))}")
+for prohibido in ("QUERY_ALL_PACKAGES", "READ_SMS", "SEND_SMS", "RECEIVE_MMS",
+                  "READ_CALL_LOG", "PROCESS_OUTGOING_CALLS", "SYSTEM_ALERT_WINDOW",
+                  "GET_ACCOUNTS", "MASTER_ACCOUNT", "WRITE_SECURE_SETTINGS"):
+    if prohibido in cortos:
+        falla("permiso de más", f"{prohibido}: no hace falta para lo que CORT promete")
+if 'android:foregroundServiceType="mediaPlayback"' in XML:
+    dice_ok("servicio de música", "declarado con su tipo, como exige Android 14")
+else:
+    falla("servicio de música", "falta `.Reproductor` con `foregroundServiceType=\"mediaPlayback\"`")
+if 'android:roundIcon="@mipmap/ic_launcher_round"' in XML:
+    dice_ok("icono", "el manifiesto pide el anillo (los PNG los saca compilar.sh del base APK)")
+else:
+    falla("icono", "el manifiesto no declara `roundIcon`: el cajón mostraría el genérico")
 
 # ── 2 · Avisos.java y lo que le piden sus vecinos ────────────────────────────
 print("\n[2] Avisos.java ↔ CortNative.java ↔ MainActivity.java")
@@ -244,6 +265,158 @@ if re.search(r"scheduleWake\([^)]*\)\s*;\s*\n\s*return", voz) or "if (motivoFren
     dice_ok("retroceso", "con el freno puesto se reintenta suave en vez de abrir el micro")
 else:
     falla("retroceso", "scheduleWake no respeta el freno")
+
+# ── 5 · el reproductor y los contactos: las clases nuevas se nombran ─────────
+print("\n[5] Reproductor.java / Musica.java / Telefono.java ↔ el puente")
+
+def metodos_de(texto: str) -> set[str]:
+    """Nombres de método declarados a cuatro espacios (o en una línea con `{`)."""
+    limpio = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
+    limpio = re.sub(r"//[^\n]*", "", limpio)
+    sale: set[str] = set()
+    for linea in limpio.splitlines():
+        l = linea.strip()
+        if not linea.startswith("    ") or not l:
+            continue
+        if l.split(" ")[0] in ("return", "if", "for", "while", "switch", "catch", "else"):
+            continue
+        for m in (re.match(r"^(?:(?:public|private|protected|static|final|synchronized)\s+)*"
+                           r"[A-Za-z_][\w<>\[\], .]*\s+(\w+)\s*\(", l),
+                  re.match(r"^(?:(?:public|private|protected|static|final|synchronized)\s+)*"
+                           r"[A-Za-z_][\w<>\[\], .]*\s+(\w+)\s*\([^)]*\)\s*\{", l)):
+            if m and m.group(1) not in ("new", "class", "int", "String"):
+                sale.add(m.group(1))
+    return sale
+
+usa = {
+    "CortNative.java": vecinos["CortNative.java"],
+    "MainActivity.java": vecinos["MainActivity.java"],
+    "Reproductor.java": (APK / "src" / "com" / "cort" / "ia" / "Reproductor.java").read_text(encoding="utf-8"),
+}
+for nombre_carpeta in ("Reproductor", "Musica", "Telefono"):
+    ruta = APK / "src" / "com" / "cort" / "ia" / f"{nombre_carpeta}.java"
+    if not ruta.exists():
+        falla(f"{nombre_carpeta}.java", "no existe: `compilar.sh` no tendría nada que compilar")
+        continue
+    definidos = metodos_de(ruta.read_text(encoding="utf-8"))
+    llamados: set[tuple[str, str]] = set()
+    para, origen = re.compile(rf"\b{nombre_carpeta}\.(\w+)\s*\("), None
+    for quien, texto in usa.items():
+        limpio = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
+        limpio = re.sub(r"//[^\n]*", "", limpio)
+        for met in para.findall(limpio):
+            llamados.add((quien, met))
+    roto = [f"{quien} → {nombre_carpeta}.{met}()" for quien, met in sorted(llamados)
+            if met not in definidos and met[0].islower()]
+    if roto:
+        for r in roto:
+            falla("costura", f"{r} no está definido en {nombre_carpeta}.java "
+                             f"(hay {len(definidos)} métodos)")
+    else:
+        dice_ok(f"{nombre_carpeta}.java", f"{len(llamados)} llamadas, todas definidas")
+
+# El aviso del reproductor al puente: `Reproductor.avisa()` llama a
+# `MainActivity.front().puente().musicaCambio()`, y ése tiene que existir y emitir
+# el evento `music` que la cara escucha. Sin él, los botones de play se quedan con
+# la barra quieta.
+if "musicaCambio" in usa["Reproductor.java"]:
+    if "void musicaCambio" in puente_txt and '"type":"music"' in puente_txt:
+        dice_ok("evento music", "el puente avisa a la cara en cada play, pausa y canción nueva")
+    else:
+        falla("evento music", "Reproductor pide aviso pero CortNative no emite `music`")
+if "static MainActivity front()" in main and "CortNative puente()" in main:
+    dice_ok("MainActivity.front()", "el servicio puede hablar con la cara aunque esté en otro hilo")
+else:
+    falla("MainActivity.front()", "falta el acceso estático: Reproductor no tiene cómo avisar")
+
+# Los tres casos nuevos del menú de Java tienen su método en el puente.
+for met in re.findall(r"puente\.(\w+)\(\)", main):
+    if met in metodos_de(puente):
+        dice_ok(f"menú → puente.{met}()", "existe")
+    else:
+        falla(f"menú → puente.{met}()", "el menú llama a un método que CortNative no tiene")
+
+# Y el número de versión del APK: `build.yml` Bautiza el artefacto con el suyo,
+# `compilar.sh` pone el `versionName`. Si se separan, la Release sale con un APK
+# que no se llama como el enlace que anuncia.
+yml = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+en_yml = re.search(r'APK_VERSION:\s*"([\d.]+)"', yml)
+en_sh = re.search(r'APK_VERSION="\$\{APK_VERSION:-([\d.]+)\}"',
+                  (APK / "compilar.sh").read_text(encoding="utf-8"))
+if en_yml and en_sh and en_yml.group(1) == en_sh.group(1):
+    dice_ok("versión del APK", en_yml.group(1) + " en los dos lados")
+else:
+    falla("versión del APK", f"build.yml dice {en_yml and en_yml.group(1)!r} y "
+                             f"compilar.sh {en_sh and en_sh.group(1)!r}")
+if "rempaquetar" in yml and "Rempaquetar el APK" in yml:
+    falla("un solo APK", "build.yml sigue montando el paso de rempaquetar: "
+                         "la dueña volvería a tener dos APK que elegir")
+else:
+    dice_ok("un solo APK", "no hay paso de rempaquetar: sale uno, el de Java")
+
+# ── 6 · las pantallas nuevas: que la cara no llame a lo que no existe ────────
+# `ui/js/pantallas.js` es capa nueva encima de las tres de antes: habla con el
+# puente de Java (`llama('musicaPoner', …)`), con el núcleo de PC
+# (`fetch(ctx.api() + '/api/chat')`) y con `hud.js` (que tiene que montarla y
+# escuchar su voz). Cada nombre mal escrito es un botón que no hace nada, y en el
+# teléfono no hay consola donde verlo: se comprueba aquí.
+print("\n[6] las pantallas (cara ↔ puente ↔ núcleo)")
+scr_txt = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+hud_txt = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+
+# 6.a · los métodos del puente que usan las pantallas tienen que estar en CortNative
+puente_metodos = metodos_de(puente)
+llamadas = set(re.findall(r"llama\(\s*'(\w+)'", scr_txt))
+# `hud.js` también habla con el puente a pelo (`window.CortNative.musicaPausa()`),
+# y son órdenes de voz: si el nombre está mal escrito, «pausa la música» no hace nada.
+llamadas |= set(re.findall(r"CortNative\.(\w+)\s*\(", hud_txt))
+llamadas |= set(re.findall(r"\bN\.(\w+)\s*\(", hud_txt))
+hueros = sorted(m for m in llamadas if m not in puente_metodos)
+if hueros:
+    falla("puente", "la cara pide " + ", ".join(f"CortNative.{m}()" for m in hueros)
+                  + " y CortNative.java no lo tiene")
+else:
+    dice_ok("puente", f"{len(llamadas)} métodos llamados desde las pantallas y la voz, "
+                      f"todos en CortNative.java")
+
+# 6.b · y las rutas del núcleo existen de verdad en el backend
+backend = "\n".join(p.read_text(encoding="utf-8", errors="ignore")
+                    for p in (RAIZ / "backend" / "app").rglob("*.py"))
+rutas = sorted(set(re.findall(r"fetch\(ctx\.api\(\)\s*\+\s*'(/api/\w+)", scr_txt))
+               | set(re.findall(r"fetch\((?:base|ctx\?\.api\(\))\s*\+\s*'(/api/\w+)", scr_txt)))
+sin_backend = [r for r in rutas if f'"{r}"' not in backend and f"'{r}'" not in backend]
+if sin_backend:
+    falla("núcleo", "pantallas.js llama a " + ", ".join(sin_backend)
+                  + " y el backend no tiene esa ruta (inventada)")
+else:
+    dice_ok("núcleo", ", ".join(rutas) + " — todas existen en backend/app")
+
+# 6.c · hud.js tiene que montarlas y cederles la voz; si no, son código muerto
+if re.search(r"import\s*\{[^}]*\binitPantallas\b[^}]*\}\s*from\s*'\./pantallas\.js'", hud_txt) \
+        and "initPantallas({" in hud_txt and "porVoz(msg)" in hud_txt:
+    dice_ok("montaje", "hud.js importa initPantallas, la llama y le pasa la voz con porVoz()")
+else:
+    falla("montaje", "hud.js no importa o no llama a initPantallas/porVoz: "
+                     "las pantallas serían código muerto y no aparecería la barra ☰")
+
+# 6.d · CSS: nada de pantalla en negro si el módulo falla. Las reglas que tapan el
+# orbe cuelgan de `.pantallas-montadas`, la clase que se pone AL FINAL del montaje.
+css_txt = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+ciegas = re.findall(r"html:not\(\.p-orbe\)\s+#[\w-]+\{display:none", css_txt)
+if ciegas:
+    falla("css", f"{len(ciegas)} regla(s) que ocultan el HUD sin comprobar que las "
+                 f"pantallas se montaron: si el módulo falla, la pantalla queda en negro")
+elif "#scene" in css_txt and "pantallas-montadas" in css_txt:
+    dice_ok("css", "el orbe sólo se apaga cuando `pantallas-montadas` existe: un fallo "
+                   "del módulo deja la interfaz de siempre intacta")
+else:
+    falla("css", "no se encuentra la regla que apaga el orbe en las otras pantallas")
+
+# 6.e · el evento que el puente emite y la cara escucha tienen que llamarse igual
+if re.search(r"__cortNative\.on", scr_txt) and re.search(r"type\s*[!=]==\s*'music'", scr_txt):
+    dice_ok("evento music en la cara", "pantallas.js pinta la barra desde el evento, sin martillar al puente")
+else:
+    falla("evento music en la cara", "la pantalla de música no escucha `music`: la barra no avanzaría")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

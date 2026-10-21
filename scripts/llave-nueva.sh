@@ -47,9 +47,9 @@ if [ -e "$LLAVE" ]; then
 fi
 
 # La misma receta que `apps/apk/llave.sh` usa en el runner: RSA 2048, treinta
-# años de validez y una sola entrada, para que `apksigner` la encuentre sin
-# nombre de alias. Contraseña de almacén y de clave iguales: `rempaquetar.sh`
-# sólo pasa `--ks-pass`.
+# años de validez y una sola entrada (`-alias CORT`), para que `apksigner` la
+# encuentre sin preguntar. Contraseña de almacén y de clave iguales:
+# `compilar.sh` firma con `--ks-pass pass:…` y `--key-pass pass:…` con la misma.
 nueva="$( (openssl rand -hex 8 2>/dev/null || printf '%s' "$(date +%s%N)") | cut -c1-16 )"
 keytool -genkeypair -keystore "$LLAVE" -alias CORT \
     -keyalg RSA -keysize 2048 -validity 10950 \

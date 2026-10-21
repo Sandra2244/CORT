@@ -70,8 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "1.2.3"       # la versión del APK experimental de Java
-      TELEFONO_VERSION: "1.1.4"  # el APK del teléfono: cuerpo 1.1.0 + cara actual
+      APK_VERSION: "1.3.0"       # UN SOLO APK: el de Java, con todo dentro
     steps:
       - uses: actions/checkout@v4
       # -- La misma llave de firma en todas las Releases ----------------------
@@ -91,14 +90,15 @@ jobs:
           path: apps/apk/keystore
           key: cort-apk-keystore-v1
           restore-keys: cort-apk-keystore-v1
-      - name: Compilar el APK de Java (aapt2 + javac + d8, sin Gradle)
+      - name: Compilar el APK (aapt2 + javac + d8, sin Gradle)
         id: java
-        # Este APK es el **experimental**: el holograma embebido con asistente del
-        # sistema, doble toque de auriculares y lectura de avisos. Sale en la
-        # Release (paso `instalador-asistente`), pero con `continue-on-error`: si
-        # un día se rompe el Java, la dueña sigue recibiendo la actualización de su
-        # APK de siempre, que es la otra pata del trabajo.
-        continue-on-error: true
+        # **El único APK que existe.** Desde `v0.2.11-demo` ya no se rempaqueta el
+        # cuerpo Kotlin original: todo —asistente predeterminado, doble toque del
+        # auricular, avisos en voz alta, reproductor propio, contactos y marcar—
+        # está en el Java de `apps/apk/src`, y la firma es la de siempre con el
+        # anillo del original (`base/CORT-IA-1.1.0.apk` sólo aporta el icono).
+        # Sin `continue-on-error`: no hay segunda pata que salve la Release, así
+        # que si el Java se rompe, el run se para y la anotación lo dice.
         shell: bash
         env:
           # La llave de firma: secreto del repo si existe; si no, la caché de
@@ -131,58 +131,23 @@ jobs:
             echo "::error::compilar.sh salió con $st — $msg"
             exit $st
           fi
-      - name: Bautizar el APK experimental de Java
-        if: steps.java.conclusion == 'success'
+      - name: Bautizar el APK
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p apk-java
-          cp apps/apk/build/CORT.apk "apk-java/CORT-IA-${APK_VERSION}-asistente.apk"
-          cp apps/apk/build/firma.txt "apk-java/CORT-IA-${APK_VERSION}-asistente-firma.txt"
-      - name: Rempaquetar el APK del teléfono (cuerpo original + cara actual)
-        id: telefono
-        shell: bash
-        env:
-          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
-          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
-        run: |
-          # `set +e` otra vez: si el paso muere con `bash -e` antes de la
-          # anotación, el fallo vuelve a ser ilegible (los logs de Actions piden
-          # sesión; la anotación del check-run no).
-          set +e
-          chmod +x apps/apk/rempaquetar.sh
-          bash -x apps/apk/rempaquetar.sh "$TELEFONO_VERSION" > /tmp/rempaq.log 2>&1
-          st=$?
-          cat /tmp/rempaq.log
-          if [ $st -ne 0 ]; then
-            errores="$(grep -E 'zip|zipalign|apksigner|PKHEAD|falta|no está' /tmp/rempaq.log | tail -12)"
-            msg=$( { echo "-- rempaquetar --"; echo "${errores:-ninguna}"; \
-                     echo "-- final del log --"; tail -c 900 /tmp/rempaq.log; } \
-                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
-            echo "::error::rempaquetar.sh salió con $st — $msg"
-            exit $st
-          fi
-      - name: Subir el APK del teléfono (el que sale en la Release)
+          mkdir -p apk
+          cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}.apk"
+          cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-firma.txt"
+      - name: Subir el APK (el que sale en la Release)
         uses: actions/upload-artifact@v4
         with:
+          # Se llama `instalador-android` para que lo recoja el mismo
+          # `pattern: instalador-*` de abajo y aparezca en la Release con enlace
+          # de descarga directo. `if-no-files-found: error`: este APK es el único,
+          # así que una Release sin él no sirve para nada y debe gritar.
           name: instalador-android
-          path: |
-            apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}.apk
-            apps/apk/build/CORT-IA-${{ env.TELEFONO_VERSION }}-firma.txt
+          path: apk/*
           if-no-files-found: error
-      - name: Subir el APK del asistente (también va a la Release)
-        uses: actions/upload-artifact@v4
-        with:
-          # Se llama `instalador-asistente` para que lo recoja el mismo
-          # `pattern: instalador-*` de abajo: así el APK del asistente aparece en
-          # la Release, con enlace de descarga directo, en vez de quedar
-          # entierrado en los artefactos del run (donde hace falta sesión de
-          # GitHub para bajarlo). `if-no-files-found: ignore` sigue siendo la red
-          # de seguridad: si el Java de esta ronda no compila, la Release sale
-          # sólo con el APK del cuerpo original y el run no se tira.
-          name: instalador-asistente
-          path: apk-java/*
-          if-no-files-found: ignore
 
   release:
     needs: [build, apk]
@@ -196,54 +161,83 @@ jobs:
         with:
           path: artefactos
           merge-multiple: true
-          # `instalador-*` recoge ahora los **dos** APK del teléfono:
-          # `instalador-android` (el cuerpo original con la cara nueva) y
-          # `instalador-asistente` (el de Java, con asistente predeterminado,
-          # doble toque del auricular y lectura de avisos). Van los dos a la
-          # Release porque la dueña tiene que poder descargarlos con un clic.
-          # Compartmente aviso: los dos son `com.cort.ia`, así que en el teléfono
-          # se instala **uno** u otro, no los dos a la vez.
+          # `instalador-*` recoge los tres instaladores de escritorio y **el**
+          # APK del teléfono. Desde esta Release ya no hay dos APK que elegir:
+          # el cuerpo Kotlin original quedó fuera (`apps/apk/rempaquetar.sh` está
+          # borrado del repo y no hay paso que lo corra) porque todo lo que hacía
+          # está en el de Java, con su icono de anillo y sus permisos.
           pattern: instalador-*
       - uses: softprops/action-gh-release@v2
         with:
           files: artefactos/*
           body: |
-            Instaladores generados por CI: Windows (.exe), Linux (.AppImage y .deb)
-            y **dos** APK para el teléfono.
+            Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
+            .deb) y **un solo APK** para el teléfono. Se acabaron las dos
+            versiones que había que elegir: `CORT-IA-1.3.0.apk` es el CORT de
+            siempre —el anillo en el cajón de aplicaciones— y lleva dentro todo
+            lo que estaba repartido entre los dos.
 
-            `CORT-IA-1.1.4.apk` es **el CORT de siempre con la interfaz nueva
-            dentro**: el cuerpo es el binario original `CORT-IA-1.1.0` (Kotlin, su
-            icono de anillo, micrófono, archivos, apps), y `apps/apk/rempaquetar.sh`
-            le cambia sólo `assets/ui/` por la del commit — once ventanas, con
-            10 · Modelos y 11 · Optimizar —, realinea y refirma.
+            **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
+            saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el
+            adaptativo, fondo `#02040A` medido en la propia imagen), no lo dibuja
+            ni lo cambia. El paquete sigue siendo `com.cort.ia`, así que
+            actualizar es instalar encima **si la firma coincide** (lea el párrafo
+            de la llave más abajo).
 
-            `CORT-IA-1.2.3-asistente.apk` es el APK escrito en Java desde este repo
-            (`apps/apk/compilar.sh`, sin Gradle). Es el que puede ponerse como
-            **asistente predeterminado** (Ajustes ▸ Aplicación de asistencia
-            predeterminada ▸ CORT), el que obedece al **doble toque del auricular**
-            y el que **lee en voz alta los avisos** que llegan —WhatsApp, Gmail,
+            **Asistente de verdad.** `res/xml/asistente.xml` ya no declara una
+            `settingsActivity` —Android descartaba en silencio al asistente cuyos
+            ajustes no fueran de una app del sistema, y una APK instalada a mano
+            nunca lo es—, y el botón «Poner CORT como asistente» pide el **rol**
+            oficial con `RoleManager` (Android 10+), que es el cuadro que de verdad
+            te pone en la lista. Se dice por voz: `pon CORT como asistente`. Con
+            CORT elegido: doble toque del auricular, gesto de asistente y
+            `lee mis avisos`.
+
+            **Su propio reproductor.** `.Reproductor` es un servicio en primer
+            plano con su notificación (play/pausa, siguiente) y su `MediaSession`,
+            así que la música y el video **siguen sonando con la cara cerrada o la
+            pantalla apagada** y el auricular obedece. CORT lee tu índice de audio
+            y video (`MediaStore`), reproduce por URI, salta a cualquier segundo,
+            va **cuadro a cuadro** en video (±1/30 s) y arma la cola sola por
+            gustos: «me gustan estas» sube artista y género, «quítalas» los baja,
+            y la próxima vez que pidas música sale mejor ordenada. Las playlists se
+            guardan con nombre y se vuelven a poner. Todo eso vive en claro, en las
+            preferencias de la app: se puede leer y borrar sin Descuadros raros.
+
+            **Tres pantallas que no tocan el orbe.** Además de la cara de siempre
+            hay hojas a pantalla completa, y se cambia entre ellas con el menú de
+            **tres líneas (☰)**, deslizando el dedo de lado, con `Alt+←/→` o
+            diciéndolo: «abre el chat», «pantalla de código», «vuelve al orbe».
+            **Charla** es un chat como los de siempre —burbujas, copiar la
+            respuesta, guardarla en 04 · Notas— con los modelos que tengas
+            bajados, elegibles desde la propia pantalla. **Código** es la terminal
+            y el cuaderno: lo que escribes ahí se ejecuta **en tu PC** (Android no
+            deja abrir un shell desde una app normal, y no se finge lo contrario),
+            y el cuaderno guarda lo que escribiste aunque cierres la app. **Música**
+            manda al reproductor de arriba. Cuando no es la pantalla del orbe, el
+            holograma **deja de dibujarse** (`orb.pausa()`): en un teléfono modesto
+            eso es RAM, GPU y batería, y así ninguna interfaz nueva tapa la otra.
+
+            **Y ya no traba el teléfono.** El micro de «Oye CORT» se cierra al pasar
+            a segundo plano, al apagarse la pantalla, mientras suena música y
+            mientras la ventana 11 cuenta caché; la escucha se rearma con respiros
+            cada vez más largos si nadie la llama. El reproductor tampoco trabó: las
+            consultas al índice corren en su propio hilo, nunca en el de la cara.
+
+            **Te lo lee**: `lee mis avisos` en el teléfono —WhatsApp, Gmail,
             Telegram, Signal— desde la barra de notificaciones, con un oído que
-            guarda doce líneas en RAM y nunca escribe disco.
-
-            **Ahora sí aparece en la lista de asistentes.** Dos arreglos dentro del
-            APK del asistente: `res/xml/asistente.xml` declaraba una
-            `settingsActivity`, y Android descarta al asistente cuya pantalla de
-            ajustes no pertenezca a una app del sistema —una APK instalada a mano
-            nunca lo es—, así que CORT desaparecía de la lista sin avisar; y el
-            botón «Poner CORT como asistente» pide ahora el **rol** oficial
-            (`RoleManager`, Android 10+), que es el cuadro que de verdad te elige.
-            Se puede decir por voz: `pon CORT como asistente`.
-
-            **Y ya no traba el teléfono.** El micrófono de «Oye CORT» se cierra al
-            pasar a segundo plano, al apagarse la pantalla, mientras suena música y
-            mientras la ventana 11 está contando caché; la escucha se rearma con
-            respiros cada vez más largos si nadie la llama.
-
-            **Te lo lee**: `lee mis notas`, `lee mis tareas`,
-            `lee el documento <nombre>` y `lee mis avisos`. Las notas y las
+            guarda doce líneas en RAM y nunca escribe disco; `lee mis notas`,
+            `lee mis tareas` y `lee el documento <nombre>` en el PC. Las notas y las
             pendientes («tengo que …», y `listo 1` para marcarlas hechas) viven en el
-            backend del PC, así que en el teléfono hacen falta conectados por Wi-Fi
-            con `bash scripts/telefono.sh`; sin PC la cara lo avisa en voz alta.
+            backend, así que en el teléfono hacen falta conectados por Wi-Fi con
+            `bash scripts/telefono.sh`; sin PC la cara lo avisa en voz alta.
+
+            **Llamadas y contactos, dicho sin adornos.** `llama a Samuel` busca en
+            tus contactos y marca: con el permiso `CALL_PHONE` va directo, sin él se
+            abre el marcador con el número puesto. Lo que **no** hace esta entrega:
+            contestar por ti ni ser un buzón de voz —Android exige ser el «teléfono
+            predeterminado» para eso, y a medias deja sin marcar llamadas normales—,
+            y no hay API para leer los SMS de otro ni entrar en WhatsApp.
 
             **Ya no se pierde tu clave al actualizar.** `cort_config.json` (las
             claves de Groq/Gemini que se pegan en 07 · Perfil) y `cort_memory.db`
@@ -263,23 +257,22 @@ jobs:
             **mismo anillo** que el de la app del teléfono
             (`bash scripts/icono-del-telefonito.sh`).
 
-            **Actualizar el APK: sigue pidiendo desinstalar, y así se acaba.** La firma
-            la decide `apps/apk/llave.sh` (secreto del repo ▸ caché del pipeline ▸
-            generar una nueva), y está **medido**: la huella de esta Release es
-            distinta a la de `v0.2.9-demo`, porque `actions/cache` guarda la llave en
-            el *ref* que la creó y cada etiqueta es otro ref — o sea, la caché de una
-            Release nunca se ve desde la siguiente. Mientras no haya secreto, cada
-            Release cuesta una desinstalación (se van el micrófono, el doble toque, el
-            permiso de los avisos y la dirección del PC). La solución, una sola vez,
-            en tu portátil: `bash scripts/llave-nueva.sh` y pegar los dos secretos
-            `CORT_APK_KEYSTORE_B64` / `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets
-            and variables ▸ Actions. Desde la Release siguiente la llave es siempre la
-            tuya. Cada APK lleva su `-firma.txt`: misma huella que la anterior = se
-            instala encima.
-
-            Los dos APK comparten paquete (`com.cort.ia`): en el teléfono se instala
-            **uno u otro**, no los dos a la vez.
+            **Actualizar el APK sin desinstalar, una sola vez.** La firma la decide
+            `apps/apk/llave.sh` (secreto del repo ▸ caché del pipeline ▸ generar una
+            nueva), y está **medido**: sin secreto, la huella de cada Release es
+            distinta, porque `actions/cache` guarda la llave en el *ref* que la creó
+            y cada etiqueta es otro ref — la caché de una Release nunca se ve desde
+            la siguiente. Cada Release sin secreto cuesta una desinstalación (se van
+            el micrófono, el doble toque, el permiso de los avisos y la dirección del
+            PC). La solución, una sola vez, en tu portátil: `bash
+            scripts/llave-nueva.sh` y pegar los dos secretos `CORT_APK_KEYSTORE_B64`
+            / `CORT_APK_KEYSTORE_PASS` en Settings ▸ Secrets and variables ▸ Actions.
+            Desde la Release siguiente la llave es siempre la tuya. Cada APK lleva su
+            `-firma.txt`: misma huella que la anterior = se instala encima.
 
             Requisitos en escritorio: Python 3.10+ y Chrome/Edge.
+            Requisitos del APK: Android 8 o más (el rol de asistente y el permiso de
+            música, desde Android 10 y 13 respectivamente; en los antiguos CORT se
+            elige a mano en Ajustes y la música pide el permiso viejo).
             Instrucciones completas, incluido el modo teléfono por Wi-Fi y el permiso
             de los avisos, en el README.

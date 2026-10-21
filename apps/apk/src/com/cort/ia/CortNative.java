@@ -335,13 +335,28 @@ public class CortNative {
 
     private boolean permiso(String kind) {
         if (kind == null) return false;
-        if (kind.equalsIgnoreCase("mic") || kind.equalsIgnoreCase("micro")
-            || kind.equalsIgnoreCase("audio")) {
+        String k = kind.toLowerCase(Locale.US);
+        if (k.equals("mic") || k.equals("micro") || k.equals("audio")) {
             return act.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                    == PackageManager.PERMISSION_GRANTED;
         }
-        if (kind.equalsIgnoreCase("camara") || kind.equalsIgnoreCase("camera")) {
+        if (k.startsWith("camara") || k.startsWith("camera")) {
             return act.checkSelfPermission(android.Manifest.permission.CAMERA)
+                   == PackageManager.PERMISSION_GRANTED;
+        }
+        // Lo que la cara pregunta antes de prometer una canción o un contacto:
+        // `hasPermission('medios')`, `hasPermission('contactos')`, `hasPermission('avisos')`.
+        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("archiv")) {
+            return Musica.puedeLeer(act);
+        }
+        if (k.startsWith("contacto") || k.startsWith("marcar") || k.startsWith("llam")) {
+            return act.checkSelfPermission(android.Manifest.permission.READ_CONTACTS)
+                   == PackageManager.PERMISSION_GRANTED;
+        }
+        if (k.startsWith("aviso") || k.startsWith("notific")) {
+            // Android 13 es el único que pregunta; antes la notificación existe sin permiso.
+            if (android.os.Build.VERSION.SDK_INT < 33) return true;
+            return act.checkSelfPermission("android.permission.POST_NOTIFICATIONS")
                    == PackageManager.PERMISSION_GRANTED;
         }
         return true;
@@ -528,6 +543,243 @@ public class CortNative {
     /** Lo llama el menú: leer los avisos en voz sin pasar por la página. */
     void leeAvisos() {
         diAlto(Avisos.resumen(Avisos.EN_VOZ_ALTA));
+    }
+
+    /* ─────────────────── el reproductor de CORT ─────────────────── */
+
+    /**
+     * La música y el video que **ya están** en el teléfono, el reproductor propio
+     * (`.Reproductor`, que es un servicio con su notificación) y lo que CORT sabe
+     * de los gustos de la dueña (`.Musica`, una cuenta por artista y por género).
+     *
+     * Dos cosas que conviene tener claras leyendo esto:
+     *
+     * · Los métodos que devuelven JSON corren en el hilo del puente, **no** en el
+     *   de la interfaz. Es a propósito: preguntarle 400 filas al índice del
+     *   sistema tarda lo suyo, y si se hiciera desde `runOnUiThread` el orbe se
+     *   cortaría a cada «pon música». El dibujo va por su cuenta y no se entera.
+     *
+     * · Sin permiso de leer archivos la lista sale **vacía**, no falsa. Por eso
+     *   la cara pregunta `musicaPuedeLeer()` antes de prometer una canción, y
+     *   `pidePermisoMedios()` abre el cuadro de una vez.
+     *
+     * Las URIs viajan separadas por salto de línea o `;` — una URI de
+     * `MediaStore` no lleva ninguno de los dos, así que no hay JSON que parsear
+     * en Java y el APK sigue sin librerías externas.
+     */
+
+    @JavascriptInterface
+    public boolean musicaPuedeLeer() {
+        return Musica.puedeLeer(act);
+    }
+
+    /** El cuadro de permisos de leer la discoteca (audio + video + fotos). */
+    @JavascriptInterface
+    public void pidePermisoMedios() {
+        act.pidePermiso("medios");
+    }
+
+    /** ¿Le falta a CORT el «acceso a todos los archivos» para poder *mover*? */
+    @JavascriptInterface
+    public boolean puedeOrdenarArchivos() {
+        if (android.os.Build.VERSION.SDK_INT < 30) return false;
+        try {
+            return android.os.Environment.isExternalStorageManager();
+        } catch (Exception eseAndroidNoTieneEseInterruptor) {
+            return false;
+        }
+    }
+
+    /** La pantalla del sistema donde está ese interruptor, para que lo ponga ella. */
+    @JavascriptInterface
+    public void abreAjustesArchivos() {
+        act.runOnUiThread(() -> {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                try {
+                    act.startActivity(new Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            Uri.fromParts("package", act.getPackageName(), null))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    return;
+                } catch (Exception eseFabricanteNoTieneEsaPantalla) { /* al final común */ }
+            }
+            openAppSettings();
+            act.avisa("Android 10 o menos: CORT ya puede mover archivos, dime qué ordenar");
+        });
+    }
+
+    /** Canciones (y videos si se pide) cuyo título, artista o género contains `q`. */
+    @JavascriptInterface
+    public String musicaBuscar(final String q, final boolean incluirVideo) {
+        return Musica.listaJson(Musica.buscar(act, q, incluirVideo));
+    }
+
+    /** Las que mejor encajan con lo que ha oído, de más a menos. */
+    @JavascriptInterface
+    public String musicaPorGusto(final String filtro, final int cuantas) {
+        int n = cuantas <= 0 ? 25 : Math.min(cuantas, 200);
+        return Musica.listaJson(Musica.porGusto(act, filtro, n));
+    }
+
+    /** «me gustan estas» / «quítalas»: sube o baja artista y género. */
+    @JavascriptInterface
+    public void musicaGustar(final String uris, final boolean meGusta) {
+        Musica.gustar(act, Musica.porUri(act, trocea(uris)), meGusta);
+    }
+
+    /** El perfil en claro, para que la cara lo lea: «te gusta X y Y». */
+    @JavascriptInterface
+    public String musicaPerfil() {
+        return Musica.perfilJson(act);
+    }
+
+    @JavascriptInterface
+    public String musicaListas() {
+        return Musica.listasJson(act);
+    }
+
+    @JavascriptInterface
+    public void musicaGuardarLista(final String nombre, final String uris) {
+        Musica.guardaLista(act, nombre, trocea(uris));
+    }
+
+    /** Poner la cola entera por URI y arrancar por la posición `desde`. */
+    @JavascriptInterface
+    public boolean musicaPoner(final String uris, final int desde) {
+        java.util.List<Reproductor.Pista> pistas = alReproductor(Musica.porUri(act, trocea(uris)));
+        if (pistas.isEmpty()) return false;
+        Reproductor.ponerCola(act, pistas, desde);
+        Reproductor.reproducir();
+        return true;
+    }
+
+    /** Lo mismo con una playlist guardada por nombre. */
+    @JavascriptInterface
+    public boolean musicaPonerLista(final String nombre, final int desde) {
+        java.util.List<Reproductor.Pista> pistas =
+            alReproductor(Musica.porUri(act, Musica.urisDeLista(act, nombre)));
+        if (pistas.isEmpty()) return false;
+        Reproductor.ponerCola(act, pistas, desde);
+        Reproductor.reproducir();
+        return true;
+    }
+
+    /**
+     * «Ponme algo»: la cola se arma sola con los gustos y suena.
+     *
+     * Se consulta en un hilo aparte porque el menú de Java la llama desde el
+     * hilo de la interfaz, y recorrer el índice del sistema ahí dentro es
+     * exactamente la traba que la dueña nota cuando CORT se pone a pensar.
+     */
+    @JavascriptInterface
+    public void musicaAutomatica() {
+        if (!Musica.puedeLeer(act)) {
+            act.avisa("Dame el permiso de música y te la pongo yo");
+            act.pidePermiso("medios");
+            return;
+        }
+        new Thread(() -> {
+            java.util.List<Reproductor.Pista> pistas =
+                alReproductor(Musica.porGusto(act, "", 40));
+            if (pistas.isEmpty()) {
+                act.avisa("No encuentro música que reproducir en el teléfono");
+                return;
+            }
+            Reproductor.ponerCola(act, pistas, 0);
+            Reproductor.reproducir();
+            musicaCambio();
+        }, "cort-musica-automatica").start();
+    }
+
+    @JavascriptInterface
+    public void musicaPlay() { Reproductor.reproducir(); }
+
+    @JavascriptInterface
+    public void musicaPausa() { Reproductor.pausar(); }
+
+    @JavascriptInterface
+    public void musicaSiguiente() { Reproductor.siguiente(); }
+
+    @JavascriptInterface
+    public void musicaAnterior() { Reproductor.anterior(); }
+
+    /** Saltar a un segundo concreto (la barra de progreso de la cara). */
+    @JavascriptInterface
+    public void musicaSalto(final int ms) { Reproductor.salto(Math.max(0, ms)); }
+
+    /** Cuadro a cuadro: ±1/30 s, para mirar un video fotograma a fotograma. */
+    @JavascriptInterface
+    public void musicaCuadro(final boolean haciaAtras) { Reproductor.cuadro(haciaAtras); }
+
+    @JavascriptInterface
+    public void musicaVolumen(final double de0a1) {
+        Reproductor.volumen((float) Math.max(0d, Math.min(1d, de0a1)));
+    }
+
+    /** Se calla y apaga el servicio (la notificación desaparece con él). */
+    @JavascriptInterface
+    public void musicaParar() {
+        Reproductor.detener();
+        musicaCambio();
+    }
+
+    @JavascriptInterface
+    public String musicaEstado() {
+        return Reproductor.estadoJson();
+    }
+
+    /** Lo llama `.Reproductor` cada vez que algo cambia: play, pausa, canción nueva. */
+    void musicaCambio() {
+        cuadro("{\"type\":\"music\",\"estado\":" + Reproductor.estadoJson() + "}");
+    }
+
+    /* ─────────────────── contactos y marcar ─────────────────── */
+
+    /** Si puede marcar de una vez, o si sólo abrirá el marcador con el número puesto. */
+    @JavascriptInterface
+    public boolean puedeMarcar() {
+        return Telefono.puedeMarcarDirecto(act);
+    }
+
+    @JavascriptInterface
+    public String contactos(final String quien) {
+        return Telefono.contactosJson(act, quien);
+    }
+
+    /**
+     * «Llama a Samuel». Con permiso marca directo; sin él abre el marcador.
+     * El JSON ya trae `directo`, así que la cara puede decir «lo marco» o
+     * «está marcado, pulsa tú» en vez de prometer de más.
+     */
+    @JavascriptInterface
+    public String llamar(final String quien) {
+        return Telefono.llamar(act, quien);
+    }
+
+    /** El cuadro de los permisos de marcar y de leer los contactos. */
+    @JavascriptInterface
+    public void pidePermisoTelefono() {
+        act.pidePermiso("contactos");
+    }
+
+    /* ───────────────────────── lista y compañía ───────────────────────── */
+
+    /** URIs separadas por `\n` o `;` → lista limpia, sin huecos. */
+    private static java.util.List<String> trocea(String uris) {
+        java.util.List<String> out = new ArrayList<>();
+        if (uris == null) return out;
+        for (String u : uris.split("[\n;]+")) {
+            String t = u.trim();
+            if (!t.isEmpty()) out.add(t);
+        }
+        return out;
+    }
+
+    private static java.util.List<Reproductor.Pista> alReproductor(java.util.List<Musica.Pista> leidas) {
+        java.util.List<Reproductor.Pista> out = new ArrayList<>();
+        if (leidas == null) return out;
+        for (Musica.Pista p : leidas) if (p != null) out.add(p.alReproductor());
+        return out;
     }
 
     /* ───────────────────────── ciclo de vida ────────────────────── */

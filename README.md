@@ -47,13 +47,14 @@ ninguna clave sigue siendo útil con comandos propios y modo sin conexión.
 | 📂 | **Archivos seguros** | Árbol lateral con doble conteo (carpetas · archivos) que se expande, vista rejilla/lista y botón **Abrir** que lanza la carpeta en el explorador del sistema |
 | 🎵 | **Música** | Escanea `~/Música`, reproduce en el panel o abre tu reproductor (VLC) con «reproduce música» |
 | 📝 | **Notas, pendientes y memoria** | «apunta …» guarda una nota; «tengo que comprar aceite» guarda una pendiente y «listo 1» la marca como hecha; **08 · Cerebro** muestra el muro de recuerdos enmarcados (notas + conversaciones) |
-| 🔊 | **Te lo lee en voz alta** | «lee mis notas» · «lee mis tareas» · «lee el documento recibo» · «lee mis avisos». En el PC lo lee del backend (notas, pendientes y textos de tus carpetas seguras); en el teléfono `CORT-IA-1.2.3-asistente.apk` lee el **centro de notificaciones** — WhatsApp, Gmail, Telegram, Signal — con un oído que guarda doce líneas en RAM y se borran solas: nunca se escriben a disco |
+| 🔊 | **Te lo lee en voz alta** | «lee mis notas» · «lee mis tareas» · «lee el documento recibo» · «lee mis avisos». En el PC lo lee del backend (notas, pendientes y textos de tus carpetas seguras); en el teléfono `CORT-IA-1.3.0.apk` lee el **centro de notificaciones** — WhatsApp, Gmail, Telegram, Signal — con un oído que guarda doce líneas en RAM y se borran solas: nunca se escriben a disco |
 | 📊 | **Sensores** | CPU / RAM / disco / batería reales y clima actual (Open-Meteo, cacheado, sin API key) |
 | ✋ | **Gestos** | MediaPipe ligero: palma despliega/plega ventanas, pinza trae el chat, puño las cierra |
 | 💡 | **Lámpara de estado** | Morado escuchando · naranja procesando · verde en línea · gris con el HUD oculto · rojo sin backend |
-| 📱 | **APK del teléfono** | dos en la Release: el cuerpo original con la interfaz de hoy dentro, y el escrito aquí con asistente del sistema, doble toque de auriculares y lectura de avisos (`apps/apk/`) |
+| 🖥 | **Pantallas** | Además del orbe hay tres hojas a pantalla completa: **Música** (sólo en el teléfono), **Charla** (chat normal con tus modelos de Ollama, copiar y seleccionar) y **Código** (terminal + cuaderno). Se cambia con ☰, deslizando el dedo de lado, con `Alt+←/→` o diciéndolo. Ninguna tapa el orbe: cuando no es su pantalla, el lienzo WebGL se apaga |
+| 📱 | **APK del teléfono** | **Uno solo** en la Release: `CORT-IA-1.3.0.apk`, el que compila `apps/apk/compilar.sh` en GitHub Actions, con el anillo de siempre como icono, el rol de asistente, su propio reproductor, el doble toque del auricular y la lectura de avisos |
 | 🎙 | **El oído no traba el teléfono** | «Oye CORT» cierra el micrófono cuando la app se va a segundo plano, cuando se apaga la pantalla, mientras suena música y mientras la ventana 11 está contando caché, y vuelve solo al pasar todo eso. Si nadie la llama, se españa cada vez más en vez de reabrir el micro cuatrocientas mil veces |
-| 🤖 | **CORT como asistente** | En `CORT-IA-1.2.3-asistente.apk`: di «pon CORT como asistente» (o usa el botón `CORT · PC` ▸ «Poner CORT como asistente») y Android abre su cuadro de rol —`RoleManager`, API 29+— para elegir CORT. El gesto del asistente, la pantalla bloqueada y el doble toque del auricular quedan entonces en CORT; el «OK Google» con la pantalla apagada se pierde, porque eso lo decide el servidor de Google |
+| 🤖 | **CORT como asistente** | En `CORT-IA-1.3.0.apk`: di «pon CORT como asistente» (o usa el botón `CORT · PC` ▸ «Poner CORT como asistente») y Android abre su cuadro de rol —`RoleManager`, API 29+— para elegir CORT. El gesto del asistente, la pantalla bloqueada y el doble toque del auricular quedan entonces en CORT; el «OK Google» con la pantalla apagada se pierde, porque eso lo decide el servidor de Google |
 | 📡 | **Modo teléfono** | `bash scripts/telefono.sh` enlaza la Wi-Fi y el celular abre el holograma actual en `http://IP-del-PC:8000` |
 | ⏻ | **Arranque BIOS** | Secuencia de encendido que comprueba en vivo cada subsistema y el puerto donde vive el núcleo |
 
@@ -113,7 +114,7 @@ o descarga el ZIP de esta rama (`Code ▸ Download ZIP`) y descomprime.
 | **Windows** | doble clic en `scripts\run.bat` | `http://localhost:8000` |
 | **Ventana holográfica (Electron)** | `bash scripts/run-desktop.sh` | ventana sin marco, modo cabina |
 | **Linux, instalado como app** | `bash scripts/instalar-linux.sh` | icono en `~/Escritorio/CORT.desktop` (extrae el AppImage sin sudo) |
-| **Android (APK del teléfono)** | instala [`CORT-IA-1.1.4.apk`](https://github.com/Sandra2244/CORT/releases/latest) | tu CORT de siempre (mismo icono, misma cara) con las once ventanas nuevas dentro |
+| **Android (APK del teléfono)** | instala [`CORT-IA-1.3.0.apk`](https://github.com/Sandra2244/CORT/releases/latest) | un solo APK: el anillo de siempre, las once ventanas, su reproductor, sus pantallas y el rol de asistente |
 | **Teléfono en la misma Wi-Fi** | `bash scripts/telefono.sh` | `http://IP-de-tu-PC:8000` desde el navegador del celular |
 
 > ¿El puerto 8000 está ocupado? `CORT_PORT=8090 bash scripts/run.sh`
@@ -142,83 +143,70 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 
 ### 5 · Descargas ya compiladas
 
-La [Release v0.2.10-demo](https://github.com/Sandra2244/CORT/releases/tag/v0.2.10-demo)
-tiene los instaladores generados por GitHub Actions (nunca se compilan en tu PC,
-que para eso hace falta un equipo sobrado):
+[La última Release](https://github.com/Sandra2244/CORT/releases/latest) tiene los
+instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
+eso hace falta un equipo sobrado):
 
-| Archivo | Para | Peso |
-|---|---|---|
-| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) | 78.966.589 B |
-| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) | 107.703.555 B |
-| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint | 74.828.436 B |
-| `CORT-IA-1.1.4.apk` | Android 8+ (ocho o más): **el APK original con la interfaz actual dentro** | 1.756.727 B |
-| `CORT-IA-1.2.3-asistente.apk` | Android 8+: el escrito desde aquí — asistente predeterminado, doble toque del auricular y lee tus avisos en voz alta | 378.490 B |
-| `CORT-IA-1.1.4-firma.txt` · `CORT-IA-1.2.3-asistente-firma.txt` | con qué llave salió cada uno y qué lleva dentro (prueba pública) | texto |
+| Archivo | Para |
+|---|---|
+| `CORT.Setup.0.2.0.exe` | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | Debian / Ubuntu / Mint |
+| `CORT-IA-1.3.0.apk` | Android 8+: **el único APK**. El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, y las pantallas Charla / Código / Música |
+| `CORT-IA-1.3.0-firma.txt` | con qué llave salió y qué lleva dentro (prueba pública) |
 
-> El instalador de escritorio abre el mismo backend de Python: sigue necesitando
-> Python 3.10+ en el equipo, y la primera vez puede tardar unos segundos en
-> arrancar mientras crea su entorno.
+> Los instaladores de escritorio abren el mismo backend de Python: siguen
+> necesitando Python 3.10+ en el equipo, y la primera vez puede tardar unos
+> segundos en arrancar mientras crea su entorno.
 
 ### 6 · CORT en el teléfono
 
-En el repo hay **dos** cosas que producen APK, y hacen cosas distintas:
+Hay **un solo APK**, y es el que se compila aquí de principio a fin:
 
 | APK | Qué es | Dónde está |
 |---|---|---|
-| `CORT-IA-1.1.4.apk` | **El tuyo de siempre, actualizado.** El cuerpo es el binario original `CORT-IA-1.1.0` (`com.cort.ia`, Kotlin, cuatro `classes.dex`, su icono de anillo adaptativo, `ListenService`, permisos de archivos/audio/almacenamiento) y lo único que se le cambia es la interfaz que lleva dentro: `assets/ui/` se sustituye por `ui/` de este commit. Después se realinea (`zipalign`) y se refirma (`apksigner`), porque tocar un entry rompe la firma vieja. **No puede leer los avisos del teléfono**: ese puente lo trae sólo el de abajo, y la cara se disculpa con una frase en vez de romperse. | `apps/apk/rempaquetar.sh` → la Release |
-| `CORT-IA-1.2.3-asistente.apk` | **El experimental escrito desde cero aquí**: Java puro sin Gradle (`apps/apk/compilar.sh`), con el holograma del repo embebido bajo `https://cort.local`, puente de voz propio (`CortNative.java`), traje de `VoiceInteractionService` para **ser el asistente predeterminado**, `MediaSession` para el **doble toque del auricular** y el servicio `Avisos` (`NotificationListenerService`) que **lee en voz alta lo que llega por WhatsApp, Gmail, Telegram o Signal**. Pesa ~370 KB porque es otra app: no lleva el Kotlin de archivos/apps/almacenamiento del original. | `apps/apk/compilar.sh` → la Release |
+| `CORT-IA-1.3.0.apk` | Java puro sin Gradle (`aapt2` + `javac --release 11` + `d8` + `zipalign` + `apksigner`), con el holograma del repo embebido bajo `https://cort.local` y su puente de voz propio (`CortNative.java`). Lleva el **anillo de siempre** como icono —`compilar.sh` saca los cinco `mipmap-*` y el XML adaptativo del `base/CORT-IA-1.1.0.apk`, no lo dibuja nadie—, el traje de `VoiceInteractionService` para **ser el asistente predeterminado**, `MediaSession` para el **doble toque del auricular**, `Avisos` (`NotificationListenerService`) que **lee en voz alta lo que llega**, y ahora **su propio reproductor** (`.Reproductor`, un servicio en primer plano con `foregroundServiceType="mediaPlayback"`): biblioteca leída de `MediaStore`, gustos que se aprenden con 👍/👎, listas guardadas, avance/retroceso y **cuadro a cuadro** en vídeo, todo en segundo plano sin trabar el teléfono. | `apps/apk/compilar.sh` → la Release |
 
-Por qué el del teléfono se rempaqueta y no se recompila: **el proyecto Gradle que
-generó el 1.1.0 no está en este repo** — lo que se guardó siempre fue el binario
-(`instaladores/CORT-IA-1.1.0.apk`, 1.815.389 bytes, comprobado byte a byte contra
-la copia del Escritorio: mismo SHA-256 `b5fa07fa…`). Sin ese proyecto no hay forma
-de recompilar su Kotlin en Actions; con el binario sí se le puede cambiar la cara,
-que es lo que importa cuando lo que mejora es la interfaz.
+La vía de **rempaquetar** el binario original (`rempaquetar.sh`) está borrada del
+repo y del workflow. Existía porque el proyecto Gradle que generó el `1.1.0`
+nunca estuvo en este repo —lo guardado era el binario
+(`instaladores/CORT-IA-1.1.0.apk`, SHA-256 `b5fa07fa…`)— y lo único que se le
+podía cambiar era la cara. Ese camino daba dos APK que había que saber elegir, y
+la dueña lo pidió claro: **todo dentro del que se compila**. Lo que se conserva
+del binario es su icono, que es lo que lo hace «el de siempre».
 
-Lo que se verificó antes de meter la mano (diff real entre los `assets/ui/` del
-binario y `ui/` del repo): `android-bridge.js`, `voice.js`, `orb.js`,
-`gestures.js`, `windows.js` y `vendor/three.module.js` son **idénticos byte a
-byte**; sólo difieren `hud.js`, `index.html`, `hud.css` e `icons.js` (las ventanas
-10 · Modelos y 11 · Optimizar). Y la superficie del puente nativo que la cara
-llama **en el teléfono** sigue siendo la de siempre (`CortNative.listen`,
-`stopListening`, `bgStatus`, `setBackground`, `keepAwake`), así que el Kotlin de
-dentro entiende el JavaScript nuevo. Los métodos nuevos —`CortNative.avisos()`,
-`.vaciarAvisos()`, `.assistantState()`, `.openAssistantSettings()` y
-`.musicPlaying()`— **no existen en ese Kotlin**: por eso la cara comprueba
-`typeof N.<método> !== 'function'` antes de llamar a cada uno y, si no está, lo
-dice con una frase en vez de reventar con un `TypeError`. Lo comprueba
-`python3 scripts/prueba-costura.py`. La versión que aparece en
-Ajustes ▸ Aplicaciones seguirá siendo **1.1.0**: el `versionName` vive en el
-manifiesto binario y reescribirlo sin el proyecto original no se puede hacer aquí.
+Qué es verdad y qué no, dicho sin adornos:
 
-Lo que el del teléfono **no** trae, dicho sin adornos:
-
-- **No puede ser el asistente predeterminado, ni escuchar el doble toque del
-  auricular, ni leer tus avisos en voz alta.** Las tres cosas exigen tocar su
-  `AndroidManifest` (añadir `BIND_VOICE_INTERACTION`, `res/xml/asistente.xml` y
-  el servicio de `BIND_NOTIFICATION_LISTENER_SERVICE`) y su código Java, y en un
-  binario compilado por fuera no se puede editar. Viven en el APK experimental
-  de la tabla de arriba, que desde `v0.2.8-demo` **también se publica en la
-  Release** para que se pueda bajar con un clic sin entrar a los artefactos del
-  run.
-- **Leer los avisos pide un interruptor a mano, una vez.** En
-  `CORT-IA-1.2.3-asistente.apk` abre el menú (el botón `☰`) y toca «Dar el
-  permiso de los avisos», o ve a Ajustes ▸ Notificaciones ▸ Acceso de
-  notificación y activa CORT. Es el mismo interruptor que usan las apps de
-  recordatorios: sin él CORT no ve la barra, y el menú te lo recuerda escribiendo
-  «pendiente». Lo que sí ve sin permiso: tus notas, tus pendientes y tus
-  documentos, porque eso lo contesta el backend del PC cuando estás conectado
-  por Wi-Fi.
-- Las ventanas 10 · Modelos y 11 · Optimizar necesitan el backend del portátil:
-  sin PC muestran el aviso de «sin PC» en vez de datos, porque piden `/api/*`.
-  Lo mismo pasa con «lee mis notas» o «lee mis tareas» a pelo: la cara traduce
-  el 501 del teléfono y lo dice en voz alta en lugar de quedarse callada.
+- **El reproductor, la música y las llamadas funcionan en el teléfono sin PC**;
+  las ventanas 10 · Modelos, 11 · Optimizar, la pantalla **Charla** y la
+  pantalla **Código** necesitan el backend del portátil, porque piden `/api/*`.
+  Sin PC no inventan una respuesta: la cara traduce el `501` del `MainActivity`
+  y lo dice en voz alta. `MainActivity` intercepta `/api/*` a propósito.
+- **La pantalla Código ejecuta en el PC, no en el teléfono.** Android no permite
+  abrir un shell desde una app normal; por eso ese terminal manda la orden al
+  núcleo (`/api/command`) y lo que ves es lo que hizo tu portátil. Prometer un
+  terminal que «arregla el teléfono» sería mentira.
+- **Leer los avisos pide un interruptor a mano, una vez.** Abre el menú (el botón
+  `☰`) y toca «Dar el permiso de los avisos», o ve a Ajustes ▸ Notificaciones ▸
+  Acceso de notificación y activa CORT. Sin él CORT no ve la barra.
+- **Con CORT como asistente se pierde el «OK Google» con la pantalla apagada**,
+  porque eso lo decide el servidor de Google, y Android sólo permite un asistente.
+- **Contestar llamadas por ti, buzón de voz, leer SMS y gestionar el correo no
+  están en este APK.** Contestar exige el rol `ROLE_CALLING` y un `InCallService`
+  (quedarse con la pantalla de llamada del sistema), y para SMS/WhatsApp no hay
+  API: se diría «lo hago» y no es cierto. Aquí CORT **ve con quién hablas y marca
+  el número** (`Telefono.java`, con permiso de contactos y de llamar concedido a
+  mano); lo demás está anotado como pendiente en `docs/PLAN-CORT.md`.
 - **Actualizar el APK todavía pide desinstalar, y ya se sabe por qué.** Hasta
   `v0.2.8-demo` cada run firmaba con una llave desechable distinta, y para Android
-  una firma distinta es otra aplicación; al desinstalar se va todo lo concedido a
-  mano: el micrófono, el doble toque, el permiso de los avisos y la dirección del
-  PC. `apps/apk/llave.sh` intentó arreglarlo con la caché de Actions y **está
-  medido en `v0.2.10-demo`: no basta** — `actions/cache` guarda cada llave en el
+  una firma distinta es otra aplicación; al desinstalar se va lo concedido a mano
+  (micrófono, avisos, contactos, dirección del PC) y lo que CORT apuntó **en el
+  teléfono**: tus gustos musicales y tus listas viven en las preferencias de la
+  app. Lo que no se pierde es el cerebro: las notas, los recuerdos y las
+  pendientes están en el PC (`~/.cort/`, o `%APPDATA%\CORT\` en Windows), y las
+  claves de Groq/Gemini también.
+  `apps/apk/llave.sh` intentó arreglarlo con la caché de Actions y **está medido
+  en `v0.2.10-demo`: no basta** — `actions/cache` guarda cada llave en el
   *ref* que la creó, una etiqueta nueva es otro ref, y la huella de esta Release no
   coincide con la de `v0.2.9-demo` (`645fee97…`). Lo que sí es permanente es el
   secreto del repo, y se fabrica en tu propio PC con `bash scripts/llave-nueva.sh`:
@@ -328,7 +316,7 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 | `ui/index.html` · `ui/css` · `ui/js` | Holograma: orbe Three.js + HUD + voz + gestos |
 | `ui/vendor/` | Three.js incluido: la interfaz funciona sin internet |
 | `desktop/main.cjs` | Ventana Electron (modo cabina / modo vidrio) |
-| `apps/apk/` | El proyecto Android sin Gradle: Java puro + `compilar.sh` (el asistente con avisos) y `rempaquetar.sh` (el cuerpo original con la cara nueva) — los compila Actions, nunca tu PC |
+| `apps/apk/` | El proyecto Android sin Gradle: Java puro + `compilar.sh` — el único APK que sale (asistente, avisos, reproductor propio y llamadas) —, `llave.sh` para la firma estable y `base/` con el binario viejo sólo para tomar su icono. Lo compila Actions, nunca tu PC |
 | `docs/` | Plan de arquitectura, fotogramas de referencia y capturas |
 | `scripts/` | `run.sh` (Linux/macOS), `run.bat` (Windows), `run-desktop.sh` (Electron), `instalar-linux.sh` (app instalada), `telefono.sh` (Wi-Fi), `prueba-lectura.py` y `prueba-costura.py` (las dos comprobaciones de esta ronda, en sandbox, sin tocar tus carpetas) |
 | `.github/workflows/build.yml` | CI que compila los instaladores y publica la Release |
@@ -343,9 +331,10 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       ventana de ayuda y soporte (wake word incluida; Piper TTS queda opcional
       porque Web Speech ya da voz gratis)
 - [x] **F6** Escritorio Electron + instaladores por CI (.exe / .AppImage / .deb)
-- [x] **F7** Android: dos APK en la Release. `CORT-IA-1.1.4.apk` — el cuerpo original de la dueña con la interfaz actual metida en `assets/ui/` (`apps/apk/rempaquetar.sh`, firmado por CI). Y `CORT-IA-1.2.3-asistente.apk` — `apps/apk/compilar.sh` compila desde cero, en Java y sin Gradle, el APK que **sí** puede ser el asistente predeterminado, escuchar el doble toque del auricular y leer en voz alta los avisos que llegan (`Avisos.java`, un `NotificationListenerService` que sólo guarda doce líneas en RAM)
+- [x] **F7** Android: **un solo APK** en la Release — `CORT-IA-1.3.0.apk`, que compila `apps/apk/compilar.sh` desde cero en Java y sin Gradle. Es el asistente predeterminado (rol por `RoleManager`), escucha el doble toque del auricular (`MediaSession`), lee en voz alta los avisos que llegan (`Avisos.java`, un `NotificationListenerService` que sólo guarda doce líneas en RAM), trae el anillo de siempre como icono (sacado de `base/CORT-IA-1.1.0.apk`) y lleva dentro su propio reproductor (`.Reproductor` + `Musica.java`: biblioteca, gustos, playlists y cuadro a cuadro en vídeo) y el marcador de contactos (`Telefono.java`). La vía de `rempaquetar.sh` está borrada del repo y del workflow: dos APK que había que elegir era trabajo doble y lío para instalar
 - [x] **F7a** Voz que lee: «lee mis notas / mis tareas / mis avisos / el documento …» — notas y pendientes en SQLite (`memory.py`), textos de las carpetas seguras (`sensors.leer_texto`) y avisos del teléfono por la barra de notificaciones. Comprobado sin teléfono con `scripts/prueba-lectura.py` y `scripts/prueba-costura.py`
-- [ ] F7b Meter en el repo el proyecto Gradle que generó el 1.1.0 para poder recompilar el cuerpo de verdad (asistente + auriculares + su cara, en un solo APK)
+- [x] **F7c** Pantallas aparte del orbe (`ui/js/pantallas.js`): **Charla** (chat con burbujas, modelos de Ollama, copiar y guardar en Notas), **Código** (terminal contra `/api/command` + cuaderno de código) y **Música** en el teléfono. Se cambia con ☰, deslizando, `Alt+←/→` o por voz, y el orbe se apaga cuando no le toca para no gastar GPU ni batería
+- [ ] F7b Contestar llamadas por ti y buzón de voz: pide el rol `ROLE_CALLING` con su `InCallService` (Android no deja otra cosa); leer SMS o el contenido de WhatsApp no tiene API, así que no se finge
 - [ ] F8 Idiomas adicionales y temas visuales
 
 Todo el software usado es gratuito.

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # La llave con la que se firma el APK del teléfono — una sola, en todas las Releases.
 #
-# Por qué existe este archivo: cada run de `compilar.sh` y `rempaquetar.sh`
-# generaba su propia llave desechable, y para Android una firma distinta es otra
+# Por qué existe este archivo: cada run de `compilar.sh` generaba su propia llave
+# desechable, y para Android una firma distinta es otra
 # aplicación. Eso significaba que **cada actualización obligaba a desinstalar**,
 # y al desinstalar se va el permiso del micrófono, el de los avisos y la dirección
 # del PC que la dueña escribió a mano. Este helper hace que la llave sea siempre
@@ -15,8 +15,14 @@
 #      pipeline guardó la primera vez en la caché (`actions/cache`, paso
 #      `cort-apk-keystore-v1` de `build.yml`). Con esto ya no hay que tocar nada.
 #   3. Ninguna de las dos: se genera una llave nueva **dentro de esa carpeta**, de
-#      modo que el siguiente run la encuentra en la caché. Ésa es la última vez que
-#      hace falta desinstalar.
+#      modo que el siguiente run la encuentra en la caché.
+#
+# El detalle medido (que antes se decía mal): la caché de `actions/cache` vive
+# **en el `ref` que la creó**, y cada etiqueta es otro `ref`. O sea, con el camino
+# 2 la llave se repite entre runs de una misma etiqueta, pero la Release siguiente
+# no la ve y vuelve a tocar desinstalar. La única llave de verdad permanente es el
+# secreto del repo (camino 1); se monta una vez en el portátil con
+# `bash scripts/llave-nueva.sh` y se pegan sus dos secretos.
 #
 # Deja definidas cuatro variables para que el que llame escriba la verdad en
 # `firma.txt`: `LLAVE`, `LLAVE_PASS`, `LLAVE_ORIGEN`, `LLAVE_ACTUALIZA`.
@@ -30,7 +36,7 @@
 
 # La carpeta es la de este script (`apps/apk/keystore`), absoluta y sin depender
 # del `cd` en el que esté el que llama: `compilar.sh` trabaja dentro de
-# `apps/apk/` y `rempaquetar.sh` en la raíz del repo.
+# `apps/apk/`, pero el workflow invoca desde la raíz del repo.
 _AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORT_KEYSTORE_DIR="${CORT_KEYSTORE_DIR:-$_AQUI/keystore}"
 

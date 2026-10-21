@@ -32,7 +32,8 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 | Manos | **MediaPipe Hands** (JavaScript, corre en CPU del navegador) | Detección de 21 puntos de la mano: abrir palma = desplegar, pinza = agarrar archivo |
 | Memoria | SQLite + JSON local | Persistente entre sesiones |
 | Sensores | `psutil` (Python): batería, CPU, RAM, red; API Open-Meteo para clima | Los paneles de estado del v3/v6 |
-| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `apksigner`) embebiendo la misma `ui/`, más la vía de **rempaquetar** el APK original de Kotlin | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila |
+| Móvil | **Java puro sin Gradle** (`aapt2` + `javac` + `d8` + `zipalign` + `apksigner`) embebiendo la misma `ui/`: **un solo APK**, `CORT-IA-1.3.0.apk`, con su reproductor en primer plano y su marcador. La vía de rempaquetar el binario de Kotlin está fuera del repo | Un `gradle build` congeló el portátil de 1,8 GB (medido); en Actions no pasa, y ahí se compila. Dos APK que había que elegir eran doble trabajo y doble publicación |
+| Pantallas | `ui/js/pantallas.js`: hojas a pantalla completa (Orbe · Música · Charla · Código) que se cambian con ☰, deslizando, `Alt+←/→` o por voz, y apagan el WebGL cuando no les toca | La dueña pidió interfaces separadas que **no toquen ni obstruyan** el orbe, como las apps multiventana |
 | Lectura en voz alta | PC: SQLite + `sensors.leer_texto`. Teléfono: `NotificationListenerService` en RAM | No hay API de WhatsApp: la barra de notificaciones es lo que la dueña ya ve, y no deja rastro en disco |
 
 ## 3. Arquitectura
@@ -63,12 +64,18 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 - **F4 — Manos**: MediaPipe — palma abierta despliega paneles, pinza agarra/suelta archivos, puño = dormir.
 - **F5 — Automaata**: wake word ("Oye CORT"), memoria persistente, comandos de sistema, perfil personalizable (como el instalador del v5).
 - **F6 — Empaquetar**: `electron-builder` → instalador .exe (Windows) y .AppImage/.deb (Linux).
-- **F7 — APK**: ya no Capacitor. Salen dos APK de `apps/apk/` y los compila GitHub
-  Actions: `rempaquetar.sh` mete la cara actual dentro del cuerpo original de Kotlin
-  (`base/CORT-IA-1.1.0.apk`, sólo cambia `assets/ui/`) y `compilar.sh` escribe desde
-  cero, en Java puro sin Gradle, el APK que **sí** puede ser el asistente
-  predeterminado de Android y escuchar el doble toque del auricular. Los dos viajan
-  en la Release con su `-firma.txt`.
+- **F7 — APK**: ya no Capacitor y **ya no dos APK**: sale uno solo de `apps/apk/`,
+  `CORT-IA-1.3.0.apk`, y lo compila GitHub Actions con `compilar.sh` (Java puro sin
+  Gradle: `aapt2` + `javac` + `d8` + `zipalign` + `apksigner`). Es el que puede ser el
+  asistente predeterminado (rol pedido con `RoleManager`, y `res/xml/asistente.xml`
+  **sin** `settingsActivity`, que es lo que lo borraba de la lista), escucha el doble
+  toque del auricular, lee los avisos, y trae dentro su **propio reproductor**
+  (`Reproductor.java`, un servicio en primer plano con `mediaPlayback`: gustos,
+  playlists y cuadro a cuadro en vídeo, sin trabar el teléfono) y el marcador de
+  contactos (`Telefono.java`). El icono es el anillo de siempre: se saca de
+  `base/CORT-IA-1.1.0.apk`. La vía `rempaquetar.sh` —el cuerpo de Kotlin con sólo la
+  cara cambiada— está borrada del repo y del workflow: dos APK que había que elegir
+  era trabajo doble. Viaja en la Release con su `-firma.txt`.
 - **F7b — Te lo lee en voz alta** (lo que hace una SIRI): «lee mis notas», «lee mis
   tareas», «lee el documento recibo» y «lee mis avisos». Notas y pendientes viven en
   SQLite (`memory.py`), los documentos se leen por la lista blanca de raíces seguras
@@ -87,6 +94,19 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
   dentro el rol `RoleManager.ROLE_ASSISTANT`—; y el **freno del oído**, que cierra
   el micro al ir a segundo plano (`pause`/`resume` entre Java y la cara), con música
   sonando, con la pantalla apagada y mientras se cuenta la caché.
+- **F7d — Pantallas aparte del orbe** (`ui/js/pantallas.js` + su CSS en `ui/css/hud.css`):
+  hoja a pantalla completa con barra ☰, cambio deslizando el dedo de lado, con
+  `Alt+←/→`/`Alt+1…4` o por voz («abre el chat», «pantalla de código», «vuelve al
+  orbe»). **Charla** (burbujas, modelos de Ollama con `/api/models` y
+  `/api/models/use`, copiar y guardar en Notas), **Código** (terminal contra
+  `/api/command` + cuaderno en `localStorage`) y **Música** sólo en el teléfono, que
+  manda al `Reproductor` y pinta su barra con el evento `music` del puente, sin
+  martillearlo. No tapan el orbe: cuando no es su pantalla el lienzo WebGL se
+  congela (`orb.pausa()` en `ui/js/orb.js`) y el HUD se apaga por CSS anclado a la
+  clase `pantallas-montadas`, así que si el módulo fallara al montarse la interfaz
+  de siempre queda intacta en vez de negra. Se comprueba en
+  `scripts/prueba-costura.py` apartado [6] (28 métodos del puente usados desde la
+  cara, todos existentes; y las cinco rutas del núcleo, todas reales).
 
 ## 5. Riesgos honestos
 

@@ -609,3 +609,179 @@ html.mobile #go{width:42px;min-height:42px;height:42px;padding:0}
   #dock{gap:6px;padding:6px 8px}
 }
 @media (max-width:820px){ #tree{display:none} }
+
+/* ================= PANTALLAS: orbe · música · charla · código ==================
+   La barra ☰ y las secciones de pantalla completa las monta `js/pantallas.js`.
+   Regla de oro: cuando no es la pantalla del orbe, el orbe y sus ventanas **no se
+   dibujan** (se apaga el lienzo WebGL: en un teléfono modesto eso es RAM, GPU y
+   batería), y cuando es la pantalla del orbe no hay nada de esto encima.  */
+#pantalla-bar{position:fixed;right:14px;top:14px;z-index:70;display:flex;align-items:center;gap:8px;
+  padding:5px 12px 5px 5px;border-radius:24px;background:var(--glass);border:1px solid var(--cyan-dim);
+  backdrop-filter:blur(10px) saturate(1.3);box-shadow:0 4px 18px rgba(0,0,0,.4)}
+html.mobile #pantalla-bar{right:auto;left:8px;top:auto;bottom:132px;padding:5px 10px}
+/* Fuera de la pantalla del orbe no hay fila de botones flotantes que esquivar
+   (#wake y #hand están apagados): la barra sube arriba, junto al título de la
+   hoja, y deja el pulgar libre para deslizar. */
+html.mobile.pantallas-montadas:not(.p-orbe) #pantalla-bar{left:8px;right:auto;top:8px;bottom:auto}
+html.mobile.pantallas-montadas:not(.p-orbe) #pantalla-menu{left:8px;right:auto;top:52px;bottom:auto}
+html.mobile.pantallas-montadas:not(.p-orbe) .scr{padding-top:54px}
+#menu3{all:unset;cursor:pointer;width:30px;height:26px;display:flex;flex-direction:column;
+  justify-content:center;gap:4px;padding:0 4px}
+#menu3 i{display:block;height:2px;border-radius:2px;background:var(--cyan);
+  box-shadow:0 0 6px rgba(0,190,255,.6)}
+#menu3 i:nth-child(2){width:80%} #menu3 i:nth-child(3){width:60%}
+#pantalla-titulo{font-family:Consolas,'Courier New',monospace;font-size:11px;letter-spacing:.22em;
+  text-transform:uppercase;color:#cfefff}
+#pantalla-sub{font-size:9.5px;color:#4b7f9e;letter-spacing:.06em}
+html.mobile #pantalla-sub{display:none}
+
+#pantalla-menu{position:fixed;right:14px;top:60px;z-index:71;display:none;flex-direction:column;gap:6px;
+  min-width:230px;max-width:80vw;padding:10px;border-radius:12px;background:rgba(4,10,22,.94);
+  border:1px solid var(--cyan-dim);backdrop-filter:blur(12px);box-shadow:0 10px 34px rgba(0,0,0,.6)}
+html.mobile #pantalla-menu{right:auto;left:8px;top:auto;bottom:190px}
+html.menu-abierto #pantalla-menu{display:flex}
+#pantalla-menu button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:8px 10px;
+  border-radius:9px;border:1px solid rgba(80,190,255,.18);background:rgba(12,28,52,.5)}
+#pantalla-menu button b{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#dff1ff}
+#pantalla-menu button span{font-size:10px;color:#5e8cab}
+#pantalla-menu button.activa{border-color:var(--cyan);background:rgba(0,160,255,.18)}
+#pantalla-menu .pm-pista{font-size:9.5px;color:#3f6c88;text-align:center;padding:2px 0 0}
+
+#pantalla-fletas{position:fixed;inset:0;pointer-events:none;z-index:69;display:none}
+#pantalla-fletas button{all:unset;pointer-events:auto;position:absolute;top:50%;transform:translateY(-50%);
+  width:34px;height:60px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#7fd0ff;
+  background:rgba(6,16,32,.6);border:1px solid var(--cyan-dim);cursor:pointer}
+#pf-left{left:0;border-radius:0 10px 10px 0} #pf-right{right:0;border-radius:10px 0 0 10px}
+html.p-orbe #pantalla-fletas,html.menu-abierto #pantalla-fletas{visibility:hidden}
+
+/* el orbe y su HUD sólo existen en su pantalla.
+   Todo cuelga de `.pantallas-montadas`, la clase que pone `initPantallas()` al
+   terminar: si el módulo de pantallas falla o no carga, la interfaz de siempre
+   queda exactamente igual y NO se queda la pantalla en negro. */
+html.pantallas-montadas:not(.p-orbe) #scene,
+html.pantallas-montadas:not(.p-orbe) #frame,html.pantallas-montadas:not(.p-orbe) #arcs,
+html.pantallas-montadas:not(.p-orbe) #twin,html.pantallas-montadas:not(.p-orbe) #tree,
+html.pantallas-montadas:not(.p-orbe) #chips,html.pantallas-montadas:not(.p-orbe) #dock,
+html.pantallas-montadas:not(.p-orbe) #camwrap,html.pantallas-montadas:not(.p-orbe) .win,
+html.pantallas-montadas:not(.p-orbe) #top,html.pantallas-montadas:not(.p-orbe) #clock,
+html.pantallas-montadas:not(.p-orbe) #status,html.pantallas-montadas:not(.p-orbe) #wake,
+html.pantallas-montadas:not(.p-orbe) #hand{display:none!important}
+html.pantallas-montadas:not(.p-orbe) body.sheet #scene{transform:none}
+
+.scr{position:fixed;inset:0;z-index:66;display:none;flex-direction:column;
+  background:#02040a;padding:56px 12px 12px}
+html.glass .scr{background:rgba(2,4,10,.94)}
+html.mobile .scr{padding:12px 8px calc(96px + env(safe-area-inset-bottom))}
+html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo{display:flex}
+
+/* En las otras pantallas el micrófono no estorba: se va a la esquina y el
+   contenido deja su hueco abajo para que el campo de escritura nunca quede
+   tapado. (El orbe, el dock y las flechas laterales ya están ocultos.) */
+html.pantallas-montadas:not(.p-orbe) #mic{left:auto;right:16px;bottom:18px;
+  width:50px;height:50px;font-size:22px}
+html.pantallas-montadas:not(.p-orbe) .scr{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+html.mobile.pantallas-montadas:not(.p-orbe) #mic{width:56px;height:56px;right:12px;bottom:14px}
+.scr-top{display:flex;align-items:center;gap:10px;padding:2px 2px 10px;border-bottom:1px solid rgba(80,190,255,.16)}
+.scr-top b{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#dff1ff}
+.scr-vuelve{all:unset;cursor:pointer;font-size:11px;color:#7fd0ff;padding:4px 8px;
+  border:1px solid rgba(80,190,255,.3);border-radius:16px}
+.scr-estado{margin-left:auto;font-family:Consolas,monospace;font-size:10px;color:#5e8cab}
+.scr-estado.aviso{color:#ffcf6b}
+.scr-cuerpo{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding-top:8px}
+.scr-lista{overflow:auto;-webkit-overflow-scrolling:touch;user-select:text;flex:1;min-height:60px}
+
+/* ---- Charla ---- */
+.ch-modelos{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ch-piego{font-size:10px;color:#5e8cab;letter-spacing:.1em;text-transform:uppercase}
+.ch-cargando{font-size:11px;color:#4b7f9e}
+.ch-mo{all:unset;cursor:pointer;font-size:11px;font-family:Consolas,monospace;color:#9fdcff;padding:4px 9px;
+  border-radius:14px;border:1px solid rgba(80,190,255,.25);background:rgba(12,28,52,.5)}
+.ch-mo.activa{border-color:var(--cyan);color:#fff;background:rgba(0,160,255,.22)}
+.ch-msgs{display:flex;flex-direction:column;gap:9px;padding:4px 2px}
+.ch-vacio{font-size:12px;color:#4b7f9e;text-align:center;padding:24px 10px}
+.burbuja{max-width:86%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.5}
+.de-tu{align-self:flex-end;background:rgba(0,120,220,.28);border:1px solid rgba(110,210,255,.4);color:#eaf7ff}
+.de-cort{align-self:flex-start;background:rgba(8,20,38,.8);border:1px solid var(--cyan-dim)}
+.bur-texto{white-space:normal;overflow-wrap:anywhere}
+.bur-pie{display:flex;gap:10px;align-items:center;margin-top:6px;font-size:9.5px;color:#4b7f9e;
+  letter-spacing:.08em;text-transform:uppercase}
+.bur-copiar{all:unset;cursor:pointer;color:#7fd0ff;border:1px solid rgba(80,190,255,.3);
+  border-radius:10px;padding:2px 8px;font-size:9.5px}
+.ch-fila{display:flex;gap:8px;align-items:flex-end}
+#ch-entrada{flex:1;resize:none;max-height:140px;background:rgba(8,20,38,.8);color:var(--text-hi);
+  border:1px solid var(--cyan-dim);border-radius:12px;padding:9px 11px;font-size:15px;font-family:inherit}
+#ch-enviar,#cod-enviar{all:unset;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;background:rgba(0,160,255,.22);border:1px solid var(--cyan);
+  color:#dff1ff;font-size:15px}
+.ch-herramientas{display:flex;gap:8px;flex-wrap:wrap}
+.ch-herramientas button{all:unset;cursor:pointer;font-size:10.5px;color:#9fdcff;padding:5px 10px;
+  border:1px solid rgba(80,190,255,.25);border-radius:14px;background:rgba(12,28,52,.5)}
+
+/* ---- Código ---- */
+.cod-out{background:rgba(3,9,20,.85);border:1px solid rgba(80,190,255,.18);border-radius:10px;
+  padding:9px 11px;font-family:Consolas,'Courier New',monospace;font-size:12.5px;line-height:1.55}
+.cod-linea{white-space:pre-wrap;overflow-wrap:anywhere;color:#9fdcff}
+.cod-linea.orden{color:#2bff9e}
+.cod-linea.hecho{color:#7fd0ff}
+.cod-linea.aviso{color:#ffcf6b}
+.cod-fila{display:flex;gap:8px;align-items:center}
+.cod-prompt{font-family:Consolas,monospace;font-size:11px;color:#5e8cab;white-space:nowrap}
+#cod-entrada{flex:1;background:rgba(8,20,38,.8);color:var(--text-hi);border:1px solid var(--cyan-dim);
+  border-radius:10px;padding:9px 11px;font-size:15px;font-family:Consolas,monospace}
+.cod-nota{border:1px solid rgba(80,190,255,.18);border-radius:10px;padding:8px 10px;background:rgba(6,16,32,.5)}
+.cod-nota summary{cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#7fd0ff}
+#cod-editor{width:100%;min-height:120px;margin-top:8px;background:rgba(3,9,20,.9);color:#cfefff;
+  border:1px solid rgba(80,190,255,.2);border-radius:8px;padding:9px 10px;font-family:Consolas,monospace;
+  font-size:12.5px;line-height:1.5;resize:vertical}
+.cod-botones{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.cod-botones button{all:unset;cursor:pointer;font-size:10.5px;color:#9fdcff;padding:5px 10px;
+  border:1px solid rgba(80,190,255,.25);border-radius:14px;background:rgba(12,28,52,.5)}
+
+/* ---- Música (el reproductor de CORT en el teléfono) ---- */
+.mu-ahora{font-size:17px;color:#eaf7ff;text-shadow:0 0 14px rgba(0,190,255,.35);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mu-datos{font-size:11.5px;color:#5e8cab}
+.mu-barra{height:6px;border-radius:6px;background:rgba(80,190,255,.18);overflow:hidden;cursor:pointer}
+#mu-prog{display:block;height:100%;width:0;background:linear-gradient(90deg,#19b3ff,#7fd0ff);
+  box-shadow:0 0 10px rgba(0,190,255,.6)}
+.mu-tiempos{display:flex;justify-content:space-between;font-family:Consolas,monospace;font-size:10px;color:#4b7f9e}
+.mu-transporte{display:flex;justify-content:center;gap:14px}
+.mu-transporte button{all:unset;cursor:pointer;width:52px;height:52px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;border-radius:50%;color:#dff1ff;
+  border:1px solid var(--cyan-dim);background:rgba(12,28,52,.6)}
+.mu-transporte #mu-play{border-color:var(--cyan);background:rgba(0,160,255,.24);
+  box-shadow:0 0 18px rgba(0,180,255,.35)}
+.mu-fila2{display:flex;gap:7px;flex-wrap:wrap;justify-content:center}
+.mu-chip{all:unset;cursor:pointer;font-size:11px;color:#9fdcff;padding:6px 11px;border-radius:16px;
+  border:1px solid rgba(80,190,255,.25);background:rgba(12,28,52,.5)}
+.mu-volumen{display:flex;align-items:center;gap:9px;font-size:10px;color:#5e8cab;letter-spacing:.1em;
+  text-transform:uppercase}
+.mu-volumen input{flex:1;accent-color:var(--cyan)}
+.mu-lista-top{display:flex;gap:7px}
+#mu-busca{flex:1;min-width:0;background:rgba(8,20,38,.8);color:var(--text-hi);
+  border:1px solid var(--cyan-dim);border-radius:10px;padding:8px 10px;font-size:15px}
+.mu-lista-top button{all:unset;cursor:pointer;font-size:11px;color:#9fdcff;padding:8px 10px;
+  border:1px solid rgba(80,190,255,.25);border-radius:10px;background:rgba(12,28,52,.5)}
+.mu-pistas{border:1px solid rgba(80,190,255,.16);border-radius:10px;background:rgba(3,9,20,.7);padding:4px}
+.mu-pista{display:flex;align-items:baseline;gap:8px;padding:8px 9px;border-radius:8px;cursor:pointer;
+  border-bottom:1px solid rgba(80,190,255,.08)}
+.mu-pista:active{background:rgba(0,160,255,.18)}
+.mu-ico{color:var(--cyan);font-size:12px}
+.mu-n{font-size:13.5px;color:#dff1ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.mu-a{font-size:10.5px;color:#5e8cab;white-space:nowrap}
+.es-video .mu-ico{color:#ffcf6b}
+.mu-vacio{font-size:12px;color:#4b7f9e;padding:14px 10px;text-align:center}
+/* El aviso de «dame el permiso de la música» es pulsable: si se pinta como texto
+   muerto, la dueña no sabe que ahí se abre el cuadro de Android. */
+.mu-vacio b{color:#7fb8d4}
+.mu-vacio .mu-dar{color:var(--cyan);text-decoration:underline;cursor:pointer;
+  -webkit-tap-highlight-color:rgba(0,229,255,.18)}
+.mu-playlists{display:flex;flex-direction:column;gap:7px}
+.mu-pl-top{display:flex;gap:7px}
+#mu-pl-nombre{flex:1;min-width:0;background:rgba(8,20,38,.8);color:var(--text-hi);
+  border:1px solid var(--cyan-dim);border-radius:10px;padding:8px 10px;font-size:15px}
+.mu-pl-top button{all:unset;cursor:pointer;font-size:10.5px;color:#9fdcff;padding:8px 9px;
+  border:1px solid rgba(80,190,255,.25);border-radius:10px;background:rgba(12,28,52,.5)}
+.mu-pl-caja{display:flex;gap:7px;flex-wrap:wrap}
+.mu-perfil{font-size:11px;color:#5e8cab}
+.mu-perfil b{color:#9fdcff}

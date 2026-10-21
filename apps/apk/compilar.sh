@@ -21,7 +21,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APK_VERSION="${APK_VERSION:-1.2.3}"
+APK_VERSION="${APK_VERSION:-1.3.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"
@@ -71,10 +71,83 @@ mkdir -p assets/ui
 cp -r ../../ui/. assets/ui/
 echo "cara embebida: $(find assets/ui -type f | wc -l) archivos, $(du -sh assets/ui | cut -f1)"
 
-# -- El icono se dibuja con el código de la propia marca (scripts/marca.py) ---
-# Nada de assets binarios inventados a mano: el PNG sale del mismo anillo que el
-# logo del README y del instalador, y `encode_png` es zlib de la biblioteca base.
-python3 - <<'PY'
+# -- El icono es EL DE SIEMPRE: se saca del APK original de la dueña ------------
+# Desde `v0.2.11-demo` sólo existe este APK, así que tiene que parecerse al que
+# ella tiene en el cajón de aplicaciones: mismo anillo, mismo fondo casi negro.
+# `base/CORT-IA-1.1.0.apk` guarda el icono adaptativo real — `ic_launcher.png`
+# (el plano, 48/72/96/144/192 px por densidad), `ic_launcher_round.png` y
+# `ic_launcher_foreground.png` (432 px en xxxhdpi, con alpha) —, y el fondo del
+# adaptativo se midió en la propia imagen: `#02040A`.
+#
+# El plan B (`scripts/marca.py`, el anillo dibujado con código) se queda por si
+# algún día el `base/` no viene en el checkout: el pipeline no se tira.
+if [ -f base/CORT-IA-1.1.0.apk ]; then
+    rm -rf build-iconos
+    mkdir -p build-iconos
+    if unzip -o -q base/CORT-IA-1.1.0.apk 'res/mipmap-*-v4/*.png' -d build-iconos; then
+        Hay_Anillo=0
+        for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            src="build-iconos/res/mipmap-$d-v4"
+            [ -d "$src" ] || continue
+            mkdir -p "res/mipmap-$d"
+            for n in ic_launcher ic_launcher_round ic_launcher_foreground; do
+                if [ -f "$src/$n.png" ]; then
+                    cp "$src/$n.png" "res/mipmap-$d/$n.png"
+                    [ "$n" = "ic_launcher_foreground" ] && Hay_Anillo=1
+                fi
+            done
+        done
+        if [ "$Hay_Anillo" = "1" ]; then
+            # El XML del icono adaptativo del base APK está en AXML binario (no se
+            # puede copiar como texto), así que se escribe su equivalente: fondo de
+            # color + el foreground original recortado por la máscara del sistema.
+            mkdir -p res/mipmap-anydpi-v26 res/values
+            for nombre in ic_launcher ic_launcher_round; do
+                cat > "res/mipmap-anydpi-v26/$nombre.xml" <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
+XML
+            done
+            cat > res/values/colores-icono.xml <<'XML'
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#02040A</color>
+</resources>
+XML
+            # `ic_launcher_round` también necesita su PNG donde no haya XML que lo
+            # sustituya: si el original no lo trae, se usa el cuadrado y listo.
+            for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+                if [ -d "res/mipmap-$d" ] && [ ! -f "res/mipmap-$d/ic_launcher_round.png" ]; then
+                    cp "res/mipmap-$d/ic_launcher.png" "res/mipmap-$d/ic_launcher_round.png"
+                fi
+            done
+            echo "icono: el anillo original del base APK, 5 densidades + adaptativo"
+        else
+            echo "icono: el base APK no trae foreground, se dibuja con marca.py"
+        fi
+    fi
+    if [ ! -f res/mipmap-xxxhdpi/ic_launcher_foreground.png ]; then
+        rm -rf res/mipmap-* res/mipmap-anydpi-v26 res/values/colores-icono.xml
+        python3 - <<'PY'
+import pathlib
+import sys
+sys.path.insert(0, "../../scripts")
+from marca import render, encode_png
+for carpeta, dim in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96),
+                     ("xxhdpi", 144), ("xxxhdpi", 192)):
+    d = pathlib.Path("res") / f"mipmap-{carpeta}"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "ic_launcher.png").write_bytes(encode_png(dim, render(dim)))
+    (d / "ic_launcher_round.png").write_bytes(encode_png(dim, render(dim)))
+print("iconos de marca generados (5 densidades, plan B)")
+PY
+    fi
+    rm -rf build-iconos
+else
+    python3 - <<'PY'
 import pathlib
 import sys
 # `compilar.sh` ya cambió al directorio `apps/apk`: la marca vive dos niveles arriba.
@@ -85,8 +158,10 @@ for carpeta, dim in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96),
     d = pathlib.Path("res") / f"mipmap-{carpeta}"
     d.mkdir(parents=True, exist_ok=True)
     (d / "ic_launcher.png").write_bytes(encode_png(dim, render(dim)))
-print("iconos de marca generados (5 densidades)")
+    (d / "ic_launcher_round.png").write_bytes(encode_png(dim, render(dim)))
+print("iconos de marca generados (5 densidades): no está base/CORT-IA-1.1.0.apk")
 PY
+fi
 
 rm -rf build
 mkdir -p build/obj build/apk

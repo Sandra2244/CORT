@@ -26,6 +26,7 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -79,11 +80,21 @@ public class MainActivity extends Activity {
     private String direccionPC = "";
     private boolean cayoUnaSolaVez = false;
 
+    /**
+     * La cara abierta, para que el `Reproductor` pueda avisarla cuando cambia algo
+     * (pista nueva, pausa, auricular). Es un `static` porque el servicio lo monta
+     * Android por su cuenta y no recibe la actividad por parámetro.
+     */
+    private static MainActivity cara;
+    static MainActivity front() { return cara; }
+    CortNative puente() { return puente; }
+
     /* ───────────────────────────── arranque ───────────────────────────── */
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        cara = this;
         puente = new CortNative(this);
 
         web = new WebView(this);
@@ -92,7 +103,10 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccess(false);
-        s.setAllowContentAccess(false);
+        // `content://` SÍ se deja: es lo que permite que un <video> de la página
+        // muestre un vídeo que ya está en el teléfono (el URI del índice de
+        // Android), y sólo se ven los archivos que la propia app puede leer.
+        s.setAllowContentAccess(true);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setTextZoom(100);
         web.setBackgroundColor(Color.parseColor("#05070d"));
@@ -178,6 +192,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        if (cara == this) cara = null;
         if (mandos != null) { mandos.setActive(false); mandos.release(); mandos = null; }
         if (puente != null) puente.destruye();
         if (web != null) web.destroy();
@@ -339,6 +354,8 @@ public class MainActivity extends Activity {
         // el interruptor del sistema antes de pulsar, sin tener que bajar la cortina
         // a media conversación para comprobarlo.
         String oido = Avisos.activado(this) ? "hecho" : "pendiente";
+        String medios = Musica.puedeLeer(this) ? "hecho" : "pendiente";
+        String suena = Reproductor.estaVivo() ? "sí" : "no";
         String[] opciones = {
             "Conectar con mi PC por Wi‑Fi",
             "Cara dentro del teléfono (sin PC)",
@@ -347,6 +364,9 @@ public class MainActivity extends Activity {
             "Dar el permiso de los avisos",
             "Escuchar una orden ahora",
             "Recargar la cara",
+            "Poner música que me gusta (suena: " + suena + ")",
+            "Parar la música",
+            "Dar permiso a la música y los archivos (" + medios + ")",
         };
         new AlertDialog.Builder(this)
             .setTitle("CORT")
@@ -358,6 +378,10 @@ public class MainActivity extends Activity {
                     case 3: puente.leeAvisos(); break;
                     case 4: puente.abreAjustesAvisos(); break;
                     case 5: puente.escuchaAhora(); break;
+                    case 6: arranca(); break;
+                    case 7: puente.musicaAutomatica(); break;
+                    case 8: puente.musicaParar(); break;
+                    case 9: puente.pidePermisoMedios(); break;
                     default: arranca(); break;
                 }
             })
@@ -478,24 +502,99 @@ public class MainActivity extends Activity {
 
     /* ─────────────────────────── permisos y ayuda ──────────────────────── */
 
+    /**
+     * El cuadro de permisos, por grupos.
+     *
+     * Se pide en lote y desde el hilo de la interfaz (los métodos del puente
+     * corren en el hilo de JavaScript, y `requestPermissions` es de la cara), y
+     * lo que se pide es lo justo para cada palabra: la música no necesita los
+     * contactos, y el micrófono no necesita el disco.
+     */
     void pidePermiso(String kind) {
-        String permiso = "camara".equalsIgnoreCase(kind) || "camera".equalsIgnoreCase(kind)
-            ? android.Manifest.permission.CAMERA
-            : android.Manifest.permission.RECORD_AUDIO;
-        if (checkSelfPermission(permiso) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        final String[] permisos = grupoDe(kind);
+        runOnUiThread(() -> {
+            String[] faltan = sinConceder(permisos);
+            if (faltan.length == 0) return;
             try {
-                requestPermissions(new String[] { permiso }, 7);
+                requestPermissions(faltan, 7);
             } catch (Exception elTelefonoNoPregunta) { /* la interfaz avisa sola */ }
+        });
+    }
+
+    private static String[] grupoDe(String kind) {
+        String k = kind == null ? "" : kind.toLowerCase(Locale.US);
+        if (k.startsWith("camara") || k.startsWith("camera")) {
+            return new String[] { android.Manifest.permission.CAMERA };
         }
+        if (k.startsWith("medios") || k.startsWith("music") || k.startsWith("archiv")) {
+            return permisosDeArchivos();
+        }
+        if (k.startsWith("contacto") || k.startsWith("marcar") || k.startsWith("llam")) {
+            return new String[] {
+                android.Manifest.permission.READ_CONTACTS,
+                android.Manifest.permission.CALL_PHONE,
+            };
+        }
+        if (k.startsWith("aviso") || k.startsWith("notific")) {
+            return new String[] { "android.permission.POST_NOTIFICATIONS" };
+        }
+        return new String[] { android.Manifest.permission.RECORD_AUDIO };
+    }
+
+    /**
+     * Hasta Android 12 vale `READ_EXTERNAL_STORAGE`; desde 13 el sistema ignora
+     * ése y hay que pedir los tipos sueltos. Pedir los dos a la vez no cuela
+     * (Android 13 rechaza el antiguo), así que se decide por versión.
+     */
+    private static String[] permisosDeArchivos() {
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            return new String[] {
+                "android.permission.READ_MEDIA_AUDIO",
+                "android.permission.READ_MEDIA_VIDEO",
+                "android.permission.READ_MEDIA_IMAGES",
+            };
+        }
+        return new String[] { android.Manifest.permission.READ_EXTERNAL_STORAGE };
+    }
+
+    private String[] sinConceder(String[] permisos) {
+        java.util.ArrayList<String> faltan = new java.util.ArrayList<>();
+        for (String permiso : permisos) {
+            try {
+                if (checkSelfPermission(permiso) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    faltan.add(permiso);
+                }
+            } catch (Exception esePermisoNoExisteEnAparejo) { /* se ignora: no hay cuadro que dar */ }
+        }
+        return faltan.toArray(new String[0]);
     }
 
     @Override
     public void onRequestPermissionsResult(int codigo, String[] permisos, int[] resultados) {
         super.onRequestPermissionsResult(codigo, permisos, resultados);
-        boolean concedido = resultados.length > 0 && resultados[0]
-            == android.content.pm.PackageManager.PERMISSION_GRANTED;
-        String kind = (permisos.length > 0 && permisos[0].endsWith("CAMERA")) ? "camara" : "mic";
+        boolean concedido = resultados.length > 0;
+        for (int resultado : resultados) {
+            if (resultado != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                concedido = false;
+                break;
+            }
+        }
+        String kind = claseDe(permisos);
         puente.permisoRespondido(kind, concedido);
+        if (!concedido && "medios".equals(kind)) {
+            avisa("Sin permiso de archivos CORT no puede ver tu música ni ordenarla");
+        }
+    }
+
+    /** El `kind` que entiende la cara: coincide con el de `CortNative.hasPermission`. */
+    private static String claseDe(String[] permisos) {
+        for (String permiso : permisos) {
+            if (permiso.endsWith("CAMERA")) return "camara";
+            if (permiso.contains("MEDIA") || permiso.contains("EXTERNAL_STORAGE")) return "medios";
+            if (permiso.contains("CONTACTS") || permiso.contains("CALL_PHONE")) return "contactos";
+            if (permiso.contains("POST_NOTIFICATIONS")) return "avisos";
+        }
+        return "mic";
     }
 
     void avisa(String texto) {

@@ -1,0 +1,724 @@
+/* ===== Pantallas de CORT: el orbe, la música, la charla y el código =====
+ *
+ * La dueña pidió **pantallas nuevas que no tengan nada que ver con el orbe y que
+ * no lo obstruyan**: se cambia con el menú de tres líneas o deslizando el dedo a
+ * un lado, y cada pantalla es su propio entorno. Esto es esa capa.
+ *
+ * Cómo encaja sin romper lo de siempre:
+ *
+ * · La pantalla `orbe` **es** la interfaz actual (el holograma, el dock, las
+ *   once ventanas de vidrio). No se mueve ni se duplica: sólo se le pone clase
+ *   al `<html>` (`p-orbe`, `p-charla`, `p-codigo`, `p-musica`) y el CSS esconde
+ *   lo que no va. Por eso el orbe no se tapa nunca: cuando no es su pantalla, el
+ *   lienzo WebGL se apaga en vez de quedarse debajo dibujando a escondidas —
+ *   en un teléfono de gama media eso también es memoria y batería.
+ *
+ * · Cada pantalla nueva es un `<section class="scr">` de pantalla completa, con
+ *   su propia barra arriba (menú ☰ + título + estado) y su contenido debajo.
+ *
+ * · En el **teléfono** (con `window.CortNative`) la pantalla de música manda de
+ *   verdad: habla con `.Reproductor`, el servicio en primer plano del APK. En el
+ *   PC esa pantalla no existe — ahí ya está la ventana 05 · Música con su
+ *   `<audio>` — y el menú la omite en vez de ofrecer un botón vacío.
+ *
+ * · Donde no hay núcleo de PC (el teléfono sin Wi-Fi con el portátil) la charla y
+ *   el código **lo dicen**, no inventan una respuesta: el `MainActivity` del APK
+ *   corta los `/api/*` y contesta 501, así que se comprueba una vez y se avisa.
+ */
+
+const N = () => window.CortNative || null;
+const enTelefono = () => !!N();
+const esc = s => String(s ?? '').replace(/[&<>"']/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let ctx = null;                     // { api, term, say, orb, voice }
+let actual = 'orbe';
+let nucleo = null;                  // null = sin comprobar, false = no hay, base = sí hay
+
+const PANTALLAS = [
+  { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre' },
+  { id: 'musica', titulo: 'Música',   sub: 'el reproductor de CORT', telefono: true },
+  { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos' },
+  { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar' },
+];
+const visibles = () => PANTALLAS.filter(p => !p.telefono || enTelefono());
+
+const llama = (nombre, ...args) => {
+  const p = N();
+  // `typeof` antes de llamar: un APK viejo (o el cuerpo de siempre) no conoce los
+  // métodos nuevos, y un `TypeError` en la consola no es un mensaje para la dueña.
+  if (!p || typeof p[nombre] !== 'function') return null;
+  try { return p[nombre](...args); } catch (e) { ctx?.term?.('el puente dijo: ' + e, 'puente'); return null; }
+};
+
+/* ─────────────────────────── la carcasa ─────────────────────────── */
+
+function montaCarcasa() {
+  if (document.getElementById('pantalla-bar')) return;
+
+  const barra = document.createElement('div');
+  barra.id = 'pantalla-bar';
+  barra.innerHTML = `
+    <button id="menu3" title="Cambiar de pantalla" aria-label="Menú de pantallas">
+      <i></i><i></i><i></i></button>
+    <span id="pantalla-titulo">Orbe</span>
+    <span id="pantalla-sub">el holograma de siempre</span>`;
+  document.body.appendChild(barra);
+
+  const menu = document.createElement('nav');
+  menu.id = 'pantalla-menu';
+  menu.innerHTML = visibles().map(p =>
+    `<button data-p="${p.id}" class="${p.id === actual ? 'activa' : ''}">` +
+    `<b>${esc(p.titulo)}</b><span>${esc(p.sub)}</span></button>`).join('')
+    + '<div class="pm-pista">o desliza el dedo a un lado</div>';
+  document.body.appendChild(menu);
+  menu.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { cierraMenu(); ir(b.dataset.p); });
+  document.getElementById('menu3').onclick = e => {
+    e.stopPropagation();
+    document.documentElement.classList.toggle('menu-abierto');
+  };
+  document.addEventListener('pointerdown', e => {
+    if (!document.documentElement.classList.contains('menu-abierto')) return;
+    if (menu.contains(e.target) || e.target.closest('#menu3')) return;
+    cierraMenu();
+  });
+
+  // Secciones: sólo la charla y el código existen en los dos aparatos; la música
+  // se monta igual y queda oculta en el PC (el menú ni la lista).
+  visibles().filter(p => p.id !== 'orbe').forEach(p => {
+    const s = document.createElement('section');
+    s.className = 'scr'; s.id = 'scr-' + p.id;
+    s.innerHTML = `<header class="scr-top"><button class="scr-vuelve" title="Volver al orbe">◂ orbe</button>
+      <b>${esc(p.titulo)}</b><span class="scr-estado"></span></header>
+      <div class="scr-cuerpo"></div>`;
+    document.body.appendChild(s);
+    s.querySelector('.scr-vuelve').onclick = () => ir('orbe');
+  });
+
+  const fletas = document.createElement('div');
+  fletas.id = 'pantalla-fletas';
+  fletas.innerHTML = '<button id="pf-left" title="pantalla anterior">‹</button>'
+                   + '<button id="pf-right" title="pantalla siguiente">›</button>';
+  document.body.appendChild(fletas);
+  document.getElementById('pf-left').onclick = () => mueve(-1);
+  document.getElementById('pf-right').onclick = () => mueve(1);
+}
+
+const cierraMenu = () => document.documentElement.classList.remove('menu-abierto');
+
+/* Deslizar a un lado: se mide en la propia carcasa, nunca en un botón, y se ignora
+   si el dedo empezó encima de una lista (ahí lo que quiere la dueña es desplazar la
+   lista, no cambiarse de pantalla). */
+function montaGesto() {
+  let x0 = null, y0 = null, objetivo = null;
+  document.addEventListener('touchstart', e => {
+    const t = e.target;
+    if (t.closest('#pantalla-menu, input, textarea, select, .scr-lista, #plist, #flist')) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; objetivo = t;
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0;
+    const dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    // 90 px hacia un lado, casi sin bajar el dedo: es un cambio de pantalla, no un
+    // Scroll. Con el teclado abierto tampoco se cambia (escribe, no desliza).
+    if (Math.abs(dx) < 90 || Math.abs(dy) > Math.abs(dx) * .6) return;
+    if (document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+    mueve(dx < 0 ? 1 : -1);
+  }, { passive: true });
+}
+
+function mueve(paso) {
+  const l = visibles().map(p => p.id);
+  const i = Math.max(0, l.indexOf(actual));
+  ir(l[(i + paso + l.length) % l.length]);
+}
+
+/* Teclado (PC e instalador): Alt+←/→ se mueve entre pantallas y Alt+1…4 salta a
+   una concreta. No uso Escape: ése ya es de las ventanas de vidrio en hud.js, y
+   dos dueñas para la misma tecla terminan peleándose. */
+function montaTeclas() {
+  document.addEventListener('keydown', e => {
+    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); mueve(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); mueve(-1); }
+    else if (/^[1-9]$/.test(e.key)) {
+      const p = visibles()[+e.key - 1];
+      if (p) { e.preventDefault(); ir(p.id); }
+    }
+  });
+}
+
+export function ir(id) {
+  const p = visibles().find(x => x.id === id) || PANTALLAS[0];
+  actual = p.id;
+  const raiz = document.documentElement;
+  visibles().forEach(x => raiz.classList.remove('p-' + x.id));
+  raiz.classList.add('p-' + actual);
+  cierraMenu();
+  const titulo = document.getElementById('pantalla-titulo');
+  if (titulo) titulo.textContent = p.titulo;
+  const sub = document.getElementById('pantalla-sub');
+  if (sub) sub.textContent = p.sub;
+  document.querySelectorAll('#pantalla-menu [data-p]').forEach(b =>
+    b.classList.toggle('activa', b.dataset.p === actual));
+  if (actual === 'musica') arrancaMusica();
+  if (actual === 'charla') { cargaModelos(); pintaCharla(); }
+  if (actual === 'codigo') { pintaCodigo(); }
+  ctx?.term?.('pantalla: ' + p.titulo, 'pantallas');
+  window.dispatchEvent(new CustomEvent('cort-pantalla', { detail: actual }));
+}
+
+export const pantallaActual = () => actual;
+
+/* ¿Hay núcleo de PC? Se pregunta una vez y se recuerda. */
+async function hayNucleo() {
+  if (nucleo) return nucleo;
+  const base = ctx?.api ? ctx.api() : '';
+  try {
+    const r = await fetch(base + '/api/port', { signal: AbortSignal.timeout(1800) });
+    if (!r.ok) throw new Error(String(r.status));
+    nucleo = base;
+  } catch { nucleo = false; }
+  return nucleo;
+}
+
+const sinNucleoFrase = () => enTelefono()
+  ? 'Sin tu portátil no hay cerebro que consulte: conéctalo y abre CORT con «CORT · PC», o escribe la dirección en el menú del botón. Aquí lo que sí funciona sin PC es la pantalla de Música.'
+  : 'El núcleo de CORT no responde: arráncalo con scripts/run (o run.bat) y vuelve a abrir esta pantalla.';
+
+async function avisaSinNucleo(donde) {
+  const ok = await hayNucleo();
+  if (ok === false && donde) { donde.textContent = 'sin núcleo'; donde.classList.add('aviso'); }
+  else if (donde) { donde.textContent = 'núcleo listo'; donde.classList.remove('aviso'); }
+  return ok;
+}
+
+/* ─────────────────────────── 01 · CHARLA ─────────────────────────── */
+/*
+ * Un chat como los de siempre: burbujas, entrada abajo, Historial arriba, y cada
+ * respuesta se puede **copiar** o seleccionar con el dedo. Los modelos salen de
+ * `/api/models` (los que ya están descargados en el PC); «usar uno» es
+ * `/api/models/use`, que es lo que ya hace la ventana 10 · Modelos.
+ */
+const CLAVE_CHARLA = 'cort-charla';
+let mensajes = [];
+
+function cargaMensajes() {
+  try { mensajes = JSON.parse(localStorage.getItem(CLAVE_CHARLA) || '[]'); }
+  catch { mensajes = []; }
+  if (!Array.isArray(mensajes)) mensajes = [];
+}
+function guardaMensajes() {
+  try { localStorage.setItem(CLAVE_CHARLA, JSON.stringify(mensajes.slice(-40))); }
+  catch { /* modo privado: se pierde al cerrar y no pasa nada */ }
+}
+
+function montaCharla() {
+  const cuerpo = document.querySelector('#scr-charla .scr-cuerpo');
+  cuerpo.innerHTML = `
+    <div class="ch-modelos" id="ch-modelos"><span class="ch-cargando">leyendo tus modelos…</span></div>
+    <div class="scr-lista ch-msgs" id="ch-msgs"></div>
+    <div class="ch-fila">
+      <textarea id="ch-entrada" rows="1" placeholder="pregúntale lo que sea · Enter envía, Mayús+Enter salto de línea"></textarea>
+      <button id="ch-enviar" title="Enviar">▲</button>
+    </div>
+    <div class="ch-herramientas">
+      <button id="ch-copiar-ultimo" title="Copiar la última respuesta">copiar respuesta</button>
+      <button id="ch-nota" title="Guardar la última respuesta como nota">guardar en Notas</button>
+      <button id="ch-vaciar" title="Vaciar esta conversación">limpiar</button>
+    </div>`;
+  const entrada = cuerpo.querySelector('#ch-entrada');
+  cuerpo.querySelector('#ch-enviar').onclick = () => charla(entrada.value);
+  entrada.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); charla(entrada.value); }
+  });
+  entrada.addEventListener('input', () => {
+    entrada.style.height = 'auto';
+    entrada.style.height = Math.min(140, entrada.scrollHeight) + 'px';
+  });
+  cuerpo.querySelector('#ch-copiar-ultimo').onclick = () => {
+    const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
+    if (!ultimo) return ctx?.say?.('Aún no hay respuesta que copiar.');
+    copia(ultimo.texto, 'Respuesta copiada.');
+  };
+  cuerpo.querySelector('#ch-nota').onclick = async () => {
+    const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
+    if (!ultimo) return ctx?.say?.('Aún no hay nada que guardar.');
+    try {
+      const r = await fetch(ctx.api() + '/api/notes', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '[charla] ' + ultimo.texto }),
+      });
+      ctx?.say?.(r.ok ? 'Anotado en 04 · Notas.' : 'El núcleo no dejó guardar la nota.');
+    } catch { ctx?.say?.('El núcleo no respondió.') }
+  };
+  cuerpo.querySelector('#ch-vaciar').onclick = () => {
+    mensajes = []; guardaMensajes(); pintaCharla();
+  };
+  cargaMensajes();
+}
+
+async function charla(texto) {
+  const pregunta = String(texto || '').trim();
+  if (!pregunta) return;
+  const entrada = document.getElementById('ch-entrada');
+  if (entrada) { entrada.value = ''; entrada.style.height = 'auto'; }
+  mensajes.push({ de: 'tu', texto: pregunta });
+  pintaCharla();
+  const estado = document.querySelector('#scr-charla .scr-estado');
+  estado.textContent = 'pensando…';
+  if (!await avisaSinNucleo(estado)) {
+    mensajes.push({ de: 'cort', texto: sinNucleoFrase() });
+    estado.textContent = 'sin núcleo'; guardaMensajes(); pintaCharla(); return;
+  }
+  try {
+    const r = await fetch(ctx.api() + '/api/chat', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: pregunta }),
+    });
+    const j = await r.json();
+    const dicho = j.reply || j.error || 'No supe qué contestar.';
+    mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '' });
+    estado.textContent = 'cerebro: ' + (j.source || 'local');
+    ctx?.orb?.burst?.();
+  } catch (e) {
+    mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e });
+    estado.textContent = 'sin núcleo';
+  }
+  guardaMensajes(); pintaCharla();
+}
+
+function pintaCharla() {
+  const caja = document.getElementById('ch-msgs');
+  if (!caja) return;
+  caja.innerHTML = mensajes.length ? '' :
+    '<div class="ch-vacio">Aquí se conversa de verdad: escribe o toca el micrófono. ' +
+    'Lo que responda se puede copiar o guardar como nota.</div>';
+  mensajes.forEach(m => {
+    const b = document.createElement('div');
+    b.className = 'burbuja ' + (m.de === 'tu' ? 'de-tu' : 'de-cort');
+    b.innerHTML = `<div class="bur-texto">${esc(m.texto).replace(/\n/g, '<br>')}</div>
+      <div class="bur-pie"><span>${m.de === 'tu' ? 'tú' : 'CORT' + (m.fuente ? ' · ' + esc(m.fuente) : '')}</span>
+      <button class="bur-copiar" title="Copiar este texto">copiar</button></div>`;
+    b.querySelector('.bur-copiar').onclick = () => copia(m.texto, 'Copiado.');
+    caja.appendChild(b);
+  });
+  caja.scrollTop = caja.scrollHeight;
+}
+
+async function cargaModelos() {
+  const caja = document.getElementById('ch-modelos');
+  if (!caja) return;
+  if (!await hayNucleo()) { caja.innerHTML = '<span class="ch-cargando">' + esc(sinNucleoFrase()) + '</span>'; return; }
+  let data;
+  try {
+    data = await (await fetch(ctx.api() + '/api/models', { signal: AbortSignal.timeout(6000) })).json();
+  } catch {
+    caja.innerHTML = '<span class="ch-cargando">no leí la lista de modelos: el núcleo no respondió</span>';
+    return;
+  }
+  const bajados = (data.modelos || []).filter(m => m.descargado);
+  if (!bajados.length) {
+    caja.innerHTML = '<span class="ch-cargando">ningún modelo descargado todavía: bájalo en 10 · Modelos (flecha ↓)</span>';
+    return;
+  }
+  caja.innerHTML = '<span class="ch-piego">modelos:</span>' + bajados.map(m =>
+    `<button class="ch-mo${m.activo ? ' activa' : ''}" data-m="${esc(m.modelo)}">${esc(m.modelo)}</button>`).join('');
+  caja.querySelectorAll('.ch-mo').forEach(b => b.onclick = async () => {
+    try {
+      const r = await fetch(ctx.api() + '/api/models/use', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ modelo: b.dataset.m }),
+      });
+      const j = await r.json();
+      ctx?.say?.(j.error ? 'No pude cambiar de modelo: ' + j.error : 'Usando ' + b.dataset.m + '.');
+      caja.querySelectorAll('.ch-mo').forEach(o => o.classList.toggle('activa', o === b));
+    } catch { ctx?.say?.('El núcleo no respondió el cambio de modelo.') }
+  });
+}
+
+function copia(texto, aviso) {
+  const listo = () => ctx?.say?.(aviso || 'Copiado.');
+  if (navigator.clipboard && window.isSecureContext !== false) {
+    navigator.clipboard.writeText(texto).then(listo).catch(() => reserva(texto, listo));
+  } else reserva(texto, listo);
+}
+function reserva(texto, listo) {
+  // En el WebView del APK (`https://cort.local`) el portapapeles async no siempre
+  // está permitido: se recurda con un campo invisible y `execCommand`.
+  const area = document.createElement('textarea');
+  area.value = texto; area.style.position = 'fixed'; area.style.opacity = '0';
+  document.body.appendChild(area); area.select();
+  try { document.execCommand('copy'); listo(); } catch { ctx?.say?.('No pude copiarlo: selecciónalo con el dedo.'); }
+  area.remove();
+}
+
+/* ─────────────────────────── 02 · CÓDIGO ─────────────────────────── */
+/*
+ * Entorno de programación y terminal. Dicho sin adornos y sin prometer lo que
+ * Android no deja: **quien ejecuta es el PC**, porque dentro de una APK una app
+ * normal no puede abrir una shell ni instalar paquetes (sandbox). Lo que hay aquí
+ * es el terminal real del equipo (por `/api/command` y su ejecutor de acciones) y
+ * un cuaderno de código: escribes o pegas, pides que lo arregle, y lo guardas.
+ */
+const CLAVE_CODIGO = 'cort-codigo';
+
+function montaCodigo() {
+  const cuerpo = document.querySelector('#scr-codigo .scr-cuerpo');
+  let guardado = '';
+  try { guardado = localStorage.getItem(CLAVE_CODIGO) || ''; } catch { /* nada */ }
+  cuerpo.innerHTML = `
+    <div class="scr-lista cod-out" id="cod-out"></div>
+    <div class="cod-fila">
+      <span class="cod-prompt">cort@pc:~$</span>
+      <input id="cod-entrada" placeholder=" Instala, arregla, actualiza… (escribe y Enter)" autocomplete="off">
+      <button id="cod-enviar" title="Ejecutar">▲</button>
+    </div>
+    <details class="cod-nota" ${guardado ? 'open' : ''}>
+      <summary>cuaderno de código (lo que escribas aquí no se pierde)</summary>
+      <textarea id="cod-editor" spellcheck="false"
+        placeholder="pega o escribe tu código…&#10;&#10;p.ej. un script de Python que ordene descargas"></textarea>
+      <div class="cod-botones">
+        <button id="cod-arregla">pide a CORT que lo arregle</button>
+        <button id="cod-copia">copiar</button>
+        <button id="cod-guarda">guardar en Notas</button>
+      </div>
+    </details>`;
+  const editor = cuerpo.querySelector('#cod-editor');
+  editor.value = guardado;
+  editor.addEventListener('input', () => {
+    try { localStorage.setItem(CLAVE_CODIGO, editor.value); } catch { /* nada */ }
+  });
+  cuerpo.querySelector('#cod-copia').onclick = () => copia(editor.value, 'Código copiado.');
+  cuerpo.querySelector('#cod-guarda').onclick = async () => {
+    if (!editor.value.trim()) return ctx?.say?.('El cuaderno está vacío.')
+    try {
+      const r = await fetch(ctx.api() + '/api/notes', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: '[código] ' + editor.value }),
+      });
+      ctx?.say?.(r.ok ? 'Guardado en 04 · Notas.' : 'El núcleo no dejó guardarlo.');
+    } catch { ctx?.say?.('Sin núcleo: no pude guardarlo.') }
+  };
+  cuerpo.querySelector('#cod-arregla').onclick = () => {
+    const texto = editor.value.trim();
+    if (!texto) return ctx?.say?.('Escribe o pega algo primero.')
+    ir('charla');
+    const entrada = document.getElementById('ch-entrada');
+    if (entrada) {
+      entrada.value = 'Revisa este código, dime qué está mal y devuélvemelo arreglado, comentado en español:\n\n' + texto;
+      entrada.focus();
+    }
+  };
+  const entrada = cuerpo.querySelector('#cod-entrada');
+  cuerpo.querySelector('#cod-enviar').onclick = () => codigo(entrada.value);
+  entrada.addEventListener('keydown', e => { if (e.key === 'Enter') codigo(entrada.value); });
+}
+
+const HISTORIAL_CODIGO = [];
+async function codigo(texto) {
+  const orden = String(texto || '').trim();
+  if (!orden) return;
+  const entrada = document.getElementById('cod-entrada');
+  if (entrada) entrada.value = '';
+  HISTORIAL_CODIGO.push(orden);
+  escribeCodigo('$ ' + orden, 'orden');
+  const estado = document.querySelector('#scr-codigo .scr-estado');
+  if (!await avisaSinNucleo(estado)) {
+    escribeCodigo(sinNucleoFrase(), 'aviso'); return;
+  }
+  try {
+    const r = await fetch(ctx.api() + '/api/command', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: orden }),
+    });
+    const j = await r.json();
+    escribeCodigo(j.reply || j.error || 'sin respuesta', 'cort');
+    (j.done || []).forEach(a => escribeCodigo('· hecho: ' + a, 'hecho'));
+    ctx?.orb?.burst?.();
+  } catch (e) {
+    escribeCodigo('el núcleo no respondió: ' + e, 'aviso');
+  }
+}
+function escribeCodigo(linea, clase) {
+  const caja = document.getElementById('cod-out');
+  if (!caja) return;
+  const d = document.createElement('div');
+  d.className = 'cod-linea ' + (clase || '');
+  d.textContent = linea;
+  caja.appendChild(d);
+  caja.scrollTop = caja.scrollHeight;
+}
+function pintaCodigo() {
+  if (!document.getElementById('cod-out')) montaCodigo();
+  const caja = document.getElementById('cod-out');
+  if (caja && !caja.childElementCount) {
+    escribeCodigo('Terminal de CORT — las órdenes se ejecutan en tu PC: «crea la carpeta Apuntes en Documentos», '
+      + '«instala ffmpeg», «arregla el permiso de la carpeta».', 'aviso');
+    if (enTelefono()) escribeCodigo(
+      'En el teléfono no hay consola: Android no deja que una app instale nada ni toque el sistema. '
+      + 'Conecta tu portátil (menú del botón «CORT · PC») y esto será una terminal de verdad.', 'aviso');
+  }
+}
+
+/* ─────────────────────────── 03 · MÚSICA (teléfono) ─────────────────────── */
+/*
+ * El reproductor de CORT en el teléfono. Manda sobre `.Reproductor` (servicio con
+ * notificación y `MediaSession`), así que la música sigue sonando con la pantalla
+ * apagada y el auricular obedece. La barra de progreso se pinta sola con los
+ * avisos `type:"music"` que manda Java: **no** hay `setInterval` preguntando, que
+ * es justo lo que traba un teléfono modesto.
+ */
+let musViva = false;
+
+function montaMusica() {
+  const cuerpo = document.querySelector('#scr-musica .scr-cuerpo');
+  cuerpo.innerHTML = `
+    <div class="mu-ahora" id="mu-ahora">nada puesto</div>
+    <div class="mu-datos"><span id="mu-artista"></span></div>
+    <div class="mu-barra" id="mu-barra"><i id="mu-prog"></i></div>
+    <div class="mu-tiempos"><span id="mu-t0">0:00</span><span id="mu-t1">—</span></div>
+    <div class="mu-transporte">
+      <button id="mu-prev" title="anterior">⏮</button>
+      <button id="mu-play" title="play / pausa">▶</button>
+      <button id="mu-next" title="siguiente">⏭</button>
+      <button id="mu-stop" title="parar del todo">⏹</button>
+    </div>
+    <div class="mu-fila2">
+      <button id="mu-gusta" class="mu-chip">👍 me gusta</button>
+      <button id="mu-no" class="mu-chip">👎 quítala</button>
+      <button id="mu-cuadro-a" class="mu-chip" title="fotograma anterior (video)">◂ cuadro</button>
+      <button id="mu-cuadro-b" class="mu-chip" title="fotograma siguiente (video)">cuadro ▸</button>
+      <button id="mu-auto" class="mu-chip">♪ ponme algo</button>
+    </div>
+    <div class="mu-volumen"><span>volumen</span><input id="mu-vol" type="range" min="0" max="1" step=".05" value=".8"></div>
+    <div class="mu-lista-top">
+      <input id="mu-busca" placeholder="busca título, artista o género…">
+      <button id="mu-buscar">buscar</button>
+      <button id="mu-gusto" title="las que mejor encajan con tus gustos">por gusto</button>
+    </div>
+    <div class="scr-lista mu-pistas" id="mu-pistas"></div>
+    <div class="mu-playlists">
+      <div class="mu-pl-top">
+        <input id="mu-pl-nombre" placeholder="nombre de la lista">
+        <button id="mu-pl-guarda">guardar la cola</button>
+        <button id="mu-pl-refresca">mis listas</button>
+      </div>
+      <div class="mu-pl-caja" id="mu-pl-caja"></div>
+      <div class="mu-perfil" id="mu-perfil"></div>
+    </div>`;
+
+  const q = cuerpo.querySelector('#mu-busca');
+  const ponTema = tema => {
+    cuerpo.querySelector('#mu-ahora').textContent = tema ? tema.titulo : 'nada puesto';
+    cuerpo.querySelector('#mu-artista').textContent =
+      tema ? [tema.artista, tema.genero].filter(Boolean).join(' · ') : '';
+  };
+  cuerpo.querySelector('#mu-play').onclick = () => {
+    const e = estadoMusica();
+    if (!e || !e.vivo) { llama('musicaAutomatica'); return; }
+    e.suena ? llama('musicaPausa') : llama('musicaPlay');
+  };
+  cuerpo.querySelector('#mu-prev').onclick = () => llama('musicaAnterior');
+  cuerpo.querySelector('#mu-next').onclick = () => llama('musicaSiguiente');
+  cuerpo.querySelector('#mu-stop').onclick = () => { llama('musicaParar'); ponTema(null); pintaProgreso({ vivo: false }); };
+  cuerpo.querySelector('#mu-gusta').onclick = () => {
+    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para evaluar.');
+    llama('musicaGustar', e.pista.uri, true); ctx?.say?.('Anotado: te gusta esto.');
+  };
+  cuerpo.querySelector('#mu-no').onclick = () => {
+    const e = estadoMusica(); if (!e?.pista) return ctx?.say?.('Nada puesto para quitar.');
+    llama('musicaGustar', e.pista.uri, false); llama('musicaSiguiente');
+  };
+  cuerpo.querySelector('#mu-cuadro-a').onclick = () => llama('musicaCuadro', true);
+  cuerpo.querySelector('#mu-cuadro-b').onclick = () => llama('musicaCuadro', false);
+  cuerpo.querySelector('#mu-auto').onclick = () => llama('musicaAutomatica');
+  cuerpo.querySelector('#mu-vol').oninput = e => llama('musicaVolumen', +e.target.value);
+  cuerpo.querySelector('#mu-barra').onclick = ev => {
+    const e = estadoMusica(); if (!e || !e.dur) return;
+    const r = ev.currentTarget.getBoundingClientRect();
+    llama('musicaSalto', Math.round((ev.clientX - r.left) / r.width * e.dur));
+  };
+  cuerpo.querySelector('#mu-buscar').onclick = () => buscaMusica(q.value, false);
+  q.addEventListener('keydown', e => { if (e.key === 'Enter') buscaMusica(q.value, false); });
+  cuerpo.querySelector('#mu-gusto').onclick = () => buscaMusica(q.value, true);
+  cuerpo.querySelector('#mu-pl-guarda').onclick = () => guardaLista();
+  cuerpo.querySelector('#mu-pl-refresca').onclick = () => {
+    document.querySelector('#scr-musica .scr-cuerpo').querySelector('#mu-pl-caja').textContent = ''; pintaListas();
+  };
+  pintaListas();
+  perfil();
+}
+
+const estadoMusica = () => {
+  const crudo = llama('musicaEstado');
+  if (!crudo) return null;
+  try { return JSON.parse(crudo); } catch { return null; }
+};
+
+function buscaMusica(texto, porGusto) {
+  const caja = document.getElementById('mu-pistas');
+  if (!caja) return;
+  if (llama('musicaPuedeLeer') === false) {
+    // El permiso **no** se pide solo: Android sólo deja pedirlo desde una
+    // pulsación, y aquí la dueña puede pulsar este aviso o el menú del botón
+    // flotante «CORT · PC» del teléfono (fila «Dar permiso a la música y los
+    // archivos»). Decir «ya lo pedí» sin haberlo pedido sería mentira.
+    caja.innerHTML = '<div class="mu-vacio">CORT no ve tu música todavía · pulsa '
+      + '<b class="mu-dar">Dar permiso a la música y los archivos</b>'
+      + ' o ábrelo desde el botón <b>CORT · PC</b> del teléfono.</div>';
+    const dar = caja.querySelector('.mu-dar');
+    if (dar) dar.onclick = () => {
+      if (llama('pidePermisoMedios') === null) {
+        ctx?.say?.('Este APK aún no pide el permiso desde aquí: usa el botón CORT · PC.');
+        return;
+      }
+      ctx?.say?.('Ahí tienes el cuadro: acepta leer audio y vídeos.');
+    };
+    return;
+  }
+  const crudo = porGusto ? llama('musicaPorGusto', texto || '', 60)
+                         : llama('musicaBuscar', texto || '', true);
+  let lista = [];
+  try { lista = JSON.parse(crudo || '[]'); } catch { lista = []; }
+  caja.innerHTML = '';
+  if (!lista.length) {
+    caja.innerHTML = '<div class="mu-vacio">nada con ese nombre · prueba con otra palabra o «por gusto»</div>';
+    return;
+  }
+  const uris = lista.map(p => p.uri);
+  lista.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'mu-pista' + (p.video ? ' es-video' : '');
+    d.innerHTML = `<span class="mu-ico">${p.video ? '▣' : '♪'}</span>
+      <span class="mu-n">${esc(p.titulo)}</span>
+      <span class="mu-a">${esc(p.artista)}${p.genero ? ' · ' + esc(p.genero) : ''}</span>`;
+    d.onclick = () => {
+      if (llama('musicaPoner', uris.join('\n'), i) === false) {
+        ctx?.say?.('Esa pista no está en el índice: recarga la lista.');
+        return;
+      }
+      ctx?.orb?.burst?.();
+    };
+    caja.appendChild(d);
+  });
+}
+
+function guardaLista() {
+  const nombre = document.getElementById('mu-pl-nombre');
+  const e = estadoMusica();
+  if (!nombre || !nombre.value.trim()) return ctx?.say?.('Ponle nombre a la lista primero.');
+  if (!e || !e.pista) return ctx?.say?.('No hay nada sonando que guardar.');
+  // Se guarda la canción actual y su URI; las listas son URIs separadas, y Java las
+  // vuelve a buscar en el índice cuando se ponen.
+  llama('musicaGuardarLista', nombre.value.trim() + ' · ' + e.pista.titulo, e.pista.uri);
+  nombre.value = '';
+  ctx?.say?.('Lista guardada en «mis listas».');
+  document.getElementById('mu-pl-caja').textContent = '';
+  pintaListas();
+}
+
+function pintaListas() {
+  const caja = document.getElementById('mu-pl-caja');
+  if (!caja || caja.childElementCount) return;
+  let nombres = [];
+  try { nombres = JSON.parse(llama('musicaListas') || '[]'); } catch { nombres = []; }
+  if (!nombres.length) {
+    caja.innerHTML = '<div class="mu-vacio">aún no guardaste ninguna lista</div>';
+    return;
+  }
+  nombres.forEach(n => {
+    const b = document.createElement('button');
+    b.className = 'mu-chip'; b.textContent = n;
+    b.onclick = () => {
+      if (llama('musicaPonerLista', n, 0) === false) ctx?.say?.('Esa lista ya no tiene canciones en el teléfono.');
+    };
+    caja.appendChild(b);
+  });
+}
+
+function perfil() {
+  const caja = document.getElementById('mu-perfil');
+  if (!caja) return;
+  let p = null;
+  try { p = JSON.parse(llama('musicaPerfil') || 'null'); } catch { p = null; }
+  const nombres = (g, a) => [(g || []).map(x => x.nombre), (a || []).map(x => x.nombre)]
+    .flat().filter(Boolean).slice(0, 5);
+  const top = nombres(p?.generos, p?.artistas);
+  caja.innerHTML = top.length
+    ? 'lo que más te gusta: <b>' + esc(top.join(', ')) + '</b>'
+    : 'aún no sé qué te gusta: pulsa 👍 cuando suene algo que te guste.';
+}
+
+function pintaProgreso(e) {
+  const barra = document.getElementById('mu-prog');
+  if (!barra || !e) return;
+  const pct = e.dur ? Math.max(0, Math.min(100, e.pos / e.dur * 100)) : 0;
+  barra.style.width = pct + '%';
+  document.getElementById('mu-t0').textContent = reloj(e.pos || 0);
+  document.getElementById('mu-t1').textContent = e.dur ? reloj(e.dur) : '—';
+  const play = document.getElementById('mu-play');
+  if (play) play.textContent = e.suena ? '⏸' : '▶';
+  const video = e.pista && e.pista.video;
+  document.querySelectorAll('#mu-cuadro-a,#mu-cuadro-b').forEach(b => b.style.display = video ? '' : 'none');
+}
+
+const reloj = ms => {
+  const s = Math.round((ms || 0) / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+};
+
+function arrancaMusica() {
+  pintaProgreso(estadoMusica());
+  const e = estadoMusica();
+  if (e && e.pista) {
+    document.getElementById('mu-ahora').textContent = e.pista.titulo;
+    document.getElementById('mu-artista').textContent = [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
+  }
+}
+
+/* Los avisos de Java: play, pausa, canción nueva, cuadro a cuadro. Sin ellos la
+   barra se quedaría quieta (y preguntar cada 200 ms es lo que traba un teléfono). */
+function escuchaMusica() {
+  if (musViva || !window.__cortNative) return;
+  musViva = true;
+  window.__cortNative.on(ev => {
+    if (!ev || ev.type !== 'music') return;
+    const e = ev.estado;
+    pintaProgreso(e);
+    const ahora = document.getElementById('mu-ahora');
+    if (ahora) ahora.textContent = e?.pista ? e.pista.titulo : 'nada puesto';
+    const art = document.getElementById('mu-artista');
+    if (art && e?.pista) art.textContent = [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
+    if (e?.pista) perfil();
+  });
+}
+
+/* ─────────────────────────── el puente hacia hud.js ─────────────────────── */
+
+export function initPantallas(contexto) {
+  ctx = contexto;
+  montaCarcasa();
+  montaGesto();
+  montaTeclas();
+  escuchaMusica();
+  if (enTelefono()) montaMusica();
+  montaCharla();
+  montaCodigo();
+  document.documentElement.classList.add('pantallas-montadas', 'p-orbe');
+  // La interfaz nueva de Android no estaba: si el puente existe, la barra de
+  // pantallas sustituye al botón flotante que ya había (no se apila encima).
+  ctx?.term?.('pantallas listas: ' + visibles().map(p => p.titulo).join(' · '), 'pantallas');
+}
+
+/* Que la dueña lo diga y CORT se mueve: se llama desde `send()` en hud.js. */
+export function porVoz(texto) {
+  const t = String(texto || '').toLowerCase();
+  if (/(vuelve|regresa|al orbe|pantalla orbe|la cara de siempre)/i.test(t)) { ir('orbe'); return 'orbe'; }
+  if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(m[uú]sica|reproductor)/i.test(t) && enTelefono()) { ir('musica'); return 'musica'; }
+  if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(charla|chat|conversa)/i.test(t)) { ir('charla'); return 'charla'; }
+  if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(c[oó]digo|programar|terminal)/i.test(t)) { ir('codigo'); return 'codigo'; }
+  return null;
+}

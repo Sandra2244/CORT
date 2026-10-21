@@ -54,12 +54,61 @@
     <uses-permission android:name="android.permission.VIBRATE"
                      android:required="false" />
 
+    <!-- ── Archivos: para «ordena mis descargas», «mueve estos a la carpeta de la
+         carrera» y para que el reproductor suene con la música que ya está en el
+         teléfono. Hasta Android 12 vale `READ_EXTERNAL_STORAGE`; desde 13 el
+         sistema ignora ése y pide los tipos sueltos. Para MOVER o renombrar hace
+         falta «todos los archivos», que es un interruptor que pone la dueña una
+         vez (Ajustes ▸ Aplicaciones ▸ CORT ▸ Acceso a todos los archivos) porque
+         Google sólo lo permite a apps de gestión de archivos — y CORT, siendo
+         sideload, puede usarlo sin problema. Sin ese interruptor el menú lo dice
+         en vez de inventarse que ordenó algo. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+                     android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+                     android:maxSdkVersion="29" android:required="false" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+                     android:required="false" />
+
+    <!-- ── Marcas y contactos: «llama a Samuel», «escríbele a mi amigo…».
+         `CALL_PHONE` marca directo (con su aviso de permiso); `READ_CONTACTS` es
+         lo que convierte un nombre en un número. No hay permiso de leer SMS ni
+         de entrar en WhatsApp: no existe, y CORT se apaña con la barra de
+         notificaciones, que es lo que la dueña ya ve. -->
+    <uses-permission android:name="android.permission.CALL_PHONE"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.READ_CONTACTS"
+                     android:required="false" />
+
+    <!-- ── Reproducir en segundo plano: el servicio con su notificación, el
+         doble toque del auricular y que la pantalla se apague sin cortar el
+         sonido. `POST_NOTIFICATIONS` es el interruptor de Android 13 para que la
+         notificación del reproductor exista. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.BLUETOOTH"
+                     android:required="false" />
+
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <application
         android:label="CORT"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true"
         android:supportsRtl="true">
@@ -125,5 +174,17 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- El **reproductor**: una notificación persistente con play/pausa y
+             siguiente, y el `MediaSession` que manda al auricular. Es lo que hace
+             que la música (o el video) siga sonando con la cara cerrada o la
+             pantalla apagada sin que el sistema mate el proceso — y, como el
+             sonido sale de aquí y no del WebView, la página puede irse atrás sin
+             cortar la canción. `mediaPlayback` es el tipo que Android 14 exige
+             para que el servicio en primer plano sea legal. -->
+        <service
+            android:name=".Reproductor"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
     </application>
 </manifest>

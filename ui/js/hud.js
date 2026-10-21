@@ -1,6 +1,7 @@
 /* ===== HUD de CORT: arranque, ventanas, chat, sensores, voz y gestos ===== */
 import { createWin } from './windows.js';
 import { createVoice, perms } from './voice.js';
+import { initPantallas, porVoz, ir } from './pantallas.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -208,6 +209,8 @@ function buildWindows() {
       <ul class="hp-keys">
         <li><b>Tab</b> completar comando</li><li><b>↑ / ↓</b> historial</li>
         <li><b>Enter</b> enviar</li><li><b>Esc</b> ocultar / mostrar el HUD</li>
+        <li><b>Alt + ← / →</b> cambiar de pantalla</li>
+        <li><b>Alt + 1…4</b> saltar a una pantalla</li>
         <li><b>arrastrar</b> la barra superior mueve la ventana</li>
         <li><b>doble clic</b> en la barra la minimiza al dock</li>
         <li><b>arrastrar</b> un chip lo coloca donde quieras</li>
@@ -219,6 +222,10 @@ function buildWindows() {
         <li><b>08 · Cerebro</b> el muro de recuerdos (notas + charlas, en SQLite)</li>
         <li><b>10 · Modelos</b> baja modelos de Ollama y ve cuáles caben en tu RAM</li>
         <li><b>11 · Optimizar</b> qué come memoria y cuánta caché se puede borrar</li>
+        <li><b>☰ · Pantallas</b> el orbe, la música, la <b>charla</b> con tus modelos y el
+          <b>código</b> (terminal). Se cambia con ☰, deslizando el dedo a un lado,
+          con <b>Alt + ←/→</b> o diciéndolo: «abre el chat», «pantalla de código»,
+          «vuelve al orbe». En otra pantalla el orbe y sus ventanas se apagan: no se tapan</li>
         <li><b>🎙</b> una orden · <b>👂</b> escucha «Oye CORT» · <b>✋</b> gestos con la mano</li>
       </ul>
       <div class="hp-sec">▸ Soporte y contacto</div>
@@ -1086,12 +1093,12 @@ function olvidaAvisos() {
 function ponAsistente() {
   const N = window.CortNative;
   if (!N || typeof N.openAssistantSettings !== 'function') {
-    // `openAssistantSettings` sólo existe en el puente Java de `apps/apk`. Si la
-    // cara está corriendo dentro del cuerpo Kotlin de siempre (el APK
-    // `CORT-IA-x.y.z.apk`, que no declara `VoiceInteractionService`), elegir
-    // CORT en Ajustes no lo va a listar: decirle a la dueña que busque en el
-    // menú sería mentirle. Se le dice cuál instalar.
-    const r = 'Ponerme como asistente lo trae el APK del asistente: baja «CORT-IA-…-asistente.apk» de la Release e instálalo encima. Con el de siempre no aparezco en esa lista, porque no llevo puesto el traje de asistente de Android.';
+    // El puente `openAssistantSettings` sólo existe en el APK de Java de este
+    // repo (`apps/apk/compilar.sh`). Si la cara está corriendo dentro del cuerpo
+    // Kotlin viejo —el `CORT-IA-1.1.x` que ya no se publica— no declara
+    // `VoiceInteractionService` y Ajustes no va a listar a CORT aunque lo intente
+    // mil veces. No le digo que busque en el menú: le digo qué instalar.
+    const r = 'Ponerme como asistente lo trae el APK que se compila aquí: CORT-IA-1.3.0.apk, el único que sale ahora de la Release. Con el cuerpo Kotlin viejo no aparezco en esa lista porque no lleva puesto el traje de asistente de Android.';
     sayLine(r);
     return;
   }
@@ -1110,6 +1117,38 @@ function ponAsistente() {
   add('a', 'Ahí sale el cuadro de Android: pulsa «Establecer asistente». Con eso el doble toque del auricular y el gesto del asistente pasan a ser míos.', 'sistema');
   term('rol de asistente solicitado' + (st && st.puede === false ? ' (no disponible en este fabricante)' : ''), 'sistema');
 }
+/* «llama a Samuel» / «llama al 611 22 33». Sólo en el teléfono, y sólo si el
+   puente lo soporta: `Telefono.java` busca en los contactos y abre la llamada.
+   Con el permiso `CALL_PHONE` concedido va directo; sin él abre el marcador con
+   el número escrito para que la dueña pulse el verde — es lo que Android deja sin
+   asustarla. Contestar por ella **no** está: eso exige el rol `ROLE_CALLING` con
+   su `InCallService`, y mientras CORT no tenga pantalla de llamadas hecha se
+   dice aquí en vez de fingirlo (el README lo cuenta igual). */
+function llamarA(quien) {
+  const N = window.CortNative;
+  if (!N || typeof N.llamar !== 'function') {
+    sayLine('Marcar lo trae el APK de Java: en esta cara no tengo acceso al teléfono.');
+    return;
+  }
+  let r = null;
+  try { r = JSON.parse(N.llamar(quien)); } catch { r = null; }
+  if (!r) { sayLine('El teléfono no me dejó marcar. Prueba otra vez o dime el número.'); return; }
+  if (!r.ok) {
+    // casi siempre es que faltan los contactos: se pide el permiso y nada más
+    if (typeof N.pidePermisoTelefono === 'function') N.pidePermisoTelefono();
+    add('a', `No encontré a «${quien}» en tus contactos —te estoy pidiendo el permiso de contactos y de llamar; vuelve a decírmelo.`, 'teléfono');
+    sayLine('No lo tengo en los contactos. Dame un momento y pídeme la llamada otra vez.');
+    term('llamar sin datos de contacto: permiso pedido', 'teléfono');
+    return;
+  }
+  orb.burst();
+  const nombre = r.nombre || quien;
+  add('a', r.directo
+    ? `Llamando a ${nombre} (${r.numero}).`
+    : `Aquí está el número de ${nombre}: ${r.numero}. Pulsa verde para llamar.`, 'teléfono');
+  sayLine(r.directo ? 'Llamando a ' + nombre : 'Te puse a ' + nombre + ' en el marcador.');
+  term('marcar ' + nombre + ' ' + r.numero + (r.directo ? ' (directo)' : ' (marcador)'), 'teléfono');
+}
 /* ---------- consola de comandos: historial ↑/↓ y Tab que completa ---------- */
 const HIST = [];
 let hIdx = 0, draft = '';
@@ -1119,7 +1158,8 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   'muéstrame los modelos', 'descarga el modelo ', 'usa el modelo ', 'enciende ollama',
   '¿cuánta ram queda?', 'abre la optimización', 'limpia la caché',
   'lee mis avisos', 'lee mis notas', 'lee mis tareas', 'tengo que ', 'lee el documento ',
-  'pon CORT como asistente'];
+  'pon CORT como asistente', 'llama a ', 'ponme algo que me guste',
+  'abre el chat', 'abre la pantalla de código', 'abre la pantalla de música', 'vuelve al orbe'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;
@@ -1143,6 +1183,26 @@ async function send(raw) {
   setTimeout(() => document.getElementById('top').classList.remove('glitch'), 800);
   orb.activate();                                    // ← vórtice de activación (referencia)
   term('consulta: "' + msg.slice(0, 40) + '"', 'voz');
+  /* ─── cambiar de pantalla: el orbe, la charla, el código y la música ───
+     Se atiende antes que nada: es una orden de interfaz, no necesita núcleo
+     ni modelo, y si la dejo para después se la roba el backend. */
+  const pantalla = porVoz(msg);
+  if (pantalla) {
+    setState('listo');
+    const titulo = { orbe: 'el orbe', musica: 'la pantalla de música',
+                     charla: 'la pantalla de charla', codigo: 'la pantalla de código' }[pantalla];
+    add('a', `Cambié a ${titulo}. Con ☰ o deslizando el dedo de lado a lado te mueves entre ellas.`, 'pantallas');
+    speakTTS('Aquí tienes ' + titulo + '.'); term('pantalla: ' + pantalla, 'pantallas');
+    if (pantalla !== 'orbe') orb.burst();
+    return;
+  }
+  /* «llama a Samuel» / «marca al 611 22 33» — el teléfono, no el PC */
+  const llamada = msg.match(/^(?:llama(?:r)?|marca(?:r)?|llámame|marcarme)\s+(?:a\s+|con\s+|al\s+)?(.{2,40})$/i);
+  if (llamada && IS_ANDROID && !/(?:wi-?fi|pantalla|ventana|luz|puerta|asistente)/i.test(llamada[1])) {
+    setState('listo');
+    llamarA(llamada[1].replace(/^(?:el contacto de |mi amigo |mi amiga )/i, '').trim());
+    return;
+  }
   /* ─── órdenes directas del repertorio de la referencia (video f7d16b9e) ─── */
   if (/modo (oficina|bureau|escritorio)|organiza|ordena (las )?ventanas|ordenar el escritorio/i.test(msg)) {
     const n = organizeBureau();
@@ -1203,6 +1263,47 @@ async function send(raw) {
     W.optimiza.show();
     add('a', 'Estoy midiendo el equipo: memoria, procesos pesados y caché borrable.', 'optimizar');
     return;
+  }
+  /* reproductor de CORT en el teléfono: MANDA si está vivo, antes que el ejecutor
+     del PC. `musicaEstado()` es el mismo JSON que pinta la pantalla Música. */
+  if (IS_ANDROID && typeof (window.CortNative || {}).musicaEstado === 'function') {
+    let e = null;
+    try { e = JSON.parse(window.CortNative.musicaEstado()); } catch { e = null; }
+    if (e && e.vivo) {
+      if (/^(pausa|para|det[eé]n|stop)\b/i.test(msg) && /m[uú]sica|audio|sonido|eso/i.test(msg) || /^pausa$/i.test(msg)) {
+        window.CortNative.musicaPausa();
+        add('a', `Pauso «${e.pista ? e.pista.titulo : 'la canción'}». Di «sigue».`, 'música');
+        speakTTS('Pausa'); return;
+      }
+      if (/^(sigue|contin[uú]a|reanuda|play)\b/i.test(msg)) {
+        window.CortNative.musicaPlay();
+        add('a', 'Sigo con la música.', 'música'); speakTTS('Continuando'); return;
+      }
+      if (/siguiente|qu[eé] sigue|otra canci[oó]n|pon otra/i.test(msg)) {
+        window.CortNative.musicaSiguiente();
+        add('a', 'Pasando a la siguiente.', 'música'); speakTTS('La siguiente'); return;
+      }
+      if (/anterior|la de antes/i.test(msg)) {
+        window.CortNative.musicaAnterior();
+        add('a', 'Voy a la anterior.', 'música'); return;
+      }
+      if (/cuadro|fotograma|frame/i.test(msg)) {
+        window.CortNative.musicaCuadro(/atr[aá]s|antes|retro/i.test(msg));
+        add('a', 'Un fotograma ' + (/atr[aá]s|antes|retro/i.test(msg) ? 'atrás' : 'adelante') + '.', 'música');
+        return;
+      }
+      if (/parar la m[uú]sica|cierra el reproductor|silencio/i.test(msg)) {
+        window.CortNative.musicaParar();
+        add('a', 'Reproductor parado. La pantalla Música sigue ahí con ☰.', 'música');
+        speakTTS('Listo, sin música'); return;
+      }
+    }
+    if (/que me guste|m[uú]sica que me gusta|ponme algo|pon m[uú]sica|reproduce m[uú]sica/i.test(msg)) {
+      window.CortNative.musicaAutomatica();
+      ir('musica');
+      add('a', 'Poniendo lo que va con tus gustos: suena aunque cierres la cara. En la pantalla Música está el control y sus 👍/👎.', 'música');
+      speakTTS('Poniendo música de tu estilo'); orb.burst(); return;
+    }
   }
   /* reproductor interno de CORT (cuando está abierto y sonando) */
   const aud = document.getElementById('aud');
@@ -1454,6 +1555,19 @@ export function wireUI(orbRef) {
     if (on) add('a', 'Escucha permanente activa: di «Oye CORT» y tu orden.', 'voz');
   };
   if (!voice.available && !IS_ANDROID) { mic.style.display = 'none'; wake.style.display = 'none'; }
+
+  /* pantallas: el orbe, la música, la charla y el código. Son hojas a pantalla
+     completa que se encienden con ☰, con las flechas ‹ ›, deslizando el dedo de
+     lado, con Alt+←/→ o por voz («abre la pantalla de código»). Cuando una de
+     ellas está encendida, el orbe y el HUD se apagan por CSS: ninguna ventana
+     nueva tapa ni estorba la cara de CORT, y al revés. */
+  initPantallas({
+    orb, term, say: sayLine,
+    api: () => API,                              // el núcleo localizado por discoverApi()
+  });
+  // Fuera de su pantalla, el orbe no se queda dibujando a escondidas: el bucle
+  // WebGL se congela (CPU, RAM y batería para el teléfono y para el portátil).
+  window.addEventListener('cort-pantalla', e => orb.pausa(e.detail !== 'orbe'));
 
   /* gestos — modo ligero */
   import('./gestures.js').then(({ initGestures }) => initGestures({

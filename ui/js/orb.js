@@ -267,7 +267,13 @@ export function initORB(mount) {
   if (/[?&]disc/.test(location.search)) musicOn = true;
 
   let frameNo = 0;
+  /* `congelado`: la dueña se fue a otra pantalla (charla, código, música) y el
+     lienzo está oculto por CSS. Seguir dibujando sería CPU, GPU, RAM y batería
+     tirados a la basura en un teléfono de gama media y en un portátil de dos
+     núcleos, así que el bucle se detiene y `pausa()` lo reanuda al volver. */
+  let congelado = false, enBucle = true;
   function frame(t) {
+    if (congelado) { enBucle = false; return; }
     requestAnimationFrame(frame);
     energy += (target - energy) * .05;
     spinBoost *= .96;
@@ -407,5 +413,10 @@ export function initORB(mount) {
     setDisc(on) { musicOn = !!on; if (!on) target = 0; },
     /** nivel 0..1 (volumen) y bajo 0..1 (pulso) desde el AnalyserNode */
     setAudio(level = 0, bass = 0) { audioL = level; audioB = Math.max(audioB, bass); },
+    /** detener/reanudar el bucle de dibujo: lo usa el cambio de pantalla */
+    pausa(on) {
+      congelado = !!on;
+      if (!congelado && !enBucle) { enBucle = true; requestAnimationFrame(frame); }
+    },
   };
 }
