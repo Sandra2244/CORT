@@ -352,7 +352,9 @@ echo "peso medido: $PESO_APK bytes en la Release / $CRUDO_APK sin comprimir / $E
 
 # Y desglosado, porque «pesan 45 MB» sin decir de dónde salen los 45 MB es otra
 # vez el número de alguien, no una medida. Cada bloque se mide EN el APK final.
-python3 - <<'PY'
+# El desglose se guarda en `build/desglose.txt` y se mete en `firma.txt`: si no
+# viaja con el APK, la dueña tiene que creerse 45 MB de memoria.
+python3 - <<'PY' | tee build/desglose.txt
 import zipfile
 z = zipfile.ZipFile("build/CORT.apk")
 CLASES = {".dex", ".so", ".arsc"}
@@ -385,13 +387,14 @@ PY
     echo "peso: $PESO_APK bytes comprimido / $CRUDO_APK bytes sin comprimir / $ENTRADAS entradas / proporción $PROP"
     echo "llave: $LLAVE_ORIGEN"
     echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
-    if [ "$HAY_MOTOR" = "1" ]; then
-        echo "oído offline: Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt)"
-        echo "  sha256 del modelo: $(cat build/motor/modelo-sha256.txt)"
-        echo "  .so: $(find build/motor/lib -name '*.so' | sort | tr '\n' ' ')"
-    else
-        echo "oído offline: NO INCLUDED (MOTOR=off: el teléfono usa el reconocedor de Google)"
-    fi
+    echo "oído offline: Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt)"
+    echo "  sha256 del modelo: $(cat build/motor/modelo-sha256.txt)"
+    echo "  .so: $(find build/motor/lib -name '*.so' | sort | tr '\n' ' ')"
+    # Ojo con las comillas: dentro de `echo "…"` un acento grave es sustitución de
+    # orden, así que las rutas van sin ellos.
+    echo "  en el primer arranque el oído desempaca el modelo en filesDir/motor:"
+    echo "  son 60.286.598 bytes sueltos (los mide Oido.kt en CRUDO_MODELO); sin sitio dice sin-sitio y no toca nada"
+    sed 's/^/   · /' build/desglose.txt
     if [ "$HAY_KOTLIN" = "1" ]; then
         echo "lenguaje: Java + Kotlin $KOTLIN_VERSION (el método del 1.1.0: d8 y dex mixto, sin Gradle)"
     else

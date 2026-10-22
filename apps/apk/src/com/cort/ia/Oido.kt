@@ -69,7 +69,9 @@ import org.vosk.Recognizer
  * `stt-final` (`text` + `alts`), `stt-error` (`no-speech` | `busy` | `audio` |
  * `abort`) y `stt-end`. Nunca sale `not-allowed` de aquí: ese nombre apaga la
  * palabra de activación para siempre en la cara, y el permiso de micro lo
- * comprueba `CortNative` antes de llamar.
+ * comprueba `CortNative` antes de llamar. Y `stt-end` sale **exactamente una vez**
+ * por escucha —`cierra()` sobre un `AtomicBoolean`—, porque `voice.js` rearma el
+ * «Oye CORT» en cada uno: dos finales serían dos micrófonos abiertos.
  */
 class Oido(private val act: Context, private val salida: Oyente) {
 
@@ -113,6 +115,20 @@ class Oido(private val act: Context, private val salida: Oyente) {
 
     @Volatile private var vivo = false
     @Volatile private var cancelado = false
+    /* `true` mientras hay UNA escucha abierta. Es la llave de que el `stt-end`
+       salga exactamente una vez por escucha: lo cierra quien llega primero —el hilo
+       que entregó su texto o se pasó de tiempo, o `cancela()`— y el que llega
+       después no emite nada. `AtomicBoolean` en vez de un `var` con `@Volatile`
+       porque las dos partes compiten de verdad: con un booleano normal los dos podían
+       leer `true` a la vez. Medido en el run rojo de `v0.2.21-demo`, comprobación 5
+       de `PruebaOido.kt`: la cara recibía DOS `stt-end` y `voice.js` rearmaba «Oye
+       CORT» dos veces, o sea dos micrófonos abiertos sobre el mismo hilo. */
+    private val abierta = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Cierra la escucha entregando su `stt-end`, sólo si todavía estaba abierta. */
+    private fun cierra() {
+        if (abierta.compareAndSet(true, false)) cuadro("""{"type":"stt-end"}""")
+    }
     private var hilo: Thread? = null
 
     /* ─────────────────────────── arranque ─────────────────────────── */
@@ -287,6 +303,7 @@ class Oido(private val act: Context, private val salida: Oyente) {
 
         vivo = true
         cancelado = false
+        abierta.set(true)
         val elHilo = Thread { escucha(r, graba, modo, maxOf(maximoMs, 1500)) }
         elHilo.name = "cort-oido-escuchando"
         elHilo.priority = Thread.MAX_PRIORITY
@@ -362,7 +379,8 @@ class Oido(private val act: Context, private val salida: Oyente) {
             vivo = false
         }
 
-        // `cancela()` ya emitió su `stt-end`: repetir aquí sería rearma doble.
+        // `cancela()` ya cerró su sesión (`cierra()` es idempotente por
+        // `compareAndSet`): aquí no se entrega texto ni se repite el `stt-end`.
         if (cancelado) return
         if (texto == null && fallo == null) texto = termina(r)
         when {
@@ -373,15 +391,15 @@ class Oido(private val act: Context, private val salida: Oyente) {
                 } else {
                     cuadro("""{"type":"stt-error","error":${comilla(fallo)}}""")
                 }
-                cuadro("""{"type":"stt-end"}""")
+                cierra()
             }
             texto.isNullOrEmpty() -> {
                 cuadro("""{"type":"stt-error","error":"no-speech"}""")
-                cuadro("""{"type":"stt-end"}""")
+                cierra()
             }
             else -> {
                 cuadro("""{"type":"stt-final","text":${comilla(texto)},"alts":[${comilla(texto)}]}""")
-                cuadro("""{"type":"stt-end"}""")
+                cierra()
             }
         }
     }
@@ -403,7 +421,11 @@ class Oido(private val act: Context, private val salida: Oyente) {
         val elHilo = hilo
         hilo = null
         elHilo?.interrupt()
-        cuadro("""{"type":"stt-end"}""")
+        // `cierra()` y no un `cuadro` directo: si la escucha ya se cerró sola —el
+        // máximo de tiempo cumplido o un texto entregado antes de que la cara llamara
+        // al botón— el `stt-end` YA salió, y un segundo rearma doble el bucle de
+        // «Oye CORT» (`voice.js` llama a `scheduleWake()` en cada uno).
+        cierra()
     }
 
     /** Freno del modo juego y de `MainActivity.onPause`: si estaba escuchando, lo cierra. */
