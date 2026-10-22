@@ -7,6 +7,32 @@ charca de permisos de los tres APK leída del binario. No es una lista de consej
 renglón de la primera tabla es una comprobación hecha sobre el archivo que está en
 la Release, y las de la segunda tabla son los mensajes tal cual los muestra Android.
 
+## Y al final, el resultado: **el `nucleo` entra** (2026-10-22, noche)
+
+La dueña instaló `CORT-IA-2.5.0-nucleo.apk` y funcionó («me gustó, funcionó… las
+interfaces táctil muy bien»). Con los tres envases de la misma Release, la misma llave y
+el mismo `versionCode`, la bisección queda cerrada con **una sola variable**:
+
+| envase | permisos | servicios `BIND_*` | en su teléfono |
+| --- | --- | --- | --- |
+| `1.1.4` (el de siempre, 1,7 MB) | 13 | 0 | entra |
+| `2.4.2` y `2.4.2-ligero` | 28 | 4 | **bloqueado** — y el ligero pesa 1,6 MB: el peso no era |
+| **`2.5.0-nucleo`** | **21** | **0** | **entra y funciona** |
+| `2.5.0` (completo) | 28 | 4 | **sin probar de nuevo**: es la misma superficie del `2.4.2` bloqueado, y ella no volvió a instalarlo |
+
+Dos cosas que conviene tener claras, porque cambian las rondas siguientes:
+
+* **El payload quedó exonerado.** El núcleo que ella usa ahora lleva dentro las cuatro
+  `.so` de Vosk y el modelo de ~40 MB. No era el bulto, ni el modelo, ni JNA, ni el ZIP.
+* **La reinstallabilidad es un presupuesto.** Cada superficie de integración (`BIND_*`,
+  `ACTION_ASSIST`, Accesibilidad) gasta parte de él. Por eso las funciones que las
+  necesitan se publican en **escalones** (`nucleo` → `nucleo+avisos` → `completo`) y se
+  elige con el precio delante: `docs/PLAN-MAESTRO.md`.
+
+Lo de abajo sigue sirviendo para lo que ya no es el caso de CORT (y para cuando cambie de
+móvil o de capa de fabricante): cómo se mide un APK, qué significa cada frase de Android y
+qué se pulsa en cada una.
+
 ## Primero: el APK no está roto. Esto es lo que se midió
 
 Se bajaron los dos APK publicados (`2.3.0` y `2.3.1`) y se leyeron byte a byte. El
