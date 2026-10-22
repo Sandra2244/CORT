@@ -8,6 +8,8 @@ una lista de consejos generales: cada fila de la tabla salió de `keytool
 
 | Archivo de la Release | SHA-256 del certificado | Se instala encima de |
 | --- | --- | --- |
+| `CORT-IA-2.4.2.apk` (v0.2.28-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt`; **47.390.449 bytes** sobre 61.916.323 sin comprimir, **49 entradas**, `sha256 39a5a7d0…82b2e3`, **comprobado bajando el archivo en este portátil**: hashea exacto y los 49 CRC pasan; `versionCode` **20402**, firma v1+v2+v3, `resources.arsc` sin comprimir y alineado, no depurable, veredicto `INSTALABLE`. Es la **variedad COMPLETA**: lleva el oído offline dentro) | cualquier 2.x **y también el otro envase**: se instala encima del `2.0.0` … del `2.4.1` sin desinstalar ni perder datos, y como el `‑ligero` comparte `versionCode` y llave, uno entra encima del otro |
+| `CORT-IA-2.4.2-ligero.apk` (v0.2.28-demo) | **la misma** `fa:ab:ef:46:8f:3a…` (`versionCode` **20402**; **1.621.264 bytes** sobre 4.485.356 sin comprimir, **44 entradas**, `sha256 aac4aa25…8d9d5043`, descargado y hasheado aquí: exacto a su hoja y CRC íntegros; **cero** entradas `lib/*.so` y **cero** `assets/motor/`, leído dentro del `.apk`; su `AndroidManifest.xml` es **byte a byte** el del completo —los dos, 15.860 B y `sha256 8a2a74c2f077e5c5…`—). Es la **variedad LIGERA**: sin el oído offline dentro, `Oido.kt` dice `sin-modelo` y se escucha con el reconocedor del sistema) | igual que el completo: misma llave y mismo `versionCode`. Existe para la bisección de Play Protect, no para el uso diario |
 | `CORT-IA-2.4.1.apk` (v0.2.27-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y en el `apksigner verify --print-certs` del run: huella `faabef468f3ae04f…`; **47.390.449 bytes**, `sha256 ed5761f3…0908a6df`, **comprobado bajando el archivo en este portátil**, las 49 entradas con CRC íntegro, `versionCode` 20401, firma v1+v2+v3 y veredicto `INSTALABLE`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0`, del `2.3.0`, del `2.3.1` y del `2.4.0` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.4.0.apk` (v0.2.25-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y en el `apksigner verify --print-certs` del run: huella `faabef468f3ae04f…`; 47.386.289 bytes, `sha256 ee5eb11f…d8b57a`, **comprobado bajando el archivo en este portátil**, firma v1+v2+v3 y veredicto `INSTALABLE`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0`, del `2.3.0` y del `2.3.1` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.3.1.apk` (v0.2.24-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` **y** verificada en el portátil con `keytool -printcert -jarfile`, que sale en 0; 47.365.737 bytes, `sha256 68dce453…8ebb5`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0` y del `2.3.0` **sin desinstalar y sin perder datos** |
@@ -23,6 +25,22 @@ Android sólo deja instalar una versión nueva por encima si la firma es **la mi
 Por eso «sale error al instalar» justo al saltar de un 1.x (o del APK original) a un
 2.x: no está roto el APK, es otra llave. Desde el 2.0.0 la llave es estable — la del
 secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola vez**.
+
+## ¿Cuál de los dos APK del 2.4.2 bajo?
+
+Por defecto, **el completo** (`CORT-IA-2.4.2.apk`): es el que oye sin internet. El
+`CORT-IA-2.4.2-ligero.apk` se baja **sólo si el completo te lo bloquea Play Protect**
+—mismo CORT, misma llave, mismos permisos, lo único que le falta dentro es el oído
+offline, y en la hoja Equipo ▸ 7 dirá `sin-modelo` y escuchará con el reconocedor del
+sistema—. No hay que desinstalar nada para pasar de uno a otro: comparten `versionCode`
+20402 y llave, así que el segundo entra encima del primero como reinstalación (el número
+no baja, luego no es bajada) y se conservan el micrófono concedido, los gustos y la
+dirección del PC. Es lo que declara la medida, no lo que se probó en un teléfono: si el
+instalador de tu marca pusiera una pega con el mismo número de versión, se desinstala
+una vez y se instala el que se quiera dejar —con eso se pierden los ajustes, igual que
+siempre. Si entras en la prueba de la bisección,
+cuenta qué pasó con cada uno (la frase exacta del aviso, si es que sale) — eso es lo
+que decide la ronda que viene: [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md).
 
 > **¿Y si no es la firma, sino Google?** Si lo que sale es un aviso de Play Protect
 > («no reconoce esta aplicación», «puede dañar tu dispositivo», «este archivo puede
@@ -47,7 +65,7 @@ secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola 
 
 ## Recién instalado: qué se toca primero
 
-Con el `2.4.1` ya puesto, tres gestos valen más que cualquier ajuste: decirle **«pon
+Con el `2.4.2` ya puesto, tres gestos valen más que cualquier ajuste: decirle **«pon
 CORT como asistente»** (Android abre su cuadro de rol y ahí se elige CORT en vez de
 Google — con esto se pierde el «OK Google» con la pantalla apagada, porque eso lo decide
 el servidor de Google y no el repo), arrastrar la cortina de ajustes rápidos y **añadir el

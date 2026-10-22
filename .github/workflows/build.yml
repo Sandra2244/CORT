@@ -339,8 +339,9 @@ jobs:
         with:
           # Se llama `instalador-android` para que lo recoja el mismo
           # `pattern: instalador-*` de abajo y aparezca en la Release con enlace
-          # de descarga directo. `if-no-files-found: error`: este APK es el único,
-          # así que una Release sin él no sirve para nada y debe gritar.
+          # de descarga directo. Desde la 2.4.2 esto sube CUATRO archivos: los dos
+          # APK (completo y ligero) con sus dos `-firma.txt`. `if-no-files-found:
+          # error`: una Release sin instaladores no sirve para nada y debe gritar.
           name: instalador-android
           path: apk/*
           if-no-files-found: error

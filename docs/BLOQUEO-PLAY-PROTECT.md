@@ -90,12 +90,24 @@ Google en el teléfono (o su análisis en la nube contra el hash del archivo); a
 hay forma local de pedir ese veredicto. Lo que sí se puede hacer es **dejar una sola
 variable por medir**, y para eso la Release `v0.2.28-demo` sube dos APK:
 
-1. **`CORT-IA-2.4.2-ligero.apk`** (unos 2 MB): mismo manifiesto, mismos permisos,
-   misma llave, mismo `versionCode` 20402, misma cara, mismas siete vías de arranque,
-   mismo reproductor, mismos avisos, mismo cerebro, mismas automatizaciones. **Sin
-   las `.so` ni el modelo**: el bloque `Equipo ▸ 7 · Oído` muestra `sin-modelo` y la
-   escucha va con el reconocedor del sistema, igual que en el 2.2.0.
-2. **`CORT-IA-2.4.2.apk`** (47,4 MB): el completo, con el oído dentro.
+1. **`CORT-IA-2.4.2-ligero.apk`** — **1.621.264 bytes**, 44 entradas, `sha256`
+   `aac4aa2524f9bd4f…8d9d5043`: mismo manifiesto, mismos permisos, misma llave, mismo
+   `versionCode` 20402, misma cara, sus vías de arranque, mismo reproductor, mismos
+   avisos, mismo cerebro, mismas automatizaciones. **Sin las `.so` ni el modelo**: el
+   bloque `Equipo ▸ 7 · Oído` muestra `sin-modelo` y la escucha va con el reconocedor
+   del sistema, igual que en el 2.2.0.
+2. **`CORT-IA-2.4.2.apk`** — **47.390.449 bytes**, 49 entradas, `sha256`
+   `39a5a7d0849f5e29…82b2e3`: el completo, con el oído dentro.
+
+Los dos archivos se bajaron en este portátil y se leyeron por dentro, así que la
+afirmación «es el mismo CORT menos el bulto nativo» no es una promesa del guion: los
+`AndroidManifest.xml` de los dos `.apk` **son los mismos byte a byte** (15.860 B,
+`sha256` `8a2a74c2f077e5c5…`), en el ligero no hay **ni una** entrada `lib/` ni `assets/motor/`
+(leídas dentro del ZIP), y el `-firma.txt` de cada uno canta
+`INSTALABLE` con v1+v2+v3 y la llave `fa:ab:ef:46…`. Fíjate en el detalle que salta:
+el ligero pesa **menos** (1.621.264 B) que el `1.1.4` que a ella se le instala bien
+(1.756.727 B). Si el `1.1.4` entra y el ligero no, el problema ya no es ni el peso ni
+el bulto nativo: es la cuenta o el paquete.
 
 La prueba son dos minutos y el resultado manda:
 
