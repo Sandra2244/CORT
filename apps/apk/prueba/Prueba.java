@@ -1,5 +1,7 @@
 package com.cort.ia;
 
+import java.time.LocalDate;
+
 /* `Razon` a pelo: 43 frases de cuenta, porcentaje, unidad y calendario, más las
    que NO son suyas y tienen que seguir sueltas para que se las lleve la nube.
    Corre en el portátil (`scripts/prueba-mente.sh`) porque `Razon` es Java puro,
@@ -20,6 +22,36 @@ public class Prueba {
         String r = Razon.intenta(frase);
         if (r != null) { fallos++; System.out.println("FALLO  «" + frase + "» NO debía responderse: " + r); }
         else System.out.println("ok     «" + frase + "» → null (a la nube)");
+    }
+
+    /* El calendario NO se escribe a mano: el run rojo de `v0.2.19-demo` fue
+       exactamente eso — «miercoles 21 de octubre de 2026» fijado el día que se
+       escribió la prueba, y GitHub Actions corre en UTC, que en su mesa de Madrid
+       ya era jueves 22 cuando el teléfono de la dueña aún era miércoles. Una
+       prueba con la fecha copiada caduca sola, así que se calcula con las MISMAS
+       funciones de `Razon` (`nombreDe`) y con el mismo `LocalDate.now()`, y se
+       aceptan también el día anterior y el posterior: si el reloj pasa de
+       medianoche entre la llamada de `Razon` y la de aquí, la prueba sigue siendo
+       prueba de lo que tiene que ser —la fecha de verdad— y no un dado cargado. */
+    static void esperaHoy() {
+        LocalDate hoy = LocalDate.now();
+        String r = Razon.intenta("qué día es hoy");
+        casos++;
+        boolean vale = false;
+        for (int d = -1; d <= 1 && !vale; d++)
+            vale = r != null && r.contains(Razon.nombreDe(hoy.plusDays(d)));
+        if (!vale) { fallos++; System.out.println("FALLO  «qué día es hoy» → " + r
+            + "   (esperaba: hoy es " + Razon.nombreDe(hoy) + ")"); }
+        else System.out.println("ok     «qué día es hoy» → " + r);
+    }
+
+    /** Lo que `faltanPara` dice de verdad según los días que queden: 0, 1 o varios. */
+    static void esperaFaltan(String frase, int dia, int mes) {
+        LocalDate hoy = LocalDate.now();
+        LocalDate destino = LocalDate.of(hoy.getYear(), mes, dia);
+        if (destino.isBefore(hoy)) destino = destino.plusYears(1);
+        long dias = java.time.temporal.ChronoUnit.DAYS.between(hoy, destino);
+        espera(frase, dias == 0 ? "Es hoy" : dias == 1 ? "Falta un día" : "Faltan");
     }
 
     public static void main(String[] a) {
@@ -49,9 +81,9 @@ public class Prueba {
         espera("50 grados celsius a fahrenheit", "122");
         espera("30 grados a fahrenheit", "86");
         espera("2 gb a mb", "2048");
-        espera("cuántos días faltan para navidad", "Faltan");
-        espera("a cuánto falta para el 1 de enero", "días");
-        espera("qué día es hoy", "miercoles 21 de octubre de 2026");
+        esperaFaltan("cuántos días faltan para navidad", 25, 12);
+        esperaFaltan("a cuánto falta para el 1 de enero", 1, 1);
+        esperaHoy();
         espera("qué hora es", "Son las");
         espera("2026 es bisiesto", "no es");
         espera("2028 es bisiesto", "es bisiesto");
