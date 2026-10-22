@@ -153,12 +153,12 @@ El modo se fuerza con `CORT_MODE` (`.env`) o desde **Perfil**: `auto`, `local`,
 instaladores generados por GitHub Actions (nunca se compilan en tu PC, que para
 eso hace falta un equipo sobrado):
 
-| Archivo | Tamaño (medido en la API pública de Releases de `v0.2.22-demo`, el 2026-10-22) | Para |
+| Archivo | Tamaño (medido en la API pública de Releases de `v0.2.23-demo`, el 2026-10-22) | Para |
 |---|---|---|
-| `CORT.Setup.0.2.0.exe` | 79.029.463 bytes (75,4 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
-| `CORT-0.2.0.AppImage` | 107.773.228 bytes (102,8 MB) | Linux genérico (ejecutable directo) |
-| `cort-desktop_0.2.0_amd64.deb` | 74.890.216 bytes (71,4 MB) | Debian / Ubuntu / Mint |
-| `CORT-IA-2.3.0.apk` | **47.365.737 bytes** (45,2 MB) comprimidos sobre 61.841.013 sin comprimir, 47 entradas, proporción **0,77** — las cifras están dentro del `-firma.txt` que sube el propio run, desglosadas por bloque | Android 8+: **el único APK** (`versionCode` 20300). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz**, la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC, agenda y **oído**) y, desde el 2.2.0, el **cerebro ancho**: cuentas, porcentajes, unidades y fechas sin portátil ni nube (`Razon`, **283 frases** en 33 reglas). Lo nuevo del **2.3.0** es el **oído propio sin nube**: Vosk 0.3.47 con su modelo de español dentro del APK, así que «Oye CORT» funciona **sin internet y sin los servicios de voz de Google** |
+| `CORT.Setup.0.2.0.exe` | 79.029.460 bytes (75,4 MB) | Windows 10/11 64 bits (instalador NSIS, eliges carpeta) |
+| `CORT-0.2.0.AppImage` | 107.773.255 bytes (102,8 MB) | Linux genérico (ejecutable directo) |
+| `cort-desktop_0.2.0_amd64.deb` | 75.039.980 bytes (71,6 MB) | Debian / Ubuntu / Mint |
+| `CORT-IA-2.3.0.apk` | **47.365.737 bytes** (45,2 MB) comprimidos sobre 61.841.077 sin comprimir, 47 entradas, proporción **0,77** — las cifras están dentro del `-firma.txt` que sube el propio run, desglosadas por bloque | Android 8+: **el único APK** (`versionCode` 20300). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema, reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz**, la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC, agenda y **oído**) y, desde el 2.2.0, el **cerebro ancho**: cuentas, porcentajes, unidades y fechas sin portátil ni nube (`Razon`, **283 frases** en 33 reglas). Lo nuevo del **2.3.0** es el **oído propio sin nube**: Vosk 0.3.47 con su modelo de español dentro del APK, así que «Oye CORT» funciona **sin internet y sin los servicios de voz de Google** |
 | `CORT-IA-2.3.0-firma.txt` | 1.928 bytes | con qué llave salió (huella SHA-256 `faabef468f3a…`), si se instala encima, el peso medido **y su desglose** por bloque (`.dex`, `.so`, modelo, cara, recursos) — prueba pública |
 
 > Los tamaños del escritorio son los que declara la API pública de Releases el
