@@ -35,6 +35,12 @@ MEM="${JAVA_MEM:-256m}"
 # 60 MB, por otro: se pueden poner techos distintos.
 MEM_KOTLINC="${KOTLIN_MEM:-320m}"
 CACHE="${MOTOR_CACHE_DIR:-$HOME/.cache/cort-motor}"
+# `motor.sh` hace `cd "$(dirname "$0")"` (se va a `apps/apk`), así que una caché
+# RELATIVA —como la que pasa el pipeline, `apps/apk/motor-cache`— le llegaría como
+# `apps/apk/apps/apk/motor-cache` y bajaría 53 MB a un sitio que nadie mira. Se
+# vuelve absoluta aquí, que es el único lugar donde se puede arreglar sin tocar
+# el script del motor.
+case "$CACHE" in /*) ;; *) CACHE="$RAIZ/$CACHE" ;; esac
 
 MODO="${1:-todo}"          # `compilar` = sólo tipo-checkeo (sin montones ni modelo)
 

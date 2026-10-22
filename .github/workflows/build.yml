@@ -141,8 +141,9 @@ jobs:
           tail -25 /tmp/mente.log
           if [ $st -ne 0 ]; then
             msg=$(grep -E 'FALLO|falla|Error|error:|excepción|Exception' /tmp/mente.log \
-                  | head -25 | tr '\n\r' '  ' | sed 's/%/%25/g')
-            echo "::error::prueba-mente.sh salió con $st — ${msg:-sin detalle}"
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/mente.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-mente.sh salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
@@ -169,9 +170,15 @@ jobs:
           st=$?
           grep -vE '^LOG \(VoskAPI' /tmp/oido.log | tail -30
           if [ $st -ne 0 ]; then
-            msg=$(grep -E 'FALLA|FALLO|error:|Exception|OutOfMemory' /tmp/oido.log \
-                  | grep -vE '^LOG \(VoskAPI' | head -20 | tr '\n\r' '  ' | sed 's/%/%25/g')
-            echo "::error::prueba-oido.sh salió con $st — ${msg:-sin detalle}"
+            msg=$(grep -E 'FALLA|FALLO|error:|Exception|OutOfMemory|sin asignar' /tmp/oido.log \
+                  | grep -vE '^LOG \(VoskAPI' | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            # si la búsqueda no encuentra nada NO se dice «sin detalle»: se vuelca
+            # el final del registro igual. En el run rojo de `v0.2.20-demo` el error
+            # fue `motor.sh: línea 63: nombre: variable sin asignar`, que no entraba
+            # en ningún patrón, y la anotación se quedó vacía — sin sesión no hay
+            # forma de leer el registro, así que el vacío es quedar ciego otra vez.
+            [ -n "$msg" ] || msg=$(grep -vE '^LOG \(VoskAPI' /tmp/oido.log | tail -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-oido.sh salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Compilar el APK (aapt2 + kotlinc + javac + d8, sin Gradle)

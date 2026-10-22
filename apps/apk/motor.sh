@@ -60,7 +60,12 @@ CACHE="${1:-motor-cache}"
 mkdir -p "$CACHE" build/motor/jar build/motor/lib assets/motor
 
 baja() {    # baja() <url> <nombre> <peso-esperado> <sha-esperado|->
-    local url="$1" nombre="$2" peso="$3" sha="$4" destino="$CACHE/$nombre"
+    # Dos `local` en vez de uno: `local nombre="$2" destino="$CACHE/$nombre"` se
+    # expande entero ANTES de asignar nada, así que con `set -u` `$nombre` aún no
+    # existe y el script moría en la primera descarga («nombre: variable sin
+    # asignar», medido el 2026-10-21 en el run rojo de `v0.2.20-demo`).
+    local url="$1" nombre="$2" peso="$3" sha="$4"
+    local destino="$CACHE/$nombre"
     if [ -f "$destino" ] \
        && [ "$(stat -c '%s' "$destino" 2>/dev/null || wc -c < "$destino" | tr -d ' ')" = "$peso" ] \
        && { [ "$sha" = "-" ] || [ "$(sha256sum "$destino" | cut -d' ' -f1)" = "$sha" ]; }; then
