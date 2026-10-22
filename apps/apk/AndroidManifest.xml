@@ -264,6 +264,7 @@
         android:fullBackupContent="@xml/respaldo"
         android:dataExtractionRules="@xml/extraccion"
         android:extractNativeLibs="true"
+        android:installLocation="auto"
         android:requestLegacyExternalStorage="true">
 
         <!-- `singleTop`: el asistente y el reconocedor reutilizan la cara que ya

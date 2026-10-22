@@ -8,6 +8,7 @@ una lista de consejos generales: cada fila de la tabla salió de `keytool
 
 | Archivo de la Release | SHA-256 del certificado | Se instala encima de |
 | --- | --- | --- |
+| `CORT-IA-2.3.0.apk` (v0.2.22-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt`; 47.365.737 bytes medidos) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0` y del `2.2.0` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.2.0.apk` (v0.2.18-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt`, y 998.536 bytes medidos) | cualquier 2.x: se instala encima del 2.0.0 y del 2.1.0 |
 | `CORT-IA-2.1.0.apk` (v0.2.16-demo) | `fa:ab:ef:46:8f:3a:e0:4f:df:ab:96:59:d6:a0:51:c4:53:d6:de:d7:b9:65:46:8c:9c:3b:85:ca:ff:a3:19:77` | cualquier 2.x |
 | `CORT-IA-2.0.0.apk` (v0.2.13-demo) | la misma `fa:ab:ef:46…` | y de ahí se pasa a 2.1.0 sin desinstalar |
@@ -32,6 +33,24 @@ secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola 
    «instalar apps desconocidas» si lo pide. Las veces siguientes ya no hará falta
    desinstalar nada.
 
+## El `2.3.0` trae oído: dos cosas que se notan al instalar
+
+* **Pide sitio, no permisos nuevos.** El APK son 45,2 MB. Al instalar, Android
+  saca del archivo las cuatro `.so` del motor (**17.433.208 bytes** en crudo, una
+  por arquitectura), y en el **primer arranque** CORT desempaca su modelo de español
+  (**60.286.598 bytes** sueltos) en su carpeta privada: en total hay que contar unos
+  **78 MB libres**. No borra ni mueve nada de tus archivos: si no cabe, la hoja
+  `☰ ▸ Equipo ▸ 7 · Oído` dice `sin-sitio`, el oído propio queda apagado y CORT
+  sigue escuchando con el reconocedor del sistema. Se puede reintentar liberando
+  sitio y volviendo a encender el interruptor del bloque. Con `installLocation="auto"`
+  en el manifiesto, si el almacenamiento interno va justo **es Android quien coloca la
+  app en la tarjeta**, sin que tengas que hacer nada.
+* **No hace falta desinstalar nada** si ya tenías un `2.0.0`, `2.1.0` o `2.2.0`: la
+  llave es la misma (`fa:ab:ef:46…`, escrita en el `-firma.txt` de cada Release) y el
+  `versionCode` sube (20200 → 20300), así que Android lo ve como una actualización
+  normal. El permiso del micrófono, el de los avisos, la dirección del PC y los gustos
+  de música se quedan donde estaban.
+
 ## Qué significa cada error
 
 | Lo que dice Android | Qué pasa de verdad | Qué hacer |
@@ -48,7 +67,7 @@ secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola 
 
 ```
 bash scripts/instala-apk.sh              # baja el último y lo instala si hay teléfono
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.2.0.apk
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.3.0.apk
 ```
 
 El script traduce la salida de `adb install -r` a español con las filas de arriba y
