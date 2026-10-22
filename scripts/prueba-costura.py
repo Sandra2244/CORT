@@ -1964,7 +1964,7 @@ clima_py = RAIZ / "scripts" / "prueba-clima.py"
 if not clima_py.exists():
     falla("2.5 · F7l · prueba", "no existe `scripts/prueba-clima.py`: el clima por ciudad "
                                 "y el registro de código quedarían sin probar")
-elif "prueba-clima.py" not in wf_txt:
+elif "python3 scripts/prueba-clima.py" not in wf_txt:
     falla("2.5 · F7l · pipeline", "`build.yml` no corre `prueba-clima.py`: la suite existiría "
                                   "y nadie la ejecutaría")
 else:
@@ -1995,6 +1995,80 @@ elif "and not coder" not in cerebro_txt:
                                  "«hazme una app del clima en Python» se contestaría con el termómetro")
 else:
     dice_ok("2.5 · F7l · cerebro", "los tres proveedores reciben `modo` y el código no pasa por el sensor")
+
+
+# ── [16] F7m · la boca del escritorio: voz por el núcleo, cosida por las tres capas
+# Medido el 2026-10-22 con `scripts/sonda-voz.html` en el Chromium de este equipo:
+# `speechSynthesis` responde pero da CERO voces, y `voiceschanged` dispara con la
+# lista vacía. O sea: en Linux la cara fingía hablar (saltaba su `onend`) y no se
+# oía nada, y los deslizadores de 07 · Perfil no mandaban en nada. Desde entonces la
+# boca se ELIGE y el timbre viaja en un POST, así que hay tres capas que tienen que
+# seguir nombrándose lo mismo: si una cambia de nombre, la otra calla en silencio.
+# Se exige la LÍNEA que invoca la suite, no el simple nombre: el nombre también
+# sale en el comentario y en la anotación de `::error::`, y con buscarlo suelto una
+# suite quitada del pipeline seguiría dando por cosida. Medido con una mutación.
+voz_suite = RAIZ / "scripts" / "prueba-voz.py"
+if not voz_suite.exists():
+    falla("F7m · prueba", "no existe `scripts/prueba-voz.py`: la boca del escritorio quedaría sin probar")
+elif "python3 scripts/prueba-voz.py" not in wf_txt:
+    falla("F7m · pipeline", "`build.yml` no corre `prueba-voz.py`: la suite existiría y nadie la ejecutaría")
+else:
+    dice_ok("F7m", "la suite de la boca existe y está montada en el trabajo `apk`")
+nucleo_voz = (RAIZ / "backend" / "app" / "voz.py").read_text(encoding="utf-8")
+if "import voz" not in backend_txt or '@app.get("/api/voice")' not in backend_txt \
+        or '@app.post("/api/voice/say")' not in backend_txt:
+    falla("F7m · puerta", "`main.py` no monta /api/voice y /api/voice/say: la cara no tendría boca que preguntar")
+else:
+    dice_ok("F7m · puerta", "el núcleo ofrece /api/voice (qué hay) y /api/voice/say (el WAV)")
+campos = [c for c in ("texto:", "voz:", "tono:", "velocidad:") if c not in backend_txt]
+if campos:
+    falla("F7m · contrato", "a `Decir` le faltan " + ", ".join(campos) +
+                            ": la cara manda esos cuatro campos y el pydantic los descartaría en silencio")
+else:
+    dice_ok("F7m · contrato", "texto/voz/tono/velocidad entran por la puerta y salen por `voz.sintetiza`")
+if 'media_type="audio/wav"' not in backend_txt or "503" not in backend_txt:
+    falla("F7m · puerta", "el audio no se declara WAV, o el fallo no viaja con código: la cara no sabría distinguirlo")
+else:
+    dice_ok("F7m · puerta", "responde audio/wav y, si no puede, 503 con el motivo con nombre")
+voice_txt = (RAIZ / "ui" / "js" / "voice.js").read_text(encoding="utf-8")
+if "'nativa'" not in voice_txt or "'navegador'" not in voice_txt or "'núcleo'" not in voice_txt \
+        or "'muda'" not in voice_txt:
+    falla("F7m · boca", "`voice.js` no elige entre las cuatro bocas: volvería a suponer que el navegador siempre habla")
+else:
+    dice_ok("F7m · boca", "nativa (teléfono) · navegador (Windows/Mac) · núcleo (Linux) · muda (se avisa)")
+if "h.onError && h.onError('sin-boca')" not in voice_txt or "'sin-boca'" not in hud_txt:
+    falla("F7m · aviso", "sin boca la cara callaría en silencio otra vez: tiene que salir el error por nombre")
+elif "boca:" not in voice_txt or "startsWith('boca:')" not in hud_txt:
+    falla("F7m · aviso", "el fallo del motor no llega a la consola: `voz.py` dice `no-suena` y nadie lo lee")
+else:
+    dice_ok("F7m · aviso", "el silencio tiene nombre en la consola (`sin-boca`, `boca:no-suena`…)")
+if "api: () => API" not in hud_txt or "voice.descubreMotor()" not in hud_txt:
+    falla("F7m · cara", "la cara no pregunta al núcleo qué boca hay (o lo pregunta a una URL fija): "
+                        "en Linux el desplegable saldría vacío otra vez")
+elif 'id="pf-voz-nota"' not in hud_txt or "boca === 'muda'" not in hud_txt:
+    falla("F7m · cara", "07 · Perfil no dice qué boca está hablando: sin esa línea un equipo sin motor "
+                        "parece un CORT roto en vez de un CORT sin espeak-ng")
+else:
+    dice_ok("F7m · cara", "pregunta el motor al arrancar, repinta el desplegable y dice la boca en uso")
+if "voz: cfg.voice" not in voice_txt or "tono: cfg.pitch" not in voice_txt or "velocidad: cfg.rate" not in voice_txt:
+    falla("F7m · viaje", "el POST del WAV no se arma con los tres mandos del Perfil: "
+                         "los deslizadores volverían a ser decorativos")
+elif "URL.revokeObjectURL" not in voice_txt:
+    falla("F7m · memoria", "el `object URL` del WAV no se libera: en 1,8 GiB de RAM cada frase dejaría audio colgando")
+else:
+    dice_ok("F7m · viaje", "timbre, tono y velocidad salen del Perfil y el audio se suelta al terminar")
+# La ruta del teléfono no se toca: sigue hablando por el puente, con los cinco argumentos.
+if "N.speak(t.slice(0, 3800), id, cfg.voice || '', +cfg.pitch || 0.82, +cfg.rate || 1)" not in voice_txt:
+    falla("F7m · teléfono", "la llamada a `CortNative.speak()` cambió de forma: el puente espera "
+                            "(texto, id, voz, tono, velocidad) y el APK se quedaría mudo")
+else:
+    dice_ok("F7m · teléfono", "el APK sigue con su `TextToSpeech` de siempre: la boca nueva es sólo el escritorio")
+cristal = (RAIZ / "desktop" / "main.cjs").read_text(encoding="utf-8")
+if "autoplay-policy" not in cristal or "no-user-gesture-required" not in cristal:
+    falla("F7m · escritorio", "Electron sigue con la política de autoplay de Chromium: el `<audio>` del "
+                              "saludo se corta antes de empezar y la boca nueva no se oye")
+else:
+    dice_ok("F7m · escritorio", "Electron permite hablar sin gesto previo (saludo, dictado, avisos)")
 
 
 # ── veredicto ───────────────────────────────────────────────────────────────

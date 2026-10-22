@@ -2,7 +2,23 @@
    Oído: dictado con texto EN VIVO mientras hablas + palabra de activación «Oye CORT».
    Habla: voz grave estilo JARVIS.
    En Android usa el puente nativo (SpeechRecognizer + TextToSpeech);
-   en un navegador de PC cae a Web Speech API. */
+   en un navegador de PC cae a Web Speech API.
+
+   ── La boca se elige SOLA, y eso es lo que faltaba (medido 2026-10-22) ──
+   Hay tres bocas posibles y un cuarto caso que es no tener ninguna:
+
+     «nativa»    el `TextToSpeech` del teléfono, a través de `CortNative.speak()`
+     «navegador» las voces que da `speechSynthesis` (Windows y macOS: sí da)
+     «núcleo»    el motor de voz del equipo, por `POST /api/voice/say` → WAV
+     «muda»      no hay ninguna: se AVISA, no se finge que se habló
+
+   En el Linux de Sandra el navegador responde pero **no da voces**: abriendo
+   `scripts/sonda-voz.html` en este Chromium sale `motor: sí · voces: 0`, y el
+   evento `voiceschanged` se dispara con la lista vacía igual. Como `speak()` sin
+   voz también salta su `onend`, CORT parecía hablar y no se oía nada, y los
+   deslizadores de 07 · Perfil no mandaban en nada. El equipo sí tiene `espeak-ng`
+   (10 timbres en español comprobados uno a uno), así que en Linux la boca pasa a
+   ser el núcleo y los tres mandos —timbre, tono, velocidad— viajan en el POST. */
 
 const N = window.CortNative || null;
 
@@ -13,6 +29,12 @@ const WAKE_ONLY = /^\s*(?:oye|hey|ey|oie|ok|okay|hola)[\s,]+(cort|court|kort|cor
 export function createVoice(h = {}) {
   const lang = h.lang || 'es-MX';
   const cfg = { voice: '', pitch: 0.82, rate: 1.0 };   // JARVIS: grave y pausado
+  /* `h.api()` es la base del núcleo (en Android es '' porque la pantalla la sirve
+     el propio backend). Se pide como función y no como cadena porque `API` en
+     hud.js aún no está descubierto cuando se construye la voz. */
+  const api = () => { try { return (h.api ? h.api() : '') || ''; } catch { return ''; } };
+  let nucl = null;              // respuesta de GET /api/voice: {motor, voces[], motivo}
+  let audio = null;             // el <audio> que está sonando por el núcleo
   let mode = 'idle';            // idle | cmd | wake
   let wakeOn = false, speaking = false, wakeTimer = 0, backoff = 400;
   let afterSpeak = null;        // acción pendiente al terminar de hablar
@@ -154,6 +176,68 @@ export function createVoice(h = {}) {
     };
   }
 
+  /* ------------------------------ la boca ------------------------------ */
+  function vocesWeb() {
+    if (!('speechSynthesis' in window)) return [];
+    try { return speechSynthesis.getVoices(); } catch { return []; }
+  }
+
+  /** Qué boca tiene este aparato AHORA. Se decide en cada `speak()` porque en
+      Chromium las voces llegan TARDE: la primera llamada puede no ver ninguna y
+      la siguiente sí. */
+  function boca() {
+    if (N) return 'nativa';
+    if (vocesWeb().length) return 'navegador';
+    if (nucl && nucl.motor && (nucl.voces || []).length) return 'núcleo';
+    return 'muda';
+  }
+
+  /** Preguntar al núcleo qué motor de voz tiene este equipo. Se llama al arrancar
+      y cuando el núcleo se descubre tarde: enumerar los timbres cuesta ~1 s en el
+      equipo (se sintetiza cada voz para comprobar que de verdad sale audio), así
+      que el núcleo lo cachea y la cara repinta el desplegable al resolver esto. */
+  async function descubreMotor() {
+    if (N) return null;                       // el teléfono habla solo: no pregunta
+    try {
+      const r = await fetch(api() + '/api/voice');
+      nucl = r.ok ? await r.json() : null;
+    } catch { nucl = null; }                  // sin núcleo: la cara ya lo dice sola
+    h.onBoca && h.onBoca(boca(), nucl);
+    return nucl;
+  }
+
+  /** Hablar por el motor del equipo: el núcleo devuelve el WAV y aquí suena.
+      El `object URL` se libera al terminar (en 1,8 GiB de RAM no se dejan audios
+      colgando) y cada fallo tiene su palabra: el silencio sin motivo fue justo lo
+      que hizo dudar de toda la sección de voz. */
+  function hablaPorNucleo(texto, id) {
+    const cuerpo = JSON.stringify({ texto, voz: cfg.voice || '',
+                                    tono: cfg.pitch, velocidad: cfg.rate });
+    const termina = (motivo) => {
+      if (audio) {
+        try { URL.revokeObjectURL(audio.src); } catch { /* ya estaba liberado */ }
+        audio = null;
+      }
+      if (motivo) h.onError && h.onError('boca:' + motivo);
+      handle({ type: 'tts-end', id });
+    };
+    fetch(api() + '/api/voice/say', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: cuerpo,
+    }).then(async r => {
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        termina(j.error || 'HTTP-' + r.status);
+        return;
+      }
+      const a = new Audio(URL.createObjectURL(await r.blob()));
+      audio = a;
+      a.onplay = () => handle({ type: 'tts-start', id });
+      a.onended = () => termina('');
+      a.onerror = () => termina('no-suena-aqui');
+      a.play().catch(() => termina('bloqueado-al-reproducir'));
+    }).catch(() => termina('sin-nucleo'));
+  }
+
   function startSession(m) {
     clearTimeout(wakeTimer);
     mode = m; emitState();
@@ -174,8 +258,16 @@ export function createVoice(h = {}) {
     get mode() { return mode; },
     get wakeOn() { return wakeOn; },
     get speaking() { return speaking; },
-    configure(o) { Object.assign(cfg, Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ''))); },
+    /* Se descarta sólo `undefined`, NO la cadena vacía: vacía en `voice` quiere
+       decir «automática», y con el filtro antiguo volver de una variante a la
+       automática no se aplicaba nunca (el Perfil guardaba '' pero el cfg seguía
+       con la voz elegida hasta reiniciar la cara). */
+    configure(o) { Object.assign(cfg, Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined))); },
     config: () => ({ ...cfg }),
+    get boca() { return boca(); },
+    /** lo que respondió `GET /api/voice` (motor, timbres y motivo si no hay) */
+    motor: () => nucl,
+    descubreMotor,
     /** Escuchar UNA orden (botón 🎙). Si ya escucha, la termina. */
     listen() {
       if (mode === 'cmd') { if (N) N.stopListening(); else web.stop(); return; }
@@ -217,19 +309,48 @@ export function createVoice(h = {}) {
       if (then) afterSpeak = then;
       return new Promise(res => {
         waiters.set(id, res);
+        const b = boca();
         if (N) N.speak(t.slice(0, 3800), id, cfg.voice || '', +cfg.pitch || 0.82, +cfg.rate || 1);
-        else web.speak(t.slice(0, 3800), id);
+        else if (b === 'núcleo') hablaPorNucleo(t.slice(0, 3800), id);
+        else if (b === 'navegador') web.speak(t.slice(0, 3800), id);
+        else {
+          /* Sin boca: se AVISA y la promesa se cumple, porque si no CORT se queda
+             «hablando» para siempre y el orbe no vuelve a su sitio. En Linux con
+             el núcleo apagado es el caso normal, y en Windows sólo pasa si el
+             sistema no tiene ni una voz instalada. */
+          h.onError && h.onError('sin-boca');
+          setTimeout(() => handle({ type: 'tts-end', id }), 0);
+        }
         setTimeout(() => { if (waiters.has(id)) handle({ type: 'tts-end', id }); }, 4000 + t.length * 110);
       });
     },
     stopSpeaking() {
-      if (N) N.stopSpeaking(); else web.stopSpeak();
+      if (N) N.stopSpeaking();
+      else {
+        web && web.stopSpeak();
+        if (audio) {
+          try { audio.pause(); URL.revokeObjectURL(audio.src); } catch { /* ya liberado */ }
+          audio = null;
+        }
+      }
       [...waiters.keys()].forEach(id => handle({ type: 'tts-end', id }));
     },
     voices() {
       if (N) { try { return JSON.parse(N.voices()); } catch { return { voices: [], default: '' }; } }
-      const vs = ('speechSynthesis' in window ? speechSynthesis.getVoices() : []).filter(v => /^es/i.test(v.lang));
-      return { voices: vs.map(v => ({ name: v.name, locale: v.lang, local: v.localService, male: /male|hombre|jorge|pablo|diego|raul/i.test(v.name) && !/female/i.test(v.name) })), default: '' };
+      const b = boca();
+      /* Por el núcleo el `name` que ve la cara es el CÓDIGO que entiende espeak
+         (`es`, `es+f4`, `es-419+m3`) porque es lo que hay que devolver en el POST;
+         la etiqueta bonita viaja aparte en `etiqueta`. */
+      if (b === 'núcleo') {
+        return { voices: (nucl.voces || []).map(v => ({
+          name: v.voz, etiqueta: v.nombre, locale: 'es', local: true, male: !!v.male,
+        })), default: '', boca: b, motor: nucl.motor, motivo: '' };
+      }
+      const vs = vocesWeb().filter(v => /^es/i.test(v.lang));
+      return { voices: vs.map(v => ({ name: v.name, etiqueta: v.name, locale: v.lang,
+        local: v.localService, male: /male|hombre|jorge|pablo|diego|raul/i.test(v.name) && !/female/i.test(v.name) })),
+        default: '', boca: b,
+        motivo: b === 'muda' ? ((nucl && nucl.motivo) || '') : '' };
     },
     /** después de hablar, abre el micrófono para la orden (tras «Oye CORT») */
     listenAfterSpeaking() { afterSpeak = () => startSession('cmd'); },

@@ -39,6 +39,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 | Modo juego | `CortNative.modoJuego(bool)` con su `volatile` y sus `silenciar`/`soltarSesion`: cierra el micro, no pide foco audio, calla el auricular | Los juegos (Call of Duty Mobile) se le cerraban y la música desaparecía. **Sin** `PACKAGE_USAGE_STATS`: la dueña rechazó ese permiso, así que es interruptor, no detección |
 | Auto-actualización | `backend/app/actualiza.py` + `scripts/actualiza.sh`: compara con la Release, respalda la instalación anterior, instala sin sudo y no toca `~/.cort` | «que CORT revise si hay actualizaciones en tu repositorio y se autorepare para eso es la terminal» |
 | Lectura en voz alta | PC: SQLite + `sensors.leer_texto`. Teléfono: `NotificationListenerService` en RAM | No hay API de WhatsApp: la barra de notificaciones es lo que la dueña ya ve, y no deja rastro en disco |
+| Boca de voz (los mandos) | `backend/app/voz.py` sobre **`espeak-ng`** del sistema (`-v` timbre sondeado, `-p` tono, `-s` velocidad) → `POST /api/voice/say` devuelve WAV y la cara lo pone en `<audio>`. La cara elige boca por orden: nativa del APK → Web Speech (sólo si `getVoices()` da voces) → núcleo → muda, y **muda se anuncia** | Medido en el Chromium de Linux: `speechSynthesis` existe y `getVoices()` da **0 voces** — el navegador no tiene con qué hablar ahí, así que los deslizadores de Perfil eran decorativos. Piper sería más bonito pero es un modelo de varios MB en un portátil de 1,8 GiB; espeak-ng ya está instalado y una frase cuesta 0,106 s y 61 KB. Guía: `docs/VOZ-DE-CORT.md` |
 
 ## 3. Arquitectura
 
@@ -55,7 +56,7 @@ Fecha: 2026-10-17 · Referencia visual: orb de partículas azul que se dispersa 
 │    clima, abrir apps, música  │
 │  · online: Groq/Gemini API    │
 │  · memoria SQLite             │
-│  · TTS Piper                  │
+│  · voz.py: espeak-ng (WAV)    │
 └───────────────────────────────┘
 ```
 

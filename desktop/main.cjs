@@ -21,6 +21,13 @@ const glass = process.env.CORT_GLASS === '1';
 const PORT = +(process.env.CORT_PORT || 8000);
 
 if (glass) app.commandLine.appendSwitch('enable-transparent-visuals');
+/* El holograma habla sin que nadie haya hecho clic (saludo de arranque, «Oye CORT»
+   contestado, avisos). Chromium bloquea el `play()` de un `<audio>` que no viene de
+   un gesto, y en Linux además `speechSynthesis` no da voces —medido: 0—, así que la
+   boca del escritorio es el WAV que fabrica el núcleo (`POST /api/voice/say`) y suena
+   por `<audio>`. Sin este cambio ese audio se corta antes de empezar y CORT vuelve a
+   quedarse muda, pero ahora con un motivo en la consola. */
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 if (process.env.CORT_GPU !== '1') app.disableHardwareAcceleration(); // 2 GB RAM
 
 /* UI embebida: al estar empaquetado, servimos resources/ui con un mini-servidor

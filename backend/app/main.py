@@ -15,6 +15,8 @@ Endpoints:
   GET  /api/tree?path=                   -> hijos de una carpeta con conteos (árbol lateral)
   GET  /api/memories                     -> muro de recuerdos (notas + conversaciones)
   GET  /api/weather?lugar=               -> clima actual (Open-Meteo, cacheado)
+  GET  /api/voice                        -> qué boca tiene este equipo y sus timbres
+  POST /api/voice/say {texto,voz,tono,velocidad} -> WAV hablado (o 503 con el motivo)
   GET  /api/support                      -> contacto y soporte de la ventana 09
   GET  /api/models                       -> catálogo Ollama + si cabe en este equipo
   GET  /api/models/progreso              -> avance de las descargas en curso
@@ -57,10 +59,11 @@ import models                                   # noqa: E402  (Ollama: catálogo
 import organiza                                 # noqa: E402  (plan de orden, sin borrar)
 import optimize                                 # noqa: E402  (RAM y caché del equipo)
 import sensors                                  # noqa: E402
+import voz                                      # noqa: E402  (la boca del escritorio: espeak-ng)
 
 from fastapi import FastAPI, Request           # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.responses import FileResponse      # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles     # noqa: E402
 from pydantic import BaseModel                  # noqa: E402
 
@@ -265,6 +268,45 @@ def weather(lugar: str = ""):
     con nombre —«Sevilla», «Gijón»— se buscan primero las coordenadas en el
     geocoder gratuito y se contesta con el sitio que se encontró escrito."""
     return sensors.weather(lugar=lugar.strip() or None)
+
+
+@app.get("/api/voice")
+def voice_estado():
+    """Qué boca tiene este equipo.
+
+    En Linux el navegador de escritorio no da ninguna voz (medido:
+    `speechSynthesis.getVoices()` = 0 y `voiceschanged` no trae nada), así que la
+    cara pregunta aquí antes de pintar el desplegable de 07 · Perfil: si `motor`
+    viene con un nombre, la boca es la del núcleo y `voces` son los timbres que
+    este equipo **de verdad pronuncia**; si viene `null`, la cara lo dice en vez de
+    ofrecer deslizadores mudos.
+    """
+    return voz.estado()
+
+
+class Decir(BaseModel):
+    texto: str = ""
+    voz: str = ""
+    tono: float = 1.0
+    velocidad: float = 1.0
+
+
+@app.post("/api/voice/say")
+def voice_say(d: Decir):
+    """Habla por el motor del equipo y devuelve el WAV.
+
+    Responde 503 con `{"error": …}` cuando no puede hablar: el silencio sin motivo
+    fue justo lo que hizo dudar de toda la sección de voz, y la cara enseña la
+    palabra de error en la consola.
+    """
+    r = voz.sintetiza(d.texto, voz=d.voz, tono=d.tono, velocidad=d.velocidad)
+    if not r.get("ok"):
+        return JSONResponse({"ok": False, "error": r.get("error", "sin-motor"),
+                             "motivo": r.get("motivo", "")}, status_code=503)
+    return Response(content=r["wav"], media_type="audio/wav",
+                    headers={"x-cort-voz": r.get("voz") or "natural",
+                             "x-cort-pitch": str(r.get("pitch")),
+                             "x-cort-wpm": str(r.get("wpm"))})
 
 
 @app.get("/api/music")

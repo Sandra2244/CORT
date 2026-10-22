@@ -181,7 +181,8 @@ function buildWindows() {
         <label class="bg-check"><input type="checkbox" id="bgbeeps"> Dejar sonar el pitido al escuchar</label>
       </div>
       <div class="pf-sec">▸ Voz de CORT</div>
-      <label class="pf">Voz</label><select class="pf" id="pf-voz"><option value="">(automática: masculina, estilo JARVIS)</option></select>
+      <label class="pf">Voz</label><select class="pf" id="pf-voz"><option value="">(automática: la que dé este equipo)</option></select>
+      <div class="bg-help" id="pf-voz-nota">mirando qué boca tiene este equipo…</div>
       <label class="pf">Tono de voz <span id="pf-voz_tono-v"></span></label>
       <input class="pf" id="pf-voz_tono" type="range" min="0.5" max="1.5" step="0.02" value="0.82">
       <label class="pf">Velocidad <span id="pf-voz_velocidad-v"></span></label>
@@ -561,11 +562,26 @@ const PF_KEYS = ['asistente', 'usuario', 'tono', 'idioma', 'ciudad', 'voz', 'voz
 const CF_KEYS = ['mode', 'groq_key', 'gemini_key', 'ollama_url', 'ollama_model'];
 function fillVoices(selected) {
   const sel = document.getElementById('pf-voz');
-  const { voices = [], default: def = '' } = voice.voices() || {};
+  if (!sel) return;
+  const { voices = [], default: def = '', boca = 'navegador', motivo = '' } = voice.voices() || {};
+  /* La lista depende de LA BOCA, y eso es lo que estaba mentiroso en Linux: el
+     navegador de este equipo da CERO voces (medido con `scripts/sonda-voz.html`),
+     así que el desplegable salía vacío y los deslizadores no mandaban en nada.
+     Aquí se pinta lo que hay —teléfono / navegador / motor del equipo— y se dice
+     en una línea por qué, en vez de dejar un silencio inexplicable. */
+  const etiqueta = v => v.etiqueta || v.name;
   sel.innerHTML = `<option value="">(automática${def ? ': ' + esc(def) : ''})</option>` +
-    voices.slice().sort((a, b) => (b.male - a.male) || a.name.localeCompare(b.name)).map(v =>
-      `<option value="${esc(v.name)}">${v.male ? '[M] ' : ''}${esc(v.name)} · ${esc(v.locale)}${v.local ? '' : ' (red)'}</option>`).join('');
+    voices.slice().sort((a, b) => (b.male - a.male) || etiqueta(a).localeCompare(etiqueta(b))).map(v =>
+      `<option value="${esc(v.name)}">${v.male ? '[M] ' : '[F] '}${esc(etiqueta(v))} · ${esc(v.locale)}${v.local ? '' : ' (red)'}</option>`).join('');
   sel.value = selected || '';
+  if (sel.value !== (selected || '')) sel.value = '';   // la voz guardada no existe en esta boca
+  sel.disabled = boca === 'muda';
+  const nota = document.getElementById('pf-voz-nota');
+  if (nota) nota.textContent =
+    boca === 'nativa' ? `Habla el motor del teléfono: ${voices.length} voces en español.`
+    : boca === 'núcleo' ? `Habla el motor de este equipo por el núcleo (${voices.length} timbres comprobados uno a uno).`
+    : boca === 'navegador' ? `Habla el navegador: ${voices.length} voces en español.`
+    : `⚠ Sin boca en este equipo. ${motivo || 'El navegador no da voces y el núcleo no responde.'} En Linux se arregla instalando espeak-ng y arrancando el núcleo; en el teléfono no hace falta nada.`;
 }
 function showRange(id) {
   const el = document.getElementById(id), out = document.getElementById(id + '-v');
@@ -1832,6 +1848,18 @@ export function wireUI(orbRef) {
   orb = orbRef;
   voice = createVoice({
     lang: 'es-MX',
+    // La boca del núcleo se pide a la URL que se descubra en el arranque, por eso
+    // es una función y no un texto: al construir la voz `API` aún puede estar vacío.
+    api: () => API,
+    onBoca(b, estado) {
+      // Cuando el núcleo contesta (o no) se repinta el desplegable con la verdad.
+      const sel = document.getElementById('pf-voz');
+      fillVoices(sel ? sel.value : '');
+      const cuantos = ((estado && estado.voces) || []).length;
+      term(`boca de voz: ${b}` + (b === 'núcleo' ? ` (${estado.motor}, ${cuantos} timbres)`
+           : b === 'muda' ? ' — ni el navegador da voces ni el núcleo las trae' : ''),
+           b === 'muda' ? 'aviso' : 'voz');
+    },
     onState(mode, st) {
       const mic = document.getElementById('mic'), wake = document.getElementById('wake');
       mic.classList.toggle('on', mode === 'cmd');
@@ -1873,6 +1901,13 @@ export function wireUI(orbRef) {
       else if (e === 'service-not-allowed') add('a', 'Este teléfono no tiene servicio de reconocimiento de voz. Instala o actualiza la app «Google» y vuelve a intentar.', 'error');
       else if (e === 'network') term('reconocimiento de voz sin red (reintento)', 'voz');
       else if (e === 'no-speech') { term('no escuché nada', 'voz'); setState('reposo'); }
+      /* La boca también avisa. `sin-boca` es el caso de Linux sin núcleo: antes se
+         quedaba en un silencio que parecía un fallo del cerebro, y aquí se nombra. */
+      else if (e === 'sin-boca') {
+        add('a', 'No tengo voz en este equipo: el navegador no da ninguna voz y el núcleo no trae motor. En Linux se arregla instalando espeak-ng; en 07 · Perfil puedes oír la prueba.', 'error');
+        term('sin boca de voz', 'aviso');
+      }
+      else if (typeof e === 'string' && e.startsWith('boca:')) term('el motor de voz no pudo hablar: ' + e.slice(5), 'voz');
     },
     onPermission,
   });
@@ -1887,6 +1922,10 @@ export function wireUI(orbRef) {
       backendOK ? 'sistema' : 'error');
     if (backendOK) {
       refreshStatus(); refreshWeather(); refreshNotes(); loadProfile(); refreshTree();
+      /* Qué boca hay se pregunta al núcleo, no se supone: en Linux el navegador
+         trae cero voces (medido) y sin esta pregunta el Perfil quedaría mudo.
+         Al resolver, `onBoca` repinta el desplegable y lo dice en la consola. */
+      voice.descubreMotor();
       if (mobile()) {
         // celular: una ventana a la vez; arranca en el canal de voz
         setTimeout(() => W.chat.show(), 150);
@@ -2002,8 +2041,17 @@ export function wireUI(orbRef) {
     }).catch(() => sayLine('El núcleo no respondió: abre la carpeta a mano.'));
   };
 
-  /* perfil: voz y enlaces */
-  ['pf-voz_tono', 'pf-voz_velocidad'].forEach(id => document.getElementById(id).addEventListener('input', () => showRange(id)));
+  /* perfil: voz y enlaces. Los tres mandos se aplican AL MOVERLOS, sin esperar a
+     «guardar»: así «Probar voz» oye exactamente el timbre, el tono y la velocidad
+     que se están tocando, y lo que CORT diga después ya sale con esa voz. Guardar
+     sigue siendo lo que lo escribe en el Perfil para el próximo arranque. */
+  const aplicaVoz = () => voice.configure({
+    voice: document.getElementById('pf-voz').value,
+    pitch: +document.getElementById('pf-voz_tono').value,
+    rate: +document.getElementById('pf-voz_velocidad').value });
+  ['pf-voz_tono', 'pf-voz_velocidad'].forEach(id => document.getElementById(id)
+    .addEventListener('input', () => { showRange(id); aplicaVoz(); }));
+  document.getElementById('pf-voz').addEventListener('change', aplicaVoz);
   document.getElementById('pftest').onclick = testBrain;
   document.getElementById('bgtoggle').onclick = toggleBg;
   document.getElementById('bgbeeps').onchange = e => post('/api/config', { clave: 'bg_beeps', valor: e.target.checked ? '1' : '0' });
@@ -2011,8 +2059,7 @@ export function wireUI(orbRef) {
   window.__cortNative.on(ev => { if (ev.type === 'bg' || ev.type === 'resume' || ev.type === 'perm') setTimeout(() => renderBg(), 300); });
   { const st = bgStatus(); if (st && st.enabled) setTimeout(() => voice.setWake(true), 3000); }
   document.getElementById('pfprobar').onclick = () => {
-    voice.configure({ voice: document.getElementById('pf-voz').value,
-      pitch: +document.getElementById('pf-voz_tono').value, rate: +document.getElementById('pf-voz_velocidad').value });
+    aplicaVoz();
     const n = document.getElementById('pf-usuario').value.trim();
     sayLine(`A sus órdenes${n ? ', ' + n : ''}. Todos los sistemas están en línea.`);
   };

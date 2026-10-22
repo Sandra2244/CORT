@@ -184,6 +184,34 @@ jobs:
             echo "::error::prueba-clima.py salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar la boca del escritorio (sin sonido, sin red)
+        id: boca
+        # `scripts/prueba-voz.py` ejerce la voz del PC, que en Linux NO puede ir por
+        # el navegador: medido el 2026-10-22 con `scripts/sonda-voz.html`, este
+        # Chromium da `speechSynthesis` con CERO voces y `voiceschanged` vacío, así
+        # que CORT «hablaba» en silencio y los mandos de 07 · Perfil no mandaban en
+        # nada. Desde aquí la boca es el motor del equipo (`espeak-ng`) a través del
+        # núcleo. Se compran con un motor de papel —la salida real de `--voices=es`,
+        # los códigos de salida y el error de mbrola medidos—: la conversión de los
+        # tres mandos (tono→`-p`, velocidad→`-s`, timbre→`-v` sólo si existe), que la
+        # variante que el motor ignora NO se ofrezca, que cada fracaso salga con su
+        # nombre (`sin-motor`, `vacio`, `no-suena`, `no-responde`), que no queden
+        # temporales `cort-voz-*` y que la orden se mande sin shell. Si el runner
+        # tiene espeak-ng de verdad, además se sintetiza un WAV y se comprueba su
+        # tamaño; si no, se anuncia y no se finge. No abre su .env ni gasta cuota.
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/prueba-voz.py > /tmp/boca.log 2>&1
+          st=$?
+          tail -25 /tmp/boca.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '^  FALLA' /tmp/boca.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/boca.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-voz.py salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el cerebro en el JDK (lógica, sin teléfono)
         id: mente
         # `scripts/prueba-mente.sh` compila `Cerebro`, `Razon`, `Nube` y `Mente`

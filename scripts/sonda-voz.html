@@ -1,0 +1,109 @@
+<!doctype html>
+<!-- Sonda de voz · se abre con doble clic, no necesita backend ni Internet.
+     Para qué: en el PC de Sandra CORT puede «hablar» por dos caminos distintos
+     (el motor del navegador/Electron o el puente nativo del teléfono). Esta hoja
+     responde tres preguntas sin adivinar:
+       · ¿hay motor de voz?              (window.speechSynthesis)
+       · ¿cuántas voces da y cuáles?     (getVoices(), que llega TARDE y por evento)
+       · ¿se oye de verdad al mover tono y velocidad?
+     No envía nada a ningún sitio: todo se queda en esta pestaña. -->
+<meta charset="utf-8">
+<title>Sonda de voz de CORT</title>
+<style>
+  body { background:#05070d; color:#cfe9ff; font:14px/1.5 system-ui, monospace; margin:24px; }
+  h1 { font-size:16px; letter-spacing:.14em; color:#5fd7ff; margin:0 0 4px; }
+  .sub { color:#7fa6c4; margin:0 0 18px; }
+  .caja { border:1px solid #14324a; border-radius:10px; padding:14px 16px; margin:0 0 14px;
+          background:#08101c; max-width:760px; }
+  .fila { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+  label { min-width:110px; color:#8fd0f2; }
+  select, input[type=range] { background:#0d1a2a; color:#dff2ff; border:1px solid #1d3f5c; border-radius:6px; padding:5px; }
+  button { background:#0f3552; color:#dff2ff; border:1px solid #2c6f9c; border-radius:8px;
+           padding:8px 14px; cursor:pointer; font:inherit; }
+  button:hover { background:#155075; }
+  #log { white-space:pre-wrap; font-family:ui-monospace,monospace; font-size:12.5px; color:#9fd8b0;
+         min-height:90px; background:#04080e; border:1px solid #123048; border-radius:8px; padding:10px; }
+  .mal { color:#ff9b8a; }
+  .bien { color:#8ef0b8; }
+</style>
+
+<h1>SONDA DE VOZ</h1>
+<p class="sub">Comprueba qué voces te da este equipo y cómo suenan con el tono y la velocidad de CORT.</p>
+
+<div class="caja">
+  <div class="fila"><label>Motor</label><b id="motor">…</b></div>
+  <div class="fila"><label>Voces encontradas</label><b id="cuenta">…</b></div>
+  <div class="fila">
+    <label for="v">Voz</label>
+    <select id="v" style="max-width:420px"><option value="">(cargando…)</option></select>
+  </div>
+  <div class="fila"><label for="t">Tono <span id="tv"></span></label>
+    <input id="t" type="range" min="0.5" max="1.5" step="0.02" value="0.82"></div>
+  <div class="fila"><label for="r">Velocidad <span id="rv"></span></label>
+    <input id="r" type="range" min="0.6" max="1.6" step="0.02" value="1"></div>
+  <div class="fila">
+    <button id="prueba">Probar voz</button>
+    <button id="callar">Callar</button>
+    <button id="repasa">Repasar la lista</button>
+  </div>
+</div>
+
+<div class="caja"><div id="log"></div></div>
+
+<script>
+const log = document.getElementById('log');
+const di = (t, clase) => { const d = document.createElement('div');
+  if (clase) d.className = clase; d.textContent = t; log.appendChild(d);
+  log.scrollTop = log.scrollHeight; };
+
+const hay = 'speechSynthesis' in window;
+document.getElementById('motor').textContent = hay ? 'sí (Web Speech del navegador)' : 'NO hay motor';
+if (!hay) { di('Este navegador no ofrece síntesis de voz. En Linux hace falta speech-dispatcher o espeak-ng instalados y el motor del escritorio activo.', 'mal'); }
+
+let voces = [];
+function repasa(motivo) {
+  voces = hay ? speechSynthesis.getVoices() : [];
+  di(`getVoices() ${motivo}: ${voces.length} voz${voces.length === 1 ? '' : 'es'}`,
+     voces.length ? 'bien' : 'mal');
+  const sel = document.getElementById('v');
+  const antes = sel.value;
+  const es = voces.filter(v => /^es/i.test(v.lang));
+  const lista = es.length ? es : voces;
+  sel.innerHTML = '<option value="">(automática)</option>' + lista.map(v =>
+    `<option value="${v.name}">${v.name} · ${v.lang}${v.localService ? '' : ' (red)'}</option>`).join('');
+  if (antes && [...sel.options].some(o => o.value === antes)) sel.value = antes;
+  di(`  en español: ${es.length}${es.length ? ' → ' + es.slice(0, 4).map(v => v.name).join(', ') : ''}`);
+  return voces.length;
+}
+
+repasa('al abrir');
+// En Chromium la lista llega TARDE: el evento es obligatorio, no un adorno.
+if (hay) {
+  speechSynthesis.addEventListener?.('voiceschanged', () => { if (!voces.length) repasa('por voiceschanged'); });
+  // y por si el evento no dispara, se vuelve a mirar tres veces
+  [400, 1200, 3000].forEach(ms => setTimeout(() => { if (!voces.length) repasa(`a los ${ms} ms`); }, ms));
+}
+
+const muestra = (id, caja) => document.getElementById(id).textContent =
+  (+document.getElementById(caja).value).toFixed(2);
+document.getElementById('t').addEventListener('input', () => muestra('tv', 't'));
+document.getElementById('r').addEventListener('input', () => muestra('rv', 'r'));
+muestra('tv', 't'); muestra('rv', 'r');
+
+document.getElementById('repasa').onclick = () => repasa('al pulsar');
+document.getElementById('callar').onclick = () => hay && speechSynthesis.cancel();
+document.getElementById('prueba').onclick = () => {
+  if (!hay) { di('No hay motor que probar.', 'mal'); return; }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance('A sus órdenes. Todos los sistemas están en línea.');
+  u.lang = 'es-MX'; u.pitch = +document.getElementById('t').value; u.rate = +document.getElementById('r').value;
+  const nom = document.getElementById('v').value;
+  const v = voces.find(x => x.name === nom);
+  if (v) u.voice = v;
+  u.onstart = () => di('· empezando a hablar…');
+  u.onend   = () => di('· ha terminado. ¿Se ha oído? Si no se ha oído nada, el motor responde pero no hay salida de audio instalada.', 'bien');
+  u.onerror = e => di('· error: ' + e.error, 'mal');
+  speechSynthesis.speak(u);
+  di(`enviando: voz=${nom || '(automática)'} tono=${u.pitch} velocidad=${u.rate}`);
+};
+</script>
