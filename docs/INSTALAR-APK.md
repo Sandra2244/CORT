@@ -8,6 +8,7 @@ una lista de consejos generales: cada fila de la tabla salió de `keytool
 
 | Archivo de la Release | SHA-256 del certificado | Se instala encima de |
 | --- | --- | --- |
+| `CORT-IA-2.4.1.apk` (v0.2.27-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y en el `apksigner verify --print-certs` del run: huella `faabef468f3ae04f…`; **47.390.449 bytes**, `sha256 ed5761f3…0908a6df`, **comprobado bajando el archivo en este portátil**, las 49 entradas con CRC íntegro, `versionCode` 20401, firma v1+v2+v3 y veredicto `INSTALABLE`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0`, del `2.3.0`, del `2.3.1` y del `2.4.0` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.4.0.apk` (v0.2.25-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y en el `apksigner verify --print-certs` del run: huella `faabef468f3ae04f…`; 47.386.289 bytes, `sha256 ee5eb11f…d8b57a`, **comprobado bajando el archivo en este portátil**, firma v1+v2+v3 y veredicto `INSTALABLE`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0`, del `2.3.0` y del `2.3.1` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.3.1.apk` (v0.2.24-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` **y** verificada en el portátil con `keytool -printcert -jarfile`, que sale en 0; 47.365.737 bytes, `sha256 68dce453…8ebb5`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0`, del `2.2.0` y del `2.3.0` **sin desinstalar y sin perder datos** |
 | `CORT-IA-2.3.0.apk` (v0.2.23-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt`; 47.365.737 bytes medidos, `sha256 2aacd93a…8811`) | cualquier 2.x: se instala encima del `2.0.0`, del `2.1.0` y del `2.2.0` **sin desinstalar y sin perder datos** |
@@ -43,6 +44,18 @@ secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola 
 3. Abre el `.apk` con el explorador de archivos del teléfono y acepta
    «instalar apps desconocidas» si lo pide. Las veces siguientes ya no hará falta
    desinstalar nada.
+
+## Recién instalado: qué se toca primero
+
+Con el `2.4.1` ya puesto, tres gestos valen más que cualquier ajuste: decirle **«pon
+CORT como asistente»** (Android abre su cuadro de rol y ahí se elige CORT en vez de
+Google — con esto se pierde el «OK Google» con la pantalla apagada, porque eso lo decide
+el servidor de Google y no el repo), arrastrar la cortina de ajustes rápidos y **añadir el
+baldosín «CORT escucha»** (en Samsung y Xiaomi hay que darle a editar/pulsar «+»), y **mantener
+pulsado el icono de CORT** para ver los tres atajos (Escucha · Equipo · Charla). Si tiene
+auriculares puestos, prueba el **doble toque** en el botón del auricular: pausa la música y
+abre el oído. Todo esto, con los pasos por marca y lo que **no** se puede comprobar sin el
+teléfono en la mano, está en [`docs/ABRIR-CORT.md`](ABRIR-CORT.md).
 
 ## El `2.3.0` trae oído: dos cosas que se notan al instalar
 
