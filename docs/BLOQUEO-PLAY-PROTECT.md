@@ -194,7 +194,22 @@ automatizaciones, el reproductor con su notificación y el doble toque del auric
 micro (con el reconocedor del sistema o Vosk según el envase), los sensores, la cámara
 de gestos, el ordenador de archivos y música, el puente Wi‑Fi con los cerebros de casa.
 
-### Los tres envases de `v0.2.29-demo` y el orden de la prueba
+### Los tres envases de `v0.2.29-demo`, medidos, y el orden de la prueba
+
+Los tres archivos están publicados y **los tres se bajaron y se leyeron por dentro en
+este portátil** (2026-10-22), así que los números de abajo no los declara el guion:
+
+| Archivo | peso | `sha256` | entradas | manifiesto binario |
+| --- | --- | --- | --- | --- |
+| `CORT-IA-2.5.0.apk` | 47.394.545 B | `245fd423…3a4e20f4` | 49 | 16.048 B · **28 permisos · 4 `BIND_*`** · `perfil declarado: completo` |
+| `CORT-IA-2.5.0-nucleo.apk` | 47.394.545 B | `761d9bee…de22564c` | 49 | 12.636 B · **21 permisos · 0 `BIND_*`** · `perfil declarado: nucleo` |
+| `CORT-IA-2.5.0-nucleo-ligero.apk` | 1.621.264 B | `344f8853…75edde30` | 44 | el **mismo** manifiesto que el núcleo (12.636 B, `sha256 b61c275d3df963a9…` en los dos) · **cero** `.so` · **cero** `assets/motor/` |
+
+Dos detalles que valen la lectura: el completo y el núcleo **pesan lo mismo comprimido y
+no son el mismo archivo** —el sin‑comprimir baja 3.412 B, que es exactamente lo que
+miden los 16.048 − 12.636 del manifiesto—, y el núcleo‑ligero comparte manifiesto byte a
+byte con el núcleo, así que cada variable está aislada en su propio eje: el perfil toca
+el manifiesto y no el peso; la variedad toca el peso y no el manifiesto.
 
 Instala **primero** `CORT-IA-2.5.0-nucleo.apk`. Es la prueba que decide, y las tres
 variantes se pueden pisar una sobre otra porque son el mismo paquete, la misma llave
