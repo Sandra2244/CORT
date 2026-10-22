@@ -1717,6 +1717,18 @@ if sin_wf:
 else:
     dice_ok("2.4.2 · pipeline", "compila las dos variedades y sube las dos con su firma")
 
+# Y que el instalador de script no se equivoque de envase: la API de Releases enumera
+# los archivos en el orden en que se subieron, y el `‑ligero` sale ANTES que el
+# completo. Si `scripts/instala-apk.sh` volviera a buscar «el primer .apk», la dueña
+# se instalaría por USB el que no oye sin nube creyendo que es el de siempre.
+ins_txt = (RAIZ / "scripts" / "instala-apk.sh").read_text(encoding="utf-8")
+if '("-ligero" in n) == ligero' not in ins_txt:
+    falla("2.4.2 · instala-apk.sh", "no filtra por variedad: bajaría el ligero por defecto")
+elif "--ligero) VARIEDAD=ligero" not in ins_txt or "VARIEDAD=completo" not in ins_txt:
+    falla("2.4.2 · instala-apk.sh", "no tiene la bandera `--ligero` ni el defecto `completo`")
+else:
+    dice_ok("2.4.2 · instala-apk.sh", "por defecto baja el completo y `--ligero` pide el envase sin oído")
+
 # La versión por defecto del script y la del workflow tienen que ser la misma, o el
 # `versionCode` del APK publicado no es el que dice la hoja de la Release.
 m_comp = re.search(r'APK_VERSION="\$\{APK_VERSION:-([0-9.]+)\}"', comp_txt)

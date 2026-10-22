@@ -24,6 +24,7 @@
 #   bash scripts/instala-apk.sh                 # baixa el último y te dice cómo
 #   bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.1.0.apk   # instala ése
 #   bash scripts/instala-apk.sh --tel           # fuerza `adb install -r`
+#   bash scripts/instala-apk.sh --ligero        # baja el envase sin el oído dentro
 #
 # Con `adb` (si algún día lo instalas) el teléfono tiene que estar conectado con
 # «Depuración USB» activa; sin `adb`, este script deja el .apk en el portátil y
@@ -112,11 +113,18 @@ instalar_por_adb() {
 
 # ── el camino normal: la Release más reciente ─────────────────────────────────
 destino=${1:-}
+# Desde la 2.4.2 la Release trae DOS APK del mismo CORT: el completo (con el oído
+# offline dentro) y el `‑ligero` (sin las `.so` de Vosk/JNA ni el modelo). La API de
+# Releases los enumera en el orden en que se subieron, y el ligero sale ANTES -- si
+# este script siguiera buscando «el primer .apk», te habría instalado el que no oye
+# sin nube. Así que por defecto se baja el COMPLETO, y `--ligero` pide el otro.
+VARIEDAD=completo
 case "$destino" in
   --tel)
     con_adb || { rojo "No hay adb en este portátil. Instala Android platform-tools si"
                  rojo "quieres instalar por USB; sin él, usa el teléfono."; exit 2; }
     ;;
+  --ligero) VARIEDAD=ligero; destino= ;;
 esac
 
 if [ -n "${destino:-}" ] && [ -f "$destino" ]; then
@@ -126,18 +134,22 @@ else
   dice "== buscando el último APK publicado en ${REPO}"
   json=$(curl -sL -m 30 "$API") || { rojo "No pude leer la Release (sin red)."; exit 1; }
   etiqueta=$(echo "$json" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("tag_name",""))')
-  url=$(echo "$json" | python3 -c '
-import json,sys
+  url=$(echo "$json" | VARIEDAD="$VARIEDAD" python3 -c '
+import json,sys,os
+ligero = os.environ.get("VARIEDAD") == "ligero"
 d=json.load(sys.stdin)
 for a in d.get("assets",[]):
-    if a["name"].endswith(".apk") and "asistente" not in a["name"]:
+    n=a["name"]
+    if n.endswith(".apk") and "asistente" not in n and (("-ligero" in n) == ligero):
         print(a["browser_download_url"]); break
 ')
-  peso=$(echo "$json" | python3 -c '
-import json,sys
+  peso=$(echo "$json" | VARIEDAD="$VARIEDAD" python3 -c '
+import json,sys,os
+ligero = os.environ.get("VARIEDAD") == "ligero"
 d=json.load(sys.stdin)
 for a in d.get("assets",[]):
-    if a["name"].endswith(".apk") and "asistente" not in a["name"]:
+    n=a["name"]
+    if n.endswith(".apk") and "asistente" not in n and (("-ligero" in n) == ligero):
         print(a["size"]); break
 ')
   [ -n "$url" ] || { rojo "La Release ${etiqueta} no trae APK."; exit 1; }

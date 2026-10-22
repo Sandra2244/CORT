@@ -193,9 +193,17 @@ activar *Depuración USB* en el teléfono (Ajustes ▸ Sistema ▸ Opciones de
 desarrollador). En el portátil:
 
 ```
-bash scripts/instala-apk.sh              # baja el último de la Release y lo instala encima
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.3.1.apk
+bash scripts/instala-apk.sh                       # baja el COMPLETO de la Release y lo instala encima
+bash scripts/instala-apk.sh --ligero              # baja el envase sin el oído dentro (la prueba)
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.4.2.apk
 ```
+
+Con `adb install -r` encima del CORT que ya tienes no se pierden datos, y el `‑r` es
+lo que deja instalar el ligero sobre el completo (o al revés) aunque pesen distinto:
+mismo paquete, misma llave, mismo `versionCode`. **Ojo con el orden de la Release**:
+la API enumera el ligero *antes* que el completo, así que el script filtra por nombre;
+si alguna vez te instala el que dice `sin-modelo` sin que lo pidieras, es ese filtro
+el que se rompió, y el sector [13] de `scripts/prueba-costura.py` está para cazarlo.
 
 El script traduce cada código de error a español y no inventa: si no hay `adb` o no
 hay teléfono delante, deja el `.apk` descargado y escribe los pasos de arriba.
