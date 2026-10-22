@@ -48,7 +48,7 @@ echo "auditoría de instalabilidad (leída del APK final, no supuesta):"
 export CORT_BUILD_TOOLS="$BT"
 
 python3 - "$APK" <<'PY'
-import hashlib, os, struct, subprocess, sys, zipfile
+import hashlib, os, re, struct, subprocess, sys, zipfile
 
 apk = sys.argv[1]
 MAL = []
@@ -224,6 +224,45 @@ if bt and pathlib.Path(bt).is_dir():
         print("   · aapt no estaba en la carpeta de build-tools: renglón omitido")
 else:
     print("   · (sin build-tools: no se leen minSdk/targetSdk ni el manifiesto binario)")
+
+# ── 7 · el PERFIL y la superficie privilegiada, leídos del binario ────────────
+# Ronda 2.5: la bisección del peso cayó (los dos APK de la 2.4.2 se bloquearon
+# igual), y lo que quedó de la medición en los tres APK del mismo disco es la
+# SUPERFICIE: el `1.1.4` que se instala declara 13 permisos y CERO servicios
+# `BIND_*`; el `2.4.2-ligero` que Play Protect bloquea declara 24 y cinco servicios
+# privilegiados. Este renglón es el que prueba que el recorte de `perfil.py` llegó
+# de verdad al binario, y el que pone el pipeline rojo si un `nucleo` saliera con
+# un servicio privilegiado dentro.
+#
+# Cómo se lee sin `aapt`: el `AndroidManifest.xml` del APK es binario, pero su
+# charca de cadenas es UTF-16LE, y los nombres salen con `re` por encima. Es el
+# mismo método con el que se midió el 1.1.4 en el portátil de la dueña.
+try:
+    binario = z.read("AndroidManifest.xml")
+    # La charca de cadenas del manifiesto binario es UTF-16LE. Los nombres largos
+    # (≥32 caracteres) traen el prefijo de longitud IMPRIMIBLE pegado, así que los
+    # permisos se buscan DENTRO de cada cadena; los cortos — como `nucleo`, 8—
+    # traen un prefijo no imprimible que el regex ya descarta, y salen exactos.
+    cadena = [s.decode("utf-16le")
+              for s in re.findall(rb"(?:[\x20-\x7e]\x00){2,}", binario)]
+    charca = set()
+    for s in cadena:
+        # Genérico por delante del `.permission.`: `com.android.alarm.permission.
+        # SET_ALARM` no empieza con `android.` y con el patrón corto no salía, así
+        # que el recuento se quedaba en 12 cuando el manifiesto declara 13.
+        charca.update(re.findall(r"[A-Za-z][A-Za-z0-9_.]*\.permission\.[A-Z0-9_]+", s))
+    permisos = sorted(charca)
+    privilegiados = sorted(p for p in charca if ".permission.BIND_" in p)
+    valores = {"completo", "nucleo"} & set(cadena)
+    perfil = ", ".join(sorted(valores)) or "sin meta-datos (manifiesto anterior a la 2.5)"
+    print(f"   · manifiesto binario: {len(permisos)} permisos "
+          f"· servicios privilegiados (BIND_*): {len(privilegiados)}"
+          + (" — " + ", ".join(p.split(".")[-1] for p in privilegiados) if privilegiados else " — ninguno"))
+    print(f"   · perfil declarado: {perfil}")
+    if valores == {"nucleo"} and privilegiados:
+        MAL.append(f"el perfil nucleo salió con {len(privilegiados)} servicios privilegiados dentro")
+except KeyError:
+    print("   · manifiesto binario: no está en el APK (no se puede auditar el perfil)")
 
 print("   · VEREDICTO: " + ("INSTALABLE — nada de lo medido da motivo de bloqueo"
                             if not MAL else "MAL — " + "; ".join(MAL)))

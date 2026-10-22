@@ -1372,6 +1372,14 @@ function speakTTS(text, then) { return voice ? voice.speak(text, then) : Promise
    quedarse callada.                                                       */
 function leeAvisos() {
   const N = window.CortNative;
+  if (!window.CORTcapaz('avisos')) {
+    // Perfil `nucleo` (ronda 2.5): `.Avisos` no está declarado en el manifiesto, así
+    // que el sistema no puede listar a CORT en «acceso a notificaciones» y el
+    // botón prometería algo que este archivo no hace. Se dice el porqué y qué APK
+    // lo trae, en vez de responder «no tengo avisos» como si estuviera vacío.
+    const r = 'Esta versión de CORT —la que se instala sin el aviso de Google— viene sin el permiso de leer notificaciones: es el precio de que el instalador te deje pasar. La hoja Equipo ▸ 9 lo explica, y el APK completo lo vuelve a traer cuando el teléfono ya acepte la app.';
+    add('a', r, 'avisos'); speakTTS('Esa puerta va cerrada en este envase.'); return;
+  }
   if (!N || typeof N.avisos !== 'function') {
     const r = 'Los avisos del teléfono los leo en la app de CORT: necesito ver tus notificaciones.';
     add('a', r, 'avisos'); speakTTS('Eso lo leo en la app del teléfono.'); return;
@@ -1406,6 +1414,13 @@ function olvidaAvisos() {
    las palabras, sin llamar a nada.                                          */
 function ponAsistente() {
   const N = window.CortNative;
+  if (!window.CORTcapaz('asistente')) {
+    // Con el perfil `nucleo` el `VoiceInteractionService` no está declarado, y el
+    // cuadro de Android de «aplicación de asistencia» no va a listar a CORT aunque
+    // lo busque diez minutos. Abrir el cuadro sería una falsa promesa.
+    sayLine('Este envase de CORT viene sin el traje de asistente: es lo que le quité para que Google te dejara instalarlo. Aun así me abres desde el icono, desde el widget y diciendo mi nombre con el micrófono en pantalla.');
+    return;
+  }
   if (!N || typeof N.openAssistantSettings !== 'function') {
     // El puente `openAssistantSettings` sólo existe en el APK de Java de este
     // repo (`apps/apk/compilar.sh`). Si la cara está corriendo dentro del cuerpo
@@ -1444,15 +1459,32 @@ function llamarA(quien) {
     sayLine('Marcar lo trae el APK de Java: en esta cara no tengo acceso al teléfono.');
     return;
   }
+  /* El perfil `nucleo` (ronda 2.5) no declara `READ_CONTACTS` ni `CALL_PHONE`.
+     `Telefono.buscar` ya se degrada solo —sin permiso devuelve lista vacía— y
+     ACTION_DIAL no necesita ninguno, así que **un número sí se puede marcar**:
+     lo que no hay es búsqueda por nombre. Pedir el permiso con
+     `pidePermisoTelefono()` en este envase sería peor que inútil: Android no
+     muestra el cuadro de un permiso que no está en el manifiesto, y la cara
+     quedaría diciendo «te estoy pidiendo el permiso» sin haberlo pedido nunca. */
+  const hayDigitos = /\d[\d\s+.-]{2,}/.test(quien || '');
+  if (!window.CORTcapaz('llamadas') && !hayDigitos) {
+    sayLine('Este envase de CORT no lee tus contactos: dime el número y te lo pongo en el marcador para que pulses verde.');
+    term('llamada por nombre sin permiso en el perfil nucleo', 'teléfono');
+    return;
+  }
   let r = null;
   try { r = JSON.parse(N.llamar(quien)); } catch { r = null; }
   if (!r) { sayLine('El teléfono no me dejó marcar. Prueba otra vez o dime el número.'); return; }
   if (!r.ok) {
     // casi siempre es que faltan los contactos: se pide el permiso y nada más
-    if (typeof N.pidePermisoTelefono === 'function') N.pidePermisoTelefono();
-    add('a', `No encontré a «${quien}» en tus contactos —te estoy pidiendo el permiso de contactos y de llamar; vuelve a decírmelo.`, 'teléfono');
-    sayLine('No lo tengo en los contactos. Dame un momento y pídeme la llamada otra vez.');
-    term('llamar sin datos de contacto: permiso pedido', 'teléfono');
+    const puede = window.CORTcapaz('llamadas');
+    if (puede && typeof N.pidePermisoTelefono === 'function') N.pidePermisoTelefono();
+    add('a', puede
+      ? `No encontré a «${quien}» en tus contactos —te estoy pidiendo el permiso de contactos y de llamar; vuelve a decírmelo.`
+      : `No encuentro a «${quien}»: este envase no lleva el permiso de contactos. Díme el número y lo dejo en el marcador.`, 'teléfono');
+    sayLine(puede ? 'No lo tengo en los contactos. Dame un momento y pídeme la llamada otra vez.'
+                  : 'Dime el número, por favor.');
+    term('llamar sin datos de contacto' + (puede ? ': permiso pedido' : ' (perfil nucleo)'), 'teléfono');
     return;
   }
   orb.burst();

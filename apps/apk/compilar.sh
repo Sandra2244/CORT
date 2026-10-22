@@ -76,7 +76,7 @@ cd "$(dirname "$0")"
 #   `.Avisos`, el auricular, la batería y la hora. El motor es puro y se prueba con
 #   node (45 comprobaciones); lo que no puede hacer, lo dice la propia hoja: las
 #   reglas se cumplen mientras CORT está en pantalla.
-APK_VERSION="${APK_VERSION:-2.4.2}"   # desde aquí sale UN SOLO APK: este
+APK_VERSION="${APK_VERSION:-2.5.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────
@@ -95,6 +95,11 @@ VERSION="${1:-$APK_VERSION}"
 # `sin-modelo` — que ya estaba previsto en `Oido.kt` y en la hoja Equipo —, así que
 # escucha con el reconocedor del sistema. NO es una trampa: la Release sube los dos
 # archivos y cada `-firma.txt` declara cuál de las dos variedades es.
+#
+# **Y la hipótesis de este bloque cayó**: ella probó los dos el 2026-10-22 y «los dos
+# fallan, Play Protect sigue bloqueando». El peso no era. Lo que queda en pie es lo
+# que se midió después leyendo los manifiestos binarios — ver el bloque del PERFIL
+# abajo —, y por eso la 2.5 sube la variedad ligera **y** los dos perfiles.
 SIN_OIDO="${APK_SIN_OIDO:-0}"
 
 SDK="${ANDROID_HOME:-}"
@@ -271,11 +276,41 @@ fi
 rm -rf build/obj build/apk
 mkdir -p build/obj build/apk
 
+# -- El PERFIL del manifiesto (`APK_PERFIL=completo|nucleo`) ------------------
+# Ronda 2.5. La bisección de la 2.4.2 mató la hipótesis del peso: los dos APK de
+# aquella ronda se bloquearon igual, y el `LIGERO` no llevaba ni `.so` ni modelo.
+# Medido el 2026-10-22 en este portátil, leyendo el `AndroidManifest.xml` binario
+# (la charca de cadenas UTF-16) de los tres APK que hay en el mismo disco:
+#
+#   APK                      usa-perm  servicios BIND_*  se instala
+#   CORT-IA-1.1.0 (el de ella)   13            0            sí
+#   CORT-IA-1.1.4 (el mío)       13            0            sí
+#   CORT-IA-2.4.2-ligero         24          5 (`BIND_VOICE_INTERACTION`,
+#                                  `BIND_SPEECH_RECOGNIZER`, `BIND_NOTIFICATION_
+#                                  LISTENER_SERVICE`, `BIND_QUICK_SETTINGS_TILE`)   no
+#
+# Y las cuatro Gordas que se señalaban (`MANAGE_EXTERNAL_STORAGE`,
+# `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`,
+# `READ_EXTERNAL_STORAGE`) están en los TRES: no son la diferencia. Lo que el 1.1.4
+# no declara y el 2.4.2 sí son los cinco servicios privilegiados, las acciones
+# `ACTION_ASSIST`/`ACTION_VOICE_COMMAND` y el trío `CALL_PHONE` + `READ_CONTACTS` +
+# `READ_CALENDAR`. Ese paquete es, literalmente, cómo describen los clasificadores
+# automáticos un troyano de accesibilidad.
+#
+# `perfil.py` corta esas regiones y clava la meta-datos `com.cort.ia.PERFIL`, así
+# que el teléfono prueba UNA sola variable: `nucleo` es la misma CORT de siempre con
+# la superficie del 1.1.4 (21 permisos normales, CERO servicios privilegiados), y
+# `completo` es lo que ya está publicado. Con `nucleo` no hay que elegir un recorte
+# a mano ni romper nada: lo que la cara no puede ofrecer, lo dice `capacidades()`.
+PERFIL="${APK_PERFIL:-completo}"
+MANIFIESTO="build/manifest-$PERFIL.xml"
+python3 perfil.py --perfil "$PERFIL" --salida "$MANIFIESTO" || exit 1
+
 # -- Recursos y manifiesto ---------------------------------------------------
 "$BT/aapt2" compile --dir res -o build/obj/res.zip
 "$BT/aapt2" link -o build/apk/sin-alinear.apk \
     -I "$PLAT/android.jar" \
-    --manifest AndroidManifest.xml \
+    --manifest "$MANIFIESTO" \
     -A assets \
     --min-sdk-version 26 --target-sdk-version 34 \
     --version-code "$CODE" --version-name "$VERSION" \
@@ -506,6 +541,11 @@ PY
     sed 's/^/   · /' build/verificacion.txt
     echo "llave: $LLAVE_ORIGEN"
     echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
+    # El perfil y la superficie del BINARIO ya los imprime la auditoría de arriba
+    # (`manifiesto binario: N permisos · servicios privilegiados (BIND_*): M ·
+    # perfil declarado: …`), leídos del APK firmado. Lo que se añade aquí es lo que
+    # pidió `perfil.py`, para que las dos cosas se puedan confrontar.
+    echo "perfil: $PERFIL (APK_PERFIL) — el recorte lo hace apps/apk/perfil.py sobre AndroidManifest.xml"
     if [ "$META_MOTOR" = "1" ]; then
         echo "variedad: COMPLETA — el oído offline va dentro (Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt))"
         echo "  sha256 del modelo: $(cat build/motor/modelo-sha256.txt)"
@@ -518,12 +558,13 @@ PY
         echo "variedad: LIGERA (APK_SIN_OIDO=1) — NO lleva el oído offline dentro"
         echo "  fuera: las cuatro .so de Vosk/JNA y el modelo de español (39.817.833 B comprimidos)"
         echo "  el oído propio dice sin-modelo en Equipo ▸ 7 · Oído y CORT escucha con el"
-        echo "  reconocedor del sistema; todo lo demás (asistente, auricular, cortina,"
-        echo "  atajos, reproductor, avisos, cerebro, automatizaciones) es idéntico al APK"
-        echo "  completo: mismo manifiesto, mismas fuentes, misma llave y mismo versionCode."
-        echo "  Para qué sirve: aislar si el aviso de Play Protect lo dispara el bulto"
-        echo "  nativo del oído o la llave. Medida el 2026-10-22: el 1.1.4 de la dueña,"
-        echo "  con los MISMOS permisos gordos y sin .so, se instala bien."
+        echo "  reconocedor del sistema — salvo que el perfil sea nucleo, que tampoco lo"
+        echo "  declara: entonces escucha con ACTION_ASSIST del sistema, si el fabricante lo usa."
+        echo "  Para qué sirvió: aislar si el aviso lo dispara el bulto nativo del oído. MEDIDO"
+        echo "  el 2026-10-22 con la dueña: NO. Los dos APK de la 2.4.2 se bloquearon igual."
+        echo "  Lo que sí separa al 1.1.4 (se instala, 13 permisos, cero servicios BIND_*) del"
+        echo "  2.4.2 (bloqueado, 28 permisos, cinco servicios privilegiados) es la superficie"
+        echo "  del manifiesto, y por eso existe el perfil nucleo."
     fi
     sed 's/^/   · /' build/desglose.txt
     if [ "$HAY_KOTLIN" = "1" ]; then

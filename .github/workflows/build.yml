@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.4.2"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.5.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -295,53 +295,112 @@ jobs:
           cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-firma.txt"
           # Se guarda el log del build completo: el paso de abajo pisa /tmp/apk.log.
           cp /tmp/apk.log /tmp/apk-completo.log
-      - name: Compilar TAMBIÉN la variedad ligera (sin el oído dentro)
-        id: ligero
-        # Ronda 2.4.2: a la dueña le sale «aplicación bloqueada para proteger tu
-        # dispositivo» con el 2.x, pero el `1.1.4` — mío, otra llave, y con los
-        # MISMOS permisos gordos medidos en su manifiesto (`MANAGE_EXTERNAL_STORAGE`,
-        # `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) — se le
-        # instala. Con esa medida cae la explicación fácil («es por auto-firmado» o
-        # «es por los permisos») y queda como sospechoso el bulto nativo: 5,9 MB de
-        # `.so` de Vosk/JNA + 39,8 MB de modelo dentro del APK. Para saberlo hace
-        # falta un APK igual en todo lo demás y SIN ese bulto, y eso es
-        # `APK_SIN_OIDO=1`. Va el segundo para que no pise el `assets/motor` del
-        # completo, y se sube a la Release con el suyo: la prueba se hace en el
-        # teléfono de ella, que es el único lugar donde vive el veredicto de Google.
+      - name: Compilar TAMBIÉN el perfil NÚCLEO (sin la superficie que delata)
+        id: nucleo
+        # Ronda 2.5. La bisección del peso se cayó sola: ella instaló los dos APK de
+        # la 2.4.2 — el de 47 MB y el de 1,6 MB — y Play Protect bloqueó LOS DOS. Con
+        # eso muere «es el bulto del oído» y queda la única diferencia que quedó en
+        # pie, medida lectura de manifiesto binario contra lectura de manifiesto
+        # binario en el mismo disco:
+        #
+        #   CORT-IA-1.1.0 / 1.1.4 (se instalan)  13 permisos, CERO servicios `BIND_*`
+        #   CORT-IA-2.4.2 (bloqueado)            28 permisos, cuatro permisos `BIND_*`
+        #                                        repartidos en cinco servicios
+        #
+        # y las cuatro Gordas (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`,
+        # `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `READ_EXTERNAL_STORAGE`) están en
+        # los TRES, así que no eran ellas. Lo que el 2.x declara y el 1.x no es el
+        # traje de asistente (`VoiceInteractionService` + `VoiceInteractionSessionService`
+        # + `RecognitionService`), el lector de notificaciones, el baldosín de Ajustes
+        # Rápidos, `ACTION_ASSIST`/`ACTION_VOICE_COMMAND` y `CALL_PHONE` +
+        # `READ_CONTACTS` + `READ_CALENDAR`. Esa es la firma con la que un clasificador
+        # automático describe un troyano de accesibilidad.
+        #
+        # El `nucleo` es la misma CORT recortada A ESA variable y nada más: mismas
+        # fuentes, mismo dex, mismo oído, misma cara, misma llave, mismo `versionCode`,
+        # 21 permisos normales y CERO servicios privilegiados. Si éste se instala, el
+        # bloqueo era la superficie y la decisión de producto es inmediata: ofrecer el
+        # núcleo primero y dar el asistente después. Si tampoco, ya no queda
+        # explicación dentro del archivo y hay que ir a por el otro camino — el que
+        # necesita sesión de Google: subir a Play, o `adb install -r`, que también
+        # está documentado. Va el segundo para no pisar el manifiesto del completo.
         shell: bash
         env:
           CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
           CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+          APK_PERFIL: "nucleo"
+        run: |
+          set +e
+          bash -x apps/apk/compilar.sh "$APK_VERSION" > /tmp/apk-nucleo.log 2>&1
+          st=$?
+          tail -30 /tmp/apk-nucleo.log
+          if [ $st -ne 0 ]; then
+            errores="$(grep -E -A 3 '\.java:[0-9]+: error:' /tmp/apk-nucleo.log \
+                       | grep -E '\.java:[0-9]+: error:|symbol:|location:|required:|found:|reason:' \
+                       | head -20)"
+            auditoria="$(grep -E 'VEREDICTO|ZIP: MAL|sin ninguna firma|manifiesto binario|perfil declarado' /tmp/apk-nucleo.log | tail -8)"
+            msg=$( { echo "-- nucleo: errores --"; echo "${errores:-ninguno}"; \
+                     echo "-- nucleo: auditoría --"; echo "${auditoria:-no corrió}"; \
+                     echo "-- nucleo: final del log --"; tail -c 700 /tmp/apk-nucleo.log; } \
+                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
+            echo "::error::compilar.sh (perfil nucleo) salió con $st — $msg"
+            exit $st
+          fi
+          cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}-nucleo.apk"
+          cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-nucleo-firma.txt"
+          echo "peso nucleo: $(stat -c '%s' "apk/CORT-IA-${APK_VERSION}-nucleo.apk") B"
+          grep -E 'perfil |manifiesto binario|perfil declarado' /tmp/apk-nucleo.log | head -4
+      - name: Compilar TAMBIÉN el núcleo SIN el oído dentro
+        id: nucleo-ligero
+        # La tercera celda de la matriz, que es la que de verdad se parece al `1.1.4`
+        # que sí se instala: superficie recortada (`APK_PERFIL=nucleo`) y bulto nativo
+        # fuera (`APK_SIN_OIDO=1`). Con dos envases no se puede distinguir «la
+        # superficie» de «la superficie MÁS el modelo de 45 MB»: con tres, la matriz
+        # queda completa y el teléfono de ella contesta en una tarde.
+        #
+        #   envase                      superficie   oído dentro   peso
+        #   CORT-IA-2.4.2-ligero        privilegiada NO            1.621.264 B  (bloqueado)
+        #   CORT-IA-2.4.2               privilegiada SÍ            47.390.449 B  (bloqueado)
+        #   CORT-IA-2.5.0-nucleo        núcleo        SÍ            ~47 MB        ?
+        #   CORT-IA-2.5.0-nucleo-ligero núcleo        NO            ~1,6 MB       ?
+        #
+        # Si el `nucleo` entra y el `nucleo-ligero` también: era la superficie, y se
+        # puede dar el oído como descarga aparte. Si SÓLO entra el `nucleo-ligero`: era
+        # la mezcla, y el modelo de español tiene que salir del APK. Si no entra
+        # ninguno de los dos: ya no queda nada dentro del archivo que culpar, y el
+        # camino es `adb install -r` o listar la app en Play (`docs/BLOQUEO-PLAY-PROTECT.md`).
+        shell: bash
+        env:
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+          APK_PERFIL: "nucleo"
           APK_SIN_OIDO: "1"
         run: |
           set +e
-          bash -x apps/apk/compilar.sh "$APK_VERSION" > /tmp/apk.log 2>&1
+          bash -x apps/apk/compilar.sh "$APK_VERSION" > /tmp/apk-nucleo-ligero.log 2>&1
           st=$?
-          tail -30 /tmp/apk.log
+          tail -30 /tmp/apk-nucleo-ligero.log
           if [ $st -ne 0 ]; then
-            errores="$(grep -E -A 3 '\.java:[0-9]+: error:' /tmp/apk.log \
-                       | grep -E '\.java:[0-9]+: error:|symbol:|location:|required:|found:|reason:' \
-                       | head -20)"
-            auditoria="$(grep -E 'VEREDICTO|ZIP: MAL|sin ninguna firma|esquemas pedidos' /tmp/apk.log | tail -8)"
-            msg=$( { echo "-- ligero: errores --"; echo "${errores:-ninguno}"; \
-                     echo "-- ligero: auditoría --"; echo "${auditoria:-no corrió}"; \
-                     echo "-- ligero: final del log --"; tail -c 700 /tmp/apk.log; } \
+            auditoria="$(grep -E 'VEREDICTO|ZIP: MAL|sin ninguna firma|manifiesto binario|perfil declarado' /tmp/apk-nucleo-ligero.log | tail -8)"
+            msg=$( { echo "-- nucleo-ligero: auditoría --"; echo "${auditoria:-no corrió}"; \
+                     echo "-- nucleo-ligero: final del log --"; tail -c 700 /tmp/apk-nucleo-ligero.log; } \
                    | tr '\n\r' '  ' | sed 's/%/%25/g' )
-            echo "::error::compilar.sh (variedad ligera) salió con $st — $msg"
+            echo "::error::compilar.sh (nucleo sin oído) salió con $st — $msg"
             exit $st
           fi
-          cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}-ligero.apk"
-          cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-ligero-firma.txt"
-          echo "peso ligero: $(stat -c '%s' "apk/CORT-IA-${APK_VERSION}-ligero.apk") B"
-          grep -E 'variedad|peso medido' /tmp/apk.log | head -4
+          cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}-nucleo-ligero.apk"
+          cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-nucleo-ligero-firma.txt"
+          echo "peso nucleo-ligero: $(stat -c '%s' "apk/CORT-IA-${APK_VERSION}-nucleo-ligero.apk") B"
+          grep -E 'perfil |variedad|manifiesto binario|perfil declarado' /tmp/apk-nucleo-ligero.log | head -5
       - name: Subir el APK (el que sale en la Release)
         uses: actions/upload-artifact@v4
         with:
           # Se llama `instalador-android` para que lo recoja el mismo
           # `pattern: instalador-*` de abajo y aparezca en la Release con enlace
-          # de descarga directo. Desde la 2.4.2 esto sube CUATRO archivos: los dos
-          # APK (completo y ligero) con sus dos `-firma.txt`. `if-no-files-found:
-          # error`: una Release sin instaladores no sirve para nada y debe gritar.
+          # de descarga directo. Desde la 2.5.0 esto sube SEIS archivos: los tres
+          # envases (completo, nucleo y nucleo-ligero) con su `-firma.txt` cada uno.
+          # `if-no-files-found: error`: una Release sin instaladores no sirve para
+          # nada y debe gritar.
           name: instalador-android
           path: apk/*
           if-no-files-found: error
@@ -371,27 +430,34 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.4.2**. Esta Release trae
-            **dos APK de Android a propósito**, y no son las dos versiones que había
-            que elegir de antes: es el mismo CORT con y sin el oído sin nube dentro,
-            para poder medir qué es lo que está bloqueando Play Protect en el
-            teléfono de la dueña (párrafo «Por qué hay dos APK»).
-            `CORT-IA-2.4.2.apk` es el de siempre: los 47 MB de antes y todo dentro.
-            `CORT-IA-2.4.2-ligero.apk` es el mismo, quitando sólo el bulto del oído
-            (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo): alrededor de
-            **1,6 MB**, escucha con el reconocedor del sistema y en **Equipo · 7 ·
-            Oído** lo dice con la palabra `sin-modelo`. Los dos llevan el anillo en el
-            cajón de aplicaciones, el resto dentro —asistente, auricular, cortina,
-            atajos, reproductor, avisos, cerebro, **cerebros de casa**, **reglas
-            «cuando X, entonces Y»**— y desde la 2.4.1, **las seis vías de abrir CORT**
-            con el auricular funcionando hasta con la cara cerrada (párrafo «Cómo se
-            abre CORT»). El peso exacto de cada archivo, medido dentro del APK final,
-            está en su `-firma.txt` de al lado.
+            .deb) y el APK del teléfono, que sube a la **2.5.0**. Esta Release trae
+            **tres APK de Android a propósito**. No son versiones distintas de CORT:
+            es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
+            mismo `versionCode`— con dos mandos distintos, para poder medir en el
+            teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
+            «Por qué hay tres envases»).
+            `CORT-IA-2.5.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.5.0-nucleo.apk` es **la novedad de esta ronda**: el mismo CORT
+            sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
+            cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
+            `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
+            abriéndose con su icono, con los atajos y con el micrófono en pantalla; lo
+            que no hace es presentarse como asistente del sistema, leer tus
+            notificaciones, poner baldosín en la cortina rápida ni marcar por el
+            auricular. **Empieza por éste**: es el que tiene que instalarse sin el
+            aviso.
+            `CORT-IA-2.5.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
+            alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
+            `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
+            está en su `-firma.txt` de al lado, y en esa hoja va también el renglón
+            `perfil:` con los permisos y los servicios `BIND_*` leídos del
+            `AndroidManifest.xml` **binario** del archivo.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0 y del 2.4.1 sin desinstalar y sin perder
-            nada** (misma llave `fa:ab:ef:46:8f:3a…` en los dos archivos,
-            `versionCode` 20402 > 20401; los dos APK de esta Release comparten número
-            de versión y `versionCode`, así que se puede pasar de uno al otro
+            2.3.1, del 2.4.0, del 2.4.1 y del 2.4.2 sin desinstalar y sin perder
+            nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos,
+            `versionCode` 20500 > 20402; los tres APK de esta Release comparten número
+            de versión y `versionCode`, así que se puede pasar de uno a otro
             instalando encima):
             mira la huella del `-firma.txt` de las dos Releases y compárala antes de
             instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
@@ -472,28 +538,56 @@ jobs:
             a ser válido el **2026-10-21 11:19 GMT**, así que un móvil con la hora
             atrasada lo ve «aún no válido» y eso se parece muchísimo a un bloqueo).
 
-            **Por qué hay dos APK en esta Release.** Porque la explicación cómoda
-            («Play Protect bloquea todo lo auto-firmado») **se cayó con una medida**:
-            el `CORT-IA-1.1.4.apk` también es auto-firmado, también es mío, y a la
-            dueña se le instala bien — y tiene **los mismos permisos gordos** que el
-            2.x (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`,
-            `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, leídos los dos `AndroidManifest`
-            entrada por entrada). Lo único que pesa de verdad en el 2.x y no existe en
-            el 1.1.4 son los **45,7 MB de bulto nativo del oído**: cuatro `.so`
-            (Vosk + `libjnidispatch` de JNA) y el modelo de español de 39.817.833 B.
-            Un escáner que ve código nativo que carga bibliotecas arbitrarias (JNA) y
-            un ZIP de 40 MB dentro del APK tiene todos los números para clasificarlo
-            como «empquetado», y eso es justo lo que avisa Play Protect. Así que esta
-            Release permite **hacer la prueba en dos minutos, sin tocar nada más**:
-            instala `CORT-IA-2.4.2-ligero.apk` (mismo manifiesto, misma llave, mismos
-            permisos, misma cara, **cero** `.so` y cero modelo). Si se instala y el
-            completo no, el culpable es el bulto del oído y se saca del APK (el modelo
-            se bajaría la primera vez que se pida el oído, en vez de viajar dentro);
-            si los dos se bloquean, el bulto es inocente y lo que queda es el veredicto
-            sobre la llave, que no se quita desde este repo. Los dos archivos están
-            firmados con la misma llave `fa:ab:ef:46:8f:3a…` y el mismo `versionCode`
-            20402, así que se puede pasar del uno al otro **instalando encima**, sin
-            desinstalar y sin perder el perfil, las claves ni los gustos.
+            **Por qué hay tres envases en esta Release.** Porque las dos explicaciones
+            cómodas **se cayeron con medidas**. La primera («Play Protect bloquea todo
+            lo auto-firmado»): el `CORT-IA-1.1.4.apk` también es auto-firmado, también
+            salió de este pipeline, y a la dueña se le instala bien. La segunda («es el
+            bulto nativo del oído»): la ronda 2.4.2 publicó el mismo APK con y sin los
+            45,7 MB de `.so` y modelo, ella probó **los dos** el 2026-10-22 y
+            «los dos fallan, Play Protect sigue bloqueando». El peso es inocente, y con
+            él se cayó también lo que decía esta hoja la ronda pasada.
+
+            Lo que quedó en pie es lo que se midió leyendo el `AndroidManifest.xml`
+            **binario** de los tres APK que hay en el mismo disco —la charca de cadenas
+            UTF-16, con el mismo método que ahora corre en cada Release dentro de
+            `scripts/audita-apk.sh`—:
+
+            ```
+            CORT-IA-1.1.0 (ella, se instala)   13 permisos · 0 servicios BIND_*
+            CORT-IA-1.1.4 (mío, se instala)    13 permisos · 0 servicios BIND_*
+            CORT-IA-2.4.2 (bloqueado)          28 permisos · 4 BIND_* en 5 servicios
+            ```
+
+            Las cuatro Gordas que se señalaban (`MANAGE_EXTERNAL_STORAGE`,
+            `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`,
+            `READ_EXTERNAL_STORAGE`) están en **los tres** archivos: no eran ellas. Lo
+            que el 2.x declara y el 1.1.4 no son los cinco servicios privilegiados —
+            `VoiceInteractionService`, su `VoiceInteractionSessionService`, el
+            `RecognitionService`, el `NotificationListenerService` y el `TileService`—,
+            las acciones `ACTION_ASSIST`/`ACTION_VOICE_COMMAND` y el trío
+            `CALL_PHONE` + `READ_CONTACTS` + `READ_CALENDAR`. Un clasificador automático
+            sin contexto describe con ese mismo paquete un troyano de accesibilidad: no
+            significa que CORT lo sea, significa que un escáner no tiene forma de
+            saberlo.
+
+            Así que esta Release prueba **esa** variable, y nada más: instala
+            `CORT-IA-2.5.0-nucleo.apk`. Si se instala, el culpable era la superficie y
+            la hoja `docs/BLOQUEO-PLAY-PROTECT.md` cambia de sitio: el núcleo pasa a ser
+            el APK recomendado, y las cuatro puertas se vuelven a abrir una a una
+            sabendo ya qué puerta exacta las vuelve a cerrar. Si se bloquea también, se
+            prueba `CORT-IA-2.5.0-nucleo-ligero.apk` (1,6 MB, la superficie del 1.1.4 y
+            cero código nativo) y, si ése entra, la decisión es sacar el modelo del
+            APK. Si **ninguno** de los tres entra, ya no queda nada dentro del archivo
+            que tocar: el camino que queda es instalar por USB con `adb install -r` o
+            listar la app en Play, y ambos están escritos en
+            `docs/BLOQUEO-PLAY-PROTECT.md`.
+
+            Los tres archivos están firmados con la misma llave `fa:ab:ef:46:8f:3a…` y
+            el mismo `versionCode` 20500, así que se puede pasar del uno al otro
+            **instalando encima**, sin desinstalar y sin perder el perfil, las claves ni
+            los gustos. Lo que sí se pierde al pasar al núcleo, porque el permiso deja
+            de estar declarado: el role de asistente, el interruptor de notificaciones,
+            el baldosín de la cortina y los contactos leídos.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el

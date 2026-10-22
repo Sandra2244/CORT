@@ -21,10 +21,12 @@
 # esa vez. Desde el 2.0.0 la llave ya no cambia, así que es un costo único.
 #
 # Uso:
-#   bash scripts/instala-apk.sh                 # baixa el último y te dice cómo
+#   bash scripts/instala-apk.sh                 # baja el último y te dice cómo
 #   bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.1.0.apk   # instala ése
 #   bash scripts/instala-apk.sh --tel           # fuerza `adb install -r`
 #   bash scripts/instala-apk.sh --ligero        # baja el envase sin el oído dentro
+#   bash scripts/instala-apk.sh --nucleo        # el envase sin superficie privilegiada
+#   bash scripts/instala-apk.sh --nucleo-ligero # las dos cosas a la vez
 #
 # Con `adb` (si algún día lo instalas) el teléfono tiene que estar conectado con
 # «Depuración USB» activa; sin `adb`, este script deja el .apk en el portátil y
@@ -118,14 +120,43 @@ destino=${1:-}
 # Releases los enumera en el orden en que se subieron, y el ligero sale ANTES -- si
 # este script siguiera buscando «el primer .apk», te habría instalado el que no oye
 # sin nube. Así que por defecto se baja el COMPLETO, y `--ligero` pide el otro.
+#
+# Desde la 2.5.0 hay ADEMÁS una segunda dimensión, que es la que interesa ahora:
+# `‑nucleo`, el mismo CORT sin la superficie privilegiada del manifiesto (cero
+# servicios `BIND_*`, cero `ACTION_ASSIST`). Con ella se prueba en el teléfono la
+# única hipótesis que quedó en pie después de que los dos APK de la 2.4.2 se
+# bloquearan igual: que Play Protect está reaccionando a la SUPERFICIE, no al peso.
+# `--nucleo` pide ese envase; sin bandera, se baja el de siempre.
 VARIEDAD=completo
+PERFIL=completo
 case "$destino" in
   --tel)
     con_adb || { rojo "No hay adb en este portátil. Instala Android platform-tools si"
                  rojo "quieres instalar por USB; sin él, usa el teléfono."; exit 2; }
     ;;
   --ligero) VARIEDAD=ligero; destino= ;;
+  --nucleo) PERFIL=nucleo; destino= ;;
+  --nucleo-ligero) PERFIL=nucleo; VARIEDAD=ligero; destino= ;;
 esac
+
+# El filtro de los dos archivos que hay que bajar (el `.apk` y su `-firma.txt`) es el
+# mismo, así que vive en una sola función: si algún día se añade una tercera
+# dimensión, se cambia un renglón y no cuatro.
+eligue() {  # $1 = qué campo se quiere: url | size | name
+  echo "$json" | PERFIL="$PERFIL" VARIEDAD="$VARIEDAD" CAMPO="$1" python3 -c '
+import json,sys,os
+nucleo  = os.environ.get("PERFIL")  == "nucleo"
+ligero  = os.environ.get("VARIEDAD") == "ligero"
+campo   = os.environ.get("CAMPO")
+d=json.load(sys.stdin)
+for a in d.get("assets",[]):
+    n=a["name"]
+    if not n.endswith(".apk") or "asistente" in n:
+        continue
+    if (("-nucleo" in n) == nucleo) and (("-ligero" in n) == ligero):
+        print(a.get(campo, a["name"] if campo=="name" else "")); break
+'
+}
 
 if [ -n "${destino:-}" ] && [ -f "$destino" ]; then
   APK=$destino
@@ -134,27 +165,14 @@ else
   dice "== buscando el último APK publicado en ${REPO}"
   json=$(curl -sL -m 30 "$API") || { rojo "No pude leer la Release (sin red)."; exit 1; }
   etiqueta=$(echo "$json" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("tag_name",""))')
-  url=$(echo "$json" | VARIEDAD="$VARIEDAD" python3 -c '
-import json,sys,os
-ligero = os.environ.get("VARIEDAD") == "ligero"
-d=json.load(sys.stdin)
-for a in d.get("assets",[]):
-    n=a["name"]
-    if n.endswith(".apk") and "asistente" not in n and (("-ligero" in n) == ligero):
-        print(a["browser_download_url"]); break
-')
-  peso=$(echo "$json" | VARIEDAD="$VARIEDAD" python3 -c '
-import json,sys,os
-ligero = os.environ.get("VARIEDAD") == "ligero"
-d=json.load(sys.stdin)
-for a in d.get("assets",[]):
-    n=a["name"]
-    if n.endswith(".apk") and "asistente" not in n and (("-ligero" in n) == ligero):
-        print(a["size"]); break
-')
-  [ -n "$url" ] || { rojo "La Release ${etiqueta} no trae APK."; exit 1; }
-  APK="$CARPETA/$(basename "$url")"
-  dice "   Release: $etiqueta · anunciada $((peso)) bytes"
+  nombre=$(eligue name)
+  url=$(eligue browser_download_url)
+  peso=$(eligue size)
+  [ -n "$url" ] || { rojo "La Release ${etiqueta} no trae ese envase (${PERFIL}/${VARIEDAD})."
+                     rojo "Si pides --nucleo y la Release es anterior a la 2.5.0, ese archivo"
+                     rojo "no existía todavía: mira los enlaces en la página de la Release."; exit 1; }
+  APK="$CARPETA/$nombre"
+  dice "   Release: $etiqueta · envase $nombre · anunciada $((peso)) bytes"
   dice "   bajando a $APK"
   curl -L -m 300 "$url" -o "$APK"
   real=$(stat -c%s "$APK")
@@ -165,11 +183,12 @@ for a in d.get("assets",[]):
   verde "Descargado entero: $real bytes."
   # La hoja de firma que publica el propio CI: peso real, llave y si se puede
   # instalar encima. Se descarga con el mismo nombre y `-firma.txt`.
-  firma_url=$(echo "$json" | python3 -c '
-import json,sys
+  firma_url=$(echo "$json" | NOMBRE="$nombre" python3 -c '
+import json,sys,os
 d=json.load(sys.stdin)
+q=os.environ["NOMBRE"][:-4] + "-firma.txt"          # el .apk y SU hoja, no la primera
 for a in d.get("assets",[]):
-    if a["name"].endswith("-firma.txt"):
+    if a["name"] == q:
         print(a["browser_download_url"]); break
 ')
   if [ -n "$firma_url" ]; then

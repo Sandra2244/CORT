@@ -1,7 +1,9 @@
 # Si Google o Play Protect no te dejan instalar el APK
 
 Escrito el 2026-10-21 después de medir el `CORT-IA-2.3.0.apk` publicado (se bajó
-entero y se leyó byte a byte en el portátil). No es una lista de consejos: cada
+entero y se leyó byte a byte en el portátil) y aumentado el 2026-10-22 con las dos
+medidas de la fecha: los dos envases de `v0.2.28-demo` bloqueados por la dueña, y la
+charca de permisos de los tres APK leída del binario. No es una lista de consejos: cada
 renglón de la primera tabla es una comprobación hecha sobre el archivo que está en
 la Release, y las de la segunda tabla son los mensajes tal cual los muestra Android.
 
@@ -129,6 +131,91 @@ La prueba son dos minutos y el resultado manda:
 > automatizaciones). Sirve sólo como prueba de que el teléfono de ella instala APK
 > auto-firmados míos sin bloquear.
 
+## La medida del 2026-10-22 (segunda parte): el peso era inocente y el manifiesto no
+
+La dueña probó los dos envases de `v0.2.28-demo` y trajo el resultado: **«los dos
+fallan, Play Protect sigue bloqueando»**. Con eso cae la hipótesis del bulto nativo —
+y cae por su propio peso, porque el ligero son 1,6 MB sin una sola `.so` y sin modelo,
+y se bloquea exactamente igual que el de 47 MB. Quedaba lo que el párrafo de arriba
+ya avisaba: si el `1.1.4` entra y el ligero no, la diferencia no está en lo que ocupa
+sino en **lo que el archivo declara**.
+
+Se volvió a medir, esta vez la superficie de integración entera, con el mismo método
+(charco de cadenas UTF‑16 del `AndroidManifest.xml` **binario**, ahora dentro de
+`scripts/audita-apk.sh`, así que el pipeline lo repite en cada Release) sobre los tres
+APK que están en el mismo disco:
+
+| APK | permisos en el binario | servicios privilegiados (`BIND_*`) | instala |
+| --- | --- | --- | --- |
+| `CORT-IA-1.1.0.apk` | **13** | **0** | sí |
+| `CORT-IA-1.1.4.apk` | **13** | **0** | sí |
+| `CORT-IA-2.4.2-ligero.apk` | **28** | **4**, repartidos en cinco servicios | no |
+
+Los cuatro `BIND_*` del 2.x son `BIND_VOICE_INTERACTION` (ser el asistente del
+sistema), `BIND_SPEECH_RECOGNIZER`, `BIND_NOTIFICATION_LISTENER_SERVICE` (leer todas
+las notificaciones, WhatsApp incluido) y `BIND_QUICK_SETTINGS_TILE` (el baldosín de la
+cortina rápida), más las acciones `ASSIST` y `VOICE_COMMAND`. Los permisos gordos que
+todos señalaban (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`,
+`REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, `READ_EXTERNAL_STORAGE`) están en **los tres**
+archivos: nunca fueron la diferencia.
+
+Lo que se parece a un troyano de accesibilidad, a ojos de un escáner sin contexto, no
+es el tamaño ni el permiso de almacenar: es **declarar que uno es el asistente del
+teléfono, que escucha todas las notificaciones y que contesta llamadas**. CORT lo
+declara porque lo hace de verdad —es justo lo que la dueña pidió—, pero un clasificador
+automático no tiene forma de saberlo.
+
+### La respuesta: dos perfiles de manifiesto, una sola variable
+
+`apps/apk/perfil.py` corta el `AndroidManifest.xml` en dos perfiles y el pipeline
+compila **los dos**. La superficie de integración vive en tres regiones marcadas del
+manifiesto (`llamadas`, `acciones-asistente`, `servicios-privilegiados`), y el perfil
+`nucleo` tira esas tres regiones y nada más:
+
+| Perfil | `<uses-permission>` en la fuente | `<service>` | cadenas privilegiadas |
+| --- | --- | --- | --- |
+| `completo` | 24 | 6 | 12 |
+| `nucleo` | **21** | **1** (`.Reproductor`) | **0** |
+
+Y aquí está la parte que hace que la comparación siga siendo limpia, comprobada
+renglón a renglón por `scripts/prueba-costura.py` (sector 14): el manifiesto del
+`completo` **es byte a byte el manifiesto de siempre**, con una sola línea añadida
+(`com.cort.ia.PERFIL`) y las seis líneas de marcador fuera — los marcadores son
+comentarios, y aapt2 nunca copia comentarios al binario. O sea: el `completo` de la
+2.5.0 no introduce ni un cambio extra que ensucie la prueba.
+
+Además el recorte no deja puertas mudas. El APK lleva dentro escrito su perfil
+(`<meta-data android:name="com.cort.ia.PERFIL">`), `CortNative.capacidades()` lo lee,
+y la cara **se niega con una frase** en vez de ofrecer el botón: en el núcleo «lee mis
+avisos», «ponme de asistente» y «llama a…» contestan que ese envase no trae esa
+integración, y la hoja Equipo canta `envase nucleo`. Lo que queda intacto en el núcleo:
+la cara y el orbe, el chat y el código, el cerebro con sus reglas, las
+automatizaciones, el reproductor con su notificación y el doble toque del auricular, el
+micro (con el reconocedor del sistema o Vosk según el envase), los sensores, la cámara
+de gestos, el ordenador de archivos y música, el puente Wi‑Fi con los cerebros de casa.
+
+### Los tres envases de `v0.2.29-demo` y el orden de la prueba
+
+Instala **primero** `CORT-IA-2.5.0-nucleo.apk`. Es la prueba que decide, y las tres
+variantes se pueden pisar una sobre otra porque son el mismo paquete, la misma llave
+`fa:ab:ef:46…` y el mismo `versionCode` 20500:
+
+* **Entra el `nucleo` y no el `completo`** → era la superficie privilegiada. Ahí se
+  decide con la dueña qué se queda: o CORT vive sin el gesto de asistente, el baldosín
+  y el oído de notificaciones (envase que entra siempre), o se acepta el aviso y se
+  instala por la vía de abajo.
+* **No entra el `nucleo` pero sí el `nucleo-ligero`** → se suma el modelo de 40 MB a la
+  lista de sospechosos y se saca del APK (se bajaría la primera vez que se pida el
+  oído). La 2.5.0 ya publica ese envase, así que la prueba no cuesta otra ronda.
+* **No entra ninguno de los dos** → dentro del archivo no queda nada que cambiar: el
+  veredicto es contra el par `com.cort.ia` + llave auto-firmada en la cuenta de Google
+  de ella. Entonces se instala por `adb` o por Play, con los pasos de abajo, y se
+  reporta la app como falsa alarma desde el propio cuadro de Play Protect.
+
+Lo que **no** se ha tocado, a propósito: la llave de firma. Cambiarla obliga a
+desinstalar y se llevan el perfil, la clave de Groq apuntada en el teléfono y las notas
+guardadas, y eso está prohibido por pedido expreso de la dueña.
+
 ## Qué pulsar según la frase exacta que te sale
 
 | Lo que ves en la pantalla | Qué es de verdad | Cómo se pasa |
@@ -177,11 +264,14 @@ razón en avisar.
   el perfil, la clave de Groq apuntada en el teléfono, tus notas y los permisos
   concedidos. Se pidió expresamente no perder esos datos, así que la llave es la
   misma desde el 2.0.0.
-* **No se quitaron los permisos que Play Protect pesa más** (`SYSTEM_ALERT_WINDOW`
-  para el puntito de escucha, `MANAGE_EXTERNAL_STORAGE` para «ordena mis
-  archivos»). Sin ellos esas dos funciones dejan de existir. Si tu teléfono aun así
-  no lo deja entrar, se puede publicar una **variante sin esos dos permisos** con
-  todo lo demás igual; dilo y se monta.
+* **No se quitaron los cuatro permisos gordos** (`SYSTEM_ALERT_WINDOW` para el puntito
+  de escucha, `MANAGE_EXTERNAL_STORAGE` y `READ_EXTERNAL_STORAGE` para «ordena mis
+  archivos», `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` para que el micro no se corte).
+  Están también en el `1.1.4` que a ella se le instala, así que **no** son la
+  diferencia medida, y sin ellos esas funciones dejan de existir. Desde la 2.5.0 sí
+  existe un envase que quita lo que los tres APK no comparten —los cinco servicios
+  privilegiados y `CALL_PHONE`/`READ_CONTACTS`/`READ_CALENDAR`—: es el `nucleo`, y está
+  publicado para que el teléfono decida, no este documento.
 * **No se mete un instalador dentro de la app.** Pedir `REQUEST_INSTALL_PACKAGES`
   es justo lo que hace que un móvil se niegue en redondo, y además la
   auto-actualización ya vive en el PC (`/api/update` y `scripts/instala-apk.sh`).
@@ -193,17 +283,19 @@ activar *Depuración USB* en el teléfono (Ajustes ▸ Sistema ▸ Opciones de
 desarrollador). En el portátil:
 
 ```
-bash scripts/instala-apk.sh                       # baja el COMPLETO de la Release y lo instala encima
-bash scripts/instala-apk.sh --ligero              # baja el envase sin el oído dentro (la prueba)
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.4.2.apk
+bash scripts/instala-apk.sh                        # baja el COMPLETO de la Release y lo instala encima
+bash scripts/instala-apk.sh --nucleo               # el envase sin superficie privilegiada (la prueba que decide)
+bash scripts/instala-apk.sh --nucleo --ligero      # y el núcleo, además, sin el modelo dentro
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.5.0-nucleo.apk
 ```
 
 Con `adb install -r` encima del CORT que ya tienes no se pierden datos, y el `‑r` es
-lo que deja instalar el ligero sobre el completo (o al revés) aunque pesen distinto:
-mismo paquete, misma llave, mismo `versionCode`. **Ojo con el orden de la Release**:
-la API enumera el ligero *antes* que el completo, así que el script filtra por nombre;
-si alguna vez te instala el que dice `sin-modelo` sin que lo pidieras, es ese filtro
-el que se rompió, y el sector [13] de `scripts/prueba-costura.py` está para cazarlo.
+lo que deja pasar de un envase a otro (completo, núcleo, núcleo‑ligero) aunque pesen
+distinto: mismo paquete, misma llave, mismo `versionCode`. **Ojo con el orden de la
+Release**: la API enumera los archivos en el orden en que se subieron, así que el
+script filtra el nombre por `‑nucleo` y por `‑ligero` en vez de tomar «el primer
+`.apk`»; si alguna vez te instala un envase que no pediste, es ese filtro el que se
+rompió, y los sectores [13] y [14] de `scripts/prueba-costura.py` están para cazarlo.
 
 El script traduce cada código de error a español y no inventa: si no hay `adb` o no
 hay teléfono delante, deja el `.apk` descargado y escribe los pasos de arriba.

@@ -26,21 +26,47 @@ Por eso «sale error al instalar» justo al saltar de un 1.x (o del APK original
 2.x: no está roto el APK, es otra llave. Desde el 2.0.0 la llave es estable — la del
 secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola vez**.
 
-## ¿Cuál de los dos APK del 2.4.2 bajo?
+## ¿Cuál de los tres envases del 2.5.0 bajo?
 
-Por defecto, **el completo** (`CORT-IA-2.4.2.apk`): es el que oye sin internet. El
-`CORT-IA-2.4.2-ligero.apk` se baja **sólo si el completo te lo bloquea Play Protect**
-—mismo CORT, misma llave, mismos permisos, lo único que le falta dentro es el oído
-offline, y en la hoja Equipo ▸ 7 dirá `sin-modelo` y escuchará con el reconocedor del
-sistema—. No hay que desinstalar nada para pasar de uno a otro: comparten `versionCode`
-20402 y llave, así que el segundo entra encima del primero como reinstalación (el número
-no baja, luego no es bajada) y se conservan el micrófono concedido, los gustos y la
-dirección del PC. Es lo que declara la medida, no lo que se probó en un teléfono: si el
-instalador de tu marca pusiera una pega con el mismo número de versión, se desinstala
-una vez y se instala el que se quiera dejar —con eso se pierden los ajustes, igual que
-siempre. Si entras en la prueba de la bisección,
-cuenta qué pasó con cada uno (la frase exacta del aviso, si es que sale) — eso es lo
-que decide la ronda que viene: [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md).
+La Release `v0.2.29-demo` publica tres APK del mismo CORT. Se diferencian por dos
+cosas, y nada más: la **superficie privilegiada** que declara el manifiesto y si el
+**oído sin internet** viaja dentro del archivo o no.
+
+| Archivo | superficie privilegiada | oído offline dentro | `<uses-permission>` declarados |
+| --- | --- | --- | --- |
+| `CORT-IA-2.5.0.apk` | sí: asistente del sistema, oído de notificaciones, baldosín de la cortina, llamadas y agenda | sí | 24 |
+| `CORT-IA-2.5.0-nucleo.apk` | **no**: cero servicios `BIND_*`, cero `CALL_PHONE`/`READ_CONTACTS`/`READ_CALENDAR` | sí | **21** |
+| `CORT-IA-2.5.0-nucleo-ligero.apk` | **no** | no: la hoja Equipo ▸ 7 dice `sin-modelo` y escucha con el reconocedor del sistema | **21** |
+
+**Empieza por el `nucleo`.** Es el envase que tiene que instalarse sí o sí, porque su
+superficie declarada es la que tenía el `1.1.4` que a ella le funciona bien. Sigue
+siendo el mismo CORT por dentro: la cara y el orbe, el chat, la hoja de código, el
+cerebro con sus reglas y sus automatizaciones, el reproductor con su notificación y el
+doble toque del auricular, el micrófono, los sensores, la cámara de gestos, el ordenador
+de archivos y de música, el puente Wi‑Fi con los cerebros de casa. Lo único que no
+ofrece es el gesto del asistente del sistema, el baldosín de la cortina rápida, leer las
+notificaciones de WhatsApp, marcar un número y mirar el calendario.
+
+Y no lo esconde a medias: cada envase lleva escrito dentro su perfil
+(`<meta-data android:name="com.cort.ia.PERFIL">`), `CortNative.capacidades()` lo lee, la
+hoja Equipo canta `envase nucleo`, y las puertas que se fueron contestan con una frase
+honesta en vez de con un botón que no hace nada.
+
+Si el `nucleo` entra y el `completo` no, la culpa queda localizada y se decide con ella
+qué vía se queda. Si no entra ninguno, dentro del archivo ya no queda nada que cambiar:
+está explicado, con la tabla de los tres APK leídos del binario, en
+[`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md).
+
+Para pasar de un envase a otro **no hay que desinstalar nada**: los tres comparten el
+paquete `com.cort.ia`, la llave `fa:ab:ef:46…` y el `versionCode` **20500**, así que el
+segundo entra encima del primero como reinstalación (el número no baja, luego no es
+bajada) y se conservan el micrófono concedido, los gustos de música y la dirección del
+PC. Es lo que declara la medida, no lo que se probó en un teléfono: si el instalador de
+tu marca pusiera una pega con el mismo número de versión, se desinstala una vez y se
+instala el que se quiera dejar —con eso se pierden los ajustes, igual que siempre—.
+
+`bash scripts/instala-apk.sh` por defecto baja el **completo**; `--nucleo` pide el
+recortado y `--nucleo-ligero` (o `--nucleo --ligero`) el que además no lleva modelo.
 
 > **¿Y si no es la firma, sino Google?** Si lo que sale es un aviso de Play Protect
 > («no reconoce esta aplicación», «puede dañar tu dispositivo», «este archivo puede
@@ -65,7 +91,7 @@ que decide la ronda que viene: [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PRO
 
 ## Recién instalado: qué se toca primero
 
-Con el `2.4.2` ya puesto, tres gestos valen más que cualquier ajuste: decirle **«pon
+Con el **completo** ya puesto, tres gestos valen más que cualquier ajuste: decirle **«pon
 CORT como asistente»** (Android abre su cuadro de rol y ahí se elige CORT en vez de
 Google — con esto se pierde el «OK Google» con la pantalla apagada, porque eso lo decide
 el servidor de Google y no el repo), arrastrar la cortina de ajustes rápidos y **añadir el
@@ -74,6 +100,12 @@ pulsado el icono de CORT** para ver los tres atajos (Escucha · Equipo · Charla
 auriculares puestos, prueba el **doble toque** en el botón del auricular: pausa la música y
 abre el oído. Todo esto, con los pasos por marca y lo que **no** se puede comprobar sin el
 teléfono en la mano, está en [`docs/ABRIR-CORT.md`](ABRIR-CORT.md).
+
+Con el **núcleo** los dos primeros no existen, y la app no finge que existen: al pedirlos
+contesta que el envase no trae esa integración. Lo que se prueba entonces es lo que sí
+viaja dentro de los tres archivos — **«hola CORT»** con la hoja de escucha abierta,
+`☰ ▸ Equipo` para ver la línea `envase nucleo` y el estado de cada bloque, «¿qué hora es?»
+o «ordena mis descargas», y el doble toque del auricular sobre el reproductor—.
 
 ## El `2.3.0` trae oído: dos cosas que se notan al instalar
 
@@ -110,8 +142,10 @@ teléfono en la mano, está en [`docs/ABRIR-CORT.md`](ABRIR-CORT.md).
 ## Con el teléfono por USB (si algún día tienes `adb`)
 
 ```
-bash scripts/instala-apk.sh              # baja el último y lo instala si hay teléfono
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.3.1.apk
+bash scripts/instala-apk.sh                            # baja el COMPLETO de la Release y lo instala por USB
+bash scripts/instala-apk.sh --nucleo                   # el envase sin superficie privilegiada (la prueba que decide)
+bash scripts/instala-apk.sh --nucleo-ligero            # y el núcleo sin el modelo de 40 MB dentro
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.5.0-nucleo.apk
 ```
 
 El script traduce la salida de `adb install -r` a español con las filas de arriba y

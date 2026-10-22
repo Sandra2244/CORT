@@ -850,6 +850,53 @@ public class CortNative {
         return "{\"rol\":" + hayRol + ",\"puede\":" + puede + ",\"esAsistente\":" + tiene + "}";
     }
 
+    /**
+     * Qué puertas puede ofrecer **este** APK. Ronda 2.5.
+     *
+     * Por qué hace falta: desde la 2.5 salen dos perfiles del mismo cuerpo. El
+     * `completo` declara el traje de asistente, el reconocedor, el lector de
+     * avisos, el baldosín de la cortina y las llamadas; el `nucleo` no declara
+     * ninguno de esos cinco servicios con `BIND_*` — es la superficie exacta del
+     * `1.1.4` que a la dueña se le instala — porque esa superficie es lo único que
+     * separa, medido, lo que Play Protect deja abrir de lo que bloquea.
+     *
+     * El Kotlin de esas puertas sigue dentro del APK en los dos perfiles (los
+     * `.class` no aparecen en ningún escáner público; lo que se mira es el
+     * manifiesto). Lo que **no** puede pasar es que la cara ofrezca un botón cuya
+     * puerta no está declarada: un `startService` de un servicio que no está en el
+     * manifiesto no arranca nada, y un «pídeme el rol de asistente» en el `nucleo`
+     * lleva a una lista de Ajustes donde CORT no aparece. Por eso la cara pregunta
+     * esto antes de pintar esas cuatro fichas de Equipo.
+     *
+     * El perfil se lee del `<meta-data>` que clava `apps/apk/perfil.py`, o sea del
+     * manifiesto **del archivo instalado** — no de una constante compilada que
+     * podría no corresponderse con el APK que llegó al teléfono. Si no hay
+     * meta-datos (un APK anterior a la 2.5, o un fabricante que la tira), se
+     * devuelve `completo`: es lo que siempre fue, y las cuatro puertas existían.
+     */
+    @JavascriptInterface
+    public String capacidades() {
+        String perfil = "completo";
+        try {
+            android.content.pm.ApplicationInfo info =
+                act.getPackageManager().getApplicationInfo(
+                    act.getPackageName(), android.content.pm.PackageManager.GET_META_DATA);
+            if (info.metaData != null) {
+                Object v = info.metaData.get("com.cort.ia.PERFIL");
+                if (v != null) perfil = v.toString();
+            }
+        } catch (Exception elPaqueteNoContesta) { /* queda completo, como siempre */ }
+        boolean nucleo = "nucleo".equals(perfil);
+        return "{\"perfil\":" + comilla(perfil)
+               + ",\"nucleo\":" + nucleo
+               + ",\"asistente\":" + !nucleo
+               + ",\"avisos\":" + !nucleo
+               + ",\"cortina\":" + !nucleo
+               + ",\"reconocedor\":" + !nucleo
+               + ",\"llamadas\":" + !nucleo
+               + ",\"agenda\":" + !nucleo + "}";
+    }
+
     /* ──────────────────────────────── avisos ─────────────────────────────── */
 
     /**

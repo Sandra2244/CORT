@@ -63,10 +63,24 @@ let preguntaVoz = false;     // la última pregunta/orden larga vino de la boca:
 
 /* Igual que en `pantallas.js`: `typeof` antes de llamar. Un `TypeError` en el
    consola del WebView es un error técnico que la dueña no ve; lo que tiene que
-   ver es una frase suya, en su pantalla. */
+   ver es una frase suya, en su pantalla.
+
+   Desde la 2.5 la pregunta tiene dos mitades, y la segunda no se ve en el puente:
+   el método `agenda` sigue existiendo en los dos perfiles del APK (el Kotlin se
+   compila entero), pero en el `nucleo` el permiso `READ_CALENDAR` no está
+   declarado en el manifiesto, así que el método existe y **no puede hacer nada** —
+   y lo peor: `requestPermissions` de un permiso no declarado no abre cuadro,
+   devuelve denegado en silencio. Por eso `puede()` consulta también
+   `CORTcapaz()` (en `android-bridge.js`) para las cuatro puertas que el recorte
+   cierra: con `nucleo` la cara pintará su frase de «este APK no puede», que ya
+   estaba escrita y es la verdad. Sin puente (el PC) o con un APK anterior a la
+   2.5, `CORTcapaz` devuelve `true` y nada de esto cambia. */
+const PUERTAS = { agenda: 'agenda', contactos: 'llamadas', pedirContactos: 'llamadas' };
 const puede = nombre => {
   const p = N();
-  return !!p && typeof p[nombre] === 'function';
+  if (!p || typeof p[nombre] !== 'function') return false;
+  const puerta = PUERTAS[nombre];
+  return !puerta || (typeof window.CORTcapaz === 'function' ? window.CORTcapaz(puerta) : true);
 };
 
 const llama = (nombre, ...args) => {
@@ -482,8 +496,16 @@ function pinta() {
       puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes',
       puede('oidoEstado') && 'oído propio', autos.total() && 'automatiza']
       .filter(Boolean);
-    estadoBar.textContent = cosas.length ? 'puente 2.1 · ' + cosas.join(' · ') : 'puente viejo';
-    estadoBar.classList.toggle('aviso', !cosas.length);
+    /* El perfil va al principio porque es la respuesta a «¿cuál de los dos APK de
+       la Release tengo instalado?». `CORTperfil()` (en `android-bridge.js`) lee el
+       `<meta-data>` del manifiesto **del archivo instalado**; en el PC sin puente
+       dice `escritorio`, y en un APK anterior a la 2.5, `completo` — que es lo que
+       era. Con `nucleo` hay cuatro puertas cerradas (asistente, avisos, marcar por
+       nombre, baldosín) y la dueña tiene que poder verlo sin probar los botones. */
+    const perfil = window.CORTperfil ? window.CORTperfil() : 'escritorio';
+    estadoBar.textContent = 'envase ' + perfil + ' · '
+      + (cosas.length ? 'puente 2.1 · ' + cosas.join(' · ') : 'puente viejo');
+    estadoBar.classList.toggle('aviso', !cosas.length || perfil === 'nucleo');
   }
 }
 

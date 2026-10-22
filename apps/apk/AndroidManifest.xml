@@ -171,6 +171,7 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
                      android:required="false" />
 
+    <!-- PERFIL-DESDE:llamadas -->
     <!-- ── Marcas y contactos: «llama a Samuel», «escríbele a mi amigo…».
          `CALL_PHONE` marca directo (con su aviso de permiso); `READ_CONTACTS` es
          lo que convierte un nombre en un número. No hay permiso de leer SMS ni
@@ -190,6 +191,7 @@
          (`Avisos`), y eso se concede con el interruptor del sistema. -->
     <uses-permission android:name="android.permission.READ_CALENDAR"
                      android:required="false" />
+    <!-- PERFIL-HASTA:llamadas -->
 
     <!-- ── Reproducir en segundo plano: el servicio con su notificación, el
          doble toque del auricular y que la pantalla se apague sin cortar el
@@ -300,6 +302,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+    <!-- PERFIL-DESDE:acciones-asistente -->
             <!-- El gesto de asistente. Android busca esta acción en la app
                  elegida como «aplicación de asistencia»; al mantener el botón de
                  inicio (o el gesto de esquina) el sistema lanza la actividad con
@@ -320,6 +323,7 @@
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+    <!-- PERFIL-HASTA:acciones-asistente -->
 
             <!-- Los tres viajes internos de los atajos del icono. Con
                  `targetClass` en `res/xml/atajos.xml` el intento ya es explícito,
@@ -339,6 +343,7 @@
                 android:resource="@xml/atajos" />
         </activity>
 
+    <!-- PERFIL-DESDE:servicios-privilegiados -->
         <!-- El **baldosín de la cortina rápida**: un toque abajo y CORT está
              escuchando, sin abrir el cajón ni ser la app de asistencia del
              fabricante. `BIND_QUICK_SETTINGS_TILE` es lo único que hace que
@@ -401,6 +406,7 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+    <!-- PERFIL-HASTA:servicios-privilegiados -->
 
         <!-- El **reproductor**: una notificación persistente con play/pausa y
              siguiente, y el `MediaSession` que manda al auricular. Es lo que hace

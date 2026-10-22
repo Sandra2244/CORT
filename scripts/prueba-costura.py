@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 
@@ -1763,6 +1764,195 @@ if "if so:" not in (RAIZ / "scripts" / "audita-apk.sh").read_text(encoding="utf-
                                "el `-firma.txt` mentiría en la variedad ligera")
 else:
     dice_ok("2.4.2 · auditoría", "el `-firma.txt` distingue completo de ligero sin mentir")
+
+
+# ── 14 · la ronda 2.5: los dos PERFILES del manifiesto ───────────────────────
+# La medida que abre la ronda, con el método de `apps/apk/perfil.py` (leer la
+# charca UTF-16 del `AndroidManifest.xml` binario) sobre los tres APK que hay en el
+# mismo disco de la dueña:
+#
+#   CORT-IA-1.1.0   13 permisos · 0 servicios BIND_*   se instala
+#   CORT-IA-1.1.4   13 permisos · 0 servicios BIND_*   se instala
+#   CORT-IA-2.4.2   28 permisos · 4 BIND_* en 5 servicios   BLOQUEADO
+#
+# Con esto cae también la segunda explicación cómoda: el `-ligero` de la 2.4.2 pesa
+# 1,6 MB, no lleva ni una `.so` ni el modelo, y se bloquea igual que el de 47 MB. El
+# peso no era. Este sector no prueba el teléfono (eso sólo puede hacerlo ella):
+# prueba que el recorte existe, que se ejecuta de verdad, que el `nucleo` no deja
+# NINGUNA de las cadenas que delatan, y que la cara no ofrece una puerta que su
+# manifiesto no declaró.
+import importlib.util as _ilu
+import difflib as _difflib
+import xml.etree.ElementTree as _ET
+
+perfil_py = APK / "perfil.py"
+_espec = _ilu.spec_from_file_location("perfil", perfil_py) if perfil_py.exists() else None
+if _espec:
+    _modulo = _ilu.module_from_spec(_espec)
+    _espec.loader.exec_module(_modulo)
+    PERFIL_DELATORES = list(_modulo.DELATORES)
+else:
+    PERFIL_DELATORES = []
+if not perfil_py.exists():
+    falla("2.5 · perfil.py", "no existe: no se puede generar el manifiesto del núcleo")
+else:
+    salidas = {}
+    rompio = []
+    for per in ("completo", "nucleo"):
+        r = subprocess.run([sys.executable, str(perfil_py), "--perfil", per],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            rompio.append(f"{per} (salió {r.returncode}: {(r.stderr or '').strip()[:90]})")
+        salidas[per] = r.stdout
+    if rompio:
+        falla("2.5 · perfil.py", "no genera el manifiesto: " + "; ".join(rompio))
+    else:
+        dice_ok("2.5 · perfil.py", "los dos perfiles se generan y validan como XML")
+
+        sin_c = lambda t: re.sub(r"<!--.*?-->", "", t, flags=re.S)   # aapt2 no copia comentarios
+        # 1. `completo` tiene que ser lo de siempre: la superficie entera, sin recortar.
+        del_ok = [d for d in PERFIL_DELATORES if d in sin_c(salidas["completo"])]
+        # 2. `nucleo` no puede dejar SOBRAR ninguna.
+        del_malo = [d for d in PERFIL_DELATORES if d in sin_c(salidas["nucleo"])]
+        if del_malo:
+            falla("2.5 · nucleo", "el recorte deja la superficie privilegiada dentro: "
+                                  + ", ".join(del_malo))
+        elif len(del_ok) != len(PERFIL_DELATORES):
+            falla("2.5 · completo", f"el perfil completo perdió {len(PERFIL_DELATORES) - len(del_ok)} "
+                                    "de las cadenas que debe conservar: el APK de siempre cambiaría")
+        else:
+            dice_ok("2.5 · recorte", f"las {len(PERFIL_DELATORES)} cadenas privilegiadas están en "
+                                     "`completo` y cero en `nucleo`")
+        # 3. Los servicios: en `completo` los seis; en `nucleo` sólo el reproductor.
+        servicios_malos = []
+        for per, esperado in (("completo", 6), ("nucleo", 1)):
+            n = len(re.findall(r"<service\b", sin_c(salidas[per])))
+            if n != esperado:
+                servicios_malos.append(f"{per} tiene {n} (tienen que ser {esperado})")
+        if servicios_malos:
+            falla("2.5 · servicios", "; ".join(servicios_malos))
+        else:
+            dice_ok("2.5 · servicios", "seis en el completo, uno (`.Reproductor`) en el núcleo")
+        # 4. La meta-datos del perfil, que es lo que lee `capacidades()`.
+        sin_meta = [per for per in ("completo", "nucleo")
+                    if f'android:name="com.cort.ia.PERFIL" android:value="{per}"'
+                    not in sin_c(salidas[per])]
+        if sin_meta:
+            falla(f"2.5 · meta-datos {', '.join(sin_meta)}", "el manifiesto no declara su perfil: "
+                  "`capacidades()` adivinaría y la cara ofrecería puertas cerradas")
+        else:
+            dice_ok("2.5 · meta-datos", "cada envase lleva escrito dentro cuál es su perfil")
+        # 5. Ningún marcador `PERFIL-DESDE/HASTA` sobrevive en la salida. Si uno
+        #    quedara, la hoja publicada llevaría dentro las instrucciones del recorte
+        #    y recortar dos veces se convertiría en otra cosa.
+        superviven = [per for per in ("completo", "nucleo") if "PERFIL-" in salidas[per]]
+        if superviven:
+            falla("2.5 · marcadores", "dejan sus propias marcas en la salida ("
+                                      + ", ".join(superviven) + "): el segundo recorte "
+                                      "no encontraría regiones que cortar")
+        else:
+            dice_ok("2.5 · marcadores", "los seis `PERFIL-DESDE/HASTA` no aparecen en ningún manifiesto generado")
+        # 6. LA PRUEBA DURA DE LA RONDA. El envase `completo` no puede ser un
+        #    manifiesto nuevo: tiene que ser EL MISMO que ella ya tiene, y lo único
+        #    que lo distingue es la línea del perfil. Se reconstruye la fuente por
+        #    fuera (sin llamar a `perfil.py`: quitar las seis líneas de marcador y
+        #    clavarse la meta-datos) y se compara BYTE A BYTE.
+        fuente = (APK / "AndroidManifest.xml").read_text(encoding="utf-8")
+        ref = "".join(l for l in fuente.splitlines(keepends=True) if "PERFIL-" not in l)
+        corte = ref.index(">", ref.find("<application")) + 1
+        ref = (ref[:corte] + "\n        <meta-data "
+               'android:name="com.cort.ia.PERFIL" android:value="completo" />' + ref[corte:])
+        if ref != salidas["completo"]:
+            delta = [l for l in _difflib.unified_diff(ref.splitlines(),
+                                                      salidas["completo"].splitlines(),
+                                                      lineterm="")
+                     if l[:1] in "+-" and l[:3] not in ("+++", "---")]
+            falla("2.5 · completo", f"no reproduce el manifiesto de siempre: {len(delta)} "
+                                    f"renglones de diferencia ({delta[:3]})")
+        else:
+            dice_ok("2.5 · completo", "idéntico al manifiesto publicado hoy, más la única "
+                                      "línea nueva: la meta-datos del perfil")
+        # 7. La trampa del `--origen`: recortar un fichero que ya lleva la etiqueta
+        #    puesta tiene que REESCRIBIR el valor, no respetar el del recorte anterior.
+        #    Sin esto, un `nucleo` generado desde `manifest-completo.xml` saldría
+        #    diciendo `completo`, que es la mentira que esta línea existe para evitar.
+        reconvertido = _modulo.pon_perfil(salidas["completo"], "nucleo")
+        if 'android:value="nucleo"' not in reconvertido or 'android:value="completo"' in reconvertido:
+            falla("2.5 · meta-datos", "no reescribe el perfil pedido sobre uno ya marcado")
+        else:
+            dice_ok("2.5 · meta-datos", "el valor siempre es el del recorte pedido, no el del fichero de entrada")
+
+# Que el recorte LLEGUE al aapt2: si `compilar.sh` siguiera pasando el manifiesto del
+# repo, los dos APK de la Release serían idénticos y la prueba no se podría hacer.
+if 'PERFIL="${APK_PERFIL:-completo}"' not in comp_txt or '--manifest "$MANIFIESTO"' not in comp_txt:
+    falla("2.5 · compilar.sh", "no gobierna el perfil hasta `aapt2 link`: "
+                               "`APK_PERFIL` o `--manifest \"$MANIFIESTO\"` no están")
+elif "python3 perfil.py --perfil" not in comp_txt:
+    falla("2.5 · compilar.sh", "no llama a `perfil.py`: el `-firma.txt` diría un perfil que no se cortó")
+elif 'echo "perfil: $PERFIL' not in comp_txt:
+    falla("2.5 · compilar.sh", "el `-firma.txt` no declara el perfil del archivo")
+else:
+    dice_ok("2.5 · compilar.sh", "`APK_PERFIL` corta el manifiesto, lo pasa a `aapt2` y lo declara en la hoja")
+
+# El pipeline tiene que compilar los TRES envases y subirlos con su hoja: con uno de
+# ellos la prueba del teléfono no se puede hacer.
+sin_wf25 = [x for x in ('APK_PERFIL: "nucleo"', "-nucleo.apk", "-nucleo-firma.txt",
+                        'APK_PERFIL: "nucleo"', "nucleo-ligero.apk") if x not in wf_txt]
+if sin_wf25:
+    falla("2.5 · pipeline", f"en `build.yml` no está {', '.join(set(sin_wf25))}: "
+                            "la Release no subiría el núcleo y no hay prueba que hacer")
+else:
+    dice_ok("2.5 · pipeline", "compila completo, núcleo y núcleo-ligero, y sube los tres con su hoja")
+
+# Y la cara tiene que saber qué lleva instalado. La cadena que se lee del manifiesto
+# y las tres puertas que se niegan en el núcleo.
+if r'"com.cort.ia.PERFIL"' not in cuerpo_crudo or "public String capacidades()" not in cuerpo_crudo:
+    falla("2.5 · puente", "`CortNative.java` no expone `capacidades()` ni lee la meta-datos del perfil")
+else:
+    dice_ok("2.5 · puente", "`capacidades()` devuelve el perfil del archivo instalado")
+puente_js = (RAIZ / "ui" / "js" / "android-bridge.js").read_text(encoding="utf-8")
+if "window.CORTcapaz" not in puente_js or "window.CORTperfil" not in puente_js:
+    falla("2.5 · cara", "`android-bridge.js` no define `CORTcapaz`/`CORTperfil`")
+elif "caps[puerta] !== false" not in puente_js:
+    falla("2.5 · cara", "`CORTcapaz` no es generosa por defecto: en el PC o con un APK "
+                        "anterior a la 2.5 cerraría puertas que sí existen")
+else:
+    dice_ok("2.5 · cara", "`CORTcapaz` consulta el perfil y, si no puede mirar, dice `true`")
+hud_txt = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+sin_hud = [x for x in ("CORTcapaz('avisos')", "CORTcapaz('asistente')", "CORTcapaz('llamadas')")
+           if x not in hud_txt]
+if sin_hud:
+    falla("2.5 · cara", "en el núcleo la cara seguiría ofreciendo " + ", ".join(sin_hud))
+else:
+    dice_ok("2.5 · cara", "avisos, asistente y llamadas se niegan con su frase, no con un botón mudo")
+tel_txt = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+if "const PUERTAS" not in tel_txt or "CORTcapaz(puerta)" not in tel_txt:
+    falla("2.5 · cara", "`puede()` de `telefono.js` no consulta el perfil: la hoja Equipo "
+                        "prometería agenda y contactos en el núcleo")
+elif "envase " not in tel_txt:
+    falla("2.5 · cara", "la barra de Equipo no dice qué envase está instalado; con tres APK "
+                        "en la Release la dueña no puede saber cuál tiene delante")
+else:
+    dice_ok("2.5 · cara", "la hoja Equipo dice «envase nucleo/completo» y cierra sus puertas")
+
+# La auditoría publicada tiene que SEGUIR midiendo el binario, no el texto del repo:
+# es la única prueba de que el recorte llegó al archivo que se instala.
+aud_txt = (RAIZ / "scripts" / "audita-apk.sh").read_text(encoding="utf-8")
+sin_aud = [x for x in ("AndroidManifest.xml", ".permission.BIND_", "perfil declarado",
+                       "el perfil nucleo salió con") if x not in aud_txt]
+if sin_aud:
+    falla("2.5 · auditoría", "`audita-apk.sh` no lee el perfil ni sus servicios del APK final: "
+                             + ", ".join(sin_aud))
+else:
+    dice_ok("2.5 · auditoría", "los permisos, los `BIND_*` y el perfil se leen del binario y "
+                                "un núcleo con servicios privilegiados pone el pipeline rojo")
+
+# Y el instalador de script no puede equivocarse de envase: la Release lista los
+# archivos en el orden en que se subieron.
+if '"-nucleo" in n' not in ins_txt or "--nucleo) PERFIL=nucleo" not in ins_txt:
+    falla("2.5 · instala-apk.sh", "no distingue el núcleo: bajaría el envase equivocado")
+else:
+    dice_ok("2.5 · instala-apk.sh", "por defecto el de siempre y `--nucleo` el recortado")
 
 
 # ── veredicto ───────────────────────────────────────────────────────────────
