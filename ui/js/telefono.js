@@ -275,6 +275,29 @@ const CARA_AGENDA = `
   </div>
   <div class="eq-dice" id="eq-ago-dice"></div>`;
 
+/* ─────────────── 7 · OÍDO: el reconocimiento que vive dentro del APK ───────────────
+   `Oido.kt` (Kotlin + Vosk) oye español sin internet y sin los servicios de voz de
+   Google. No es un extra: es la respuesta a dos cosas que la dueña dijo —«no me
+   entiende cuando estoy sin datos» y «en el juego se traba»—. La cara no pinta aquí
+   una ilusión: cada fase la manda Java por el evento `motor` (`extrayendo`,
+   `cargando`, `listo`, `sin-sitio`, `sin-modelo`, `roto`, `cerrado`) con su `motivo`
+   en español, y el botón apaga o enciende el oído de verdad
+   (`CortNative.oidoPropio`). Si el oído propio está apagado o aún no está listo,
+   CORT sigue escuchando con el reconocedor de siempre: esta hoja lo dice, no lo
+   esconde. */
+const CARA_OIDOS = `
+  <div class="eq-estado" id="eq-oido-est">preguntando al oído del teléfono…</div>
+  <div class="eq-fila">
+    <button class="eq-b eq-grande" id="eq-oido-btn">escucha sin internet: comprobando…</button>
+  </div>
+  <div class="eq-fila">
+    <span class="eq-nota" id="eq-oido-motor"></span>
+    <span class="eq-nota" id="eq-oido-sitio"></span>
+  </div>
+  <div class="eq-dice" id="eq-oido-dice"></div>
+  <div class="eq-nota">el modelo de español ocupa 60 MB en tu teléfono y tarda unos
+    segundos la primera vez; CORT te lo dice aquí mientras se copia.</div>`;
+
 /* ─────────────────────────── montaje y pintura ─────────────────────────── */
 
 export function montaTelefono(contexto) {
@@ -295,6 +318,7 @@ export function montaTelefono(contexto) {
   caja.appendChild(bloque('mem', '4', 'Memoria', 'lo que el teléfono recuerda', CARA_MEMORIA));
   caja.appendChild(bloque('atu', '5', 'Atuendos', 'los colores de CORT y su burbuja', CARA_ATUENDO));
   caja.appendChild(bloque('ago', '6', 'Agenda', 'tus citas y lo que llegó al correo', CARA_AGENDA));
+  caja.appendChild(bloque('oido', '7', 'Oído', 'escuchar sin internet ni Google', CARA_OIDOS));
   cuerpo.appendChild(caja);
 
   enganchaVoz();
@@ -303,6 +327,7 @@ export function montaTelefono(contexto) {
   enganchaMemoria();
   enganchaAtuendo();
   enganchaAgenda();
+  enganchaOido();
 
   montada = true;
   pinta();
@@ -313,11 +338,12 @@ export function montaTelefono(contexto) {
    y cada vez que `pantallas.js` entra en `equipo` (igual que `arrancaMusica()`). */
 function pinta() {
   if (!montada) return;
-  pintaVoz(); pintaMando(); pintaCerebro(); pintaMemoria(); pintaAtuendo();
+  pintaVoz(); pintaMando(); pintaCerebro(); pintaMemoria(); pintaAtuendo(); pintaOido();
   const estadoBar = document.querySelector('#scr-equipo .scr-estado');
   if (estadoBar) {
     const cosas = [puede('accion') && 'mando', puede('ajusteVoz') && 'voz',
-      puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes']
+      puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes',
+      puede('oidoEstado') && 'oído propio']
       .filter(Boolean);
     estadoBar.textContent = cosas.length ? 'puente 2.1 · ' + cosas.join(' · ') : 'puente viejo';
     estadoBar.classList.toggle('aviso', !cosas.length);
@@ -1018,6 +1044,91 @@ function apunta(titulo, hora, alVoz) {
 /* El puente empuja `{type:'mente'|'memoria'|'accion'}` cuando lo largo termina. Se
    guarda SIEMPRE en el estado (aunque la hoja esté cerrada) y se pinta si existe.
    Devuelve `true` si el evento era de estos. */
+/* ─────────────────────── 7 · el oído propio, en la hoja ───────────────────────
+   Java manda el estado por dos vías: el evento `motor` (cada vez que cambia de
+   fase) y `oidoEstado()`, que se puede preguntar. La cara usa las dos: pinta con lo
+   que llegue primero y no supone nunca lo que no le han dicho. */
+
+/** Lo que se le dice a la dueña en cada fase. Sin inventar: si `Oido` no la nombra, se copia la palabra. */
+const FASES_OID = {
+  'sin-intentar': 'todavía no he intentado oír sin internet',
+  'sin-arrancar': 'el oído sin nube no ha arrancado con CORT',
+  'preparando': 'estoy preparando el oído sin nube…',
+  'extrayendo': 'copiando el modelo de español a tu teléfono (60 MB, unos segundos)…',
+  'cargando': 'cargando el modelo de español…',
+  'listo': 'escucho sin internet ni Google ✓',
+  'sin-sitio': 'no cabe el modelo: falta sitio libre en el teléfono',
+  'sin-modelo': 'el modelo de español no está dentro de este APK',
+  'sin-libreria': 'la librería del motor no cargó en este teléfono',
+  'roto': 'el motor del oído se cayó',
+  'cerrado': 'cerré el oído sin nube al salir de CORT',
+  'apagado': 'el oído sin nube está apagado: uso el reconocedor de siempre',
+};
+
+function pintaOido(ev) {
+  const e = ev || (() => {
+    if (!puede('oidoEstado')) return { oido: 'apagado' };
+    const r = parsea(llama('oidoEstado'), ctx);
+    return r && typeof r === 'object' ? r : { oido: 'sin-arrancar' };
+  })();
+  estado.ultimoMotor = e;
+  const fase = String(e.oido || 'sin-decir-fase');
+  const lineaEl = el('eq-oido-est');
+  if (lineaEl) {
+    lineaEl.textContent = (FASES_OID[fase] || fase) + (e.motivo ? ' — ' + e.motivo : '');
+    lineaEl.classList.toggle('aviso', !['listo'].includes(fase));
+  }
+  const motor = el('eq-oido-motor');
+  if (motor) motor.textContent = e.motor ? 'motor: ' + e.motor + ' · ' + (e.modelo || '?') : '';
+  const sitio = el('eq-oido-sitio');
+  if (sitio) sitio.textContent = (e.libresMB !== undefined && e.libresMB !== '?' && e.pesoModelo)
+    ? 'libres: ' + e.libresMB + ' MB · el modelo ocupa ' + Math.round((e.pesoModelo || 0) / 1048576) + ' MB'
+    : '';
+  const boton = el('eq-oido-btn');
+  if (boton) boton.textContent = e.listo || fase === 'listo'
+    ? 'escucha sin internet: activada'
+    : (fase === 'apagado' ? 'escucha sin internet: apagada' : 'escucha sin internet: ' + fase);
+  const dice = fase === 'listo' ? diceBien : avisa;
+  if (e.listo) dice('oido', 'Ya oigo «CORT» sin datos ni wifi. Si Google no está, también.');
+  else if (e.motivo) dice('oido', e.motivo);
+}
+
+/** «activa/quita el oído sin internet» y «¿me oyes sin wifi?», por voz. */
+function accionOido(b) {
+  if (!puede('oidoEstado') && !puede('oidoPropio')) {
+    return di('Este APK todavía no trae el oído sin nube: empieza en el 2.3.0.', 'oido');
+  }
+  const enciende = /\b(activa|enciende|pon|quiero|quiero|on)\b/.test(b);
+  const apaga = /\b(apaga|desactiva|quita|off|no quiero)\b/.test(b);
+  if (!enciende && !apaga) {
+    const e = parsea(llama('oidoEstado'), ctx) || estado.ultimoMotor || {};
+    const fase = String(e.oido || 'sin-arrancar');
+    return di((FASES_OID[fase] || fase) + (e.motivo ? ' — ' + e.motivo : ''), 'oido');
+  }
+  const r = parsea(llama('oidoPropio', enciende), ctx);
+  if (!r || typeof r !== 'object') return di('El teléfono no me dejó mover el oído.', 'oido');
+  setTimeout(() => pintaOido(), 400);
+  return di(enciende
+    ? 'Pongo el oído propio: te escucho sin internet ni servicios de voz.'
+    : 'Apago el oído propio y vuelvo al reconocedor de Google.', 'oido');
+}
+
+function enganchaOido() {
+  const boton = el('eq-oido-btn');
+  if (!boton) return;
+  boton.onclick = () => {
+    const antes = estado.ultimoMotor || {};
+    const quiero = !(antes.listo || antes.oido === 'listo') && antes.oido !== 'apagado';
+    // `oidoPropio` es síncrono y dice lo que quedó puesto; si este APK no lo tiene
+    // (un instalador anterior al 2.3.0) se avisa en el bloque, no en la consola.
+    const r = puede('oidoPropio') ? parsea(llama('oidoPropio', quiero), ctx) : null;
+    if (!r || typeof r !== 'object') { avisa('oido', 'este APK todavía no trae el oído sin nube.'); return; }
+    ctx?.say?.(quiero ? 'Voy preparando el oído sin internet.' : 'Apago el oído propio y uso el de Google.');
+    setTimeout(() => pintaOido(), 400);
+  };
+  pintaOido();
+}
+
 export function handleTelefonoEvento(ev) {
   if (!ev || typeof ev.type !== 'string') return false;
   if (ev.type === 'mente') {
@@ -1064,6 +1175,16 @@ export function handleTelefonoEvento(ev) {
     pintaMando();
     return true;
   }
+  if (ev.type === 'motor') {
+    // La fase del oído propio. Se guarda SIEMPRE, con la hoja montada o no: si
+    // CORT está copiando los 60 MB del modelo y ella abre Equipo dos minutos
+    // después, lo que tiene que ver es en qué punto está, no «preguntando…».
+    estado.ultimoMotor = ev;
+    if (montada) pintaOido(ev);
+    if (ev.oido) ctx?.term?.('oído sin nube: ' + ev.oido
+      + (ev.motivo ? ' — ' + String(ev.motivo).slice(0, 60) : ''), 'equipo');
+    return true;
+  }
   return false;
 }
 
@@ -1092,6 +1213,16 @@ export function telefonoPorVoz(texto) {
   if (!enTelefono()) return false;            // en PC: nada de esto, la frase sigue al núcleo
   const b = normaliza(texto);
   if (!b) return false;
+
+  /* 0 · el oído sin nube: «activa el oído sin internet», «¿me oyes sin wifi?»,
+         «quita el oído offline». Se contesta con la fase REAL que Java ha mandado,
+         nunca con lo que la cara supone. */
+  if (/\boido\b/.test(b) && /\b(internet|nube|offline|wifi|datos)\b/.test(b)) {
+    return accionOido(b);
+  }
+  if (/\b(escucha|oye|oyeme)\b/.test(b) && /\bsin (internet|wifi|datos|nube)\b/.test(b)) {
+    return accionOido(b);
+  }
 
   /* 1 · volumen — sólo con la palabra «volumen/sonido» delante, para no pisar a
         «baja la persiana», que es de otro mundo. */

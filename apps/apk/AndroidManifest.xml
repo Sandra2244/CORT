@@ -245,6 +245,14 @@
         <package android:name="com.ovovcx.fansclub" />
     </queries>
 
+    <!-- `extractNativeLibs="true"` es lo que permite meter las `.so` del oído
+         propio (Vosk + JNA, ~17 MB comprimidos en `lib/<abi>/`) comprimidas de
+         verdad dentro del APK: con `false` —que es el default desde API 23 si se
+         usa Gradle— el instalador exige las `.so` alineadas sin comprimir y el
+         `zip -r` suelto de `compilar.sh` daría una app que NO arranca. Con `true`
+         Android las saca a `nativeLibraryDir` al instalar: cuesta algo de espacio
+         en el teléfono, cambia por el APK que se descarga, y es el mismo trato que
+         usó el 1.1.0. -->
     <application
         android:label="CORT"
         android:icon="@mipmap/ic_launcher"
@@ -255,6 +263,7 @@
         android:supportsRtl="true"
         android:fullBackupContent="@xml/respaldo"
         android:dataExtractionRules="@xml/extraccion"
+        android:extractNativeLibs="true"
         android:requestLegacyExternalStorage="true">
 
         <!-- `singleTop`: el asistente y el reconocedor reutilizan la cara que ya

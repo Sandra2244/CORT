@@ -186,6 +186,14 @@ public class MainActivity extends Activity {
             // Sin receptor, el doble toque igual funciona con la sesión activa.
         }
 
+        // El oído propio se prepara aquí, y no dentro de `new CortNative`: desempacar
+        // los 60,3 MB del modelo de español y cargar el `Model` de Vosk cuesta
+        // segundos, y hacerlos en el `onCreate` es lo que saca el diálogo «CORT no
+        // responde» antes de que la dueña haya visto nada. `preparaOido()` lanza su
+        // propio hilo (`cort-oido`) y avisa por el puente en cada fase, así que la
+        // cara pinta primero y el oído llega detrás.
+        web.postDelayed(() -> puente.preparaOido(), 1200);
+
         pidePermiso("mic");
         abreLoQueToque(getIntent());
     }

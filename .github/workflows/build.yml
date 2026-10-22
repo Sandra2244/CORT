@@ -70,12 +70,15 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.2.0"       # UN SOLO APK: el de Java, con todo dentro:
+      APK_VERSION: "2.3.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
-                                 # avisos leídos, modo juego, MV con letra, y desde
-                                 # aquí el mando del aparato (volumen, linterna,
-                                 # alarma, temporizador, abrir apps, voces del TTS,
-                                 # memoria en SQLite, cerebro en la nube, atuendos).
+                                 # avisos leídos, modo juego, MV con letra, el mando
+                                 # del aparato (volumen, linterna, alarma,
+                                 # temporizador, abrir apps, voces del TTS, memoria
+                                 # en SQLite, cerebro en la nube, atuendos) y —nuevo
+                                 # en 2.3.0— el OÍDO PROPIO: Vosk 0.3.47 con su
+                                 # modelo de español, para escuchar sin internet y
+                                 # sin los servicios de voz de Google.
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -100,6 +103,27 @@ jobs:
           path: apps/apk/keystore
           key: cort-apk-keystore-v1
           restore-keys: cort-apk-keystore-v1
+      # -- Las 53 MB del motor, una sola vez ---------------------------------
+      # `apps/apk/motor.sh` baja el AAR de Vosk (12.297.565 B), el de JNA
+      # (517.278 B) y el modelo de español (39.817.833 B). Son archivos FIJOS, con
+      # peso y huella comprobados en el propio script, así que se pueden cachear
+      # por versión sin riesgo de quedarse con un motor viejo: si `motor.sh` cambia
+      # de número, la clave cambia y se vuelve a bajar. Sin esto, cada run gastaría
+      # ~2 minutos de red y dependería de que alphacephei.com esté despierto.
+      - name: Cachear el motor offline (Vosk + JNA + modelo)
+        uses: actions/cache@v4
+        with:
+          path: apps/apk/motor-cache
+          key: cort-motor-vosk-0.3.47-small-es-0.42-v1
+          restore-keys: cort-motor-vosk-
+      # `kotlinc` son 87 MB de compilador que no cambian; se cachea aparte del
+      # motor porque lo necesita tanto la prueba del oído como el build del APK.
+      - name: Cachear el compilador Kotlin
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/cort-kotlin
+          key: cort-kotlin-1.9.24-v1
+          restore-keys: cort-kotlin-
       - name: Probar el cerebro en el JDK (lógica, sin teléfono)
         id: mente
         # `scripts/prueba-mente.sh` compila `Cerebro`, `Razon`, `Nube` y `Mente`
@@ -121,7 +145,36 @@ jobs:
             echo "::error::prueba-mente.sh salió con $st — ${msg:-sin detalle}"
             exit $st
           fi
-      - name: Compilar el APK (aapt2 + javac + d8, sin Gradle)
+      - name: Probar el oído propio con Vosk de verdad (sin teléfono)
+        id: oido
+        # `scripts/prueba-oido.sh` hace lo que `javac` no puede hacer NUNCA: carga
+        # el modelo de español de verdad (`vosk.jar` de escritorio lleva el mismo
+        # `libvosk.so` de linux que el AAR de Android), le mete muestras de audio a
+        # mano por el gemelo de papel de `AudioRecord` y comprueba seis cosas del
+        # `Oido.kt` que sólo se romperían en el teléfono: que el ZIP se desempaca y
+        # `Model()` lo acepta, que el silencio avisa `no-speech`, que la señal manda
+        # `stt-speech` y `stt-level` entre 0 y 1, que un `read()` negativo —el
+        # micrófono que le quita un juego a mitad— NO tumba el proceso, que
+        # `cancela()` cierra con UN solo `stt-end`, y que sin sitio libre no lo
+        # intenta ni destruye datos. Va antes del APK porque un `Oido` roto llega
+        # igual al teléfono y se queda mudo, que es justo la queja que motivó la
+        # ronda.
+        shell: bash
+        env:
+          MOTOR_CACHE_DIR: apps/apk/motor-cache
+        run: |
+          set +e
+          chmod +x apps/apk/motor.sh scripts/prueba-oido.sh
+          bash scripts/prueba-oido.sh > /tmp/oido.log 2>&1
+          st=$?
+          grep -vE '^LOG \(VoskAPI' /tmp/oido.log | tail -30
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E 'FALLA|FALLO|error:|Exception|OutOfMemory' /tmp/oido.log \
+                  | grep -vE '^LOG \(VoskAPI' | head -20 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-oido.sh salió con $st — ${msg:-sin detalle}"
+            exit $st
+          fi
+      - name: Compilar el APK (aapt2 + kotlinc + javac + d8, sin Gradle)
         id: java
         # **El único APK que existe.** Desde `v0.2.11-demo` ya no se rempaqueta el
         # cuerpo Kotlin original: todo —asistente predeterminado, doble toque del
@@ -203,16 +256,18 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.2.0**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.2.0.apk`
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.3.0**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.3.0.apk`
             es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
-            dentro todo lo que estaba repartido entre los dos. **Se instala encima
-            del 2.0.0 y del 2.1.0 sin desinstalar y sin perder nada** (misma llave,
-            `versionCode` 20200 > 20100): mira la huella del `-firma.txt` de las dos
-            Releases y compárala antes de instalar. **Si vienes de un 1.x**, el
-            primer intento dará error —es la llave distinta, medida en
-            `docs/INSTALAR-APK.md`—: desinstala una vez, instala este, y de aquí en
-            adelante todas las actualizaciones entran encima.
+            dentro todo lo que estaba repartido entre los dos, más el **oído propio
+            sin nube** (párrafo «Escucha sin internet» abajo). **Se instala encima
+            del 2.0.0, del 2.1.0 y del 2.2.0 sin desinstalar y sin perder nada**
+            (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20300 > 20200): mira la
+            huella del `-firma.txt` de las dos Releases y compárala antes de
+            instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
+            llave distinta, medida en `docs/INSTALAR-APK.md`—: desinstala una vez,
+            instala este, y de aquí en adelante todas las actualizaciones entran
+            encima.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el
@@ -444,6 +499,24 @@ jobs:
             aparecer en las dos Releases; si en la tuya no está, desinstala una vez y ya
             no volverá a tocar. La llave nunca se sube al repo: el repo es público y
             está en `.gitignore`.
+
+            **Escucha sin internet: el oído propio.** `Oido.kt` (Kotlin, el método
+            del original) mete dentro del APK el reconocedor de español de **Vosk
+            0.3.47** con su modelo `vosk-model-small-es-0.42`: al abrir CORT se
+            desempaca a `filesDir/motor/` (60.286.598 B en 14 archivos, medidos) y
+            desde ahí entiende «CORT», «hola CORT» y las órdenes **sin red y sin los
+            servicios de voz de Google** —el caso real de un teléfono de gama baja
+            donde esos servicios no vienen, y el de datos apagados o sin cobertura.
+            Funciona así: el puente intenta primero el oído propio y, si todavía está
+            cargando o el modelo no cabe, cae solo al reconocedor de siempre, así que
+            la cara nunca se queda muda por este cambio. `prueba-oido.sh` lo prueba
+            EN PIPELINE con el motor de verdad (desempaque, silencio, señal, micrófono
+            quitado a mitad, cancelación y falta de sitio: seis comprobaciones), antes
+            de compilar. Se puede apagar en Ajustes, y el estado («extrayendo»,
+            «cargando», «listo», «sin-sitio», «roto» y por qué) se lee en la pantalla
+            Equipo. Cuesta espacio, y eso está dicho en voz alta: los `.so` de
+            arm64-v8a y armeabi-v7a (8.862.928 B + 168.176 B + 8.279.808 B + 122.296 B)
+            y el ZIP del modelo viajan dentro; a cambio CORT oye sin nube.
 
             **El tamaño, sin adornos y medido.** Se bajaron los dos APK y se contaron
             sus entradas. El `1.1.0` original: 1.815.389 B de archivo sobre

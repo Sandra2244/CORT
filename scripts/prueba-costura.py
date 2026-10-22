@@ -1174,6 +1174,77 @@ elif faltan_s:
 else:
     dice_ok("entorno", f"las {len(lee_sens)} claves de una fila de sensores las emite `Sentidos`")
 
+# ── [11] el oído propio: motor.sh ↔ Oido.kt ↔ manifiesto ↔ pipeline ─────────
+# La ronda 2.3 mete un motor de reconocimiento dentro del APK. Son cuatro sitios
+# que tienen que decir el mismo número y tres trampas que ya están medidas; si uno
+# se separa, el fallo no sale en `javac`: sale en el teléfono, en forma de modelo
+# que no carga o de `.so` que no se instalan.
+MOTOR_SH = (APK / "motor.sh").read_text(encoding="utf-8") if (APK / "motor.sh").exists() else ""
+OIDO_KT = next((p.read_text(encoding="utf-8") for p in (APK / "src" / "com" / "cort" / "ia").glob("Oido.kt")), "")
+COMPILAR_SH = (APK / "compilar.sh").read_text(encoding="utf-8")
+WORKFLOW = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+MANIFIESTO = (APK / "AndroidManifest.xml").read_text(encoding="utf-8")
+
+if not MOTOR_SH or not OIDO_KT:
+    falla("oído", "falta apps/apk/motor.sh o `Oido.kt`: el oído propio no está en el repo")
+else:
+    m_motor = re.search(r'^MODELO="([a-z0-9.\-]+)"', MOTOR_SH, re.M)
+    m_oido = re.search(r'const val MODELO = "([a-z0-9.\-]+)"', OIDO_KT)
+    p_modelo = re.search(r'^MODELO_PESO=(\d+)', MOTOR_SH, re.M)
+    p_oido = re.search(r'const val PESO_ZIP = (\d+)L', OIDO_KT)
+    if not (m_motor and m_oido):
+        falla("oído", "no se encuentra el nombre del modelo en `motor.sh` o en `Oido.kt`")
+    elif m_motor.group(1) != m_oido.group(1):
+        falla("oído", f"`motor.sh` baja `{m_motor.group(1)}` y `Oido.kt` busca `{m_oido.group(1)}`: "
+                      "el desempaque buscaría un ZIP que no existe")
+    else:
+        dice_ok("oído", f"el modelo se nombra igual en los dos sitios: `{m_motor.group(1)}`")
+    # El peso del ZIP se comprueba en `motor.sh` (`MODELO_PESO`) y en `Oido.kt`
+    # (`PESO_ZIP`, la marca que escribe el desempaque). Si se separan, la marca
+    # nunca cuadra y CORT copia 60 MB en cada arranque.
+    if p_oido and p_modelo and p_oido.group(1) != p_modelo.group(1):
+        falla("oído", f"`Oido.kt` dice PESO_ZIP={p_oido.group(1)} y `motor.sh` baja {p_modelo.group(1)}: "
+                      "la marca del desempaque no cuadraría y se re-extraería siempre")
+    elif p_oido and p_modelo:
+        dice_ok("oído", f"el peso del ZIP es el mismo en los dos: {p_oido.group(1)} B")
+
+    # Las dos trampas del AAR de Vosk, medidas leyendo el fuente de Alpha Cephei.
+    # Se miran SIN los comentarios: `Oido.kt` explica en su cabecera por qué NO los
+    # usa, y esa explicación contendría los dos nombres.
+    OIDO_CODIGO = re.sub(r"/\*.*?\*/", " ", OIDO_KT, flags=re.S)
+    OIDO_CODIGO = re.sub(r"//[^\n]*", " ", OIDO_CODIGO)
+    for trampa, por_que in [
+        ("SpeechService", "su hilo lanza `RuntimeException(«error reading audio buffer»)`: "
+                          "el micrófono que quita un juego tumbaría la app"),
+        ("StorageService", "necesita `res/raw` con `AssetFileDescriptor`, y `aapt2` comprime "
+                           "los assets: ese descriptor no existe"),
+    ]:
+        if trampa in OIDO_CODIGO:
+            falla("oído", f"`Oido.kt` vuelve a usar `{trampa}`: {por_que}")
+    if not any(t in OIDO_CODIGO for t in ("SpeechService", "StorageService")):
+        dice_ok("oído", "el desempaque y la escucha van a mano, sin `SpeechService` ni `StorageService`")
+
+    # El trato de las `.so`: comprimidas sólo son legales con `extractNativeLibs`.
+    if 'android:extractNativeLibs="true"' not in MANIFIESTO:
+        falla("oído", "el manifiesto no pone `android:extractNativeLibs=\"true\"`: con las `.so` "
+                      "comprimidas del `zip -r` la app instala y no arranca")
+    elif "zip -q -r ../apk/sin-alinear.apk lib" not in COMPILAR_SH:
+        falla("oído", "el manifiesto declara las `.so` extraíbles pero `compilar.sh` no las mete en el APK")
+    else:
+        dice_ok("oído", "las `.so` viajan comprimidas y el manifiesto permite extraerlas al instalar")
+
+    # El pipeline: versión, descarga cacheada y prueba antes del build.
+    v_yml = re.search(r'APK_VERSION:\s*"([0-9.]+)"', WORKFLOW)
+    v_sh = re.search(r'APK_VERSION="\$\{APK_VERSION:-([0-9.]+)\}"', COMPILAR_SH)
+    if v_yml and v_sh and v_yml.group(1) != v_sh.group(1):
+        falla("oído", f"`build.yml` compila la {v_yml.group(1)} y `compilar.sh` espera la {v_sh.group(1)}")
+    elif v_yml and v_sh:
+        dice_ok("oído", f"la versión del APK es la misma en el pipeline y en el script: {v_yml.group(1)}")
+    if "prueba-oido.sh" not in WORKFLOW:
+        falla("oído", "`build.yml` no corre `scripts/prueba-oido.sh`: el oído llegaría al teléfono sin probar")
+    else:
+        dice_ok("oído", "la prueba del oído con Vosk de verdad va en el pipeline, antes del APK")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

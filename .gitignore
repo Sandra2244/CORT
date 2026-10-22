@@ -10,3 +10,11 @@ desktop/out/
 
 # la llave de firma del APK: la genera el pipeline en su caché y NUNCA va al repo (es público)
 apps/apk/keystore/
+
+# El oído propio: 40 MB de modelo y 19 MB de `.so` que BAJA el pipeline
+# (`apps/apk/motor.sh`) y que no van al repo — es público y pesaría más que todo
+# lo demás. `build/` es el staging del APK; `motor-cache` la caché de Actions.
+apps/apk/build/
+apps/apk/motor-cache/
+apps/apk/assets/motor/
+apps/apk/prueba/papeles/android/media/AudioRecord.java.tmp

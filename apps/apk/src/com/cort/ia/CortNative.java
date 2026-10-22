@@ -61,6 +61,24 @@ public class CortNative {
     private SpeechRecognizer stt;
     private volatile boolean sttVivo = false;
 
+    /* ────────────── el oído propio (Kotlin, sin nube) ──────────────
+     *
+     * `Oido` es el reconocimiento de español que vive dentro del APK: Vosk con su
+     * modelo de 39.817.833 B comprimidos en `assets/motor/`, que la primera vez se
+     * desempaca a `filesDir/motor/` (60.286.598 B) y se carga en un hilo aparte.
+     * Sale aquí y no en Google por tres cosas que ella pidió: que CORT funcione
+     * sin internet, que no dependa de los servicios de voz de Google (en muchos
+     * teléfonos de gama baja no vienen instalados, y ahí el micrófono se quedaba
+     * mudo), y que conteste rápido cuando el auricular pide la palabra.
+     *
+     * `porOido` dice CUÁL de los dos oídos está abierto ahora mismo, porque el
+     * `cancel()` y el `stop()` tienen que ir al mismo sitio que abrió la escucha:
+     * mandarlos al otro deja un micrófono abierto detrás, y un micro abierto que
+     * nadie cierra es lo que ella nota como «el teléfono se traba».
+     */
+    private volatile Oido oido;
+    private volatile boolean porOido = false;
+
     /** El oído que abrió el **doble toque del auricular**: su insignia se apaga con él. */
     private volatile boolean porAuricular = false;
 
@@ -164,6 +182,48 @@ public class CortNative {
         return paleta;
     }
 
+    /**
+     * El oído propio, perezoso como las demás piezas: montar `Oido` no carga nada
+     * (eso lo hace `preparaOido()`, en su hilo), así que aquí sólo se construye el
+     * objeto y se engancha su salida al puente.
+     *
+     * El enganche no es un `cuadro(json)` pelado: cuando el oído manda su
+     * `stt-end` hay que apagar **la insignia del auricular**, y ése es el detalle
+     * que el reconocedor de Google hace por `oidoCerrado()`. Se hace a mano porque
+     * `Oido` ya emite su `stt-end` —llamar aquí a `oidoCerrado()` mandaría dos y
+     * `voice.js` cerraría el oído dos veces.
+     *
+     * Devuelve `null` si la dueña apagó el oído propio en Ajustes: la cara sigue
+     * funcionando con el reconocedor de siempre, que es la otra mitad del trato.
+     */
+    private synchronized Oido oido() {
+        if (!act.prefs().getBoolean("oido", true)) return null;
+        if (oido == null) {
+            oido = new Oido(act, json -> {
+                cuadro(json);
+                if (json.contains("\"stt-end\"")) {
+                    sttVivo = false;
+                    apagaInsignia();
+                }
+            });
+        }
+        return oido;
+    }
+
+    /** Apaga sólo la insignia del auricular; el `stt-end` ya lo mandó quien cierra. */
+    private void apagaInsignia() {
+        if (porAuricular) {
+            porAuricular = false;
+            cuadro("{\"type\":\"auricular\",\"escuchando\":false}");
+        }
+    }
+
+    /** Arranca el desempaque y la carga del modelo. Se llama desde `MainActivity`. */
+    void preparaOido() {
+        Oido propio = oido();
+        if (propio != null) propio.prepara();
+    }
+
     public CortNative(MainActivity actividad) {
         this.act = actividad;
         // El modo juego sobrevive a que se cierre la app: si la última partida
@@ -213,10 +273,7 @@ public class CortNative {
     /** El oído se cierra: el `stt-end` de siempre y, si era del auricular, su insignia. */
     private void oidoCerrado() {
         cuadro("{\"type\":\"stt-end\"}");
-        if (porAuricular) {
-            porAuricular = false;
-            cuadro("{\"type\":\"auricular\",\"escuchando\":false}");
-        }
+        apagaInsignia();
     }
 
     private void arrancarEscucha(String lang, String modo) {
@@ -237,6 +294,22 @@ public class CortNative {
             pedir("mic");
             return;
         }
+        // Primero el oído propio. `escucha()` devuelve `false` en los tres casos en
+        // que todavía no puede responder —está desempacando el modelo, el micro está
+        // ocupado, o el motor se cayó— y entonces se cae al reconocedor de Google,
+        // que es lo que hacía CORT antes de existir esta clase. La cara no ve la
+        // diferencia: los dos caminos emiten `stt-start`, `stt-speech`, `stt-level`,
+        // `stt-partial`, `stt-final`, `stt-error` y `stt-end` con los mismos nombres.
+        // Aquí **no** se manda el `stt-start`: lo manda `Oido` con su `modo`, para
+        // que no salga duplicado y voice.js cuente aperturas de más.
+        Oido propio = oido();
+        if (propio != null
+                && propio.escucha(modo, "wake".equals(modo) ? Oido.MAX_WAKE : Oido.MAX_CMD)) {
+            porOido = true;
+            sttVivo = true;
+            return;
+        }
+        porOido = false;
         if (stt == null) {
             stt = SpeechRecognizer.createSpeechRecognizer(act);
             stt.setRecognitionListener(escucha);
@@ -261,13 +334,20 @@ public class CortNative {
 
     @JavascriptInterface
     public void stopListening() {
-        act.runOnUiThread(() -> { if (stt != null) stt.stopListening(); });
+        act.runOnUiThread(() -> {
+            // Se cierra EL oído que se abrió, no «el de siempre»: si el cierre va al
+            // reconocedor de Google mientras habla Vosk, el micro del oído propio se
+            // queda agarrado y la siguiente escucha no puede empezar.
+            if (porOido && oido != null) { oido.para(); return; }
+            if (stt != null) stt.stopListening();
+        });
     }
 
     @JavascriptInterface
     public void cancelListening() {
         act.runOnUiThread(() -> {
             sttVivo = false;
+            if (porOido && oido != null) { porOido = false; oido.cancela(); return; }
             if (stt != null) stt.cancel();
         });
     }
@@ -478,7 +558,48 @@ public class CortNative {
     @JavascriptInterface
     public String available() {
         return "{\"stt\":" + SpeechRecognizer.isRecognitionAvailable(act)
-               + ",\"tts\":" + ttsListo + "}";
+               + ",\"tts\":" + ttsListo
+               + ",\"oido\":" + (oido != null && oido.listo()) + "}";
+    }
+
+    /**
+     * El estado del oído propio en JSON: qué fase va (`sin-intentar`, `extrayendo`,
+     * `cargando`, `listo`, `sin-sitio`, `roto`…), cuánto pesa el modelo, cuántos MB
+     * libres hay y por qué se cayó si se cayó. Es la respuesta a «¿por qué CORT no me
+     * entiende sin internet?» sin tener que abrir el teléfono por USB.
+     */
+    @JavascriptInterface
+    public String oidoEstado() {
+        Oido propio = oido;
+        if (propio == null) {
+            return act.prefs().getBoolean("oido", true)
+                ? "{\"type\":\"motor\",\"oido\":\"sin-arrancar\",\"listo\":false}"
+                : "{\"type\":\"motor\",\"oido\":\"apagado\",\"listo\":false}";
+        }
+        return propio.estadoJson();
+    }
+
+    /**
+     * El interruptor de Ajustes: «que CORT escuche sin internet». Apagado, el oído
+     * propio se suelta (devuelve sus ~50 MB) y toda la escucha vuelve al reconocedor
+     * de Google, que es como funcionaba antes. Encendido, se prepara otra vez.
+     */
+    @JavascriptInterface
+    public String oidoPropio(final boolean on) {
+        act.prefs().edit().putBoolean("oido", on).apply();
+        final Oido propio = oido;
+        oido = null;
+        if (propio != null) {
+            Thread soltar = new Thread(() -> {
+                propio.frena(true);
+                propio.suelta();
+            }, "cort-oido-suelta");
+            soltar.setDaemon(true);
+            soltar.start();
+        }
+        porOido = false;
+        if (on) preparaOido();
+        return "{\"ok\":true,\"oido\":" + on + "}";
     }
 
     /* ───────────────────── permisos y ajustes ──────────────────── */
@@ -1402,6 +1523,12 @@ public class CortNative {
     void pausa() {
         act.runOnUiThread(() -> {
             cuadro("{\"type\":\"pause\"}");
+            // `frena` cierra el oído propio si estaba abierto (y su `cancela()` manda
+            // el `stt-end` y la insignia por el enganche de `oido()`); el `cancel` de
+            // siempre sigue para el reconocedor de Google.
+            Oido propio = oido;
+            if (propio != null) propio.frena(true);
+            if (porOido) porOido = false;
             if (sttVivo && stt != null) stt.cancel();
             sttVivo = false;
             if (tts != null) tts.stop();
@@ -1427,15 +1554,30 @@ public class CortNative {
         // enlace de `TextToSpeech` (el del puente y el de ella son bocas distintas, y
         // dejarla abierta es dejar un motor de voz respirando en el teléfono), y
         // `Recuerdos` es una base SQLite con su manija de disco.
+        //
+        // `Oido` se suelta **aquí y no en `pausa()`**: el `Model` de Vosk es código
+        // nativo y trae unos 50 MB detrás (medido por Alpha Cephei), que en un teléfono
+        // de gama baja es la diferencia entre que CORT sobreviva en segundo plano o que
+        // Android lo cierre. Al cerrar la app se devuelven; al volver, `preparaOido()`
+        // los vuelve a pedir, y el modelo ya está desempacado en `filesDir`, así que no
+        // se copia nada: sólo se carga.
         final VozNueva enlace = boca;
         final Recuerdos base = recuerdos;
+        final Oido elOido = oido;
         boca = null;
         recuerdos = null;
+        oido = null;
+        porOido = false;
         act.runOnUiThread(() -> {
             if (stt != null) { stt.destroy(); stt = null; }
             if (tts != null) { tts.shutdown(); tts = null; ttsListo = false; }
             if (enlace != null) enlace.suelta();
         });
+        if (elOido != null) {
+            Thread soltar = new Thread(elOido::suelta, "cort-oido-suelta");
+            soltar.setDaemon(true);
+            soltar.start();
+        }
         if (base != null) {
             try { base.close(); } catch (Exception laBaseYaEstabaCerrada) { /* nada */ }
         }
