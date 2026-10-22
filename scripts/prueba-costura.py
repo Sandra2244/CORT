@@ -1955,6 +1955,48 @@ else:
     dice_ok("2.5 · instala-apk.sh", "por defecto el de siempre y `--nucleo` el recortado")
 
 
+# ── [15] F7l · el clima por ciudad y el registro de código, cosidos por las tres capas
+# La prueba vive en `scripts/prueba-clima.py` (sin red); aquí se comprueba el COSTURE,
+# que es lo que un cambio de cualquier capa puede romper: que la puerta del backend
+# acepte la ciudad, que la cara la ofrezca y la guarde, que las tres IAs reciban el
+# `modo`, y que la prueba nueva esté montada en el pipeline.
+clima_py = RAIZ / "scripts" / "prueba-clima.py"
+if not clima_py.exists():
+    falla("2.5 · F7l · prueba", "no existe `scripts/prueba-clima.py`: el clima por ciudad "
+                                "y el registro de código quedarían sin probar")
+elif "prueba-clima.py" not in wf_txt:
+    falla("2.5 · F7l · pipeline", "`build.yml` no corre `prueba-clima.py`: la suite existiría "
+                                  "y nadie la ejecutaría")
+else:
+    dice_ok("2.5 · F7l", "la suite existe y está montada en el trabajo `apk`")
+backend_txt = (RAIZ / "backend" / "app" / "main.py").read_text(encoding="utf-8")
+if "def weather(lugar: str" not in backend_txt or "lugar=lugar.strip()" not in backend_txt:
+    falla("2.5 · F7l · puerta", "`GET /api/weather` no admite `?lugar=`: la cara no podría "
+                                "pedir una ciudad")
+else:
+    dice_ok("2.5 · F7l · puerta", "/api/weather espera `lugar` y lo pasa a `sensors.weather`")
+if "id=\"pf-ciudad\"" not in hud_txt or "'ciudad'" not in hud_txt:
+    falla("2.5 · F7l · cara", "la ventana PERFIL no tiene campo `ciudad`: la preferencia "
+                              "que lee `brain._perfil_clave` no se puede escribir")
+elif "id=\"wx-ciudad\"" not in hud_txt or "/api/weather?lugar=" not in hud_txt:
+    falla("2.5 · F7l · cara", "02 · Entorno no pide ni envía la ciudad: el panel seguiría "
+                              "atado a la IP")
+else:
+    dice_ok("2.5 · F7l · cara", "hay caja de ciudad en Entorno, campo en Perfil y se guarda por /api/profile")
+cerebro_txt = (RAIZ / "backend" / "app" / "brain.py").read_text(encoding="utf-8")
+usos = cerebro_txt.count("system_prompt(modo)")
+if usos < 3:
+    falla("2.5 · F7l · cerebro", f"algún proveedor no recibe la consigna del registro "
+                                 f"(se ven {usos} usos de `system_prompt(modo)`, tienen que ser 3)")
+elif 'modo = "coder" if coder else "asistente"' not in cerebro_txt:
+    falla("2.5 · F7l · cerebro", "`think()` no decide el registro: `es_programacion` existiría sin efecto")
+elif "and not coder" not in cerebro_txt:
+    falla("2.5 · F7l · cerebro", "el mando local no se salta en las frases de código: "
+                                 "«hazme una app del clima en Python» se contestaría con el termómetro")
+else:
+    dice_ok("2.5 · F7l · cerebro", "los tres proveedores reciben `modo` y el código no pasa por el sensor")
+
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

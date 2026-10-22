@@ -14,7 +14,7 @@ Endpoints:
   GET  /api/files?path=                  -> explorador de carpetas (raíces seguras)
   GET  /api/tree?path=                   -> hijos de una carpeta con conteos (árbol lateral)
   GET  /api/memories                     -> muro de recuerdos (notas + conversaciones)
-  GET  /api/weather                      -> clima actual (Open-Meteo, cacheado)
+  GET  /api/weather?lugar=               -> clima actual (Open-Meteo, cacheado)
   GET  /api/support                      -> contacto y soporte de la ventana 09
   GET  /api/models                       -> catálogo Ollama + si cabe en este equipo
   GET  /api/models/progreso              -> avance de las descargas en curso
@@ -260,8 +260,11 @@ def memories_subir(r: RecuerdosReq):
 
 
 @app.get("/api/weather")
-def weather():
-    return sensors.weather()
+def weather(lugar: str = ""):
+    """Clima con Open-Meteo. Sin `lugar` es el de la IP (la ventana de entorno);
+    con nombre —«Sevilla», «Gijón»— se buscan primero las coordenadas en el
+    geocoder gratuito y se contesta con el sitio que se encontró escrito."""
+    return sensors.weather(lugar=lugar.strip() or None)
 
 
 @app.get("/api/music")

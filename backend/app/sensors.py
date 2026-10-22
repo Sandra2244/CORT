@@ -26,7 +26,30 @@ ROOTS = {
     "Videos": HOME / "Videos",
 }
 
-WEATHER_CACHE = {"t": 0.0, "data": None}
+WEATHER_CACHE: dict[str, dict] = {}   # por lo que se preguntó: {clave: {"t":…, "data":…}}
+
+# Códigos WMO de Open-Meteo, en español y de menor a mayor: la tabla es EXACTA por
+# código, y el «variable» sólo cubre un número que Open-Meteo no publicara ese día.
+CIELO_WMO = {
+    0: "despejado", 1: "mayormente despejado", 2: "parcialmente nublado", 3: "nublado",
+    45: "niebla", 48: "niebla con escarcha", 51: "llovizna débil", 53: "llovizna",
+    55: "llovizna intensa", 56: "llovizna helada", 57: "llovizna helada intensa",
+    61: "lluvia débil", 63: "lluvia", 65: "lluvia fuerte", 66: "lluvia helada",
+    67: "lluvia helada fuerte", 71: "nevada débil", 73: "nevada", 75: "nevada intensa",
+    77: "granizo fino", 80: "chubascos débiles", 81: "chubascos", 82: "chubascos fuertes",
+    85: "chubascos de nieve", 86: "chubascos de nieve fuertes",
+    95: "tormenta eléctrica", 96: "tormenta con granizo", 99: "tormenta con granizo fuerte",
+}
+
+
+def cielo_de(codigo) -> str:
+    """Nombre en español de un código WMO. Nunca inventa: desconocido es desconocido."""
+    try:
+        c = int(codigo)
+    except (TypeError, ValueError):
+        return "sin dato de cielo"
+    return CIELO_WMO.get(c, f"cielo sin clasificar (código {c})")
+
 
 
 def _fecha(p: Path) -> str:
@@ -364,33 +387,165 @@ def open_dir(rel: str) -> dict:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
 
 
-def weather(lat: float | None = None, lon: float | None = None) -> dict:
-    """Clima actual. Usa IP geolocation si no se pasan coordenadas. Cachea 20 min."""
-    now = time.time()
-    if WEATHER_CACHE["data"] and now - WEATHER_CACHE["t"] < 1200:
-        return WEATHER_CACHE["data"]
+def geo(lugar: str) -> dict:
+    """Convierte un topónimo en coordenadas con el geocoder gratuito de Open-Meteo.
+
+    Sin clave API y sin cuenta: `GET https://geocoding-api.open-meteo.com/v1/search`.
+    Medido el 2026-10-22 con `name=Madrid`: contestó con `results[0]` =
+    `{latitude: 40.4165, longitude: -3.70256, country: "España", admin1: "Comunidad
+    Autónoma de Madrid", timezone: "Europe/Madrid"}`, así que de ahí salen las
+    coordenadas Y el nombre que se enseña, y no hace falta inventarse ninguno.
+
+    Cachea el nombre 6 h (un topónimo no se mueve) y NUNCA adivina: si el geocoder no
+    lista resultados, devuelve `sin-lugar` con lo que se buscó, para que la cara lo
+    repita entre comillas en vez de dar el tiempo de otra ciudad.
+    """
+    busca = (lugar or "").strip()
+    if not busca:
+        return {"ok": False, "error": "sin-lugar", "busca": lugar}
+    clave = "geo:" + busca.lower()
+    ahora = time.time()
+    guardado = WEATHER_CACHE.get(clave)
+    if guardado and ahora - guardado["t"] < 6 * 3600:
+        return guardado["data"]
     try:
-        if lat is None:
-            g = requests.get("http://ip-api.com/json/?fields=lat,lon", timeout=6).json()
-            lat, lon = g.get("lat"), g.get("lon")
-            if not lat:
-                raise ValueError("sin geo")
-        w = requests.get(
+        r = requests.get("https://geocoding-api.open-meteo.com/v1/search",
+                         params={"name": busca, "count": 5, "language": "es",
+                                 "format": "json"}, timeout=8)
+        r.raise_for_status()
+        resultados = r.json().get("results") or []
+        if not resultados:
+            # `sin-lugar` NO es un fallo de red: es que ese nombre no está en el mapa.
+            # Se sale con eso escrito para que nadie lo confunda con «no hay internet».
+            return {"ok": False, "error": "sin-lugar", "busca": busca}
+        # Si la dueña dice «Madrid» y el primer golpe es «Madrid de Cilicia» (Turquía),
+        # el orden del geocoder ya trae primero el de más población; se toma `results[0]`
+        # y se enseña país y región para que el propio renglón permita rectificar.
+        g = resultados[0]
+        nombre = ", ".join(x for x in (g.get("name"), g.get("country")) if x)
+        data = {"ok": True, "lat": g["latitude"], "lon": g["longitude"],
+                "lugar": nombre, "region": g.get("admin1") or "",
+                "nombre": g.get("name") or busca}
+        WEATHER_CACHE[clave] = {"t": ahora, "data": data}
+        return data
+    except Exception as e:
+        return {"ok": False, "error": f"sin datos de lugar ({type(e).__name__})"}
+
+
+def weather(lugar: str | None = None, lat: float | None = None,
+            lon: float | None = None) -> dict:
+    """Clima de un sitio: por nombre si lo trae `lugar`, y si no, por IP.
+
+    Open-Meteo otra vez (`/v1/forecast`, gratis y sin clave), con `current` y `daily`
+    en la misma llamada para no pedir dos veces lo mismo. Cachea 20 minutos POR
+    CONSULTA: antes había un único hueco de caché, así que preguntar por Madrid y
+    luego por Sevilla se pisaban la respuesta, y con ella la ventana de entorno
+    refresco cada 10 min se comía el clima de la ciudad anterior.
+
+    Honestidad medida: si falta un campo, se dice `sin-datos` con el motivo y se
+    devuelve `ok: false`; en ningún momento se rellena un número inventado, y el
+    código de cielo que no está en la tabla WMO se llama a sí mismo
+    «cielo sin clasificar (código N)» en vez de «despejado» — que era lo que salía
+    antes por culpa de un `next(… if cod >= k)` que ganaba siempre el 0.
+    """
+    ahora = time.time()
+    por_ip = False
+    if lat is None and lugar:
+        g = geo(lugar)
+        if not g.get("ok"):
+            return g
+        lat, lon = g["lat"], g["lon"]
+        nombre = g["lugar"]
+    elif lat is not None:
+        nombre = lugar or "ese sitio"
+    else:
+        # Sin ciudad nombrada: la IP. `ip-api.com` es el único que había, y ahora pide
+        # también `city`, porque «Exterior: 15 °C» sin decir de dónde es media respuesta.
+        por_ip = True
+        clave = "auto"
+        guardado = WEATHER_CACHE.get(clave)
+        if guardado and ahora - guardado["t"] < 1200:
+            return guardado["data"]
+        try:
+            g = requests.get("http://ip-api.com/json/", params={"fields": "lat,lon,city"},
+                             timeout=6).json()
+        except Exception as e:
+            return {"ok": False, "error": f"sin datos de clima ({type(e).__name__})"}
+        lat, lon = g.get("lat"), g.get("lon")
+        if not lat:
+            return {"ok": False, "error": "sin-datos: ni la IP dio coordenadas"}
+        nombre = g.get("city") or "tu ubicación"
+
+    clave = f"w:{round(lat, 3)},{round(lon, 3)}"
+    guardado = WEATHER_CACHE.get(clave)
+    if guardado and ahora - guardado["t"] < 1200:
+        return guardado["data"]
+    try:
+        r = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={"latitude": round(lat, 3), "longitude": round(lon, 3),
-                    "current": "temperature_2m,weather_code,wind_speed_10m",
-                    "timezone": "auto"},
-            timeout=8).json()
-        cur = w["current"]
-        cod = cur["weather_code"]
-        cielos = {0: "despejado", 1: "mayormente despejado", 2: "parcialmente nublado",
-                  3: "nublado", 45: "niebla", 48: "niebla helada", 51: "llovizna",
-                  61: "lluvia", 63: "lluvia fuerte", 71: "nieve", 80: "chubascos",
-                  95: "tormenta eléctrica"}
-        desc = next((v for k, v in cielos.items() if cod >= k), "variable")
-        data = {"ok": True, "temp": cur["temperature_2m"], "viento": cur["wind_speed_10m"],
-                "cielo": desc, "lat": lat, "lon": lon}
-        WEATHER_CACHE.update(t=now, data=data)
+                    "current": "temperature_2m,apparent_temperature,relative_humidity_2m,"
+                               "weather_code,wind_speed_10m",
+                    "daily": "weather_code,temperature_2m_max,temperature_2m_min,"
+                             "precipitation_probability_max",
+                    "timezone": "auto", "forecast_days": 2},
+            timeout=8)
+        r.raise_for_status()
+        w = r.json()
+        cur = w.get("current") or {}
+        if "temperature_2m" not in cur:
+            return {"ok": False, "error": "sin-datos: Open-Meteo contestó sin `current`"}
+        dia = (w.get("daily") or {})
+        def hoy(campo):
+            v = (dia.get(campo) or [None])[0]
+            return v
+        def manana(campo):
+            lista = dia.get(campo) or []
+            return lista[1] if len(lista) > 1 else None
+        data = {"ok": True, "lugar": nombre, "lat": lat, "lon": lon,
+                "hora": cur.get("time"), "zona": w.get("timezone"),
+                "temp": cur["temperature_2m"], "sensacion": cur.get("apparent_temperature"),
+                "humedad": cur.get("relative_humidity_2m"),
+                "viento": cur.get("wind_speed_10m"),
+                "codigo": cur.get("weather_code"), "cielo": cielo_de(cur.get("weather_code")),
+                "max": hoy("temperature_2m_max"), "min": hoy("temperature_2m_min"),
+                "lluvia": hoy("precipitation_probability_max"),
+                "cielo_manana": cielo_de(manana("weather_code")),
+                "lluvia_manana": manana("precipitation_probability_max"),
+                "max_manana": manana("temperature_2m_max"),
+                "min_manana": manana("temperature_2m_min")}
+        WEATHER_CACHE[clave] = {"t": ahora, "data": data}
+        if por_ip:
+            # La ranura «auto» es LA DE LA IP: sólo se escribe desde ese camino. Si se
+            # escribiera también al preguntar por una ciudad, la ventana de entorno
+            # (que llama sin argumentos cada 10 min) leería el clima de Madrid creyendo
+            # que es el de la ubicación del PC.
+            WEATHER_CACHE["auto"] = {"t": ahora, "data": data}
         return data
     except Exception as e:
         return {"ok": False, "error": f"sin datos de clima ({type(e).__name__})"}
+
+
+def frase(w: dict) -> str:
+    """El clima dicho en una frase, con lo que hay y sin inventar lo que no."""
+    if not w.get("ok"):
+        return ""
+    piezas = [f"{w['temp']:.0f} °C, {w['cielo']}"]
+    if w.get("sensacion") is not None and abs(w["sensacion"] - w["temp"]) >= 1.5:
+        piezas.append(f"sensación {w['sensacion']:.0f} °C")
+    if w.get("viento") is not None:
+        piezas.append(f"viento {w['viento']:.0f} km/h")
+    if w.get("humedad") is not None:
+        piezas.append(f"humedad {w['humedad']:.0f} %")
+    donde = w.get("lugar") or "aquí"
+    dicho = f"En {donde}: " + ", ".join(piezas) + "."
+    if w.get("max") is not None and w.get("min") is not None:
+        dicho += f" Hoy entre {w['min']:.0f} y {w['max']:.0f} °C"
+        if w.get("lluvia") is not None:
+            dicho += f", con un {w['lluvia']:.0f} % de probabilidad de lluvia"
+        dicho += "."
+    if w.get("lluvia_manana") is not None and w["lluvia_manana"] >= 40:
+        dicho += (f" Mañana pinta serio: {w['lluvia_manana']:.0f} % de lluvia "
+                  f"y {w['cielo_manana']}.")
+    return dicho
+

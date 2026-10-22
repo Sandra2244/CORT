@@ -160,6 +160,30 @@ jobs:
             echo "::error::prueba-costura.py salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el clima y el registro de código (sin red)
+        id: clima
+        # `scripts/prueba-clima.py` ejerce la parte del cerebro que NO necesita
+        # teléfono ni nube: qué ciudad se entendió de la frase («el tiempo en Gijón
+        # ahora mismo» tiene que dar Gijón, y «el clima de la semana» no puede dar
+        # Semana), la tabla WMO —que antes decía «despejado» a todo—, que una ciudad
+        # inexistente se devuelva con su nombre entre comillas en vez del tiempo de
+        # otra, y que «hazme una app del clima en Python» se conteste con código y no
+        # con el termómetro. Con `sensors.weather` sustituido por un gemelo y la base
+        # de memoria en `mktemp`: no gasta cuota de Groq ni abre su .env.
+        shell: bash
+        run: |
+          set +e
+          python3 -m pip install --quiet requests > /tmp/pip-clima.log 2>&1
+          python3 scripts/prueba-clima.py > /tmp/clima.log 2>&1
+          st=$?
+          tail -25 /tmp/clima.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '^  FALLA' /tmp/clima.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/clima.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-clima.py salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el cerebro en el JDK (lógica, sin teléfono)
         id: mente
         # `scripts/prueba-mente.sh` compila `Cerebro`, `Razon`, `Nube` y `Mente`

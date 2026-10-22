@@ -122,6 +122,8 @@ function buildWindows() {
   W.env = createWin({ id: 'env', onShow: () => { refreshStatus(); refreshWeather(); }, icon: '◉', title: '02 · Entorno',
     x: 14, y: clamp(112 + vh * .42 + 18, 330, 440), w: Math.min(240, vw - 28),
     html: `<div id="wx">…</div>
+      <input id="wx-ciudad" style="width:100%;margin-top:4px;font-size:10px"
+        placeholder="otra ciudad (Enter): Sevilla" autocomplete="off">
       <div id="envscope" style="font-size:10px;color:#5e8cab"></div>
       <div style="margin-top:8px;font-size:10px;color:#5e8cab">CPU <span id="envcpu"></span></div><div class="bar"><i id="bar-cpu" style="width:0"></i></div>
       <div style="font-size:10px;color:#5e8cab">RAM <span id="ramgb"></span></div><div class="bar"><i id="bar-ram" style="width:0"></i></div>
@@ -165,6 +167,8 @@ function buildWindows() {
         <option value="">Español (es-MX)</option>
         <option value="inglés">English</option>
         <option value="portugués">Português</option></select>
+      <label class="pf">Tu ciudad (para el clima)</label>
+      <input class="pf" id="pf-ciudad" placeholder="Sevilla">
       <div class="pf-sec">▸ Segundo plano</div>
       <div id="bgbox">
         <button id="bgtoggle" class="bg-toggle"><span class="sw"></span><b>Que CORT se quede en segundo plano</b></button>
@@ -553,7 +557,7 @@ async function addNote() {
 }
 
 /* ---------- perfil (+ voz de CORT + cerebro IA) ---------- */
-const PF_KEYS = ['asistente', 'usuario', 'tono', 'idioma', 'voz', 'voz_tono', 'voz_velocidad'];
+const PF_KEYS = ['asistente', 'usuario', 'tono', 'idioma', 'ciudad', 'voz', 'voz_tono', 'voz_velocidad'];
 const CF_KEYS = ['mode', 'groq_key', 'gemini_key', 'ollama_url', 'ollama_model'];
 function fillVoices(selected) {
   const sel = document.getElementById('pf-voz');
@@ -575,6 +579,13 @@ async function loadProfile() {
       if (el && p[k]) el.value = p[k];
     }
     fillVoices(p.voz);
+    /* La ciudad guardada manda al panel de Entorno y al cerebro por voz: si la
+       caja ya tiene algo escrito (la dueña la cambió en esta sesión), no se pisa. */
+    perfilCiudad = p.ciudad || '';
+    const wcj = document.getElementById('wx-ciudad');
+    if (wcj && !wcj.value && perfilCiudad) wcj.value = perfilCiudad;
+    // El arranque ya pintó el tiempo por IP; con ciudad guardada se repinta una vez.
+    if (perfilCiudad) refreshWeather();
     voice.configure({ voice: p.voz || '', pitch: p.voz_tono ? +p.voz_tono : undefined,
       rate: p.voz_velocidad ? +p.voz_velocidad : undefined });
     showRange('pf-voz_tono'); showRange('pf-voz_velocidad');
@@ -1010,14 +1021,27 @@ function pintaSensores(s) {
 }
 
 /* ---------- clima ---------- */
+let perfilCiudad = '';      // lo que dice la ventana PERFIL; '' = clima por IP
 async function refreshWeather() {
   const el = document.getElementById('wx');
+  const caja = document.getElementById('wx-ciudad');
+  const lugar = (caja && caja.value.trim()) || perfilCiudad;
   try {
-    const w = await (await fetch(API + '/api/weather')).json();
-    el.innerHTML = w.ok
-      ? `<span class="big">${w.temp.toFixed(0)}°C</span> · ${w.cielo}<br>
-         <span style="color:#5e8cab">viento ${w.viento.toFixed(0)} km/h</span>`
-      : '<span style="color:#5e8cab">clima no disponible (offline)</span>';
+    const w = await (await fetch(API + '/api/weather?lugar=' + encodeURIComponent(lugar))).json();
+    if (!w.ok) {
+      // Dos fallos distintos y dos avisos distintos: «ese nombre no existe» no es
+      // «no hay red», y decirlo importa cuando lo que se escribió fue la ciudad.
+      el.innerHTML = w.error === 'sin-lugar'
+        ? `<span style="color:#e0b060">no encuentro «${esc(w.busca || '')}»</span><br>` +
+          `<span style="color:#5e8cab">prueba con otro nombre o pon tu ciudad en 07 · Perfil</span>`
+        : '<span style="color:#5e8cab">clima no disponible (offline)</span>';
+      return;
+    }
+    el.innerHTML = `<span class="big">${w.temp.toFixed(0)}°C</span> · ${esc(w.cielo)}<br>
+       <span style="color:#5e8cab">${esc(w.lugar || '')} · viento ${(+w.viento || 0).toFixed(0)} km/h</span>` +
+      (w.max != null && w.min != null
+        ? `<br><span style="color:#5e8cab">hoy ${(+w.min).toFixed(0)}–${(+w.max).toFixed(0)}°` +
+          (w.lluvia != null ? ` · ${(+w.lluvia).toFixed(0)}% lluvia` : '') + '</span>' : '');
   } catch { el.textContent = '…'; }
 }
 
@@ -1885,6 +1909,19 @@ export function wireUI(orbRef) {
   });
 
   document.getElementById('go').onclick = () => send();
+  /* La ciudad del tiempo se puede cambiar sin abrir el Perfil, y se escribe en la
+     preferencia para que «el clima» por voz la respete en el próximo arranque.
+     Un Enter vacío vuelve a la IP, que es lo de siempre. */
+  const wxc = document.getElementById('wx-ciudad');
+  const poneCiudad = () => {
+    perfilCiudad = wxc.value.trim();
+    // Se guarda en el Perfil (clave libre: la lee `brain._perfil_clave('ciudad')`).
+    // Si el núcleo no está, el fetch falla en silencio y la caja sigue sirviendo.
+    try { post('/api/profile', { clave: 'ciudad', valor: perfilCiudad }).catch(() => {}); } catch { /* sin backend */ }
+    refreshWeather();
+  };
+  wxc.addEventListener('keydown', e => { if (e.key === 'Enter') poneCiudad(); });
+  wxc.addEventListener('change', poneCiudad);
   // teclado abierto en el celular → la hoja ocupa la pantalla
   document.addEventListener('focusin', e => { if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName) && e.target.type !== 'range') document.body.classList.add('typing'); });
   document.addEventListener('focusout', () => setTimeout(() => {
