@@ -41,18 +41,81 @@ O sea: no hay ningún defecto que justifique un bloqueo. Lo que pasa es otra cos
 
 ## La regla de Google, dicha sin adornos
 
-Play Protect avisa de **cualquier** app que no esté en Google Play y que esté
-firmada con un certificado auto-firmado como el de CORT. No hay bandera dentro del
-APK que apague ese aviso: se quita publicando la app en Play (cuesta una cuenta de
-desarrollador y una revisión), y no es el caso. Lo que sí se puede hacer desde el
-repo —y se hizo en el `2.3.1`— es no dar ningún motivo extra: firmar por los tres
-esquemas a la fuerza, que el `sha256` y la ventana del certificado viajen publicados
-en el `-firma.txt` de cada Release, y que el pipeline **se ponga rojo** si algún APK
-sale sin firmar, truncado o marcado como depurable.
+Play Protect **analiza** cualquier app que no esté en Google Play y que esté firmada
+con un certificado auto-firmado como el de CORT, y decide por archivo: a veces deja
+instalar con un aviso que se puede descartar y a veces **bloquea** sin dar opción. No
+hay bandera dentro del APK que apague ese veredicto: lo único que lo quita de encima
+es publicar la app en Play (cuenta de desarrollador y revisión), y no es el caso. Lo
+que sí se puede hacer desde el repo —y se hizo en el `2.3.1`— es no dar ningún motivo
+extra: firmar por los tres esquemas a la fuerza, que el `sha256` y la ventana del
+certificado viajen publicados en el `-firma.txt` de cada Release, y que el pipeline
+**se ponga rojo** si algún APK sale sin firmar, truncado o marcado como depurable.
 
-Ese aviso es **dismissible** casi siempre. En la pantalla hay que tocar el texto
-pequeño: casi nadie lo ve porque está debajo del titular, gris, y en Android 14
-además hay que desplegar «Opciones avanzadas» para que aparezca.
+Que el aviso sea **dismissible** o **bloqueante** no lo decide el APK: en la pantalla
+hay que buscar el texto pequeño, que casi nadie ve porque está debajo del titular,
+gris, y en Android 14 además hay que desplegar «Opciones avanzadas» para que
+aparezca. Cuando no aparece ningún botón, el cuadro ya está en la segunda categoría, y
+lo que hay que determinar es **por qué archivo** lo bloqueó Google — eso es lo que
+resuelve la prueba de la sección siguiente.
+
+## La medida del 2026-10-22: el «es por ser auto-firmado» no se sostiene
+
+La dueña trajo un dato que vale más que cualquier teoría: **el
+`CORT-IA-1.1.4.apk` se le instala bien, y el `2.x` le sale «aplicación bloqueada para
+proteger tu dispositivo»**. Los dos son auto-firmados, los dos los compilé yo, y los
+dos certificados tienen la misma pinta (ventana corta, asunto `CN=CORT`). Se bajaron
+los dos y se leyó el `AndroidManifest.xml` de cada uno (el charco de cadenas UTF-16
+del binario, que es lo que ve el instalador). Los **permisos gordos no son la
+diferencia**:
+
+| Permiso | `1.1.4` (se instala) | `2.4.1` (bloqueado) |
+| --- | --- | --- |
+| `MANAGE_EXTERNAL_STORAGE` | sí | sí |
+| `SYSTEM_ALERT_WINDOW` | sí | sí |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | sí | sí |
+| `READ_MEDIA_AUDIO`, `RECORD_AUDIO`, `POST_NOTIFICATIONS`, `CAMERA`, `SET_ALARM`… | sí | sí |
+| **`.so` nativas dentro** | **ninguna** | **cuatro** (Vosk + JNA, 5.868.445 B) |
+| **modelo de español dentro** | **no** | **sí** (39.817.833 B comprimidos, 60.286.598 B al desempacar) |
+| Peso del archivo | 1.756.727 B | 47.390.449 B |
+
+Es decir: lo único que tienen los 2.x y no tiene el 1.1.4 es **el bulto nativo del
+oído sin nube**. Y eso es justo el patrón que más pesa en un clasificador automático:
+código que carga bibliotecas nativas por medio de **JNA** (`libjnidispatch.so`, un
+clásico de los empaquetadores de malware) y un **ZIP de 40 MB metido dentro** del APK.
+No es que CORT sea malware; es que *parece* empaquetado, y el veredicto lo da el
+escáner de Google, no este repo.
+
+**No se puede comprobar desde el portátil.** El bloqueo lo produce el servicio de
+Google en el teléfono (o su análisis en la nube contra el hash del archivo); aquí no
+hay forma local de pedir ese veredicto. Lo que sí se puede hacer es **dejar una sola
+variable por medir**, y para eso la Release `v0.2.28-demo` sube dos APK:
+
+1. **`CORT-IA-2.4.2-ligero.apk`** (unos 2 MB): mismo manifiesto, mismos permisos,
+   misma llave, mismo `versionCode` 20402, misma cara, mismas siete vías de arranque,
+   mismo reproductor, mismos avisos, mismo cerebro, mismas automatizaciones. **Sin
+   las `.so` ni el modelo**: el bloque `Equipo ▸ 7 · Oído` muestra `sin-modelo` y la
+   escucha va con el reconocedor del sistema, igual que en el 2.2.0.
+2. **`CORT-IA-2.4.2.apk`** (47,4 MB): el completo, con el oído dentro.
+
+La prueba son dos minutos y el resultado manda:
+
+* **Se instala el ligero y no el completo** → el culpable es el bulto del oído. La
+  solución de verdad es sacarlo del APK: el modelo se bajaría la primera vez que
+  enciendas el oído (ya hay código de desempaque y de «¿cabe?» en `Oido.kt`, sólo que
+  hoy lee del `assets` en vez de una URL) y el APK vuelve a pesar 2 MB con el oído
+  disponible. Lo anoto como la ronda siguiente.
+* **Se bloquean los dos** → el peso y las `.so` son inocentes y lo que está marcado es
+  el par `com.cort.ia` + la llave `fa:ab:ef:46…` en el servicio de Google. Ahí no hay
+  nada que compilar: se pulsa «instalar de todos modos» cuando aparece, se reporta la
+  app como falsa alarma desde el propio cuadro de Play Protect, o se pasa por la vía
+  de abajo (`adb`).
+* **Se instala el completo** → el aviso de antes era transitorio (hash nuevo, análisis
+  pendiente) y no hay que cambiar nada.
+
+> La comparación con el `1.1.4` **no** es una invitación a usarlo: pesa poco porque le
+> falta media app (sin reproductor, sin avisos, sin hojas, sin oído, sin
+> automatizaciones). Sirve sólo como prueba de que el teléfono de ella instala APK
+> auto-firmados míos sin bloquear.
 
 ## Qué pulsar según la frase exacta que te sale
 

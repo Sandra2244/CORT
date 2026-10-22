@@ -165,8 +165,23 @@ eso hace falta un equipo sobrado):
 | `CORT-IA-2.4.1.apk` | **47.390.449 bytes** (45,2 MB) comprimidos sobre 61.916.132 sin comprimir, 49 entradas, proporción **0,77** — `sha256` `ed5761f3e9964fd8c2e7be05401f672a2cfdefe8e8c9a7c6a46dcd8c0908a6df`, comprobado bajando el archivo y leyéndolo en el portátil (los CRC de las 49 entradas, además) — las cifras están dentro del `-firma.txt` que sube el propio run, desglosadas por bloque | Android 8+: **el único APK** (`versionCode` 20401). El anillo de siempre como icono, once ventanas de vidrio, rol de asistente del sistema **con sus acciones ya declaradas** (`ACTION_ASSIST`, `ACTION_VOICE_COMMAND`), **baldosín en la cortina** (`.Panel`, `TileService`), **tres atajos del icono** (`res/xml/atajos.xml`) y **doble toque de auricular con la cara cerrada** (`.Reproductor` responde `onMediaButtonEvent`), reproductor propio con gustos y playlists, lectura de avisos, llamadas, **MV con letra sincronizada**, **organizador de archivos con plan y confirmación**, **modo juego**, **auto-actualización por voz**, la **hoja Equipo** (mando, voz, atuendos, memoria, cerebro sin PC, agenda, **oído** y **Automatiza**), el **cerebro ancho** de 2.2.0 (`Razon`: **283 frases** en 33 reglas), el **oído propio sin nube** de 2.3.0 (Vosk 0.3.47 con su modelo de español dentro del APK), los **cerebros de casa** de 2.4.0 (`Ollama.java`: busca, lista, **descarga y elige modelos del PC por Wi-Fi**, cero permisos nuevos), la **terminal ampliada** del teléfono (`terminalTelefono`), las **automatizaciones** «cuando X, entonces Y» (`ui/js/automatiza.js`: 5 disparadores × 8 acciones) y el evento nuevo del puente `type:"atajo"` (saltar a una hoja desde Java). Guía: [`docs/ABRIR-CORT.md`](docs/ABRIR-CORT.md), [`docs/CEREBROS-DE-CASA.md`](docs/CEREBROS-DE-CASA.md) y [`docs/AUTOMATIZAR-CORT.md`](docs/AUTOMATIZAR-CORT.md); si el que aparece es un aviso de Play Protect, [`docs/BLOQUEO-PLAY-PROTECT.md`](docs/BLOQUEO-PLAY-PROTECT.md) |
 | `CORT-IA-2.4.1-firma.txt` | 3.493 bytes | con qué llave salió (huella SHA-256 `faabef468f3a…`, **la misma del 2.0.0 en adelante**, así que esto se instala encima), si se instala encima, el peso medido **y su desglose** por bloque (`.dex`, `.so`, modelo, cara, recursos) y la **auditoría leída del APK final**: `sha256`, esquemas v1/v2/v3, ventana de validez del certificado, `resources.arsc` sin comprimir y alineado, `minSdk`/`targetSdk`, que no esté marcado como depurable y el veredicto `INSTALABLE` — prueba pública |
 
-> Los tamaños del escritorio son los que declara la API pública de Releases el
-> 2026-10-22, no una estimación.
+> Los tamaños del escritorio son los que declara la API pública de Releases de esta
+> etiqueta, no una estimación.
+>
+> **En la Release siguiente (`v0.2.28-demo`, la 2.4.2) hay dos APK de Android a
+> propósito, y aún sin medir aquí.** La dueña trajo una medida que tumba la
+> explicación cómoda: el `CORT-IA-1.1.4.apk` también es auto-firmado, también lo
+> compilé yo y **se le instala bien**, con los mismos permisos gordos que el 2.x
+> (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`)
+> leídos en los dos manifiestos. Lo único que tienen los 2.x y no tiene el 1.1.4 son
+> los 45,7 MB de bulto nativo del oído (cuatro `.so` de Vosk/JNA + el modelo). Para
+> no adivinar, la 2.4.2 sube el **completo** y un **ligero** con el mismo manifiesto,
+> la misma llave, el mismo `versionCode` y las mismas funciones, sin una sola `.so` ni
+> modelo: dos minutos en el teléfono deciden si el aviso de Play Protect lo provoca el
+> bulto del oído (y entonces el modelo se baja en vez de viajar dentro) o si está
+> marcado el par `com.cort.ia` + llave (y entonces no hay nada que compilar). La
+> prueba escrita, los números medidos de los dos archivos y qué pulsar según la frase
+> exacta: [`docs/BLOQUEO-PLAY-PROTECT.md`](docs/BLOQUEO-PLAY-PROTECT.md).
 >
 > **Y sobre «el APK no pesa lo que debería y lo comprimiste demasiado»: se bajaron
 > los dos APK y se midieron entrada por entrada.** El `CORT-IA-1.1.0.apk` original

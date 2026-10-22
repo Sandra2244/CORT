@@ -78,6 +78,8 @@ public class CortNative {
      */
     private volatile Oido oido;
     private volatile boolean porOido = false;
+    /** `true` sólo en la variedad ligera: el motor del oído no viaja en este APK. */
+    private volatile boolean sinOidoPropio = false;
 
     /** El oído que abrió el **doble toque del auricular**: su insignia se apaga con él. */
     private volatile boolean porAuricular = false;
@@ -199,13 +201,24 @@ public class CortNative {
     private synchronized Oido oido() {
         if (!act.prefs().getBoolean("oido", true)) return null;
         if (oido == null) {
-            oido = new Oido(act, json -> {
-                cuadro(json);
-                if (json.contains("\"stt-end\"")) {
-                    sttVivo = false;
-                    apagaInsignia();
-                }
-            });
+            try {
+                oido = new Oido(act, json -> {
+                    cuadro(json);
+                    if (json.contains("\"stt-end\"")) {
+                        sttVivo = false;
+                        apagaInsignia();
+                    }
+                });
+            } catch (Throwable motorFuera) {
+                // La **variedad ligera** (`APK_SIN_OIDO=1` en `compilar.sh`): las
+                // clases de Vosk y JNA no viajaron en el dex, así que ni siquiera se
+                // puede construir el oído. No es un fallo del teléfono ni hay que
+                // reabrir el micro de otra manera: se marca el caso, se dice
+                // `sin-modelo` en la hoja Equipo y toda la escucha va al
+                // reconocedor del sistema, que es el plan B de siempre.
+                sinOidoPropio = true;
+                return null;
+            }
         }
         return oido;
     }
@@ -580,6 +593,11 @@ public class CortNative {
     @JavascriptInterface
     public String oidoEstado() {
         Oido propio = oido;
+        if (sinOidoPropio) {
+            // Variedad ligera: no es que el teléfono no pueda, es que este archivo
+            // no trae el motor. La cara lo pinta con su frase de `sin-modelo`.
+            return "{\"type\":\"motor\",\"oido\":\"sin-modelo\",\"listo\":false}";
+        }
         if (propio == null) {
             return act.prefs().getBoolean("oido", true)
                 ? "{\"type\":\"motor\",\"oido\":\"sin-arrancar\",\"listo\":false}"

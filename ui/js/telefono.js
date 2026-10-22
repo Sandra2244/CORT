@@ -1395,7 +1395,7 @@ const FASES_OID = {
   'cargando': 'cargando el modelo de español…',
   'listo': 'escucho sin internet ni Google ✓',
   'sin-sitio': 'no cabe el modelo: falta sitio libre en el teléfono',
-  'sin-modelo': 'el modelo de español no está dentro de este APK',
+  'sin-modelo': 'este APK es la variedad ligera: no lleva el motor dentro, oigo con el reconocedor de siempre',
   'sin-libreria': 'la librería del motor no cargó en este teléfono',
   'roto': 'el motor del oído se cayó',
   'cerrado': 'cerré el oído sin nube al salir de CORT',

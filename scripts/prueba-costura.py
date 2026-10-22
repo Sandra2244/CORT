@@ -1680,6 +1680,79 @@ elif "static KeyEvent teclaDe" not in main_txt:
 else:
     dice_ok("2.4.1 · auricular", "la sesión del reproductor caza el segundo toque, pausa y abre el micro")
 
+# ── 13 · la ronda 2.4.2: la variedad LIGERA, para aislar el aviso de Play Protect ─
+# La medida que abre la ronda: el `1.1.4` de la dueña se instala y el 2.x no, con los
+# MISMOS permisos gordos en los dos manifiestos. Así que la sospecha es el bulto
+# nativo del oído, y la única forma de comprobarlo es un APK idéntico en todo menos
+# en ese bulto. Este sector no prueba el teléfono (eso sólo puede hacerlo ella):
+# prueba que la variante ligera NO es un truco, que no se le ha olvidado quitar nada
+# y que el oído avisa de su ausencia en vez de quedarse callado.
+comp_txt = (RAIZ / "apps/apk" / "compilar.sh").read_text(encoding="utf-8")
+falta = []
+if 'SIN_OIDO="${APK_SIN_OIDO:-0}"' not in comp_txt:
+    falta.append("la bandera `APK_SIN_OIDO`")
+if "META_MOTOR=0" not in comp_txt or "rm -rf assets/motor" not in comp_txt:
+    falta.append("el `rm -rf assets/motor` con `META_MOTOR=0`")
+# Las dos cosas que hacen pesado el APK tienen que estar gobernadas por META_MOTOR,
+# no por HAY_MOTOR: HAY_MOTOR son los `.jar` de COMPILAR, que hacen falta incluso en
+# la ligera porque `Oido.kt` se compila contra ellos.
+if comp_txt.count('[ "$META_MOTOR" = "1" ] && D8_JARS') != 1:
+    falta.append("el dex de Vosk/JNA gobernado por `META_MOTOR`")
+if 'if [ "$META_MOTOR" = "1" ]; then\n    (cd build/motor' not in comp_txt:
+    falta.append("el `zip` de las `.so` gobernado por `META_MOTOR`")
+if 'variedad: LIGERA' not in comp_txt:
+    falta.append("que el `-firma.txt` declare `variedad: LIGERA` (si no lo dice, la "
+                 "Release engaña)")
+if falta:
+    falla("2.4.2 · compilar.sh", "no gobernaría de verdad la variedad ligera: " + ", ".join(falta))
+else:
+    dice_ok("2.4.2 · compilar.sh", "la bandera quita modelo, `.so` y clases del motor, y lo dice en el `-firma.txt`")
+
+# Que el workflow pase la bandera y bautice el archivo: si falta una de las dos, la
+# Release saca UN APK y la prueba no se puede hacer.
+wf_txt = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+sin_wf = [x for x in ('APK_SIN_OIDO: "1"', "-ligero.apk", "-ligero-firma.txt") if x not in wf_txt]
+if sin_wf:
+    falla("2.4.2 · pipeline", f"en `build.yml` no está {', '.join(sin_wf)}: la variedad ligera no llegaría a la Release")
+else:
+    dice_ok("2.4.2 · pipeline", "compila las dos variedades y sube las dos con su firma")
+
+# La versión por defecto del script y la del workflow tienen que ser la misma, o el
+# `versionCode` del APK publicado no es el que dice la hoja de la Release.
+m_comp = re.search(r'APK_VERSION="\$\{APK_VERSION:-([0-9.]+)\}"', comp_txt)
+m_wf = re.search(r'APK_VERSION: "([0-9.]+)"', wf_txt)
+if not m_comp or not m_wf or m_comp.group(1) != m_wf.group(1):
+    falla("2.4.2 · versión", f"`compilar.sh` dice {m_comp.group(1) if m_comp else '?'} y "
+                             f"`build.yml` dice {m_wf.group(1) if m_wf else '?'}: un APK "
+                             "publicado con el nombre de otra")
+else:
+    dice_ok("2.4.2 · versión", f"las dos partes nombran {m_comp.group(1)}")
+
+# Y que la ausencia del motor se DIGA: sin esto, la hoja Equipo quedaría en
+# «sin-arrancar» para siempre y la dueña no sabría si es la variedad ligera o un fallo.
+cuerpo = java_limpio.get("CortNative.java", "")
+# `java_limpio` quita también los literales, y el `sin-modelo` vive dentro de uno (es
+# el JSON que se manda a la cara), así que esa parte se mira en el archivo crudo.
+cuerpo_crudo = (APK / "src" / "com" / "cort" / "ia" / "CortNative.java").read_text(encoding="utf-8")
+sin_aviso = [x for x in ("sinOidoPropio", "catch (Throwable motorFuera)") if x not in cuerpo]
+sin_aviso += [x for x in (r'\"sin-modelo\"',) if x not in cuerpo_crudo]
+if sin_aviso:
+    falla("2.4.2 · aviso", f"`CortNative.java` no informa de la variedad ligera: falta {', '.join(sin_aviso)}")
+elif "sin-modelo" not in (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8"):
+    falla("2.4.2 · aviso", "la cara no tiene frase para `sin-modelo`: pintaría la palabra cruda")
+elif 'estado = "sin-modelo"' not in (APK / "src" / "com" / "cort" / "ia" / "Oido.kt").read_text(encoding="utf-8"):
+    falla("2.4.2 · aviso", "`Oido.kt` ya no emite `sin-modelo` cuando el modelo no está en los assets")
+else:
+    dice_ok("2.4.2 · aviso", "sin motor: `Oido` lo dice, `CortNative` lo resume y la cara lo traduce")
+
+# La auditoría no puede afirmar que hay cuatro `.so` en un APK que no tiene ninguna.
+if "if so:" not in (RAIZ / "scripts" / "audita-apk.sh").read_text(encoding="utf-8"):
+    falla("2.4.2 · auditoría", "`audita-apk.sh` sigue describiendo librerías nativas aunque no haya: "
+                               "el `-firma.txt` mentiría en la variedad ligera")
+else:
+    dice_ok("2.4.2 · auditoría", "el `-firma.txt` distingue completo de ligero sin mentir")
+
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

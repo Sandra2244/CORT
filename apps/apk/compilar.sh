@@ -76,8 +76,26 @@ cd "$(dirname "$0")"
 #   `.Avisos`, el auricular, la batería y la hora. El motor es puro y se prueba con
 #   node (45 comprobaciones); lo que no puede hacer, lo dice la propia hoja: las
 #   reglas se cumplen mientras CORT está en pantalla.
-APK_VERSION="${APK_VERSION:-2.4.1}"   # desde aquí sale UN SOLO APK: este
+APK_VERSION="${APK_VERSION:-2.4.2}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
+
+# ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────
+# La dueña reportó el 2026-10-22: «aplicación bloqueada para proteger tu
+# dispositivo» con el 2.4.1, pero el `1.1.4` — que es mío, misma forma de firmar
+# y **los mismos permisos gordos** (`MANAGE_EXTERNAL_STORAGE`,
+# `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, medidos entrada por
+# entrada en su `AndroidManifest.xml`) — se le instala bien. Entonces el aviso
+# **no** es de permisos ni de llave: queda como sospechoso lo único que pesa de
+# verdad en el 2.x, que son los 45,7 MB del oído (`libvosk.so` +
+# `libjnidispatch.so` + JNA + el modelo de español dentro del APK). Para saberlo
+# con una sola prueba hace falta un APK **idéntico en todo lo demás y sin ese
+# bulto**: con esta bandera el `aapt2`, el `javac`, el `d8`, el manifiesto, la cara
+# y la llave son los mismos; lo que no se mete son las `.so`, las clases de
+# Vosk/JNA en el dex y el ZIP del modelo. CORT arranca igual y el oído dice
+# `sin-modelo` — que ya estaba previsto en `Oido.kt` y en la hoja Equipo —, así que
+# escucha con el reconocedor del sistema. NO es una trampa: la Release sube los dos
+# archivos y cada `-firma.txt` declara cuál de las dos variedades es.
+SIN_OIDO="${APK_SIN_OIDO:-0}"
 
 SDK="${ANDROID_HOME:-}"
 [ -n "$SDK" ] || SDK="${ANDROID_SDK_ROOT:-}"
@@ -143,6 +161,20 @@ bash motor.sh "${MOTOR_CACHE:-motor-cache}"
 [ -f build/motor/lib/arm64-v8a/libvosk.so ] || { echo "motor.sh no dejó las .so de arm64-v8a"; exit 1; }
 [ -f "assets/motor/$(cat build/motor/modelo-nombre.txt).zip" ] || { echo "falta el modelo en assets/motor"; exit 1; }
 HAY_MOTOR=1
+
+# `HAY_MOTOR` dice si los `.jar` están para COMPILAR (hacen falta incluso en la
+# variedad ligera: `Oido.kt` se compila contra ellos). `META_MOTOR` dice si el motor
+# **viaja dentro del APK**: con `APK_SIN_OIDO=1` se quitan las `.so`, el ZIP del
+# modelo y las clases de Vosk/JNA del dex, y no queda ni un rastro del subsistema.
+# Así la prueba de Play Protect es de una sola variable: mismo manifiesto, misma
+# llave, misma cara, y lo único que cambia es el bulto nativo.
+META_MOTOR=1
+if [ "$SIN_OIDO" = "1" ]; then
+    META_MOTOR=0
+    ENTRO="$(du -sb assets/motor | cut -f1)"
+    rm -rf assets/motor
+    echo "variedad LIGERA: fuera el modelo ($ENTRO B) y fuera las .so del motor"
+fi
 
 # -- El icono es EL DE SIEMPRE: se saca del APK original de la dueña ------------
 # Desde `v0.2.11-demo` sólo existe este APK, así que tiene que parecerse al que
@@ -317,7 +349,7 @@ javac --release 11 -encoding UTF-8 -classpath "$CP_JAVA" \
 D8_ENTRADAS="$(find build/obj -name '*.class')"
 [ "$HAY_KOTLIN" = "1" ] && D8_ENTRADAS="$D8_ENTRADAS $(find build/obj-kotlin -name '*.class')"
 D8_JARS=""
-[ "$HAY_MOTOR" = "1" ] && D8_JARS="build/motor/jar/vosk.jar build/motor/jar/jna.jar"
+[ "$META_MOTOR" = "1" ] && D8_JARS="build/motor/jar/vosk.jar build/motor/jar/jna.jar"
 # `kotlin-stdlib-jdk7/jdk8` y `annotations` van también: el `classes.dex` del
 # original los contenía y omitirlos es la clase de `NoClassDefFoundError` que
 # sólo aparece al ejecutar, nunca al compilar.
@@ -337,7 +369,7 @@ D8_JARS=""
 # en la descarga. `zip -q -r` conserva la ruta `lib/<abi>/`, que es lo único que
 # mira el cargador del sistema para `System.loadLibrary("vosk")` y para el
 # `libjnidispatch.so` con el que JNA habla con él.
-if [ "$HAY_MOTOR" = "1" ]; then
+if [ "$META_MOTOR" = "1" ]; then
     (cd build/motor && zip -q -r ../apk/sin-alinear.apk lib)
     echo "motor: .so empaquetados -> $(unzip -l build/apk/sin-alinear.apk | grep -c 'lib/')"
 fi
@@ -474,13 +506,25 @@ PY
     sed 's/^/   · /' build/verificacion.txt
     echo "llave: $LLAVE_ORIGEN"
     echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
-    echo "oído offline: Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt)"
-    echo "  sha256 del modelo: $(cat build/motor/modelo-sha256.txt)"
-    echo "  .so: $(find build/motor/lib -name '*.so' | sort | tr '\n' ' ')"
-    # Ojo con las comillas: dentro de `echo "…"` un acento grave es sustitución de
-    # orden, así que las rutas van sin ellos.
-    echo "  en el primer arranque el oído desempaca el modelo en filesDir/motor:"
-    echo "  son 60.286.598 bytes sueltos (los mide Oido.kt en CRUDO_MODELO); sin sitio dice sin-sitio y no toca nada"
+    if [ "$META_MOTOR" = "1" ]; then
+        echo "variedad: COMPLETA — el oído offline va dentro (Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt))"
+        echo "  sha256 del modelo: $(cat build/motor/modelo-sha256.txt)"
+        echo "  .so: $(find build/motor/lib -name '*.so' | sort | tr '\n' ' ')"
+        # Ojo con las comillas: dentro de `echo "…"` un acento grave es sustitución de
+        # orden, así que las rutas van sin ellos.
+        echo "  en el primer arranque el oído desempaca el modelo en filesDir/motor:"
+        echo "  son 60.286.598 bytes sueltos (los mide Oido.kt en CRUDO_MODELO); sin sitio dice sin-sitio y no toca nada"
+    else
+        echo "variedad: LIGERA (APK_SIN_OIDO=1) — NO lleva el oído offline dentro"
+        echo "  fuera: las cuatro .so de Vosk/JNA y el modelo de español (39.817.833 B comprimidos)"
+        echo "  el oído propio dice sin-modelo en Equipo ▸ 7 · Oído y CORT escucha con el"
+        echo "  reconocedor del sistema; todo lo demás (asistente, auricular, cortina,"
+        echo "  atajos, reproductor, avisos, cerebro, automatizaciones) es idéntico al APK"
+        echo "  completo: mismo manifiesto, mismas fuentes, misma llave y mismo versionCode."
+        echo "  Para qué sirve: aislar si el aviso de Play Protect lo dispara el bulto"
+        echo "  nativo del oído o la llave. Medida el 2026-10-22: el 1.1.4 de la dueña,"
+        echo "  con los MISMOS permisos gordos y sin .so, se instala bien."
+    fi
     sed 's/^/   · /' build/desglose.txt
     if [ "$HAY_KOTLIN" = "1" ]; then
         echo "lenguaje: Java + Kotlin $KOTLIN_VERSION (el método del 1.1.0: d8 y dex mixto, sin Gradle)"

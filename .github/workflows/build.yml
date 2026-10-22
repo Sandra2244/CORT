@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.4.1"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.4.2"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -293,6 +293,47 @@ jobs:
           mkdir -p apk
           cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}.apk"
           cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-firma.txt"
+          # Se guarda el log del build completo: el paso de abajo pisa /tmp/apk.log.
+          cp /tmp/apk.log /tmp/apk-completo.log
+      - name: Compilar TAMBIÉN la variedad ligera (sin el oído dentro)
+        id: ligero
+        # Ronda 2.4.2: a la dueña le sale «aplicación bloqueada para proteger tu
+        # dispositivo» con el 2.x, pero el `1.1.4` — mío, otra llave, y con los
+        # MISMOS permisos gordos medidos en su manifiesto (`MANAGE_EXTERNAL_STORAGE`,
+        # `SYSTEM_ALERT_WINDOW`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`) — se le
+        # instala. Con esa medida cae la explicación fácil («es por auto-firmado» o
+        # «es por los permisos») y queda como sospechoso el bulto nativo: 5,9 MB de
+        # `.so` de Vosk/JNA + 39,8 MB de modelo dentro del APK. Para saberlo hace
+        # falta un APK igual en todo lo demás y SIN ese bulto, y eso es
+        # `APK_SIN_OIDO=1`. Va el segundo para que no pise el `assets/motor` del
+        # completo, y se sube a la Release con el suyo: la prueba se hace en el
+        # teléfono de ella, que es el único lugar donde vive el veredicto de Google.
+        shell: bash
+        env:
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+          APK_SIN_OIDO: "1"
+        run: |
+          set +e
+          bash -x apps/apk/compilar.sh "$APK_VERSION" > /tmp/apk.log 2>&1
+          st=$?
+          tail -30 /tmp/apk.log
+          if [ $st -ne 0 ]; then
+            errores="$(grep -E -A 3 '\.java:[0-9]+: error:' /tmp/apk.log \
+                       | grep -E '\.java:[0-9]+: error:|symbol:|location:|required:|found:|reason:' \
+                       | head -20)"
+            auditoria="$(grep -E 'VEREDICTO|ZIP: MAL|sin ninguna firma|esquemas pedidos' /tmp/apk.log | tail -8)"
+            msg=$( { echo "-- ligero: errores --"; echo "${errores:-ninguno}"; \
+                     echo "-- ligero: auditoría --"; echo "${auditoria:-no corrió}"; \
+                     echo "-- ligero: final del log --"; tail -c 700 /tmp/apk.log; } \
+                   | tr '\n\r' '  ' | sed 's/%/%25/g' )
+            echo "::error::compilar.sh (variedad ligera) salió con $st — $msg"
+            exit $st
+          fi
+          cp apps/apk/build/CORT.apk "apk/CORT-IA-${APK_VERSION}-ligero.apk"
+          cp apps/apk/build/firma.txt "apk/CORT-IA-${APK_VERSION}-ligero-firma.txt"
+          echo "peso ligero: $(stat -c '%s' "apk/CORT-IA-${APK_VERSION}-ligero.apk") B"
+          grep -E 'variedad|peso medido' /tmp/apk.log | head -4
       - name: Subir el APK (el que sale en la Release)
         uses: actions/upload-artifact@v4
         with:
@@ -327,16 +368,27 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.4.1**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.4.1.apk`
-            es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
-            dentro todo lo que estaba repartido entre los dos, más el **oído propio
-            sin nube**, los **cerebros de casa**, **las reglas «cuando X, entonces Y»**
-            y, en esta 2.4.1, **las cinco formas de abrir CORT** con el auricular
-            funcionando hasta con la cara cerrada (párrafo «Cómo se abre CORT»).
+            .deb) y el APK del teléfono, que sube a la **2.4.2**. Esta Release trae
+            **dos APK de Android a propósito**, y no son las dos versiones que había
+            que elegir de antes: es el mismo CORT con y sin el oído sin nube dentro,
+            para poder medir qué es lo que está bloqueando Play Protect en el
+            teléfono de la dueña (párrafo «Por qué hay dos APK»).
+            `CORT-IA-2.4.2.apk` es el de siempre: 47,4 MB y todo dentro.
+            `CORT-IA-2.4.2-ligero.apk` es el mismo, quitando sólo el bulto del oído
+            (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo): unos **2 MB**,
+            escucha con el reconocedor del sistema y en **Equipo · 7 · Oído** lo dice
+            con la palabra `sin-modelo`. Los dos llevan el anillo en el cajón de
+            aplicaciones, el resto dentro —asistente, auricular, cortina, atajos,
+            reproductor, avisos, cerebro, **cerebros de casa**, **reglas «cuando X,
+            entonces Y»**— y en esta 2.4.1, **las cinco formas de abrir CORT** con el
+            auricular funcionando hasta con la cara cerrada (párrafo «Cómo se abre
+            CORT»).
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1 y del 2.4.0 sin desinstalar y sin perder
-            nada** (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20401 > 20400):
+            2.3.1, del 2.4.0 y del 2.4.1 sin desinstalar y sin perder
+            nada** (misma llave `fa:ab:ef:46:8f:3a…` en los dos archivos,
+            `versionCode` 20402 > 20401; los dos APK de esta Release comparten número
+            de versión y `versionCode`, así que se puede pasar de uno al otro
+            instalando encima):
             mira la huella del `-firma.txt` de las dos Releases y compárala antes de
             instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
             llave distinta, medida en `docs/INSTALAR-APK.md`—: desinstala una vez,
@@ -415,6 +467,29 @@ jobs:
             en pantalla (incluido el reloj del teléfono: el certificado de CORT empieza
             a ser válido el **2026-10-21 11:19 GMT**, así que un móvil con la hora
             atrasada lo ve «aún no válido» y eso se parece muchísimo a un bloqueo).
+
+            **Por qué hay dos APK en esta Release.** Porque la explicación cómoda
+            («Play Protect bloquea todo lo auto-firmado») **se cayó con una medida**:
+            el `CORT-IA-1.1.4.apk` también es auto-firmado, también es mío, y a la
+            dueña se le instala bien — y tiene **los mismos permisos gordos** que el
+            2.x (`MANAGE_EXTERNAL_STORAGE`, `SYSTEM_ALERT_WINDOW`,
+            `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`, leídos los dos `AndroidManifest`
+            entrada por entrada). Lo único que pesa de verdad en el 2.x y no existe en
+            el 1.1.4 son los **45,7 MB de bulto nativo del oído**: cuatro `.so`
+            (Vosk + `libjnidispatch` de JNA) y el modelo de español de 39.817.833 B.
+            Un escáner que ve código nativo que carga bibliotecas arbitrarias (JNA) y
+            un ZIP de 40 MB dentro del APK tiene todos los números para clasificarlo
+            como «empquetado», y eso es justo lo que avisa Play Protect. Así que esta
+            Release permite **hacer la prueba en dos minutos, sin tocar nada más**:
+            instala `CORT-IA-2.4.2-ligero.apk` (mismo manifiesto, misma llave, mismos
+            permisos, misma cara, **cero** `.so` y cero modelo). Si se instala y el
+            completo no, el culpable es el bulto del oído y se saca del APK (el modelo
+            se bajaría la primera vez que se pida el oído, en vez de viajar dentro);
+            si los dos se bloquean, el bulto es inocente y lo que queda es el veredicto
+            sobre la llave, que no se quita desde este repo. Los dos archivos están
+            firmados con la misma llave `fa:ab:ef:46:8f:3a…` y el mismo `versionCode`
+            20402, así que se puede pasar del uno al otro **instalando encima**, sin
+            desinstalar y sin perder el perfil, las claves ni los gustos.
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el

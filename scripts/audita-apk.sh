@@ -152,8 +152,14 @@ except KeyError:
 # ── 4 · las `.so` del oído ───────────────────────────────────────────────────
 so = [i for i in entradas if i.filename.startswith("lib/") and i.filename.endswith(".so")]
 abis = sorted({i.filename.split("/")[1] for i in so})
-print(f"   · librerías nativas: {len(so)} en {abis or 'ninguna abi'} — comprimidas, "
-      f"legal porque el manifiesto trae extractNativeLibs=\"true\"")
+if so:
+    print(f"   · librerías nativas: {len(so)} en {abis} — comprimidas, "
+          f"legal porque el manifiesto trae extractNativeLibs=\"true\"")
+else:
+    print("   · librerías nativas: NINGUNA — ésta es la variedad LIGERA (sin el oído")
+    print("     offline dentro); no hay `.so` que extraer, así que tampoco hay nada que "
+          "pueda")
+    print("     reclamar el escáner de código nativo de Play Protect")
 
 # ── 5 · el certificado: ventana, asunto y huella ─────────────────────────────
 # Se lee del PKCS#7 de la firma v1 con `openssl`; si no hay v1 o no hay openssl,
