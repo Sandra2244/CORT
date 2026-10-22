@@ -1086,6 +1086,22 @@ public class CortNative {
         cuadro("{\"type\":\"music\",\"estado\":" + Reproductor.estadoJson() + "}");
     }
 
+    /**
+     * Lo llama `.Avisos` cuando llega un aviso nuevo (ronda 2.4).
+     *
+     * Antes la cara sólo se enteraba de los avisos cuando la dueña abría la hoja o
+     * cuando CORT los leía; para una automatización («cuando llegue algo de
+     * WhatsApp, haz X») eso llega tarde. Es un cuadro **sin pedir nada**: la página
+     * lo recibe por `window.__cortNative.emit` como los demás, y si la página no
+     * está, `cuadro` cae en el `null` de `evalua` y no pasa nada.
+     *
+     * No añade permiso: `Avisos` ya escucha el buzón porque la dueña dio de alta el
+     * lector de notificaciones en Ajustes.
+     */
+    void avisoEnLaCara(String de, String dicho) {
+        cuadro("{\"type\":\"aviso\",\"de\":" + comilla(de) + ",\"dice\":" + comilla(dicho) + "}");
+    }
+
     /* ────────────────────────────── modo juego ────────────────────────────── */
 
     /**

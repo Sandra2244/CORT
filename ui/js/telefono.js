@@ -23,8 +23,14 @@
  *   que llega con la hoja cerrada no se pierde: sale cuando se abre.
  */
 
-const N = () => window.CortNative || null;
-const enTelefono = () => !!N();
+/* Las reglas «cuando X, entonces Y» (ronda 2.4). El motor es puro —sin `document`
+   ni `localStorage` a pelo— y se prueba en el portátil con
+   `node scripts/prueba-automatiza.mjs`; aquí sólo se le dan las manos (`ejecuta`),
+   la consola y el DOM donde pintarse. */
+import { creaMotor, marcapasos, necesitaReloj, DISPARADORES, ACCIONES, preajustes }
+  from './automatiza.js';
+
+const N = () => window.CortNative || null;const enTelefono = () => !!N();
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
   c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // Para comparar por palabras: sin mayúsculas ni tildes, porque la dueña dice
@@ -44,6 +50,10 @@ const estado = {
   nivel: null, max: null, linterna: false,
   mente: { proveedor: '', base: '', modelo: '', clavePuesta: false, conRed: false, motores: [] },
   ultimaMente: null,
+  // Los cerebros de casa (Ollama en el PC, por Wi-Fi). `modelos` y `servidores` son
+  // lo que vino de Java, sin retocar: la hoja se pinta sólo desde aquí.
+  ollama: { servidor: '', origen: '', version: '', modelo: '', enCasa: false,
+            modelos: [], servidorVisto: [], descargando: false },
   hechos: 0, conPortatil: false, direccion: '', recuerdos: [], quien: '', ultimaMemoria: null,
   atuendos: [], puesto: '', burbuja: false,
 };
@@ -106,12 +116,79 @@ function envia(metodo, cuerpo, donde, sinPuente) {
   return r;
 }
 
-/* Hablar y, de paso, dejar escrito en el bloque lo que se dijo. */
+/* Hablar y, de paso, dejar escrito en el bloque lo que se dijo. Desde la 2.4 se
+   escribe TAMBIÉN en la consola: la dueña amplió la terminal del teléfono para
+   escribir órdenes a mano, y una orden que sólo habla no deja rastro — parece que
+   no hizo nada. */
 function di(texto, donde) {
   if (donde) avisa(donde, texto);
+  salida(texto);
   ctx?.say?.(texto);
   return true;
 }
+
+/* El sitio donde se lee lo que CORT acaba de decir. Dos, en el teléfono: la consola
+   del orbe (`ctx.term`) y, si la dueña está en la pantalla **Código**, su terminal
+   (`espejo`, que pone `terminalTelefono`). Un `try` alrededor porque el espejo es
+   DOM ajeno: si la pantalla se desmontó entre la orden y la respuesta, la orden no
+   se cae por un `null`. */
+let espejo = null;
+function salida(texto, clase) {
+  ctx?.term?.(texto, 'equipo');
+  if (espejo) { try { espejo(String(texto || ''), clase || 'cort'); } catch { /* pantalla cerrada */ } }
+}
+
+/* La terminal de la pantalla Código, ampliada para el teléfono (ronda 2.4): la
+   misma boca que la voz, pero escribiendo. Devuelve `true` si la línea se atendió
+   AQUÍ (puente del teléfono) y `false` si `pantallas.js` debe seguir intentando con
+   el núcleo del PC. No inventa: si el puente no está, lo dice. */
+export function terminalTelefono(orden, escribe) {
+  if (!enTelefono()) return false;
+  espejo = typeof escribe === 'function' ? escribe : null;
+  const b = normaliza(orden);
+  if (!b) return false;
+  if (/^(ayuda|help|comandos|listado|que puedes hacer)\b/.test(b)) {
+    CMD_TELEFONO.forEach(l => (escribe || salida)(l, 'aviso'));
+    return true;
+  }
+  if (/^(olvida|cierra|limpia) (la )?terminal/.test(b)) {
+    const caja = document.getElementById('cod-out');
+    if (caja) caja.innerHTML = '';
+    espejo = null;
+    return true;
+  }
+  // `estado del telefono` / `sensores`: lo que mide el aparato, a pelo en la consola.
+  if (/^(estado|que tal estas|como estas)\b/.test(b) && puede('aparato')) {
+    const a = parsea(llama('aparato'), ctx);
+    if (a) { Object.keys(a).forEach(k => (escribe || salida)(k + ': ' + fmt(a[k]), 'cort')); return true; }
+  }
+  return telefonoPorVoz(orden);
+}
+const fmt = v => (v && typeof v === 'object' ? JSON.stringify(v) : String(v));
+
+/* Lo que `ayuda` enumera en la terminal del teléfono: las órdenes que se atienden
+   AQUÍ, sin portátil. Se mantiene a mano, y `prueba-costura.py` comprueba que lo
+   que se promete existe (una ayuda mentirosa es peor que ninguna). */
+const CMD_TELEFONO = [
+  '— órdenes que se atienden en el teléfono, sin PC:',
+  '  sube el volumen · baja el volumen · callar · volumen max · volumen min',
+  '  linterna · prende la linterna · apaga la linterna',
+  '  pon una alarma a las 7:30 · temporizador de 10 minutos',
+  '  abre whatsapp · busca en la red <algo> · busca la app <algo>',
+  '  acuérdate de <algo> · ¿qué sabes de mí? · sincroniza con el pc',
+  '  voz de siri · cambia la voz · ponte azul · atuendo Cortana · burbuja',
+  '  piensa <pregunta>              (el cerebro del teléfono: casa o nube)',
+  '  busca cerebros                  (barre tu Wi-Fi buscando Ollama)',
+  '  modelos                         (qué modelos hay en tu PC)',
+  '  usa el modelo qwen2.5:1.5b      (piensa con ése a partir de ahora)',
+  '  descarga el modelo qwen2.5:0.5b (lo baja el PC; la barra se mueve aquí)',
+  '  borra el modelo llama3',
+  '  mis automatizaciones              (las reglas «cuando X, entonces Y»)',
+  '  automatiza cuando diga modo noche haz callar la música',
+  '  ¿qué tengo hoy? · revisa el correo · apunta cena con Samuel a las 9',
+  '  estado                          (qué mide el teléfono ahora)',
+  '  ayuda · olvida la terminal',
+];
 
 /* ─────────────────────────── la carcasa de la hoja ─────────────────────────── */
 
@@ -222,6 +299,29 @@ const CARA_CEREBRO = `
     <button class="eq-b" id="eq-men-prueba">probar</button>
     <span class="eq-nota" id="eq-men-clave-est"></span>
   </div>
+  <div class="eq-tit">los cerebros gordos de tu casa (Ollama por Wi-Fi)</div>
+  <div class="eq-estado" id="eq-oll-est">sin mirar la red todavía</div>
+  <div class="eq-fila">
+    <input id="eq-oll-serv" placeholder="http://192.168.1.20:11434"
+      autocomplete="off" spellcheck="false">
+    <button class="eq-b" id="eq-oll-fija">fijar</button>
+  </div>
+  <div class="eq-fila">
+    <button class="eq-b" id="eq-oll-busca">🔍 buscar en tu Wi-Fi</button>
+    <button class="eq-b" id="eq-oll-mis">↻ mis modelos</button>
+  </div>
+  <div class="eq-nube" id="eq-oll-lista"></div>
+  <div class="eq-barra"><i id="eq-oll-barra"></i></div>
+  <div class="eq-fila">
+    <input id="eq-oll-nuevo" placeholder="bajar uno nuevo: qwen2.5:0.5b"
+      autocomplete="off" spellcheck="false">
+    <button class="eq-b" id="eq-oll-baja">↓ descargar</button>
+  </div>
+  <div class="eq-nota">Ollama vive en tu PC, no dentro del teléfono: el APK no puede
+    llevarse el servidor (es un programa de ordenador). Lo que hace CORT es hablar con
+    él por Wi-Fi. Para que conteste hay que arrancarlo con <b>OLLAMA_HOST=0.0.0.0:11434</b>
+    y tener los dos aparatos en la misma red.</div>
+  <div class="eq-dice" id="eq-oll-dice"></div>
   <div class="eq-tit">preguntar sin el portátil delante</div>
   <div class="eq-fila">
     <input id="eq-men-pregunta" placeholder="piensa lo que sea…">
@@ -298,6 +398,40 @@ const CARA_OIDOS = `
   <div class="eq-nota">el modelo de español ocupa 60 MB en tu teléfono y tarda unos
     segundos la primera vez; CORT te lo dice aquí mientras se copia.</div>`;
 
+/* ── 8 · Automatiza: «cuando X, entonces Y» ──
+   Lo de JARVIS: una condición y unas cosas que hacer, apuntadas por ella. Se ofrece
+   aquí porque las manos ya están (volumen, linterna, apps, música, el cerebro, la
+   memoria) y lo que faltaba era el sitio donde se juntan. La limitación va escrita
+   en la propia hoja: las reglas se evalúan mientras CORT está vivo en pantalla. */
+const CARA_AUTOS = `
+  <div class="eq-estado" id="eq-aut-est">sin reglas todavía</div>
+  <div class="eq-nube" id="eq-aut-lista"></div>
+  <div class="eq-tit">crear una regla</div>
+  <input id="eq-aut-nombre" class="eq-lleno" placeholder="cómo la llamas: modo noche">
+  <div class="eq-fila">
+    <select id="eq-aut-disp"></select>
+  </div>
+  <div class="eq-fila">
+    <input id="eq-aut-de" placeholder="de quién (whatsapp, gmail…)" style="display:none">
+    <select id="eq-aut-op" style="display:none"></select>
+    <input id="eq-aut-texto" placeholder="la frase que tú dices">
+  </div>
+  <div class="eq-fila">
+    <select id="eq-aut-acc"></select>
+    <select id="eq-aut-opa" style="display:none"></select>
+    <input id="eq-aut-arg" placeholder="el texto o el dato">
+  </div>
+  <div class="eq-fila">
+    <button class="eq-b eq-grande" id="eq-aut-nueva">＋ apuntar la regla</button>
+    <button class="eq-b" id="eq-aut-planta">las tres de muestra</button>
+    <button class="eq-b" id="eq-aut-borra">borrar todas</button>
+  </div>
+  <div class="eq-dice" id="eq-aut-dice"></div>
+  <div class="eq-nota">las reglas se cumplen <b>mientras CORT está abierto en pantalla</b>:
+    la cara es una página y una página cerrada no escucha. Lo que sí funciona con la
+    pantalla apagada es lo que hace Java solo (leer tus avisos en voz alta, la música,
+    el oído del auricular). Ella lo dice en el contrato, no aquí de adorno.</div>`;
+
 /* ─────────────────────────── montaje y pintura ─────────────────────────── */
 
 export function montaTelefono(contexto) {
@@ -319,6 +453,7 @@ export function montaTelefono(contexto) {
   caja.appendChild(bloque('atu', '5', 'Atuendos', 'los colores de CORT y su burbuja', CARA_ATUENDO));
   caja.appendChild(bloque('ago', '6', 'Agenda', 'tus citas y lo que llegó al correo', CARA_AGENDA));
   caja.appendChild(bloque('oido', '7', 'Oído', 'escuchar sin internet ni Google', CARA_OIDOS));
+  caja.appendChild(bloque('autos', '8', 'Automatiza', 'cuando X, entonces Y', CARA_AUTOS));
   cuerpo.appendChild(caja);
 
   enganchaVoz();
@@ -328,6 +463,7 @@ export function montaTelefono(contexto) {
   enganchaAtuendo();
   enganchaAgenda();
   enganchaOido();
+  enganchaAutos();
 
   montada = true;
   pinta();
@@ -339,11 +475,12 @@ export function montaTelefono(contexto) {
 function pinta() {
   if (!montada) return;
   pintaVoz(); pintaMando(); pintaCerebro(); pintaMemoria(); pintaAtuendo(); pintaOido();
+  pintaAutos();
   const estadoBar = document.querySelector('#scr-equipo .scr-estado');
   if (estadoBar) {
     const cosas = [puede('accion') && 'mando', puede('ajusteVoz') && 'voz',
       puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes',
-      puede('oidoEstado') && 'oído propio']
+      puede('oidoEstado') && 'oído propio', autos.total() && 'automatiza']
       .filter(Boolean);
     estadoBar.textContent = cosas.length ? 'puente 2.1 · ' + cosas.join(' · ') : 'puente viejo';
     estadoBar.classList.toggle('aviso', !cosas.length);
@@ -648,6 +785,7 @@ function enganchaCerebro() {
   el('eq-men-pregunta').addEventListener('keydown', e => {
     if (e.key === 'Enter') preguntaMente(e.currentTarget.value, false);
   });
+  enganchaOllama();
 }
 
 function pintaCerebro() {
@@ -683,6 +821,7 @@ function pintaCerebro() {
     + ' · ' + (estado.mente.clavePuesta ? 'clave puesta ✓' : 'sin clave')
     + ' · red ' + (estado.mente.conRed ? 'hay' : 'no hay'));
   pintaUltimaMente();
+  pintaOllama(false);
 }
 
 function guardaMente(alVoz) {
@@ -739,6 +878,204 @@ function pintaUltimaMente() {
   res.innerHTML = `<span class="eq-de ${esc(e.de || '')}">${esc(e.de === 'local' ? 'local' : 'nube')}</span>`
     + '<div class="eq-texto">' + esc(e.responde || '') + '</div>'
     + (e.eco ? '<div class="eq-nota">a propósito de: ' + esc(e.eco) + '</div>' : '');
+}
+
+/* ── 3b · los cerebros de casa: Ollama por Wi-Fi ──
+   No hay método propio del puente: todo entra por `mente({que:'ollama',…})`, así
+   que un APK anterior a la ronda 2.4 contesta `{"ok":false,"dice":…}` con su frase
+   honesta en vez de reventar aquí. `estado` y `usa` vuelven en el mismo golpe;
+   `fija`, `lista`, `descubre`, `borra` y `descarga` tardan (son red) y contestan
+   después, por el evento `mente` con `de:'ollama'`. */
+
+const giga = n => (n >= 1073741824 ? (n / 1073741824).toFixed(1) + ' GB'
+  : n >= 1048576 ? Math.round(n / 1048576) + ' MB'
+  : n >= 1024 ? Math.round(n / 1024) + ' KB' : n + ' B');
+
+const barra = p => {
+  const b = el('eq-oll-barra');
+  if (b) b.style.width = Math.round(Math.max(0, Math.min(1, Number(p) || 0)) * 100) + '%';
+};
+
+function enganchaOllama() {
+  el('eq-oll-busca').onclick = () => ollamaOrden('descubre');
+  el('eq-oll-mis').onclick = () => ollamaOrden('lista');
+  el('eq-oll-fija').onclick = () => ollamaOrden('fija', { servidor: (el('eq-oll-serv')?.value || '').trim() });
+  el('eq-oll-baja').onclick = () => {
+    const nombre = (el('eq-oll-nuevo')?.value || '').trim();
+    if (!nombre) return di('Escribe el modelo que quieres bajar: qwen2.5:0.5b, qwen2.5:1.5b…', 'oll');
+    ollamaOrden('descarga', { modelo: nombre });
+  };
+  el('eq-oll-nuevo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') el('eq-oll-baja').click();
+  });
+}
+
+/* La orden, con su frase de mientras. `envia` ya deja en el bloque el `dice` de
+   Java cuando el APK no puede, así que aquí no se inventa nada. */
+function ollamaOrden(accion, extra) {
+  if (!puede('mente')) return di('Mirar a Ollama desde el teléfono lo trae el APK nuevo de la Release.', 'oll');
+  const cuerpo = { que: 'ollama', accion };
+  if (extra && typeof extra === 'object') Object.assign(cuerpo, extra);
+  const r = envia('mente', cuerpo, 'oll', 'este APK todavía no habla con Ollama.');
+  if (!r) return false;
+  if (accion === 'usa') {                    // sincrónico: ya vino la respuesta
+    estado.ollama.modelo = r.modelo || estado.ollama.modelo;
+    estado.ollama.enCasa = true;
+    diceBien('oll', r.dice || 'hecho.');
+    ctx?.term?.('pienso con ' + (r.modelo || '') + ' (casa)', 'equipo');
+    ctx?.say?.('Voy a pensar con el modelo de casa.');
+    pintaOllama(false);
+    return true;
+  }
+  if (!r.pendiente && r.que === 'fija') return manejaOllama(r);
+  if (r.pendiente) {                          // llega en un momento, por el evento
+    linea('oll', { descubre: 'mirando tu Wi-Fi… (dos o tres segundos)',
+      lista: 'pidiendo la lista de modelos…',
+      fija: 'llamando a ese PC…',
+      borra: 'borrando ese modelo…',
+      descarga: 'bajando ' + (cuerpo.modelo || '') + '…' }[accion] || 'mirando…');
+  }
+  return true;
+}
+
+function pintaOllama(pideLista) {
+  if (!montada) return;
+  if (!puede('mente')) {
+    linea('oll', 'sin puente de cerebro');
+    el('eq-oll-lista').innerHTML = '<span class="eq-nota">hablar con los cerebros de tu PC '
+      + 'lo trae el APK nuevo de la Release.</span>';
+    return;
+  }
+  const r = envia('mente', { que: 'ollama', accion: 'estado' }, 'oll',
+    'este APK todavía no mira a Ollama.');
+  if (!r) return;
+  estado.ollama.servidor = r.servidor || '';
+  estado.ollama.origen = r.origen || '';
+  estado.ollama.modelo = r.modelo || '';
+  estado.ollama.enCasa = !!r.eligeNube;
+  const caja = el('eq-oll-serv');
+  if (caja && !caja.value) caja.value = estado.ollama.servidor;
+  pintaOllamaLinea();
+  if (pideLista) ollamaOrden('lista');
+}
+
+function pintaOllamaLinea() {
+  const o = estado.ollama;
+  linea('oll', (o.servidor ? o.servidor + (o.version ? ' · Ollama ' + o.version : '')
+        : 'sin PC señalado: pulsa «buscar en tu Wi-Fi»')
+    + ' · ' + (o.enCasa ? 'pensando en casa ✓' : 'pensando con lo de siempre')
+    + (o.modelo ? ' · ' + o.modelo : '')
+    + (o.modelos.length ? ' · ' + o.modelos.length + ' modelos' : ''));
+}
+
+function pintaModelosOllama() {
+  const cajaLista = el('eq-oll-lista');
+  if (!cajaLista) return;
+  const o = estado.ollama;
+  cajaLista.innerHTML = o.modelos.length
+    ? o.modelos.map(m => `<div class="eq-mod"><b${m.nombre === o.modelo ? ' class="puesta"' : ''}>`
+        + `${esc(m.nombre)}${m.nombre === o.modelo ? ' ✓' : ''}</b>`
+        + `<small>${esc(m.parametros || '?')} · ${esc(m.cuantizacion || '?')} · `
+        + `${giga(Number(m.tamano) || 0)}</small>`
+        + `<button class="eq-b" data-usa="${esc(m.nombre)}">usar</button>`
+        + `<button class="eq-b" data-borra="${esc(m.nombre)}">borrar</button></div>`).join('')
+    : '<span class="eq-nota">no veo modelos en ese PC. Escribe uno en «bajar uno nuevo»: '
+      + 'para un teléfono de 4 GB van bien <b>qwen2.5:0.5b</b> y <b>qwen2.5:1.5b</b> '
+      + '(se bajan en el PC, no en el teléfono).</span>';
+  cajaLista.querySelectorAll('[data-usa]').forEach(b => {
+    b.onclick = () => ollamaOrden('usa', { modelo: b.dataset.usa });
+  });
+  cajaLista.querySelectorAll('[data-borra]').forEach(b => {
+    b.onclick = () => ollamaOrden('borra', { modelo: b.dataset.borra });
+  });
+}
+
+/* Los PC que encontró `descubre`: si sólo hay uno se fija solo; con dos o más
+   (varios ordenadores con Ollama en casa) se elige con un golpe. */
+function pintaServidoresOllama(servidores) {
+  const cajaLista = el('eq-oll-lista');
+  if (!cajaLista) return;
+  cajaLista.innerHTML = servidores.map(s => `<button class="eq-chip" data-serv="${esc(s.host)}">`
+    + `${esc(s.host)}<small>Ollama ${esc(s.version || '?')}</small></button>`).join('')
+    + '<span class="eq-nota">toca el PC donde están tus modelos</span>';
+  cajaLista.querySelectorAll('[data-serv]').forEach(b => {
+    b.onclick = () => { el('eq-oll-serv').value = b.dataset.serv; ollamaOrden('fija', { servidor: b.dataset.serv }); };
+  });
+}
+
+/* El cuadro largo que manda Java. Devuelve `true` si era suyo (para que
+   `handleTelefonoEvento` no lo tome por una respuesta del cerebro). */
+function manejaOllama(ev) {
+  const o = estado.ollama;
+  if (ev.ok === false) {
+    if (ev.que === 'descarga') { o.descargando = false; barra(0); }
+    const dicho = ev.dice || 'el PC de casa no contestó.';
+    avisa('oll', dicho);
+    if (ev.que !== 'descarga') salida('ollama: ' + dicho);
+    else salida('no pude bajar ' + (ev.modelo || 'el modelo') + ': ' + dicho);
+    if (ev.que === 'lista') { o.modelos = []; pintaModelosOllama(); }
+    return true;
+  }
+  switch (ev.que) {
+    case 'fija':
+      o.servidor = ev.servidor || o.servidor;
+      o.version = ev.version || '';
+      if (ev.contesta) { diceBien('oll', ev.dice || 'PC localizado.'); ollamaOrden('lista'); }
+      else { avisa('oll', ev.dice || ''); }
+      pintaOllamaLinea();
+      return true;
+    case 'descubre': {
+      const servidores = Array.isArray(ev.servidores) ? ev.servidores : [];
+      o.servidorVisto = servidores.map(s => s.host);
+      const hallazgo = servidores.length === 1 ? 'Ollama en ' + servidores[0].host + ' (versión '
+          + (servidores[0].version || '?') + ')'
+        : servidores.length + ' PCs con Ollama: ' + servidores.map(s => s.host).join(', ');
+      diceBien('oll', hallazgo + ' · ' + (ev.probados || '?') + ' direcciones miradas.');
+      salida('buscando cerebros: ' + hallazgo);
+      if (servidores.length === 1) { el('eq-oll-serv').value = servidores[0].host; ollamaOrden('fija', { servidor: servidores[0].host }); }
+      else pintaServidoresOllama(servidores);
+      return true;
+    }
+    case 'lista':
+      o.modelos = Array.isArray(ev.modelos) ? ev.modelos : [];
+      o.version = ev.version || o.version;
+      o.servidor = ev.servidor || o.servidor;
+      pintaModelosOllama();
+      pintaOllamaLinea();
+      const resumen = o.modelos.length
+        ? o.modelos.map(m => m.nombre + ' (' + giga(Number(m.tamano) || 0) + ')').join(', ')
+        : 'ninguno: pide «descarga el modelo qwen2.5:0.5b»';
+      diceBien('oll', o.modelos.length + ' modelos listos en ' + (o.servidor || 'el PC')
+        + (o.version ? ' · Ollama ' + o.version : '') + '.');
+      salida('modelos en tu PC: ' + resumen);
+      return true;
+    case 'descarga': {
+      if (ev.listo === undefined) {                 // va bajando: sólo la barra
+        o.descargando = true;
+        barra(ev.porcentaje);
+        linea('oll', 'bajando ' + (ev.modelo || '') + ' · ' + (ev.estado || '')
+          + (Number(ev.total) ? ' · ' + giga(Number(ev.hecho) || 0) + ' de ' + giga(Number(ev.total) || 0) : ''));
+        return true;
+      }
+      o.descargando = false; barra(1);
+      if (ev.listo) {
+        const dicho = 'ya está ' + (ev.modelo || 'el modelo') + ' en tu PC ('
+          + giga(Number(ev.total) || 0) + '). Toca «usar» y CORT piensa con él.';
+        diceBien('oll', dicho);
+        salida(dicho);
+        ctx?.say?.('Modelo bajado.');
+        ollamaOrden('lista');
+      } else { avisa('oll', ev.dice || 'no pude bajar ese modelo.'); }
+      return true;
+    }
+    case 'borra':
+      diceBien('oll', 'borrado ' + (ev.modelo || '') + ' de tu PC.');
+      salida('borrado ' + (ev.modelo || '') + ' de tu PC');
+      ollamaOrden('lista');
+      return true;
+    default:
+      return true;
+  }
 }
 
 /* ── 4 · Memoria ── */
@@ -1129,9 +1466,309 @@ function enganchaOido() {
   pintaOido();
 }
 
+/* ════════════════════ 8 · AUTOMATIZA: «cuando X, entonces Y» ════════════════════
+   Las reglas viven en `automatiza.js` (motor puro, comprobable en el portátil) y
+   aquí reciben lo que ese motor no puede tener: **las manos** (`ejecutaAccion`), la
+   consola, y el DOM donde pintarse. Tres cosas se sostienen con esto:
+
+   · La orden de la dueña pasa por el motor ANTES que por la boca de CORT
+     (`telefonoPorVoz`), así que si ella apuntó «modo noche», lo que pasa es LO SUYO,
+     no lo que CORT siempre entiende por esa frase.
+   · Las señales entran por donde ya entraban: `stt-final`/terminal (frase),
+     `aviso` (nuevo en Java, ronda 2.4), `auricular`, y la batería, que se mira con
+     el `aparato()` de siempre. Ninguna regla pide un permiso que el APK no tenga.
+   · Si una acción no existe en este APK, `ejecutaAccion` devuelve `false` y el motor
+     lo cuenta en la consola. Un «ya está» vacío es el fallo que se reprochó al 2.0.0.
+*/
+
+/* Las manos. Todo lo que una regla puede pedir, traducido a las funciones que YA
+   estaban en esta hoja — no hay ni un puente nuevo que inventar. */
+function ejecutaAccion(que, a) {
+  const texto = String(a.texto ?? a.arg ?? a.app ?? a.hora ?? '').trim();
+  switch (que) {
+    case 'habla':
+      if (!texto) return false;
+      salida('la regla dice: ' + texto, 'autos');
+      ctx?.say?.(texto);
+      return true;
+    case 'volumen': {
+      const como = { callar: 'callar', mínimo: 'min', maximo: 'max', máximo: 'max',
+                     subir: 'sube', bajar: 'baja', min: 'min', max: 'max' }[a.como || a.arg] || 'sube';
+      return accionVolumen(como, true);
+    }
+    case 'linterna':
+      return accionLinterna(/apag|off|quita/i.test(String(a.como || a.arg || '')) ? 'off' : 'on', true);
+    case 'abrir':
+      if (!texto) return false;
+      return accionAbrir(texto.toLowerCase(), true);
+    case 'musica': {
+      const como = String(a.como || a.arg || 'parar').toLowerCase();
+      const metodo = /para|stop/.test(como) ? 'musicaParar'
+        : /siguiente|next/.test(como) ? 'musicaSiguiente'
+        : /pausa/.test(como) ? 'musicaPausa'
+        : /seguir|play|continua/.test(como) ? 'musicaPlay' : '';
+      if (!metodo || !puede(metodo)) return false;
+      llama(metodo);
+      ctx?.term?.('la regla movió la música: ' + como, 'autos');
+      return true;
+    }
+    case 'piensa':
+      return texto ? preguntaMente(texto, true) : false;
+    case 'recuerdo':
+      return texto ? guardaRecuerdo(texto, true) : false;
+    case 'alarma': {
+      const hora = /^\d{1,2}:\d{2}$/.test(texto) ? texto : '';
+      if (!hora) return false;
+      return accionAlarma(hora, 'de tu automatización', true);
+    }
+    default:
+      return false;
+  }
+}
+
+/* El motor, una sola vez por carga de la página. `almacen` no se pasa: usa el
+   `localStorage` del WebView, que es donde ya guarda CORT sus otras cosas, y si el
+   aparato no lo deja escribir el motor lo dice en vez de callarse. */
+const autos = creaMotor({
+  ejecuta: ejecutaAccion,
+  term: (t, c) => { ctx?.term?.(t, c || 'autos'); salida(t, 'autos'); },
+});
+
+/* El reloj sólo se enciende si hay una regla de hora o de batería: sin ella, cero
+   temporizadores. Un latido cada 30 s, que es lo que tarda en notarse un «a las 7:30»
+   y no martillea el `aparato()` de un teléfono modesto. */
+let latido = null;
+function revisaReloj() {
+  const quiere = necesitaReloj(autos.crudas());
+  if (quiere && !latido) {
+    latido = marcapasos({ motor: autos, aparato: aparatoRapido, cadaMs: 30000 }).arranca();
+  } else if (!quiere && latido) {
+    latido.para(); latido = null;
+  }
+}
+
+/* La batería se lee con lo que ya hay: `aparato()` cuesta un `Intent` pegajoso y no
+   pide permiso. Se guarda el último número para no llamar al puente dos veces. */
+let aparatoUltimo = null;
+function aparatoRapido() {
+  const r = puede('aparato') ? parsea(llama('aparato'), ctx) : null;
+  if (r && typeof r === 'object') { aparatoUltimo = r; return r; }
+  return aparatoUltimo;
+}
+
+/* Qué se muestra en el formulario según el disparador o la acción elegidos: los
+   `<select>` con `opciones` sustituyen al campo de texto, para que no haya forma de
+   escribir un estado que el motor no reconoce. */
+function rellena(disparador, accion) {
+  const d = DISPARADORES.find(x => x.id === disparador) || DISPARADORES[0];
+  const a = ACCIONES.find(x => x.id === accion) || ACCIONES[0];
+  const texto = el('eq-aut-texto'), op = el('eq-aut-op'), de = el('eq-aut-de');
+  if (texto) {
+    texto.style.display = d.campo === 'texto' || d.campo === 'hora' ? '' : 'none';
+    texto.placeholder = d.tipo === 'hora' || d.campo === 'hora' ? '07:30'
+      : (d.pista || 'la palabra');
+  }
+  if (op) {
+    const hay = !!(d.opciones && d.opciones.length);
+    op.style.display = hay ? '' : 'none';
+    if (hay) op.innerHTML = d.opciones.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  }
+  if (de) de.style.display = d.id === 'aviso' ? '' : 'none';
+  const arg = el('eq-aut-arg'), opa = el('eq-aut-opa');
+  if (arg) {
+    arg.style.display = a.opciones && a.opciones.length ? 'none' : '';
+    arg.placeholder = a.pista || (a.campo === 'hora' ? '07:30' : 'el texto');
+  }
+  if (opa) {
+    const hay = !!(a.opciones && a.opciones.length);
+    opa.style.display = hay ? '' : 'none';
+    if (hay) opa.innerHTML = a.opciones.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('');
+  }
+}
+
+function leeFormulario() {
+  const d = (el('eq-aut-disp') || {}).value || 'frase';
+  const a = (el('eq-aut-acc') || {}).value || 'habla';
+  const definicion = DISPARADORES.find(x => x.id === d) || {};
+  const accion = ACCIONES.find(x => x.id === a) || {};
+  const disparador = { tipo: d };
+  if (definicion.opciones && definicion.opciones.length) disparador.estado = el('eq-aut-op').value;
+  if (d === 'hora') {
+    const hora = ((el('eq-aut-texto') || {}).value || '').trim();
+    if (!/^\d{1,2}:\d{2}$/.test(hora)) { avisa('autos', 'la hora va en formato 07:30'); return null; }
+    disparador.hora = hora.length === 4 ? '0' + hora : hora;
+  } else if (d === 'cargador' && disparador.estado === 'baje de') {
+    const hasta = Number(((el('eq-aut-texto') || {}).value || '').replace('%', ''));
+    if (!Number.isFinite(hasta)) { avisa('autos', 'dime un porcentaje: «baje de 20»'); return null; }
+    disparador.hasta = hasta;
+  } else if (definicion.campo === 'texto') {
+    disparador.texto = ((el('eq-aut-texto') || {}).value || '').trim();
+  }
+  if (d === 'aviso') disparador.de = ((el('eq-aut-de') || {}).value || '').trim();
+  if (d === 'frase' && !disparador.texto) { avisa('autos', 'dime la frase que la dispara'); return null; }
+  if (d === 'aviso' && !disparador.texto && !disparador.de) {
+    avisa('autos', 'una regla de avisos necesita al menos «de quién» o «qué dice»'); return null;
+  }
+
+  const hacen = [{ que: a }];
+  if (accion.opciones &&accion.opciones.length) hacen[0].como = el('eq-aut-opa').value;
+  else hacen[0].texto = ((el('eq-aut-arg') || {}).value || '').trim();
+  if (a === 'abrir') hacen[0].app = hacen[0].texto;
+  if (a === 'alarma') hacen[0].hora = hacen[0].texto;
+  if (!hacen[0].como && !hacen[0].texto) { avisa('autos', 'la acción necesita un dato'); return null; }
+  return { nombre: ((el('eq-aut-nombre') || {}).value || '').trim(), disparador, hacen };
+}
+
+function enganchaAutos() {
+  const disp = el('eq-aut-disp'), acc = el('eq-aut-acc');
+  if (!disp || !acc) return;
+  disp.innerHTML = DISPARADORES.map(d => `<option value="${esc(d.id)}">${esc(d.nombre)}</option>`).join('');
+  acc.innerHTML = ACCIONES.map(a => `<option value="${esc(a.id)}">${esc(a.nombre)}</option>`).join('');
+  disp.onchange = () => rellena(disp.value, acc.value);
+  acc.onchange = () => rellena(disp.value, acc.value);
+  rellena('frase', 'habla');
+
+  el('eq-aut-nueva').onclick = () => {
+    const r = leeFormulario();
+    if (!r) return;
+    const nueva = autos.agrega(r);
+    diceBien('autos', 'apuntada: ' + nueva.nombre + ' — ' + nueva.cuando + ' → ' + nueva.hacen.join(' + '));
+    ['eq-aut-nombre', 'eq-aut-texto', 'eq-aut-arg', 'eq-aut-de'].forEach(id => {
+      const c = el(id); if (c) c.value = '';
+    });
+    pintaAutos();
+    ctx?.say?.('Regla apuntada.');
+  };
+  el('eq-aut-planta').onclick = () => {
+    autos.vacia();
+    preajustes().forEach(r => autos.agrega(r));
+    diceBien('autos', 'las tres de muestra puestas. Enciende la que quieras.');
+    pintaAutos();
+  };
+  el('eq-aut-borra').onclick = () => {
+    autos.vacia(); pintaAutos();
+    diceBien('autos', 'borradas todas. La hoja queda limpia.');
+  };
+  pintaAutos();
+}
+
+function pintaAutos() {
+  const cajaLista = el('eq-aut-lista');
+  const lista = autos.lista();
+  linea('autos', lista.length
+    ? lista.length + ' regla(s) · ' + lista.filter(r => r.activo).length + ' encendidas'
+      + (autos.guardadas() ? '' : ' (este teléfono no deja guardarlas: se pierden al cerrar)')
+    : 'sin reglas todavía. «cuando diga modo noche, calla la música» — o las tres de muestra.');
+  if (!cajaLista) return;
+  cajaLista.innerHTML = lista.map(r => `
+    <div class="eq-mod${r.activo ? '' : ' apagada'}" data-regla="${esc(r.id)}">
+      <div class="eq-mod-n">
+        <b>${esc(r.nombre)}</b>
+        <span>${esc(r.cuando)}</span>
+        <span class="eq-mod-t">${r.hacen.map(esc).join(' + ')}</span>
+      </div>
+      <div class="eq-mod-b">
+        <button data-aut-pon="${esc(r.id)}" title="encender/apagar">${r.activo ? '●' : '○'}</button>
+        <button data-aut-ya="${esc(r.id)}" title="probar ahora">▶</button>
+        <button data-aut-fu="${esc(r.id)}" title="borrar">✕</button>
+      </div>
+      <div class="eq-mod-d">${r.veces ? 'sonó ' + r.veces + ' vez' + (r.veces > 1 ? 'es' : '') : 'sin sonar aún'}</div>
+    </div>`).join('');
+  cajaLista.querySelectorAll('[data-aut-pon]').forEach(b => {
+    b.onclick = () => {
+      const r = autos.lista().find(x => x.id === b.dataset.autPon);
+      autos.cambia(b.dataset.autPon, !(r && r.activo));
+      revisaReloj(); pintaAutos();
+    };
+  });
+  cajaLista.querySelectorAll('[data-aut-ya]').forEach(b => {
+    b.onclick = () => {
+      // Probar es disparar la regla con una señal que la cumpla a la fuerza: así se
+      // ve si SUS manos llegan, sin esperar a que suene el aviso de verdad.
+      const r = autos.crudas().find(x => x.id === b.dataset.autYa);
+      if (!r) return;
+      diceBien('autos', 'probando «' + (r.nombre || r.id) + '»…');
+      (r.hacen || []).forEach(a => {
+        Promise.resolve(ejecutaAccion(a.que, a)).then(ok => {
+          if (!ok) avisa('autos', '«' + a.que + '» no pudo hacerse en este APK.');
+        });
+      });
+    };
+  });
+  cajaLista.querySelectorAll('[data-aut-fu]').forEach(b => {
+    b.onclick = () => { autos.quita(b.dataset.autFu); revisaReloj(); pintaAutos(); };
+  });
+  revisaReloj();
+}
+
+/* «cuando diga modo noche haz callar la música» — la regla escrita de una frase.
+   Sólo se atiende con la palabra `automatiza`/`regla`/`cuando … haz` claras, para no
+   llevarse por delante un «cuando llueva avísame» que era una pregunta normal. */
+function reglaDeVoz(texto, b) {
+  const par = String(texto).match(/cuando\s+(.+?)\s+(?:haz|entonces|que|y)\s+(.+)/i);
+  if (!par) return false;
+  const condicion = par[1].replace(/^(diga|dice|diga|escriba|llegue|suene|pase)\b/i, '').trim();
+  const obra = normaliza(par[2]);
+  const hace = (() => {
+    if (/volumen|sonido/.test(obra)) {
+      const como = /call|silenc/.test(obra) ? 'callar' : /max|tope/.test(obra) ? 'máximo'
+        : /baj|suave/.test(obra) ? 'bajar' : /sub|fuerte/.test(obra) ? 'subir' : 'mínimo';
+      return { que: 'volumen', como };
+    }
+    if (/linterna|antorcha|luz/.test(obra)) return { que: 'linterna', como: /apag|quita/.test(obra) ? 'apagar' : 'encender' };
+    if (/musica|cancion|reproduc/.test(obra)) {
+      return { que: 'musica', como: /siguiente/.test(obra) ? 'siguiente'
+        : /pausa/.test(obra) ? 'pausa' : /seguir|play/.test(obra) ? 'seguir' : 'parar' };
+    }
+    if (/abre|abrir/.test(obra)) {
+      const app = obra.replace(/^abre\s+(?:la\s+|el\s+|una\s+)?/, '').replace(/\b(app|la app|el app)\b/g, '').trim();
+      if (!app) return null;
+      return { que: 'abrir', app, texto: app };
+    }
+    if (/recuerd|apunta|anota/.test(obra)) {
+      return { que: 'recuerdo', texto: par[2].replace(/^\s*(?:apunta|anota|recuerda)\s*(?:que|de)?\s*/i, '').trim() };
+    }
+    if (/di|avisa|habla|dile/.test(obra)) {
+      return { que: 'habla', texto: par[2].replace(/^\s*(?:di|dile|avisa(?:me)?|habla)\s*(?:que|me)?[:\s]*/i, '').trim() };
+    }
+    return { que: 'piensa', texto: par[2] };
+  })();
+  if (!hace) return di('No entendí qué hacer. Prueba: «automatiza cuando diga modo noche haz callar la música».', 'autos');
+  const tipo = /aviso|mensaje|llegue/.test(normaliza(condicion)) ? 'aviso' : 'frase';
+  const disparador = tipo === 'aviso'
+    ? { tipo, texto: condicion.replace(/^(de|cuando|llegue|un)\b/ig, ' ').trim() }
+    : { tipo: 'frase', texto: condicion };
+  const nombre = ((texto.match(/llamad[oa]\s+["']?([^"'”]{2,30})/i) || [])[1] || '').trim();
+  const r = autos.agrega({ nombre: nombre || condicion.slice(0, 28), disparador, hacen: [hace] });
+  pintaAutos();
+  abre('autos');
+  return di('Regla apuntada: cuando ' + r.cuando.replace(/^cuando\s+/i, '') + ' → ' + r.hacen.join(' + ') + '.', 'autos');
+}
+
 export function handleTelefonoEvento(ev) {
   if (!ev || typeof ev.type !== 'string') return false;
+
+  /* Las automatizaciones se alimentan de los eventos EN CUANTO llegan, antes de que
+     la hoja los interprete para pintar. `aviso` es nuevo en la 2.4 (Java lo manda
+     desde `.Avisos`); el del auricular ya existía. Ninguno de los dos interrumpe lo
+     de siempre: si ninguna regla sonó, el evento sigue su camino. */
+  if (ev.type === 'aviso') {
+    const sonaron = autos.dispara({ tipo: 'aviso', de: ev.de || '', dice: ev.dice || '' });
+    if (montada) pintaAutos();
+    if (sonaron.length) return true;
+    // Sin regla que lo quiera, el aviso se cuenta igual que antes: en la consola.
+    ctx?.term?.('aviso de ' + (ev.de || 'quién sabe') + ': ' + String(ev.dice || '').slice(0, 70), 'equipo');
+    return false;
+  }
+  if (ev.type === 'auricular') {
+    autos.dispara({ tipo: 'auricular', escuchando: !!ev.escuchando });
+    if (montada) pintaAutos();
+  }
+
   if (ev.type === 'mente') {
+    // Los cuadros de Ollama usan el mismo evento que las respuestas, pero no son
+    // una respuesta: son la lista, el progreso de una descarga o un aviso del PC.
+    if (ev.de === 'ollama') return manejaOllama(ev);
     estado.ultimaMente = ev;
     if (montada) { pintaUltimaMente(); const d = el('eq-men-dice'); if (d) d.textContent = ''; }
     const dicho = ev.ok === false
@@ -1140,7 +1777,7 @@ export function handleTelefonoEvento(ev) {
     // Java dice de dónde salió la respuesta (`nube` o `local`); si no lo dice,
     // no se inventa ni se queda el paréntesis a medias.
     const de = ev.de === 'local' || ev.de === 'nube' ? ' (' + ev.de + ')' : '';
-    ctx?.term?.('respuesta del cerebro' + de + ': ' + String(dicho).slice(0, 60), 'equipo');
+    salida('respuesta del cerebro' + de + ': ' + String(dicho).slice(0, 600));
     if (preguntaVoz) { preguntaVoz = false; ctx?.say?.(String(dicho).slice(0, 400)); ctx?.orb?.burst?.(); }
     // Y si la respuesta local TRAÍA una acción, se hace. `Mente.local()` nombra la
     // cosa (`{"de":"local","accion":"volumen","param":"sube"}`) y **no la ejecuta**:
@@ -1200,6 +1837,7 @@ export function estadoTelefono() {
     clavePuesta: estado.mente.clavePuesta, conRed: estado.mente.conRed,
     recuerdos: estado.hechos, conPortatil: estado.conPortatil, direccion: estado.direccion,
     atuendos: estado.atuendos.length, puesto: estado.puesto, burbuja: estado.burbuja,
+    reglas: autos.total(), reglasVivas: autos.lista().filter(r => r.activo).length,
   };
 }
 
@@ -1213,6 +1851,32 @@ export function telefonoPorVoz(texto) {
   if (!enTelefono()) return false;            // en PC: nada de esto, la frase sigue al núcleo
   const b = normaliza(texto);
   if (!b) return false;
+
+  /* −1 · LAS REGLAS DE ELLA, antes que la boca de CORT. Si apuntó «modo noche», lo
+         que tiene que pasar es LO SUYO, no lo que la cara siempre entiende por esa
+         frase. Por eso va en el sitio −1, por encima del oído, el volumen y todo lo
+         demás. Con la palabra `cuando … haz` delante, la frase además CREA la regla. */
+  if (/\b(automatiza|automatizaciones|regla|reglas)\b/.test(b) && /\bcuando\b/.test(b)
+      && /\b(haz|entonces)\b/.test(b)) {
+    const creada = reglaDeVoz(texto, b);
+    if (creada) return true;
+  }
+  // `automatiz` con sufijo: «mis automatizaciones» y «apaga la automatización de la
+  // mañana» también entran por aquí. Se usa la raíz sin tilde porque `normaliza`
+  // ya se la quitó.
+  if (/automatiz|\breglas\b/.test(b) && !/\bcuando\b/.test(b)) {
+    abre('autos'); pintaAutos();
+    const n = autos.total();
+    return di(n ? 'Tienes ' + n + ' regla(s): ' + autos.lista().map(r => r.nombre).join(', ')
+                + '. Se cumplen mientras CORT esté en pantalla.'
+                : 'Aún no hay reglas. Dime «automatiza cuando diga modo noche haz callar la música».', 'autos');
+  }
+  const disparadas = autos.dispara({ tipo: 'frase', texto });
+  if (disparadas.length) {
+    if (montada) { abre('autos'); pintaAutos(); }
+    ctx?.orb?.burst?.();
+    return true;
+  }
 
   /* 0 · el oído sin nube: «activa el oído sin internet», «¿me oyes sin wifi?»,
          «quita el oído offline». Se contesta con la fase REAL que Java ha mandado,
@@ -1255,6 +1919,38 @@ export function telefonoPorVoz(texto) {
     const seg = sacaSegundos(b);
     if (!seg) return di('Dime cuánto cuenta: «temporizador de 10 minutos».', 'mando');
     return accionTemporizador(seg, true);
+  }
+
+  /* 4b · los cerebros de casa (Ollama por Wi-Fi). Va ANTES que «abre una app» y
+        que «busca …» a propósito: «busca en tu wifi» o «abre los modelos» sin este
+        orden se los llevaban la app o el buscador. Sólo se atiende con palabras
+        suyas (`cerebros`, `ollama`, `modelo(s)`), así que no pisa «muéstrame tu
+        cerebro» (el muro de recuerdos) ni las frases normales. */
+  if (/\b(ollama|modelo|modelos|cerebros)\b/.test(b)
+      || (/\bwifi\b/.test(b) && /^(busca|buscar|buscame|localiza|encuentra)\b/.test(b))) {
+    // El nombre del modelo se saca del TEXTO, no de `b`: lleva dos puntos, puntos y
+    // a veces mayúsculas, y todo eso `normaliza()` lo estropea.
+    const MODELO = (texto.match(/(?:modelo|cerebro)\s*(?:de|:)?\s*["']?([A-Za-z0-9._:@\/-]{2,42})/i) || [])[1]
+      || (texto.match(/(?:descarga|baja|borra|usa|pon|elimina)\s+(?:el\s+|la\s+|un\s+)?["']?([A-Za-z0-9._:@\/-]{2,42})/i) || [])[1] || '';
+    abre('men');
+    if (/^(busca|buscar|buscame|localiza|encuentra)\b/.test(b)) {
+      return ollamaOrden('descubre') ? di('Mirando tu Wi-Fi a ver dónde está Ollama…') : false;
+    }
+    if (/^(usa|pon|ponme|cambia|cambiate|elige|usar)\b/.test(b)) {
+      if (!MODELO) return di('Dime cuál: «usa el modelo qwen2.5:1.5b».', 'oll');
+      return ollamaOrden('usa', { modelo: MODELO }) ? di('Voy a pensar con ' + MODELO + '.') : false;
+    }
+    if (/^(descarga|descargar|baja|bajar|instala|instalar|instalame|pull)\b/.test(b)) {
+      if (!MODELO) return di('Dime el modelo: «descarga el modelo qwen2.5:0.5b».', 'oll');
+      return ollamaOrden('descarga', { modelo: MODELO })
+        ? di('Pidiéndoselo a tu PC: ' + MODELO + '. La barra se mueve en la hoja Equipo.') : false;
+    }
+    if (/^(borra|borrar|elimina|eliminar|quita|quitar)\b/.test(b)) {
+      if (!MODELO) return di('Dime cuál borro: «borra el modelo llama3».', 'oll');
+      return ollamaOrden('borra', { modelo: MODELO }) ? di('Borrándolo de tu PC.') : false;
+    }
+    // Sin verbo claro: «modelos», «muéstrame los modelos», «los cerebros».
+    return ollamaOrden('lista') ? di('Mirando qué modelos hay en tu PC.') : false;
   }
 
   /* 5 · «abre whatsapp» y las demás. A propósito NO están `musica` ni

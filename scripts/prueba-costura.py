@@ -741,7 +741,7 @@ METODOS_21 = {
                                       "probar", "estado")),
     "memoria":   ("Recuerdos.java",  ("guardar", "buscar", "lista", "quien", "olvidar",
                                       "sincronizar", "estado")),
-    "mente":     ("Mente.java",      ("estado", "ajustar", "preguntar", "probar")),
+    "mente":     ("Mente.java",      ("estado", "ajustar", "preguntar", "probar", "ollama")),
     "atuendo":   ("Paleta.java",     ("lista", "poner")),
     "agenda":    ("Agenda.java",     ("hoy", "proximos", "abrir", "correo", "apunta")),
 }
@@ -1174,7 +1174,7 @@ elif faltan_s:
 else:
     dice_ok("entorno", f"las {len(lee_sens)} claves de una fila de sensores las emite `Sentidos`")
 
-# ── [11] el oído propio: motor.sh ↔ Oido.kt ↔ manifiesto ↔ pipeline ─────────
+# ── [9b] el oído propio: motor.sh ↔ Oido.kt ↔ manifiesto ↔ pipeline ─────────
 # La ronda 2.3 mete un motor de reconocimiento dentro del APK. Son cuatro sitios
 # que tienen que decir el mismo número y tres trampas que ya están medidas; si uno
 # se separa, el fallo no sale en `javac`: sale en el teléfono, en forma de modelo
@@ -1244,6 +1244,299 @@ else:
         falla("oído", "`build.yml` no corre `scripts/prueba-oido.sh`: el oído llegaría al teléfono sin probar")
     else:
         dice_ok("oído", "la prueba del oído con Vosk de verdad va en el pipeline, antes del APK")
+
+# ── 10 · la ronda 2.4: los cerebros de casa (Ollama por Wi-Fi) ──────────────
+# La dueña pidió «que CORT sí pueda instalar modelos locales de Ollama». Medido:
+# Ollama NO cabe dentro de un APK (es un servidor en Go que pide Linux), así que la
+# promesa honesta es que el teléfono HABLE con el Ollama del PC por Wi-Fi: listar,
+# bajar, borrar, elegir y preguntar. Son cuatro piezas con el nombre exacto —la
+# clase del HTTP, la ruta de `Mente`, la hoja y el pipeline— y si una falta el
+# botón miente. Aquí se cose la ronda entera sin teléfono.
+print("\n[10] ronda 2.4 · Ollama en la Wi-Fi de casa")
+
+OLLAMA_RUTA = APK / "src" / "com" / "cort" / "ia" / "Ollama.java"
+MENTE_RUTA = APK / "src" / "com" / "cort" / "ia" / "Mente.java"
+NUBE_RUTA = APK / "src" / "com" / "cort" / "ia" / "Nube.java"
+ACCIONES_24 = ("estado", "lista", "descubre", "fija", "usa", "descarga", "borra")
+if not OLLAMA_RUTA.is_file():
+    falla("2.4 · ollama", "falta `Ollama.java`: la cara ofrece los botones y nadie habla con el PC")
+else:
+    ollama_txt = OLLAMA_RUTA.read_text(encoding="utf-8")
+    mente_txt = MENTE_RUTA.read_text(encoding="utf-8")
+    # Los cuadros llevan dentro `\"que\":\"lista\"`; sin las barras del escape de
+    # Java se leen como el JSON que de verdad sale al WebView.
+    ollama_plano = ollama_txt.replace("\\", "")
+    mente_lits = literales(mente_txt)
+
+    sin_que = [a for a in ACCIONES_24 if f'"que":"{a}"' not in ollama_plano]
+    if sin_que:
+        falla("2.4 · cuadros", f"`Ollama.java` no etiqueta sus cuadros con: {', '.join(sin_que)} "
+                               "— la cara no sabría qué pintar (y una descarga fallida no bajaría la barra)")
+    else:
+        dice_ok("2.4 · cuadros", f"los {len(ACCIONES_24)} cuadros salen etiquetados con su `que`")
+
+    sin_ruta = [a for a in ACCIONES_24 if f'"{a}"' not in mente_lits]
+    if '"ollama"' not in mente_lits:
+        falla("2.4 · ruta", "`Mente` no compara con \"ollama\": la orden de la cara no llega a `Ollama`")
+    elif sin_ruta:
+        falla("2.4 · ruta", f"`Mente.java` no conoce las acciones: {', '.join(sin_ruta)} "
+                            "(la cara las manda y Java contestaría «no conozco esa acción»)")
+    else:
+        dice_ok("2.4 · ruta", f"`Mente` despacha `que:\"ollama\"` con sus {len(ACCIONES_24)} acciones")
+
+    if "new Ollama(" not in sin_comentarios(mente_txt):
+        falla("2.4 · ruta", "`Mente` no monta `Ollama`: la clase está escrita y aislada")
+    else:
+        dice_ok("2.4 · puente", "no hace falta método nuevo: entra por `mente()`, que `CortNative` ya expone")
+
+    # La hoja: que llame las acciones y que escuche el evento con el mismo nombre.
+    sin_cara = [a for a in ACCIONES_24 if f"'{a}'" not in CARA_21]
+    if "que: 'ollama'" not in CARA_21:
+        falla("2.4 · cara", "la hoja no manda nunca `{que:'ollama'}`: quedó en Java, sin botón")
+    elif sin_cara:
+        falla("2.4 · cara", f"la hoja no ofrece: {', '.join(sin_cara)}")
+    elif "ev.de === 'ollama'" not in CARA_21:
+        falla("2.4 · cara", "la cara no escucha `de:'ollama'` en el evento `mente`: la lista y la "
+                            "barra no se moverían nunca")
+    else:
+        dice_ok("2.4 · cara", f"las {len(ACCIONES_24)} acciones a la vista y el evento `de:'ollama'` escuchado")
+
+    # Cada `id` del bloque tiene que estar enganchado o escrito por Java: un botón
+    # sin `onclick` es exactamente el «no hace nada» que ya se reprochó al 2.0.0.
+    ids = sorted(set(re.findall(r'id="(eq-oll-[a-z-]+)"', CARA_21)))
+    # `-est` y `-dice` no se buscan a pelo: los escribe `linea('oll'…)` /
+    # `avisa('oll'…)` montando el id, igual que el resto de la hoja.
+    sin_enganche = [i for i in ids if f"el('{i}')" not in CARA_21
+                    and not (i.endswith(("-est", "-dice")) and "'oll'" in CARA_21)]
+    if not ids:
+        falla("2.4 · hoja", "no hay ningún `eq-oll-*` en `CARA_CEREBRO`: el bloque no existe")
+    elif sin_enganche:
+        falla("2.4 · hoja", f"escritos y sin dueño: {', '.join(sin_enganche)}")
+    else:
+        dice_ok("2.4 · hoja", f"los {len(ids)} ids del bloque tienen su gancho")
+
+    CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+    sin_css = [c for c in (".eq-barra", ".eq-mod") if c not in CSS]
+    if sin_css:
+        falla("2.4 · hoja", f"la cara usa {', '.join(sin_css)} y `hud.css` no lo define: "
+                            "saldría sin estilos en el teléfono")
+    else:
+        dice_ok("2.4 · hoja", "la barra de descarga y la fila de modelo tienen su CSS")
+
+    # Cero permisos nuevos: `descubre` se hace con la IPv4 propia, sin `WifiInfo`.
+    if "ACCESS_WIFI_STATE" in MANIFIESTO:
+        falla("2.4 · permisos", "`descubre` habría pedido ACCESS_WIFI_STATE: se prometió no añadir ninguno")
+    elif "getNetworkInterfaces" not in ollama_plano:
+        falla("2.4 · permisos", "`descubre` no usa `NetworkInterface`: ¿con qué saca ahora el rango de la Wi-Fi?")
+    else:
+        dice_ok("2.4 · permisos", "cero permisos nuevos: la red propia se lee con `NetworkInterface`")
+
+    # `usa` escribe lo que `Nube` lee: si los nombres de las prefs se separan, el
+    # modelo elegido no se usa y la cara dice «listo» mintiendo.
+    ollama_lits = literales(ollama_txt)
+    nube_lits = literales(NUBE_RUTA.read_text(encoding="utf-8"))
+    separadas = [c for c in ("nube-proveedor", "nube-base", "nube-modelo", "ollama-servidor")
+                 if f'"{c}"' not in ollama_lits]
+    leidas = [c for c in ("nube-proveedor", "nube-base", "nube-modelo") if f'"{c}"' not in nube_lits]
+    if separadas:
+        falla("2.4 · prefs", f"`Ollama.usa` no escribe {', '.join(separadas)}: elegir un modelo no lo usaría")
+    elif leidas:
+        falla("2.4 · prefs", f"`Nube` no lee {', '.join(leidas)}: las claves se escriben en un idioma que él no habla")
+    else:
+        dice_ok("2.4 · prefs", "`usa` escribe y `Nube` lee las mismas cuatro claves")
+
+    if '"ollama"' not in nube_lits:
+        falla("2.4 · Nube", "el catálogo de `Nube` no tiene `ollama`: elegirlo dejaría la base vacía")
+    elif "'ollama'" not in CARA_21:
+        falla("2.4 · Nube", "`PROVEEDORES` de la cara no ofrece `ollama`")
+    else:
+        dice_ok("2.4 · Nube", "ollama es un proveedor más, sin clave y con su base /v1")
+
+# ── 10b · la terminal ampliada (#77): ayuda ↔ CMDS ↔ router ─────────────────
+# La dueña pidió «la terminal de CORT… que se pueda ampliar en teléfono y funcione
+# con esos cerebros locales». Ampliarla son tres capas que tienen que decir el mismo
+# nombre: la lista que `ayuda` enumera en la hoja, el `CMDS` que el HUD usa para el
+# Tab y la pantalla 09 · Ayuda, y el router de `telefono.js` que la atiende. El daño
+# clásico es la promesa vacía: una ayuda que enumera un comando sin router deja a la
+# dueña escribiendo cosas que CORT ignora en silencio.
+print("\n[10b] la terminal del teléfono (lo que promete, lo que completa, lo que atiende)")
+
+PROMESAS_24 = ("busca cerebros", "modelos", "usa el modelo", "descarga el modelo",
+               "borra el modelo", "piensa", "ayuda", "olvida la terminal")
+ayuda_24 = re.search(r"const CMD_TELEFONO = \[(.*?)\];", CARA_21, re.S)
+cmds_24 = re.search(r"const CMDS = \[(.*?)\];", HUD_21, re.S)
+if not ayuda_24:
+    falla("terminal · ayuda", "`telefono.js` no tiene `CMD_TELEFONO`: «ayuda» no sabe qué enumerar")
+elif not cmds_24:
+    falla("terminal · ayuda", "`hud.js` no tiene `CMDS`: ni el Tab ni la pantalla 09 muestran comandos")
+else:
+    en_ayuda = ayuda_24.group(1)
+    lista_cmds = re.findall(r"'([^']*)'", cmds_24.group(1))
+    hueso = [p for p in PROMESAS_24 if p not in en_ayuda]
+    huérfanas = [p for p in PROMESAS_24
+                 if p not in hueso and not any(c.startswith(p) for c in lista_cmds)]
+    if hueso:
+        falla("terminal · ayuda", f"`ayuda` ya no promete: {', '.join(hueso)}")
+    elif huérfanas:
+        falla("terminal · ayuda", f"se prometen pero el Tab/09 · Ayuda no los ofrece: {', '.join(huérfanas)} "
+                                  "— en el teléfono no hay forma de saberlos sin leer el código")
+    else:
+        dice_ok("terminal · ayuda",
+                f"las {len(PROMESAS_24)} promesas de `ayuda` están también en `CMDS` "
+                f"({len(lista_cmds)} comandos completados por el Tab)")
+
+    # Que la consola del PC no se pierda lo del teléfono: `pantallas.js` tiene que
+    # importar la boca ampliada y llamarla ANTES de intentar el núcleo.
+    if "export function terminalTelefono" not in CARA_21:
+        falla("terminal · costura", "`terminalTelefono` no está exportado: `pantallas.js` no podría llamarlo")
+    elif not re.search(r"import\s*\{[^}]*\bterminalTelefono\b[^}]*\}\s*from\s*'\./telefono\.js'", scr_txt):
+        falla("terminal · costura", "`pantallas.js` no importa `terminalTelefono`: la pantalla Código "
+                                    "seguiría mandando todo al núcleo, que en el teléfono no está")
+    elif "terminalTelefono(orden" not in scr_txt:
+        falla("terminal · costura", "`pantallas.js` importa `terminalTelefono` y no lo llama: código muerto")
+    elif "CMD_TELEFONO.forEach" not in CARA_21:
+        falla("terminal · costura", "«ayuda» no recorre `CMD_TELEFONO`: la lista quedaría escrita y muda")
+    else:
+        dice_ok("terminal · costura", "la pantalla Código del teléfono pasa por el puente "
+                                      "y devuelve el eco a su propia consola")
+
+    # El grupo 4b: sin él, «busca cerebros» se lo llevaban la app o el buscador.
+    if not re.search(r"\\b\(ollama\|modelo\|modelos\|cerebros\)\\b", CARA_21):
+        falla("terminal · router", "`telefonoPorVoz` no tiene el grupo de `ollama|modelo|modelos|cerebros`: "
+                                   "escribir «modelos» abriría una app o el navegador")
+    else:
+        dice_ok("terminal · router", "el grupo de los cerebros va antes que «abre una app» y «busca …»")
+
+# La prueba que decide todo: el diálogo HTTP se comprueba contra un Ollama de
+# mentira levantado dentro del JDK, sin teléfono y sin internet.
+PRUEBA4 = APK / "prueba" / "Prueba4.java"
+SH_24 = (RAIZ / "scripts" / "prueba-mente.sh").read_text(encoding="utf-8")
+if not PRUEBA4.is_file():
+    falla("2.4 · prueba", "falta `apps/apk/prueba/Prueba4.java`: Ollama llegaría al teléfono sin probar")
+elif "Prueba4" not in SH_24 or "jdk.httpserver" not in SH_24:
+    falla("2.4 · prueba", "`prueba-mente.sh` no corre `Prueba4` o no añade `jdk.httpserver`: "
+                          "la suite quedaría fuera del pipeline")
+elif "Ollama.java" not in SH_24:
+    falla("2.4 · prueba", "`prueba-mente.sh` no copia `Ollama.java` a /tmp: `Prueba4` no compilaría")
+elif "prueba-mente.sh" not in WORKFLOW:
+    falla("2.4 · prueba", "`build.yml` no corre la mente: las suites no se ejecutan antes del APK")
+else:
+    dice_ok("2.4 · prueba", "Prueba4 (servidor de mentira) va en `prueba-mente.sh` y en el pipeline")
+
+# ── 11 · la ronda 2.4: las reglas «cuando X, entonces Y» ─────────────────────
+# «la automatización como es JARVIS o Cortana, eso necesito». Son tres capas: el
+# motor (`automatiza.js`, puro y probado con node), la cara que lo pinta y le da las
+# manos (`telefono.js`), y la seña de Java que lo alimenta (`type:"aviso"` nuevo).
+# El error que se caza aquí es el de siempre: un `<select>` que ofrece una acción que
+# nadie atiende, o una regla que se pinta pero no se monta.
+print("\n[11] las automatizaciones (motor ↔ manos ↔ seña de Java)")
+
+MOTOR_RUTA = RAIZ / "ui" / "js" / "automatiza.js"
+if not MOTOR_RUTA.is_file():
+    falla("2.4b · motor", "falta `ui/js/automatiza.js`: la hoja promete reglas y no hay quien las cumpla")
+else:
+    motor = MOTOR_RUTA.read_text(encoding="utf-8")
+
+    def array_js(nombre):
+        m = re.search(r"export const " + nombre + r" = \[(.*?)\n\];", motor, re.S)
+        return m.group(1) if m else ""
+
+    disp = re.findall(r"\{ id: '([a-z]+)',", array_js("DISPARADORES"))
+    acciones = re.findall(r"\{ id: '([a-z]+)',", array_js("ACCIONES"))
+    if not disp or not acciones:
+        falla("2.4b · motor", "no se leen los disparadores o las acciones del motor")
+    else:
+        # 11.a · cada acción que ofrece el `<select>` tiene su `case` en las manos.
+        manos = re.search(r"function ejecutaAccion\(que, a\) \{(.*?)\n\}\n", CARA_21, re.S)
+        if not manos:
+            falla("2.4b · manos", "`telefono.js` no define `ejecutaAccion`: las reglas no tendrían manos")
+        else:
+            casos = set(re.findall(r"case '([a-z]+)'", manos.group(1)))
+            sin_mano = [a for a in acciones if a not in casos]
+            huérfanas = sorted(casos - set(acciones))
+            if sin_mano:
+                falla("2.4b · manos", f"la hoja ofrece acciones que nadie atiende: {', '.join(sin_mano)} "
+                                      "— la regla se cumpliría «a medias» y en silencio")
+            elif huérfanas:
+                falla("2.4b · manos", f"las manos atienden {', '.join(huérfanas)} pero la hoja no las ofrece")
+            else:
+                dice_ok("2.4b · manos", f"las {len(acciones)} acciones del formulario tienen su `case`")
+
+        # 11.b · cada señal que promete un disparador existe de verdad. `reloj` y
+        # `aparato` las produce la cara; `aviso` y `auricular` las emite Java, y ésa
+        # es la que hay que comprobar contra el puente.
+        senales = set(re.findall(r"senal: '([^']+)'", array_js("DISPARADORES")))
+        inventadas = [s for s in senales if s not in ("aviso", "auricular", "aparato", "reloj",
+                                                     "stt-final / terminal")]
+        java = puente_texto()
+        if inventadas:
+            falla("2.4b · señales", f"disparadores con señal inventada: {', '.join(inventadas)}")
+        elif '"type\\":\\"aviso\\"' not in java:
+            falla("2.4b · señales", "Java no emite `{type:\"aviso\"}`: la regla de avisos nunca se enteraría")
+        elif '"type\\":\\"auricular\\"' not in java:
+            falla("2.4b · señales", "Java no emite el evento del auricular")
+        elif 'ev.type === \'aviso\'' not in CARA_21 or 'ev.type === \'auricular\'' not in CARA_21:
+            falla("2.4b · señales", "la cara no escucha `aviso`/`auricular`: las señales llegan y se pierden")
+        else:
+            dice_ok("2.4b · señales", ", ".join(sorted(senales)) + " — todas con su emisor o su origen en la cara")
+
+        # 11.c · Java: quien manda la seña tiene que ser `.Avisos`, en el momento.
+        avisos_java = (APK / "src" / "com" / "cort" / "ia" / "Avisos.java").read_text(encoding="utf-8")
+        if "avisoEnLaCara" not in avisos_java or "avisoEnLaCara" not in java:
+            falla("2.4b · java", "`Avisos` no avisa a la cara cuando llega algo: la automatización de avisos "
+                                 "sólo funcionaría al abrir la hoja")
+        elif "MainActivity.front()" not in avisos_java:
+            falla("2.4b · java", "el aviso se manda sin preguntar si la cara está: con la app cerrada sería un fallo")
+        else:
+            dice_ok("2.4b · java", "`.Avisos` manda la seña nada más guardar el aviso, y sólo si la cara está viva")
+
+    # 11.d · la hoja: bloque montado, enganchado y pintado.
+    sin_montar = [x for x in ("bloque('autos'", "enganchaAutos();", "pintaAutos();")
+                  if x not in CARA_21]
+    ids = sorted(set(re.findall(r'id="(eq-aut-[a-z]+)"', CARA_21)))
+    # `-est` y `-dice` no se buscan a pelo: los montan `linea('autos'…)` /
+    # `avisa('autos'…)` / `diceBien('autos'…)` con el prefijo, como en el resto de la hoja.
+    sin_dueno = [i for i in ids if f"el('{i}')" not in CARA_21
+                 and not (i.endswith(("-est", "-dice")) and "'autos'" in CARA_21)]
+    if "from './automatiza.js'" not in CARA_21:
+        falla("2.4b · hoja", "`telefono.js` no importa el motor: la hoja sería decoration")
+    elif sin_montar:
+        falla("2.4b · hoja", f"el bloque no está del todo montado: falta {', '.join(sin_montar)}")
+    elif not ids:
+        falla("2.4b · hoja", "no hay ningún `eq-aut-*`: el formulario no existe")
+    elif sin_dueno:
+        falla("2.4b · hoja", f"escritos y sin dueño: {', '.join(sin_dueno)}")
+    else:
+        dice_ok("2.4b · hoja", f"bloque 8 montado, con sus {len(ids)} campos enganchados")
+
+    sin_css = [c for c in (".eq-mod.apagada", ".eq-mod-b", ".eq-mod-n") if c not in
+               (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")]
+    if sin_css:
+        falla("2.4b · css", f"la hoja usa {', '.join(sin_css)} y `hud.css` no lo define")
+    else:
+        dice_ok("2.4b · css", "la fila de una regla, su apagado y sus botones tienen estilo")
+
+    # 11.e · las reglas mandan ANTES que la boca de CORT, y la frase se puede crear
+    # de una vez. Sin el −1, «modo noche» se lo llevaba el volumen de siempre.
+    antes = CARA_21.index("export function telefonoPorVoz")
+    cuerpo = CARA_21[antes:antes + 4000]
+    if "autos.dispara({ tipo: 'frase'" not in cuerpo:
+        falla("2.4b · voz", "las reglas no se consultan en `telefonoPorVoz`: la frase se va a la boca de siempre")
+    elif "reglaDeVoz" not in cuerpo:
+        falla("2.4b · voz", "«cuando … haz …» no crea ninguna regla: habría que escribirla a mano")
+    elif "case 'recuerdo'" not in (manos.group(1) if manos else ""):
+        falla("2.4b · voz", "la regla de apuntar recuerdos no está entre las manos")
+    else:
+        dice_ok("2.4b · voz", "las reglas van en el sitio −1 (ganan) y se crean hablando")
+
+    # 11.f · la prueba del motor, en el pipeline.
+    PRUEBA_AUTO = RAIZ / "scripts" / "prueba-automatiza.mjs"
+    if not PRUEBA_AUTO.is_file():
+        falla("2.4b · prueba", "falta `scripts/prueba-automatiza.mjs`: el motor llegaría al teléfono sin probar")
+    elif "prueba-automatiza.mjs" not in WORKFLOW:
+        falla("2.4b · prueba", "`build.yml` no corre la prueba del motor: quedaría fuera del pipeline")
+    else:
+        dice_ok("2.4b · prueba", "el motor se prueba con node, en el portátil y en el pipeline")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

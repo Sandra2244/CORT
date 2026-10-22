@@ -34,7 +34,7 @@
  *   vecina (nada de imports circulares ni de estado compartido por las paredes).
  */
 
-import { montaTelefono } from './telefono.js';
+import { montaTelefono, terminalTelefono } from './telefono.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -519,6 +519,29 @@ async function codigo(texto) {
   HISTORIAL_CODIGO.push(orden);
   escribeCodigo('$ ' + orden, 'orden');
   const estado = document.querySelector('#scr-codigo .scr-estado');
+
+  /* ── la terminal AMPLIADA del teléfono (ronda 2.4) ──
+     Hasta ahora, sin el portátil delante esta pantalla sólo sabía decir «sin
+     núcleo». Ahora la línea se atiende en el propio aparato, en dos niveles:
+     1) las órdenes del puente —volumen, linterna, alarma, apps, memoria, voz,
+        atuendo, agenda y las de los cerebros de casa (`busca cerebros`, `modelos`,
+        `usa el modelo …`, `descarga el modelo …`, `borra el modelo …`)—, y
+     2) lo que no es orden: se le pregunta al cerebro del teléfono (`Mente`), que
+        contesta con `Cerebro`/`Razon` sin red, o con el modelo local de Ollama si
+        lo elegiste. La respuesta NO se espera aquí: llega por el evento `mente` y
+        se escribe en esta misma terminal (el `espejo` de `telefono.js`), porque
+        bloquear el hilo del puente es justo lo que traba el teléfono.
+     Se necesita `CortNative.mente`: un instalador anterior lo echa de menos y cae
+     en la frase honesta de siempre, no en un botón mudo. */
+  if (enTelefono() && typeof (window.CortNative || {}).mente === 'function') {
+    if (terminalTelefono(orden, escribeCodigo)) return;
+    escribeCodigo('la contesto yo, sin el portátil…', 'aviso');
+    try {
+      window.CortNative.mente(JSON.stringify({ que: 'preguntar', texto: orden, eco: orden.slice(0, 40) }));
+      return;
+    } catch (e) { escribeCodigo('el cerebro del teléfono no respondió: ' + e, 'aviso'); return; }
+  }
+
   if (!await avisaSinNucleo(estado)) {
     escribeCodigo(sinNucleoFrase(), 'aviso'); return;
   }
@@ -551,8 +574,12 @@ function pintaCodigo() {
     escribeCodigo('Terminal de CORT — las órdenes se ejecutan en tu PC: «crea la carpeta Apuntes en Documentos», '
       + '«instala ffmpeg», «arregla el permiso de la carpeta».', 'aviso');
     if (enTelefono()) escribeCodigo(
-      'En el teléfono no hay consola: Android no deja que una app instale nada ni toque el sistema. '
-      + 'Conecta tu portátil (menú del botón «CORT · PC») y esto será una terminal de verdad.', 'aviso');
+      'En el teléfono esta terminal manda SOBRE EL TELÉFONO: volumen, linterna, alarma, apps, '
+      + 'memoria, voz, agenda y los cerebros de tu PC por Wi-Fi (`busca cerebros`, `modelos`, '
+      + '`usa el modelo …`, `descarga el modelo …`). Lo que no sea orden lo piensa el cerebro '
+      + 'del teléfono, con o sin internet. Instalar paquetes o tocar archivos del ordenador '
+      + 'sigue necesitando el portátil: conecta (menú del botón «CORT · PC») y escribe ahí. '
+      + 'Escribe `ayuda` para ver la lista.', 'aviso');
   }
 }
 

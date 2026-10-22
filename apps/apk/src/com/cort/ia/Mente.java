@@ -48,6 +48,7 @@ public class Mente {
     private final Context app;
     private final Nube nube;
     private final Cerebro cerebro;
+    private final Ollama ollama;
 
     /** El emisor por defecto que usa `mente(...)` para `preguntar`/`probar`. */
     private volatile AlResponder emisor;
@@ -56,6 +57,11 @@ public class Mente {
         this.app = contexto.getApplicationContext();
         this.nube = nube;
         this.cerebro = cerebro;
+        // `Ollama` es el cerebro gordo de casa: el servidor NO cabe en el APK (es
+        // Go y pide Linux), pero su API de red sí se maneja desde aquí. Se monta
+        // siempre porque cuesta cero: no abre sockets hasta que la dueña pide
+        // `lista` o `descubre`.
+        this.ollama = new Ollama(contexto);
     }
 
     /** El hook que `CortNative` llama una vez para que el resultado largo llegue a la cara. */
@@ -86,6 +92,23 @@ public class Mente {
             }
             if ("probar".equals(que)) {
                 lanzarProbar();
+                return pendiente();
+            }
+            // ── los cerebros de casa (Ollama por Wi-Fi) ─────────────────────
+            // `estado` y `usa` no tocan la red: se contestan aquí. `fija` la toca
+            // apenas (un ping de 3,5 s), así que también va al hilo, igual que
+            // `lista`, `descubre`, `borra` y `descarga`; la cara recibe el resultado
+            // por el mismo evento `mente` con `de:"ollama"`. La descarga emite TANTOS
+            // cuadros como trozos le llegue del servidor, que es lo que hace mover la
+            // barra.
+            if ("ollama".equals(que)) {
+                String accion = campo(j, args, "accion");
+                if (accion.isEmpty()) accion = campo(j, args, "hacer");
+                String modelo = campo(j, args, "modelo");
+                String servidor = campo(j, args, "servidor");
+                if ("estado".equals(accion)) return ollama.estadoJson();
+                if ("usa".equals(accion)) return ollama.usa(modelo);
+                lanzarOllama(accion, modelo, servidor);
                 return pendiente();
             }
             return mal("no conozco ese que de mente: " + que);
@@ -122,14 +145,19 @@ public class Mente {
             }
             // Desconocida: a la nube si está lista y hay red; si no, honestidad.
             if (nube.configurada() && nube.hayRed()) {
+                // El `de` que ve la dueña: `ollama` NO es una nube de pago, es el PC
+                // de su casa por Wi-Fi, y llamarlo «nube» hace parecer que la factura
+                // o el corte de internet afectan. Se distingue aquí, en el único
+                // sitio donde se sabe qué proveedor contestó.
+                final String de = "ollama".equals(nube.proveedor()) ? "casa" : "nube";
                 nuevoHilo(() -> {
                     String respuesta = nube.preguntar(texto, null);
                     if (respuesta == null) {
                         entregar(entrega, "{\"ok\":false,\"dice\":" + comilla(nube.ultimoFallo())
-                             + ",\"de\":\"nube\",\"eco\":" + comilla(eco40(eco)) + "}");
+                             + ",\"de\":\"" + de + "\",\"eco\":" + comilla(eco40(eco)) + "}");
                     } else {
                         entregar(entrega, "{\"ok\":true,\"responde\":" + comilla(respuesta)
-                             + ",\"de\":\"nube\",\"eco\":" + comilla(eco40(eco)) + "}");
+                             + ",\"de\":\"" + de + "\",\"eco\":" + comilla(eco40(eco)) + "}");
                     }
                 });
             } else {
@@ -162,6 +190,38 @@ public class Mente {
             } else {
                 json = "{\"ok\":true,\"responde\":" + comilla(respuesta)
                      + ",\"de\":\"nube\",\"eco\":" + comilla("prueba") + "}";
+            }
+            if (entrega != null) { try { entrega.con(json); } catch (Exception e) { Log.w("cort", "emisor", e); } }
+        });
+    }
+
+    /**
+     * El hilo de Ollama. `descarga` es la única acción que emite VARIOS cuadros:
+     * uno por trozo que notifica el servidor (con su `porcentaje`) y el final, así
+     * que se le pasa un `Progreso` que reenvía a la cara en vez de un único `con`.
+     * El resto cabe en un cuadro.
+     */
+    private void lanzarOllama(final String accion, final String modelo, final String servidor) {
+        final AlResponder entrega = emisor;
+        nuevoHilo(() -> {
+            String json;
+            if ("descarga".equals(accion) || "pull".equals(accion)) {
+                json = ollama.descarga(modelo, cuadro -> {
+                    if (entrega != null) { try { entrega.con(cuadro); } catch (Exception e) { Log.w("cort", "emisor-ollama", e); } }
+                });
+            } else if ("lista".equals(accion)) {
+                json = ollama.lista();
+            } else if ("fija".equals(accion) || "servidor".equals(accion)) {
+                // Escribe la dirección y hace el ping corto: la cara necesita saber
+                // si CONTESTA antes de pintar la lista de modelos.
+                json = ollama.fija(servidor);
+            } else if ("descubre".equals(accion) || "busca".equals(accion)) {
+                json = ollama.descubre(servidor);
+            } else if ("borra".equals(accion) || "rm".equals(accion)) {
+                json = ollama.borra(modelo);
+            } else {
+                json = "{\"ok\":false,\"de\":\"ollama\",\"dice\":" + comilla(
+                    "no conozco esa acción de ollama: " + (accion.isEmpty() ? "(venía vacía)" : accion)) + "}";
             }
             if (entrega != null) { try { entrega.con(json); } catch (Exception e) { Log.w("cort", "emisor", e); } }
         });

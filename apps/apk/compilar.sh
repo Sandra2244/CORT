@@ -57,7 +57,26 @@ cd "$(dirname "$0")"
 # (2) que cada Release publique la auditoría de instalabilidad, para poder
 # comprobar el archivo que llega al teléfono en vez de suponerlo. La guía de
 # toques por mensaje está en `docs/BLOQUEO-PLAY-PROTECT.md`.
-APK_VERSION="${APK_VERSION:-2.3.1}"   # desde aquí sale UN SOLO APK: este
+#
+# El 2.4.0 es la ronda del **cerebro de casa y las reglas**. Tres funciones nuevas,
+# todas con su prueba antes de firmar:
+#
+# · `Ollama.java` — el teléfono habla con el Ollama del PC por Wi-Fi (buscar, listar,
+#   bajar con su barra, borrar, y pensar con ese modelo: `usa` escribe las cuatro
+#   claves que lee `Nube`, así que la respuesta llega con `de:"casa"`, sin clave y
+#   sin internet). Ollama NO cabe dentro del APK: es un servidor en Go que pide
+#   Linux; lo que va dentro es su cliente. Cero permisos nuevos —el barrido de la
+#   red sale de `NetworkInterface`, no de `WifiInfo`.
+# · La terminal **ampliada en el teléfono** (`terminalTelefono`): la pantalla Código
+#   manda las órdenes por el puente (volumen, linterna, apps, avisos, modelos) y, si
+#   no hay portátil, el `Mente` del teléfono contesta con sus propios cerebros. El
+#   eco de todo se lee en la misma consola.
+# · `automatiza.js` — las reglas «cuando X, entonces Y» (hoja Equipo · 8), con las
+#   señales que ya existen: su frase, el aviso nuevo `{type:"aviso"}` que manda
+#   `.Avisos`, el auricular, la batería y la hora. El motor es puro y se prueba con
+#   node (45 comprobaciones); lo que no puede hacer, lo dice la propia hoja: las
+#   reglas se cumplen mientras CORT está en pantalla.
+APK_VERSION="${APK_VERSION:-2.4.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"

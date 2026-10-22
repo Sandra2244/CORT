@@ -79,6 +79,14 @@ public class JSONObject {
         return v instanceof Number ? ((Number) v).intValue() : porDefecto;
     }
 
+    // El tamaño de un modelo se dice en bytes y caben mal en un `int` (1,1 GB es
+    // 1.100.000.000 > 2^31-2 … justito). `Ollama` lee `size`, `total` y `completed`
+    // con `optLong`, que es lo que trae el `org.json` de Android de verdad.
+    public long optLong(String k, long porDefecto) {
+        Object v = datos.get(k);
+        return v instanceof Number ? ((Number) v).longValue() : porDefecto;
+    }
+
     public boolean optBoolean(String k, boolean porDefecto) {
         Object v = datos.get(k);
         return v instanceof Boolean ? (Boolean) v : porDefecto;
@@ -124,6 +132,11 @@ public class JSONObject {
     static String pinta(Object v) {
         if (v == null) return "null";
         if (v instanceof Boolean || v instanceof Number) return String.valueOf(v);
+        // Un `JSONObject` de papel metido dentro de otro (o de un `JSONArray`) no es
+        // un `Map`: hay que preguntarle primero por su clase, si no se imprimiría
+        // `org.json.JSONObject@…` dentro del JSON y la cara no lo leería.
+        if (v instanceof JSONObject) return ((JSONObject) v).toString();
+        if (v instanceof JSONArray) return v.toString();
         if (v instanceof Map) return new JSONObject(cop((Map<String, Object>) v)).toString();
         if (v instanceof List) return new JSONArray(new ArrayList<Object>((List<Object>) v)).toString();
         return comilla(String.valueOf(v));

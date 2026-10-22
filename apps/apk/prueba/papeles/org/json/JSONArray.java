@@ -52,4 +52,24 @@ public class JSONArray {
         Object v = items.get(i);
         return v instanceof java.util.Map ? new JSONObject(JSONObject.cop((java.util.Map<String, Object>) v)) : null;
     }
+
+    public String optString(int i, String porDefecto) {
+        if (i < 0 || i >= items.size()) return porDefecto;
+        Object v = items.get(i);
+        return v == null ? porDefecto : String.valueOf(v);
+    }
+
+    /* Falta hasta la ronda 2.4: `Ollama` mete un `JSONObject` dentro de un
+       `JSONArray` y luego pide `toString()` para imprimirlo dentro de su cuadro.
+       El `org.json` de Android sí tiene este método; el de papel no existía, así
+       que salía `org.json.JSONArray@1b6d…` y la cara no habría leído nada. Lo
+       cazó `Prueba4` al parsear de vuelta su propia lista. */
+    public String toString() {
+        StringBuilder b = new StringBuilder("[");
+        for (int i = 0; i < items.size(); i++) {
+            if (i > 0) b.append(',');
+            b.append(JSONObject.pinta(items.get(i)));
+        }
+        return b.append(']').toString();
+    }
 }

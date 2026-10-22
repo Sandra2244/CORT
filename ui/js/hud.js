@@ -1510,7 +1510,16 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   'busca ', 'qué sabes de mí', 'acuédate de ', 'voz de siri', 'cambia la voz',
   'ponte azul', 'atuendo ', 'burbuja', 'piensa ', 'sincroniza con el pc',
   '¿qué tengo hoy?', 'mi agenda', 'las citas de la semana', 'revisa el correo',
-  'apunta una cita con Samuel a las 9', 'enciende la linterna'];
+  'apunta una cita con Samuel a las 9', 'enciende la linterna',
+  /* ronda 2.4 · los cerebros de casa. Se escriben igual con el portátil delante o
+     desde la terminal de la pantalla Código en el teléfono (`terminalTelefono`), así
+     que el Tab los ofrece en las dos caras. */
+  'busca cerebros', 'modelos', 'muéstrame los modelos del teléfono',
+  'usa el modelo qwen2.5:1.5b', 'descarga el modelo qwen2.5:0.5b', 'borra el modelo llama3',
+  /* las automatizaciones (ronda 2.4): las mismas palabras en el Tab y en la hoja
+     8 · Automatiza del teléfono; `automatiza.js` es quien las cumple. */
+  'mis automatizaciones', 'automatiza cuando diga modo noche haz callar la música',
+  'ayuda', 'olvida la terminal'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));
   if (!hits.length) return null;

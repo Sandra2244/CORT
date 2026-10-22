@@ -71,10 +71,73 @@ SQLite propio (`cort.db`), y `sincronizar` lo cuadra con el portátil por la LAN
 | `ajustar` | `proveedor`, `base`, `modelo`, `clave` (`clave:""` = no tocar) | lo mismo que `estado` |
 | `preguntar` | `texto`, `eco` (primeros 40 caracteres) | `{"pendiente":true}` → evento `{type:"mente", ok, responde, de:"nube\|local", eco}`; si `de:"local"` y la frase era una orden del aparato, trae además `accion` y `param` |
 | `probar` | — | `{"pendiente":true}` → evento igual, con `responde` corto |
+| `ollama` | `accion` (`estado`, `usa`, `fija`, `lista`, `descubre`, `descarga`, `borra`), `modelo`, `servidor` | **desde la 2.4**: los cerebros de casa. `estado` y `usa` contestan al momento (no gastan red); las otras cinco devuelven `{"pendiente":true}` y su cuadro sale por el mismo `type:"mente"` con `de:"ollama"` y su `que`. Ver §4b |
+
+## 4b · `mente({que:"ollama", …})` — los cerebros de casa (ronda 2.4)
+
+Ollama **no cabe dentro del APK**: es un servidor escrito en Go que pide Linux. Lo
+que vive en el teléfono es su cliente HTTP (`Ollama.java`), y habla con el Ollama del
+PC por la Wi-Fi. Eso obliga a la dueña a arrancarlo una vez con
+`OLLAMA_HOST=0.0.0.0:11434` (en Linux: `systemctl edit ollama.service` →
+`Environment="OLLAMA_HOST=0.0.0.0:11434"` → `daemon-reload` → `restart`); sin eso el
+servidor sólo escucha en su propio `127.0.0.1` y el teléfono nunca lo ve.
+
+| `accion` | argumentos | cómo vuelve |
+|---|---|---|
+| `estado` | — | sincrónico: `{"ok":true,"de":"ollama","que":"estado","servidor":"192.168.1.20:11434","origen":"http://…","puerto":11434,"modelo":"…","eligeNube":true}` |
+| `usa` | `modelo` | sincrónico: escribe `nube-proveedor:"ollama"`, `nube-base:<origen>/v1`, `nube-modelo` y `ollama-servidor`; a partir de ahí `preguntar` se contesta en casa, **sin clave y sin internet**, y el evento trae `de:"casa"` en vez de `de:"nube"` |
+| `fija` | `servidor` (admite `IP`, `IP:puerto`, `http://…:11434` y hasta la base con `/v1`) | `{"pendiente":true}` → `{"que":"fija","servidor","origen","version","contesta":bool,"dice"}`. Guarda **siempre** (puede que el PC esté dormido) y dice la verdad de si contestó |
+| `lista` | — | `{"que":"lista","servidor","version","modelos":[{"nombre","tamano","parametros","cuantizacion","modificado"}],"total"}` — `tamano` en bytes, leído como `long`: 1,1 GB es 1.100.000.000 y no cabe en un `int` |
+| `descubre` | `servidor` (opcional, separado por comas) | `{"que":"descubre","rango","probados","servidores":[{"host","version"}]}`. Con `servidor` vacío barre el `/24` propio con 24 hilos y 260 ms por socket; **la suite y el pipeline pasan siempre la lista explícita**, para no llamar a la puerta de nadie en un runner compartido. Cero permisos nuevos: la red propia sale de `NetworkInterface`, no de `WifiInfo` |
+| `descarga` | `modelo` | **varios cuadros**: uno cada vez que cambia el `status`, salta 5 puntos o pasan 400 ms —`{"que":"descarga","modelo","estado","hecho","total","porcentaje":0.4213}`— y uno final con `listo:true\|false`. Es lo que mueve la barra de la hoja |
+| `borra` | `modelo` | `{"que":"borra","modelo","como":"DELETE"}`; si el servidor es viejo (405/400/404) cae al `POST {"name":…}` |
+
+Los errores llevan `{"ok":false,"de":"ollama","que":"<acción>","dice"}`: el `que` no
+es adorno, es lo que le dice a la cara si tiene que bajar la barra de una descarga o
+sólo avisar en el bloque. Ningún método lanza: si el PC no está, la hoja lo cuenta y
+`Cerebro`/`Razon` siguen contestando solas.
 
 `Mente` **reconoce** la orden pero no la ejecuta: la hace `Acciones` cuando la cara
 le devuelve `accion`/`param`. Sin ese reenvío, «sube el volumen» sin portátil se
 quedaba en un «vale» vacío.
+
+## 4c · `automatiza.js` — «cuando X, entonces Y» (ronda 2.4)
+
+No es un método del puente: es una capa **de la cara** que se sirve de los métodos
+que ya están. El motor (`ui/js/automatiza.js`) es puro —almacén, reloj y manos
+entran por parámetros—, y por eso se prueba en el portátil con
+`node scripts/prueba-automatiza.mjs` (45 comprobaciones) sin WebView ni Android.
+
+| disparador | señal real que lo alimenta | campo |
+|---|---|---|
+| `frase` | `stt-final` (el dictado) y la terminal de la pantalla Código | `texto` |
+| `aviso` | el evento `{type:"aviso"}` nuevo de esta ronda | `de` (quién) y/o `texto` (qué dice) |
+| `auricular` | `{type:"auricular", escuchando}` | `estado`: `suena` / `deja de sonar` |
+| `cargador` | `aparato()` —`bateria`, `cargando`—, mirado por un latido de 30 s | `estado`: `conecta` / `desconecta` / `baje de` + `hasta` |
+| `hora` | el mismo latido, con `HH:MM` del reloj del teléfono | `hora` (una vez al día) |
+
+| acción | mano que la ejecuta (ya existía) |
+|---|---|
+| `habla` | `ctx.say()` |
+| `volumen`, `linterna`, `alarma`, `abrir` | `accion({que:'volumen'\|'linterna'\|'alarma'\|'abrir'})` |
+| `musica` | `musicaParar()` / `musicaPlay()` / `musicaPausa()` / `musicaSiguiente()` |
+| `piensa` | `mente({que:'preguntar'})` — casa (Ollama) o nube, según esté ajustado |
+| `recuerdo` | `memoria({que:'guardar'})` |
+
+Tres reglas del motor que importan a quien la use:
+
+· Las suyas **ganan**: las reglas se consultan antes que la boca de CORT
+  (`telefonoPorVoz`, sitio −1). Si ella apuntó «modo noche», no se lo lleva el
+  volumen de siempre.
+· Freno de **un minuto** por regla (visible en la consola: «acaba de sonar: la freno
+  un minuto»), y las de hora no se repiten en el mismo día. Sin esto, una regla de
+  avisos con la palabra «hola» sonaría veinte veces en un minuto.
+· Se cumplen **mientras CORT está en pantalla**. La cara es una página: un WebView
+  cerrado no escucha. Lo que sigue funcionando con la pantalla apagada es lo que
+  hace Java solo (leer avisos en voz alta, el reproductor, el oído del auricular).
+
+Las reglas se guardan en el `localStorage` del WebView bajo `cort.autos.v1`; si el
+teléfono no deja escribir, el motor lo dice y siguen vivas en RAM hasta cerrar.
 
 ## 5 · `atuendo(que, args)` — la cara cambia de traje
 
@@ -197,6 +260,14 @@ cuatro a `window.__cortNative.emit({...})`:
 | `mente` | termina una pregunta al cerebro de la nube (hilo aparte) | `{ok,responde,de:"nube\|local",eco}`; si `de` es `local` puede traer además `{accion,param}`, **y la cara tiene que reenviarlos a `accion()`** (`Mente` nombra la cosa, `Acciones` la hace) |
 | `memoria` | termina una sincronía con el portátil | `{ok,subidos,bajados,dice}` |
 | `auricular` | el **doble toque del auricular** abre el micro, y cuando se cierra | `{escuchando:true\|false}` |
+| `aviso` | **ronda 2.4** — `.Avisos` acaba de guardar un aviso nuevo | `{de,dice}` (`dice` es la línea ya formada por `linea()`: hora, quién y asunto) |
+
+`aviso` es el único que no contesta a nada: es Java empujando lo que pasó, sin que
+la cara lo pida. Existe por las automatizaciones («cuando llegue algo de WhatsApp,
+haz X»), que necesitan la señal **en el momento**, no cuando la dueña abra la hoja
+Equipo y se lea el resumen. Se manda sólo si `MainActivity.front()` existe (con la
+app cerrada no hay página que escuche, y el aviso queda igual guardado para leerlo
+después). Cero permisos nuevos: el lector de notificaciones ya estaba dado de alta.
 
 `accion` **no** es un evento: es síncrono (`envia('accion', …)` trae la respuesta en
 el mismo viaje), y no hay nada largo que Java haga por su cuenta en esta ronda. La

@@ -2,13 +2,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # prueba-mente.sh — el cerebro del APK, probado EN EL PORTÁTIL, sin teléfono.
 #
-# Cuatro clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro:
-# `Razon` (cuentas, unidades, fechas), `Cerebro` (la tabla de frases), `Nube`
-# (el proveedor) y `Mente` (quién responde cada frase). Lo que las ata a Android
-# son cinco tipos: `Log`, `Context`, `SharedPreferences`, `AssetManager` y el
-# `org.json` del sistema. Aquí se les pone su **gemelo de papel**
-# (`apps/apk/prueba/papeles`) y con eso el JDK de a pie compila y ejecuta las
-# tres pruebas:
+# Cuatro clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro: `Razon`
+# (cuentas, unidades, fechas), `Cerebro` (la tabla de frases), `Nube` (el
+# proveedor), `Ollama` (los cerebros del PC de casa por Wi-Fi) y `Mente` (quién
+# responde cada frase). Lo que las ata a Android son cinco tipos: `Log`, `Context`,
+# `SharedPreferences`, `AssetManager` y el `org.json` del sistema. Aquí se les pone
+# su **gemelo de papel** (`apps/apk/prueba/papeles`) y con eso el JDK de a pie
+# compila y ejecuta las cuatro pruebas:
 #
 #   Prueba.java   · `Razon` a pelo: 43 frases suyas y seis que no lo son.
 #   Prueba2.java  · la RUTA: acción conocida → `Cerebro`; cuenta/unidad/hora →
@@ -16,6 +16,10 @@
 #   Prueba3.java  · las 283 frases de la tabla, una por una, contra las DOS
 #                   tablas (la del asset y la del código) para ver los robos
 #                   por orden — sólo se ven aquí, nunca en la cara.
+#   Prueba4.java  · `Ollama` contra un Ollama de mentira levantado en el propio
+#                   JDK (`com.sun.net.httpserver`): listar, bajar con progreso,
+#                   borrar en las dos formas de la API, descubrir y que la pregunta
+#                   se conteste con el modelo de casa. Todo por `127.0.0.1`.
 #
 # `--release 11` no se pasa: en este portátil `javac` sólo existe como módulo del
 # JDK (`java -m jdk.compiler/…`) y ese punto de entrada no acepta la bandera. El
@@ -34,9 +38,9 @@ T=/tmp/cort-mente
 
 # 1 · el escenario, siempre limpio: fuentes + gemelos de papel + pruebas
 rm -rf "$T"; mkdir -p "$T/src/com/cort/ia" "$T/papeles" "$T/assets" "$T/assets-vacias" "$T/out"
-cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$T/src/com/cort/ia/"
+cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$E"/Ollama.java "$T/src/com/cort/ia/"
 cp -r "$P"/papeles/* "$T/papeles/"
-cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$T/src/com/cort/ia/"
+cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$P"/Prueba4.java "$T/src/com/cort/ia/"
 cp "$RAIZ"/apps/apk/assets/habilidades.json "$T/assets/"
 
 # 2 · `javac` como orden o como módulo del JDK, según el portátil
@@ -50,10 +54,14 @@ si_javac() {
 
 LISTA=$(find "$T/papeles" "$T/src" -name '*.java')
 echo "== compilando $(echo "$LISTA" | wc -l) ficheros de papel"
+# `--add-modules jdk.httpserver` hace falta desde que `Prueba4` monta un Ollama de
+# mentira: el servidor HTTP del JDK no está en el conjunto de módulos raíz cuando se
+# compila desde el classpath de toda la vida. En Android ese servidor NO existe (allí
+# se habla con `HttpURLConnection`), así que la bandera sólo vive en esta prueba.
 # shellcheck disable=SC2086
-si_javac -encoding UTF-8 -d "$T/out" $LISTA
+si_javac -encoding UTF-8 --add-modules jdk.httpserver -d "$T/out" $LISTA
 
-# 3 · las tres suites; la última manda en el código de salida
+# 3 · las cuatro suites; la última manda en el código de salida
 #
 # Cada salida va a su propio `.log` y se imprime entera SI ALGO FALLA. Con
 # `java … | tail -1` se perdería el detalle justo cuando hace falta: `pipefail`
@@ -63,12 +71,13 @@ si_javac -encoding UTF-8 -d "$T/out" $LISTA
 MEM="${JAVA_MEM:-256m}"
 pasa=0
 fallan=0
-for suite in Prueba Prueba2 Prueba3; do
+for suite in Prueba Prueba2 Prueba3 Prueba4; do
   caso="Razon a pelo"; [ "$suite" = Prueba2 ] && caso="la ruta de Mente"
   [ "$suite" = Prueba3 ] && caso="las frases de la tabla"
+  [ "$suite" = Prueba4 ] && caso="Ollama en la Wi-Fi de casa"
   echo "== $caso"
   set +e
-  java -Xmx"$MEM" -cp "$T/out" "com.cort.ia.$suite" > "$T/$suite.log" 2>&1
+  java -Xmx"$MEM" --add-modules jdk.httpserver -cp "$T/out" "com.cort.ia.$suite" > "$T/$suite.log" 2>&1
   st=$?
   set -e
   if [ $st -eq 0 ]; then
@@ -79,6 +88,6 @@ for suite in Prueba Prueba2 Prueba3; do
     echo "   (sale $st — log: $T/$suite.log)"
   fi
 done
-[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 3"; exit 1; }
+[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 4"; exit 1; }
 FRASES=$(python3 -c 'import json;d=json.load(open("apps/apk/assets/habilidades.json"));print(sum(len(p["patrones"]) for p in d["patrones"]))' 2>/dev/null || echo "?")
-echo "MENTE OK: las 3 suites pasan sobre las $FRASES frases de la tabla."
+echo "MENTE OK: las 4 suites pasan sobre las $FRASES frases de la tabla."

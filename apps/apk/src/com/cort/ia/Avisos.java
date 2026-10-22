@@ -86,6 +86,18 @@ public class Avisos extends NotificationListenerService {
                              new SimpleDateFormat(HORA, ES).format(new Date(aviso.getPostTime())));
         if (dicho != null) {
             guarda(dicho);
+            /* Ronda 2.4 · la cara se entera EN EL MOMENTO. Las automatizaciones
+               («cuando llegue un aviso de WhatsApp, haz X») viven en `automatiza.js`
+               y necesitan la señal recién llegada, no cuando la dueña abra la hoja
+               Equipo y se lea el resumen. Sin Activity —o con la página cerrada—
+               `front()` es `null` y esto no hace nada: el aviso igual se guarda y se
+               puede leer después, que es lo que ya hacía CORT.
+               `cuadro` hace el favor de ir al hilo de la UI, así que desde el hilo
+               del `NotificationListener` se puede llamar tranquilo. */
+            try {
+                MainActivity cara = MainActivity.front();
+                if (cara != null) cara.puente().avisoEnLaCara(de, dicho);
+            } catch (Exception laCaraNoEsta) { }
         }
     }
 

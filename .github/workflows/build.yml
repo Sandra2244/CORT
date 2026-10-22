@@ -70,17 +70,20 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.3.1"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.4.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
                                  # temporizador, abrir apps, voces del TTS, memoria
                                  # en SQLite, cerebro en la nube, atuendos), el
                                  # OÍDO PROPIO de 2.3.0 (Vosk 0.3.47 con su modelo
-                                 # de español), y en 2.3.1 la firma con los tres
-                                 # esquemas a la fuerza + la auditoría de
-                                 # instalabilidad en `-firma.txt`, porque a la dueña
-                                 # se lo bloquea Play Protect al instalar.
+                                 # de español), la firma con los tres esquemas a la
+                                 # fuerza + la auditoría de instalabilidad de 2.3.1,
+                                 # y en 2.4.0 los CEREBROS DE CASA (`Ollama.java`:
+                                 # lista, descarga con barra, borra y piensa por
+                                 # Wi-Fi con el Ollama del PC), la terminal ampliada
+                                 # en el teléfono y las REGLAS «cuando X, entonces Y»
+                                 # (`automatiza.js`, hoja Equipo · 8).
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -146,6 +149,28 @@ jobs:
                   | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
             [ -n "$msg" ] || msg=$(tail -10 /tmp/mente.log | tr '\n\r' '  ' | sed 's/%/%25/g')
             echo "::error::prueba-mente.sh salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
+      - name: Probar el motor de automatizaciones con node (sin teléfono)
+        id: autos
+        # `scripts/prueba-automatiza.mjs` ejerce las reglas «cuando X, entonces Y»
+        # sobre el módulo PURO (`ui/js/automatiza.js`): los acentos de la frase, el
+        # freno de un minuto, «a las 7:30 una vez al día», la señal del aviso que
+        # manda `.Avisos`, la batería del `aparato()` y lo que pasa cuando una acción
+        # no existe en este APK. Con almacén, reloj y manos de mentira, así que no
+        # necesita WebView ni Android. Son 45 comprobaciones y valen lo que vale el
+        # bloque 8 de la hoja Equipo.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-automatiza.mjs > /tmp/autos.log 2>&1
+          st=$?
+          tail -20 /tmp/autos.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/autos.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/autos.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-automatiza.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
@@ -271,18 +296,57 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.3.1**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.3.1.apk`
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.4.0**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.4.0.apk`
             es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
             dentro todo lo que estaba repartido entre los dos, más el **oído propio
-            sin nube** (párrafo «Escucha sin internet» abajo). **Se instala encima
-            del 2.0.0, del 2.1.0, del 2.2.0 y del 2.3.0 sin desinstalar y sin perder
-            nada** (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20301 > 20300):
+            sin nube** (párrafo «Escucha sin internet» abajo), los **cerebros de
+            casa** y **las reglas «cuando X, entonces Y»** (dos párrafos nuevos).
+            **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0 y del
+            2.3.1 sin desinstalar y sin perder
+            nada** (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20400 > 20301):
             mira la huella del `-firma.txt` de las dos Releases y compárala antes de
             instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
             llave distinta, medida en `docs/INSTALAR-APK.md`—: desinstala una vez,
             instala este, y de aquí en adelante todas las actualizaciones entran
             encima.
+
+            **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
+            (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC
+            y desde la hoja **Equipo · 3 · Cerebro** se puede **buscar** el PC en la
+            Wi-Fi, ver **qué modelos hay**, **descargar** uno con su barra de progreso,
+            **borrarlo** y **elegirlo** para pensar. Al elegirlo, CORT pasa a contestar
+            con `de:"casa"`: sin clave y sin internet, usando el ordenador de casa.
+            Ollama **no cabe dentro del APK** —es un servidor en Go que pide Linux—, así
+            que lo que viaja dentro es su cliente; la única tarea manual es arrancar el
+            servidor con `OLLAMA_HOST=0.0.0.0:11434` para que conteste a la red. **Cero
+            permisos nuevos**: el barrido de la red propia sale de `NetworkInterface`, no
+            de `WifiInfo`. Probado contra un Ollama de mentira levantado dentro del JDK
+            (`apps/apk/prueba/Prueba4.java`, 36 comprobaciones) antes de firmar.
+
+            **La terminal, ampliada en el teléfono** (pantalla **Código**). Antes en el
+            teléfono la consola no hacía nada porque no hay núcleo que consultar. Ahora
+            las órdenes se atienden **en el aparato**: volumen, linterna, alarmas, apps,
+            memoria, cerebro y los modelos de casa, con `estado` para leer lo que mide
+            el teléfono y `ayuda` para ver la lista de lo que se atiende sin portátil.
+            Lo que CORT contesta se escribe en la propia consola (y si el portátil está
+            conectado, la orden sigue yendo a él).
+
+            **Automatizaciones como las de JARVIS** (`docs/AUTOMATIZAR-CORT.md`, hoja
+            **Equipo · 8 · Automatiza**). Reglas suyas, de dos mitades: «cuando
+            ⟨pasa una cosa⟩ → haz ⟨otra⟩». Los cinco disparadores son señales que ya
+            existían o que esta ronda añade sin permiso nuevo: su **frase**, el **aviso**
+            que recién llega (Java manda el evento `{type:"aviso"}` desde `.Avisos`), el
+            **auricular**, la **batería** y la **hora**. Las ocho acciones usan las manos
+            de siempre: hablar, volumen, linterna, abrir una app, la música, pensar,
+            apuntar un recuerdo y poner una alarma. Se crean **hablando** («automatiza
+            cuando diga modo noche haz callar la música») o con los botones, vienen tres
+            de muestra, cada regla tiene su `▶ probar ahora`, y se guardan en las
+            preferencias del WebView. Se cumplen **mientras CORT está en pantalla** —la
+            cara es una página y una página cerrada no escucha—; lo que sigue funcionando
+            con la pantalla apagada es lo que hace Java solo (leer avisos, el
+            reproductor, el oído del auricular). El motor es puro y se prueba con node
+            sin teléfono (`scripts/prueba-automatiza.mjs`, 45 comprobaciones).
 
             **¿Play Protect te lo bloquea? Lea `docs/BLOQUEO-PLAY-PROTECT.md` antes
             de tirar el APK.** Es la ronda de que se pueda instalar: este `.apk`
