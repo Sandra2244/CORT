@@ -136,6 +136,30 @@ jobs:
           path: ~/.cache/cort-kotlin
           key: cort-kotlin-1.9.24-v1
           restore-keys: cort-kotlin-
+      - name: Comprobar la costura (manifiesto ↔ Java ↔ cara)
+        id: costura
+        # `scripts/prueba-costura.py` es lo único que puede decir si las tres capas
+        # se nombran lo mismo, y `javac` NO lo ve nunca: un `@JavascriptInterface`
+        # que la cara llama con otro nombre, una pantalla que Java nombra `equipo`
+        # y `pantallas.js` no tiene, un `<service>` sin su `android:permission`, un
+        # atajo con la etiqueta escrita como literal, un símbolo `@hide` que el
+        # `android.jar` no exporta. Son doce sectores y cuesta una fracción de
+        # segundo, así que va EL PRIMERO del trabajo: si la costura está abierta,
+        # no gasta ni motor ni SDK. La anotación es obligatoria —los registros de
+        # Actions son privados y este repo no tiene token para leerlos—.
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/prueba-costura.py > /tmp/costura.log 2>&1
+          st=$?
+          tail -30 /tmp/costura.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '^  · |FALTA' /tmp/costura.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/costura.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-costura.py salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el cerebro en el JDK (lógica, sin teléfono)
         id: mente
         # `scripts/prueba-mente.sh` compila `Cerebro`, `Razon`, `Nube` y `Mente`
