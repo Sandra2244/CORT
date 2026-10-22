@@ -7,16 +7,35 @@ la Release, y las de la segunda tabla son los mensajes tal cual los muestra Andr
 
 ## Primero: el APK no está roto. Esto es lo que se midió
 
-| Lo que mira el instalador | Qué salió en el `CORT-IA-2.3.0.apk` |
+Se bajaron los dos APK publicados (`2.3.0` y `2.3.1`) y se leyeron byte a byte. El
+`2.3.1` es el que está ahora en la Release:
+
+| Lo que mira el instalador | Qué salió en el `CORT-IA-2.3.1.apk` |
 | --- | --- |
 | El ZIP abre y no está cortado | 47 entradas, CRC íntegro, 47.365.737 bytes |
-| sha256 del archivo | `2aacd93a0d8d051f6947b80be78258481de9559091eaa76ea796f50c52488811` |
+| sha256 del archivo | `68dce45384573744e43b9a7f04c368715a8dfb3419f1fc2f4ee231b13488ebb5` |
 | Esquemas de firma | **v1** (`META-INF/CORT.RSA`) **+ v2 + v3** — los tres |
+| La v1, comprobada fuera de `apksigner` | `keytool -printcert -jarfile` la lee, imprime la huella y sale con código **0**, sin una queja |
 | Huella del certificado | `faabef468f3ae04fdfab9659…` (la `fa:ab:ef:46…` de siempre) |
 | Validez del certificado | desde **2026-10-21 11:19 GMT** hasta 2056-10-13 |
 | `resources.arsc` | sin comprimir y alineado a 4 (obligatorio desde Android 11) |
+| `minSdk` / `targetSdk` | 26 (Android 8) / 34 (Android 14) |
 | ¿Marcado como depurable? | no |
 | `REQUEST_INSTALL_PACKAGES` | no se pide: CORT no instala APKs por su cuenta |
+
+Todo eso está impreso también en `CORT-IA-2.3.1-firma.txt`, que viaja al lado del
+`.apk`, porque sin sesión de GitHub los registros del pipeline dan 403.
+
+> **Un detalle de la hoja que puede confundir.** En el `-firma.txt` verás dos
+> afirmaciones que parecen peleadas: la auditoría dice `firma: v1+v2+v3` y más
+> abajo `apksigner verify --verbose` imprime `Verified using v1 scheme (JAR
+> signing): false` **mientras sale con código 0**. Las dos son verdad y no hay
+> nada que arreglar: `META-INF/CORT.RSA` está, y `keytool` la verifica sin error
+> (medido). `apksigner` reserva el `true` de esa línea para el caso en que la v1
+> *hiciera falta* para instalar, y con `minSdk 26` nunca hace falta — Android 8+
+> comprueba el bloque de firma v2/v3, y ahí la hoja dice `true`. Lo que
+> decide si puedes instalar **encima** del CORT que ya tienes es la **llave**
+> (`fa:ab:ef:46…`), no el esquema, y esa llave no se ha movido desde el 2.0.0.
 
 O sea: no hay ningún defecto que justifique un bloqueo. Lo que pasa es otra cosa.
 
@@ -45,7 +64,7 @@ además hay que desplegar «Opciones avanzadas» para que aparezca.
 | «No se ha podido instalar porque la firma no coincide» / `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | otra cosa: vienes de un 1.x o del APK original, que llevan **otra llave** | desinstalar **una** vez y reinstalar; desde el 2.0.0 la llave no se mueve. Está explicado en `docs/INSTALAR-APK.md` |
 | «El certificado no es válido», «la fecha del certificado es incorrecta», «aún no válido» | el reloj del teléfono va mal | Ajustes ▸ Sistema ▸ **Fecha y hora** ▸ «Automática». El certificado de CORT empieza a ser válido el 2026-10-21 11:19 GMT: si el móvil marca una fecha anterior, Android lo rechaza y el fallo parece de seguridad pero es de hora |
 | «Espere a que Play Protect analice la aplicación» y se queda girando | está consultando la reputación por red y no la encuentra | instala **sin red**: activa el modo avión (o apaga Wi‑Fi y datos) y abre el `.apk` otra vez. Sin conexión no hay consulta, y el aviso se puede aceptar |
-| Pantalla roja de «riesgo» con cuenta atrás (Xiaomi / Redmi / HyperOS) | el escáneo de MIUI, aparte de Play | en esa pantalla: **«Detalles» ▸ «Instalar»**; y una sola vez: Ajustes ▸ Apps ▸ ⋮ ▸ *Permisos especiales* ▸ *Instalar apps desconocidas* ▸ Archivos. Si repite, en Ajustes ▸ Seguridad ▸ desactiva «Escanear apps» mientras instalas |
+| Pantalla roja de «riesgo» con cuenta atrás (Xiaomi / Redmi / HyperOS) | el escaneo propio de MIUI, aparte de Play | en esa pantalla: **«Detalles» ▸ «Instalar»**; y una sola vez: Ajustes ▸ Apps ▸ ⋮ ▸ *Permisos especiales* ▸ *Instalar apps desconocidas* ▸ Archivos. Si repite, en Ajustes ▸ Seguridad ▸ desactiva «Escanear apps» mientras instalas |
 | «Bloqueo de descargas desconocidas» (Samsung) | el interruptor propio de Samsung | Ajustes ▸ Biometría y seguridad ▸ desactiva **«Bloquear descargas desconocidas»** un momento; o Play Store ▸ Play Protect ▸ ⚙ ▸ «Analizar aplicaciones» OFF, instalar, y volverlo a ON |
 | «Instalación bloqueada por tu administrador» | hay un perfil de trabajo o de escuela en el teléfono | ahí no hay truco honesto: hace falta quitar el perfil o instalar desde el perfil personal |
 

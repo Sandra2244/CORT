@@ -97,6 +97,39 @@ if "v2" not in esquemas:
 if not esquemas:
     MAL.append("sin ninguna firma legible")
 
+# La contradicción que hay que dejar escrita, no colleoneada. `apksigner verify
+# --verbose` imprime «Verified using v1 scheme (JAR signing): false» aunque el APK
+# trae `META-INF/CORT.RSA` + `CORT.SF` + `MANIFEST.MF`, y sale con código 0. Medido
+# el 2026-10-21 sobre el `CORT-IA-2.3.1.apk` publicado: `keytool -printcert
+# -jarfile` lo lee, imprime la huella `fa:ab:ef:46…` y termina en 0 sin una sola
+# queja — o sea que la v1 está y verifica. `apksigner` reserva el `true` de esa
+# línea para el caso en que la v1 hicera falta para instalar, y con `minSdk 26`
+# nunca hace falta: Android 8+ comprueba el bloque v2/v3 (y ahí la hoja dice
+# `true`). Como la instalación encima del anterior depende de la LLAVE y no del
+# esquema, aquí se comprueba la v1 con una herramienta distinta en vez de discutir
+# la semántica de `apksigner`.
+import shutil
+kt = shutil.which("keytool") or os.environ.get("JAVA_HOME", "") + "/bin/keytool"
+if not (kt and os.path.exists(kt)):
+    print("   · v1 comprobada por fuera: sin `keytool` a mano (no invalida nada)")
+else:
+    k = subprocess.run([kt, "-printcert", "-jarfile", apk], capture_output=True, text=True)
+    quejas = [l for l in (k.stdout + k.stderr).splitlines()
+              if any(w in l.lower() for w in ("verification failed", "fall", "error"))]
+    # `keytool` imprime `	 SHA256: FA:AB:…:77`, así que se parte por el primer
+    # `SHA256:` (no por `:`, que se quedaría con el último byte del hash).
+    huella = ""
+    for l in k.stdout.splitlines():
+        if "SHA256:" in l:
+            huella = l.split("SHA256:", 1)[1].strip().replace(":", "")
+            break
+    if k.returncode == 0 and not quejas:
+        print(f"   · v1 verificada con keytool: sí (huella {huella[:16]}…)")
+    else:
+        print(f"   · v1 verificada con keytool: NO — sale {k.returncode}: "
+              f"{(quejas[:1] or ['sin detalle'])[0][:120]}")
+        MAL.append("la firma v1 no verifica según keytool")
+
 # ── 3 · recursos: sin comprimir y alineados (obligatorio desde API 30) ────────
 try:
     i = z.getinfo("resources.arsc")
