@@ -63,6 +63,23 @@ Ella escribió de corrido; aquí está repartido. Entre paréntesis, la tarea de
 
 Esto es lo que hay dentro ahora mismo, con su sitio exacto. Cambia más de un diagnóstico.
 
+- **Y en cuanto se midió, apareció el culpable de verdad (ronda F8, 2026-10-22).** Todo lo
+  de abajo eran lecturas del código; ésta es una ejecución. La sonda nueva
+  (`ui/sonda-carita.html`, un `window.CortNative` de mentira + el módulo de hojas real)
+  produjo un `TypeError` en `pantallas.js:669`: `enganchaTransporte` armaba sus selectores
+  como `'#' + p + s` → `#muplay`, mientras `transporteHTML` pinta los ids con guion
+  (`mu-play`). El primer `$('play').onclick` recibía `null`. Como ese fallo ocurre **dentro
+  de `initPantallas`**, y el CSS ata la cara nueva entera a la clase
+  `pantallas-montadas` (que se añade al FINAL de ese mismo `initPantallas`), el resultado
+  medido fue: en el teléfono **no se monta ninguna hoja nueva** — ni Música, ni MV, ni
+  Equipo, ni Charla, ni Código — y ningún botón del reproductor obedece. Desde la ronda 2.0
+  (`5faf8fe`, al factorizar el transporte común a Música y MV). Eso es «se traban los
+  botones» y eso es «esos botones montados no van»: la dueña estaba viendo la cara anterior,
+  que es exactamente lo que el plan de contingencia del CSS garantiza. Arreglado con el
+  guion; la sonda pasa las 19 comprobaciones y `prueba-costura.py` tiene ahora dos
+  comprobaciones nuevas que ponen el pipeline rojo si el `$` vuelve a perder el guion o si
+  `enganchaTransporte` engancha un botón que la plantilla no pinta (13 botones comprobados).
+
 - **La «bandeja de abajo» es `#dock`**: doce botones escritos a mano en `ui/index.html:74-89`
   (Archivos · Entorno · Canal · Notas · Musica · Consola · Perfil · Cerebro · Modelos ·
   Optimizar · Ayuda + abrir/ocultar + la lámpara). En PC está centrado abajo y casi a todo
@@ -72,7 +89,9 @@ Esto es lo que hay dentro ahora mismo, con su sitio exacto. Cambia más de un di
   una esquina**: hay que construirlo (precedente útil: la barra de hojas sí se reubica a la
   esquina en móvil, `hud.css:634-635`).
 - **Por qué «se traban los botones» del reproductor** — dos candidatas con nombre y línea,
-  no teorías:
+  no teorías. **Ninguna era la principal**: la causa medida es el `TypeError` de arriba, que
+  dejaba el transporte sin enganchar. Las dos de abajo son reales además de ésa y también
+  están arregladas (la 1, en el código; la 2, por medición de la geometría en la sonda).
   1. El **deslizar para cambiar de hoja** escucha `touchstart`/`touchend` en la pantalla
      entera y con 90 px de recorrido ya salta de hoja; ignora las listas (`.scr-lista`,
      `#plist`, `#flist`) pero **no ignora los botones del transporte**

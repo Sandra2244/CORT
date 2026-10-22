@@ -379,6 +379,11 @@ input.pf[type=range]{padding:0;height:26px;accent-color:var(--cyan);background:t
 
 html.mobile body{font-size:14px;-webkit-tap-highlight-color:transparent;user-select:none}
 html.mobile input,html.mobile select,html.mobile textarea{user-select:text;font-size:16px}
+/* El `user-select:none` de arriba es para que un dedo no seleccione medio HUD al
+   deslizar, pero se estaba carryando el texto de la consola: la dueña pide «copia lo
+   que me contestaste» y no podía. Los logros son para leer y copiar, así que ahí se
+   vuelve a permitir. La píldora de música hace lo contrario (su título es un botón). */
+html.mobile #log,html.mobile #termlog,html.mobile .scr-lista{user-select:text;-webkit-user-select:text}
 html.mobile #frame{opacity:.32}
 html.mobile #status{display:none}
 html.mobile #top{top:6px;padding:4px 16px;font-size:10px;letter-spacing:.3em;max-width:92vw;overflow:hidden}
@@ -712,6 +717,39 @@ html.pantallas-montadas:not(.p-orbe) #mic{left:auto;right:16px;bottom:18px;
   width:50px;height:50px;font-size:22px}
 html.pantallas-montadas:not(.p-orbe) .scr{padding-bottom:calc(82px + env(safe-area-inset-bottom))}
 html.mobile.pantallas-montadas:not(.p-orbe) #mic{width:56px;height:56px;right:12px;bottom:14px}
+
+/* ---- la píldora de música, en la esquina ----
+   Lo que pidió la dueña: «si ya no es esta interfaz de música, que no salga en la
+   bandeja de abajo: un botón accesible en una esquina, para que no moleste, porque
+   uno dice CORT PC y está atravesado». El calco es el mini-reproductor de Lark
+   Player (portada · título · play/pausa), pero en miniature y en la esquina
+   INFERIOR IZQUIERDA: a la derecha vive el micrófono flotante (`#mic`) y en el
+   centro el dock, que es justo lo que cruzaba la pantalla. `pintaPildora()` la
+   enciende y la apaga (en las hojas Música y MV no aparece: ahí ya está el
+   transporte completo; con el modo juego tampoco: ahí CORT se aparta), y el ✕ la
+   pliega hasta que la pista pare. En el Orbe se sube por encima del dock para no
+   sentarse encima de él. */
+#repro-pildora{position:fixed;left:10px;bottom:calc(16px + env(safe-area-inset-bottom));
+  z-index:71;display:none;align-items:center;gap:8px;max-width:min(74vw,300px);
+  padding:6px 8px;border-radius:22px;background:rgba(4,12,26,.9);
+  border:1px solid rgba(80,190,255,.38);box-shadow:0 6px 20px rgba(0,0,0,.5)}
+#repro-pildora.viva{display:flex}
+html.pantallas-montadas.p-orbe #repro-pildora{bottom:calc(86px + env(safe-area-inset-bottom))}
+#repro-pildora button{all:unset;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;
+  justify-content:center;color:#dff1ff;border-radius:50%}
+#rp-portada{width:36px;height:36px;font-size:16px;color:#7fd0ff;
+  border:1px solid var(--cyan-dim);background:rgba(12,28,52,.7)}
+#rp-play{width:40px;height:40px;font-size:16px;border:1px solid var(--cyan);
+  background:rgba(0,160,255,.24);box-shadow:0 0 14px rgba(0,180,255,.3)}
+#rp-cierra{width:26px;height:26px;font-size:12px;color:#5e8cab}
+#rp-cierra:hover{color:#dff1ff}
+#rp-texto{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px;cursor:pointer;
+  /* La letra de la píldora es para LEER, no para arrastrar: con `user-select:text`
+     el dedo que desliza sobre el título se lo llevaba al portapapeles en vez de
+     pasar de hoja. Aquí se corta el toque, que es lo que espera la dueña. */
+  user-select:none;-webkit-user-select:none}
+#rp-titulo{font-size:12px;color:#eaf7ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rp-artista{font-size:10px;color:#5e8cab;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scr-top{display:flex;align-items:center;gap:10px;padding:2px 2px 10px;border-bottom:1px solid rgba(80,190,255,.16)}
 .scr-top b{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#dff1ff}
 .scr-vuelve{all:unset;cursor:pointer;font-size:11px;color:#7fd0ff;padding:4px 8px;

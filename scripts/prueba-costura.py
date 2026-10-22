@@ -2071,6 +2071,115 @@ else:
     dice_ok("F7m · escritorio", "Electron permite hablar sin gesto previo (saludo, dictado, avisos)")
 
 
+# ── [17] F8 · la cara ordenada: el gesto no se traga los botones, la música vive en
+#             la esquina y el chat se acuerda (docs/PLAN-MAESTRO.md, ronda F8)
+# Cuatro quejas medidas en el código de la dueña («se traban los botones», «la bandeja
+# de abajo está atravesada», «en el chat no puedo seleccionar», «el historial no
+# aparece»). Son puramente de `ui/` más una puerta que ya existía, así que lo que se
+# comprueba aquí es la COSTURA: el JS crea unos ids y el CSS los viste; la cara pide
+# `/api/history` y el núcleo lo sirve. Si un nombre se cambia en una capa sin cambiarlo
+# en la otra, el botón aparece sin forma o el historial se queda vacío sin decir por qué.
+f8_js = scr_txt if 'scr_txt' in dir() else (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+f8_css = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+if "NO_ES_GESTO" not in f8_js or "button" not in f8_js:
+    falla("F8 · gesto", "`montaGesto()` no excluye los controles: deslizar el pulgar sobre el play "
+                        "cambiaba de hoja en vez de reproducir (la causa de «se traban los botones»)")
+else:
+    for b in (".mu-transporte", "#mic", "#dock", "#repro-pildora"):
+        if b not in f8_js:
+            falla("F8 · gesto", f"`{b}` no está en la lista de no-gesto: ahí vuelve a comerse el deslizamiento")
+    dice_ok("F8 · gesto", "el deslizamiento de hojas no arranca desde ningún botón ni desde la píldora")
+if "montaPildora" not in f8_js or "pintaPildora" not in f8_js:
+    falla("F8 · píldora", "no existe la píldora de música: la bandeja del dock seguiría cruzando la pantalla")
+else:
+    dice_ok("F8 · píldora", "la píldora existe y se pliega con su ✕ hasta que la pista pare")
+# Se CUENTAN las llamadas (`(?<!function )` deja fuera la definición: buscar la
+# subcadena a secas daba verde con la píldora montada y nunca repintada, medido con
+# una mutación que borraba la llamada de `pintaProgreso`).
+llamadas_pint = len(re.findall(r"(?<!function )\bpintaPildora\s*\(", f8_js))
+llamadas_mont = len(re.findall(r"(?<!function )\bmontaPildora\s*\(", f8_js))
+if llamadas_mont < 1:
+    falla("F8 · píldora", "`montaPildora()` está definido pero nadie lo llama: no hay píldora en pantalla")
+elif llamadas_pint < 3:
+    falla("F8 · píldora", f"`pintaPildora()` se llama {llamadas_pint} vez/veces y hacen falta 3 "
+                          "(el aviso de Java, el cambio de hoja y el arranque): con una menos la píldora "
+                          "se queda con la canción anterior o no aparece hasta que algo suene")
+elif not re.search(r"pintaPildora\(estadoMusica\(\)\)", f8_js):
+    falla("F8 · píldora", "al entrar en una hoja no se repinta con el estado que ya trae el servicio: "
+                          "volver a la app con la pista sonando dejaría la esquina vacía")
+else:
+    dice_ok("F8 · píldora", "se monta una vez y se repinta desde los tres sitios (aviso · hoja · arranque)")
+if "actual !== 'musica' && actual !== 'mv'" not in f8_js:
+    falla("F8 · píldora", "la píldora no se apaga en Música y MV: se ENCIMARÍA dos mandos del mismo "
+                          "reproductor, y apagar uno desde el otro no es una interfaz, es una trampa")
+else:
+    dice_ok("F8 · píldora", "fuera de Música/MV se ve; dentro no, y en modo juego tampoco")
+ids_js = set(re.findall(r"#?\b(rp-[a-z]+|repro-pildora)\b", f8_js))
+huérfanos = sorted(i for i in ids_js if "#" + i not in f8_css)
+creados = set(re.findall(r'id="(rp-[a-z]+)"', f8_js)) | {"repro-pildora"}
+if not ids_js:
+    falla("F8 · píldora", "la cara no crea ningún id de la píldora (cambió la forma del `innerHTML`)")
+elif huérfanos:
+    falla("F8 · css", "la cara menciona " + ", ".join("#" + i for i in huérfanos) +
+                      " y `hud.css` no lo viste: saliría como texto suelto sin forma ni lugar, "
+                      "o `querySelector` devolvería `null` y el montaje se caería entero")
+elif creados != ids_js:
+    falla("F8 · píldora", "la cara menciona " + ", ".join(sorted(ids_js - creados)) +
+                          " sin crearlo con `id=\"…\"` (o crea algo que no selecciona): ese botón existe "
+                          "en el CSS y en nada más, así que pulsarlo no es pulsar nada")
+else:
+    dice_ok("F8 · css", f"los {len(ids_js)} ids de la píldora se crean, se seleccionan y tienen su regla")
+if "$('play').onclick = alternaReproduccion" not in f8_js:
+    falla("F8 · transporte", "el play del transporte volvió a ir por su cuenta: dos mandos del mismo "
+                             "play/pausa que un día mandan distinto")
+else:
+    dice_ok("F8 · transporte", "píldora y transporte usan la MISMA función de play/pausa")
+# EL BUG QUE ESTA RONDA SACÓ A LA LUZ (medido con `ui/sonda-carita.html`, 2026-10-22):
+# `enganchaTransporte` armaba el selector como `'#' + p + s`, o sea `#muplay`, mientras
+# `transporteHTML` escribe los ids con guion (`mu-play`). El primer `$('play').onclick`
+# devolvía `null` y saltaba un `TypeError` DENTRO de `initPantallas`, que es el sitio al
+# que el CSS llama «la cara de siempre se queda intacta»: sin la clase
+# `pantallas-montadas` no se monta NINGUNA hoja nueva. Así que desde la ronda 2.0
+# (5faf8fe) el teléfono mostraba la tira de botones vieja y ningún botón del
+# reproductor hacía nada — que es, palabra por palabra, «se traban los botones».
+# Se comprueban los dos lados de la costura, no el arreglo concreto.
+ayudante = re.search(r"const \$ = s => donde\.querySelector\((.*?)\);", f8_js)
+if not ayudante:
+    falla("F8 · transporte", "ya no se reconoce el ayudante `$` de `enganchaTransporte`: la comprobación "
+                             "del guion se quedaría ciega y el bug volvería colado")
+elif "'#' + p + '-' + s" not in ayudante.group(1):
+    falla("F8 · transporte", f"el ayudante `$` arma los selectores como `{ayudante.group(1)}`: sin el GUION "
+                             "sale `#muplay`, que no existe, el primer `onclick` revienta y se lleva la cara "
+                             "nueva entera (así estaba desde la ronda 2.0)")
+else:
+    dice_ok("F8 · transporte", "`$` arma `#mu-play` / `#mv-play`, que son los ids que de verdad se pintan")
+plantilla = set(re.findall(r'id="\$\{p\}(-[a-z0-9-]+)"', f8_js))
+duros = set(re.findall(r"\$\('([a-z0-9-]+)'\)\.(?:onclick|oninput)", f8_js))
+sin_id = sorted(g for g in duros if '-' + g not in plantilla)
+if not duros or not plantilla:
+    falla("F8 · transporte", "la cara dejó de reconocer los botones del transporte (cambió la forma del "
+                             "`$()` o del `innerHTML`): la comprobación ya no ve nada y no sirve")
+elif sin_id:
+    falla("F8 · transporte", "`enganchaTransporte` engancha " + ", ".join("$('" + g + "')" for g in sin_id) +
+                             " pero `transporteHTML` no pinta ese id: el `null` del primer botón tira "
+                             "`initPantallas` y deja el teléfono sin hojas nuevas")
+else:
+    dice_ok("F8 · transporte", f"los {len(duros)} botones enganchados están pintados por la plantilla")
+if '@app.get("/api/history")' in backend_txt:
+    if "/api/history" not in f8_js:
+        falla("F8 · charla", "el núcleo sirve /api/history y la cara no lo pide nunca: la hoja se abre en "
+                             "blanco aunque CORT se acuerde (así estaba antes de esta ronda)")
+    else:
+        dice_ok("F8 · charla", "la Charla trae el historial del núcleo cuando llega vacía")
+else:
+    falla("F8 · charla", "`/api/history` ya no está en `main.py`: la cara pediría un historial que no existe")
+if "html.mobile #log" not in f8_css or "#termlog" not in f8_css:
+    falla("F8 · seleccionar", "`user-select:none` del móvil sigue tapando la consola: la dueña no puede "
+                              "copiar lo que leyó (su queja textual)")
+else:
+    dice_ok("F8 · seleccionar", "la consola y la terminal del móvil se pueden seleccionar y copiar")
+
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

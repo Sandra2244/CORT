@@ -138,12 +138,23 @@ const cierraMenu = () => document.documentElement.classList.remove('menu-abierto
 
 /* Deslizar a un lado: se mide en la propia carcasa, nunca en un botón, y se ignora
    si el dedo empezó encima de una lista (ahí lo que quiere la dueña es desplazar la
-   lista, no cambiarse de pantalla). */
+   lista, no cambiarse de pantalla).
+
+   F8: la lista de exclusiones era corta y por eso «se traban los botones» del
+   reproductor. El transporte de Música/MV es una fila de botones **horizontal**
+   (⏮ ▶ ⏭ ⏹ y debajo siete chips), y el pulgar al apoyar describe justo esos ~90 px
+   que aquí significaban «cámbiame de hoja»: la dueña pulsaba play, la cara se iba a
+   otra pantalla y la canción no empezaba. Un gesto de página no puede nacer encima
+   de un control: quedan fuera también la píldora de música y el micrófono flotante,
+   que en móvil vive en la misma esquina que el final de la fila. */
 function montaGesto() {
   let x0 = null, y0 = null, objetivo = null;
+  const NO_ES_GESTO = '#pantalla-menu, button, a, input, textarea, select, output,'
+    + ' .scr-lista, #plist, #flist, .mu-transporte, .mu-fila2, .mu-volumen, .mu-barra,'
+    + ' #mic, #dock, #repro-pildora, #pantalla-fletas';
   document.addEventListener('touchstart', e => {
     const t = e.target;
-    if (t.closest('#pantalla-menu, input, textarea, select, .scr-lista, #plist, #flist')) return;
+    if (t.closest && t.closest(NO_ES_GESTO)) return;
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; objetivo = t;
   }, { passive: true });
   document.addEventListener('touchend', e => {
@@ -195,12 +206,17 @@ export function ir(id) {
     b.classList.toggle('activa', b.dataset.p === actual));
   if (actual === 'musica') arrancaMusica();
   if (actual === 'mv') arrancaMV();
-  if (actual === 'charla') { cargaModelos(); pintaCharla(); }
+  if (actual === 'charla') { cargaModelos(); pintaCharla(); traeHistorial(); }
   if (actual === 'codigo') { pintaCodigo(); }
   // El Equipo se releé al entrar (voces, volumen, cerebro, recuerdos, trajes): es
   // la foto del aparato, y el aparato cambia mientras la hoja está cerrada.
   if (actual === 'equipo') telefono.pinta();
   pintaJuego((estadoMusica() || {}).juego);
+  // Cambiar de hoja es justo lo que hace aparecer o desaparecer la píldora: en
+  // Música y MV ya está el transporte completo, y en el Orbe o el Chat no debe
+  // tapar nada. Se repinta aquí y no sólo con el aviso de Java porque al entrar
+  // en una hoja puede no llegar ningún aviso.
+  pintaPildora(estadoMusica());
   ctx?.term?.('pantalla: ' + p.titulo, 'pantallas');
   window.dispatchEvent(new CustomEvent('cort-pantalla', { detail: actual }));
 }
@@ -328,6 +344,29 @@ async function charla(texto) {
     estado.textContent = 'sin núcleo';
   }
   guardaMensajes(); pintaCharla();
+}
+
+/* El historial de verdad está en el núcleo (`GET /api/history`), y la cara nunca lo
+   pedía: al reinstalar la app, cambiar de aparato o vaciar el almacén del navegador,
+   la Charla se abría en blanco aunque CORT se acordara de lo hablado. Se trae sólo
+   cuando la hoja está VACÍA: si la dueña ya tiene su conversación local, mezclar los
+   dos listados saldría un desorden peor que dejar el suyo. Un fallo de red aquí no
+   dice nada ni estorba —la charla funciona igual sin historial—, así que se traga
+   en silencio; lo que no se traga es una respuesta que no sea 200. */
+async function traeHistorial() {
+  if (mensajes.length || !ctx?.api) return;
+  try {
+    const r = await fetch(ctx.api() + '/api/history?n=40',
+                          { signal: AbortSignal.timeout(2500) });
+    if (!r.ok) return;
+    const filas = await r.json();
+    if (!Array.isArray(filas) || !filas.length) return;
+    mensajes = filas.filter(x => x && (x.rol === 'user' || x.rol === 'assistant'))
+      .map(x => ({ de: x.rol === 'user' ? 'tu' : 'cort',
+                   texto: String(x.texto || ''), fuente: x.fuente || '' }));
+    if (!mensajes.length) return;
+    guardaMensajes(); pintaCharla();
+  } catch { /* sin núcleo o sin respuesta: la hoja queda como estaba */ }
 }
 
 function pintaCharla() {
@@ -620,18 +659,19 @@ const transporteHTML = p => `
     <div class="mu-volumen"><span>volumen</span><input id="${p}-vol" type="range" min="0" max="1" step=".05" value=".8"></div>`;
 
 function enganchaTransporte(donde, p) {
-  const $ = s => donde.querySelector('#' + p + s);
+  // El prefijo lleva GUION: los ids se escriben `${p}-play`, así que buscar
+  // `'#' + p + s` daba `#muplay`, que no existe. Medido en la sonda (F8): el `null`
+  // del primer botón tiraba `TypeError`, y como `montaMusica()` es el paso previo a
+  // MV, Equipo, Charla y Código, la cara nueva Entera se caía en silencio — por eso
+  // en el teléfono instalado seguía saliendo la tira de botones de siempre.
+  const $ = s => donde.querySelector('#' + p + '-' + s);
   const ponTema = tema => {
     const ahora = $('ahora'), artista = $('artista');
     if (ahora) ahora.textContent = tema ? tema.titulo : 'nada puesto';
     if (artista) artista.textContent =
       tema ? [tema.artista, tema.genero].filter(Boolean).join(' · ') : '';
   };
-  $('play').onclick = () => {
-    const e = estadoMusica();
-    if (!e || !e.vivo) { llama('musicaAutomatica'); return; }
-    e.suena ? llama('musicaPausa') : llama('musicaPlay');
-  };
+  $('play').onclick = alternaReproduccion;
   $('prev').onclick = () => llama('musicaAnterior');
   $('next').onclick = () => llama('musicaSiguiente');
   $('stop').onclick = () => { llama('musicaParar'); ponTema(null); pintaProgreso({ vivo: false }); };
@@ -672,6 +712,58 @@ function enganchaTransporte(donde, p) {
   // El modo juego es del teléfono; el botón está en los dos transportes por si la
   // dueña llega antes a Música que a MV. La respuesta, en voz alta, siempre.
   $('juego').onclick = () => ctx?.say?.(modoJuego(!((estadoMusica() || {}).juego)));
+}
+
+/* ───────────────────────── la píldora de música, en la esquina ─────────────────
+   Lo que la dueña pidió con «si es otra interfaz de música, ya no debe aparecer en
+   la bandeja de abajo: debe estar en un botón accesible, en una esquina, para que no
+   moleste, porque uno dice CORT PC y está atravesado». Antes no existía tal cosa:
+   cuando sonaba algo, o te ibas a la hoja Música entera, o te quedabas con la tira
+   del dock cruzando todo el borde inferior — justo donde el pulgar trabaja.
+   El calco es el mini-reproductor de Lark Player (portada · título · play/pausa),
+   pero **encogido en la esquina inferior izquierda**: a la derecha del todo vive el
+   micrófono flotante, y en medio la fila del transporte. Se pliega con su ✕ y se
+   queda plegado hasta que la pista pare (si no, reaparecería cada refresco de
+   estado); con el modo juego activo no aparece — ahí CORT se aparta, que es la
+   promesa del modo juego — y en las hojas Música y MV tampoco: ahí ya está el
+   transporte completo. */
+let pildoraPlegada = false;
+
+const alternaReproduccion = () => {
+  const e = estadoMusica();
+  if (!e || !e.vivo) { llama('musicaAutomatica'); return; }
+  e.suena ? llama('musicaPausa') : llama('musicaPlay');
+};
+
+function montaPildora() {
+  if (document.getElementById('repro-pildora')) return;
+  const p = document.createElement('div');
+  p.id = 'repro-pildora';
+  p.innerHTML = '<button id="rp-portada" title="abrir la música">♪</button>'
+    + '<div id="rp-texto"><b id="rp-titulo">—</b><span id="rp-artista"></span></div>'
+    + '<button id="rp-play" title="pausa o sigue">▶</button>'
+    + '<button id="rp-cierra" title="recoger hasta que pare la pista">✕</button>';
+  document.body.appendChild(p);
+  const abre = () => ir('musica');
+  p.querySelector('#rp-portada').onclick = abre;
+  p.querySelector('#rp-texto').onclick = abre;
+  p.querySelector('#rp-play').onclick = alternaReproduccion;
+  p.querySelector('#rp-cierra').onclick = () => {
+    pildoraPlegada = true; p.classList.remove('viva');
+  };
+}
+
+function pintaPildora(e) {
+  const p = document.getElementById('repro-pildora');
+  if (!p) return;
+  const viva = !!e && !!e.vivo && !!e.pista && !e.juego && !pildoraPlegada
+    && actual !== 'musica' && actual !== 'mv';
+  p.classList.toggle('viva', viva);
+  if (!viva) { if (!e || !e.pista) pildoraPlegada = false; return; }
+  p.querySelector('#rp-titulo').textContent = e.pista.titulo || 'sin título';
+  p.querySelector('#rp-artista').textContent =
+    [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
+  p.querySelector('#rp-play').textContent = e.suena ? '⏸' : '▶';
 }
 
 function montaMusica() {
@@ -814,6 +906,7 @@ function perfil() {
    MV): es la misma pista, y dos barras que avanzan distinto serían peor que una. */
 function pintaProgreso(e) {
   if (!e) return;
+  pintaPildora(e);
   ['mu', 'mv'].forEach(p => {
     const barra = document.getElementById(p + '-prog');
     if (!barra) return;
@@ -1194,7 +1287,7 @@ export function initPantallas(contexto) {
   montaTeclas();
   escuchaMusica();
   escuchaAtajos();
-  if (enTelefono()) { montaMusica(); montaMV(); }
+  if (enTelefono()) { montaMusica(); montaMV(); montaPildora(); }
   // El Equipo lleva el `ctx` de siempre **más `ir`**: si la dueña dice «cambia la
   // voz» y no nombra ninguna, la hoja tiene que traer la pantalla delante, y eso
   // es de aquí. Se lo pasamos como función para no importar este módulo desde
@@ -1206,6 +1299,10 @@ export function initPantallas(contexto) {
   // El modo juego sobrevive a cerrar la app (lo guarda Java): si la dueña se fue a
   // jugar y vuelve, el avispón tiene que estar encendido desde el primer instante.
   pintaJuego(!!(estadoMusica() || {}).juego);
+  // Y la píldora: si la dueña vuelve a la app con la pista todavía sonando, el
+  // aviso de Java puede no llegar hasta que algo cambie. Se pinta una vez al
+  // montar, con el estado que ya trae el servicio.
+  pintaPildora(estadoMusica());
   // La interfaz nueva de Android no estaba: si el puente existe, la barra de
   // pantallas sustituye al botón flotante que ya había (no se apila encima).
   ctx?.term?.('pantallas listas: ' + visibles().map(p => p.titulo).join(' · '), 'pantallas');

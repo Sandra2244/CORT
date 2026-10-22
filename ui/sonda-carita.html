@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- Sonda de la cara (ronda F8) · se abre con el núcleo arrancado:
+       http://127.0.0.1:8000/sonda-carita.html
+     Para qué: las hojas de Música, MV y Equipo del teléfono no existen sin puente
+     de Java, así que en el portátil era imposible VER lo que se cambia en la cara
+     (la píldora de la esquina, el gesto que se tragaba los botones, el historial
+     del chat). Esta hoja monta el MISMO módulo `js/pantallas.js` con un puente de
+     mentira — un `window.CortNative` que devuelve un estado de música inventado y
+     anota lo que le mandan — y luego se comprueba a sí misma, aquí debajo, con
+     líneas `ok` / `NO`.
+
+     No envía nada a ningún sitio salvo lo que ya pide la cara de siempre
+     (`/api/history`), y no toca el teléfono de verdad: el puente es de mentirijilla.
+     Sirve también para enseñarle a la dueña la interfaz nueva sin tener el APK
+     delante. -->
+<meta charset="utf-8">
+<title>Sonda de la cara · CORT F8</title>
+<link rel="stylesheet" href="/css/hud.css">
+<style>
+  #sonda { position: fixed; left: 0; right: 0; bottom: 0; max-height: 42vh; overflow: auto;
+    z-index: 900; background: #02040a; color: #cfe9ff; font: 12px/1.5 Consolas, monospace;
+    padding: 10px 14px; border-top: 1px solid #1d3f5c; }
+  #sonda h1 { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: #5fd7ff; margin: 0 0 6px; }
+  #sonda .ok { color: #2bff9e; } #sonda .no { color: #ff6b8a; }
+  #sonda button { background: #0d1a2a; color: #dff2ff; border: 1px solid #1d3f5c;
+    border-radius: 6px; padding: 4px 10px; margin: 0 6px 6px 0; cursor: pointer; font: inherit; }
+</style>
+
+<div id="sonda"><h1>Sonda de la cara · F8</h1><div id="salida">montando…</div></div>
+
+<script type="module">
+const salida = document.getElementById('salida');
+const lineas = [];
+// Si la sonda se cae a mitad, hay que VER por qué: sin esto el navegador deja la hoja
+// en «montando…» y uno se pone a cazar el fallo a ciegas.
+addEventListener('error', e => { salida.textContent = 'CAÍ: ' + (e.message || e.type) +
+  '\n' + ((e.error && e.error.stack) || (e.filename + ':' + e.lineno)); });
+addEventListener('unhandledrejection', e => { salida.textContent = 'CAÍ (promesa): ' +
+  ((e.reason && e.reason.stack) || e.reason); });
+const dice = (bueno, texto) => lineas.push(`<div class="${bueno ? 'ok' : 'no'}">${bueno ? 'ok ' : 'NO '} ${texto}</div>`);
+
+/* ── el puente de mentirijilla ───────────────────────────────────────────────
+   Sólo los métodos que la cara de esta ronda necesita. `musicaEstado` devuelve lo
+   que pongamos en `estado`, y cada orden que manda se anota en `mandadas` para
+   poder decir «el play de verdad llamó a musicaPausa». */
+let estado = null;
+const mandadas = [];
+window.CortNative = {
+  avisos: () => '[]',
+  puede: () => true,
+  accion: () => 'null',
+  musicaEstado: () => (estado ? JSON.stringify(estado) : ''),
+  musicaPausa: () => mandadas.push('musicaPausa'),
+  musicaPlay: () => mandadas.push('musicaPlay'),
+  musicaAutomatica: () => mandadas.push('musicaAutomatica'),
+  musicaParar: () => mandadas.push('musicaParar'),
+  musicaListas: () => '[]',
+  musicaPerfil: () => 'null',
+  equipo: () => 'null',
+  on: () => {},
+};
+
+const m = await import('/js/pantallas.js');
+m.initPantallas({ api: () => '', term: () => {}, say: () => {}, orb: { burst: () => {}, pausa: () => {} }, voice: {} });
+document.documentElement.classList.add('mobile');   // la cara del teléfono, en el navegador
+
+/* ── ayuda: un deslizamiento de dedo, con su recorrido horizontal ───────────*/
+function desliza(el, dx) {
+  const r = el.getBoundingClientRect(), cy = r.y + r.height / 2;
+  const bulto = (tipo, x) => {
+    const t = new Touch({ identifier: 1, target: el, clientX: x, clientY: cy });
+    return new TouchEvent(tipo, { touches: tipo === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true });
+  };
+  el.dispatchEvent(bulto('touchstart', r.x + r.width / 2));
+  el.dispatchEvent(bulto('touchend', r.x + r.width / 2 + dx));
+}
+
+ponEstado({ vivo: true, suena: true, pos: 42000, dur: 191000, juego: false,
+            pista: { titulo: 'Dark Rose', artista: 'Eika', genero: 'city pop', uri: 'content://x' } });
+function ponEstado(e) { estado = e; }
+
+/* ── 1 · la píldora de la esquina ───────────────────────────────────────────*/
+const p = document.getElementById('repro-pildora');
+dice(!!p, 'existe la píldora de música fuera del dock');
+m.ir('charla');
+dice(p.classList.contains('viva'), 'en Charla, con pista puesta, está a la vista');
+dice(p.querySelector('#rp-titulo').textContent === 'Dark Rose', 'dice la canción (' + p.querySelector('#rp-titulo').textContent + ')');
+mandadas.length = 0; p.querySelector('#rp-play').click();
+dice(mandadas.join() === 'musicaPausa', 'su ▶/⏸ manda pausa (no cambia de hoja ni se queda sorda)');
+m.ir('musica');
+dice(!p.classList.contains('viva'), 'en Música se apaga: ahí ya está el transporte completo');
+m.ir('mv');
+dice(!p.classList.contains('viva'), 'en MV igual');
+m.ir('charla');
+ponEstado({ ...estado, juego: true }); m.ir('codigo');
+dice(!p.classList.contains('viva'), 'en modo juego se va: CORT se aparta, ésa es la promesa');
+ponEstado({ ...estado, juego: false }); m.ir('charla');
+p.querySelector('#rp-cierra').click();
+dice(!p.classList.contains('viva'), 'el ✕ la pliega');
+m.ir('codigo');
+dice(!p.classList.contains('viva'), 'y sigue plegada mientras suene la misma pista');
+ponEstado({ ...estado, pista: null, suena: false }); m.ir('charla');
+ponEstado({ ...estado, pista: { titulo: 'Otra', artista: '' }, suena: true }); m.ir('codigo');
+dice(p.classList.contains('viva'), 'al parar y sonar otra cosa vuelve sola');
+
+/* ── 2 · el deslizamiento ya no se traga los botones ────────────────────────*/
+m.ir('musica');
+const hoja = m.pantallaActual();
+desliza(document.getElementById('mu-play'), 150);
+dice(m.pantallaActual() === hoja, 'deslizar 150 px sobre ▶ NO cambia de hoja (la queja: «se traban los botones»)');
+desliza(document.getElementById('mu-gusta'), 150);
+desliza(document.getElementById('mu-next'), 150);
+dice(m.pantallaActual() === hoja, 'sobre los chips y el ⏭ tampoco');
+mandadas.length = 0; document.getElementById('mu-play').click();
+dice(mandadas.length === 1, 'y pulsado de verdad, el botón obedece (' + mandadas.join() + ')');
+m.ir('charla');
+const hoja2 = m.pantallaActual();
+desliza(document.querySelector('#repro-pildora #rp-titulo'), 150);
+dice(m.pantallaActual() === hoja2, 'sobre el título de la píldora tampoco (es un botón, no una hoja)');
+desliza(document.querySelector('#scr-charla .scr-top'), 150);
+dice(m.pantallaActual() !== hoja2, 'en una zona sin controles, el deslizamiento sigue cambiando de hoja');
+
+/* ── 3 · seleccionar y copiar lo escrito ────────────────────────────────────*/
+const sel = s => { const e = document.querySelector(s); return e ? getComputedStyle(e).userSelect : 'sin-elemento'; };
+dice(sel('#ch-msgs') === 'text', 'la Charla se puede seleccionar (' + sel('#ch-msgs') + ')');
+// La consola (`#log`) y la terminal (`#termlog`) las monta `hud.js`, que esta hoja no
+// carga: se comprueba su regla en la hoja de estilos, que es justo lo que estaba
+// tapado por el `user-select:none` del móvil.
+const css = await (await fetch('/css/hud.css')).text();
+['#log', '#termlog'].forEach(id => dice(
+  new RegExp('html\\.mobile[^{]*' + id + '[^{]*\\{[^}]*user-select:\\s*text').test(css),
+  `${id} vuelve a ser seleccionable en el móvil`));
+
+/* ── 4 · el historial del núcleo, que antes no se pedía ─────────────────────*/
+localStorage.removeItem('cort-charla');
+const caja = document.getElementById('ch-msgs');
+caja.innerHTML = '';
+m.ir('charla');
+await new Promise(r => setTimeout(r, 1800));
+const burbujas = caja.querySelectorAll('.burbuja').length;
+dice(burbujas > 0, `la Charla trae el historial de /api/history (${burbujas} burbujas)`);
+
+salida.innerHTML = lineas.join('') +
+  `<div><button id="otro">otra pista</button><button id="para">parar</button>` +
+  `<button id="juego">modo juego</button><button id="musica">ir a Música</button></div>` +
+  '<div style="margin-top:6px;color:#5e8cab">La tira de abajo es la sonda; la píldora y las hojas son la cara real.</div>';
+document.getElementById('otro').onclick = () => { ponEstado({ ...estado, pista: { titulo: 'Still Falling', artista: 'Luv Resval' }, suena: true }); m.ir('codigo'); };
+document.getElementById('para').onclick = () => { ponEstado({ ...estado, pista: null, suena: false }); m.ir('charla'); };
+document.getElementById('juego').onclick = () => { ponEstado({ ...estado, juego: !estado.juego }); m.ir('charla'); };
+document.getElementById('musica').onclick = () => m.ir('musica');
+window.__sonda = () => lineas.map(s => s.replace(/<[^>]+>/g, ''));
+</script>
