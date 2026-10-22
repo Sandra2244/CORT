@@ -1160,6 +1160,31 @@ function escuchaMusica() {
   });
 }
 
+/* Los atajos del icono (ronda 2.4.1). Mantener pulsado el icono de CORT en el cajón
+   ofrece «Escuchar», «Equipo» y «Charla»; las dos hojas no son una orden de voz, son
+   un `Intent` que llega a Java **antes** de que la página exista, así que Java lo
+   guarda y lo suelta por el puente (`{"type":"atajo","hoja":"…"}`) cuando la cara ya
+   está montada. Aquí se escucha ese aviso y se hace el `ir(hoja)` de siempre, el
+   mismo que ejecuta un toque en la barra.
+
+   Se comprueba que la hoja exista en este aparato antes de saltar: `ir()` con un id
+   que no está en `visibles()` cae en el Orbe sin decir nada, y un atajo que abre la
+   ventana equivocada es peor que un atajo que avisa. «Equipo», por ejemplo, pide el
+   puente de acciones: con un APK viejo no existe. */
+let atajosViva = false;
+function escuchaAtajos() {
+  if (atajosViva || !window.__cortNative) return;
+  atajosViva = true;
+  window.__cortNative.on(ev => {
+    if (!ev || ev.type !== 'atajo') return;
+    const id = String(ev.hoja || '');
+    const p = visibles().find(x => x.id === id);
+    if (!p) { ctx?.term?.('ese atajo pide una hoja que no está en este aparato: ' + id, 'pantallas'); return; }
+    ir(id);
+    ctx?.term?.('atajo: ' + p.titulo, 'pantallas');
+  });
+}
+
 /* ─────────────────────────── el puente hacia hud.js ─────────────────────── */
 
 export function initPantallas(contexto) {
@@ -1168,6 +1193,7 @@ export function initPantallas(contexto) {
   montaGesto();
   montaTeclas();
   escuchaMusica();
+  escuchaAtajos();
   if (enTelefono()) { montaMusica(); montaMV(); }
   // El Equipo lleva el `ctx` de siempre **más `ir`**: si la dueña dice «cambia la
   // voz» y no nombra ninguna, la hoja tiene que traer la pantalla delante, y eso

@@ -39,7 +39,9 @@ import android.media.session.MediaSession;
 import android.net.Uri;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
+import android.view.KeyEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,6 +85,8 @@ public class Reproductor extends Service {
     private AudioManager audio;
     private AudioFocusRequest focoPeticion;
     private boolean pausadoPorFoco = false;
+    /** La hora del último toque del auricular, para cazar el **segundo** (2.4.1). */
+    private long ultimoToque = 0L;
 
     @Override public IBinder onBind(Intent i) { return null; }
 
@@ -114,6 +118,10 @@ public class Reproductor extends Service {
             @Override public void onSkipToPrevious() { anterior(); }
             @Override public void onSeekTo(long pos) { salto((int) pos); }
             @Override public void onStop() { parar(); }
+            // La tecla física, antes de que el sistema la traduzca en play/pausa.
+            @Override public boolean onMediaButtonEvent(Intent evento) {
+                return dobleToque(evento);
+            }
         });
         sesion.setActive(true);
         // Android 14: un servicio en primer plano con tipo `mediaPlayback` exige
@@ -468,6 +476,62 @@ public class Reproductor extends Service {
                 r.estadoSesion();
             }
         } catch (Exception elSistemaNoLoPermite) { }
+    }
+
+    /* ────────────── el doble toque con la cara cerrada (2.4.1) ──────────────
+     *
+     * Hasta ahora el doble toque del auricular vivía sólo en `MainActivity`, y su
+     * `MediaSession` se desactiva en `onPause()` — «la música vuelve a su dono»,
+     * que es lo correcto para no robarle los botones a Spotify. El resultado,
+     * medido en la lectura de las dos clases: con CORT **cerrado** nadie le
+     * devolvía el toque a CORT, así que había que abrir la cara a mano. Aquí se
+     * cierra el círculo: la sesión del reproductor vive mientras suena la música
+     * (o sea, con la pantalla apagada y la cara atrás), y es esa sesión la que
+     * recibe la tecla.
+     *
+     * Las tres reglas que comparten los dos sitios:
+     *   · sólo `HEADSETHOOK` y `MEDIA_PLAY_PAUSE`, y sólo con `ACTION_DOWN`;
+     *   · el **primero** toque devuelve `false` — se queda con la música, que es
+     *     lo que espera cualquiera que pulsa una vez—; el **segundo** dentro de
+     *     500 ms es de CORT y devuelve `true`;
+     *   · en modo juego no se hace nada: ahí la sesión ya está suelta
+     *     (`soltarSesion()`), y por si una capa de fabricante la trae igual, el
+     *     `CortNative.enJuego()` lo corta antes de abrir el micro.
+     *
+     * Se pausa la canción antes de abrir la cara, y no es un detalle de educación:
+     * el oído (`Oido.kt`) y el reconocedor de Google oyen por el mismo micrófono
+     * que el auricular reporta, y con la música sonando CORT se transcribe a sí
+     * misma los tambores. `MainActivity.abreLoQueToque()` manda después el
+     * `escuchaDelAuricular()`, que es el que pinta la insignia de «te escucho».
+     */
+
+    /** `true` si el toque es de CORT; `false` si lo deja pasar a la música. */
+    private boolean dobleToque(Intent evento) {
+        KeyEvent tecla = MainActivity.teclaDe(evento);
+        if (tecla == null || tecla.getAction() != KeyEvent.ACTION_DOWN) return false;
+        int codigo = tecla.getKeyCode();
+        boolean toque = codigo == KeyEvent.KEYCODE_HEADSETHOOK
+                     || codigo == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE;
+        if (!toque || CortNative.enJuego()) return false;
+        long ahora = SystemClock.elapsedRealtime();
+        if (ultimoToque != 0L && ahora - ultimoToque < 500L) {
+            ultimoToque = 0L;
+            pausar();
+            Intent abrir = new Intent(this, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                .putExtra(MainActivity.PIDE_ESCUCHAR, true);
+            try {
+                startActivity(abrir);
+            } catch (Exception noPuedeAbrir) {
+                // Con la pantalla bloqueada hay capas que no dejan lanzar desde un
+                // servicio. La música queda pausada y CORT sigue sonando al abrir:
+                // mejor eso que un botón que cierra la app en la cara de la dueña.
+                Log.w(TAG, "el doble toque no pudo abrir la cara: " + noPuedeAbrir);
+            }
+            return true;
+        }
+        ultimoToque = ahora;
+        return false;
     }
 
     /** Parar del todo: se calla, se quita la notificación y se apaga el servicio. */

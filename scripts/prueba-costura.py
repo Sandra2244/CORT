@@ -1538,6 +1538,138 @@ else:
     else:
         dice_ok("2.4b · prueba", "el motor se prueba con node, en el portátil y en el pipeline")
 
+# ── 12 · la ronda 2.4.1: las vías para abrir CORT, y el auricular sin cara ───
+# Cinco caminos nuevos que no se pueden probar en el portátil y que se rompen en
+# silencio: un `<intent-filter>` que falta y Android no ofrece a CORT en el listado
+# del asistente; un `@string/…` escrito como literal y los atajos del icono dejan
+# de salir; un `hojaDe` que devuelve «equipo» y una pantalla que en la lista se
+# llama distinto; un `type:"atajo"` que Java emite y la cara no escucha; y un
+# `teclaDe` que vuelve a ser `private` — ése lo para `javac`, pero lo para en el
+# run, con la Release ya anunciada.
+print("\n[12] ronda 2.4.1 · asistente, baldosín, atajos y el doble toque sin cara")
+
+MAN = (APK / "AndroidManifest.xml").read_text(encoding="utf-8")
+ACCIONES_MAN = set(re.findall(r'<action android:name="([^"]+)"', MAN))
+PROPIAS = ("com.cort.ia.ESCUCHAR", "com.cort.ia.EQUIPO", "com.cort.ia.CHARLA")
+FALTAN = [a for a in ("android.intent.action.ASSIST", "android.intent.action.VOICE_COMMAND",
+                      "android.service.quicksettings.action.QS_TILE", *PROPIAS)
+          if a not in ACCIONES_MAN]
+if FALTAN:
+    falla("2.4.1 · manifiesto", f"no se declara {', '.join(FALTAN)}: esa vía de arranque "
+                                "no existe para Android, y el gesto se lo queda Google en silencio")
+else:
+    dice_ok("2.4.1 · manifiesto", "ASSIST, VOICE_COMMAND, el baldosín y las tres acciones propias")
+
+if "android.permission.BIND_QUICK_SETTINGS_TILE" not in MAN:
+    falla("2.4.1 · baldosín", "el `<service>` no lleva su `android:permission`: la cortina no lo lista")
+elif 'android:name="android.app.shortcuts"' not in MAN:
+    falla("2.4.1 · atajos", "falta la meta-datos `android.app.shortcuts`: mantener el icono no da nada")
+else:
+    dice_ok("2.4.1 · cortina", "TileService protegido y los atajos del icono anunciados")
+
+ATAJOS_RUTA = APK / "res" / "xml" / "atajos.xml"
+ETIQUETAS = [p for p in sorted((APK / "res" / "values").glob("*.xml"))] if (APK / "res" / "values").is_dir() else []
+texto_etiquetas = " ".join(p.read_text(encoding="utf-8") for p in ETIQUETAS)
+if not ATAJOS_RUTA.is_file():
+    falla("2.4.1 · atajos", "`res/xml/atajos.xml` no existe y el manifiesto apunta a él: aapt2 muere al enlazar")
+else:
+    arbol = ET.fromstring(ATAJOS_RUTA.read_text(encoding="utf-8"))
+    A = "{http://schemas.android.com/apk/res/android}"
+    atajos = arbol.findall("shortcut")
+    id_de = lambda s: s.get(A + "shortcutId") or "?"
+    # Los atributos del `<intent>` van con el prefijo `android:`, y `ElementTree`
+    # los guarda como nombre expandido: leerlos sin `A +` da `None` y el sector se
+    # queja de un destino vacío que en el archivo sí está escrito.
+    viajes = {(i.get(A + "action") or "", i.get(A + "targetClass") or "")
+              for s in atajos for i in s.findall("intent")}
+    sin_via = [a for a, c in viajes if a not in ACCIONES_MAN]
+    mal_destino = [c for a, c in viajes if c != "com.cort.ia.MainActivity"]
+    # La trampa medida: con `android:shortcutShortLabel="Escucha"` (literal) el
+    # `ShortcutPackage` del sistema espera un recurso y el atajo no aparece.
+    huesos = [id_de(s) for s in atajos
+              if not (s.get(A + "shortcutShortLabel") or "").startswith("@string/")]
+    sin_recurso = sorted({m.group(1) for s in atajos for m in
+                          (re.search(r'@string/(\w+)', s.get(A + k) or "") for k in
+                           ("shortcutShortLabel", "shortcutLongLabel", "shortcutDisabledMessage"))
+                          if m and f'name="{m.group(1)}"' not in texto_etiquetas})
+    if len(atajos) != 3:
+        falla("2.4.1 · atajos", f"hay {len(atajos)} atajos y la hoja promete tres")
+    elif sin_via:
+        falla("2.4.1 · atajos", f"el icono manda {', '.join(sin_via)} y el manifiesto no las recibe")
+    elif mal_destino:
+        falla("2.4.1 · atajos", f"viaje hacia {', '.join(mal_destino)} en vez de `com.cort.ia.MainActivity`")
+    elif huesos:
+        falla("2.4.1 · atajos", f"etiqueta sin `@string/` en {', '.join(huesos)}: Android no pinta ese atajo")
+    elif sin_recurso:
+        falla("2.4.1 · atajos", f"etiquetas que no existen en `res/values`: {', '.join(sin_recurso)}")
+    else:
+        dice_ok("2.4.1 · atajos", "tres atajos, con su acción declarada, su destino y su `@string/`")
+
+# El baldosín: la clase tiene que existir con el nombre exacto del manifiesto.
+PANEL = APK / "src" / "com" / "cort" / "ia" / "Panel.java"
+if not PANEL.is_file():
+    falla("2.4.1 · baldosín", "`Panel.java` no existe: `javac` compila el manifiesto igual y el App se instala sin tile")
+else:
+    panel_txt = sin_comentarios(PANEL.read_text(encoding="utf-8"))
+    sin_panel = [x for x in ("extends TileService", "startActivityAndCollapse",
+                             "MainActivity.PIDE_ESCUCHAR", "android.service.quicksettings.TileService")
+                 if x not in panel_txt]
+    if ".Panel" not in MAN:
+        falla("2.4.1 · baldosín", "el manifiesto no declara `android:name=\".Panel\"`")
+    elif sin_panel:
+        falla("2.4.1 · baldosín", f"en `Panel.java` falta {', '.join(sin_panel)}")
+    else:
+        dice_ok("2.4.1 · baldosín", "TileService público (API 24+, este App arranca en 26) y abre la cara a escuchar")
+
+# Java: las cuatro vías se traducen en `abreLoQueToque`, y las hojas que nombra
+# tienen que existir en `PANTALLAS` (si no, `ir()` cae en el Orbe sin avisar).
+main_txt = (APK / "src" / "com" / "cort" / "ia" / "MainActivity.java").read_text(encoding="utf-8")
+main_plano = main_txt.replace("\\", "")
+sin_accion = [a for a in ("android.intent.action.ASSIST", "android.intent.action.VOICE_COMMAND", *PROPIAS)
+              if f'"{a}"' not in literales(main_txt)]
+if sin_accion:
+    falla("2.4.1 · cara abre", f"`abreLoQueToque` no conoce {', '.join(sin_accion)}: Android llama y CORT no hace nada")
+else:
+    hojas = sorted(set(re.findall(r'return "(equipo|charla|orbe|musica|mv|codigo)"', main_plano)))
+    pantallas_js = lectura("ui", "js", "pantallas.js")
+    ids = set(re.findall(r"\{ id: '(\w+)'", pantallas_js))
+    fuera = [h for h in hojas if h not in ids]
+    if not hojas:
+        falla("2.4.1 · cara abre", "`hojaDe` no devuelve ninguna hoja: los atajos de hoja no abren nada")
+    elif fuera:
+        falla("2.4.1 · cara abre", f"Java pide {', '.join(fuera)} y `pantallas.js` no tiene esa pantalla")
+    else:
+        dice_ok("2.4.1 · cara abre", f"las cinco vías se reconocen y sus hojas ({', '.join(hojas)}) existen")
+
+# La costura del atajo: Java lo emite, la cara lo escucha y alguien llama a `ir`.
+p = puente_texto().replace("\\", "")
+if '"type":"atajo"' not in p:
+    falla("2.4.1 · puente", "`atajoEnLaCara` no emite `type:\"atajo\"`: el atajo se queda en Java")
+else:
+    pant = lectura("ui", "js", "pantallas.js")
+    sin_cara = [x for x in ("ev.type !== 'atajo'", "escuchaAtajos();", "ir(id)") if x not in pant]
+    if sin_cara:
+        falla("2.4.1 · cara", f"en `pantallas.js` falta {', '.join(sin_cara)}: el aviso llega a ninguna parte")
+    else:
+        dice_ok("2.4.1 · cara", "el evento se escucha, `initPantallas` engancha el oyente y `ir` mueve la hoja")
+
+# El auricular sin la cara delante: la sesión del reproductor tenía los `onPlay` y
+# compañía, pero NO `onMediaButtonEvent`, así que el doble toque sólo vivía en
+# `MainActivity` y se desactivaba en `onPause`. Y `teclaDe` tiene que seguir
+# siendo accessible desde el paquete: con `private` lo pararía `javac` en el run.
+rep_txt = java_limpio.get("Reproductor.java", "")
+sin_toque = [x for x in ("onMediaButtonEvent", "dobleToque", "pausar();", "CortNative.enJuego()")
+             if x not in rep_txt]
+if sin_toque:
+    falla("2.4.1 · auricular", f"`Reproductor.java` no tiene {', '.join(sin_toque)}: con la cara cerrada "
+                               "el doble toque se lo queda la música y CORT no despierta")
+elif re.search(r"private\s+static\s+KeyEvent\s+teclaDe", main_txt):
+    falla("2.4.1 · auricular", "`MainActivity.teclaDe` volvió a ser `private`: `Reproductor` no puede leerla y javac lo canta")
+elif "static KeyEvent teclaDe" not in main_txt:
+    falla("2.4.1 · auricular", "`teclaDe` no es ya de paquete: las dos sesiones leerían la tecla por caminos distintos")
+else:
+    dice_ok("2.4.1 · auricular", "la sesión del reproductor caza el segundo toque, pausa y abre el micro")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

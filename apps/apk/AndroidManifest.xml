@@ -82,6 +82,25 @@
   doble toque del auricular se atiende por `MediaSession`, no por un micro oyendo
   siempre.
 
+  ── CÓMO SE ABRE CORT (ronda 2.4.1), y por qué hay cuatro vías y no una ──
+  El icono del cajón era la única puerta con `MAIN`/`LAUNCHER`, así que todo lo
+  demás —el gesto del asistente, el botón del auricular mantenido, el baldosín
+  rápido— caía en Google. Ahora el sistema tiene de dónde elegir:
+
+  * `android.intent.action.ASSIST` en `.MainActivity`: es la acción que manda el
+    sistema a la app de asistencia cuando la dueña mantiene el botón de inicio,
+    desliza desde la esquina o usa el botón lateral. Sin declararla, Android ni
+    siquiera ofrece a CORT en aquel listado.
+  * `android.intent.action.VOICE_COMMAND`: la misma idea para el botón del
+    auricular mantenido (500 ms) y para los mandos del coche. Es la que declara
+    la app de Google.
+  * `.Panel` (`TileService`, Android 7+): un baldosín «CORT escucha» en la cortina
+    rápida. No pide ningún permiso y no necesita que CORT sea la app de asistencia.
+  * `android.app.shortcuts` (`res/xml/atajos.xml`): mantener pulsado el icono da
+    tres atajos —Escuchar, Equipo, Charla— que abren esa hoja directamente.
+  Las tres acciones de `com.cort.ia.*` son el viaje interno de los atajos: la cara
+  las lee en `abreLoQueToque` y abre la hoja por el puente (`atajo`).
+
   `versionCode` y `versionName` NO se escriben aquí: los pone `compilar.sh` al
   enlazar, derivados de la etiqueta de la Release.
 -->
@@ -280,7 +299,61 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- El gesto de asistente. Android busca esta acción en la app
+                 elegida como «aplicación de asistencia»; al mantener el botón de
+                 inicio (o el gesto de esquina) el sistema lanza la actividad con
+                 `ACTION_ASSIST`, y `abreLoQueToque` la convierte en «ponte a
+                 escuchar». Es la vía que hace falta ADEMÁS del
+                 `VoiceInteractionService` de abajo: el servicio es lo que pone a
+                 CORT en el listado, esta acción es lo que lo despierta cuando el
+                 fabricante no usa sesiones de voz. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- El botón del auricular mantenido y los mandos del coche: la app de
+                 Google declara esta misma acción, y es la que se le ocurre al
+                 sistema cuando alguien aprieta y sostiene el botón del audífono. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Los tres viajes internos de los atajos del icono. Con
+                 `targetClass` en `res/xml/atajos.xml` el intento ya es explícito,
+                 pero se declaran igual: así `adb shell am start -a
+                 com.cort.ia.EQUIPO` funciona, y eso es lo que se prueba en el
+                 portátil antes de mandar nada al teléfono. -->
+            <intent-filter>
+                <action android:name="com.cort.ia.ESCUCHAR" />
+                <action android:name="com.cort.ia.EQUIPO" />
+                <action android:name="com.cort.ia.CHARLA" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- Los atajos que aparecen al mantener pulsado el icono del cajón. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/atajos" />
         </activity>
+
+        <!-- El **baldosín de la cortina rápida**: un toque abajo y CORT está
+             escuchando, sin abrir el cajón ni ser la app de asistencia del
+             fabricante. `BIND_QUICK_SETTINGS_TILE` es lo único que hace que
+             Android lo liste en «Editar los ajustes rápidos»; el icono se pone
+             desde código (`android.R.drawable.ic_btn_speak_now`) para no depender
+             de un drawable propio que el pipeline regenera. -->
+        <service
+            android:name=".Panel"
+            android:exported="true"
+            android:label="CORT escucha"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!-- El traje de asistente del sistema: la puerta (`.Asistente`) sólo la
              mira Android si está protegida con `BIND_VOICE_INTERACTION`, y la

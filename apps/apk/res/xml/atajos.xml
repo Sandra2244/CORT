@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Los atajos del icono (ronda 2.4.1): mantener pulsado CORT en el cajón da tres
+  puertas, y las tres se atienden AQUÍ, sin ser la app de asistencia.
+
+  Cada `<intent>` es explícito (`targetPackage` + `targetClass`), así que el viaje
+  no depende de que otra app pueda lanzar la actividad. Las acciones son las tres
+  `com.cort.ia.*` que declara el manifiesto, y `MainActivity.abreLoQueToque` es
+  quien las traduce: `ESCUCHAR` abre la cara y pone el micro, `EQUIPO` y `CHARLA`
+  abren la cara y piden la hoja por el puente (`{"type":"atajo","hoja":…}`).
+
+  Un detalle que no es estética: `shortcutShortLabel` y `shortcutLongLabel` tienen
+  que ser **referencia a un recurso de texto** (`@string/…`), no un literal. Con
+  literal, el parsesito del sistema (`ShortcutPackage`) lee un entero de recurso y
+  los atajos no aparecen: se ve el icono, se mantiene, y sale sólo «Abrir». Por
+  eso las etiquetas viven en `res/values/etiquetas.xml`.
+
+  No hay `<categories>`: es opcional, y las categorías conocidas
+  (`android.shortcut.conversation`) cambiarían el grupo donde Android agrupa el
+  atajo — en algunos lanzadores lo mete dentro de los chats de WhatsApp.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="escuchar"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/atajo_escuchar_corto"
+        android:shortcutLongLabel="@string/atajo_escuchar"
+        android:shortcutDisabledMessage="@string/atajo_escuchar_no">
+        <intent
+            android:action="com.cort.ia.ESCUCHAR"
+            android:targetPackage="com.cort.ia"
+            android:targetClass="com.cort.ia.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="equipo"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/atajo_equipo_corto"
+        android:shortcutLongLabel="@string/atajo_equipo"
+        android:shortcutDisabledMessage="@string/atajo_equipo_no">
+        <intent
+            android:action="com.cort.ia.EQUIPO"
+            android:targetPackage="com.cort.ia"
+            android:targetClass="com.cort.ia.MainActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="charla"
+        android:enabled="true"
+        android:shortcutShortLabel="@string/atajo_charla_corto"
+        android:shortcutLongLabel="@string/atajo_charla"
+        android:shortcutDisabledMessage="@string/atajo_charla_no">
+        <intent
+            android:action="com.cort.ia.CHARLA"
+            android:targetPackage="com.cort.ia"
+            android:targetClass="com.cort.ia.MainActivity" />
+    </shortcut>
+
+</shortcuts>

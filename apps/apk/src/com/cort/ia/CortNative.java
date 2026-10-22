@@ -252,8 +252,17 @@ public class CortNative {
         act.runOnUiThread(() -> arrancarEscucha(lang, modo));
     }
 
-    /** Lo mismo, pero desde Java: el doble toque del auricular y el asistente. */
+    /**
+     * Lo mismo, pero desde Java: el doble toque del auricular y el asistente.
+     *
+     * La guarda de `sttVivo` existe porque desde la ronda 2.4.1 hay vías que abren
+     * el micro **y además** traen la cara al frente con `PIDE_ESCUCHAR` (el doble
+     * toque, el baldosín): sin ella las dos rutas llaman a `arrancarEscucha` y el
+     * segundo `startListening` corta la frase que se estaba diciendo a media
+     * palabra. El oído ya abierto se deja abierto.
+     */
     void escuchaAhora() {
+        if (sttVivo) return;
         act.runOnUiThread(() -> arrancarEscucha("es-MX", "cmd"));
     }
 
@@ -1100,6 +1109,21 @@ public class CortNative {
      */
     void avisoEnLaCara(String de, String dicho) {
         cuadro("{\"type\":\"aviso\",\"de\":" + comilla(de) + ",\"dice\":" + comilla(dicho) + "}");
+    }
+
+    /**
+     * El atajo del icono largo (ronda 2.4.1): «Equipo» o «Charla» llegan a Java
+     * antes de que la página exista, así que no hay a quién pedirle la hoja. Se
+     * emite `{"type":"atajo","hoja":"…"}` y `pantallas.js` hace el `ir(hoja)` de
+     * siempre — el mismo que ejecuta un toque en la barra de pantallas.
+     *
+     * Sale por `cuadro`, que es la boca única del puente: si la cara aún no tiene
+     * oyente, el evento se pierde como se pierden los demás, y la página abre en
+     * el orbe. No se guarda en cola a propósito: un atajo de hace ocho segundos ya
+     * no es un atajo, es CORT saltando solo.
+     */
+    void atajoEnLaCara(String hoja) {
+        cuadro("{\"type\":\"atajo\",\"hoja\":" + comilla(hoja) + "}");
     }
 
     /* ────────────────────────────── modo juego ────────────────────────────── */

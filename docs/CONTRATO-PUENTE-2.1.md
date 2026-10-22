@@ -252,22 +252,25 @@ o que ninguna app de ese teléfono puede recibirlo.
 
 ## 9 · los eventos que vuelven
 
-Además de los de siempre (`stt-*`, `tts-*`, `perm`, `music`), la ronda 2.1 empuja
-cuatro a `window.__cortNative.emit({...})`:
+Además de los de siempre (`stt-*`, `tts-*`, `perm`, `music`), estos son los eventos
+que Java empuja a `window.__cortNative.emit({...})` sin que la cara los pida:
 
 | `type` | cuándo | payload |
 |---|---|---|
 | `mente` | termina una pregunta al cerebro de la nube (hilo aparte) | `{ok,responde,de:"nube\|local",eco}`; si `de` es `local` puede traer además `{accion,param}`, **y la cara tiene que reenviarlos a `accion()`** (`Mente` nombra la cosa, `Acciones` la hace) |
 | `memoria` | termina una sincronía con el portátil | `{ok,subidos,bajados,dice}` |
-| `auricular` | el **doble toque del auricular** abre el micro, y cuando se cierra | `{escuchando:true\|false}` |
+| `auricular` | el **doble toque del auricular** abre el micro, y cuando se cierra | `{escuchando:true\|false}` — desde 2.4.1 funciona con la cara delante (`MainActivity`) **y con la cara cerrada** (`Reproductor`), que antes no |
 | `aviso` | **ronda 2.4** — `.Avisos` acaba de guardar un aviso nuevo | `{de,dice}` (`dice` es la línea ya formada por `linea()`: hora, quién y asunto) |
+| `atajo` | **ronda 2.4.1** — la dueña eligió «Equipo» o «Charla» al mantener pulsado el icono del cajón | `{hoja:"equipo"\|"charla"}` — y `pantallas.js` lo convierte en el `ir(hoja)` de siempre |
 
-`aviso` es el único que no contesta a nada: es Java empujando lo que pasó, sin que
-la cara lo pida. Existe por las automatizaciones («cuando llegue algo de WhatsApp,
-haz X»), que necesitan la señal **en el momento**, no cuando la dueña abra la hoja
-Equipo y se lea el resumen. Se manda sólo si `MainActivity.front()` existe (con la
-app cerrada no hay página que escuche, y el aviso queda igual guardado para leerlo
-después). Cero permisos nuevos: el lector de notificaciones ya estaba dado de alta.
+`aviso` y `atajo` son los dos que no contestan a nada: es Java empujando lo que
+pasó, sin que la cara lo pida. El primero existe por las automatizaciones («cuando
+llegue algo de WhatsApp, haz X»), que necesitan la señal **en el momento**, no
+cuando la dueña abra la hoja Equipo y se lea el resumen. El segundo porque el
+atajo llega en el `Intent`, antes de que el WebView tenga página: `MainActivity`
+lo espera 900 ms y lo suelta. Los dos se mandan sólo si la cara está viva, y
+`atajo` no se guarda en cola — un atajo de hace ocho segundos ya no es un atajo,
+es CORT saltando solo. Se lee y se olvida, como todo lo que empuja el puente.
 
 `accion` **no** es un evento: es síncrono (`envia('accion', …)` trae la respuesta en
 el mismo viaje), y no hay nada largo que Java haga por su cuenta en esta ronda. La

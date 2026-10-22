@@ -74,6 +74,17 @@ public class MainActivity extends Activity {
     /** La bandera que mandan `Sesion.java` y `Reconocimiento.java` al invocar a CORT. */
     public static final String PIDE_ESCUCHAR = "cort.escuchar";
 
+    /* Las tres acciones que declara `res/xml/atajos.xml`, y las dos del sistema,
+       escritas como cadena en vez de `Intent.ACTION_ASSIST` / `ACTION_VOICE_COMMAND`:
+       el APK se compila contra el `android.jar` que baje el pipeline, y no depende
+       de qué constantes estén o no exportadas ese día. La cadena es la misma en
+       cualquier Android, así que el riesgo se queda en cero por dos líneas. */
+    public static final String A_ESCUCHAR = "com.cort.ia.ESCUCHAR";
+    public static final String A_EQUIPO = "com.cort.ia.EQUIPO";
+    public static final String A_CHARLA = "com.cort.ia.CHARLA";
+    private static final String A_ASISTENTE = "android.intent.action.ASSIST";
+    private static final String A_VOZ = "android.intent.action.VOICE_COMMAND";
+
     /** El código con el que se pide el rol de asistente a `RoleManager` (API 29+). */
     private static final int PETICION_ROL = 42;
 
@@ -205,13 +216,50 @@ public class MainActivity extends Activity {
         abreLoQueToque(intent);
     }
 
-    /** El asistente y el doble toque llegan con `PIDE_ESCUCHAR`: escucha al abrir. */
+    /**
+     * Todo lo que abre CORT **sin** pulsar su icono: el gesto de asistente
+     * (`ACTION_ASSIST`), el botón del auricular mantenido (`ACTION_VOICE_COMMAND`),
+     * el baldosín de la cortina y la sesión de voz (esos tres con `PIDE_ESCUCHAR`),
+     * y los tres atajos del icono largo, que además de escuchar abren una hoja.
+     *
+     * Se concentra aquí y no repartido entre `onCreate` y `onNewIntent` porque el
+     * viaje puede llegar con la cara ya abierta (`singleTop`): la actividad se
+     * reutiliza, y lo único que cambia es el `Intent`.
+     */
     private void abreLoQueToque(Intent intent) {
-        if (intent == null || !intent.getBooleanExtra(PIDE_ESCUCHAR, false)) return;
+        if (intent == null) return;
+        String accion = intent.getAction() == null ? "" : intent.getAction();
+        String hoja = hojaDe(accion);
+        boolean oir = intent.getBooleanExtra(PIDE_ESCUCHAR, false)
+                   || A_ASISTENTE.equals(accion)
+                   || A_VOZ.equals(accion)
+                   || A_ESCUCHAR.equals(accion);
+        if (!oir && hoja == null) return;
+        intent.removeExtra(PIDE_ESCUCHAR);
         // Un retardo corto: si se pide el micrófono antes de que la página exista,
         // la interfaz aún no tiene `window.__cortNative` y el resultado se pierde.
-        web.postDelayed(() -> { puente.escuchaAhora(); hideTeclado(); }, 900);
-        intent.removeExtra(PIDE_ESCUCHAR);
+        // Con el teléfono bloqueado el retardo no basta —la cara se monta después
+        // del desbloqueo—, pero `escuchaAhora()` ya tiene su guarda de micro
+        // abierto y la página se recupera sola al aparecer.
+        final boolean escucha = oir;
+        final String cualHoja = hoja;
+        web.postDelayed(() -> {
+            if (cualHoja != null) puente.atajoEnLaCara(cualHoja);
+            // `escuchaDelAuricular` y no `escuchaAhora`: en ninguna de estas vías la
+            // dueña está mirando la pantalla cuando llega el resultado, así que la
+            // insignia del micro es lo único que le dice que CORT ya la está oyendo.
+            if (escucha) puente.escuchaDelAuricular();
+            hideTeclado();
+        }, 900);
+    }
+
+    /** Qué hoja pide cada atajo del icono; `null` para cualquier otra acción. */
+    private static String hojaDe(String accion) {
+        switch (accion) {
+            case A_EQUIPO: return "equipo";
+            case A_CHARLA: return "charla";
+            default: return null;
+        }
     }
 
     @Override
@@ -393,8 +441,12 @@ public class MainActivity extends Activity {
         };
     }
 
-    /** `EXTRA_KEY_EVENT` es un `Parcelable`; se recoge con cuidado por si viene otro tipo. */
-    private static KeyEvent teclaDe(Intent evento) {
+    /**
+     * `EXTRA_KEY_EVENT` es un `Parcelable`; se recoge con cuidado por si viene otro
+     * tipo. Sin `private` a propósito: `Reproductor.dobleToque` lee la misma tecla
+     * del mismo `Intent` y no hay que escribir dos veces el mismo `try/catch`.
+     */
+    static KeyEvent teclaDe(Intent evento) {
         try {
             Object dentro = evento.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
             return dentro instanceof KeyEvent ? (KeyEvent) dentro : null;

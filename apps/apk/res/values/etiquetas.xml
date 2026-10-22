@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Las etiquetas de los atajos del icono (`res/xml/atajos.xml`), en español y en el
+  sitio que toca: Android exige `@string/…` en `shortcutShortLabel` y
+  `shortcutLongLabel`, no un literal.
+
+  Los cortos son de verdad cortos (los lanzadores los parten en dos líneas a los
+  ~10 caracteres), y los largos dicen lo que pasa al pulsar, no el nombre de la
+  hoja. `compilar.sh` escribe en esta misma carpeta su `colores-icono.xml` para el
+  icono adaptativo: los dos archivos conviven, `aapt2 link` los junta.
+-->
+<resources>
+    <string name="atajo_escuchar_corto">Escucha</string>
+    <string name="atajo_escuchar">Escuchar a CORT</string>
+    <string name="atajo_escuchar_no">Abre CORT primero</string>
+
+    <string name="atajo_equipo_corto">Equipo</string>
+    <string name="atajo_equipo">Abrir la hoja Equipo</string>
+    <string name="atajo_equipo_no">Abre CORT primero</string>
+
+    <string name="atajo_charla_corto">Charla</string>
+    <string name="atajo_charla">Conversar con tus modelos</string>
+    <string name="atajo_charla_no">Abre CORT primero</string>
+</resources>
