@@ -358,11 +358,13 @@ jobs:
         with:
           path: artefactos
           merge-multiple: true
-          # `instalador-*` recoge los tres instaladores de escritorio y **el**
-          # APK del teléfono. Desde esta Release ya no hay dos APK que elegir:
-          # el cuerpo Kotlin original quedó fuera (`apps/apk/rempaquetar.sh` está
-          # borrado del repo y no hay paso que lo corra) porque todo lo que hacía
-          # está en el de Java, con su icono de anillo y sus permisos.
+          # `instalador-*` recoge los tres instaladores de escritorio y **los APK del
+          # teléfono**. No son «las dos versiones que había que elegir» de la ronda
+          # 2.0 (el cuerpo Kotlin fuera: `apps/apk/rempaquetar.sh` está borrado del
+          # repo y no hay paso que lo corra). Son el MISMO CORT dos veces: completo y
+          # ligero, con el mismo `versionCode` y la misma llave, para poder bisecar el
+          # bloqueo de Play Protect. La guía de cuál instalar está en
+          # `docs/INSTALAR-APK.md`.
           pattern: instalador-*
       - uses: softprops/action-gh-release@v2
         with:
@@ -374,16 +376,17 @@ jobs:
             que elegir de antes: es el mismo CORT con y sin el oído sin nube dentro,
             para poder medir qué es lo que está bloqueando Play Protect en el
             teléfono de la dueña (párrafo «Por qué hay dos APK»).
-            `CORT-IA-2.4.2.apk` es el de siempre: 47,4 MB y todo dentro.
+            `CORT-IA-2.4.2.apk` es el de siempre: los 47 MB de antes y todo dentro.
             `CORT-IA-2.4.2-ligero.apk` es el mismo, quitando sólo el bulto del oído
-            (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo): unos **2 MB**,
-            escucha con el reconocedor del sistema y en **Equipo · 7 · Oído** lo dice
-            con la palabra `sin-modelo`. Los dos llevan el anillo en el cajón de
-            aplicaciones, el resto dentro —asistente, auricular, cortina, atajos,
-            reproductor, avisos, cerebro, **cerebros de casa**, **reglas «cuando X,
-            entonces Y»**— y en esta 2.4.1, **las cinco formas de abrir CORT** con el
-            auricular funcionando hasta con la cara cerrada (párrafo «Cómo se abre
-            CORT»).
+            (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo): alrededor de
+            **1,6 MB**, escucha con el reconocedor del sistema y en **Equipo · 7 ·
+            Oído** lo dice con la palabra `sin-modelo`. Los dos llevan el anillo en el
+            cajón de aplicaciones, el resto dentro —asistente, auricular, cortina,
+            atajos, reproductor, avisos, cerebro, **cerebros de casa**, **reglas
+            «cuando X, entonces Y»**— y desde la 2.4.1, **las seis vías de abrir CORT**
+            con el auricular funcionando hasta con la cara cerrada (párrafo «Cómo se
+            abre CORT»). El peso exacto de cada archivo, medido dentro del APK final,
+            está en su `-firma.txt` de al lado.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
             2.3.1, del 2.4.0 y del 2.4.1 sin desinstalar y sin perder
             nada** (misma llave `fa:ab:ef:46:8f:3a…` en los dos archivos,
