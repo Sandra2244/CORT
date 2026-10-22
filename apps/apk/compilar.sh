@@ -46,7 +46,18 @@ cd "$(dirname "$0")"
 # modelo de español de 39.817.833 B, `Habla` con los avisos sonoros del propio
 # CORT, y los `.so` de `apps/apk/motor.sh` empaquetados a mano. Ahí están los
 # ~45 MB que faltaban, no en relleno.
-APK_VERSION="${APK_VERSION:-2.3.0}"   # desde aquí sale UN SOLO APK: este
+#
+# El 2.3.1 no añade funciones: es la ronda de **que se pueda instalar**. La dueña
+# reportó que Google/Play Protect le bloquea el APK. Antes de tocar nada se MIDIO
+# el `CORT-IA-2.3.0.apk` publicado (bajado y leído byte a byte): sale con firma
+# v1+v2+v3, certificado RSA 2048 vigente hasta 2056 y `resources.arsc` sin
+# comprimir y alineado. O sea: el APK no está roto, es el aviso de Google a
+# cualquier app con certificado auto-firmado y fuera de Play. Lo que sí se puede
+# hacer desde aquí es (1) no dejar ningún esquema de firma al azar del `minSdk` y
+# (2) que cada Release publique la auditoría de instalabilidad, para poder
+# comprobar el archivo que llega al teléfono en vez de suponerlo. La guía de
+# toques por mensaje está en `docs/BLOQUEO-PLAY-PROTECT.md`.
+APK_VERSION="${APK_VERSION:-2.3.1}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 SDK="${ANDROID_HOME:-}"
@@ -59,8 +70,8 @@ fi
 # `versionCode` es el número con el que Android decide si esto **es una
 # actualización** o hay que desinstalar para meterlo. Se deriva de la versión con
 # `MA*10000 + MI*100 + PA`: 1.0.2 → 10002, 2.0.0 → 20000; algo que no sea
-# `X.Y.Z` vuelve a 1. Con esa fórmula 2.3.0 (20300) queda por delante del 2.2.0
-# (20200) y de cualquier 1.x, así que se instala ENCIMA sin desinstalar (con la
+# `X.Y.Z` vuelve a 1. Con esa fórmula 2.3.1 (20301) queda por delante del 2.3.0
+# (20300) y del 2.2.0 (20200), así que se instala ENCIMA sin desinstalar (con la
 # misma llave de `llave.sh`).
 case "$VERSION" in
     [0-9]*.[0-9]*.[0-9]*)
@@ -323,10 +334,59 @@ source llave.sh
 preparar_llave || { echo "no se pudo preparar la llave de firma"; exit 1; }
 echo "firmando con $LLAVE_ORIGEN — actualizar instalando encima: $LLAVE_ACTUALIZA"
 
-"$BT/apksigner" sign --ks "$LLAVE" \
+# -- Los TRES esquemas de firma, pedidos a la fuerza -------------------------
+# Por qué: `apksigner` no pregunta, decide. Con `minSdkVersion 26` la firma v1
+# (la carpeta `META-INF/` de toda la vida) viene **desactivada por defecto**, y
+# la v3 sólo se activa sola con `minSdk >= 28`. Eso deja un APK atado a que el
+# `apksigner` del runner tenga los defaults de siempre. Medido sobre el
+# `CORT-IA-2.3.0.apk` publicado —bajado y leído byte a byte en el portátil, no
+# deducido—: sí salió con v1 (`META-INF/CORT.RSA`), v2 (`0x7109871a`) y v3
+# (`0xf05368c0`). Aun así se piden explícitos, porque la v1 es la única que
+# cualquier herramienta corriente puede leer (`keytool -printcert -jarfile`, el
+# explorador con el que Play Protect mira el archivo, y `docs/INSTALAR-APK.md`
+# se escribió con esa lectura). Ningún esquema extra cambia la llave, así que
+# instalar encima del 2.3.0 sigue valiendo.
+#
+# La sonda existe porque estas banderas dependen de la versión de las
+# build-tools: si el runner cambiara de imagen y no las conociera, un `sign` con
+# argumento desconocido daría rojo y aquí no se fabrican banderas a ciegas.
+ESQUEMAS=""
+for bander in --v1-signing-enabled --v2-signing-enabled --v3-signing-enabled; do
+    if "$BT/apksigner" sign --help 2>&1 | grep -q -- "$bander"; then
+        ESQUEMAS="$ESQUEMAS $bander true"
+    else
+        echo "aviso: este apksigner no conoce $bander; se firma con sus defaults"
+    fi
+done
+echo "esquemas pedidos:${ESQUEMAS:- (ninguno explícito)}"
+
+# `set -u` no molesta aquí: `ESQUEMAS` se parte en palabras a propósito, y son
+# banderas fijas escritas arriba, no rutas que alguien pueda llenar con espacios.
+# shellcheck disable=SC2086
+"$BT/apksigner" sign $ESQUEMAS --ks "$LLAVE" \
     --ks-pass pass:"$LLAVE_PASS" --key-pass pass:"$LLAVE_PASS" \
     --out build/CORT.apk build/apk/alineado.apk
-"$BT/apksigner" verify build/CORT.apk
+
+# `verify --verbose` es el que dice QUÉ esquemas quedaron, no sólo si pasa. Su
+# salida va a `build/verificacion.txt` y de ahí a `firma.txt`: sin sesión en
+# GitHub los registros de Actions dan 403, así que lo que no viaje con el APK no
+# existe. El `verify` sin `|| true`: si la firma no cuadra, el run tiene que
+# ponerse rojo antes de publicar nada.
+"$BT/apksigner" verify --verbose build/CORT.apk | tee build/verificacion.txt
+
+# -- Auditoría de instalabilidad ---------------------------------------------
+# La pregunta de la dueña ahora es «Play Protect no me deja instalarlo». Para
+# poder responder con medidas en vez de con opiniones, cada Release se audita a
+# sí misma sobre lo que Android y Play Protect miran de verdad, y el resultado se
+# sube pegado al APK. Cada renglón se lee del archivo final:
+#   * sha256   → distingue «el APK está mal» de «la descarga se cortó».
+#   * recursos → desde Android 11, `resources.arsc` debe estar SIN comprimir y
+#                alineado a 4; si fallara, el instalador lo tira.
+#   * certificado → la firma de un auto-firmado caducado o «aún no válido» se
+#                parece mucho a un bloqueo de Play Protect; la ventana se publica
+#                para poder culpar al reloj del teléfono si es eso.
+#   * depurable → un `android:debuggable` perdido sería un motivo real de bloqueo.
+bash ../../scripts/audita-apk.sh build/CORT.apk "$BT" | tee build/auditoria.txt
 
 # -- Cuánto pesa lo que acaba de salir ----------------------------------------
 # La pregunta de la dueña fue «el APK no pesa lo que debería y lo comprimiste
@@ -385,6 +445,14 @@ PY
     echo "APK de CORT $VERSION (versionCode $CODE), paquete com.cort.ia"
     echo "cara embebida: ui/ de este commit ($(git rev-parse --short HEAD 2>/dev/null || echo '?'))"
     echo "peso: $PESO_APK bytes comprimido / $CRUDO_APK bytes sin comprimir / $ENTRADAS entradas / proporción $PROP"
+    # La auditoría del archivo final y lo que `apksigner verify --verbose` vio en
+    # él. Van aquí, pegadas al peso, porque son la respuesta a «Play Protect no me
+    # deja instalarlo»: si el sha256 y el peso coinciden con los de abajo, el
+    # archivo de la Release es íntegro y firmado por las tres vías, y el problema
+    # está en el teléfono (guía de toques: `docs/BLOQUEO-PLAY-PROTECT.md`).
+    cat build/auditoria.txt
+    echo "  verificación:"
+    sed 's/^/   · /' build/verificacion.txt
     echo "llave: $LLAVE_ORIGEN"
     echo "actualizar instalando encima: $LLAVE_ACTUALIZA"
     echo "oído offline: Vosk 0.3.47 + JNA 5.13.0 + modelo $(cat build/motor/modelo-nombre.txt)"

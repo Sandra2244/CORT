@@ -21,6 +21,15 @@ Por eso «sale error al instalar» justo al saltar de un 1.x (o del APK original
 2.x: no está roto el APK, es otra llave. Desde el 2.0.0 la llave es estable — la del
 secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola vez**.
 
+> **¿Y si no es la firma, sino Google?** Si lo que sale es un aviso de Play Protect
+> («no reconoce esta aplicación», «puede dañar tu dispositivo», «este archivo puede
+> dañar tu dispositivo») o el teléfono directamente no deja abrir el `.apk`, ese es
+> **otro asunto** y tiene su propia guía, renglón por renglón y por mensaje exacto:
+> [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md). Ahí está medido que el
+> APK viene firmado por las tres vías (v1+v2+v3), con el `resources.arsc` alineado y
+> el certificado vigente: no es un defecto del archivo, es el aviso que Google da a
+> cualquier app con certificado auto-firmado que no está en Play.
+
 ## Los tres pasos, sin cable y sin ordenador
 
 1. Baja `CORT-IA-<versión>.apk` de <https://github.com/Sandra2244/CORT/releases/latest>
@@ -62,6 +71,8 @@ secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola 
 | `INSTALL_PARSE_FAILED_NOT_APK`, «central directory», el peso no cuadra | la descarga se cortó | volver a bajar (el script compara el peso con el que anuncia la Release) |
 | `INSTALL_PARSE_FAILED_NO_CERTIFICATES`, «signing failed» | el archivo no es de la Release | bajar el `.apk` oficial |
 | «no tienes permiso para instalar apps desconocidas» | falta el permiso por app | Ajustes ▸ Aplicaciones ▸ Instalar apps desconocidas ▸ activarlo para el explorador que uses |
+| «El certificado no es válido», «aún no válido», «la fecha es incorrecta» | el **reloj** del teléfono va atrasado: el certificado de CORT empieza a ser válido el 2026-10-21 11:19 GMT (medido en su `META-INF/CORT.RSA`) | Ajustes ▸ Sistema ▸ Fecha y hora ▸ ponerla en automática y reintentar |
+| Aviso de Play Protect sin ningún código, y no hay botón de instalar | app auto-firmada y fuera de Google Play: es el aviso, no el APK | la tabla por frase exacta de [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md) |
 
 ## Con el teléfono por USB (si algún día tienes `adb`)
 
@@ -76,6 +87,12 @@ no se calla ningún código raro: lo imprime tal cual.
 ## Cómo se comprueba que un APK es el publicado
 
 Cada Release trae, junto al `.apk`, un archivo `…-firma.txt` con el peso exacto, las
-entradas del ZIP, la proporción de compresión y las huellas del certificado. Si el
-`.apk` que instalas pesa lo que dice esa hoja y su huella es `fa:ab:ef:46…`, es el
-mismo que salió del compilador de este repo.
+entradas del ZIP, la proporción de compresión y las huellas del certificado. Desde
+el `2.3.1` esa hoja trae además la **auditoría de instalabilidad leída del archivo
+final**: el `sha256` del APK, los esquemas de firma que realmente están dentro
+(v1/v2/v3), la ventana de validez del certificado, si `resources.arsc` va sin
+comprimir y alineado y si la app está o no marcada como depurable. Si el `.apk` que
+instalas pesa y hashea lo que dice esa hoja, y su huella es `fa:ab:ef:46…`, es el
+mismo que salió del compilador de este repo. Si el pipeline saca un APK truncado,
+sin firma v2 o depurable, **el run se pone rojo y no se publica**: lo comprueba
+`scripts/audita-apk.sh` antes de subir nada.

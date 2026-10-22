@@ -70,15 +70,17 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.3.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.3.1"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
                                  # temporizador, abrir apps, voces del TTS, memoria
-                                 # en SQLite, cerebro en la nube, atuendos) y —nuevo
-                                 # en 2.3.0— el OÍDO PROPIO: Vosk 0.3.47 con su
-                                 # modelo de español, para escuchar sin internet y
-                                 # sin los servicios de voz de Google.
+                                 # en SQLite, cerebro en la nube, atuendos), el
+                                 # OÍDO PROPIO de 2.3.0 (Vosk 0.3.47 con su modelo
+                                 # de español), y en 2.3.1 la firma con los tres
+                                 # esquemas a la fuerza + la auditoría de
+                                 # instalabilidad en `-firma.txt`, porque a la dueña
+                                 # se lo bloquea Play Protect al instalar.
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -216,7 +218,13 @@ jobs:
             errores="$(grep -E -A 3 '\.java:[0-9]+: error:' /tmp/apk.log \
                        | grep -E '\.java:[0-9]+: error:|symbol:|location:|required:|found:|reason:' \
                        | head -40)"
+            # Y lo que diga la auditoría del APK final (`scripts/audita-apk.sh`): si
+            # se puso MAL es porque el archivo no es instalable — firma ausente,
+            # `resources.arsc` comprimido o desalineado, marcado como depurable — y
+            # ese renglón es la noticia, no el final del log.
+            auditoria="$(grep -E 'VEREDICTO|auditoría de instalabilidad|no conoce --v|sin ninguna firma|ZIP: MAL|resources\.arsc|certificado:|esquemas pedidos' /tmp/apk.log | tail -14)"
             msg=$( { echo "-- errores --"; echo "${errores:-ninguno}"; \
+                     echo "-- auditoría --"; echo "${auditoria:-la auditoría no llegó a correr}"; \
                      echo "-- final del log --"; tail -c 900 /tmp/apk.log; } \
                    | tr '\n\r' '  ' | sed 's/%/%25/g' )
             echo "::error::compilar.sh salió con $st — $msg"
@@ -263,18 +271,34 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y **un solo APK** para el teléfono, que sube a la **2.3.0**. Se
-            acabaron las dos versiones que había que elegir: `CORT-IA-2.3.0.apk`
+            .deb) y **un solo APK** para el teléfono, que sube a la **2.3.1**. Se
+            acabaron las dos versiones que había que elegir: `CORT-IA-2.3.1.apk`
             es el CORT de siempre —el anillo en el cajón de aplicaciones— y lleva
             dentro todo lo que estaba repartido entre los dos, más el **oído propio
             sin nube** (párrafo «Escucha sin internet» abajo). **Se instala encima
-            del 2.0.0, del 2.1.0 y del 2.2.0 sin desinstalar y sin perder nada**
-            (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20300 > 20200): mira la
-            huella del `-firma.txt` de las dos Releases y compárala antes de
+            del 2.0.0, del 2.1.0, del 2.2.0 y del 2.3.0 sin desinstalar y sin perder
+            nada** (misma llave `fa:ab:ef:46:8f:3a…`, `versionCode` 20301 > 20300):
+            mira la huella del `-firma.txt` de las dos Releases y compárala antes de
             instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
             llave distinta, medida en `docs/INSTALAR-APK.md`—: desinstala una vez,
             instala este, y de aquí en adelante todas las actualizaciones entran
             encima.
+
+            **¿Play Protect te lo bloquea? Lea `docs/BLOQUEO-PLAY-PROTECT.md` antes
+            de tirar el APK.** Es la ronda de que se pueda instalar: este `.apk`
+            sale firmado con los **tres esquemas a la vez** (v1 en `META-INF/`, v2 y
+            v3 en el bloque de firma, pedidos con bandera explícita en vez de dejarlos
+            al default que `apksigner` elige según el `minSdk`), y cada Release publica
+            en su `-firma.txt` una **auditoría medida sobre el archivo final**: sha256,
+            peso exacto, qué esquemas están, la ventana de validez del certificado,
+            `resources.arsc` sin comprimir y alineado, `minSdk`/`targetSdk` y que no
+            esté marcado como depurable. Si el sha256 del archivo de tu teléfono es el
+            de esa hoja, el APK está entero y bien firmado, y lo que falla es el aviso
+            de Google a cualquier app con certificado auto-firmada y fuera de Play:
+            ahí está, renglón por renglón, qué pulsar según la frase exacta que sale
+            en pantalla (incluido el reloj del teléfono: el certificado de CORT empieza
+            a ser válido el **2026-10-21 11:19 GMT**, así que un móvil con la hora
+            atrasada lo ve «aún no válido» y eso se parece muchísimo a un bloqueo).
 
             **Un APK, el de Java, con el logo de siempre.** `apps/apk/compilar.sh`
             saca el icono del `base/CORT-IA-1.1.0.apk` (sus cinco densidades y el

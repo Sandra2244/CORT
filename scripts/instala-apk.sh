@@ -80,6 +80,18 @@ traduce() {
     "device offline"*|"*no permissions"*|*unauthorized*)
       rojo "El teléfono no habla por USB."
       dice "  Acepta el cuadro «Permitir depuración USB» en la pantalla del teléfono." ;;
+    *"not yet valid"*|*"certificate not valid"*|*"Certificado"*|*"certificate has expired"*)
+      rojo "Android rechaza el certificado de firma — y casi siempre es la HORA del teléfono."
+      dice "  El certificado de CORT empieza a ser válido el 2026-10-21 11:19 GMT (medido en"
+      dice "  su propio META-INF/CORT.RSA). Si el móvil marca una fecha anterior, el instalador"
+      dice "  lo ve «aún no válido» y el fallo parece de seguridad pero es del reloj:"
+      dice "  Ajustes ▸ Sistema ▸ Fecha y hora ▸ automática, y reintenta." ;;
+    *"Play Protect"*|*"not optimized"*|*"may harm"*|*"unrecognized"*)
+      rojo "Es el aviso de Google a cualquier app auto-firmada que no está en Play."
+      dice "  No es un defecto del APK: con la hoja -firma.txt al lado se ve que va firmado"
+      dice "  v1+v2+v3, con resources.arsc alineado y el certificado vigente hasta 2056."
+      dice "  La tabla de qué pulsar según la frase exacta está en docs/BLOQUEO-PLAY-PROTECT.md."
+      dice "  Por adb, que es justamente lo que estamos haciendo, ese aviso no aparece." ;;
     *)
       rojo "Android contestó algo que no conozco:"
       dice "$salida" ;;
@@ -151,6 +163,27 @@ for a in d.get("assets",[]):
   if [ -n "$firma_url" ]; then
     curl -sL -m 30 "$firma_url" -o "${APK%.apk}-firma.txt" &&
       dice "== hoja de firma publicada: ${APK%.apk}-firma.txt"
+    # Y además del peso, el sha256. Desde el `2.3.1` la hoja lleva la auditoría
+    # leída sobre el APK final, renglón `sha256: <64 hex>`: comparar ese valor con
+    # el archivo que acabas de bajar distingue «el APK está mal hecho» de «la
+    # descarga se corrompió por el camino», que es justo la duda que aparece cuando
+    # Play Protect se queja. El peso ya se comprobó arriba, byte a byte.
+    esperado=$( { grep -m1 -oE 'sha256: [0-9a-f]{64}' "${APK%.apk}-firma.txt" || true; } \
+                | awk '{print $2}')
+    if [ -n "$esperado" ]; then
+      real_sha=$(sha256sum "$APK" | awk '{print $1}')
+      if [ "$real_sha" = "$esperado" ]; then
+        verde "sha256 coincide con la hoja: $real_sha"
+        dice "   (o sea: el archivo es idéntico al que salió del compilador;"
+        dice "    si el teléfono lo bloquea, no es defecto del APK → docs/BLOQUEO-PLAY-PROTECT.md)"
+      else
+        rojo "sha256 DISTINTO: el tuyo es $real_sha y la hoja anuncia $esperado."
+        rojo "Ese archivo no es el publicado: no lo instales, vuelve a bajarlo."
+        exit 1
+      fi
+    else
+      dice "   (la hoja de esta Release no trae sha256: es anterior al 2.3.1)"
+    fi
   fi
 fi
 
@@ -166,4 +199,10 @@ else
   dice "   Si sale un error al instalar, mira la tabla de docs/INSTALAR-APK.md;"
   dice "   en nueve de diez casos es que el CORT viejo se firmó con otra llave y hay"
   dice "   que desinstalar ese CORT UNA vez."
+  dice ""
+  dice "   Y si el que salta es un AVISO de Google («Play Protect no reconoce esta"
+  dice "   app», «puede dañar tu dispositivo», Chrome no deja descargar el .apk), eso"
+  dice "   NO es un fallo del APK: es el aviso que Google da a cualquier app"
+  dice "   auto-firmada fuera de Play. docs/BLOQUEO-PLAY-PROTECT.md tiene la tabla"
+  dice "   de qué pulsar según la frase exacta, por marca de teléfono."
 fi
