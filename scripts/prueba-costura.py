@@ -1618,8 +1618,18 @@ else:
         falla("2.4.1 · baldosín", "el manifiesto no declara `android:name=\".Panel\"`")
     elif sin_panel:
         falla("2.4.1 · baldosín", f"en `Panel.java` falta {', '.join(sin_panel)}")
+    elif re.search(r"unlockAndRun\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\)", panel_txt):
+        # Medido en el run rojo de `v0.2.26-demo` (39820927537): la firma pública es
+        # `unlockAndRun(Runnable)`, y pasarle el `PendingIntent` —que es lo que uno
+        # «recuerda» de los baldosines— da «PendingIntent cannot be converted to
+        # Runnable». `javac` lo para, pero lo para seis minutos después.
+        falla("2.4.1 · baldosín", "`unlockAndRun` recibe un `Runnable`, no un `PendingIntent`: "
+                                 "hay que escribir `unlockAndRun(() -> …)`")
+    elif "unlockAndRun(() ->" not in panel_txt:
+        falla("2.4.1 · baldosín", "sin `unlockAndRun(() -> …)` el toque con la pantalla bloqueada se pierde")
     else:
-        dice_ok("2.4.1 · baldosín", "TileService público (API 24+, este App arranca en 26) y abre la cara a escuchar")
+        dice_ok("2.4.1 · baldosín", "TileService público (API 24+, este App arranca en 26), "
+                                    "con su `Runnable` de desbloqueo y la cara pidiendo escuchar")
 
 # Java: las cuatro vías se traducen en `abreLoQueToque`, y las hojas que nombra
 # tienen que existir en `PANTALLAS` (si no, `ir()` cae en el Orbe sin avisar).

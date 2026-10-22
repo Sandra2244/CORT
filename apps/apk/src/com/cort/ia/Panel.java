@@ -42,38 +42,41 @@ public class Panel extends TileService {
     }
 
     /**
-     * El viaje, con las tres salidas que hay según la versión del teléfono.
+     * El viaje, con el método que exista en el teléfono.
      *
-     * `startActivityAndCollapse(Intent)` es el método **nuevo** (Android 14): con
-     * `targetSdk` 34 es el que recomienda Google, y el antiguo sigue funcionando,
-     * pero está marcado como obsoleto. Con los dos caminos escritos, el APK vale
-     * para un teléfono de 2018 y para el de la dueña.
+     * `startActivityAndCollapse(Intent)` es el **nuevo** (Android 14): con
+     * `targetSdk` 34 es el que recomienda Google. `startActivityAndCollapse(PendingIntent)`
+     * es el antiguo y sigue funcionando —está obsoleto, no borrado.
+     */
+    private void via(Intent abrir) {
+        if (Build.VERSION.SDK_INT >= 34) startActivityAndCollapse(abrir);
+        else startActivityAndCollapse(pendienteDe(abrir));
+    }
+
+    /**
+     * Se llama así, con el plan B dentro de un `try/catch`, por lo que midió el
+     * pipeline de `v0.2.26-demo`: `unlockAndRun` **no** recibe un `PendingIntent`,
+     * recibe un `Runnable`, y `javac` lo paró con «PendingIntent cannot be converted
+     * to Runnable». Escrito con la firma de verdad, el encargo es un trozo de código
+     * que Android ejecuta justo después de que la dueña desbloquee.
      *
-     * `startActivityAndCollapse(PendingIntent)`: la vía antigua. Android cierra la
-     * cortina y lanza lo que traiga el pendiente.
-     *
-     * `startActivity`: el plan B, que en algunas capas de fabricante es lo único
-     * que no lanza `SecurityException` cuando el baldosín se pulsa con la pantalla
-     * recién encendida. Si ni eso puede, el toque se pierde pero CORT no se cierra
-     * en la cara: un baldosín mudo es mejor que un asistente que revienta.
+     * `startActivity`: el último recurso, que en algunas capas de fabricante es lo
+     * único que no lanza `SecurityException` cuando el baldosín se pulsa con la
+     * pantalla recién encendida. Si ni eso puede, el toque se pierde pero CORT no se
+     * cierra en la cara: un baldosín mudo es mejor que un asistente que revienta.
      */
     private void abreYCortaBaldosin() {
         Intent abrir = new Intent(this, MainActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 .putExtra(MainActivity.PIDE_ESCUCHAR, true);
         try {
-            if (Build.VERSION.SDK_INT >= 34) {
-                startActivityAndCollapse(abrir);
-                return;
-            }
-            PendingIntent viaje = pendienteDe(abrir);
             if (Build.VERSION.SDK_INT >= 30 && isLocked()) {
-                // Con el teléfono bloqueado, el baldosín no puede abrir actividades:
-                // se deja encargado el viaje para después del desbloqueo.
-                unlockAndRun(viaje);
+                // Con el teléfono bloqueado Android no deja lanzar actividades desde
+                // un baldosín: se deja encargado el viaje para después del desbloqueo.
+                unlockAndRun(() -> via(abrir));
                 return;
             }
-            startActivityAndCollapse(viaje);
+            via(abrir);
         } catch (Exception noPuede) {
             try {
                 startActivity(abrir);
