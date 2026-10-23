@@ -1,0 +1,427 @@
+/* =========================================================================
+   apps.css — LA ROPA POR APP (ronda F9)
+   =========================================================================
+   Lo que pidió la dueña: «que cada panel y apartado se vea DIFERENTE, como si
+   fuera otra app: la de música una réplica de Lark Player, la de la IA como la
+   de Gemini o Qoder, y el orbe sólo pantalla principal, sin botones, con uno
+   solo del menú».
+
+   Este archivo no sustituye a `hud.css`: lo viste por encima (va enlazado
+   después), y sólo toca tres cosas:
+
+   1. El CAJÓN (`#cajon`): el menú lateral que sustituye a la tira de doce
+      botones del borde inferior. El orbe se queda con UN solo botón (`#orb-menu`).
+   2. El TEMA por hoja: cada pantalla define sus variables (`--app-*`) y todo lo
+      que se pinta dentro las usa. Cambiar de hoja es cambiar de app: de color,
+      de fondo, de tipografía de títulos y de cabecera.
+   3. Los dos calcos: `.lk-*` (Lark Player, música y MV) y `.gm-*` (Gemini/Qoder,
+      la Charla), más las `.hoja-*` que son los paneles que suben desde abajo
+      con la esquina redondeada y su_asidero, igual que en las capturas.
+
+   Nada de esto inventa funciones: pinta lo que ya mandan `pantallas.js` y el
+   puente de Java. Lo que el puente no tiene (ecualizador, carpetas, carátulas)
+   NO se ofrece, aunque en Lark esté.
+   ========================================================================= */
+
+/* ─────────────────────────── 1 · el cajón ─────────────────────────── */
+
+/* El único botón del orbe: arriba a la izquierda, como la ☰ de Gemini. */
+#orb-menu{position:fixed;left:14px;top:14px;z-index:88;width:44px;height:44px;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;
+  background:rgba(6,14,28,.72);border:1px solid var(--cyan-dim);color:#dff1ff;
+  font-size:18px;cursor:pointer;backdrop-filter:blur(8px);
+  box-shadow:0 6px 18px rgba(0,0,0,.5)}
+#orb-menu i{font-style:normal;line-height:1}
+html.pantallas-montadas:not(.p-orbe) #orb-menu{display:none}
+
+/* La cortina: un toque fuera y se cierra (es lo que hace el cajón de Gemini). */
+#cortina{position:fixed;inset:0;z-index:86;background:rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;transition:opacity .22s ease}
+html.cajon-abierto #cortina{opacity:1;pointer-events:auto}
+
+#cajon{position:fixed;left:0;top:0;bottom:0;z-index:87;width:min(330px,86vw);
+  display:flex;flex-direction:column;gap:2px;padding:16px 12px calc(14px + env(safe-area-inset-bottom));
+  background:#06080f;border-right:1px solid rgba(80,190,255,.22);
+  box-shadow:24px 0 60px rgba(0,0,0,.65);overflow:auto;-webkit-overflow-scrolling:touch;
+  transform:translateX(-104%);transition:transform .26s cubic-bezier(.2,.9,.25,1)}
+html.cajon-abierto #cajon{transform:none}
+#cj-cab{display:flex;align-items:baseline;gap:10px;padding:2px 6px 12px}
+#cj-cab b{font-size:15px;letter-spacing:.28em;color:#fff}
+#cj-cab span{font-size:10.5px;color:#5e8cab;letter-spacing:.06em}
+#cj-cierra{all:unset;cursor:pointer;margin-left:auto;width:30px;height:30px;display:flex;
+  align-items:center;justify-content:center;border-radius:50%;color:#7fd0ff;font-size:14px;
+  border:1px solid rgba(80,190,255,.25)}
+.cj-grupo{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:#4b7f9e;
+  padding:14px 8px 6px;border-top:1px solid rgba(80,190,255,.12);margin-top:6px}
+/* Las apps: cada una con su color, para que se lean como iconos de otra app. */
+#cj-apps{display:flex;flex-direction:column;gap:2px}
+.cj-app{all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;padding:9px 8px;
+  border-radius:12px}
+.cj-app:hover,.cj-app:active{background:rgba(255,255,255,.06)}
+.cj-app i{font-style:normal;width:34px;height:34px;flex:0 0 auto;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  background:color-mix(in srgb, var(--tinte) 22%, transparent);
+  border:1px solid color-mix(in srgb, var(--tinte) 55%, transparent);
+  color:var(--tinte)}
+.cj-n{min-width:0;display:flex;flex-direction:column}
+.cj-app b{font-size:13.5px;color:#eaf7ff;letter-spacing:.02em}
+.cj-app span{display:block;font-size:10.5px;color:#5e8cab;margin-top:1px}
+.cj-app.activa{background:color-mix(in srgb, var(--tinte) 14%, transparent)}
+/* En Android 8-12 `color-mix` no existe: sin él, el icono sale neutro y la fila
+   sigue sirviendo. Se comprueba con estas dos reglas de reserva. */
+@supports not (color: color-mix(in srgb, red 50%, blue)){
+  .cj-app i{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.22);color:#dff1ff}
+  .cj-app.activa{background:rgba(255,255,255,.08)}
+}
+/* El dock de siempre, ahora dentro del cajón: lista vertical, no tira horizontal.
+   Lleva `display:flex` explícito porque `hud.css` esconde `#dock` en las hojas que
+   no son el orbe (`html.pantallas-montadas:not(.p-orbe) #dock{display:none}`), y aquí
+   el cajón tiene que poder abrirse desde cualquier hoja. */
+#cajon #dock{position:static;display:flex;flex-wrap:wrap;max-width:none;transform:none;gap:6px;
+  background:none;border:0;box-shadow:none;backdrop-filter:none;padding:2px 0 0}
+#cajon #dock button{width:calc(50% - 3px);height:38px;border-radius:10px;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+#cajon #dock button span{font-size:10px;letter-spacing:.04em}
+#cajon #dock button i{font-size:13px}
+#cajon #dock #lamp{width:100%;justify-content:flex-start;padding:6px 4px}
+/* Lo que sólo existe en el PC: en el teléfono no se ofrece (su queja del
+   «Optimizar» que llevaba a una hoja de escritorio). */
+html.mobile #cajon #dock [data-pc]{display:none}
+html.mobile #cajon #dock{gap:6px}
+#cj-ajustes{display:flex;flex-direction:column;gap:6px;padding-top:4px}
+/* `#wake` y `#hand` se **reubican** aquí con sus mismos nodos (el manejador de
+   `hud.js` viaja con ellos). Dos ids + clase ganan a las reglas sueltas de
+   `html.mobile #wake`, que es lo que hace falta para despegarlos de la esquina. */
+#cajon #cj-ajustes .fab{position:static;width:100%;height:42px;justify-content:flex-start;
+  gap:12px;padding:0 12px;border-radius:12px;font-size:12.5px;color:#dff1ff;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);transform:none}
+#cajon #cj-ajustes .fab i{font-size:15px}
+#cajon #cj-ajustes .fab::after{content:attr(data-nombre);letter-spacing:.02em}
+#cajon #cj-ajustes .fab.on{border-color:var(--cyan);background:rgba(0,160,255,.16)}
+/* Las filas de ajuste que no son un FAB (letra grande, sin movimiento). */
+.cj-fila{all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;padding:0 12px;
+  height:42px;border-radius:12px;font-size:12.5px;color:#dff1ff;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)}
+.cj-fila i{font-style:normal;width:15px;text-align:center;font-size:15px}
+.cj-fila::after{content:'';margin-left:auto;width:34px;height:18px;border-radius:12px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2)}
+.cj-fila.on{border-color:var(--cyan)}
+.cj-fila.on::after{background:rgba(0,160,255,.5);border-color:var(--cyan)}
+
+/* ─────────────────────── 2 · el orbe, sin botones encima ─────────────────────── */
+
+/* La barra de hojas de siempre (`#pantalla-bar`: ☰ + título + subtítulo) ya no hace
+   falta: cada app escribe su nombre en SU cabecera (`.scr-top`, `.lk-barra`,
+   `.gm-cab`) y para saltar de una a otra está el cajón. */
+html.pantallas-montadas #pantalla-bar{display:none}
+/* El cartel del modo juego se queda, flotando arriba: es un aviso, no un botón. */
+#pantalla-juego{position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:90;
+  display:none;padding:6px 14px;border-radius:16px;font-size:11.5px;letter-spacing:.06em;
+  background:rgba(20,10,2,.9);border:1px solid rgba(255,179,71,.55);color:#ffd79a;
+  box-shadow:0 8px 22px rgba(0,0,0,.5)}
+#pantalla-juego.viva{display:block}
+/* Las dos hojas con barra propia (Música y Charla) no necesitan la cabecera genérica. */
+html.pantallas-montadas .scr.sin-cab .scr-top{display:none}
+html.pantallas-montadas .scr.sin-cab{padding-top:6px}
+/* El micrófono flotante se queda: es LA acción de CORT. En el orbe respira un poco
+   más arriba para no pisar el saludo. */
+html.pantallas-montadas.p-orbe #mic{bottom:calc(24px + env(safe-area-inset-bottom))}
+/* Y el orbe, que es lo que ella pidió, se queda solo: sin dock, sin flechas y sin
+   la tira de ventanas de cristal encima (el HUD de siempre se atenúa). */
+html.pantallas-montadas.p-orbe #pantalla-bar,
+html.pantallas-montadas.p-orbe #pantalla-fletas{display:none}
+html.pantallas-montadas.p-orbe #arcs,html.pantallas-montadas.p-orbe #twin{opacity:.35}
+
+/* ─────────────────────── 3 · tema por hoja (cada app, su cara) ───────────────── */
+
+html.p-orbe   { --app-bg:transparent;                 --app-accent:#39c2ff; --app-txt:#e8f6ff; --app-dim:#5e8cab; --app-sup:rgba(8,20,38,.55) }
+html.p-musica { --app-bg:#000;                        --app-accent:#ff9a8b; --app-txt:#ffffff; --app-dim:#9b9ba4; --app-sup:#141417; --app-pastilla:#232329 }
+html.p-mv     { --app-bg:#000;                        --app-accent:#ffb27a; --app-txt:#ffffff; --app-dim:#9b9ba4; --app-sup:#141417; --app-pastilla:#232329 }
+html.p-charla { --app-bg:#070711;                     --app-accent:#8ab4f8; --app-txt:#e8eaed; --app-dim:#9aa0a6; --app-sup:#17171f; --app-pastilla:#23232e }
+html.p-codigo { --app-bg:#04070a;                     --app-accent:#2bff9e; --app-txt:#c9ffdf; --app-dim:#5f8f7a; --app-sup:#0a1016; --app-pastilla:#12201a }
+html.p-equipo { --app-bg:#02060d;                     --app-accent:#39c2ff; --app-txt:#dff1ff; --app-dim:#5e8cab; --app-sup:rgba(8,20,38,.72); --app-pastilla:#0d2033 }
+
+html.pantallas-montadas:not(.p-orbe) .scr{background:var(--app-bg);color:var(--app-txt)}
+/* La cabecera de cada hoja es la barra de SU app: nombre grande a la izquierda
+   (como «Lark Player» o «Gemini» en las capturas) y el estado a la derecha. */
+html.pantallas-montadas:not(.p-orbe) .scr-top{border-bottom:0;padding:6px 2px 10px;gap:8px}
+html.pantallas-montadas:not(.p-orbe) .scr-top b{font-size:19px;letter-spacing:0;
+  text-transform:none;color:var(--app-txt);font-weight:700}
+html.pantallas-montadas:not(.p-orbe) .scr-vuelve{color:var(--app-accent);
+  border-color:color-mix(in srgb, var(--app-accent) 40%, transparent);font-size:13px}
+html.pantallas-montadas:not(.p-orbe) .scr-estado{color:var(--app-dim)}
+html.pantallas-montadas:not(.p-orbe) .scr-cuerpo{gap:10px}
+/* El pie de página del teléfono dejaba 96 px para la tira de botones que ya no está. */
+html.pantallas-montadas:not(.p-orbe) .scr{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
+html.mobile.pantallas-montadas:not(.p-orbe) .scr{padding:8px 12px calc(18px + env(safe-area-inset-bottom))}
+
+/* ───────────────────────── 4 · las hojas que suben ─────────────────────────
+   El panel de abajo de Lark: esquina redondeada, asidero, título y filas con
+   icono. Se abre con `abreHoja()` y se cierra pulsando la cortina, el asidero o ✕. */
+.hoja-cortina{position:fixed;inset:0;z-index:96;background:rgba(0,0,0,.6);opacity:0;
+  pointer-events:none;transition:opacity .2s ease}
+.hoja-cortina.abierta{opacity:1;pointer-events:auto}
+.hoja{position:fixed;left:0;right:0;bottom:0;z-index:97;max-height:78vh;overflow:auto;
+  -webkit-overflow-scrolling:touch;
+  background:var(--hoja-fondo,#101014);color:#fff;
+  border-radius:22px 22px 0 0;padding:6px 14px calc(18px + env(safe-area-inset-bottom));
+  box-shadow:0 -14px 44px rgba(0,0,0,.6);
+  transform:translateY(104%);transition:transform .26s cubic-bezier(.2,.9,.25,1)}
+.hoja.abierta{transform:none}
+.hoja-asidero{width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.28);
+  margin:4px auto 10px}
+.hoja-cab{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.hoja-cab b{font-size:17px;font-weight:700}
+.hoja-cab .hoja-cierra{all:unset;cursor:pointer;margin-left:auto;color:#b9b9c2;
+  width:30px;height:30px;display:flex;align-items:center;justify-content:center;
+  border-radius:50%;background:rgba(255,255,255,.08)}
+.hoja-fila{display:flex;align-items:center;gap:12px;padding:12px 6px;border-radius:12px;
+  cursor:pointer;font-size:14.5px;color:#f2f2f5}
+.hoja-fila i{font-style:normal;width:24px;text-align:center;color:#c9c9d2;font-size:15px}
+.hoja-fila small{margin-left:auto;color:#8d8d97;font-size:11.5px}
+.hoja-fila.elegida{color:var(--app-accent,#ff9a8b)}
+.hoja-fila.elegida small{color:var(--app-accent,#ff9a8b)}
+.hoja-fila:hover,.hoja-fila:active{background:rgba(255,255,255,.06)}
+.hoja-pista{display:flex;align-items:center;gap:10px;padding:8px 4px}
+.hoja-pista .lk-mini-portada{width:38px;height:38px;border-radius:8px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;background:#232329;color:#cfcfd6}
+.hoja-pista b{font-size:13.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hoja-pista span{font-size:11px;color:#8d8d97}
+.hoja-pista .arrastra{margin-left:auto;color:#8d8d97;font-size:15px}
+.hoja-pista.sonando b{color:var(--app-accent,#ff9a8b)}
+
+/* ───────────────────────── 5 · calco LARK (Música y MV) ─────────────────────────
+   De las doce capturas de la dueña se copió: el negro puro, la fila de chips con el
+   activo RELLENO, la lista (miniatura · título en negrita · artista gris · duración a
+   la derecha), el reproductor a pantalla completa con el título teñido del acento y
+   los tres botones gordos, y las hojas que suben desde abajo.
+   Lo que Lark tiene y CORT no: carátulas reales, carpetas, ecualizador y «más
+   reproducido» — no se pintan falsos. */
+
+/* La barra de la app: título + buscador + orden + más opciones, como en Lark. */
+.lk-barra{display:flex;align-items:center;gap:10px;padding:2px 0 6px}
+.lk-barra .lk-nombre{font-size:20px;font-weight:700;letter-spacing:-.2px}
+.lk-btn{all:unset;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;
+  justify-content:center;border-radius:50%;color:#e9e9ee;font-size:16px;background:rgba(255,255,255,.06)}
+.lk-btn:active{background:rgba(255,255,255,.14)}
+.lk-btn.peligrado{color:var(--app-accent)}
+.lk-espacio{margin-left:auto}
+
+/* Los chips-pestaña: `Canciones | Playlists | Artistas | …` desplazables. */
+.lk-pestanas{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.lk-pestanas::-webkit-scrollbar{display:none}
+.lk-pestana{all:unset;cursor:pointer;flex:0 0 auto;padding:7px 15px;border-radius:19px;
+  font-size:13px;color:#d6d6dd;background:var(--app-pastilla,#232329)}
+.lk-pestana.activa{background:#2f6df6;color:#fff;font-weight:600}
+
+.lk-seccion{display:flex;align-items:center;gap:8px;padding:2px 2px 6px;
+  font-size:13.5px;color:#e6e6ec;font-weight:600}
+.lk-seccion small{margin-left:auto;color:#8d8d97;font-weight:400;font-size:11.5px}
+
+/* La lista de pistas */
+.lk-lista{border:0;border-radius:0;background:transparent;padding:0}
+.lk-fila{display:flex;align-items:center;gap:11px;padding:7px 4px;border-radius:12px;cursor:pointer}
+.lk-fila:active,.lk-fila:hover{background:rgba(255,255,255,.07)}
+.lk-portada{width:46px;height:46px;flex:0 0 auto;border-radius:9px;display:flex;
+  align-items:center;justify-content:center;font-size:17px;color:#0c0c10;
+  background:linear-gradient(140deg,var(--app-accent),#5b5b66)}
+.lk-fila .lk-txt{min-width:0;flex:1}
+.lk-fila b{display:block;font-size:14px;color:#f4f4f7;font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk-fila span{display:block;font-size:11.5px;color:#8f8f99;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk-fila em{font-style:normal;font-size:11px;color:#7c7c86;flex:0 0 auto}
+.lk-fila.sonando b{color:var(--app-accent)}
+.lk-fila.sonando .lk-portada{box-shadow:0 0 0 2px var(--app-accent) inset}
+
+/* El reproductor a pantalla completa */
+.lk-portada-grande{width:min(72vw,320px);aspect-ratio:1;margin:6px auto 2px;border-radius:16px;
+  display:flex;align-items:center;justify-content:center;font-size:64px;color:#0b0b0f;
+  background:linear-gradient(150deg,var(--app-accent),#3c3c46 70%);
+  box-shadow:0 18px 46px rgba(0,0,0,.6)}
+.lk-titulo{text-align:center;font-size:20px;font-weight:700;line-height:1.25;
+  color:var(--app-accent);padding:8px 6px 0;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lk-artista{text-align:center;font-size:12.5px;color:#9b9ba4;padding:2px 6px 0}
+.lk-fila-botones{display:flex;align-items:center;justify-content:center;gap:26px;padding:10px 0 4px}
+.lk-gordo{all:unset;cursor:pointer;width:62px;height:62px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:26px;color:var(--app-accent);
+  background:rgba(255,255,255,.05)}
+.lk-gordo.lk-play{width:74px;height:74px;font-size:30px;background:var(--app-accent);color:#111}
+.lk-linea{display:flex;align-items:center;gap:9px;font-size:11px;color:#8f8f99;
+  font-family:ui-monospace,Consolas,monospace;padding:2px 4px}
+.lk-linea .mu-barra{flex:1;height:4px;background:rgba(255,255,255,.16)}
+.lk-linea .mu-barra i{background:var(--app-accent)}
+.lk-abajo{display:flex;align-items:center;justify-content:space-around;gap:10px;padding:8px 4px 0}
+.lk-abajo button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;
+  gap:3px;font-size:11px;color:#b9b9c2;padding:6px 12px;border-radius:12px}
+.lk-abajo button i{font-style:normal;font-size:17px}
+.lk-abajo button.on{color:var(--app-accent);background:rgba(255,255,255,.06)}
+.lk-pastillas{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;padding-top:4px}
+.lk-pastillas .mu-chip{background:var(--app-pastilla,#232329);border-color:rgba(255,255,255,.12);
+  color:#dcdce2;font-size:11.5px;padding:7px 12px}
+.lk-pastillas .mu-chip.on{border-color:var(--app-accent);color:var(--app-accent)}
+
+/* La píldora de F8, vestida de Lark: superficie teñida, portada y pausa a la derecha. */
+html.pantallas-montadas #repro-pildora{background:var(--app-sup,#141417);
+  border-color:color-mix(in srgb, var(--app-accent) 45%, transparent);
+  border-radius:16px;max-width:min(78vw,330px)}
+html.pantallas-montadas #rp-play{background:var(--app-accent);color:#101014;border-color:transparent;
+  box-shadow:0 4px 14px rgba(0,0,0,.45)}
+html.pantallas-montadas #rp-portada{background:linear-gradient(140deg,var(--app-accent),#3c3c46);
+  color:#0d0d12;border-color:transparent}
+html.pantallas-montadas #rp-titulo{color:#f2f2f6}
+html.pantallas-montadas #rp-artista{color:#9b9ba4}
+
+/* MV: el mismo lenguaje, con el vídeo arriba y la letra debajo (ya existía; sólo
+   cambia la ropa). La hoja del vídeo deja el orbe de disco en la esquina.
+   El cuadro grande de Lark **se quita** aquí: en MV la imagen es el vídeo, y
+   pintarle encima un cuadrado decorativo sería tapar lo único que importa. */
+html.p-mv .lk-portada-grande{display:none}
+html.p-mv .lk-player{gap:6px}
+
+/* ───────────────────── 6 · calco GEMINI / QODER (la Charla) ─────────────────────
+   De sus capturas: la barra con el NOMBRE DEL MODELO y su ▾, el saludo grande
+   centrado sobre un degradado, la píldora de escritura con + · micrófono · enviar
+   redondo, y el desplegable de modelos con la marca de verificación. */
+
+.gm-cab{display:flex;align-items:center;gap:8px;padding:2px 0 6px}
+.gm-modelo{all:unset;cursor:pointer;display:flex;align-items:center;gap:7px;padding:7px 12px;
+  border-radius:19px;background:var(--app-pastilla,#23232e);color:#e8eaed;font-size:13.5px;
+  max-width:62vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gm-modelo em{font-style:normal;color:var(--app-accent);font-size:11px}
+.gm-cab .lk-btn{background:transparent}
+.gm-desplegable{position:absolute;left:8px;top:52px;z-index:20;display:none;flex-direction:column;
+  gap:4px;min-width:min(300px,84vw);padding:8px;border-radius:18px;
+  background:#1b1b22;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 46px rgba(0,0,0,.6)}
+.gm-desplegable.abierto{display:flex}
+.gm-opc{all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;padding:9px 10px;
+  border-radius:12px;font-size:13.5px;color:#e8eaed}
+.gm-opc small{display:block;font-size:11px;color:#9aa0a6}
+.gm-opc:hover,.gm-opc:active{background:rgba(255,255,255,.07)}
+.gm-opc.activa{background:rgba(138,180,248,.16)}
+.gm-opc .marca{width:18px;color:var(--app-accent)}
+.gm-pie-gm{margin-top:4px;padding-top:8px;border-top:1px solid rgba(255,255,255,.08);
+  font-size:11.5px;color:#9aa0a6}
+
+/* El saludo, cuando no hay conversación: como «Hola, Sandra Sofía. ¿Cuál es el plan?» */
+.gm-saludo{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:14px;text-align:center;padding:20px 14px;position:relative}
+.gm-saludo::before{content:"";position:absolute;inset:-20% -30% auto;height:60%;
+  background:radial-gradient(60% 60% at 50% 0,rgba(64,96,255,.28),transparent 70%);
+  pointer-events:none}
+.gm-saludo b{position:relative;font-size:26px;font-weight:600;color:#f6f7fb;line-height:1.3}
+.gm-saludo span{position:relative;font-size:12.5px;color:var(--app-dim);max-width:34ch}
+.gm-sugerencias{position:relative;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;
+  padding-top:6px}
+.gm-sugerencias button{all:unset;cursor:pointer;font-size:12px;color:#dfe3ea;padding:8px 12px;
+  border-radius:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1)}
+
+/* Las burbujas, en su idioma: la de CORT sin caja (como Gemini), la tuya a la derecha. */
+.gm-msgs{display:flex;flex-direction:column;gap:14px;padding:6px 2px}
+.gm-msgs .burbuja{max-width:92%;padding:0;background:none;border:0;box-shadow:none;
+  font-size:15px;line-height:1.6;color:#e8eaed;border-radius:0}
+.gm-msgs .burbuja.de-tu{align-self:flex-end;max-width:82%;padding:10px 14px;border-radius:18px;
+  background:var(--app-sup,#23232e);color:#f1f3f7}
+.gm-msgs .burbuja.de-cort{align-self:flex-start}
+.gm-msgs .bur-pie{display:flex;align-items:center;gap:10px;margin-top:6px;
+  font-size:10.5px;color:#8f939b;letter-spacing:.04em}
+.gm-msgs .bur-copiar{all:unset;cursor:pointer;font-size:10.5px;color:var(--app-accent);
+  padding:3px 9px;border-radius:12px;background:rgba(138,180,248,.12)}
+.gm-msgs .bur-fuente{color:#6f7480}
+
+/* La píldora de escritura: + · campo · micrófono · enviar redondo */
+.gm-pildora{display:flex;align-items:flex-end;gap:6px;padding:6px 8px;border-radius:26px;
+  background:var(--app-sup,#23232e);border:1px solid rgba(255,255,255,.1)}
+.gm-pildora textarea{flex:1;background:none;border:0;outline:none;resize:none;color:#f1f3f7;
+  font:inherit;font-size:15px;line-height:1.45;max-height:140px;padding:8px 4px}
+.gm-pildora textarea::placeholder{color:#8a8f98}
+.gm-redondo{all:unset;cursor:pointer;width:40px;height:40px;flex:0 0 auto;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  background:rgba(255,255,255,.08);color:#dfe3ea}
+.gm-redondo.enviar{background:var(--app-accent);color:#0a0d14;font-weight:700}
+.gm-modos{display:flex;gap:7px;overflow-x:auto;padding:8px 2px 2px;scrollbar-width:none}
+.gm-modos::-webkit-scrollbar{display:none}
+.gm-modo{all:unset;cursor:pointer;flex:0 0 auto;display:flex;align-items:center;gap:6px;
+  padding:6px 12px;border-radius:16px;font-size:12px;color:#cfd3da;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)}
+.gm-modo.activa{background:color-mix(in srgb, var(--app-accent) 22%, transparent);
+  border-color:var(--app-accent);color:#fff}
+.gm-adjuntar{display:flex;gap:14px;flex-wrap:wrap;padding:6px 2px 12px}
+.gm-adjuntar button{all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;
+  gap:6px;width:74px;font-size:11.5px;color:#dfe3ea}
+.gm-adjuntar i{font-style:normal;width:54px;height:54px;border-radius:50%;display:flex;
+  align-items:center;justify-content:center;font-size:20px;background:rgba(255,255,255,.09)}
+.gm-adjuntar button:active i{background:rgba(255,255,255,.18)}
+.gm-usando{display:flex;align-items:center;gap:8px;font-size:11.5px;color:#9aa0a6;
+  padding:2px 6px}
+.gm-usando b{color:var(--app-accent);font-weight:600}
+/* Las hojas de adjuntar y de historial usan el mismo `.hoja` de arriba; sólo cambia
+   el fondo para que pegue con el azul de la app. */
+html.p-charla .hoja{--hoja-fondo:#1b1b23}
+html.p-musica .hoja,html.p-mv .hoja{--hoja-fondo:#161619}
+
+/* ─────────────────────── 7 · Código y Equipo, con su aire ─────────────────────── */
+/* Que no se vean igual que la Charla: la terminal es verde sobre negro, el Equipo es
+   el cian de siempre pero sin cristal. */
+html.p-codigo .scr-cuerpo,html.p-codigo .scr-lista{font-family:ui-monospace,Consolas,monospace}
+html.p-codigo #cod-out{background:#04080a;border-color:rgba(43,255,158,.2)}
+html.p-codigo #cod-out .cod-linea{color:#b9ffd8}
+html.p-codigo .ch-mo,html.p-codigo .mu-chip{border-color:rgba(43,255,158,.35);color:#b9ffd8}
+html.p-equipo .scr-cuerpo{color:var(--app-txt)}
+
+/* ─────────────────────────── 8 · accesibilidad ───────────────────────────
+   Dos cosas que la dueña pidió en el plan maestro y que aquí cuestan dos líneas:
+   letra más grande y menos movimiento. Se activan desde el cajón. */
+html.letra-grande{font-size:17px}
+html.letra-grande .lk-fila b,html.letra-grande .gm-msgs .burbuja{font-size:1.05em}
+html.sin-movimiento #cajon,html.sin-movimiento .hoja,html.sin-movimiento #cortina,
+html.sin-movimiento #repro-pildora{transition:none}
+html.sin-movimiento *{animation:none !important}
+
+/* ─────────────────── 9 · los remates del calco (F9) ───────────────────
+   Lo que el JS de la ronda 9 dibuja y aún no tenía ropa: el mini-reproductor anclado
+   de Lark, las dos vistas de la hoja de Música, la ☰ de las hojas sin barra propia,
+   el chip del adjunto y los rótulos del modo en las burbujas. */
+
+/* La ☰ de MV, Código y Equipo: en la misma esquina que el botón del orbe, para que
+   el menú esté siempre donde la dueña lo aprendió. */
+html.pantallas-montadas .scr-top .scr-menu{all:unset;cursor:pointer;width:34px;height:34px;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;
+  color:var(--app-accent,#39c2ff);background:rgba(255,255,255,.07);font-size:15px}
+
+/* Música: las dos vistas. `hidden` es el atributo que pone `vistaMusica()`; como el
+   cuerpo de la hoja es un flex, hay que anular el `display` para que desaparezca. */
+#mu-lista,#mu-player{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1}
+#mu-lista[hidden],#mu-player[hidden]{display:none}
+.lk-player{display:flex;flex-direction:column;gap:8px;min-height:0}
+.lk-portada-grande i{font-style:normal;font-size:54px;color:rgba(255,255,255,.5)}
+
+/* El mini de Lark, anclado abajo con `sticky`: la lista se desplaza por encima y él
+   no se mueve, que es lo que hace el de verdad. */
+.lk-mini{position:sticky;bottom:0;z-index:20;display:flex;align-items:center;gap:10px;
+  margin-top:auto;padding:7px 9px;border-radius:16px;
+  background:var(--app-sup,#141417);box-shadow:0 -6px 22px rgba(0,0,0,.5)}
+.lk-mini[hidden]{display:none}
+.lk-mini button{all:unset;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex:0 0 auto;border-radius:10px;background:var(--app-accent,#ff9a8b);color:#141013;font-size:16px}
+#mus-mini-portada{width:38px;height:38px}
+#mus-mini-play{width:34px;height:34px;border-radius:50%;font-size:14px}
+.lk-mini-txt{min-width:0;flex:1}
+.lk-mini-txt b{display:block;font-size:13px;color:#f3f3f7;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lk-mini-txt span{display:block;font-size:11px;color:#9b9ba4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* MV va más apretado: el vídeo y la letra se llevan la pantalla, el transporte es el
+   mismo pero sin los botones de 74 px. */
+html.p-mv .lk-gordo{width:48px;height:48px;font-size:19px}
+html.p-mv .lk-gordo.lk-play{width:58px;height:58px;font-size:24px}
+html.p-mv .lk-titulo{font-size:16px}
+
+/* La Charla: el saludo con sus sugerencias desaparece en cuanto hay conversación. */
+.gm-saludo[hidden]{display:none}
+.gm-modo i{font-style:normal;opacity:.85}
+.gm-adj-chip{align-self:flex-start;margin:0 2px}
+.bur-modo,.bur-adj{color:var(--app-accent,#8ab4f8);font-size:10.5px}
+.gm-opc>span{min-width:0;display:flex;flex-direction:column}
+.gm-opc b{font-size:13.5px;color:#f1f3f7;font-weight:600}

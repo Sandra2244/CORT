@@ -2180,6 +2180,214 @@ else:
     dice_ok("F8 · seleccionar", "la consola y la terminal del móvil se pueden seleccionar y copiar")
 
 
+# ── [18] F9 · la cara partida en apps: UN botón en el orbe, Lark en Música y
+#             Gemini en Charla (docs/PLAN-MAESTRO.md, ronda F9)
+# La dueña pidió dos cosas concretas: que el orbe quede sólo con el botón del menú, y
+# que cada apartado parezca OTRA app —Música calco de Lark Player, Charla calco de
+# Gemini/Qoder, con su modelo, sus modos y su adjunto—. Todo eso vive en `ui/` más una
+# puerta nueva en el portátil, así que el riesgo no es de compilación sino de NOMBRES:
+# el cajón lo PINTA `index.html` y lo ENCHUFA `pantallas.js`; el calco lo escribe el
+# `innerHTML` y lo VISTE `css/apps.css`; y el adjunto cruza cara → `main.py` →
+# `sensors.py`. Cada nombre que cambia en una capa sin cambiar en la otra es un botón
+# mudo —que es, palabra por palabra, el bug del sector [17]—.
+f9_js = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+f9_css = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+f9_ropa_ruta = RAIZ / "ui" / "css" / "apps.css"
+f9_ropa = f9_ropa_ruta.read_text(encoding="utf-8") if f9_ropa_ruta.exists() else ""
+f9_indice = (RAIZ / "ui" / "index.html").read_text(encoding="utf-8")
+f9_hudjs = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+f9_vidrio = (RAIZ / "ui" / "js" / "windows.js").read_text(encoding="utf-8")
+f9_sensores = (RAIZ / "backend" / "app" / "sensors.py").read_text(encoding="utf-8")
+print("\n[18] F9 · el cajón de un botón, el calco de Lark y el de Gemini")
+
+# 1 · la ropa: que exista, que esté enlazada y que vaya DESPUÉS de hud.css
+if not f9_ropa:
+    falla("F9 · ropa", "no existe `ui/css/apps.css` (o está vacío): el calco de Lark y de Gemini "
+                       "está escrito en el JS pero no se VISTE, así que las hojas saldrían con la "
+                       "ropa de siempre y la dueña no vería ninguna de las dos apps nuevas")
+elif 'css/apps.css' not in f9_indice:
+    falla("F9 · ropa", "`index.html` no enlaza `css/apps.css`: el JS pinta clases `lk-`/`gm-` que "
+                       "ninguna hoja de estilo conoce, y una clase sin regla es texto suelto")
+elif 'href="css/hud.css"' not in f9_indice or \
+        f9_indice.index('href="css/hud.css"') > f9_indice.index('href="css/apps.css"'):
+    falla("F9 · ropa", "`apps.css` se enlaza ANTES que `hud.css`: ganan las reglas viejas y el "
+                       "calco desaparece. El orden de las dos hojas es parte del contrato")
+else:
+    dice_ok("F9 · ropa", f"`apps.css` ({len(f9_ropa.splitlines())} líneas) existe y va enlazada "
+                         "después de `hud.css`")
+
+# 2 · el envase: el pipeline copia `ui/` ENTERO, así que la ropa nueva viaja sola
+f9_emp = (RAIZ / "apps" / "apk" / "compilar.sh").read_text(encoding="utf-8")
+if "cp -r ../../ui/. assets/ui/" not in f9_emp:
+    falla("F9 · envase", "`compilar.sh` ya no copia `ui/.` entero a `assets/ui/`: si la lista de "
+                         "archivos pasa a ser fija, `css/apps.css` se queda fuera y el APK sale con "
+                         "la cara vieja sin que ningún check se entere")
+else:
+    dice_ok("F9 · envase", "el pipeline copia `ui/.` completo: la ropa nueva entra en el APK sin que "
+                           "nadie la anuncie archivo por archivo")
+
+# 3 · el cajón: los nodos los pinta el índice y la cara los enchufa (en los dos sentidos)
+F9_DUEÑOS = ("orb-menu", "cortina", "cj-cierra", "cj-apps", "cj-ajustes")
+f9_agarra = set(re.findall(r"getElementById\('([a-z0-9-]+)'\)", f9_js))
+f9_sin_nodo = sorted(n for n in F9_DUEÑOS if f'id="{n}"' not in f9_indice)
+f9_sin_dueño = sorted(n for n in F9_DUEÑOS if n not in f9_agarra)
+if "montaNavegacion" not in f9_js:
+    falla("F9 · cajón", "no existe `montaNavegacion()`: ☰, la cortina y la ✕ estarían pintados sin "
+                        "un solo manejador —el botón único del orbe no abriría nada")
+elif not re.search(r"(?<!function )montaNavegacion\(\);", f9_js):
+    falla("F9 · cajón", "`montaNavegacion()` está definido pero nadie lo llama: ☰ queda mudo")
+elif f9_sin_nodo:
+    falla("F9 · cajón", "la cara enchufa " + ", ".join("#" + n for n in f9_sin_nodo) +
+                        " y `index.html` no lo pinta: `getElementById` da `null`, el `onclick` no "
+                        "se pone y ese botón no hace nada (el mismo silencio del sector [17])")
+elif f9_sin_dueño:
+    falla("F9 · cajón", "`index.html` pinta " + ", ".join("#" + n for n in f9_sin_dueño) +
+                        " y la cara no lo enchufa ni lo rellena: es markup muerto en el menú")
+else:
+    dice_ok("F9 · cajón", f"los {len(F9_DUEÑOS)} nodos del cajón están pintados en el índice y "
+                          "enchufados por la cara")
+
+# 4 · el orbe: UN solo botón. Las dos tiras viejas no pueden seguir en el índice ni
+#     seguir vivas en la cara, o el menú tendría dos puertas y el orbe seguiría lleno.
+if 'id="pantalla-bar"' in f9_indice or 'id="pantalla-menu"' in f9_indice:
+    falla("F9 · orbe", "`index.html` sigue pintando la barra de hojas vieja (`#pantalla-bar` / "
+                       "`#pantalla-menu`): el orbe no está limpio, que es lo que se pidió")
+elif 'pantalla-bar' in f9_js or 'pantalla-menu' in f9_js:
+    falla("F9 · orbe", "`pantallas.js` se refiere todavía a " +
+                       ", ".join(x for x in ("pantalla-bar", "pantalla-menu") if x in f9_js) +
+                       ": esas hojas ya no se pintan, así que `querySelector` devuelve `null` y el "
+                       "código que las usaba no corre nunca")
+else:
+    dice_ok("F9 · orbe", "no queda ni la barra de hojas ni el menú viejo: en el orbe sólo hay ☰")
+
+# 5 · el dock VIAJA dentro del cajón (no se duplica) y `apps.css` lo reabre: sin esa
+#     regla el menú saldría sin los botones de las ventanas de vidrio, porque `hud.css`
+#     esconde `#dock` en cuanto se sale del orbe.
+f9_dock = f9_indice.count('id="dock"')
+if f9_dock != 1:
+    falla("F9 · cajón", f"hay {f9_dock} nodos `id=\"dock\"` en el índice: `windows.js` enchufa "
+                        "`#dock [data-win=…]` y siempre coge el primero, así que la otra mitad de "
+                        "los botones quedaría sorda")
+elif not ('id="cajon"' in f9_indice and f9_indice.index('id="cajon"') < f9_indice.index('id="dock"')):
+    falla("F9 · cajón", "el `#dock` no está DENTRO de `#cajon`: las doce ventanas de vidrio siguen "
+                        "fuera del menú y el cajón sale sin herramientas")
+elif '#cajon #dock' not in f9_ropa:
+    falla("F9 · ropa", "`apps.css` no reabre `#cajon #dock`: `hud.css` esconde el dock fuera del "
+                       "orbe, así que el cajón se pintaría vacío de botones")
+elif 'html.pantallas-montadas:not(.p-orbe) #dock' not in f9_css:
+    falla("F9 · ropa", "cambió la regla de `hud.css` que esconde `#dock` fuera del orbe: esta "
+                       "comprobación se queda ciega y hay que reescribirla a la par")
+elif '#dock [data-win="' not in f9_vidrio:
+    falla("F9 · cajón", "`windows.js` ya no busca sus botones dentro de `#dock`: hay que cambiar "
+                        "esta costura, porque la cara los metió en el cajón contando con ello")
+else:
+    dice_ok("F9 · cajón", "un solo `#dock`, metido en el cajón, reabierto por apps.css y seguido "
+                          "enlazando las ventanas de vidrio")
+
+# 6 · la clase de bug que la sonda cazó en vivo (`mv-letra`): el transporte repite su
+#     plantilla con prefijo, y si un id dinámico coincide con un id fijo de la cara hay
+#     DOS nodos con el mismo `id`. `getElementById` devuelve el primero y el segundo se
+#     pinta encima sin que nadie lo vea. Se comprueban los dos lados de la plantilla.
+f9_prefijos = set(re.findall(r"transporteHTML\('([a-z]+)'\)", f9_js))
+f9_sufijos = set(re.findall(r'id="\$\{p\}(-[a-z0-9-]+)"', f9_js))
+f9_fijos = set(re.findall(r'id="([a-z0-9-]+)"', f9_js)) | set(re.findall(r'id="([a-z0-9-]+)"', f9_indice))
+f9_choque = sorted({a + b for a in f9_prefijos for b in f9_sufijos} & f9_fijos)
+if len(f9_prefijos) < 2 or len(f9_sufijos) < 10:
+    falla("F9 · transporte", f"la plantilla del transporte cambió de forma ({len(f9_prefijos)} "
+                             f"prefijos, {len(f9_sufijos)} ids dinámicos): la comprobación de "
+                             "choques ya no ve nada y hay que reescribirla a la par")
+elif f9_choque:
+    falla("F9 · transporte", "el transporte pinta " + ", ".join("#" + c for c in f9_choque) +
+                             " y ése es OTRO id de la cara: dos nodos con el mismo id. Así estaba "
+                             "`mv-letra`, el botón de la letra montado encima de la caja de letras")
+else:
+    dice_ok("F9 · transporte", f"los {len(f9_sufijos)} ids del transporte × {len(f9_prefijos)} hojas "
+                              f"no chocan con ninguno de los {len(f9_fijos)} ids fijos de la cara")
+
+# 7 · el adjunto de la Charla cruza las tres capas: la cara pide `/api/lee`, el núcleo lo
+#     declara y lo fía a `sensors.leer_texto` (que ya tenía su candado de rutas). Y la
+#     cara no puede leer claves que el núcleo no devuelve.
+f9_pide_lee = "/api/lee" in f9_js
+if not f9_pide_lee:
+    falla("F9 · adjunto", "la cara no pide `/api/lee`: el botón 「+」 no puede tener archivo, "
+                          "sería un adjunto de mentira")
+elif '@app.get("/api/lee")' not in backend_txt:
+    falla("F9 · adjunto", "la cara pide `/api/lee` y `main.py` no lo sirve: el 404 se traduce en "
+                          "«el portátil no contestó a lo de leer el archivo», que es mentira")
+elif "leer_texto" not in backend_txt or "def leer_texto" not in f9_sensores:
+    falla("F9 · adjunto", "`/api/lee` no se apoya en `sensors.leer_texto`: o se duplicó el lectura "
+                          "por otro lado, o se perdió el candado de las raíces permitidas")
+else:
+    cuerpo_lee = f9_sensores.split("def leer_texto", 1)[1].split("\ndef ", 1)[0]
+    da = set(re.findall(r'"([a-z_]+)":', cuerpo_lee))
+    pide = set(re.findall(r"\br\.([a-z_]+)\b",
+                          f9_js.split("async function adjuntaArchivo", 1)[1]
+                              .split("async function ", 1)[0]))
+    de_mas = sorted(pide - da)
+    if de_mas:
+        falla("F9 · adjunto", "la cara lee " + ", ".join("r." + k for k in de_mas) +
+                              " de `/api/lee` y `leer_texto` no devuelve esa clave: saldría "
+                              "`undefined` en el mensaje de la dueña")
+    else:
+        dice_ok("F9 · adjunto", "`/api/lee` está en la cara, en `main.py` y en `sensors.py`, y las "
+                                "claves que se leen (" + ", ".join(sorted(pide)) + ") son las que devuelve")
+
+# 8 · el cuerpo de los POST contra los modelos de pydantic. `Nota` tiene UN campo que es
+#     `texto`: la Charla lo mandaba como `text` (arreglado) y el Código también. Con el
+#     nombre equivocado FastAPI contesta 422, y la cara lo cuenta como «el núcleo no dejó
+#     guardarlo» —culpa del núcleo, cuando el fallo estaba escrito en el repo.
+F9_MODELOS = {"chat": "Msg", "notes": "Nota", "models/use": "Modelo"}
+f9_campos = {}
+for f9_ruta, f9_cls in F9_MODELOS.items():
+    m = re.search(r"class " + f9_cls + r"\(BaseModel\):\n((?:    \w+: [^\n]*\n)+)", backend_txt)
+    f9_campos[f9_ruta] = set(re.findall(r"^    (\w+):", m.group(1), re.M)) if m else set()
+if not all(f9_campos.values()):
+    falla("F9 · contrato", "algún modelo del núcleo ya no se reconoce (" +
+                           ", ".join(k for k, v in f9_campos.items() if not v) +
+                           " sin campos): la comprobación de los POST queda ciega")
+else:
+    torcidos = []
+    for m in re.finditer(r"fetch\((?:ctx\.api\(\)|base) \+ '(/api/[a-z/_]+)'[\s\S]{0,420}?"
+                         r"body: JSON\.stringify\(\{([^}]*?)\}\)", f9_js):
+        f9_ruta = m.group(1)[len("/api/"):]
+        if f9_ruta not in f9_campos:
+            continue
+        llaves = set(re.findall(r"(\w+):", m.group(2)))
+        if not llaves <= f9_campos[f9_ruta]:
+            torcidos.append(f9_ruta + " manda " + ", ".join(sorted(llaves)) +
+                            " y el modelo sólo tiene " + ", ".join(sorted(f9_campos[f9_ruta])))
+    if torcidos:
+        falla("F9 · contrato", "; ".join(torcidos))
+    else:
+        dice_ok("F9 · contrato", "los POST de la cara mandan exactamente los campos de `Msg`, "
+                                 "`Nota` y `Modelo` (422 = «el núcleo no dejó guardarlo», mentira)")
+
+# 9 · modos de la Charla: `Msg` sólo tiene `message`, así que el modo NO puede ser un
+#     campo del cuerpo —es la instrucción que va DELANTE de la pregunta. Si alguien añade
+#     el campo al backend sin cambiar la cara, esta comprobación avisa de que ya no es la
+#     única forma de decir el modo.
+if "CH_MODOS" not in f9_js or "pide:" not in f9_js:
+    falla("F9 · modos", "no existen los modos con su instrucción (`CH_MODOS` / `pide:`): la fila "
+                        "de seis botones de abajo sería decoración")
+elif "modo.pide" not in f9_js.split("const envio = [", 1)[-1].split("];", 1)[0]:
+    falla("F9 · modos", "`charla()` ya no pone la instrucción del modo delante de la pregunta: "
+                        "elegir 「Resume」 no resumiría nada")
+else:
+    dice_ok("F9 · modos", "el modo viaja dentro de `message`, que es lo único que acepta `/api/chat`")
+
+# 10 · el Escape: `hud.js` lo escucha en `document` para cerrar las ventanas de vidrio. La
+#      cara tiene que ganarle el tecla en la FASE DE CAPTURA y cortar la propagación, o
+#      cerrar el cajón reabriría el vidrio detrás.
+if "Escape" not in f9_hudjs:
+    falla("F9 · teclas", "`hud.js` ya no usa Escape: el `capture` de la cara sobra y hay que "
+                         "reescribir esta comprobación")
+elif "stopImmediatePropagation" not in f9_js or "{ capture: true }" not in f9_js:
+    falla("F9 · teclas", "la cara no se adelanta a `hud.js` con `capture` + `stopImmediatePropagation`: "
+                         "un Escape cerraría la hoja Y abriría las ventanas de vidrio a la vez")
+else:
+    dice_ok("F9 · teclas", "Escape lo coge primero la cara (capture) y no lo deja llegar a hud.js")
+
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

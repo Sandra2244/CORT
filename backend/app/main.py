@@ -223,6 +223,20 @@ def files(path: str = ""):
     return sensors.list_dir(path)
 
 
+@app.get("/api/lee")
+def lee(path: str = "", maximo: int = 6000):
+    """Contenido de un archivo de texto para **adjuntarlo a la charla**.
+
+    No es un lector nuevo: es `sensors.leer_texto`, la misma función que usa «lee el
+    documento X», con el mismo candado (sólo dentro de Documentos/Escritorio/
+    Descargas/Imágenes/Música/Videos, y `../` bloqueado). El tope se limita por aquí
+    porque el portátil de la dueña tiene 1,8 GiB: un `log` de 40 MB no puede entrar
+    en un prompt. Lo que no es texto plano (PDF, docx, imágenes) devuelve `ok:false`
+    con el motivo, y la cara lo dice tal cual en vez de inventar un resumen.
+    """
+    return sensors.leer_texto(path, max(200, min(int(maximo or 6000), 20000)))
+
+
 @app.get("/api/tree")
 def tree(path: str = ""):
     """Hijos de una carpeta con sus conteos — para expandir el árbol lateral."""

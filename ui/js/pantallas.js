@@ -47,23 +47,29 @@ let nucleo = null;                  // null = sin comprobar, false = no hay, bas
 let telefono = { pinta: () => {} }; // lo que monta `telefono.js`; en el PC es un no-op
 
 const PANTALLAS = [
-  { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre' },
-  { id: 'musica', titulo: 'Música',   sub: 'el reproductor de CORT', telefono: true },
-  { id: 'mv',     titulo: 'MV',       sub: 'el video con su letra', telefono: true },
-  { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos' },
-  { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar' },
+  { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre', ic: '◉' },
+  { id: 'musica', titulo: 'Música',   sub: 'el reproductor de CORT', telefono: true, ic: '♪' },
+  { id: 'mv',     titulo: 'MV',       sub: 'el video con su letra', telefono: true, ic: '▣' },
+  { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos', ic: '✦' },
+  { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar', ic: '⌗' },
   // La hoja del contrato 2.1: manda sobre el aparato. Sin puente no existe — en el
   // PC no hay volumen que subir ni linterna que encender, y un botón que no hace
   // nada es peor que un botón que no se ofrece.
   // `puente: 'accion'` es la segunda condición: un APK viejo sí tiene `CortNative`
   // pero no trae los métodos del contrato 2.1, y ahí la hoja entera sobra.
   { id: 'equipo', titulo: 'Equipo',   sub: 'lo que manda CORT en el teléfono',
-    telefono: true, puente: 'accion' },
+    telefono: true, puente: 'accion', ic: '⚙' },
 ];
-// `visibles()` es la única lista que se pinta (menú, teclas, deslizar, `ir`). Una
+// `visibles()` es la única lista que se pinta (cajón, teclas, deslizar, `ir`). Una
 // hoja con `puente` solo se ofrece si el puente de Java trae ese método de verdad.
 const visibles = () => PANTALLAS.filter(p => (!p.telefono || enTelefono())
   && (!p.puente || puede(p.puente)));
+
+/* Cada hoja es SU app: el color con el que se pinta su icono del cajón, su fondo y su
+   acento. Los valores coinciden con las variables `--app-*` de `css/apps.css`, que es
+   donde se visten de verdad; aquí sólo hace falta el tinte del icono. */
+const TINTE = { orbe: '#39c2ff', musica: '#ff9a8b', mv: '#ffb27a',
+                charla: '#8ab4f8', codigo: '#2bff9e', equipo: '#7ce7c8' };
 
 const puede = nombre => {
   // Mismo `typeof` que `llama()`, pero sólo para PREGUNTAR: sirve para avisar con
@@ -82,59 +88,167 @@ const llama = (nombre, ...args) => {
 
 /* ─────────────────────────── la carcasa ─────────────────────────── */
 
+/* F9 · «el orbe será sólo pantalla principal, sin botones; sólo uno de las acciones
+   o menú». Lo que antes era la tira de doce botones del borde inferior MÁS el menú ☰
+   de hojas es ahora UNA sola cosa: el cajón (`#cajon`), que abre el único botón que
+   queda en el orbe (`#orb-menu`) y se organiza en tres bloques —tus apps, las
+   herramientas, los ajustes—.
+
+   Dos decisiones que importan:
+   · `#dock` NO se duplica ni se reescribe: viaja dentro del cajón con sus mismos
+     nodos, porque `windows.js` engancha cada ventana buscando `#dock [data-win=…]`
+     y esos manejadores son los que ya funcionan. Lo que sólo existe en el PC lleva
+     `data-pc` y en el teléfono se esconde con CSS (su queja del «Optimizar»).
+   · `#wake` y `#hand` se **reubican** dentro del cajón, igual que el dock: al mover
+     el nodo se va con él el manejador que les puso `hud.js`.
+*/
 function montaCarcasa() {
-  if (document.getElementById('pantalla-bar')) return;
+  if (document.getElementById('scr-charla')) return;
 
-  const barra = document.createElement('div');
-  barra.id = 'pantalla-bar';
-  barra.innerHTML = `
-    <button id="menu3" title="Cambiar de pantalla" aria-label="Menú de pantallas">
-      <i></i><i></i><i></i></button>
-    <span id="pantalla-titulo">Orbe</span>
-    <span id="pantalla-sub">el holograma de siempre</span>
-    <span id="pantalla-juego" hidden title="CORT está en silencio mientras juegas">🎮 modo juego</span>`;
-  document.body.appendChild(barra);
+  montaCajon();
 
-  const menu = document.createElement('nav');
-  menu.id = 'pantalla-menu';
-  menu.innerHTML = visibles().map(p =>
-    `<button data-p="${p.id}" class="${p.id === actual ? 'activa' : ''}">` +
-    `<b>${esc(p.titulo)}</b><span>${esc(p.sub)}</span></button>`).join('')
-    + '<div class="pm-pista">o desliza el dedo a un lado</div>';
-  document.body.appendChild(menu);
-  menu.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { cierraMenu(); ir(b.dataset.p); });
-  document.getElementById('menu3').onclick = e => {
-    e.stopPropagation();
-    document.documentElement.classList.toggle('menu-abierto');
-  };
-  document.addEventListener('pointerdown', e => {
-    if (!document.documentElement.classList.contains('menu-abierto')) return;
-    if (menu.contains(e.target) || e.target.closest('#menu3')) return;
-    cierraMenu();
-  });
-
-  // Secciones: sólo la charla y el código existen en los dos aparatos; la música
-  // se monta igual y queda oculta en el PC (el menú ni la lista).
+  // Las hojas: cada `<section>` es la pantalla completa de SU app. Las que llevan
+  // `sin-cab` dibujan su propia barra (Lark y Gemini), y la genérica estorba.
+  const CON_BARRA_PROPIA = ['musica', 'charla'];
   visibles().filter(p => p.id !== 'orbe').forEach(p => {
     const s = document.createElement('section');
-    s.className = 'scr'; s.id = 'scr-' + p.id;
-    s.innerHTML = `<header class="scr-top"><button class="scr-vuelve" title="Volver al orbe">◂ orbe</button>
+    s.className = 'scr' + (CON_BARRA_PROPIA.includes(p.id) ? ' sin-cab' : '');
+    s.id = 'scr-' + p.id;
+    s.innerHTML = `<header class="scr-top"><button class="scr-vuelve" title="Volver al orbe">‹</button>
+      <button class="scr-menu" title="Menú de CORT" aria-label="Menú de CORT">☰</button>
       <b>${esc(p.titulo)}</b><span class="scr-estado"></span></header>
       <div class="scr-cuerpo"></div>`;
     document.body.appendChild(s);
     s.querySelector('.scr-vuelve').onclick = () => ir('orbe');
+    s.querySelector('.scr-menu').onclick = abreCajon;
   });
 
-  const fletas = document.createElement('div');
-  fletas.id = 'pantalla-fletas';
-  fletas.innerHTML = '<button id="pf-left" title="pantalla anterior">‹</button>'
-                   + '<button id="pf-right" title="pantalla siguiente">›</button>';
-  document.body.appendChild(fletas);
-  document.getElementById('pf-left').onclick = () => mueve(-1);
-  document.getElementById('pf-right').onclick = () => mueve(1);
+  // El cartel del modo juego: aviso flotante, no botón (la barra de hojas ya no está).
+  const juego = document.createElement('div');
+  juego.id = 'pantalla-juego';
+  juego.hidden = true;
+  juego.title = 'CORT está en silencio mientras juegas';
+  juego.textContent = '🎮 modo juego';
+  document.body.appendChild(juego);
 }
 
-const cierraMenu = () => document.documentElement.classList.remove('menu-abierto');
+/* El contenido del cajón: las apps, con su color y su descripción. Se vuelve a
+   pintar cada vez porque `visibles()` depende del puente (un APK viejo no ofrece
+   Equipo, y sin teléfono no hay Música ni MV). */
+function montaCajon() {
+  const caja = document.getElementById('cj-apps');
+  if (!caja) return;
+  caja.innerHTML = visibles().map(p => `<button class="cj-app" data-p="${p.id}"
+      style="--tinte:${TINTE[p.id] || '#39c2ff'}">
+      <i>${p.ic || '◦'}</i><span class="cj-n"><b>${esc(p.titulo)}</b><span>${esc(p.sub)}</span></span>
+    </button>`).join('');
+  caja.querySelectorAll('[data-p]').forEach(b => {
+    b.onclick = () => { cierraCajon(); ir(b.dataset.p); };
+    b.classList.toggle('activa', b.dataset.p === actual);
+  });
+  montaAjustesCajon();
+}
+
+/* Ajustes y accesibilidad dentro del cajón: los dos conmutadores que ya existían
+   como botones flotantes, más dos filas nuevas que cuestan dos líneas y valen para
+   una pantalla de 5 pulgadas con letra pequeña. */
+function montaAjustesCajon() {
+  const caja = document.getElementById('cj-ajustes');
+  if (!caja) return;
+  [['wake', 'Escucha permanente «Oye CORT»'], ['hand', 'Gestos con la mano']].forEach(([id, nombre]) => {
+    const b = document.getElementById(id);
+    if (!b || b.parentElement === caja) return;
+    b.dataset.nombre = nombre;
+    caja.appendChild(b);
+  });
+  const fila = (id, icono, texto, clase) => {
+    const b = document.createElement('button');
+    b.className = 'cj-fila' + (document.documentElement.classList.contains(clase) ? ' on' : '');
+    b.dataset.aj = id;
+    b.innerHTML = `<i>${icono}</i>${esc(texto)}`;
+    b.onclick = () => {
+      const on = document.documentElement.classList.toggle(clase);
+      b.classList.toggle('on', on);
+      try { localStorage.setItem('cort-' + id, on ? '1' : '0'); } catch { /* modo privado */ }
+      ctx?.say?.(texto + (on ? ' activado.' : ' desactivado.'));
+    };
+    return b;
+  };
+  caja.querySelectorAll('.cj-fila').forEach(b => b.remove());
+  caja.appendChild(fila('letra', 'A', 'Letra más grande', 'letra-grande'));
+  caja.appendChild(fila('movimiento', '≈', 'Sin animaciones', 'sin-movimiento'));
+}
+
+/* Los dos trajes de accesibilidad sobreviven al arranque: se leen del almacén local
+   antes de pintar nada, para que la dueña no tenga que tocarlos cada vez. */
+function aplicaAccesibilidad() {
+  let g = '0', m = '0';
+  try { g = localStorage.getItem('cort-letra') || '0'; m = localStorage.getItem('cort-movimiento') || '0'; }
+  catch { /* sin almacén: queda como está */ }
+  const raiz = document.documentElement;
+  if (g === '1') raiz.classList.add('letra-grande');
+  if (m === '1') raiz.classList.add('sin-movimiento');
+}
+
+const abreCajon = () => {
+  montaCajon();                      // por si el puente cambió desde el último arranque
+  document.documentElement.classList.add('cajon-abierto');
+};
+const cierraCajon = () => document.documentElement.classList.remove('cajon-abierto');
+const cajonAbierto = () => document.documentElement.classList.contains('cajon-abierto');
+const cierraMenu = cierraCajon;      // nombre de siempre, para no romper lo que lo llama
+
+/* El único botón que queda en el orbe, su cortina y la ✕ del cajón. Se enganchan
+   aquí y no dentro de `montaCajon()`, porque `montaCajon()` se repinta con cada
+   cambio de hoja y estos tres nodos son fijos del índice. */
+function montaNavegacion() {
+  const boton = document.getElementById('orb-menu');
+  const cortina = document.getElementById('cortina');
+  const cierre = document.getElementById('cj-cierra');
+  if (boton) boton.onclick = () => cajonAbierto() ? cierraCajon() : abreCajon();
+  if (cortina) cortina.onclick = cierraCajon;
+  if (cierre) cierre.onclick = cierraCajon;
+}
+
+/* ─────────────────── las hojas que suben desde abajo (bottom sheets) ───────────
+   Calco de Lark y de Gemini: panel redondo por arriba, asidero, título y filas con
+   icono. Una sola instancia viva: abrir otra cierra la anterior, porque dos hojas
+   apiladas en una pantalla de 5 pulgadas es un accidente. */
+let hojaViva = null;
+
+function cierraHoja() {
+  if (!hojaViva) return;
+  const { raiz, cortina } = hojaViva;
+  raiz.classList.remove('abierta');
+  cortina.classList.remove('abierta');
+  const cierra = () => { raiz.remove(); cortina.remove(); };
+  document.documentElement.classList.contains('sin-movimiento') ? cierra() : setTimeout(cierra, 260);
+  hojaViva = null;
+}
+
+/* `html` es el contenido ya pintado; `alAbrir` recibe la hoja por si hay que
+   enganchar botones después (se hace aquí para que nadie tenga que acordarse). */
+function abreHoja({ titulo, html, botones = '', alAbrir = null }) {
+  cierraHoja();
+  const cortina = document.createElement('div');
+  cortina.className = 'hoja-cortina abierta';
+  const raiz = document.createElement('div');
+  raiz.className = 'hoja';
+  raiz.innerHTML = `<div class="hoja-asidero"></div>
+    <div class="hoja-cab"><b>${esc(titulo)}</b>${botones}
+      <button class="hoja-cierra" title="Cerrar">✕</button></div>
+    <div class="hoja-cuerpo">${html}</div>`;
+  document.body.appendChild(cortina);
+  document.body.appendChild(raiz);
+  const cierra = () => { cierraHoja(); };
+  cortina.onclick = cierra;
+  raiz.querySelector('.hoja-asidero').onclick = cierra;
+  raiz.querySelector('.hoja-cierra').onclick = cierra;
+  requestAnimationFrame(() => raiz.classList.add('abierta'));
+  hojaViva = { raiz, cortina };
+  alAbrir?.(raiz);
+  return raiz;
+}
 
 /* Deslizar a un lado: se mide en la propia carcasa, nunca en un botón, y se ignora
    si el dedo empezó encima de una lista (ahí lo que quiere la dueña es desplazar la
@@ -149,9 +263,10 @@ const cierraMenu = () => document.documentElement.classList.remove('menu-abierto
    que en móvil vive en la misma esquina que el final de la fila. */
 function montaGesto() {
   let x0 = null, y0 = null, objetivo = null;
-  const NO_ES_GESTO = '#pantalla-menu, button, a, input, textarea, select, output,'
-    + ' .scr-lista, #plist, #flist, .mu-transporte, .mu-fila2, .mu-volumen, .mu-barra,'
-    + ' #mic, #dock, #repro-pildora, #pantalla-fletas';
+  const NO_ES_GESTO = '#cajon, #cortina, .hoja, .hoja-cortina, button, a, input, textarea,'
+    + ' select, output, .scr-lista, .lk-lista, .lk-pestanas, .gm-msgs, .gm-modos, .lk-fila,'
+    + ' #plist, #flist, .mu-transporte, .mu-fila2, .mu-volumen, .mu-barra,'
+    + ' #mic, #dock, #repro-pildora';
   document.addEventListener('touchstart', e => {
     const t = e.target;
     if (t.closest && t.closest(NO_ES_GESTO)) return;
@@ -177,9 +292,20 @@ function mueve(paso) {
 }
 
 /* Teclado (PC e instalador): Alt+←/→ se mueve entre pantallas y Alt+1…5 salta a
-   una concreta. No uso Escape: ése ya es de las ventanas de vidrio en hud.js, y
-   dos dueñas para la misma tecla terminan peleándose. */
+   una concreta.
+
+   Escape: en el orbe es de las ventanas de vidrio (`hud.js`), y dos dueñas para la
+   misma tecla terminan peleándose. Así que sólo se toma cuando hay algo propio que
+   cerrar —primero la hoja, después el cajón— y en ese caso se corta el evento con
+   `stopImmediatePropagation` en la **fase de captura de `window`**: el oyente del
+   HUD está puesto en `document` (fase de burbuja), va después, y al cortarlo no
+   llega a esconder las ventanas justo cuando la dueña sólo quería cerrar un menú. */
 function montaTeclas() {
+  window.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if (hojaViva) { e.preventDefault(); e.stopImmediatePropagation(); cierraHoja(); return; }
+    if (cajonAbierto()) { e.preventDefault(); e.stopImmediatePropagation(); cierraCajon(); }
+  }, { capture: true });
   document.addEventListener('keydown', e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); mueve(1); }
@@ -198,12 +324,11 @@ export function ir(id) {
   visibles().forEach(x => raiz.classList.remove('p-' + x.id));
   raiz.classList.add('p-' + actual);
   cierraMenu();
-  const titulo = document.getElementById('pantalla-titulo');
-  if (titulo) titulo.textContent = p.titulo;
-  const sub = document.getElementById('pantalla-sub');
-  if (sub) sub.textContent = p.sub;
-  document.querySelectorAll('#pantalla-menu [data-p]').forEach(b =>
-    b.classList.toggle('activa', b.dataset.p === actual));
+  cierraHoja();
+  // El cajón es la única tira de botones que queda, así que la hoja activa se marca
+  // ahí. Se repinta siempre: `visibles()` puede haber cambiado (un aviso de Java trae
+  // un método que antes no estaba) y un cajón desactualizado ofrecería una hoja muerta.
+  montaCajon();
   if (actual === 'musica') arrancaMusica();
   if (actual === 'mv') arrancaMV();
   if (actual === 'charla') { cargaModelos(); pintaCharla(); traeHistorial(); }
@@ -271,21 +396,103 @@ function guardaMensajes() {
   catch { /* modo privado: se pierde al cerrar y no pasa nada */ }
 }
 
+/* ────────── la Charla, calco de Gemini (y de la estructura de Qoder) ──────────
+ *
+ * Copiado de sus ocho capturas de Google/Gemini: barra arriba con el nombre del
+ * **modelo y su ▾**, saludo grande centrado sobre un degradado, chips de sugerencia,
+ * y abajo la **píldora** con `+`, el campo, el micrófono y el botón redondo de enviar.
+ * Las respuestas van sin caja (tuya a la derecha, la de CORT a la izquierda) y cada
+ * una con su «copiar» y su fuente.
+ *
+ * Lo que se copió de Qoder es la **estructura**, no el dibujo: el menú es un sitio
+ * distinto de la conversación (el cajón), el chat cambia de **modo** y **adjunta**
+ * archivos, y el modelo se elige desde la propia barra.
+ *
+ * Dos honestidades que importan:
+ *  · El **modo** añade una instrucción delante de tu pregunta. Se hace aquí porque
+ *    `POST /api/chat` sólo acepta `{message}` — no hay parámetro de modo en el
+ *    backend —, y el modelo sigue siendo el de tu portátil.
+ *  · El **adjunto** es texto de verdad: se lee con `GET /api/lee` (el mismo candado
+ *    de `sensors.leer_texto`: sólo dentro de tus carpetas permitidas) y se manda
+ *    dentro del mensaje. Un PDF no se puede leer letra a letra, y eso se dice en
+ *    pantalla en vez de resumir algo que nadie ha leído.
+ */
+const CH_MODOS = [
+  { id: 'normal', ic: '✦', txt: 'Normal', pide: '' },
+  { id: 'explica', ic: '💡', txt: 'Explícame',
+    pide: 'Explícamo despacio, como a quien aprende, y con un ejemplo sencillo.' },
+  { id: 'resume', ic: '≡', txt: 'Resume', pide: 'Responde en tres frases como mucho.' },
+  { id: 'traduce', ic: '🌐', txt: 'Traduce',
+    pide: 'Traduce lo que te pido al inglés y avísame de cualquier falso amigo.' },
+  { id: 'codigo', ic: '⌗', txt: 'Código',
+    pide: 'Dame código comentado en español y después dime qué hace cada parte.' },
+  { id: 'plan', ic: '🗒', txt: 'Plan',
+    pide: 'Hazme un plan por pasos, en orden, y di qué comprobar en cada paso.' },
+];
+
+/* Las sugerencias del saludo: cosas que CORT **ya sabe hacer** por su backend, no
+   frases decorativas. Cada una se envía como si la hubiera escrito la dueña. */
+const CH_SUGERENCIAS = [
+  '¿Qué tiempo hace hoy?',
+  '¿Qué modelos tengo bajados?',
+  'Lee mis notas',
+  'Muéstrame mis documentos',
+  '¿Qué recuerdas de mí?',
+];
+
+let chModo = 'normal';
+let chAdj = null;                 // {nombre, ruta, texto} lo que va pegado a la próxima pregunta
+let chModelo = '';                // el nombre del modelo activo, para el rótulo de la barra
+
 function montaCharla() {
   const cuerpo = document.querySelector('#scr-charla .scr-cuerpo');
+  if (!cuerpo) return;
   cuerpo.innerHTML = `
-    <div class="ch-modelos" id="ch-modelos"><span class="ch-cargando">leyendo tus modelos…</span></div>
-    <div class="scr-lista ch-msgs" id="ch-msgs"></div>
-    <div class="ch-fila">
-      <textarea id="ch-entrada" rows="1" placeholder="pregúntale lo que sea · Enter envía, Mayús+Enter salto de línea"></textarea>
-      <button id="ch-enviar" title="Enviar">▲</button>
+    <div class="gm-cab">
+      <button class="lk-btn" id="gm-menu" title="Menú de CORT">☰</button>
+      <button class="gm-modelo" id="gm-modelo" title="Elegir modelo">
+        <span id="gm-modelo-n">leyendo…</span><em>▾</em></button>
+      <span class="lk-espacio"></span>
+      <button class="lk-btn" id="gm-nueva" title="Empezar de cero">✚</button>
+      <button class="lk-btn" id="gm-recuerda" title="Traer lo que CORT recuerda del núcleo">⟳</button>
     </div>
-    <div class="ch-herramientas">
-      <button id="ch-copiar-ultimo" title="Copiar la última respuesta">copiar respuesta</button>
-      <button id="ch-nota" title="Guardar la última respuesta como nota">guardar en Notas</button>
-      <button id="ch-vaciar" title="Vaciar esta conversación">limpiar</button>
+    <div class="gm-desplegable" id="gm-despl"></div>
+    <div class="gm-saludo" id="gm-saludo">
+      <b id="gm-saludo-t">Hola. ¿Qué hacemos?</b>
+      <span id="gm-saludo-s">Tus modelos viven en el portátil: ahí corren. Aquí se eligen,
+        se pregunta, se adjunta un documento y se guarda.</span>
+      <div class="gm-sugerencias">${CH_SUGERENCIAS.map((s, i) =>
+        `<button data-s="${i}">${esc(s)}</button>`).join('')}</div>
+    </div>
+    <div class="scr-lista gm-msgs" id="ch-msgs"></div>
+    <div class="gm-usando" id="gm-usando"></div>
+    <div class="gm-modos" id="gm-modos"></div>
+    <div class="gm-pildora">
+      <button class="gm-redondo" id="gm-adj" title="Adjuntar un documento o una nota">+</button>
+      <textarea id="ch-entrada" rows="1" placeholder="Pregunta a CORT…"></textarea>
+      <button class="gm-redondo" id="gm-mic" title="Dictar con el micrófono">🎙</button>
+      <button class="gm-redondo enviar" id="ch-enviar" title="Enviar">▲</button>
+    </div>
+    <div class="gm-pie-gm">
+      <button class="mu-chip" id="ch-copiar-ultimo" title="Copiar la última respuesta">copiar respuesta</button>
+      <button class="mu-chip" id="ch-nota" title="Guardar la última respuesta como nota">guardar en Notas</button>
     </div>`;
+
   const entrada = cuerpo.querySelector('#ch-entrada');
+  pintaModosCharla();
+  pintaUsandoCharla();
+  cuerpo.querySelector('#gm-menu').onclick = abreCajon;
+  cuerpo.querySelector('#gm-modelo').onclick = () => {
+    const d = cuerpo.querySelector('#gm-despl');
+    if (d.classList.toggle('abierto')) cargaModelos();
+  };
+  document.addEventListener('click', e => {
+    // Un toque fuera del desplegable lo cierra (es lo que hace Gemini, y deja de
+    // tapar la conversación).
+    const d = document.getElementById('gm-despl');
+    if (d && d.classList.contains('abierto') && !e.target.closest('#gm-despl, #gm-modelo'))
+      d.classList.remove('abierto');
+  });
   cuerpo.querySelector('#ch-enviar').onclick = () => charla(entrada.value);
   entrada.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); charla(entrada.value); }
@@ -293,6 +500,25 @@ function montaCharla() {
   entrada.addEventListener('input', () => {
     entrada.style.height = 'auto';
     entrada.style.height = Math.min(140, entrada.scrollHeight) + 'px';
+  });
+  cuerpo.querySelector('#gm-adj').onclick = hojaAdjuntar;
+  // El micro de la píldora es el de siempre (`#mic` de hud.js): se le dice a la
+  // dueña, porque capturar el audio desde esta hoja sería otro camino distinto.
+  cuerpo.querySelector('#gm-mic').onclick = () => {
+    const m = document.getElementById('mic');
+    if (m) m.click(); else ctx?.say?.('Toca el micrófono flotante para dictar.');
+  };
+  cuerpo.querySelector('#gm-nueva').onclick = () => {
+    mensajes = []; chAdj = null; guardaMensajes(); pintaCharla(); pintaAdjunto();
+    ctx?.say?.('Conversación nueva. Lo que CORT recuerda del núcleo sigue ahí: pulsa ⟳ para traerlo.');
+  };
+  cuerpo.querySelector('#gm-recuerda').onclick = () => {
+    traeHistorial(true);
+    ctx?.say?.('Traigo lo que recuerda el núcleo.');
+  };
+  cuerpo.querySelectorAll('#gm-saludo [data-s]').forEach(b => b.onclick = () => {
+    entrada.value = CH_SUGERENCIAS[+b.dataset.s];
+    charla(entrada.value);
   });
   cuerpo.querySelector('#ch-copiar-ultimo').onclick = () => {
     const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
@@ -305,15 +531,157 @@ function montaCharla() {
     try {
       const r = await fetch(ctx.api() + '/api/notes', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: '[charla] ' + ultimo.texto }),
+        body: JSON.stringify({ texto: '[charla] ' + ultimo.texto }),
       });
       ctx?.say?.(r.ok ? 'Anotado en 04 · Notas.' : 'El núcleo no dejó guardar la nota.');
     } catch { ctx?.say?.('El núcleo no respondió.') }
   };
-  cuerpo.querySelector('#ch-vaciar').onclick = () => {
-    mensajes = []; guardaMensajes(); pintaCharla();
-  };
   cargaMensajes();
+}
+
+/* Los chips de modo, con el activo teñido del acento de la app. */
+function pintaModosCharla() {
+  const caja = document.getElementById('gm-modos');
+  if (!caja) return;
+  caja.innerHTML = CH_MODOS.map(m => `<button class="gm-modo${m.id === chModo ? ' activa' : ''}"
+    data-m="${m.id}" title="${esc(m.pide || 'sin instrucción añadida')}">
+    <i>${m.ic}</i>${esc(m.txt)}</button>`).join('');
+  caja.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+    chModo = b.dataset.m;
+    pintaModosCharla();
+    pintaUsandoCharla();
+  });
+}
+
+/* La línea de abajo: modelo, modo y adjunto. Se dice aquí en vez de esconderse en
+   un menú porque la dueña tiene que saber QUÉ se le está mandando al modelo. */
+function pintaUsandoCharla() {
+  const linea = document.getElementById('gm-usando');
+  if (!linea) return;
+  const modo = CH_MODOS.find(m => m.id === chModo) || CH_MODOS[0];
+  const partes = ['usando ' + (chModelo || 'el modelo del núcleo'), 'modo ' + modo.txt];
+  if (chAdj) partes.push('adjunto ' + chAdj.nombre);
+  linea.innerHTML = partes.map((p, i) => i === 0 ? `<b>${esc(p)}</b>` : esc(p)).join(' · ');
+}
+
+function pintaAdjunto() {
+  pintaUsandoCharla();
+  const chip = document.getElementById('gm-adj-chip');
+  if (chip) chip.remove();
+  if (!chAdj) return;
+  const pill = document.querySelector('.gm-pildora');
+  if (!pill) return;
+  const b = document.createElement('button');
+  b.className = 'mu-chip gm-adj-chip';
+  b.id = 'gm-adj-chip';
+  b.textContent = '📎 ' + chAdj.nombre + ' ✕';
+  b.title = 'Quitar el adjunto';
+  b.onclick = () => { chAdj = null; pintaAdjunto(); };
+  pill.before(b);
+}
+
+/* La hoja del `+`, calco de la de Gemini: botones redondos arriba. Aquí sólo hay
+   opciones que CORT puede cumplir de verdad, y se dice por qué no están las otras. */
+function hojaAdjuntar() {
+  const enPC = !enTelefono();
+  const opciones = [
+    ['📄', 'Un documento', 'texto de tus carpetas', () => hojaArchivos('')],
+    ['🗒', 'Una nota', 'lo que ya apuntaste', () => hojaNotas()],
+    ['💬', 'Lo último de la charla', 'para preguntar sobre eso', () => {
+      const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
+      if (!ultimo) return ctx?.say?.('Aún no hay ninguna respuesta que adjuntar.');
+      chAdj = { nombre: 'última respuesta', ruta: '', texto: ultimo.texto };
+      pintaAdjunto(); cierraHoja();
+    }],
+  ];
+  abreHoja({
+    titulo: 'Adjuntar a la pregunta',
+    html: `<div class="gm-adjuntar">${opciones.map(([ic, txt], i) =>
+      `<button data-a="${i}"><i>${ic}</i>${esc(txt)}</button>`).join('')}</div>
+      <div class="hoja-fila" style="cursor:default"><i>ℹ</i>
+        ${enPC ? 'Sólo texto (.txt, .md, .log) hasta 400 KB: es lo que se puede leer letra a letra. '
+               : 'Tus documentos y tus notas están en el portátil: sin CORT abierto ahí no hay nada que adjuntar. '
+               + 'El audio del micrófono y las fotos del teléfono se mandan desde el propio Android, no por aquí.'}
+        <small></small></div>`,
+    alAbrir: raiz => raiz.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      cierraHoja(); opciones[+b.dataset.a][3]();
+    }),
+  });
+}
+
+/* Explorador sencillo dentro de la hoja: carpetas y archivos de la raíz que se elija.
+   Se apoya en `GET /api/files`, que ya candada por el backend (fuera de las carpetas
+   permitidas devuelve error y aquí se muestra ese error, no se tapa). */
+async function hojaArchivos(path) {
+  const base = await hayNucleo();
+  if (!base) return ctx?.say?.('Sin el núcleo del portátil no hay documentos que abrir.');
+  let d = null;
+  try {
+    d = await (await fetch(base + '/api/files?path=' + encodeURIComponent(path),
+      { signal: AbortSignal.timeout(6000) })).json();
+  } catch { return ctx?.say?.('El portátil no contestó a lo de listar archivos.'); }
+  if (!d || d.error) return ctx?.say?.(d?.error || 'No pude leer esa carpeta.');
+  const filas = (d.entries || []).map((e, i) => {
+    const texto = e.type === 'dir' ? '📁 ' + e.name : e.name;
+    return `<div class="hoja-fila" data-i="${i}"><i>${e.type === 'dir' ? '▸' : '·'}</i>${esc(texto)}
+      <small>${e.type === 'dir' ? 'carpeta' : Math.round((e.size || 0) / 1024) + ' KB'}</small></div>`;
+  }).join('');
+  abreHoja({
+    titulo: path || 'Tus carpetas',
+    botones: path ? '<button class="lk-btn" id="ah-sub">‹</button>' : '',
+    html: filas || '<div class="mu-vacio">vacía</div>',
+    alAbrir: raiz => {
+      raiz.querySelector('#ah-sub')?.addEventListener('click', () => {
+        const padre = path.split('/').slice(0, -1).join('/');
+        cierraHoja(); hojaArchivos(padre);
+      });
+      raiz.querySelectorAll('[data-i]').forEach(f => f.onclick = () => {
+        const e = (d.entries || [])[+f.dataset.i];
+        if (!e) return;
+        const ruta = (path ? path + '/' : '') + e.name;
+        if (e.type === 'dir') { cierraHoja(); hojaArchivos(ruta); return; }
+        cierraHoja(); adjuntaArchivo(ruta);
+      });
+    },
+  });
+}
+
+async function adjuntaArchivo(ruta) {
+  const base = await hayNucleo();
+  if (!base) return ctx?.say?.('Sin el núcleo no puedo leer el archivo.');
+  ctx?.say?.('Leyendo ' + ruta.split('/').pop() + '…');
+  let r = null;
+  try {
+    r = await (await fetch(base + '/api/lee?path=' + encodeURIComponent(ruta),
+      { signal: AbortSignal.timeout(8000) })).json();
+  } catch { return ctx?.say?.('El portátil no contestó a lo de leer el archivo.'); }
+  if (!r || r.ok === false) {
+    return ctx?.say?.((r && r.error) || 'Ese archivo no lo puedo leer aquí.');
+  }
+  chAdj = { nombre: r.archivo, ruta, texto: r.texto };
+  pintaAdjunto();
+  ctx?.say?.('Adjuntado ' + r.archivo + (r.entero ? ', entero.' : ', lo que cabe de ' + r.caracteres + ' caracteres.'));
+}
+
+async function hojaNotas() {
+  const base = await hayNucleo();
+  if (!base) return ctx?.say?.('Sin el núcleo no hay notas que traer.');
+  let ns = [];
+  try {
+    ns = await (await fetch(base + '/api/notes', { signal: AbortSignal.timeout(6000) })).json();
+  } catch { return ctx?.say?.('El portátil no contestó a lo de las notas.'); }
+  if (!Array.isArray(ns) || !ns.length) return ctx?.say?.('No tienes notas guardadas todavía.');
+  abreHoja({
+    titulo: 'Una nota guardada',
+    html: ns.slice(-14).reverse().map((n, i) => `<div class="hoja-fila" data-i="${i}">
+      <i>🗒</i>${esc(String(n.texto || '').slice(0, 60))}<small>${esc(String(n.fecha || ''))}</small></div>`).join(''),
+    alAbrir: raiz => raiz.querySelectorAll('[data-i]').forEach(f => f.onclick = () => {
+      const n = ns.slice(-14).reverse()[+f.dataset.i];
+      chAdj = { nombre: 'nota ' + (n.fecha || ''), ruta: '', texto: String(n.texto || '') };
+      pintaAdjunto(); cierraHoja();
+      ctx?.say?.('Nota adjuntada.');
+    }),
+  });
 }
 
 async function charla(texto) {
@@ -321,27 +689,43 @@ async function charla(texto) {
   if (!pregunta) return;
   const entrada = document.getElementById('ch-entrada');
   if (entrada) { entrada.value = ''; entrada.style.height = 'auto'; }
-  mensajes.push({ de: 'tu', texto: pregunta });
+  const modo = CH_MODOS.find(m => m.id === chModo) || CH_MODOS[0];
+  // El adjunto va DENTRO del mensaje: `POST /api/chat` sólo acepta `{message}`, así
+  // que no hay campo donde poner un archivo. Se manda el texto leído y se dice cuál.
+  const envio = [modo.pide, chAdj
+      ? '[Adjunto: ' + (chAdj.ruta || chAdj.nombre) + ']\n' + chAdj.texto : '', pregunta]
+    .filter(Boolean).join('\n\n');
+  mensajes.push({ de: 'tu', texto: pregunta, modo: modo.id, adj: chAdj ? chAdj.nombre : '' });
+  const adjUntado = chAdj; chAdj = null;
+  pintaAdjunto();
   pintaCharla();
   const estado = document.querySelector('#scr-charla .scr-estado');
+  const usando = document.getElementById('gm-usando');
+  if (usando) usando.innerHTML = '<b>pensando…</b> · modo ' + esc(modo.txt)
+    + (adjUntado ? ' · 📎 ' + esc(adjUntado.nombre) : '');
   estado.textContent = 'pensando…';
   if (!await avisaSinNucleo(estado)) {
     mensajes.push({ de: 'cort', texto: sinNucleoFrase() });
-    estado.textContent = 'sin núcleo'; guardaMensajes(); pintaCharla(); return;
+    estado.textContent = 'sin núcleo';
+    if (usando) usando.innerHTML = '<b>sin núcleo</b> · ' + esc(sinNucleoFrase());
+    guardaMensajes(); pintaCharla(); return;
   }
   try {
     const r = await fetch(ctx.api() + '/api/chat', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: pregunta }),
+      body: JSON.stringify({ message: envio }),
     });
     const j = await r.json();
     const dicho = j.reply || j.error || 'No supe qué contestar.';
     mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '' });
     estado.textContent = 'cerebro: ' + (j.source || 'local');
+    if (usando) usando.innerHTML = '<b>' + esc(chModelo || 'el modelo del núcleo') + '</b> · cerebro '
+      + esc(j.source || 'local') + ' · modo ' + esc(modo.txt);
     ctx?.orb?.burst?.();
   } catch (e) {
     mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e });
     estado.textContent = 'sin núcleo';
+    if (usando) usando.innerHTML = '<b>sin núcleo</b>';
   }
   guardaMensajes(); pintaCharla();
 }
@@ -352,15 +736,22 @@ async function charla(texto) {
    cuando la hoja está VACÍA: si la dueña ya tiene su conversación local, mezclar los
    dos listados saldría un desorden peor que dejar el suyo. Un fallo de red aquí no
    dice nada ni estorba —la charla funciona igual sin historial—, así que se traga
-   en silencio; lo que no se traga es una respuesta que no sea 200. */
-async function traeHistorial() {
-  if (mensajes.length || !ctx?.api) return;
+   en silencio; lo que no se traga es una respuesta que no sea 200.
+
+   `forzar` (el botón ⟳ de la barra) sí sustituye lo local: lo manda el núcleo, que es
+   donde CORT recuerda de verdad, y la dueña lo pidió con un toque. */
+async function traeHistorial(forzar) {
+  if (mensajes.length && !forzar) return;
+  if (!ctx?.api) return;
   try {
     const r = await fetch(ctx.api() + '/api/history?n=40',
                           { signal: AbortSignal.timeout(2500) });
     if (!r.ok) return;
     const filas = await r.json();
-    if (!Array.isArray(filas) || !filas.length) return;
+    if (!Array.isArray(filas) || !filas.length) {
+      if (forzar) ctx?.say?.('El núcleo no guarda ninguna conversación todavía.');
+      return;
+    }
     mensajes = filas.filter(x => x && (x.rol === 'user' || x.rol === 'assistant'))
       .map(x => ({ de: x.rol === 'user' ? 'tu' : 'cort',
                    texto: String(x.texto || ''), fuente: x.fuente || '' }));
@@ -372,30 +763,51 @@ async function traeHistorial() {
 function pintaCharla() {
   const caja = document.getElementById('ch-msgs');
   if (!caja) return;
-  caja.innerHTML = mensajes.length ? '' :
-    '<div class="ch-vacio">Aquí se conversa de verdad: escribe o toca el micrófono. ' +
-    'Lo que responda se puede copiar o guardar como nota.</div>';
+  // El saludo de Gemini con sus sugerencias sólo mientras no hay conversación: en
+  // cuanto se pregunta, la pantalla es para las respuestas.
+  const saludo = document.getElementById('gm-saludo');
+  if (saludo) saludo.hidden = mensajes.length > 0;
+  caja.innerHTML = '';
   mensajes.forEach(m => {
     const b = document.createElement('div');
     b.className = 'burbuja ' + (m.de === 'tu' ? 'de-tu' : 'de-cort');
+    const pies = [];
+    if (m.de === 'tu') pies.push('tú');
+    else pies.push('CORT');
+    if (m.fuente) pies.push(`<span class="bur-fuente">${esc(m.fuente)}</span>`);
+    if (m.modo && m.modo !== 'normal') {
+      const mo = CH_MODOS.find(x => x.id === m.modo);
+      pies.push(`<span class="bur-modo">${mo ? esc(mo.ic + ' ' + mo.txt) : esc(m.modo)}</span>`);
+    }
+    if (m.adj) pies.push(`<span class="bur-adj">📎 ${esc(m.adj)}</span>`);
     b.innerHTML = `<div class="bur-texto">${esc(m.texto).replace(/\n/g, '<br>')}</div>
-      <div class="bur-pie"><span>${m.de === 'tu' ? 'tú' : 'CORT' + (m.fuente ? ' · ' + esc(m.fuente) : '')}</span>
+      <div class="bur-pie"><span>${pies.join(' · ')}</span>
       <button class="bur-copiar" title="Copiar este texto">copiar</button></div>`;
     b.querySelector('.bur-copiar').onclick = () => copia(m.texto, 'Copiado.');
     caja.appendChild(b);
   });
   caja.scrollTop = caja.scrollHeight;
+  pintaUsandoCharla();
 }
 
+/* El desplegable del modelo, calco del de Gemini: nombre arriba con ▾, filas con su
+   ✓ y su explicación, y un pie que abre 10 · Modelos en el PC.
+   Los datos salen de `GET /api/models` (los que Ollama ya tiene bajados) y elegir uno
+   es `POST /api/models/use`, exactamente lo que hace la ventana 10. */
 async function cargaModelos() {
-  const caja = document.getElementById('ch-modelos');
+  const caja = document.getElementById('gm-despl');
   if (!caja) return;
   const enPC = !enTelefono();
+  const rotulo = document.getElementById('gm-modelo-n');
+  const pinta = html => { caja.innerHTML = html; };
+  const deja = nombre => { if (rotulo) rotulo.textContent = nombre || 'modelo del núcleo'; };
   // El teléfono no tiene modelos: los tiene Ollama, y Ollama vive en el portátil.
   // Sin PC la lista NO se pinta vacía en silencio —eso parece un fallo de CORT—,
   // se pone el aviso de «sin PC» con la misma frase del resto de la cara.
   if (!await hayNucleo()) {
-    caja.innerHTML = '<span class="ch-cargando ch-sinpc">' + esc(sinNucleoFrase()) + '</span>';
+    deja('sin portátil');
+    pinta(`<div class="gm-opc"><span class="marca">!</span><span><b>El portátil está apagado o fuera de la red</b>
+      <small>${esc(sinNucleoFrase())}</small></span></div>`);
     if (enTelefono()) avisaModelosEnPC();
     return;
   }
@@ -411,27 +823,38 @@ async function cargaModelos() {
     nucleo = false;                      // la próxima vez se vuelve a preguntar
   }
   if (!data) {
-    caja.innerHTML = '<span class="ch-cargando ch-sinpc">no leí la lista de modelos: ' + esc(porque) + '</span>';
+    deja('sin lista');
+    pinta(`<div class="gm-opc"><span class="marca">!</span><span><b>no leí la lista de modelos</b>
+      <small>${esc(porque)}</small></span></div>`);
     return;
   }
   const bajados = (data.modelos || []).filter(m => m.descargado);
+  const activo = bajados.find(m => m.activo);
+  deja(activo?.modelo || (bajados.length ? bajados[0].modelo : ''));
   if (!bajados.length) {
-    caja.innerHTML = '<span class="ch-cargando">' + esc(enPC
-      ? 'ningún modelo descargado todavía: bájalo en 10 · Modelos (flecha ↓)'
-      : 'en el teléfono no hay modelos que bajar: viven en tu portátil. '
-        + 'Con CORT abierto ahí, la charla ya usa el que tengas puesto.') + '</span>'
+    pinta(`<div class="gm-opc"><span class="marca">·</span><span><b>${esc(enPC
+      ? 'ningún modelo descargado todavía'
+      : 'en el teléfono no hay modelos que bajar: viven en tu portátil')}${enPC ? ''
+      : ', con CORT abierto ahí la charla ya usa el que tengas puesto'}</b>
+      <small>${esc(enPC ? 'bájalo en 10 · Modelos (flecha ↓)' : 'aquí sólo se eligen y se conversa con ellos')}</small></span></div>`)
       + (enPC ? botonBajarModelos() : '');
     if (enPC) enganchaBajarModelos(caja);
     if (enTelefono()) avisaModelosEnPC();
+    pintaUsandoCharla();
     return;
   }
-  caja.innerHTML = '<span class="ch-piego">modelos:</span>' + bajados.map(m =>
-    `<button class="ch-mo${m.activo ? ' activa' : ''}" data-m="${esc(m.modelo)}">${esc(m.modelo)}</button>`).join('')
+  pinta(bajados.map(m => `<button class="gm-opc${m.activo ? ' activa' : ''}" data-m="${esc(m.modelo)}">
+      <span class="marca">${m.activo ? '✓' : '·'}</span>
+      <span><b>${esc(m.modelo)}</b><small>${m.activo ? 'el que está puesto ahora' : 'tocado, se usa en la próxima respuesta'}</small></span>
+    </button>`).join('')
+    + `<div class="gm-opc" style="cursor:default"><span class="marca">≡</span><span><b>Nivel de razonamiento</b>
+       <small>lo que se añade con el modo de abajo: Explícame, Resume, Plan…</small></span></div>`
     + (enPC ? botonBajarModelos()
-            : '<span class="ch-piego ch-nota">en el portátil: allí bajan y allí corren</span>');
+            : '<div class="gm-opc" style="cursor:default"><span class="marca">🏠</span><span><b>Los modelos están en el portátil</b>'
+              + '<small>allí bajan y allí corren</small></span></div>'));
   if (enPC) enganchaBajarModelos(caja);
   else avisaModelosEnPC();
-  caja.querySelectorAll('.ch-mo').forEach(b => b.onclick = async () => {
+  caja.querySelectorAll('.gm-opc[data-m]').forEach(b => b.onclick = async () => {
     try {
       const r = await fetch(ctx.api() + '/api/models/use', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -439,9 +862,19 @@ async function cargaModelos() {
       });
       const j = await r.json();
       ctx?.say?.(j.error ? 'No pude cambiar de modelo: ' + j.error : 'Usando ' + b.dataset.m + '.');
-      caja.querySelectorAll('.ch-mo').forEach(o => o.classList.toggle('activa', o === b));
+      caja.querySelectorAll('.gm-opc[data-m]').forEach(o => {
+        o.classList.toggle('activa', o === b);
+        o.querySelector('.marca').textContent = o === b ? '✓' : '·';
+      });
+      chModelo = b.dataset.m;
+      deja(chModelo);
+      pintaUsandoCharla();
     } catch { ctx?.say?.('El núcleo no respondió el cambio de modelo.') }
   });
+  // El rótulo de la barra y el modelo activo se conocen aquí, que es donde sale la
+  // lista: `pintaUsandoCharla` lee `chModelo` para la línea de abajo.
+  chModelo = activo?.modelo || '';
+  pintaUsandoCharla();
 }
 
 /* En el PC la pantalla Charla se limita a lo que ya sabe hacer: enseñar la lista,
@@ -529,7 +962,10 @@ function montaCodigo() {
     try {
       const r = await fetch(ctx.api() + '/api/notes', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: '[código] ' + editor.value }),
+        // `texto`, NO `text`: el modelo `Nota` del núcleo sólo tiene ese campo, y con
+        // `text` FastAPI contesta 422 —el botón decía «el núcleo no dejó guardarlo»
+        // sin que nadie hubiera probado a guardarlo de verdad (cazado al coser [18]).
+        body: JSON.stringify({ texto: '[código] ' + editor.value }),
       });
       ctx?.say?.(r.ok ? 'Guardado en 04 · Notas.' : 'El núcleo no dejó guardarlo.');
     } catch { ctx?.say?.('Sin núcleo: no pude guardarlo.') }
@@ -636,27 +1072,49 @@ let musViva = false;
    La barra de progreso, el play/pausa, el anterior/siguiente, el parar, el cuadro a
    cuadro, el «me gusta» y el volumen son los mismos botones que mandan sobre
    `.Reproductor`. Se pintan con un prefijo de id y se enganchan **una sola vez**:
-   duplicarlos sería tener dos transportes que un día mandan distinto. `extra` es lo
-   que sólo aporta MV (mover también la imagen). */
+   duplicarlos sería tener dos transportes que un día mandan distinto.
+
+   F9: la disposición es la del reproductor a pantalla completa de Lark Player (sus
+   doce capturas), pero **los ids no cambian** — `pintaProgreso`, `ponRotulos` y el
+   `enganchaTransporte` de siempre siguen buscando `mu-play`, `mv-prog`, etc. Lo que
+   se movió es el envoltorio: portada cuadrada arriba, título teñido, línea fina con
+   `0:02 / 3:11`, los tres botones gordos, el volumen, la fila de chips y abajo las
+   tres acciones de Lark («ponme algo», «letra», «modo juego»).
+
+   Lo que Lark tiene y CORT **no** puede copiar porque el puente no lo da: carátula
+   real (`.Reproductor` no devuelve ninguna imagen), ecualizador, carpetas y cola.
+   No se pintan falsos: el cuadro grande lleva el glifo y el acento de la app. */
 const transporteHTML = p => `
-    <div class="mu-barra" id="${p}-barra"><i id="${p}-prog"></i></div>
-    <div class="mu-tiempos"><span id="${p}-t0">0:00</span><span id="${p}-t1">—</span></div>
-    <div class="mu-transporte">
-      <button id="${p}-prev" title="anterior">⏮</button>
-      <button id="${p}-play" title="play / pausa">▶</button>
-      <button id="${p}-next" title="siguiente">⏭</button>
-      <button id="${p}-stop" title="parar del todo">⏹</button>
+  <div class="lk-player">
+    <div class="lk-portada-grande" id="${p}-caratula"><i>♪</i></div>
+    <div class="lk-titulo" id="${p}-ahora">nada puesto</div>
+    <div class="lk-artista"><span id="${p}-artista"></span></div>
+    <div class="lk-linea">
+      <span id="${p}-t0">0:00</span>
+      <div class="mu-barra" id="${p}-barra"><i id="${p}-prog"></i></div>
+      <span id="${p}-t1">—</span>
     </div>
-    <div class="mu-fila2">
+    <div class="lk-fila-botones">
+      <button id="${p}-prev" class="lk-gordo" title="anterior">⏮</button>
+      <button id="${p}-play" class="lk-gordo lk-play" title="play / pausa">▶</button>
+      <button id="${p}-next" class="lk-gordo" title="siguiente">⏭</button>
+    </div>
+    <div class="mu-volumen"><span>volumen</span>
+      <input id="${p}-vol" type="range" min="0" max="1" step=".05" value=".8"></div>
+    <div class="mu-fila2 lk-pastillas">
       <button id="${p}-gusta" class="mu-chip">👍 me gusta</button>
       <button id="${p}-no" class="mu-chip">👎 quítala</button>
       <button id="${p}-envia" class="mu-chip" title="enviar esta pista por WhatsApp, correo o lo que quieras">📤 enviar</button>
       <button id="${p}-cuadro-a" class="mu-chip" title="un fotograma atrás (±1/30 s en vídeo)">◂ cuadro</button>
       <button id="${p}-cuadro-b" class="mu-chip" title="un fotograma adelante (±1/30 s en vídeo)">cuadro ▸</button>
-      <button id="${p}-auto" class="mu-chip">♪ ponme algo</button>
-      <button id="${p}-juego" class="mu-chip" title="CORT se calla y no escucha mientras juegas">🎮 modo juego</button>
+      <button id="${p}-stop" class="mu-chip" title="parar del todo">⏹ parar</button>
     </div>
-    <div class="mu-volumen"><span>volumen</span><input id="${p}-vol" type="range" min="0" max="1" step=".05" value=".8"></div>`;
+    <div class="lk-abajo">
+      <button id="${p}-auto" title="una pista sacada de tus gustos"><i>♪</i><span>ponme algo</span></button>
+      <button id="${p}-letras" title="el vídeo con su letra (MV)"><i>▣</i><span>letra</span></button>
+      <button id="${p}-juego" title="CORT se calla y no escucha mientras juegas"><i>🎮</i><span>modo juego</span></button>
+    </div>
+  </div>`;
 
 function enganchaTransporte(donde, p) {
   // El prefijo lleva GUION: los ids se escriben `${p}-play`, así que buscar
@@ -701,6 +1159,13 @@ function enganchaTransporte(donde, p) {
   $('cuadro-a').onclick = () => { llama('musicaCuadro', true); mueveVideoLocal(-1 / 30); };
   $('cuadro-b').onclick = () => { llama('musicaCuadro', false); mueveVideoLocal(1 / 30); };
   $('auto').onclick = () => llama('musicaAutomatica');
+  // «Letra» es el botón de Lark que sube el vídeo con su karaoke: es OTRA hoja del
+  // mismo servicio, así que se cambia de hoja en vez de duplicar el reproductor.
+  $('letras').onclick = () => {
+    ir('mv');
+    const caja = document.getElementById('mv-letra');
+    if (caja) caja.scrollIntoView({ block: 'start' });
+  };
   $('vol').oninput = e => llama('musicaVolumen', +e.target.value);
   $('barra').onclick = ev => {
     const e = estadoMusica(); if (!e || !e.dur) return;
@@ -766,40 +1231,246 @@ function pintaPildora(e) {
   p.querySelector('#rp-play').textContent = e.suena ? '⏸' : '▶';
 }
 
+/* ───────────── la hoja de Música, calco de Lark Player (F9) ─────────────
+   De sus doce capturas se copió la estructura: barra arriba (nombre + buscar +
+   ordenar + ⋮), fila de chips con el activo RELLENO, sección con su cuenta, lista de
+   filas (miniatura · título · artista · duración) y mini-reproductor anclado abajo
+   que, al tocarlo, sube el reproductor a pantalla completa. Las tres acciones se
+   hacen con las **hojas que suben de abajo**, igual que Lark con «Ordenar videos por»
+   y su menú de contexto.
+
+   Lo que se copió es lo que el puente da: `musicaBuscar`, `musicaPorGusto`,
+   `musicaListas`, `musicaPerfil`, `musicaPoner…`. El orden es cliente (sobre la
+   lista ya leída, con su `dur` real) porque `.Reproductor` no acepta un criterio de
+   orden; y no hay carátula, carpetas ni ecualizador por el mismo motivo. */
+let musLista = [];          // última lista leída del índice: con ella se ordena sin volver a Java
+let musVista = 'lista';     // 'lista' | 'player'
+let musChip = 'canciones';  // la pestaña que va rellena
+let musOrden = 'indice';    // 'indice' | 'titulo' | 'artista' | 'dur'
+
+const MUS_CHIPS = [
+  { id: 'canciones', txt: 'Canciones' },
+  { id: 'videos', txt: 'Vídeos' },
+  { id: 'listas', txt: 'Playlists' },
+  { id: 'gustos', txt: 'Tus gustos' },
+];
+
 function montaMusica() {
   const cuerpo = document.querySelector('#scr-musica .scr-cuerpo');
   if (!cuerpo) return;
   cuerpo.innerHTML = `
-    <div class="mu-ahora" id="mu-ahora">nada puesto</div>
-    <div class="mu-datos"><span id="mu-artista"></span></div>
-    ${transporteHTML('mu')}
-    <div class="mu-lista-top">
+    <div class="lk-barra">
+      <button class="lk-btn" id="mu-vuelve" title="Volver">‹</button>
+      <span class="lk-nombre">Música</span>
+      <span class="lk-espacio"></span>
+      <button class="lk-btn" id="mu-busca-btn" title="Buscar en tu música">🔍</button>
+      <button class="lk-btn" id="mu-orden-btn" title="Ordenar">↕</button>
+      <button class="lk-btn" id="mu-mas-btn" title="Más acciones">⋮</button>
+    </div>
+    <div class="mu-lista-top" id="mu-buscador" hidden>
       <input id="mu-busca" placeholder="busca título, artista o género…">
       <button id="mu-buscar">buscar</button>
       <button id="mu-gusto" title="las que mejor encajan con tus gustos">por gusto</button>
     </div>
-    <div class="scr-lista mu-pistas" id="mu-pistas"></div>
-    <div class="mu-playlists">
-      <div class="mu-pl-top">
-        <input id="mu-pl-nombre" placeholder="nombre de la lista">
-        <button id="mu-pl-guarda">guardar la cola</button>
-        <button id="mu-pl-refresca">mis listas</button>
+    <div class="lk-pestanas" id="mu-chips"></div>
+    <div id="mu-lista">
+      <div class="lk-seccion"><span id="mu-seccion-t">Canciones</span><small id="mu-cuenta"></small></div>
+      <div class="lk-lista scr-lista" id="mu-pistas"></div>
+      <div class="mu-playlists" id="mu-listas" hidden>
+        <div class="lk-seccion">Mis listas<small>guardadas en el teléfono</small></div>
+        <div class="mu-pl-caja lk-pastillas" id="mu-pl-caja"></div>
+        <div class="mu-pl-top">
+          <input id="mu-pl-nombre" placeholder="nombre de la lista">
+          <button id="mu-pl-guarda">guardar la que suena</button>
+          <button id="mu-pl-refresca">recargar</button>
+        </div>
       </div>
-      <div class="mu-pl-caja" id="mu-pl-caja"></div>
-      <div class="mu-perfil" id="mu-perfil"></div>
-    </div>`;
+      <div id="mu-gustos" hidden>
+        <div class="lk-seccion">Lo que más te gusta<small>de tus 👍</small></div>
+        <div class="mu-perfil" id="mu-perfil"></div>
+        <div class="lk-pastillas" id="mu-perfil-chips"></div>
+      </div>
+      <div class="lk-mini" id="mus-mini" hidden>
+        <button id="mus-mini-portada" title="abrir el reproductor">♪</button>
+        <div class="lk-mini-txt"><b id="mus-mini-t">—</b><span id="mus-mini-a"></span></div>
+        <button id="mus-mini-play" title="pausa o sigue">▶</button>
+      </div>
+    </div>
+    <div id="mu-player" hidden>${transporteHTML('mu')}</div>`;
 
   const q = cuerpo.querySelector('#mu-busca');
   enganchaTransporte(cuerpo, 'mu');
+  pintaChipsMusica();
+  cuerpo.querySelector('#mu-busca-btn').onclick = () => {
+    const caja = cuerpo.querySelector('#mu-buscador');
+    caja.hidden = !caja.hidden;
+    if (!caja.hidden) q.focus();
+  };
   cuerpo.querySelector('#mu-buscar').onclick = () => buscaMusica(q.value, false);
   q.addEventListener('keydown', e => { if (e.key === 'Enter') buscaMusica(q.value, false); });
   cuerpo.querySelector('#mu-gusto').onclick = () => buscaMusica(q.value, true);
+  cuerpo.querySelector('#mu-orden-btn').onclick = hojaOrden;
+  cuerpo.querySelector('#mu-mas-btn').onclick = hojaMas;
+  cuerpo.querySelector('#mu-vuelve').onclick = () => {
+    if (musVista === 'player') vistaMusica('lista'); else ir('orbe');
+  };
+  cuerpo.querySelector('#mus-mini').onclick = () => vistaMusica('player');
+  cuerpo.querySelector('#mus-mini-portada').onclick = () => vistaMusica('player');
+  cuerpo.querySelector('#mus-mini-play').onclick = ev => {
+    ev.stopPropagation();            // tocar el play no debe abrir el reproductor entero
+    alternaReproduccion();
+    pintaMini(estadoMusica());
+  };
   cuerpo.querySelector('#mu-pl-guarda').onclick = () => guardaLista();
   cuerpo.querySelector('#mu-pl-refresca').onclick = () => {
-    document.querySelector('#scr-musica .scr-cuerpo').querySelector('#mu-pl-caja').textContent = ''; pintaListas();
+    cuerpo.querySelector('#mu-pl-caja').textContent = ''; pintaListas();
   };
+  vistaMusica('lista');
   pintaListas();
   perfil();
+  buscaMusica('', false);            // Lark abre con la lista ya delante, no con un buscador vacío
+}
+
+/* Las dos vistas de la hoja (lista ↔ reproductor a pantalla completa) y los chips.
+   Se esconde en vez de montar y desmontar: el transporte tiene que seguir vivo para
+   que `pintaProgreso` siga pintando la barra aunque la dueña esté mirando la lista. */
+function vistaMusica(que) {
+  musVista = que;
+  const lista = document.getElementById('mu-lista');
+  const player = document.getElementById('mu-player');
+  if (lista) lista.hidden = que !== 'lista';
+  if (player) player.hidden = que !== 'player';
+  const vuelve = document.getElementById('mu-vuelve');
+  if (vuelve) vuelve.title = que === 'player' ? 'Volver a la lista' : 'Volver al orbe';
+  pintaMini(estadoMusica());
+}
+
+function pintaChipsMusica() {
+  const caja = document.getElementById('mu-chips');
+  if (!caja) return;
+  caja.innerHTML = MUS_CHIPS.map(c =>
+    `<button class="lk-pestana${c.id === musChip ? ' activa' : ''}" data-c="${c.id}">${c.txt}</button>`).join('');
+  caja.querySelectorAll('[data-c]').forEach(b => b.onclick = () => eligeChip(b.dataset.c));
+}
+
+function eligeChip(c) {
+  musChip = c;
+  pintaChipsMusica();
+  const seccion = document.getElementById('mu-seccion-t');
+  const pistas = document.getElementById('mu-pistas');
+  const listas = document.getElementById('mu-listas');
+  const gustos = document.getElementById('mu-gustos');
+  const enLista = c === 'canciones' || c === 'videos';
+  if (pistas) pistas.hidden = !enLista;
+  if (seccion) seccion.textContent = (MUS_CHIPS.find(x => x.id === c) || {}).txt || 'Canciones';
+  if (listas) listas.hidden = c !== 'listas';
+  if (gustos) gustos.hidden = c !== 'gustos';
+  if (c === 'listas') {
+    const caja = document.getElementById('mu-pl-caja');
+    if (caja) caja.textContent = '';              // obliga a releer: Java pudo cambiar las listas
+    pintaListas();
+  }
+  if (c === 'gustos') { perfil(); pintaGustos(); }
+  if (enLista) buscaMusica(document.getElementById('mu-busca')?.value || '', false);
+}
+
+/* El «Ordenar» de Lark, pero dicho como es: los criterios se aplican a la lista que
+   ya está leída. La duración es la que manda `.Reproductor` (`dur` en ms), no un
+   adorno. */
+function hojaOrden() {
+  const OPC = [
+    ['indice', 'Como vinieron', 'el orden del índice'],
+    ['titulo', 'Título', 'A → Z'],
+    ['artista', 'Artista', 'A → Z'],
+    ['dur', 'Duración', 'las más largas primero'],
+  ];
+  abreHoja({
+    titulo: 'Ordenar por',
+    html: OPC.map(([id, txt, sub]) => `<div class="hoja-fila${id === musOrden ? ' elegida' : ''}"
+      data-o="${id}"><i>${id === musOrden ? '✓' : '·'}</i>${txt}<small>${sub}</small></div>`).join(''),
+    alAbrir: raiz => raiz.querySelectorAll('[data-o]').forEach(f => f.onclick = () => {
+      musOrden = f.dataset.o;
+      pintaMusicaLista();
+      ctx?.say?.('Ordenado por ' + (OPC.find(o => o[0] === musOrden) || ['', 'el índice'])[1].toLowerCase() + '.');
+      cierraHoja();
+    }),
+  });
+}
+
+/* El menú ⋮: sólo cosas que el puente sabe hacer. «Añadir a la lista» guarda la
+   pista actual con `musicaGuardarLista`; no hay cola que editar (`.Reproductor` no
+   la expone), así que aquí no se finge. */
+function hojaMas() {
+  const e = estadoMusica();
+  const pista = e?.pista;
+  const filas = [
+    ['♪', 'Ponme algo de tus gustos', 'sin tocar nada', () => { llama('musicaAutomatica'); cierraHoja(); }],
+    ['👍', pista ? 'Me gusta: ' + (pista.titulo || '') : 'Me gusta', 'entrena tus gustos', () => {
+      if (!pista) return ctx?.say?.('No hay nada puesto que evaluar.');
+      llama('musicaGustar', pista.uri, true); cierraHoja();
+    }],
+    ['▣', 'Letra y vídeo (MV)', 'la misma pista', () => { cierraHoja(); ir('mv'); }],
+    ['💾', 'Guardar en una lista', pista ? (pista.titulo || '') : 'necesita una pista puesta', () => {
+      if (!pista) return ctx?.say?.('Primero pon algo, que se guarda lo que está sonando.');
+      const caja = document.getElementById('mu-listas');
+      if (caja) caja.hidden = false;
+      const nombre = document.getElementById('mu-pl-nombre');
+      if (nombre) { nombre.value = pista.titulo || 'mi lista'; nombre.focus(); }
+      cierraHoja(); eligeChip('listas');
+    }],
+    ['🎮', 'Modo juego', 'CORT se aparta mientras juegas', () => {
+      ctx?.say?.(modoJuego(!((estadoMusica() || {}).juego))); cierraHoja();
+    }],
+  ];
+  abreHoja({
+    titulo: pista ? (pista.titulo || 'la pista') : 'Música',
+    html: filas.map(([ic, txt, sub], i) => `<div class="hoja-fila" data-i="${i}">
+      <i>${ic}</i>${esc(txt)}<small>${esc(sub)}</small></div>`).join(''),
+    alAbrir: raiz => raiz.querySelectorAll('[data-i]').forEach(f => f.onclick = () => filas[+f.dataset.i][3]()),
+  });
+}
+
+/* El mini-reproductor anclado de Lark: portada · título · artista · play. Se pinta
+   desde `pintaProgreso`, que es el único sitio que recibe los avisos de Java, así
+   que no hay temporizador propio. */
+function pintaMini(e) {
+  const mini = document.getElementById('mus-mini');
+  if (!mini) return;
+  const viva = !!(e && e.vivo && e.pista) && musVista !== 'player';
+  mini.hidden = !viva;
+  const tit = document.getElementById('mus-mini-t');
+  const art = document.getElementById('mus-mini-a');
+  const play = document.getElementById('mus-mini-play');
+  if (tit) tit.textContent = e?.pista?.titulo || '—';
+  if (art) art.textContent = e?.pista
+    ? [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ') : '';
+  if (play) play.textContent = e?.suena ? '⏸' : '▶';
+  // La fila que suena se tiñe, como en Lark: se compara la `uri` del índice, no el
+  // título, porque dos pistas pueden llamarse igual.
+  document.querySelectorAll('#mu-pistas .lk-fila').forEach(f =>
+    f.classList.toggle('sonando', !!e?.pista && f.dataset.uri === (e.pista.uri || '')));
+}
+
+/* Los gustos de verdad (`musicaPerfil`): géneros y artistas con sus puntos. Cada
+   chip lanza una búsqueda con ese nombre, que es lo que el índice sabe responder. */
+function pintaGustos() {
+  const caja = document.getElementById('mu-perfil-chips');
+  if (!caja) return;
+  let p = null;
+  try { p = JSON.parse(llama('musicaPerfil') || 'null'); } catch { p = null; }
+  const nombres = [...(p?.generos || []), ...(p?.artistas || [])]
+    .filter(x => x && x.nombre).slice(0, 12);
+  if (!nombres.length) {
+    caja.innerHTML = '<div class="mu-vacio">aún no sé qué te gusta: pulsa 👍 cuando suene algo tuyo</div>';
+    return;
+  }
+  caja.innerHTML = nombres.map((x, i) => `<button class="mu-chip" data-g="${i}">${esc(x.nombre)}</button>`).join('');
+  caja.querySelectorAll('[data-g]').forEach(b => b.onclick = () => {
+    const q = document.getElementById('mu-busca');
+    if (q) q.value = nombres[+b.dataset.g].nombre;
+    eligeChip('canciones');
+    buscaMusica(nombres[+b.dataset.g].nombre, false);
+  });
 }
 
 const estadoMusica = () => {
@@ -816,6 +1487,7 @@ function buscaMusica(texto, porGusto) {
     // pulsación, y aquí la dueña puede pulsar este aviso o el menú del botón
     // flotante «CORT · PC» del teléfono (fila «Dar permiso a la música y los
     // archivos»). Decir «ya lo pedí» sin haberlo pedido sería mentira.
+    musLista = [];
     caja.innerHTML = '<div class="mu-vacio">CORT no ve tu música todavía · pulsa '
       + '<b class="mu-dar">Dar permiso a la música y los archivos</b>'
       + ' o ábrelo desde el botón <b>CORT · PC</b> del teléfono.</div>';
@@ -831,26 +1503,47 @@ function buscaMusica(texto, porGusto) {
   }
   const crudo = porGusto ? llama('musicaPorGusto', texto || '', 60)
                          : llama('musicaBuscar', texto || '', true);
-  let lista = [];
-  try { lista = JSON.parse(crudo || '[]'); } catch { lista = []; }
+  try { musLista = JSON.parse(crudo || '[]'); } catch { musLista = []; }
+  if (!Array.isArray(musLista)) musLista = [];
+  pintaMusicaLista();
+}
+
+/* Pintar lo leído, con el chip de en medio y el orden elegido. Se separa de la
+   lectura porque las pestañas y la hoja «Ordenar por» vuelven a pintar **la misma
+   lista**, sin volverle a pedir nada a Java. */
+function pintaMusicaLista() {
+  const caja = document.getElementById('mu-pistas');
+  if (!caja) return;
+  const cuenta = document.getElementById('mu-cuenta');
+  let lista = musChip === 'videos' ? musLista.filter(p => p.video) : musLista;
+  const ordenada = musOrden === 'indice' ? lista : [...lista].sort((a, b) =>
+    musOrden === 'dur' ? (b.dur || 0) - (a.dur || 0)
+      : String(a[musOrden] || '').localeCompare(String(b[musOrden] || ''), 'es', { sensitivity: 'base' }));
+  if (cuenta) cuenta.textContent = ordenada.length
+    ? ordenada.length + (musChip === 'videos' ? ' vídeos' : ' canciones') : '';
   caja.innerHTML = '';
-  if (!lista.length) {
+  if (!ordenada.length) {
     caja.innerHTML = '<div class="mu-vacio">nada con ese nombre · prueba con otra palabra o «por gusto»</div>';
     return;
   }
-  const uris = lista.map(p => p.uri);
-  lista.forEach((p, i) => {
+  const uris = ordenada.map(p => p.uri);
+  const e = estadoMusica();
+  ordenada.forEach((p, i) => {
     const d = document.createElement('div');
-    d.className = 'mu-pista' + (p.video ? ' es-video' : '');
-    d.innerHTML = `<span class="mu-ico">${p.video ? '▣' : '♪'}</span>
-      <span class="mu-n">${esc(p.titulo)}</span>
-      <span class="mu-a">${esc(p.artista)}${p.genero ? ' · ' + esc(p.genero) : ''}</span>`;
+    d.className = 'lk-fila' + (e?.pista && e.pista.uri === p.uri ? ' sonando' : '');
+    d.dataset.uri = p.uri || '';
+    d.innerHTML = `<span class="lk-portada">${p.video ? '▣' : '♪'}</span>
+      <span class="lk-txt"><b>${esc(p.titulo)}</b>
+        <span>${esc([p.artista, p.genero].filter(Boolean).join(' · '))}</span></span>
+      <em>${p.dur ? reloj(p.dur) : ''}</em>`;
     d.onclick = () => {
       if (llama('musicaPoner', uris.join('\n'), i) === false) {
         ctx?.say?.('Esa pista no está en el índice: recarga la lista.');
         return;
       }
       ctx?.orb?.burst?.();
+      pintaMusicaLista();
+      pintaMini(estadoMusica());
     };
     caja.appendChild(d);
   });
@@ -907,6 +1600,7 @@ function perfil() {
 function pintaProgreso(e) {
   if (!e) return;
   pintaPildora(e);
+  pintaMini(e);            // el mini anclado de Lark y la fila teñida van con el mismo aviso
   ['mu', 'mv'].forEach(p => {
     const barra = document.getElementById(p + '-prog');
     if (!barra) return;
@@ -977,8 +1671,6 @@ function montaMV() {
       <video id="mv-video" playsinline preload="metadata" muted></video>
       <div class="mv-aviso" id="mv-aviso" hidden></div>
     </div>
-    <div class="mu-ahora" id="mv-ahora">nada puesto</div>
-    <div class="mu-datos"><span id="mv-artista"></span></div>
     ${transporteHTML('mv')}
     <div class="mv-letra-top">
       <button id="mv-rebuscar" class="mu-chip" title="volver a pedir la letra de esta canción">↻ rebuscar la letra</button>
@@ -1282,7 +1974,9 @@ function escuchaAtajos() {
 
 export function initPantallas(contexto) {
   ctx = contexto;
+  aplicaAccesibilidad();            // antes de pintar: la letra grande no se espera
   montaCarcasa();
+  montaNavegacion();
   montaGesto();
   montaTeclas();
   escuchaMusica();

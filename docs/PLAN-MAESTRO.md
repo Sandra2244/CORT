@@ -63,6 +63,20 @@ Ella escribió de corrido; aquí está repartido. Entre paréntesis, la tarea de
 
 Esto es lo que hay dentro ahora mismo, con su sitio exacto. Cambia más de un diagnóstico.
 
+- **Lo de abajo es la lectura de la cara VIEJA; desde F9 (2026-10-22, noche) tres cosas ya
+  no son así, y conviene saberlo antes de tocar nada.** (1) `#dock` **ya no está en el
+  borde**: sus doce botones son ahora el segundo grupo del **cajón** (`#cajon`), con sus
+  mismos nodos —por eso `windows.js` sigue encontrando `#dock [data-win="…"]`— y `apps.css`
+  tiene que reabrirlos porque `hud.css` los esconde fuera del Orbe. (2) El **orbe no tiene
+  más botones que ☰** (`#orb-menu`); la barra de hojas y el menú viejo de `index.html` se
+  fueron, y `prueba-costura.py` [18] pone el pipeline rojo si vuelven a aparecer como nodo
+  pintado o como nombre citado. (3) **Cada hoja viste su propia ropa** (`ui/css/apps.css`,
+  enlazada después de `hud.css`): Música con el negro puro y el mini de Lark Player, Charla
+  con su barra de modelo, sus seis modos, su `+` de adjuntar y su píldora redonda. La
+  manera de **verlo todo sin teléfono** sigue siendo `ui/sonda-carita.html` con el núcleo
+  arrancado: **77 comprobaciones**, y se pone roja si un id del transporte choca con un id
+  fijo de la cara o si la cara manda a `/api/*` un campo que el modelo de pydantic no tiene.
+
 - **Y en cuanto se midió, apareció el culpable de verdad (ronda F8, 2026-10-22).** Todo lo
   de abajo eran lecturas del código; ésta es una ejecución. La sonda nueva
   (`ui/sonda-carita.html`, un `window.CortNative` de mentira + el módulo de hojas real)
@@ -190,8 +204,24 @@ pedírselo antes.
    restaurado desde `/api/history`, y vidrio y agua con freno. *Puro `ui/` + CSS: no toca el
    manifiesto, así que el envase sigue siendo el que entra.* Es la que más se nota y la más
    barata.
-2. **F9 · Música sin pelearse** (#95, #96) — predeterminado vs propio, Lark Player por
-   nombre, MV con el gesto de Lark, ligero en juego.
+2. **F9 · Cada apartado, otra app** (#92, #104, #105, #106, y en parte #96) — **HECHO el
+   2026-10-22**, con lo que ella pidió por encima de lo que estaba planeado: el orbe queda
+   con **un solo botón** (☰) que abre el **cajón** —hojas + las once ventanas de vidrio, que
+   viajan con sus mismos nodos + ajustes—, **Música es calco de Lark Player** (barra
+   buscar/orden/más, cuatro chips, mini fijo abajo, reproductor a pantalla completa, y el
+   orden real hecho en la cara porque `musicaPoner` no acepta orden) y **Charla es calco de
+   Gemini/Qoder** (modelo con ▾ y `models/use`, seis modos que viajan **delante** de la
+   pregunta porque `/api/chat` sólo tiene `message`, `+` que **adjunta texto de verdad** por
+   la puerta nueva `GET /api/lee`, píldora de escritura y saludo con sugerencias). Identidad
+   por hoja en `ui/css/apps.css` (427 líneas, enlazada después de `hud.css`).
+   *Salió con un bug real:* 「guardar en Notas」 de Charla y de Código mandaba `{text: …}` a
+   `/api/notes`, cuyo modelo `Nota` sólo tiene `texto` → 422 contado como «el núcleo no dejó
+   guardarlo». Queda de esta entrada lo que depende del aparato: que **Lark Player** se
+   ofrencia por nombre como reproductor predeterminado (#95) y el gesto karaoke de MV (#96).
+   *Pruebas:* `ui/sonda-carita.html` **77 `ok` / 0 fallos** y costura **229 `ok`** con el
+   sector **[18]** (10 comprobaciones; tres mutaciones las pusieron rojas).
+   **Nada de esto se ve en el teléfono hasta recompilar el `nucleo`**, porque `ui/` viaja
+   dentro del APK.
 3. **F10 · Perfil vivo y voz por frase** (#100, #91, #90) — nombre de la IA, rol,
    «sobre mí», «más grave / más rápido», clima en el teléfono sin PC.
 4. **F11 · CORT actúa por ella** (#97, #98) — la escalera de envases y el mensaje

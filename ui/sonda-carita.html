@@ -1,21 +1,28 @@
 <!doctype html>
-<!-- Sonda de la cara (ronda F8) · se abre con el núcleo arrancado:
+<!-- Sonda de la cara (rondas F8 y F9) · se abre con el núcleo arrancado:
        http://127.0.0.1:8000/sonda-carita.html
      Para qué: las hojas de Música, MV y Equipo del teléfono no existen sin puente
      de Java, así que en el portátil era imposible VER lo que se cambia en la cara
-     (la píldora de la esquina, el gesto que se tragaba los botones, el historial
-     del chat). Esta hoja monta el MISMO módulo `js/pantallas.js` con un puente de
-     mentira — un `window.CortNative` que devuelve un estado de música inventado y
-     anota lo que le mandan — y luego se comprueba a sí misma, aquí debajo, con
-     líneas `ok` / `NO`.
+     (la píldora de la esquina, el gesto que se tragaba los botones, el historial del
+     chat, y en F9 el cajón, el calco de Lark y el de Gemini). Esta hoja monta el
+     MISMO módulo `js/pantallas.js` con un puente de mentira — un `window.CortNative`
+     que devuelve un estado de música inventado y anota lo que le mandan — y con un
+     `fetch` de mentira para `/api/chat`, `/api/models`, `/api/files` y `/api/lee`,
+     y luego se comprueba a sí misma, aquí debajo, con líneas `ok` / `NO`.
 
-     No envía nada a ningún sitio salvo lo que ya pide la cara de siempre
-     (`/api/history`), y no toca el teléfono de verdad: el puente es de mentirijilla.
-     Sirve también para enseñarle a la dueña la interfaz nueva sin tener el APK
-     delante. -->
+     Lo que SÍ va al servidor de verdad: `/api/port` y `/api/history` (lecturas). No
+     envía nada que cambie el estado del núcleo, y no toca el teléfono: el puente es
+     de mentirijilla. Sirve también para enseñarle a la dueña la interfaz nueva sin
+     tener el APK delante.
+
+     Las comprobaciones están escritas para poder fallar: cada una lee lo que hay en
+     el DOM o lo que se mandó, y se mutó a propósito (cambiar un id, quitar un
+     manejador) para verla ponerse en `NO`. Una prueba que nunca se pone roja es
+     decorativa. -->
 <meta charset="utf-8">
-<title>Sonda de la cara · CORT F8</title>
+<title>Sonda de la cara · CORT F9</title>
 <link rel="stylesheet" href="/css/hud.css">
+<link rel="stylesheet" href="/css/apps.css">
 <style>
   #sonda { position: fixed; left: 0; right: 0; bottom: 0; max-height: 42vh; overflow: auto;
     z-index: 900; background: #02040a; color: #cfe9ff; font: 12px/1.5 Consolas, monospace;
@@ -26,7 +33,7 @@
     border-radius: 6px; padding: 4px 10px; margin: 0 6px 6px 0; cursor: pointer; font: inherit; }
 </style>
 
-<div id="sonda"><h1>Sonda de la cara · F8</h1><div id="salida">montando…</div></div>
+<div id="sonda"><h1>Sonda de la cara · F9</h1><div id="salida">montando…</div></div>
 
 <script type="module">
 const salida = document.getElementById('salida');
@@ -40,28 +47,107 @@ addEventListener('unhandledrejection', e => { salida.textContent = 'CAÍ (promes
 const dice = (bueno, texto) => lineas.push(`<div class="${bueno ? 'ok' : 'no'}">${bueno ? 'ok ' : 'NO '} ${texto}</div>`);
 
 /* ── el puente de mentirijilla ───────────────────────────────────────────────
-   Sólo los métodos que la cara de esta ronda necesita. `musicaEstado` devuelve lo
+   Sólo los métodos que la cara de estas rondas necesita. `musicaEstado` devuelve lo
    que pongamos en `estado`, y cada orden que manda se anota en `mandadas` para
    poder decir «el play de verdad llamó a musicaPausa». */
 let estado = null;
 const mandadas = [];
+const PISTAS = [
+  { uri: 'content://a', titulo: 'Zanja', artista: 'Eika', genero: 'city pop', dur: 191000, video: 0 },
+  { uri: 'content://b', titulo: 'Ámbar', artista: 'Luv Resval', genero: 'rap', dur: 62000, video: 0 },
+  { uri: 'content://c', titulo: 'Still Falling', artista: 'Aiko', genero: 'pop', dur: 201000, video: 1 },
+];
 window.CortNative = {
   avisos: () => '[]',
   puede: () => true,
   accion: () => 'null',
-  musicaEstado: () => (estado ? JSON.stringify(estado) : ''),
-  musicaPausa: () => mandadas.push('musicaPausa'),
-  musicaPlay: () => mandadas.push('musicaPlay'),
-  musicaAutomatica: () => mandadas.push('musicaAutomatica'),
-  musicaParar: () => mandadas.push('musicaParar'),
-  musicaListas: () => '[]',
-  musicaPerfil: () => 'null',
+  capacidades: () => 'nucleo',
   equipo: () => 'null',
+  aparato: () => '{}',
+  sensores: () => '{}',
+  memoria: () => 'null',
+  mente: () => 'null',
+  atuendo: () => 'null',
+  agenda: () => 'null',
+  ajusteVoz: () => 'null',
+  comparte: () => '{"ok":true,"envia":"Zanja"}',
+  musicaEstado: () => (estado ? JSON.stringify(estado) : ''),
+  musicaPuedeLeer: () => true,
+  musicaBuscar: (q, video) => {
+    mandadas.push('musicaBuscar');
+    const t = String(q || '').toLowerCase();
+    return JSON.stringify(!t ? PISTAS
+      : PISTAS.filter(p => (p.titulo + ' ' + p.artista + ' ' + p.genero).toLowerCase().includes(t)));
+  },
+  musicaPorGusto: () => { mandadas.push('musicaPorGusto'); return JSON.stringify(PISTAS); },
+  musicaPoner: (uris, desde) => { mandadas.push('musicaPoner:' + desde); return true; },
+  musicaPonerLista: () => true,
+  musicaListas: () => JSON.stringify(['para correr']),
+  musicaGuardarLista: () => true,
+  musicaGustar: () => true,
+  musicaPerfil: () => JSON.stringify({ generos: [{ nombre: 'city pop', puntos: 9 }],
+                                       artistas: [{ nombre: 'Eika', puntos: 7 }] }),
+  musicaPlay: () => mandadas.push('musicaPlay'),
+  musicaPausa: () => mandadas.push('musicaPausa'),
+  musicaAutomatica: () => mandadas.push('musicaAutomatica'),
+  musicaSiguiente: () => mandadas.push('musicaSiguiente'),
+  musicaAnterior: () => mandadas.push('musicaAnterior'),
+  musicaParar: () => mandadas.push('musicaParar'),
+  musicaSalto: () => true,
+  musicaCuadro: () => true,
+  musicaVolumen: () => true,
+  modoJuego: () => 'modo juego',
   on: () => {},
 };
 
+/* ── el `fetch` de mentirijilla: lo que la cara MANDA, no sólo lo que pinta ──
+   `/api/port` y `/api/history` se dejan ir al servidor de verdad (son lecturas).
+   `/api/chat`, `/api/models/use` y `/api/notes` se anotan para poder comprobar el
+   CUERPO que sale: que el modo se pone delante y que el adjunto viaja dentro del
+   mensaje es justo lo que ningún css puede demostrar. */
+const peticiones = [];
+const real = window.fetch.bind(window);
+const R = o => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(o) });
+window.fetch = (u, opts) => {
+  const url = String(u);
+  if (url.includes('/api/port') || url.includes('/api/history')) return real(u, opts);
+  let cuerpo = null;
+  try { cuerpo = opts && opts.body ? JSON.parse(opts.body) : null; } catch { cuerpo = null; }
+  peticiones.push({ url, cuerpo });
+  if (url.includes('/api/models/use')) return R({ ok: true });
+  if (url.includes('/api/models')) return R({ modelos: [
+    { modelo: 'llama3.2', descargado: true, activo: true },
+    { modelo: 'qwen2.5-coder', descargado: true, activo: false },
+    { modelo: 'mistral', descargado: false }] });
+  if (url.includes('/api/chat')) return R({ reply: 'respuesta de la sonda', source: 'sonda' });
+  if (url.includes('/api/lee')) return R({ ok: true, archivo: 'nota.txt', carpetas: 'Documentos',
+    texto: 'CONTENIDO_DEL_DOCUMENTO', entero: true, caracteres: 22 });
+  if (url.includes('/api/files')) return R({ path: 'Documentos', entries: [
+    { name: 'Apuntes', type: 'dir', size: 0, folders: 2, files: 1, fecha: '2026-10-01' },
+    { name: 'nota.txt', type: 'file', size: 1200, fecha: '2026-10-02' }] });
+  if (url.includes('/api/notes')) return R([{ id: 1, fecha: '2026-10-02 09:00', texto: 'comprar pilas' }]);
+  return R({});
+};
+
+/* ── la carcasa de verdad, traída de `index.html` ──────────────────────────
+   El cajón, su botón, la cortina y los conmutadores no los inventa el JS: viven en
+   el índice. Si la sonda se fabricara su propio `<div id="cajon">`, no serviría para
+   nada — lo que se quiere comprobar es que **el índice que se instala** trae esos
+   nodos y que la cara los enchufa. `DOMParser` no ejecuta `<script>`, así que se
+   adoptan los nodos y sólo los maneja `pantallas.js`. */
+const cruda = await (await real('/index.html')).text();
+const pagina = new DOMParser().parseFromString(cruda, 'text/html');
+['orb-menu', 'cortina', 'cajon', 'mic', 'wake', 'hand'].forEach(id => {
+  const n = pagina.getElementById(id);
+  if (n) document.body.appendChild(document.importNode(n, true));
+  else lineas.push(`<div class="no">NO index.html no trae #${id}</div>`);
+});
+
 const m = await import('/js/pantallas.js');
-m.initPantallas({ api: () => '', term: () => {}, say: () => {}, orb: { burst: () => {}, pausa: () => {} }, voice: {} });
+// `api()` tiene que devolver una dirección de verdad: la cara guarda el resultado de
+// `hayNucleo()` y un `''` (la raíz relativa) se lee como «no hay portátil», así que
+// con `''` esta sonda nunca llegaría a la lista de modelos.
+m.initPantallas({ api: () => location.origin, term: () => {}, say: () => {}, orb: { burst: () => {}, pausa: () => {} }, voice: {} });
 document.documentElement.classList.add('mobile');   // la cara del teléfono, en el navegador
 
 /* ── ayuda: un deslizamiento de dedo, con su recorrido horizontal ───────────*/
@@ -74,34 +160,39 @@ function desliza(el, dx) {
   el.dispatchEvent(bulto('touchstart', r.x + r.width / 2));
   el.dispatchEvent(bulto('touchend', r.x + r.width / 2 + dx));
 }
+const tecla = k => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const espera = ms => new Promise(r => setTimeout(r, ms));
 
 ponEstado({ vivo: true, suena: true, pos: 42000, dur: 191000, juego: false,
-            pista: { titulo: 'Dark Rose', artista: 'Eika', genero: 'city pop', uri: 'content://x' } });
+            pista: { titulo: 'Still Falling', artista: 'Aiko', genero: 'pop', uri: 'content://c', video: 1 } });
 function ponEstado(e) { estado = e; }
 
 /* ── 1 · la píldora de la esquina ───────────────────────────────────────────*/
-const p = document.getElementById('repro-pildora');
-dice(!!p, 'existe la píldora de música fuera del dock');
+const pildora = document.getElementById('repro-pildora');
+dice(!!pildora, 'existe la píldora de música fuera del dock');
 m.ir('charla');
-dice(p.classList.contains('viva'), 'en Charla, con pista puesta, está a la vista');
-dice(p.querySelector('#rp-titulo').textContent === 'Dark Rose', 'dice la canción (' + p.querySelector('#rp-titulo').textContent + ')');
-mandadas.length = 0; p.querySelector('#rp-play').click();
+dice(pildora.classList.contains('viva'), 'en Charla, con pista puesta, está a la vista');
+dice(pildora.querySelector('#rp-titulo').textContent === 'Still Falling', 'dice la canción (' + pildora.querySelector('#rp-titulo').textContent + ')');
+mandadas.length = 0; pildora.querySelector('#rp-play').click();
 dice(mandadas.join() === 'musicaPausa', 'su ▶/⏸ manda pausa (no cambia de hoja ni se queda sorda)');
 m.ir('musica');
-dice(!p.classList.contains('viva'), 'en Música se apaga: ahí ya está el transporte completo');
+dice(!pildora.classList.contains('viva'), 'en Música se apaga: ahí ya está el transporte completo');
 m.ir('mv');
-dice(!p.classList.contains('viva'), 'en MV igual');
+dice(!pildora.classList.contains('viva'), 'en MV igual');
 m.ir('charla');
 ponEstado({ ...estado, juego: true }); m.ir('codigo');
-dice(!p.classList.contains('viva'), 'en modo juego se va: CORT se aparta, ésa es la promesa');
+dice(!pildora.classList.contains('viva'), 'en modo juego se va: CORT se aparta, ésa es la promesa');
 ponEstado({ ...estado, juego: false }); m.ir('charla');
-p.querySelector('#rp-cierra').click();
-dice(!p.classList.contains('viva'), 'el ✕ la pliega');
+pildora.querySelector('#rp-cierra').click();
+dice(!pildora.classList.contains('viva'), 'el ✕ la pliega');
 m.ir('codigo');
-dice(!p.classList.contains('viva'), 'y sigue plegada mientras suene la misma pista');
+dice(!pildora.classList.contains('viva'), 'y sigue plegada mientras suene la misma pista');
 ponEstado({ ...estado, pista: null, suena: false }); m.ir('charla');
 ponEstado({ ...estado, pista: { titulo: 'Otra', artista: '' }, suena: true }); m.ir('codigo');
-dice(p.classList.contains('viva'), 'al parar y sonar otra cosa vuelve sola');
+dice(pildora.classList.contains('viva'), 'al parar y sonar otra cosa vuelve sola');
+ponEstado({ ...estado, pista: PISTAS[2], suena: true });
 
 /* ── 2 · el deslizamiento ya no se traga los botones ────────────────────────*/
 m.ir('musica');
@@ -115,38 +206,209 @@ mandadas.length = 0; document.getElementById('mu-play').click();
 dice(mandadas.length === 1, 'y pulsado de verdad, el botón obedece (' + mandadas.join() + ')');
 m.ir('charla');
 const hoja2 = m.pantallaActual();
-desliza(document.querySelector('#repro-pildora #rp-titulo'), 150);
+desliza($('#repro-pildora #rp-titulo'), 150);
 dice(m.pantallaActual() === hoja2, 'sobre el título de la píldora tampoco (es un botón, no una hoja)');
-desliza(document.querySelector('#scr-charla .scr-top'), 150);
+desliza($('#scr-mv .scr-cuerpo'), 150);
 dice(m.pantallaActual() !== hoja2, 'en una zona sin controles, el deslizamiento sigue cambiando de hoja');
 
 /* ── 3 · seleccionar y copiar lo escrito ────────────────────────────────────*/
-const sel = s => { const e = document.querySelector(s); return e ? getComputedStyle(e).userSelect : 'sin-elemento'; };
+const sel = s => { const e = $(s); return e ? getComputedStyle(e).userSelect : 'sin-elemento'; };
 dice(sel('#ch-msgs') === 'text', 'la Charla se puede seleccionar (' + sel('#ch-msgs') + ')');
 // La consola (`#log`) y la terminal (`#termlog`) las monta `hud.js`, que esta hoja no
 // carga: se comprueba su regla en la hoja de estilos, que es justo lo que estaba
 // tapado por el `user-select:none` del móvil.
-const css = await (await fetch('/css/hud.css')).text();
+const css = await (await real('/css/hud.css')).text();
 ['#log', '#termlog'].forEach(id => dice(
   new RegExp('html\\.mobile[^{]*' + id + '[^{]*\\{[^}]*user-select:\\s*text').test(css),
   `${id} vuelve a ser seleccionable en el móvil`));
+// Y la ropa nueva tiene que llegar cargada de verdad: si `index.html` no enlaza
+// `apps.css`, el calco existe en el JS pero no se ve (el fallo se mutó quitando el
+// `<link>`: sin él, esta línea se pone en `NO`).
+const indice = await (await real('/index.html')).text();
+dice(/rel="stylesheet"\s+href="css\/apps\.css"/.test(indice), 'el índice enlaza css/apps.css después de hud.css');
 
 /* ── 4 · el historial del núcleo, que antes no se pedía ─────────────────────*/
 localStorage.removeItem('cort-charla');
 const caja = document.getElementById('ch-msgs');
 caja.innerHTML = '';
 m.ir('charla');
-await new Promise(r => setTimeout(r, 1800));
+await espera(1800);
 const burbujas = caja.querySelectorAll('.burbuja').length;
 dice(burbujas > 0, `la Charla trae el historial de /api/history (${burbujas} burbujas)`);
 
+/* ── 5 · el cajón: UN botón, y las apps dentro ──────────────────────────────*/
+document.documentElement.classList.remove('cajon-abierto');
+$('#orb-menu').click();
+dice(document.documentElement.classList.contains('cajon-abierto'), 'el único botón del orbe abre el cajón');
+$('#cortina').click();
+dice(!document.documentElement.classList.contains('cajon-abierto'), 'la cortina lo cierra');
+tecla('Escape');
+dice($('#cajon') && $$('#cj-apps .cj-app').length === $$('.scr').length + 1,
+  `el cajón ofrece las ${$$('#cj-apps .cj-app').length} hojas de este aparato (orbe + ${$$('.scr').length} secciones)`);
+$('#orb-menu').click();
+const conTinte = $$('#cj-apps .cj-app').filter(b => b.getAttribute('style').includes('--tinte')).length;
+dice(conTinte === $$('#cj-apps .cj-app').length, 'cada app del cajón lleva su tinte (' + conTinte + ')');
+const antes = m.pantallaActual();
+$('#cj-apps .cj-app[data-p="codigo"]').click();
+dice(m.pantallaActual() === 'codigo' && !document.documentElement.classList.contains('cajon-abierto'),
+  'elegir una app del cajón abre esa hoja y cierra el cajón');
+tecla('Escape');                                     // por si algo queda abierto
+// El dock NO se duplica: viaja dentro del cajón con sus nodos de siempre, porque
+// `windows.js` engancha cada ventana buscando `#dock [data-win=…]`.
+const dock = document.getElementById('dock');
+const botonesDock = dock ? dock.querySelectorAll('button[data-win]').length : 0;
+const duplicados = (() => {
+  const vistos = new Set(), rep = [];
+  $$('[id]').forEach(e => { if (vistos.has(e.id)) rep.push(e.id); vistos.add(e.id); });
+  return rep;
+})();
+dice(!!dock && !!dock.closest('#cajon') && botonesDock > 8,
+  `el dock viaja dentro del cajón con sus ${botonesDock} ventanas intactas`);
+dice(duplicados.length === 0, 'no hay NINGÚN id duplicado en la cara ' +
+  (duplicados.length ? '(repetidos: ' + duplicados.join(', ') + ')' : ''));
+dice($$('#wake').length === 1 && $('#wake').closest('#cj-ajustes') !== null,
+  'los conmutadores de siempre se reubicaron, no se copiaron');
+$('#cj-ajustes .cj-fila[data-aj="letra"]').click();
+dice(document.documentElement.classList.contains('letra-grande')
+     && localStorage.getItem('cort-letra') === '1', 'la accesibilidad se aplica y se recuerda');
+$('#cj-ajustes .cj-fila[data-aj="letra"]').click();
+dice(!document.documentElement.classList.contains('letra-grande'), 'y se quita');
+localStorage.removeItem('cort-letra');
+document.documentElement.classList.remove('cajon-abierto');
+
+/* ── 6 · Música: calco de Lark Player ───────────────────────────────────────*/
+m.ir('musica');
+dice(!!$('#scr-musica .lk-barra') && !!$('#mu-orden-btn') && !!$('#mu-mas-btn'),
+  'la barra de Lark: nombre, buscar, ordenar y ⋮');
+dice($$('#mu-chips .lk-pestana').length === 4, 'los cuatro chips-pestaña (' + $$('#mu-chips .lk-pestana').length + ')');
+dice($$('#mu-chips .lk-pestana.activa').length === 1, 'sólo UN chip va relleno, como en Lark');
+dice($$('#mu-pistas .lk-fila').length === 3, 'la lista salió del índice con sus filas (' + $$('#mu-pistas .lk-fila').length + ')');
+dice($('#mu-cuenta').textContent.includes('3'), 'la sección lleva su cuenta («' + $('#mu-cuenta').textContent + '»)');
+dice($('#mu-cuenta').textContent.trim() === '3 canciones', 'la cuenta dice canciones, no un número suelto');
+dice($$('#mu-pistas .lk-fila em').length === 3 && $$('#mu-pistas .lk-fila em')[0].textContent === '3:11',
+  'la duración real de cada fila (' + $$('#mu-pistas .lk-fila em')[0].textContent + ')');
+dice($$('#mu-pistas .lk-fila .lk-portada img').length === 0 && $$('#mu-pistas .lk-portada-grande img').length === 0,
+  'sin carátulas fingidas: el puente no da ninguna imagen');
+// Orden real sobre la lista ya leída (no otra llamada a Java): «Título» A→Z.
+const antesDeOrden = $$('#mu-pistas .lk-fila b').map(b => b.textContent).join('|');
+$('#mu-orden-btn').click();
+dice(!!$('.hoja') && $$('.hoja [data-o]').length === 4, 'la hoja «Ordenar por» sube desde abajo con sus 4 criterios');
+$$('.hoja [data-o]').find(f => f.dataset.o === 'titulo').click();
+await espera(320);   // la hoja baja con su animación: hay que dejarla terminar
+const trasOrden = $$('#mu-pistas .lk-fila b').map(b => b.textContent);
+dice(antesDeOrden !== trasOrden.join('|') && trasOrden[0] === 'Ámbar',
+  'ordenar por título reordena de verdad (' + trasOrden.join(' → ') + ')');
+dice(!$('.hoja'), 'y la hoja se cierra sola al elegir');
+// El chip de Vídeos filtra por `video` sobre la misma lista.
+$('#mu-chips .lk-pestana[data-c="videos"]').click();
+dice($$('#mu-pistas .lk-fila').length === 1, 'el chip «Vídeos» deja sólo los que tienen imagen');
+$('#mu-chips .lk-pestana[data-c="listas"]').click();
+dice(!$('#mu-listas').hidden && $$('#mu-pl-caja .mu-chip').map(b => b.textContent).includes('para correr'),
+  'la pestaña de playlists lee `musicaListas`');
+$('#mu-chips .lk-pestana[data-c="gustos"]').click();
+dice(!$('#mu-gustos').hidden && $$('#mu-perfil-chips .mu-chip').length === 2,
+  'la pestaña de gustos pinta géneros y artistas del perfil');
+$('#mu-chips .lk-pestana[data-c="canciones"]').click();
+// Tocar una fila pone ESA pista en ESA posición del índice.
+mandadas.length = 0;
+$$('#mu-pistas .lk-fila')[1].click();
+dice(mandadas.join() === 'musicaPoner:1', 'tocar la fila 2 manda `musicaPoner(uris, 1)`');
+dice(!!$('#mus-mini') && !$('#mus-mini').hidden, 'con pista puesta queda el mini anclado de Lark');
+$('#mus-mini-play').click();
+dice(mandadas.includes('musicaPausa') && m.pantallaActual() === 'musica',
+  'el ▶/⏸ del mini manda pausa SIN abrir el reproductor');
+$('#mus-mini').click();
+dice(!$('#mu-player').hidden && $('#mu-lista').hidden, 'tocar el mini sube el reproductor a pantalla completa');
+dice($('#mu-ahora').textContent === 'Still Falling' && $('#mu-t1').textContent === '3:11',
+  'el transporte pinta título y tiempo (' + $('#mu-t1').textContent + ')');
+dice(!!$('#mu-letras') && !!$('#mu-barra') && !!$('#mu-vol') && !!$('#mu-juego'),
+  'el reproductor tiene letra, barra, volumen y modo juego');
+$('#mu-vuelve').click();
+dice(!$('#mu-player').hidden === false && !$('#mu-lista').hidden, 'y el ‹ vuelve a la lista, no al orbe');
+$('#mu-mas-btn').click();
+dice($$('.hoja [data-i]').length >= 4, 'el ⋮ abre el menú de contexto con sus filas');
+$$('.hoja [data-i]')[0].click();
+dice(mandadas.includes('musicaAutomatica'), '「Ponme algo」 de la hoja llama a `musicaAutomatica`');
+// Lo que Lark tiene y CORT no finge: ni ecualizador, ni carpetas, ni cola.
+const fingido = ['#mu-ecualizador', '#mu-cola', '#mu-carpetas', '.lk-ecualizador'].filter(s => $(s)).length;
+dice(fingido === 0, 'nada inventado: sin ecualizador, sin cola y sin carpetas (el puente no los da)');
+
+/* ── 7 · Charla: calco de Gemini con la estructura de Qoder ─────────────────*/
+m.ir('charla');
+dice(!!$('#gm-menu') && !!$('#gm-modelo') && !!$('#gm-adj') && !!$('#ch-enviar'),
+  'la barra y la píldora de Gemini: ☰, modelo ▾, + y enviar');
+dice($('#ch-entrada').closest('.gm-pildora') !== null, 'el campo vive DENTRO de la píldora');
+$('#gm-modelo').click();
+await espera(200);            // `cargaModelos()` es async: la lista llega después del toque
+dice($('#gm-despl').classList.contains('abierto') && $$('#gm-despl .gm-opc[data-m]').length === 2,
+  'el desplegable lista los modelos bajados (' + $$('#gm-despl .gm-opc[data-m]').length + ')');
+dice($('#gm-modelo-n').textContent === 'llama3.2', 'y la barra lleva el nombre del modelo activo');
+$$('#gm-despl .gm-opc[data-m]')[1].click();
+await espera(120);            // `models/use` es una promesa: el rótulo cambia al volver
+dice(peticiones.some(x => x.url.includes('/api/models/use') && x.cuerpo?.modelo === 'qwen2.5-coder'),
+  'elegir modelo manda el nombre a /api/models/use');
+dice($('#gm-modelo-n').textContent === 'qwen2.5-coder', 'y el rótulo de la barra cambia');
+$('#ch-msgs').click();
+dice(!$('#gm-despl').classList.contains('abierto'), 'tocar fuera del desplegable lo cierra');
+dice($$('#gm-modos .gm-modo').length === 6, 'los seis modos de la fila de abajo');
+$('#gm-modos .gm-modo[data-m="resume"]').click();
+dice($('#gm-modos .gm-modo.activa').dataset.m === 'resume', 'el modo elegido queda marcado');
+// Adjuntar: `+` → Un documento → la hoja de archivos → el archivo → texto leído.
+$('#gm-adj').click();
+dice($$('.gm-adjuntar button').length === 3, 'la hoja del + trae sus botones redondos');
+$$('.gm-adjuntar button')[0].click();
+await espera(160);
+dice($$('.hoja [data-i]').length === 2, 'el explorador lista la carpeta que devuelve /api/files');
+$$('.hoja [data-i]')[1].click();
+await espera(160);
+dice(!!$('#gm-adj-chip') && $('#gm-usando').textContent.includes('adjunto nota.txt'),
+  'el documento queda adjunto y se anuncia (' + $('#gm-usando').textContent + ')');
+// Enviar con modo + adjunto: el cuerpo que sale hacia /api/chat es la prueba real.
+peticiones.length = 0;
+$('#ch-entrada').value = 'hablame de Eika';
+$('#ch-enviar').click();
+await espera(80);
+const chat = peticiones.find(x => x.url.includes('/api/chat'));
+dice(!!chat && chat.cuerpo.message.startsWith('Responde en tres frases'),
+  'el modo se pone DELANTE de la pregunta (así funciona sin campo de modo en el backend)');
+dice(!!chat && chat.cuerpo.message.includes('CONTENIDO_DEL_DOCUMENTO')
+     && chat.cuerpo.message.includes('hablame de Eika'),
+  'el texto leído viaja dentro del mensaje, junto a la pregunta');
+dice($('#ch-msgs .burbuja.de-tu .bur-adj')?.textContent.includes('nota.txt'), 'la burbuja dice qué llevabas adjunto');
+dice($('#gm-adj-chip') === null, 'y el adjunto se suelta solo tras enviar (no se repite en la siguiente)');
+dice($('#gm-saludo').hidden, 'con conversación delante, el saludo de Gemini se aparta');
+// El botón nuevo NO borra la memoria del núcleo: sólo la hoja local.
+localStorage.setItem('cort-charla', JSON.stringify([{ de: 'tu', texto: 'borrable' }]));
+m.ir('musica'); m.ir('charla');
+$('#gm-nueva').click();
+dice($$('#ch-msgs .burbuja').length === 0, '「✚」 empieza de cero en esta hoja');
+dice(peticiones.every(x => !/api\/notes/.test(x.url) || x.cuerpo?.texto),
+  'guardar una nota manda {texto}, el campo que de verdad pide el backend');
+
+/* ── 8 · cada hoja es otra app ──────────────────────────────────────────────*/
+const tinteDe = id => { m.ir(id); return getComputedStyle(document.documentElement).getPropertyValue('--app-accent').trim(); };
+const tintes = ['musica', 'charla', 'codigo', 'equipo'].map(tinteDe);
+dice(new Set(tintes).size === 4, 'cada hoja pinta con SU acento (' + tintes.join(' / ') + ')');
+m.ir('musica');
+dice(getComputedStyle($('#scr-musica')).backgroundColor === 'rgb(0, 0, 0)', 'Música es negro puro, como Lark');
+m.ir('charla');
+dice(getComputedStyle($('.gm-pildora')).borderRadius.startsWith('26'), 'la Charla termina en píldora redonda');
+// En el orbe no queda UN solo botón de herramientas: el dock se fue al cajón.
+m.ir('orbe');
+dice($$('#dock button:not([data-pc])').length > 0
+     && getComputedStyle(document.getElementById('dock')).display !== 'none'
+     && !document.getElementById('pantalla-menu') && !document.getElementById('pantalla-bar'),
+  'en el orbe no queda ni la barra de hojas ni el menú viejo: sólo ☰');
+
 salida.innerHTML = lineas.join('') +
   `<div><button id="otro">otra pista</button><button id="para">parar</button>` +
-  `<button id="juego">modo juego</button><button id="musica">ir a Música</button></div>` +
-  '<div style="margin-top:6px;color:#5e8cab">La tira de abajo es la sonda; la píldora y las hojas son la cara real.</div>';
-document.getElementById('otro').onclick = () => { ponEstado({ ...estado, pista: { titulo: 'Still Falling', artista: 'Luv Resval' }, suena: true }); m.ir('codigo'); };
+  `<button id="juego">modo juego</button><button id="musica">ir a Música</button>` +
+  `<button id="abre-cajon">abrir el cajón</button></div>` +
+  '<div style="margin-top:6px;color:#5e8cab">La tira de abajo es la sonda; el cajón, la píldora y las hojas son la cara real.</div>';
+document.getElementById('otro').onclick = () => { ponEstado({ ...estado, pista: PISTAS[0], suena: true }); m.ir('musica'); };
 document.getElementById('para').onclick = () => { ponEstado({ ...estado, pista: null, suena: false }); m.ir('charla'); };
 document.getElementById('juego').onclick = () => { ponEstado({ ...estado, juego: !estado.juego }); m.ir('charla'); };
 document.getElementById('musica').onclick = () => m.ir('musica');
+document.getElementById('abre-cajon').onclick = () => $('#orb-menu').click();
 window.__sonda = () => lineas.map(s => s.replace(/<[^>]+>/g, ''));
 </script>

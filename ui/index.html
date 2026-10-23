@@ -14,6 +14,10 @@
 <script src="js/android-bridge.js"></script>
 <script src="js/icons.js"></script>
 <link rel="stylesheet" href="css/hud.css">
+<!-- La ropa por app (F9): cada apartado con su fondo, su acento y su cabecera, para
+     que Música parezca Lark y Charla parezca Gemini en vez de doce hojas iguales.
+     Va DESPUÉS de `hud.css` a propósito: son reglas que ajustan las de siempre. -->
+<link rel="stylesheet" href="css/apps.css">
 </head>
 <body>
 <div id="scene"></div>
@@ -70,23 +74,45 @@
 <!-- chips flotantes: archivos/notas que CORT te "lanza a las manos" (Jared) -->
 <div id="chips"></div>
 
-<!-- dock de ventanas (estética Jared Hood: chips rectangulares con icono + etiqueta monoespaciada) -->
-<div class="panel" id="dock">
-  <button data-win="files" title="01 · Archivos"><i data-ic="folder"></i><span>Archivos</span></button>
-  <button data-win="env" title="02 · Entorno"><i>◉</i><span>Entorno</span></button>
-  <button data-win="chat" title="03 · Canal de voz"><i>✦</i><span>Canal</span></button>
-  <button data-win="notes" title="04 · Notas"><i>✎</i><span>Notas</span></button>
-  <button data-win="music" title="05 · Música"><i>♪</i><span>Musica</span></button>
-  <button data-win="term" title="06 · Consola"><i>▤</i><span>Consola</span></button>
-  <button data-win="perfil" title="07 · Perfil"><i data-ic="gear"></i><span>Perfil</span></button>
-  <button data-win="cerebro" title="08 · Cerebro (muro de recuerdos)"><i>⌗</i><span>Cerebro</span></button>
-  <button data-act="open" title="Abrir en el explorador la carpeta que estás viendo"><i data-ic="open"></i><span>Abrir</span></button>
-  <button data-win="modelos" title="10 · Modelos locales (Ollama): descargar y elegir"><i data-ic="download"></i><span>Modelos</span></button>
-  <button data-win="optimiza" title="11 · Optimización: RAM y caché del equipo"><i data-ic="gauge"></i><span>Optimizar</span></button>
-  <button data-win="ayuda" title="09 · Ayuda, atajos y soporte"><i data-ic="help"></i><span>Ayuda</span></button>
-  <button data-act="hide" title="Ocultar / mostrar todas las ventanas (Esc)"><i>◫</i><span>Ocultar</span></button>
-  <span id="lamp" title="estado de CORT"><i></i><span>arrancando</span></span>
-</div>
+<!-- ================= EL CAJÓN =================
+     La dueña: «el orbe será sólo pantalla principal, sin botones; sólo uno de las
+     acciones o menú». Todo lo que antes cruzaba el borde inferior (la tira de doce
+     botones) se va a este cajón lateral, que es lo único que abre el botón ☰: sus
+     apps, sus herramientas y sus ajustes, en tres bloques con nombre. El `#dock` de
+     siempre NO se duplica ni se reescribe: viaja dentro del cajón con sus mismos
+     nodos, porque `windows.js` engancha las ventanas buscando `#dock [data-win=…]`
+     y esos manejadores son los que ya funcionan. Lo que sólo existe en el PC
+     (`data-pc`) se esconde en el teléfono con CSS: un botón que lleva a una hoja de
+     escritorio en un móvil es peor que no ofrecerlo. -->
+<button class="fab" id="orb-menu" title="Menú de CORT" aria-label="Menú de CORT"><i>☰</i></button>
+<div id="cortina"></div>
+<aside id="cajon">
+  <header id="cj-cab">
+    <b>C.O.R.T.</b><span>elige tu app</span>
+    <button id="cj-cierra" title="Cerrar el menú (Esc)">✕</button>
+  </header>
+  <div class="cj-grupo">Tus apps</div>
+  <div id="cj-apps"><!-- lo rellena `pantallas.js` con las hojas visibles --></div>
+  <div class="cj-grupo">Herramientas</div>
+  <div class="panel" id="dock">
+    <button data-win="files" title="01 · Archivos" data-pc><i data-ic="folder"></i><span>Archivos</span></button>
+    <button data-win="env" title="02 · Entorno" data-pc><i>◉</i><span>Entorno</span></button>
+    <button data-win="chat" title="03 · Canal de voz"><i>✦</i><span>Canal</span></button>
+    <button data-win="notes" title="04 · Notas"><i>✎</i><span>Notas</span></button>
+    <button data-win="music" title="05 · Música" data-pc><i>♪</i><span>Musica</span></button>
+    <button data-win="term" title="06 · Consola" data-pc><i>▤</i><span>Consola</span></button>
+    <button data-win="perfil" title="07 · Perfil"><i data-ic="gear"></i><span>Perfil</span></button>
+    <button data-win="cerebro" title="08 · Cerebro (muro de recuerdos)"><i>⌗</i><span>Cerebro</span></button>
+    <button data-act="open" title="Abrir en el explorador la carpeta que estás viendo" data-pc><i data-ic="open"></i><span>Abrir</span></button>
+    <button data-win="modelos" title="10 · Modelos locales (Ollama): descargar y elegir"><i data-ic="download"></i><span>Modelos</span></button>
+    <button data-win="optimiza" title="11 · Optimización: RAM y caché del equipo" data-pc><i data-ic="gauge"></i><span>Optimizar</span></button>
+    <button data-win="ayuda" title="09 · Ayuda, atajos y soporte"><i data-ic="help"></i><span>Ayuda</span></button>
+    <button data-act="hide" title="Ocultar / mostrar todas las ventanas (Esc)" data-pc><i>◫</i><span>Ocultar</span></button>
+    <span id="lamp" title="estado de CORT"><i></i><span>arrancando</span></span>
+  </div>
+  <div class="cj-grupo">Ajustes y accesibilidad</div>
+  <div id="cj-ajustes"><!-- aquí se reubican `#wake` y `#hand` al montar la cara --></div>
+</aside>
 
 <!-- botones flotantes: voz, escucha permanente y manos -->
 <div id="livetxt" aria-live="polite"></div>
