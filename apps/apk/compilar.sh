@@ -76,7 +76,7 @@ cd "$(dirname "$0")"
 #   `.Avisos`, el auricular, la batería y la hora. El motor es puro y se prueba con
 #   node (45 comprobaciones); lo que no puede hacer, lo dice la propia hoja: las
 #   reglas se cumplen mientras CORT está en pantalla.
-APK_VERSION="${APK_VERSION:-2.5.0}"   # desde aquí sale UN SOLO APK: este
+APK_VERSION="${APK_VERSION:-2.6.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

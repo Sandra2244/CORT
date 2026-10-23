@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.5.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.6.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -482,14 +482,14 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.5.0**. Esta Release trae
+            .deb) y el APK del teléfono, que sube a la **2.6.0**. Esta Release trae
             **tres APK de Android a propósito**. No son versiones distintas de CORT:
             es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
             mismo `versionCode`— con dos mandos distintos, para poder medir en el
             teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
             «Por qué hay tres envases»).
-            `CORT-IA-2.5.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
-            `CORT-IA-2.5.0-nucleo.apk` es **la novedad de esta ronda**: el mismo CORT
+            `CORT-IA-2.6.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.6.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
             sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
             cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
             `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
@@ -498,7 +498,7 @@ jobs:
             notificaciones, poner baldosín en la cortina rápida ni marcar por el
             auricular. **Empieza por éste**: es el que tiene que instalarse sin el
             aviso.
-            `CORT-IA-2.5.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            `CORT-IA-2.6.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
             bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
             alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
             `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
@@ -506,9 +506,9 @@ jobs:
             `perfil:` con los permisos y los servicios `BIND_*` leídos del
             `AndroidManifest.xml` **binario** del archivo.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0, del 2.4.1 y del 2.4.2 sin desinstalar y sin perder
+            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2 y del 2.5.0 sin desinstalar y sin perder
             nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos,
-            `versionCode` 20500 > 20402; los tres APK de esta Release comparten número
+            `versionCode` 20600 > 20500; los tres APK de esta Release comparten número
             de versión y `versionCode`, así que se puede pasar de uno a otro
             instalando encima):
             mira la huella del `-firma.txt` de las dos Releases y compárala antes de
@@ -517,6 +517,19 @@ jobs:
             instala este, y de aquí en adelante todas las actualizaciones entran
             encima.
 
+            **La cara nueva (ronda F9): cada apartado es su propia app.** `ui/` viaja
+            dentro del APK, así que ésta es la Release en la que la dueña **ve por fin**
+            lo que estaba montado en el repo: el orbe queda con **un solo botón** (☰),
+            que abre un **cajón** con las hojas, las once ventanas de vidrio de siempre y
+            los ajustes; **Música** es calco de Lark Player (barra con buscar/orden/más,
+            cuatro chips, mini fijo abajo que sube a pantalla completa); y **Charla** es
+            calco de Gemini/Qoder (el **nombre del modelo** con su ▾ y su cambio
+            `models/use`, **seis modos**, el `+` que **adjunta el texto de un archivo**
+            leyéndolo por `GET /api/lee` con el candado de raíces de siempre, y la
+            píldora de escritura redonda). Cada hoja lleva su propio color y su propio
+            fondo (`ui/css/apps.css`). Nada de esto toca el manifiesto, la llave de
+            firma ni el `versionCode` del envase anterior: el perfil que ya tienes
+            instalado sigue siendo válido.
             **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
             (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC
             y desde la hoja **Equipo · 3 · Cerebro** se puede **buscar** el PC en la
@@ -622,20 +635,20 @@ jobs:
             significa que CORT lo sea, significa que un escáner no tiene forma de
             saberlo.
 
-            Así que esta Release prueba **esa** variable, y nada más: instala
-            `CORT-IA-2.5.0-nucleo.apk`. Si se instala, el culpable era la superficie y
-            la hoja `docs/BLOQUEO-PLAY-PROTECT.md` cambia de sitio: el núcleo pasa a ser
-            el APK recomendado, y las cuatro puertas se vuelven a abrir una a una
-            sabendo ya qué puerta exacta las vuelve a cerrar. Si se bloquea también, se
-            prueba `CORT-IA-2.5.0-nucleo-ligero.apk` (1,6 MB, la superficie del 1.1.4 y
-            cero código nativo) y, si ése entra, la decisión es sacar el modelo del
-            APK. Si **ninguno** de los tres entra, ya no queda nada dentro del archivo
-            que tocar: el camino que queda es instalar por USB con `adb install -r` o
-            listar la app en Play, y ambos están escritos en
-            `docs/BLOQUEO-PLAY-PROTECT.md`.
+            Esa prueba **ya está hecha y ganada**: la dueña instaló el
+            `CORT-IA-2.5.0-nucleo.apk` en su teléfono el 2026-10-22 y funcionó. Cero
+            `BIND_*` entra; cuatro `BIND_*` se bloquea. Por eso el `nucleo` es desde
+            aquí el envase recomendado y éste sigue siendo el archivo que hay que
+            instalar primero: `CORT-IA-2.6.0-nucleo.apk`. Si alguna vez se volviera a
+            bloquear, el siguiente paso sigue escrito en
+            `docs/BLOQUEO-PLAY-PROTECT.md` —probar el `‑ligero` (1,6 MB) y, si ése
+            entra, sacar el modelo de 39,8 MB del APK—, y si ninguno de los tres
+            entrara, dentro del archivo ya no queda nada que tocar: quedan `adb
+            install -r` por USB o listar la app en Play, y las dos vías están ahí
+            escritas.
 
             Los tres archivos están firmados con la misma llave `fa:ab:ef:46:8f:3a…` y
-            el mismo `versionCode` 20500, así que se puede pasar del uno al otro
+            el mismo `versionCode` 20600, así que se puede pasar del uno al otro
             **instalando encima**, sin desinstalar y sin perder el perfil, las claves ni
             los gustos. Lo que sí se pierde al pasar al núcleo, porque el permiso deja
             de estar declarado: el role de asistente, el interruptor de notificaciones,
