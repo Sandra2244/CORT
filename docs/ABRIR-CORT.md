@@ -5,7 +5,7 @@ Asistente para colocarla como predeterminada en vez de Google y funcione con los
 audífonos, con los mismos botones, sensores de doble toque, el hablar por audífonos,
 CORT ejecute las acciones… inicie de otras formas».
 
-Todo lo de abajo es **el mismo APK** (`CORT-IA-2.6.0.apk`): no hay que instalar nada
+Todo lo de abajo es **el mismo APK** (`CORT-IA-2.7.0.apk`): no hay que instalar nada
 aparte ni dar ningún permiso nuevo. Lo que cambia es cuántas puertas tiene CORT y
 cómo se abren.
 
@@ -184,7 +184,7 @@ Lo que **no** se puede comprobar desde el repo: si tu fabricante lista a CORT en
 cuadro del asistente, si su lanzador pinta los atajos, y a qué app le da el botón del
 auricular cuando suena otra. Eso son tres decisiones del teléfono, y las tres tienen
 su plan B aquí arriba (baldosín y atajo de `Escucha`).
-> **Si instalaste el envase `nucleo`** (`CORT-IA-2.6.0-nucleo.apk`, el que se prueba
+> **Si instalaste el envase `nucleo`** (`CORT-IA-2.7.0-nucleo.apk`, el que se prueba
 > primero cuando Play Protect bloquea el completo): de las seis vías de esta guía
 > quedan cuatro —la notificación del reproductor con su doble toque, los tres atajos
 > del icono, el arranque normal y las acciones `com.cort.ia.{ESCUCHAR,EQUIPO,CHARLA}`—

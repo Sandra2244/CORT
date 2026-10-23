@@ -220,12 +220,34 @@ automatizaciones, el reproductor con su notificación y el doble toque del auric
 micro (con el reconocedor del sistema o Vosk según el envase), los sensores, la cámara
 de gestos, el ordenador de archivos y música, el puente Wi‑Fi con los cerebros de casa.
 
-### Los tres envases, medidos dos veces: `v0.2.29-demo` (2.5.0) y `v0.2.31-demo` (2.6.0)
+### Los tres envases, medidos tres veces: `2.5.0`, `2.6.0` y `2.7.0`
 
-**La prueba ya está decidida con su teléfono delante:** ella instaló el `CORT-IA-2.5.0-nucleo.apk` el 2026-10-22 y funcionó. Era la superficie del manifiesto, no el peso ni las `.so`. Desde ahí el envase **recomendado** es el `nucleo`, y la Release siguiente —la **2.6.0**, que es la que lleva la cara F9 dentro— se volvió a bajar, hashear y leer por dentro en este portátil (2026-10-23) para comprobar que la superficie no se movió: **mismos 21 permisos y CERO `BIND_*`** en el `nucleo`, mismos 28 y 4 en el completo, y el `nucleo-ligero` vuelve a compartir manifiesto byte a byte con el núcleo (`sha256 2eb742ce3b2a8e74…` en los dos).
+**La prueba ya está decidida con su teléfono delante:** ella instaló el `CORT-IA-2.5.0-nucleo.apk` el 2026-10-22 y funcionó. Era la superficie del manifiesto, no el peso ni las `.so`. Desde ahí el envase **recomendado** es el `nucleo`, y las Releases siguientes —la **2.6.0** con la cara F9 dentro y la **2.7.0** con los arreglos de la F10— se han vuelto a bajar, hashear y leer por dentro en este portátil (2026-10-23) para comprobar que la superficie no se movió: **mismos 21 permisos y CERO `BIND_*`** en el `nucleo`, mismos 28 y 4 en el completo, y el `nucleo-ligero` vuelve a compartir manifiesto byte a byte con el núcleo.
 
 Los tres archivos están publicados y **los tres se bajaron y se leyeron por dentro en
-este portátil** (2026-10-22), así que los números de abajo no los declara el guion:
+este portátil**, así que los números de abajo no los declara el guion:
+
+Medidos en la **2.7.0** (`v0.2.33-demo`, 2026-10-23):
+
+| Archivo | peso | `sha256` | entradas | manifiesto binario |
+| --- | --- | --- | --- | --- |
+| `CORT-IA-2.7.0.apk` | 47.435.573 B | `6d3c95c2…39e8d998` | 50 | 16.048 B · **28 permisos · 4 `BIND_*`** · `perfil declarado: completo` |
+| `CORT-IA-2.7.0-nucleo.apk` | 47.435.573 B | `f2ffbf26…7bcefc5c` | 50 | 12.636 B · **21 permisos · 0 `BIND_*`** · `sha256 5118287f97be22df…` · `perfil declarado: nucleo` |
+| `CORT-IA-2.7.0-nucleo-ligero.apk` | 1.662.292 B | `937ad328…a1a5e5e` | 45 | el **mismo** manifiesto que el núcleo (12.636 B y `sha256 5118287f97be22df…` en los dos) · **cero** `.so` · **cero** `assets/motor/` |
+
+Lo que se movió respecto a la 2.6.0 es sólo cara dentro, y en el buen sentido: el
+completo y el núcleo bajan a **50 entradas** y el ligero a **45** porque `assets/ui/`
+ya son **15 archivos en vez de 16** —la sonda del taller (`sonda-carita.html`, 26.424 B)
+dejó de viajar, que era el byte sobrante confesado en la ronda anterior—, y dentro de esos
+15 está el `pantallas.js` de la F10 (128.071 B). El sin‑comprimir sube 12.867 B sobre la
+2.6.0 (más JS y más CSS), el manifiesto sigue con los mismos 16.048 B y 12.636 B, con los
+mismos **28 y 21 permisos** y los mismos 4/0 `BIND_*`, y la llave sigue
+siendo `faabef468f3ae04f…`, así que **20700 entra encima del 2.6.0 sin desinstalar**.
+Y la comprobación que de verdad contesta a «en el teléfono veo la cara vieja»:
+`assets/ui/js/pantallas.js` mide dentro del `.apk` **128.071 B**, byte a byte lo mismo que
+hay en el repo en este momento. La F10 viaja publicada.
+La huella del `AndroidManifest.xml` cambia respecto a la tabla de abajo (`2eb742ce…` →
+`5118287f…`) por un solo motivo: dentro va escrita la `versionName`.
 
 Medidos en la **2.6.0** (`v0.2.31-demo`, 2026-10-23):
 
@@ -249,9 +271,9 @@ miden los 16.048 − 12.636 del manifiesto—, y el núcleo‑ligero comparte ma
 byte con el núcleo, así que cada variable está aislada en su propio eje: el perfil toca
 el manifiesto y no el peso; la variedad toca el peso y no el manifiesto.
 
-Instala **primero** `CORT-IA-2.6.0-nucleo.apk` —el envase ya probado—, y las tres
+Instala **primero** `CORT-IA-2.7.0-nucleo.apk` —el envase ya probado—, y las tres
 variantes se pueden pisar una sobre otra porque son el mismo paquete, la misma llave
-`fa:ab:ef:46…` y el mismo `versionCode` 20600 (encima del 2.5.0, que era 20500, entra
+`fa:ab:ef:46…` y el mismo `versionCode` 20700 (encima del 2.6.0, que era 20600, entra
 sin desinstalar):
 
 * **Entra el `nucleo` y no el `completo`** → era la superficie privilegiada. Ahí se
@@ -340,7 +362,7 @@ desarrollador). En el portátil:
 bash scripts/instala-apk.sh                        # baja el COMPLETO de la Release y lo instala encima
 bash scripts/instala-apk.sh --nucleo               # el envase sin superficie privilegiada (la prueba que decide)
 bash scripts/instala-apk.sh --nucleo --ligero      # y el núcleo, además, sin el modelo dentro
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.6.0-nucleo.apk
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.7.0-nucleo.apk
 ```
 
 Con `adb install -r` encima del CORT que ya tienes no se pierden datos, y el `‑r` es
