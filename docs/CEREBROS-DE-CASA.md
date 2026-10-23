@@ -117,7 +117,9 @@ en esa prueba es su **gemelo de papel**, `apps/apk/prueba/papeles/com/cort/ia/Ti
 que anota en `Timbre.PUESTOS` cada aviso que se habría puesto, y `Prueba4` lo cuenta: si
 el día de mañana `Ollama` deja de avisar, la prueba del portátil se pone roja en casa,
 sin encender nada. La firma de los dos `Timbre` es idéntica a propósito, y el sector [24]
-de `scripts/prueba-costura.py` la cruza.
+de `scripts/prueba-costura.py` la cruza. El papel **no puede llamar a `Ollama`** (lleva su
+propia copia de `peso`): `scripts/prueba-oido.sh` compila los gemelos de papel en soledad,
+y allí la clase real no está delante — eso dio un rojo en el runner el 2026-10-23.
 
 Es una notificación normal de `NotificationManager`, con su canal
 **`CORT · modelos`**, no un servicio en primer plano: no añade ningún permiso ni ningún

@@ -3143,6 +3143,17 @@ F24_JAVA = {p.name: p.read_text(encoding="utf-8")
 
 # 24.a · el aviso, y desde dónde se dispara
 f24_huecos = []
+
+
+def f24_sin_comentarios(texto):
+    """El código sin lo que se cuenta de sí mismo. Dos mutaciones enseñaron esto:
+    los comentarios explican dónde vive el aviso NOMBRÁNDOLO (`android.jar`,
+    `Timbre.java`), y si la comprobación lee también los comentarios, un verde o un
+    rojo dependen de una frase escrita en prosa. Se quitan `/* … */` y lo que sigue
+    a `//`."""
+    limpio = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
+    return "\n".join(l.split("//")[0] for l in limpio.splitlines())
+
 if "public static void bajada(" not in F24_TIM:
     f24_huecos.append("`Timbre.java` ya no tiene `bajada`")
 f24_bien = len(re.findall(r"Timbre\.bajada\(app, true", F24_OL))
@@ -3173,14 +3184,19 @@ if "startForeground" in F24_TIM or "startForeground" in F24_OL:
 # `android.app.Notification`, la prueba del JDK dejaría de compilar, y si `Timbre`
 # entrara en la lista copiada, el papel se quedaría corto. Se mira el CÓDIGO, no los
 # comentarios: el aviso de dónde vive se explica precisamente nombrando al bulto.
-f24_ol_code = re.sub(r"/\*.*?\*/", "", F24_OL, flags=re.S)
-f24_ol_code = "\n".join(l.split("//")[0] for l in f24_ol_code.splitlines())
+f24_ol_code = f24_sin_comentarios(F24_OL)
 if "android.app.Notification" in f24_ol_code or "NotificationManager" in f24_ol_code:
     f24_huecos.append("`Ollama.java` volvió a hablar con Android directamente: se prueba "
                       "con JDK puro en el portátil y ahí eso no compila")
-if "Timbre.java" in F24_MENTE:
-    f24_huecos.append("`prueba-mente.sh` copia `Timbre.java`: el aviso de verdad necesita "
-                      "`android.jar` y el rojo saldría en el runner, no en el teléfono")
+# En el guion de shell cuenta SOLO la línea que copia: el párrafo que explica este
+# reparto lleva el nombre `Timbre.java` escrito, y el primer intento de esta
+# comprobación se puso rojo leyéndose a sí mismo la prosa.
+f24_cp = "\n".join(l for l in F24_MENTE.splitlines()
+                   if re.match(r"\s*cp\b", l) and '"$E"' in l)
+if "Timbre.java" in f24_cp:
+    f24_huecos.append("`prueba-mente.sh` copia `Timbre.java` en su `cp`: el aviso de "
+                      "verdad necesita `android.jar` y el rojo saldría en el runner, no "
+                      "en el teléfono")
 # El gemelo de papel y el de Android tienen que ser la MISMA firma: si una cambia y la
 # otra no, `Prueba4` avisa sobre un método que ya no es el que llama `descarga`.
 def f24_firma(fuente):
@@ -3193,6 +3209,13 @@ if f24_firma(F24_TIM) != f24_firma(F24_PAP) or f24_firma(F24_TIM) is None:
     f24_huecos.append(f"la firma de `bajada` no coincide entre el Timbre de Android "
                       f"{f24_firma(F24_TIM)} y el de papel {f24_firma(F24_PAP)}: la prueba "
                       "del JDK estaría comprobando otro método")
+# El papel tiene que valer por sí solo: `scripts/prueba-oido.sh` compila ÚNICAMENTE los
+# gemelos de papel (sin `Ollama.java` delante), así que un `Ollama.peso` dentro de
+# `Timbre.java` de papel es un `cannot find symbol` en un step que no tenía nada que
+# ver con el aviso. Lo pasó de verdad el día que se repartió el aviso.
+if "Ollama" in f24_sin_comentarios(F24_PAP):
+    f24_huecos.append("el Timbre de papel depende de `Ollama`: `prueba-oido.sh` compila "
+                      "sólo los papeles y ese `javac` se cae (el peso se copia, no se llama)")
 if f24_huecos:
     falla("aviso de bajada", "; ".join(f24_huecos))
 else:

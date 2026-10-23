@@ -609,9 +609,12 @@ jobs:
             (4) Todo eso está comprobado **sin encender el teléfono**:
             `scripts/prueba-costura.py` trae los sectores [23] y [24], donde el módulo del
             copiloto se importa y se le preguntan 20 comandos de escritura negados y 14 de
-            lectura autorizados, y las 18 mutaciones de la batería (10 del copiloto y 8 del
-            aviso y de la cara) se prueban en un árbol aparte: cada comprobación nueva
-            tiene que saber ponerse roja, y aquí todas lo hacen.
+            lectura autorizados, y las 21 mutaciones de la batería (10 del copiloto y 11 del
+            aviso, la cara y el papel) se prueban en un árbol aparte: cada comprobación nueva
+            tiene que saber ponerse roja, y aquí todas lo hacen. Dos de esas 11 enseñaron
+            algo que no se veía de frente —una comprobación que lee prosa se pone roja
+            leyéndose a sí misma: hay que mirar el CÓDIGO, no los comentarios, ni el párrafo
+            que explica el reparto—.
 
             **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
             (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC

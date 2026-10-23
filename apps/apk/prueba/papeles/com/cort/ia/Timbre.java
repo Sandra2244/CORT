@@ -22,10 +22,22 @@ public class Timbre {
     public static void bajada(Context app, boolean bien, String nombre,
                               long hecho, long total, String motivo, String donde) {
         PUESTOS.add((bien ? "listo " : "paró ") + nombre
-                    + "|" + Ollama.peso(hecho) + "|" + (total > 0 ? Ollama.peso(total) : "0 GB")
+                    + "|" + peso(hecho) + "|" + (total > 0 ? peso(total) : "0 GB")
                     + "|" + motivo + "|" + donde);
     }
 
     /** La libreta se limpia entre pruebas, para que un aviso viejo no tape un rojo. */
     public static void limpia() { PUESTOS.clear(); }
+
+    /* El mismo recibo que `Ollama.peso`, COPYADO a propósito y no llamado: este papel
+       lo compila también `scripts/prueba-oido.sh`, que compila ÚNICAMENTE los gemelos
+       (sin `Ollama.java` delante), y allí un `Ollama.peso` sería un `cannot find
+       symbol` en mitad del pipeline. Copiar una línea de formato cuesta menos que
+       romperle a la dueña un step que no tenía nada que ver con el aviso. */
+    private static String peso(long b) {
+        if (b <= 0) return "0 GB";
+        if (b >= 100_000_000L) return String.format(java.util.Locale.ROOT, "%.1f GB", b / 1e9);
+        if (b >= 100_000L) return String.format(java.util.Locale.ROOT, "%.0f MB", b / 1e6);
+        return String.format(java.util.Locale.ROOT, "%.0f KB", b / 1e3);
+    }
 }
