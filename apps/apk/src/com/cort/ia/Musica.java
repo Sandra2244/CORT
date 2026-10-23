@@ -146,8 +146,7 @@ public class Musica {
             : new String[] { MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE,
                              MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.GENRE,
                              MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION,
-                             MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.LYRICS,
-                             MediaStore.Audio.Media.DATA };
+                             MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.DATA };
         // `IS_MUSIC != 0`: sin ese filtro la discoteca de CORT se llena de tonos de
         // llamada, avisos del sistema y grabaciones de la dictadora, que también viven
         // en la tabla de audio.
@@ -171,11 +170,13 @@ public class Musica {
                 p.fecha = cur.getLong(video ? 4 : 6);
                 p.video = video;
                 // La píldora `LETRAS` de Lark: sólo si la letra **existe de verdad** en
-                // el teléfono — incrustada en la etiqueta LYRICS del archivo, o en un
-                // `.lrc` / `.txt` con el mismo nombre al lado.
-                String incrustada = video ? "" : texto(cur, 7);
-                p.letra = !incrustada.isEmpty()
-                    || hayArchivoDeLetra(texto(cur, video ? 5 : 8));
+                // el teléfono. Se comprueba como hermana del archivo (`.lrc` / `.txt`
+                // con el mismo nombre al lado), que es lo que Lark lee y lo que CORT
+                // puede mirar sin decodificar nada. Lo incrustado queda fuera porque
+                // el SDK **no tiene columna de letras**: el `android.jar` del runner
+                // dijo `cannot find symbol: variable LYRICS` (run 39902845281,
+                // 2026-10-23), así que pedirla era cerrar el APK entero.
+                p.letra = !video && hayArchivoDeLetra(texto(cur, video ? 5 : 7));
                 salida.add(p);
             }
         } catch (Exception e) {
@@ -434,7 +435,7 @@ public class Musica {
         Cursor cur = null;
         try {
             // `null` en las columnas = todas: una URI de audio y una de vídeo no
-            // comparten GENRE / ALBUM / LYRICS, y pedir una que no existe revienta.
+            // comparten GENRE / ALBUM, y pedir una que no existe revienta.
             cur = c.getContentResolver().query(Uri.parse(u), null, null, null, null);
             if (cur == null || !cur.moveToFirst()) return null;
             Pista p = new Pista();
@@ -447,7 +448,9 @@ public class Musica {
             p.album = p.video ? "" : textoDe(cur, MediaStore.Audio.Media.ALBUM);
             p.dur = largo(cur, MediaStore.MediaColumns.DURATION);
             p.fecha = largo(cur, MediaStore.MediaColumns.DATE_ADDED);
-            p.letra = !p.video && !textoDe(cur, MediaStore.Audio.Media.LYRICS).isEmpty();
+            // La letra se mira igual que en el listado: hermana `.lrc` / `.txt` junto
+            // a la ruta. Sin `DATA` (Android 13 con puntero de otra app) dice que no.
+            p.letra = !p.video && hayArchivoDeLetra(textoDe(cur, MediaStore.MediaColumns.DATA));
             return p;
         } catch (Exception esaUriYaNoEstá) {
             return null;                      // borrada, o de otra app que ya no está

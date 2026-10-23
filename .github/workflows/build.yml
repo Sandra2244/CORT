@@ -526,11 +526,12 @@ jobs:
             `perfil:` con los permisos y los servicios `BIND_*` leídos del
             `AndroidManifest.xml` **binario** del archivo.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2 y del 2.5.0 sin desinstalar y sin perder
-            nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos,
-            `versionCode` 20600 > 20500; los tres APK de esta Release comparten número
-            de versión y `versionCode`, así que se puede pasar de uno a otro
-            instalando encima):
+            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0 y del 2.6.0 sin desinstalar y
+            sin perder nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos; el
+            `versionCode` lo deriva `apps/apk/compilar.sh` de la versión con
+            `MA*10000 + MI*100 + PA`, así que siempre sale mayor que el del envase
+            anterior, y los tres APK de esta Release lo comparten: se puede pasar de uno
+            a otro instalando encima):
             mira la huella del `-firma.txt` de las dos Releases y compárala antes de
             instalar. **Si vienes de un 1.x**, el primer intento dará error —es la
             llave distinta, medida en `docs/INSTALAR-APK.md`—: desinstala una vez,
@@ -538,8 +539,8 @@ jobs:
             encima.
 
             **La cara nueva (ronda F9): cada apartado es su propia app.** `ui/` viaja
-            dentro del APK, así que ésta es la Release en la que la dueña **ve por fin**
-            lo que estaba montado en el repo: el orbe queda con **un solo botón** (☰),
+            dentro del APK desde la 2.6.0, así que lo que se montó entonces sigue
+            aquí: el orbe queda con **un solo botón** (☰),
             que abre un **cajón** con las hojas, las once ventanas de vidrio de siempre y
             los ajustes; **Música** es calco de Lark Player (barra con buscar/orden/más,
             cuatro chips, mini fijo abajo que sube a pantalla completa); y **Charla** es
@@ -550,6 +551,27 @@ jobs:
             fondo (`ui/css/apps.css`). Nada de esto toca el manifiesto, la llave de
             firma ni el `versionCode` del envase anterior: el perfil que ya tienes
             instalado sigue siendo válido.
+
+            **La ronda F10: los cinco fallos que ella trajo, arreglados de frente.**
+            (1) El **modo juego** se quedaba clavado y era la causa del micrófono mudo y
+            de la música en silencio —el `Reproductor` pedía el foco, lo rechazaba y no
+            decía nada—; ahora el negativo tiene nombre en las cuatro capas (Java,
+            `voice.js`, `hud.js` y el cartel, que es un **botón** que se toca para salir)
+            y poner música desde la cara manda salir del modo. (2) **Las carátulas**: no
+            existía una sola línea que pidiera una portada; `musicaCaratula` la saca del
+            índice con `loadThumbnail` y la manda en `base64`, porque el `WebView` tiene
+            `setAllowFileAccess(false)` y un `file://` nunca cargaría; cada fila pinta su
+            foto y, si el teléfono no la tiene, su glifo —nunca un hueco—. (3) **La
+            pestaña Vídeos** salía medio vacía porque el tope de 400 era compartido con
+            las canciones: ahora cada una tiene el suyo y va en rejilla. (4) **El
+            buscador** fallaba con acentos y la ñ porque el `LIKE` de SQLite sólo ignora
+            mayúsculas ASCII; Java pliega las palabras antes de comparar. Y (5) **MV** ya
+            no es otra app: es la letra fusionada dentro del reproductor (se llega por la
+            ❝ de la fila), y el orbe ya no se despierta encima del vídeo. Añadido: el
+            botón nativo «CORT · PC» se oculta en las hojas donde tapaba la píldora, el
+            `⋮` del reproductor trae Velocidad / Dormir / Ocultar / Compartir, y **Charla
+            piensa en el teléfono** cuando el portátil no está (cae al puente `mente` y
+            la respuesta vuelve por el evento, en vez de dejar la frase de error).
             **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
             (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC
             y desde la hoja **Equipo · 3 · Cerebro** se puede **buscar** el PC en la

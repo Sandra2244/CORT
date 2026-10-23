@@ -568,6 +568,14 @@ PROHIBIDOS = [
      "en `android.webkit.PermissionRequest` el método es `getResources()` (plural, "
      "devuelve `String[]`); el singular se lo inventó quien escribió la línea y "
      "`javac` lo paró"),
+    # La última, medida por `javac` en el run rojo de `v0.2.32-demo` (39902845281,
+    # 2026-10-23): F10 pedía la letra incrustada al índice creyendo que MediaStore
+    # guarda la etiqueta ID3 de siempre. No la guarda como columna.
+    ("Media.LYRICS",
+     "`MediaStore.Audio.Media` **no tiene columna `LYRICS`**: `javac` dijo «cannot "
+     "find symbol: variable LYRICS, location: class Media» y cerró el APK entero. "
+     "La letra se mira en el archivo hermano (`.lrc` / `.txt`), que es lo que Lark "
+     "lee y lo que CORT puede comprobar sin decodificar"),
 ]
 cazas = []
 java_limpio = {}
@@ -2765,6 +2773,91 @@ else:
             dice_ok("sonda · pantallas", "las " + str(len(f21_visibles)) + " hojas visibles ("
                     + ", ".join(f21_visibles) + ") las recorre la sonda, y la escondida (`mv`) "
                       "sigue montada sin ofrecerse")
+
+
+# ── [22] F10 · las columnas del índice, leídas por su número ─────────────────
+# El run rojo de `v0.2.32-demo` (39902845281) paró el APK por una columna inventada, y
+# al arreglarla aparece el riesgo de al lado: `Musica.leerEn` rellena la pista con
+# `texto(cur, 4)`, números que tienen que casar con el ORDEN de la proyección. Quitar o
+# mover una columna no da error de compilación —da la letra del álbum, o la fecha como
+# duración—, y en el teléfono sale una lista con campos cambiados. El analizador
+# sintáctico del portátil no lo ve (los `cannot find symbol` se filtran a propósito),
+# así que lo cruza esta prueba: el número escrito en el código contra la posición real
+# dentro del `String[] columnas`, leído del mismo archivo.
+print("\n[22] F10 · el índice del cursor y la columna que dice leer, la misma vez")
+F22_MUS = (APK / "src" / "com" / "cort" / "ia" / "Musica.java").read_text(encoding="utf-8")
+F22_PROY = re.search(
+    r"String\[\]\s+columnas\s*=\s*video\s*\?\s*new\s+String\[\]\s*\{(.*?)\}\s*:\s*"
+    r"new\s+String\[\]\s*\{(.*?)\}\s*;", F22_MUS, re.S)
+if not F22_PROY:
+    falla("cursor · proyección", "la prueba no encuentra el `String[] columnas = video ? … : …` "
+                                 "de `Musica.leerEn`: está vacía, y un verde que no puede "
+                                 "ponerse rojo no es prueba")
+else:
+    f22_cols = {}
+    for f22_ramo, f22_rama in ((F22_PROY.group(1), "vídeo"), (F22_PROY.group(2), "audio")):
+        f22_cols[f22_rama] = [x.strip().split(".")[-1]
+                              for x in f22_ramo.split(",") if x.strip()]
+    # (`qué`, cómo se reconoce la línea, columna que DEBE ser, ramas en ese orden)
+    f22_lecturas = [
+        ("el título",     r"p\.titulo = texto\(cur, (\d+)\)",
+                          "TITLE", ("vídeo", "audio")),
+        ("el artista",    r"p\.artista = texto\(cur, (\d+)\)",
+                          "ARTIST", ("vídeo", "audio")),
+        ("el género",     r'p\.genero = video \? "" : texto\(cur, (\d+)\)',
+                          "GENRE", ("audio",)),
+        ("el álbum",      r'p\.album = video \? "" : texto\(cur, (\d+)\)',
+                          "ALBUM", ("audio",)),
+        ("la duración",   r"p\.dur = cur\.getLong\(video \? (\d+) : (\d+)\)",
+                          "DURATION", ("vídeo", "audio")),
+        ("la fecha",      r"p\.fecha = cur\.getLong\(video \? (\d+) : (\d+)\)",
+                          "DATE_ADDED", ("vídeo", "audio")),
+        ("la ruta",       r"hayArchivoDeLetra\(texto\(cur, video \? (\d+) : (\d+)\)\)",
+                          "DATA", ("vídeo", "audio")),
+    ]
+    f22_cambios = []
+    for f22_que, f22_calco, f22_columna, f22_ramas in f22_lecturas:
+        f22_m = re.search(f22_calco, F22_MUS)
+        if not f22_m:
+            f22_cambios.append(f"{f22_que}: la línea que lee `{f22_columna}` ya no está como "
+                               "la prueba la conoce (hay que leerla y actualizarla)")
+            continue
+        for f22_i, f22_rama in enumerate(f22_ramas):
+            # Una línea puede llevar un número para las dos ramas (`texto(cur, 1)`, que
+            # vale si TITLE cae en el mismo sitio en las dos proyecciones) o uno por rama
+            # (`cur.getLong(video ? 3 : 5)`). Se casa con la que haya escrito.
+            f22_escrito = int(f22_m.group(f22_i + 1 if len(f22_m.groups()) == len(f22_ramas) else 1))
+            if f22_columna not in f22_cols[f22_rama]:
+                f22_cambios.append(f"{f22_que}: `{f22_columna}` no está en la proyección de "
+                                   f"{f22_rama}, y el código la lee en la {f22_escrito}")
+                continue
+            f22_real = f22_cols[f22_rama].index(f22_columna)
+            if f22_escrito != f22_real:
+                f22_cambios.append(
+                    f"{f22_que}: el código lee la posición {f22_escrito} y en la proyección de "
+                    f"{f22_rama} `{f22_columna}` está en la {f22_real} → sale el campo de al lado")
+    if f22_cambios:
+        falla("cursor · índices", "; ".join(f22_cambios))
+    else:
+        dice_ok("cursor · índices", "las " + str(len(f22_lecturas)) + " lecturas por número de "
+                                    "`Musica.leerEn` caen en la columna que nombran ("
+                                    f"proyección de {len(f22_cols['vídeo'])} columnas de vídeo y "
+                                    f"{len(f22_cols['audio'])} de audio)")
+
+    # Y la letra, que es lo que se quedó sin columna: tiene que seguir viva en los dos
+    # caminos (el listado y la URI suelta), si no la píldora `LETRAS` de Lark vuelve a
+    # ser un adorno que nunca se pinta.
+    f22_llamadas = F22_MUS.count("hayArchivoDeLetra(")
+    if f22_llamadas < 3:
+        falla("letra", f"`hayArchivoDeLetra` aparece {f22_llamadas} veces contando su "
+                       "definición: hacen tres (la definición, el listado y `unaPorUri`), y sin "
+                       "una de las dos llamadas la píldora LETRAS sale siempre vacía")
+    elif F22_MUS.count("p.letra =") < 2:
+        falla("letra", "`p.letra` no se rellena en los dos caminos: la cara recibiría `false` "
+                       "en las canciones que sí tienen `.lrc`")
+    else:
+        dice_ok("letra", "la píldora LETRAS se la gana el archivo hermano (`.lrc` / `.txt`) en "
+                         "el listado y por URI, sin pedirle al índice una columna que no existe")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
