@@ -92,11 +92,88 @@ public class Ollama {
     private static final int PUERTO = 11434;          // el puerto de casa de Ollama
 
     private final SharedPreferences prefs;
+    private final Context app;              // para poder avisar sin Activity a la vista
     private String ultimoFallo = "";
 
     Ollama(Context contexto) {
+        this.app = contexto.getApplicationContext();
         this.prefs = contexto.getApplicationContext()
                              .getSharedPreferences("cort", Context.MODE_PRIVATE);
+    }
+
+    /* ─────────────── el aviso de que la bajada terminó ───────────────
+     * Bajar `qwen2.5:7b` son 4,7 GB: por la Wi-Fi de casa es media hora larga. Sin
+     * aviso, la dueña tiene que dejar la hoja de Modelos abierta mirando la barra,
+     * y con eso el teléfono no se suelta — que es justo lo que ella pidió
+     * («que avise cuando termine»).
+     *
+     * Es una notificación normal de `NotificationManager`, NO un servicio en primer
+     * plano: no añade `foregroundServiceType` ni permisos al manifiesto, y la
+     * superficie del manifiesto es lo que hizo que Play Protect rechazara al APK,
+     * así que aquí no se toca ni una línea de XML — `POST_NOTIFICATIONS` ya estaba
+     * declarado desde la ronda del reproductor. El icono (`stat_sys_download_done`,
+     * `stat_notify_error`) es de `android.R.drawable`, público desde la API 1.
+     *
+     * El límite dicho en seco: el hilo que lee el `NDJSON` es de esta app. Si
+     * Android mata el proceso (en un móvil con poco aire libre se hace), el aviso
+     * no llega; lo que sí queda hecho es la bajada, que el PC terminó igual. */
+    private static final String CANAL_MODELO = "cort-modelos";
+    private static final int NOTA_MODELO = 4230;
+
+    /** El aviso en sí: `bien` = terminó; si no, se cuenta el motivo con `ultimoFallo`. */
+    private void avisaBajada(boolean bien, String nombre, long hecho, long total) {
+        try {
+            android.app.NotificationManager nm = (android.app.NotificationManager)
+                    app.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return;
+            if (android.os.Build.VERSION.SDK_INT >= 26
+                    && nm.getNotificationChannel(CANAL_MODELO) == null) {
+                android.app.NotificationChannel c = new android.app.NotificationChannel(
+                        CANAL_MODELO, "CORT · modelos",
+                        android.app.NotificationManager.IMPORTANCE_DEFAULT);
+                c.setDescription("Avisa cuando un modelo termina de bajar, o cuando la bajada se cortó.");
+                c.setShowBadge(false);
+                nm.createNotificationChannel(c);
+            }
+            /* El `NEW_TASK` no es adorno: se avisa desde un hilo de esta clase, sin
+               Activity delante, y un `PendingIntent.getActivity` sin esa bandera no
+               arranca la cara desde el background. */
+            android.content.Intent abre = new android.content.Intent(app, MainActivity.class);
+            abre.addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP
+                          | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            android.app.PendingIntent quien = android.app.PendingIntent.getActivity(
+                    app, 4231, abre,
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_IMMUTABLE);
+            String detalle = bien
+                    ? (total > 0 && hecho < total ? peso(hecho) + " de " + peso(total) : peso(hecho))
+                      + " · ya está en " + servidor() + ". Elige el cerebro en Charla."
+                    : (ultimoFallo.isEmpty() ? "la bajada se cortó sin decir por qué" : ultimoFallo);
+            android.app.Notification.Builder b =
+                    (android.os.Build.VERSION.SDK_INT >= 26)
+                    ? new android.app.Notification.Builder(app, CANAL_MODELO)
+                    : new android.app.Notification.Builder(app);
+            b.setSmallIcon(bien ? android.R.drawable.stat_sys_download_done
+                                 : android.R.drawable.stat_notify_error)
+             .setContentTitle(bien ? "Modelo listo · " + nombre : "La bajada de " + nombre + " paró")
+             .setContentText(detalle)
+             .setStyle(new android.app.Notification.BigTextStyle().bigText(detalle))
+             .setContentIntent(quien)
+             .setAutoCancel(true)
+             .setOnlyAlertOnce(true);
+            nm.notify(NOTA_MODELO, b.build());
+        } catch (Exception noHayForma) {
+            // Sin permiso de avisos (Android 13) `notify` se ignora en silencio; nunca
+            // es motivo para cortar una descarga que va por buen camino.
+            Log.i("cort", "el aviso de bajada no salió: " + noHayForma);
+        }
+    }
+
+    /** Los bytes hechos texto, con el número que la dueña reconoce (GB, no 1024). */
+    static String peso(long b) {
+        if (b <= 0) return "0 GB";
+        double gb = b / 1e9;
+        if (gb >= 0.1) return String.format(java.util.Locale.ROOT, "%.1f GB", gb);
+        return String.format(java.util.Locale.ROOT, "%.0f MB", b / 1e6);
     }
 
     /* ───────────────────────────── de dónde hablo ───────────────── */
@@ -295,8 +372,13 @@ public class Ollama {
             }
             cerr(lector);
             c.disconnect();
-            if (error) return mal("descarga", ultimoFallo);
+            if (error) { avisaBajada(false, nombre, hecho, total); return mal("descarga", ultimoFallo); }
             if (!motes) Log.i("cort", "ollama-pull terminó sin 'success': " + estado);
+            /* El aviso va AQUÍ y no en la cara: la hoja se cierra, el teléfono se
+               bloquea y la pantalla se apaga, y la bajada sigue sus segundos
+               delante. Con `motes` a false no se promete un modelo que el servidor
+               no confirmó, así que tampoco se avisa de más. */
+            if (motes) avisaBajada(true, nombre, hecho, total);
             return "{\"ok\":true,\"de\":\"ollama\",\"que\":\"descarga\""
                  + ",\"modelo\":" + comilla(nombre)
                  + ",\"listo\":" + motes
@@ -304,13 +386,16 @@ public class Ollama {
                  + ",\"hecho\":" + hecho + ",\"total\":" + total + "}";
         } catch (SocketTimeoutException tardo) {
             ultimoFallo = "el PC dejó de mandar trozos: el modelo sigue bajando por su lado o se cortó la Wi-Fi";
+            avisaBajada(false, nombre, 0, 0);
             return mal("descarga", ultimoFallo);
         } catch (IOException noHay) {
             ultimoFallo = "no llego a " + servidor() + " (" + noHay.getMessage() + ")";
+            avisaBajada(false, nombre, 0, 0);
             return mal("descarga", ultimoFallo);
         } catch (Exception bulto) {
             ultimoFallo = "no pude bajar " + nombre;
             Log.w("cort", "ollama-pull", bulto);
+            avisaBajada(false, nombre, 0, 0);
             return mal("descarga", ultimoFallo);
         }
     }

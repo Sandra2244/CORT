@@ -100,3 +100,32 @@ de la tabla) y a `Razon` (cuentas, unidades, fechas), que viven dentro del APK.
 - No abre el puerto por ti ni toca el firewall del PC.
 - No barre redes que no sean la tuya: el barrido completo sólo se hace en casa, y las
   pruebas del pipeline usan direcciones explícitas para no llamar a máquinas ajenas.
+
+## 6 · El aviso cuando termina la bajada (ronda 2.8)
+
+Bajar `qwen2.5:7b` son **4,7 GB medidos** y por la Wi-Fi de casa es media hora larga.
+Desde la 2.8 el `Ollama.java` manda **una notificación al terminar** —y otra si la
+bajada se corta, con el motivo que dio el servidor—, así que la hoja de Modelos se
+puede cerrar y el teléfono se puede bloquear. Al pulsar ↓ la propia cara lo dice:
+*«cierra la hoja si quieres, te aviso cuando termine»*.
+
+Es una notificación normal de `NotificationManager`, con su canal
+**`CORT · modelos`**, no un servicio en primer plano: no añade ningún permiso ni ningún
+`foregroundServiceType` al manifiesto, porque la superficie del manifiesto es justo lo
+que hacía rechazar el APK (ver `BLOQUEO-PLAY-PROTECT.md`). `POST_NOTIFICATIONS` ya
+estaba declarado desde el reproductor; si algún día lo quitas en Ajustes ▸ Notificaciones,
+el aviso no sale y la descarga sigue igual.
+
+El límite dicho en seco: el hilo que lee la descarga es de la app. Si Android la mata
+por memoria, el aviso no llega —el modelo, en cambio, sí queda bajado en el PC, porque
+quien lo baja es Ollama—.
+
+## 7 · El catálogo: 107 modelos con su peso medido
+
+La lista de modelos que ofrece la hoja ya no son cuatro de memoria: son **107 modelos
+con el peso que ocupa su descarga**, leído trozo a trozo del registro público de Ollama
+con `scripts/mede-catalogo.py`. Los **14** que aparecen en la hoja de modelos del
+escritorio (`backend/app/models.py`) son un subconjunto de esos 107 y salen de **los
+mismos bytes**; el sector **[23]** de la costura cruza los dos archivos, comprueba que
+el `gb` declarado es la división de esos bytes y que ningún modelo de la cara está en
+la lista sin haber sido medido. Si un peso no se puede medir, no sale.

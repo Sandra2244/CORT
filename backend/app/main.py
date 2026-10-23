@@ -27,6 +27,9 @@ Endpoints:
   GET  /api/letras?artista=&titulo=&duracion= -> letra (LRCLIB) sincronizada o plana
   POST /api/organizar    {raiz, criterio}          -> PLAN de orden (no toca nada)
   POST /api/organizar/aplicar {raiz, criterio, token} -> ejecutar el plan confirmado
+  GET  /api/copiloto                    -> qué comandos puede ejecutar solo CORT
+  POST /api/copiloto/plan    {objetivo}            -> PLAN de pasos (no ejecuta nada)
+  POST /api/copiloto/ejecuta {token, indice}       -> correr UN paso sólo si es de sólo lectura
   GET  /api/update                       -> qué CORT tengo y qué hay en GitHub
   POST /api/update/aplicar {asset}       -> descargar/preparar el instalador nuevo
 
@@ -52,6 +55,7 @@ import actualiza                                # noqa: E402  (GitHub: versión 
 from brain import brain_status, think          # noqa: E402
 import brain                                    # noqa: E402  (test_all / recarga de config)
 import config_store                             # noqa: E402
+import copiloto                                 # noqa: E402  (copiloto de terminal: sólo lectura)
 import letras                                   # noqa: E402  (LRCLIB, sin clave)
 import memory                                   # noqa: E402
 import local_commands                           # noqa: E402
@@ -452,12 +456,15 @@ def optimizar_cierra(p: Proceso):
     return optimize.cerrar(p.pid)
 
 
-# ─────────────── letras, organizar archivos y actualización ─────────────────
-# Tres funciones que la dueña pidió con la boca pequeña y la cara grande:
+# ────── letras, organizar archivos, copiloto de terminal y actualización ──────
+# Cuatro funciones que la dueña pidió con la boca pequeña y la cara grande:
 # «ponme mis Documentos en orden» (sin que desaparezca nada), «léeme la letra
-# de esta canción» y «comprueba si hay un CORT nuevo». Las tres viven en módulos
-# propios por el mismo motivo: `organiza` confirma antes de mover, `letras`
-# cachea para no martillar LRCLIB y `actualiza` jamás descarga 100 MB dentro
+# de esta canción», «guíame como copiloto y ejecuta los comandos tú solo» y
+# «comprueba si hay un CORT nuevo». Las cuatro viven en módulos propios
+# por el mismo motivo: `organiza` confirma antes de mover, `letras`
+# cachea para no martillar LRCLIB, `copiloto` sólo ejecuta comandos de
+# sólo lectura —el mismo backend escucha por Wi-Fi y un `rm` automático
+# desde el teléfono sería un desastre— y `actualiza` jamás descarga 100 MB dentro
 # de una petición — el portátil es de 1,8 GiB y no debe congelarse.
 # NOMBRES Y FORMAS = CONTRATO con la cara de JS: no renombrar.
 class OrganizaReq(BaseModel):
@@ -473,6 +480,15 @@ class OrganizaAplicar(BaseModel):
 
 class ActualizaReq(BaseModel):
     asset: str = ""                        # vacío = el instalador de escritorio
+
+
+class CopilotoPlanReq(BaseModel):
+    objetivo: str = ""
+
+
+class CopilotoEjecutaReq(BaseModel):
+    token: str = ""
+    indice: int = 0
 
 
 @app.get("/api/letras")
@@ -492,6 +508,26 @@ def organizar_aplicar(r: OrganizaAplicar):
     """Ejecuta el último plan cuyo token coincida. Sin plan, o con token viejo,
     se niega: aquí nadie ordena la casa de la dueña a traición."""
     return organiza.aplicar(r.raiz, r.criterio, r.token)
+
+
+@app.get("/api/copiloto")
+def copiloto_permisos():
+    """Lo que la cara enseña: la lista de comandos que CORT puede correr solo
+    (sólo lectura), los negados siempre y lo que la dueña haya añadido a mano."""
+    return copiloto.estado()
+
+
+@app.post("/api/copiloto/plan")
+def copiloto_plan(r: CopilotoPlanReq):
+    """La PROPUESTA del copiloto con su token: piensa los pasos y no ejecuta ninguno."""
+    return copiloto.plan(r.objetivo)
+
+
+@app.post("/api/copiloto/ejecuta")
+def copiloto_ejecuta(r: CopilotoEjecutaReq):
+    """Corre UN paso del último plan, y sólo si el comando es de sólo lectura.
+    Con token caducado, o si el paso escribe/borra, se niega y lo dice."""
+    return copiloto.ejecutar(r.token, r.indice)
 
 
 @app.get("/api/update")

@@ -53,7 +53,9 @@ const estado = {
   // Los cerebros de casa (Ollama en el PC, por Wi-Fi). `modelos` y `servidores` son
   // lo que vino de Java, sin retocar: la hoja se pinta sólo desde aquí.
   ollama: { servidor: '', origen: '', version: '', modelo: '', enCasa: false,
-            modelos: [], servidorVisto: [], descargando: false },
+            modelos: [], servidorVisto: [], descargando: false,
+            // F11 · el catálogo: con qué filtro está pintado y si está desplegado
+            filtro: '', abierto: false },
   hechos: 0, conPortatil: false, direccion: '', recuerdos: [], quien: '', ultimaMemoria: null,
   atuendos: [], puesto: '', burbuja: false,
 };
@@ -331,6 +333,14 @@ const CARA_CEREBRO = `
       autocomplete="off" spellcheck="false">
     <button class="eq-b" id="eq-oll-baja">↓ descargar</button>
   </div>
+  <div class="eq-tit">catálogo de modelos <small id="eq-cat-cuenta"></small></div>
+  <div class="eq-fila">
+    <input id="eq-cat-busca" placeholder="busca en el catálogo: qwen, 3b, código…"
+      autocomplete="off" spellcheck="false">
+    <button class="eq-b" id="eq-cat-abre">ver catálogo</button>
+  </div>
+  <div class="eq-fila" id="eq-cat-chips"></div>
+  <div class="eq-nube" id="eq-cat-lista"></div>
   <div class="eq-nota">Ollama vive en tu PC, no dentro del teléfono: el APK no puede
     llevarse el servidor (es un programa de ordenador). Lo que hace CORT es hablar con
     él por Wi-Fi. Para que conteste hay que arrancarlo con <b>OLLAMA_HOST=0.0.0.0:11434</b>
@@ -918,6 +928,220 @@ const barra = p => {
   if (b) b.style.width = Math.round(Math.max(0, Math.min(1, Number(p) || 0)) * 100) + '%';
 };
 
+/* ── F11 · el catálogo medido ──
+   La dueña pidió «catálogo 1–100 con descarga en segundo plano, barra y aviso».
+   Lo que NO se hizo: inventarse los pesos. Cada `b` de la tabla son los bytes de
+   las capas del manifiesto que sirve `registry.ollama.ai` — o sea lo que
+   `ollama pull` baja de verdad — medidos el 2026-10-23. La lista la lleva dentro
+   la cara (no hace falta el portátil para mirarla), y el ↓ lanza la descarga por
+   el puente de siempre (`mente`), que ya va en su hilo y ya manda su barra por el
+   evento `mente`. */
+/* Los bytes son la suma de las capas del manifiesto de
+ * `registry.ollama.ai/v2/library/<modelo>/manifests/<etiqueta>` — lo que
+ * `ollama pull` baja de verdad —, medidos desde este portátil el 2026-10-23.
+ * Ordenados de menos a más. No hay ningún peso estimado en esta tabla. */
+const CATALOGO_OLLAMA = [
+  { m: 'all-minilm:22m', b: 45960589, d: 'embeddings: busca por sentido' },
+  { m: 'all-minilm:33m', b: 67319501, d: 'embeddings: busca por sentido' },
+  { m: 'smollm:135m', b: 91738925, d: 'los más chicos, para equipos flojos' },
+  { m: 'smollm2:135m', b: 270898111, d: 'los más chicos, para equipos flojos' },
+  { m: 'nomic-embed-text:latest', b: 274302030, d: 'embeddings: busca por sentido' },
+  { m: 'gemma3:270m', b: 291554440, d: 'los más chicos, para equipos flojos' },
+  { m: 'functiongemma:270m', b: 300806689, d: 'elige herramientas y funciones' },
+  { m: 'qwen2.5:0.5b', b: 397820829, d: 'buen español' },
+  { m: 'qwen3:0.6b', b: 522653277, d: 'buen español' },
+  { m: 'paraphrase-multilingual:latest', b: 562777452, d: 'embeddings: busca por sentido' },
+  { m: 'tinyllama:1.1b', b: 637699655, d: 'los más chicos, para equipos flojos' },
+  { m: 'bge-large:335m', b: 670531692, d: 'embeddings: busca por sentido' },
+  { m: 'smollm2:360m', b: 725565951, d: 'los más chicos, para equipos flojos' },
+  { m: 'lfm2.5-thinking:1.2b', b: 731163420, d: 'razona paso a paso' },
+  { m: 'gemma3:1b', b: 806067267, d: 'conversación general' },
+  { m: 'qwen2.5:1.5b', b: 986061405, d: 'buen español' },
+  { m: 'qwen2.5-coder:1.5b', b: 986061602, d: 'código' },
+  { m: 'deepseek-r1:1.5b', b: 1117322281, d: 'razona paso a paso' },
+  { m: 'deepcoder:1.5b', b: 1117323213, d: 'código' },
+  { m: 'bge-m3:latest', b: 1157672268, d: 'embeddings: busca por sentido' },
+  { m: 'snowflake-arctic-embed2:568m', b: 1160296381, d: 'embeddings: busca por sentido' },
+  { m: 'llama3.2:1b', b: 1321097844, d: 'los más chicos, para equipos flojos' },
+  { m: 'qwen3.5:0.8b', b: 1322069043, d: 'buen español' },
+  { m: 'qwen3:1.7b', b: 1359292957, d: 'buen español' },
+  { m: 'granite3.1-dense:2b', b: 1569689131, d: 'conversación general' },
+  { m: 'llama-guard3:1b', b: 1600181360, d: 'filtra respuestas (guard)' },
+  { m: 'gemma2:2b', b: 1629518008, d: 'conversación general' },
+  { m: 'shieldgemma:2b', b: 1708595138, d: 'filtra respuestas (guard)' },
+  { m: 'starcoder2:3b', b: 1709901383, d: 'código' },
+  { m: 'moondream:1.8b', b: 1738450635, d: 'entiende imágenes' },
+  { m: 'falcon3:1b', b: 1778722778, d: 'conversación general' },
+  { m: 'smollm2:1.7b', b: 1820427974, d: 'los más chicos, para equipos flojos' },
+  { m: 'qwen3-vl:2b', b: 1889519136, d: 'entiende imágenes' },
+  { m: 'qwen2.5:3b', b: 1929911945, d: 'buen español' },
+  { m: 'orca-mini:3b', b: 1979946988, d: 'conversación general' },
+  { m: 'falcon3:3b', b: 2005696570, d: 'conversación general' },
+  { m: 'hermes3:3b', b: 2019383881, d: 'conversación general' },
+  { m: 'llama3.2:3b', b: 2019392628, d: 'conversación general' },
+  { m: 'granite4:3b', b: 2099520968, d: 'conversación general' },
+  { m: 'phi3:3.8b', b: 2176178430, d: 'conversación general' },
+  { m: 'phi4-mini:3.8b', b: 2491876363, d: 'los más chicos, para equipos flojos' },
+  { m: 'qwen3:4b', b: 2497293444, d: 'buen español' },
+  { m: 'qwen3.5:2b', b: 2683396637, d: 'buen español' },
+  { m: 'nemotron-mini:4b', b: 2697402127, d: 'conversación general' },
+  { m: 'nemotron-3-nano:4b', b: 2837596648, d: 'los más chicos, para equipos flojos' },
+  { m: 'ministral-3:3b', b: 2953840294, d: 'conversación general' },
+  { m: 'granite4:1b', b: 3267419912, d: 'los más chicos, para equipos flojos' },
+  { m: 'qwen3.5:4b', b: 3324173757, d: 'buen español' },
+  { m: 'gemma3:4b', b: 3350272259, d: 'conversación general' },
+  { m: 'deepscaler:1.5b', b: 3560419007, d: 'razona paso a paso' },
+  { m: 'codellama:7b', b: 3825910133, d: 'código' },
+  { m: 'llama2:7b', b: 3826793120, d: 'conversación general' },
+  { m: 'deepseek-llm:7b', b: 4000473307, d: 'conversación general' },
+  { m: 'starcoder2:7b', b: 4042812743, d: 'código' },
+  { m: 'sqlcoder:7b', b: 4108916388, d: 'código' },
+  { m: 'starling-lm:7b', b: 4108939803, d: 'conversación general' },
+  { m: 'neural-chat:7b', b: 4109852830, d: 'conversación general' },
+  { m: 'openchat:7b', b: 4109875903, d: 'conversación general' },
+  { m: 'dolphincoder:7b', b: 4228620959, d: 'código' },
+  { m: 'mistral:7b', b: 4372823897, d: 'conversación general' },
+  { m: 'falcon3:7b', b: 4569738490, d: 'conversación general' },
+  { m: 'llama3:8b', b: 4661224191, d: 'conversación general' },
+  { m: 'hermes3:8b', b: 4661226758, d: 'conversación general' },
+  { m: 'deepseek-r1:7b', b: 4683074953, d: 'razona paso a paso' },
+  { m: 'qwen2.5:7b', b: 4683086845, d: 'buen español' },
+  { m: 'qwen2.5-coder:7b', b: 4683087074, d: 'código' },
+  { m: 'exaone-deep:7.8b', b: 4770664663, d: 'conversación general' },
+  { m: 'aya:8b', b: 4797473531, d: 'buen español' },
+  { m: 'cogito:8b', b: 4920747535, d: 'razona paso a paso' },
+  { m: 'llama3.1:8b', b: 4920752841, d: 'conversación general' },
+  { m: 'dolphin3:8b', b: 4920757165, d: 'conversación general' },
+  { m: 'tulu3:8b', b: 4920788500, d: 'conversación general' },
+  { m: 'granite3.3:8b', b: 4942891236, d: 'conversación general' },
+  { m: 'granite3.1-dense:8b', b: 4991633323, d: 'conversación general' },
+  { m: 'codegemma:7b', b: 5011852326, d: 'código' },
+  { m: 'aya-expanse:8b', b: 5056999552, d: 'buen español' },
+  { m: 'deepseek-r1:8b', b: 5225375560, d: 'razona paso a paso' },
+  { m: 'qwen3:8b', b: 5225387677, d: 'buen español' },
+  { m: 'glm4:9b', b: 5455325746, d: 'conversación general' },
+  { m: 'minicpm-v:8b', b: 5473837900, d: 'entiende imágenes' },
+  { m: 'ministral-3:8b', b: 6022236102, d: 'conversación general' },
+  { m: 'solar:10.7b', b: 6072383801, d: 'conversación general' },
+  { m: 'qwen3-vl:8b', b: 6190971493, d: 'entiende imágenes' },
+  { m: 'qwen3.5:9b', b: 6550825373, d: 'buen español' },
+  { m: 'mistral-nemo:12b', b: 7071712741, d: 'buen español' },
+  { m: 'llama3.2-vision:11b', b: 7816588622, d: 'entiende imágenes' },
+  { m: 'gemma3n:e2b', b: 7836324401, d: 'conversación general' },
+  { m: 'gemma3:12b', b: 8164039587, d: 'conversación general' },
+  { m: 'cogito:14b', b: 8985290822, d: 'razona paso a paso' },
+  { m: 'deepseek-r1:14b', b: 8988111721, d: 'razona paso a paso' },
+  { m: 'phi4:14b', b: 9053115905, d: 'conversación general' },
+  { m: 'ministral-3:14b', b: 9082537031, d: 'conversación general' },
+  { m: 'qwen3:14b', b: 9276198077, d: 'buen español' },
+  { m: 'gemma3n:e4b', b: 9768581713, d: 'conversación general' },
+  { m: 'phi4-reasoning:14b', b: 11117502673, d: 'razona paso a paso' },
+  { m: 'mistral-small:24b', b: 14333921100, d: 'conversación general' },
+  { m: 'devstral:24b', b: 14333927558, d: 'código' },
+  { m: 'gemma3:27b', b: 17413409507, d: 'conversación general' },
+  { m: 'qwen3.5:27b', b: 17478556413, d: 'buen español' },
+  { m: 'qwen3-coder:30b', b: 18556700222, d: 'código' },
+  { m: 'wizardcoder:33b', b: 18819451016, d: 'código' },
+  { m: 'deepseek-r1:32b', b: 19851337321, d: 'razona paso a paso' },
+  { m: 'qwq:32b', b: 19851349169, d: 'razona paso a paso' },
+  { m: 'qwen2.5:32b', b: 19851349181, d: 'buen español' },
+  { m: 'qwen2.5-coder:32b', b: 19851349410, d: 'código' },
+  { m: 'qwen3.5:35b', b: 22069591997, d: 'buen español' },
+  { m: 'llama3.3:70b', b: 42520413354, d: 'conversación general' },
+];
+
+
+const CAT_FILTROS = [
+  ['', 'todos'],
+  ['chico', '≤ 1 GB'],
+  ['medio', '1–5 GB'],
+  ['grande', '> 5 GB'],
+  ['codigo', 'código'],
+  ['razona', 'razona'],
+  ['imagen', 'imágenes'],
+  ['embed', 'embeddings'],
+];
+
+function catPasa(ficha) {
+  const f = estado.ollama.filtro;
+  if (!f) return true;
+  if (f === 'chico') return ficha.b <= 1e9;
+  if (f === 'medio') return ficha.b > 1e9 && ficha.b <= 5e9;
+  if (f === 'grande') return ficha.b > 5e9;
+  if (f === 'imagen') return /im|VL|visi/i.test(ficha.d + ficha.m);
+  if (f === 'codigo') return /código/i.test(ficha.d);
+  if (f === 'razona') return /razona/i.test(ficha.d);
+  if (f === 'embed') return /embedding/i.test(ficha.d);
+  return true;
+}
+
+/* Como el servidor de Ollama está en el PC, la cara sabe qué modelos ya están
+   bajados (`estado.ollama.modelos`) y ése es el único criterio que puede pintar
+   sin mentir: si no hay lista, no pinta ✓. */
+function estaEnPC(nombre) {
+  return (estado.ollama.modelos || []).some(m => (m.nombre || m) === nombre);
+}
+
+function pintaCatalogo() {
+  const caja = el('eq-cat-lista'), chips = el('eq-cat-chips'), cuenta = el('eq-cat-cuenta');
+  if (!caja || !chips || !cuenta) return;
+  cuenta.textContent = CATALOGO_OLLAMA.length + ' medidos del registro';
+  if (!estado.ollama.abierto) {
+    chips.innerHTML = '';
+    caja.innerHTML = '<span class="eq-nota">pulsa «ver catálogo» y se despliegan los '
+      + CATALOGO_OLLAMA.length + ' modelos con el peso real de su descarga. Al tocar ↓ '
+      + 'lo baja tu PC por Wi-Fi y la barra de arriba se mueve sola; puedes cerrar la '
+      + 'hoja mientras baja.</span>';
+    return;
+  }
+  chips.innerHTML = CAT_FILTROS.map(([clave, titulo]) =>
+    `<button class="eq-chip${estado.ollama.filtro === clave ? ' puesta' : ''}" `
+    + `data-filtro="${clave}">${titulo}</button>`).join('');
+  chips.querySelectorAll('[data-filtro]').forEach(b => {
+    b.onclick = () => { estado.ollama.filtro = b.dataset.filtro; pintaCatalogo(); };
+  });
+
+  const busca = plegarTexto(el('eq-cat-busca')?.value || '');
+  const vale = CATALOGO_OLLAMA.filter(f => catPasa(f)
+    && (!busca || plegarTexto(f.m + ' ' + f.d).includes(busca)));
+  const tope = 40;
+  caja.innerHTML = vale.length
+    ? vale.slice(0, tope).map(f => {
+        const enPC = estaEnPC(f.m);
+        return `<div class="eq-mod"><b data-nombre="${esc(f.m)}">${esc(f.m)}`
+          + (enPC ? ' ✓' : '') + `</b><small>${giga(f.b)}</small>`
+          + `<button class="eq-b" data-baja="${esc(f.m)}">`
+          + (enPC ? 'usa' : '↓') + `</button></div>`;
+      }).join('')
+      + (vale.length > tope
+        ? `<span class="eq-nota">y ${vale.length - tope} más — afina la busca o el filtro</span>` : '')
+    : '<span class="eq-nota">ni uno con esa busca. Prueba con «qwen», «3b» o «código».</span>';
+  caja.querySelectorAll('[data-baja]').forEach(b => {
+    b.onclick = () => {
+      const nombre = b.dataset.baja;
+      const input = el('eq-oll-nuevo');
+      if (input) input.value = nombre;
+      if (b.textContent.trim() === 'usa') ollamaOrden('usa', { modelo: nombre });
+      else ollamaOrden('descarga', { modelo: nombre });
+    };
+  });
+  caja.querySelectorAll('[data-nombre]').forEach(n => {
+    n.onclick = () => {
+      const input = el('eq-oll-nuevo');
+      if (input) input.value = n.dataset.nombre;
+      di('puesto «' + n.dataset.nombre + '» en el campo de descargar.', 'oll');
+    };
+  });
+}
+
+/* El catálogo no tiene acentos ni mayúsculas al filtrar: la dueña escribe «codigo»
+   y quiere encontrar «código». Es el mismo arreglo que el buscador de Música, que
+   en Java se llama `plegar`. */
+function plegarTexto(s) {
+  return String(s || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n');
+}
+
 function enganchaOllama() {
   el('eq-oll-busca').onclick = () => ollamaOrden('descubre');
   el('eq-oll-mis').onclick = () => ollamaOrden('lista');
@@ -930,6 +1154,17 @@ function enganchaOllama() {
   el('eq-oll-nuevo').addEventListener('keydown', e => {
     if (e.key === 'Enter') el('eq-oll-baja').click();
   });
+  el('eq-cat-abre').onclick = () => {
+    estado.ollama.abierto = !estado.ollama.abierto;
+    el('eq-cat-abre').textContent = estado.ollama.abierto ? 'cerrar catálogo' : 'ver catálogo';
+    pintaCatalogo();
+  };
+  el('eq-cat-busca').addEventListener('input', () => {
+    estado.ollama.abierto = true;
+    el('eq-cat-abre').textContent = 'cerrar catálogo';
+    pintaCatalogo();
+  });
+  pintaCatalogo();
 }
 
 /* La orden, con su frase de mientras. `envia` ya deja en el bloque el `dice` de
@@ -955,11 +1190,18 @@ function ollamaOrden(accion, extra) {
       lista: 'pidiendo la lista de modelos…',
       fija: 'llamando a ese PC…',
       borra: 'borrando ese modelo…',
-      descarga: 'bajando ' + (cuerpo.modelo || '') + '…' }[accion] || 'mirando…');
+      /* Lo de «te aviso» no es adorno: desde la ronda 2.8 el APK manda una
+         notificación cuando la bajada termina o se corta (`Ollama.avisaBajada`),
+         así que se puede cerrar la hoja y apagar la pantalla. Lo que no puede
+         prometer es que el aviso llegue si Android mata la app por memoria. */
+      descarga: 'bajando ' + (cuerpo.modelo || '') + ' · cierra la hoja si quieres, te aviso cuando termine' }[accion] || 'mirando…');
   }
   return true;
 }
 
+/* La ✓ del catálogo depende de la lista que devuelve el PC: si llega tarde (el
+   `lista` es red), el catálogo hay que repintarlo, si no se queda sin marcar y la
+   dueña vuelve a bajar lo que ya tiene. */
 function pintaOllama(pideLista) {
   if (!montada) return;
   if (!puede('mente')) {
@@ -991,6 +1233,9 @@ function pintaOllamaLinea() {
 }
 
 function pintaModelosOllama() {
+  /* Con la lista nueva cambian las ✓ del catálogo: si no se repinta, la dueña
+     vuelve a pedir un modelo que ya está bajado en su PC. */
+  if (estado.ollama.abierto) pintaCatalogo();
   const cajaLista = el('eq-oll-lista');
   if (!cajaLista) return;
   const o = estado.ollama;
@@ -1032,7 +1277,7 @@ function manejaOllama(ev) {
   if (ev.ok === false) {
     if (ev.que === 'descarga') { o.descargando = false; barra(0); }
     const dicho = ev.dice || 'el PC de casa no contestó.';
-    avisa('oll', dicho);
+    avisa('oll', dicho + (ev.que === 'descarga' ? ' · CORT también te lo avisó' : ''));
     if (ev.que !== 'descarga') salida('ollama: ' + dicho);
     else salida('no pude bajar ' + (ev.modelo || 'el modelo') + ': ' + dicho);
     if (ev.que === 'lista') { o.modelos = []; pintaModelosOllama(); }

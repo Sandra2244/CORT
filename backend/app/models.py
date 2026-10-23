@@ -31,36 +31,41 @@ _CANDADO = threading.Lock()
 # llega a la vez que el primero y Ollama se queda sin memoria a media bajada.
 _FILA_PULL = threading.Semaphore(1)
 
-# Peso ≈ bytes descargados y RAM ≈ la que necesita para correr con soltura.
-# Los números son los que anuncia Ollama para estos tags (redondeados).
+# `gb` son los bytes que baja `ollama pull`, MEDIDOS: la suma de las capas del
+# manifiesto que sirve `registry.ollama.ai/v2/library/<modelo>/manifests/<tag>`
+# (2026-10-23 desde este portátil, con `scripts/mede-catalogo.py`). `b` guarda el
+# número exacto para que la cara del teléfono y la ventana de escritorio digan el
+# mismo peso. `ram` sigue siendo una estimación honesta de lo que hace falta para
+# CORRERLO (eso no lo dice el registro), y por eso el veredicto llama «justo» al
+# que queda entre 0,6 y 0,95 de la RAM del equipo en vez de prometerlo.
 CATALOGO = [
-    {"modelo": "qwen2.5:0.5b",   "gb": 0.4, "ram": 1.0, "nivel": "ligero",
+    {"modelo": "qwen2.5:0.5b",   "gb": 0.4, "b": 397820829, "ram": 1.0, "nivel": "ligero",
      "para": "frases cortas, órdenes y resúmenes rápidos"},
-    {"modelo": "qwen3:0.6b",     "gb": 0.5, "ram": 1.3, "nivel": "ligero",
+    {"modelo": "qwen3:0.6b",     "gb": 0.5, "b": 522653277, "ram": 1.3, "nivel": "ligero",
      "para": "el más moderno que cabe en un equipo de 2 GB"},
-    {"modelo": "tinyllama:1.1b", "gb": 0.6, "ram": 1.2, "nivel": "ligero",
+    {"modelo": "tinyllama:1.1b", "gb": 0.6, "b": 637699655, "ram": 1.2, "nivel": "ligero",
      "para": "conversación muy básica en inglés"},
-    {"modelo": "deepseek-r1:1.5b", "gb": 1.1, "ram": 2.0, "nivel": "ligero",
+    {"modelo": "deepseek-r1:1.5b", "gb": 1.1, "b": 1117322281, "ram": 2.0, "nivel": "ligero",
      "para": "razonar paso a paso (matemáticas, lógica simple)"},
-    {"modelo": "llama3.2:1b",    "gb": 1.3, "ram": 2.2, "nivel": "ligero",
+    {"modelo": "llama3.2:1b",    "gb": 1.3, "b": 1321097844, "ram": 2.2, "nivel": "ligero",
      "para": "español decente con respuestas cortas"},
-    {"modelo": "qwen3:1.7b",     "gb": 1.4, "ram": 2.6, "nivel": "medio",
+    {"modelo": "qwen3:1.7b",     "gb": 1.4, "b": 1359292957, "ram": 2.6, "nivel": "medio",
      "para": "bueno para 4 GB: razona y escribe en español"},
-    {"modelo": "gemma2:2b",      "gb": 1.6, "ram": 3.0, "nivel": "medio",
+    {"modelo": "gemma2:2b",      "gb": 1.6, "b": 1629518008, "ram": 3.0, "nivel": "medio",
      "para": "buen equilibrio calidad/peso"},
-    {"modelo": "qwen2.5:3b",     "gb": 1.9, "ram": 3.5, "nivel": "medio",
+    {"modelo": "qwen2.5:3b",     "gb": 1.9, "b": 1929911945, "ram": 3.5, "nivel": "medio",
      "para": "el recomendado para CORT (español y herramientas)"},
-    {"modelo": "phi3:mini",      "gb": 2.2, "ram": 4.0, "nivel": "medio",
+    {"modelo": "phi3:mini",      "gb": 2.2, "b": 2176178430, "ram": 4.0, "nivel": "medio",
      "para": "código y razonamiento corto"},
-    {"modelo": "qwen3:4b",       "gb": 2.5, "ram": 5.0, "nivel": "medio",
+    {"modelo": "qwen3:4b",       "gb": 2.5, "b": 2497293444, "ram": 5.0, "nivel": "medio",
      "para": "el mejor de tamaño medio (necesita 8 GB para ir suelto)"},
-    {"modelo": "mistral:7b",     "gb": 4.1, "ram": 7.0, "nivel": "pesado",
+    {"modelo": "mistral:7b",     "gb": 4.4, "b": 4372823897, "ram": 7.0, "nivel": "pesado",
      "para": "conversación amplia (necesita 8 GB)"},
-    {"modelo": "llama3.1:8b",    "gb": 4.9, "ram": 8.0, "nivel": "pesado",
+    {"modelo": "llama3.1:8b",    "gb": 4.9, "b": 4920752841, "ram": 8.0, "nivel": "pesado",
      "para": "el estándar abierto (8 GB o más)"},
-    {"modelo": "qwen2.5:7b",     "gb": 4.7, "ram": 8.0, "nivel": "pesado",
+    {"modelo": "qwen2.5:7b",     "gb": 4.7, "b": 4683086845, "ram": 8.0, "nivel": "pesado",
      "para": "multilingüe fuerte, español muy bueno"},
-    {"modelo": "codellama:7b",   "gb": 3.9, "ram": 8.0, "nivel": "pesado",
+    {"modelo": "codellama:7b",   "gb": 3.8, "b": 3825910133, "ram": 8.0, "nivel": "pesado",
      "para": "programar: autocompletar y explicar código"},
 ]
 POR_NOMBRE = {c["modelo"]: c for c in CATALOGO}

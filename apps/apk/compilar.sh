@@ -76,7 +76,13 @@ cd "$(dirname "$0")"
 #   `.Avisos`, el auricular, la batería y la hora. El motor es puro y se prueba con
 #   node (45 comprobaciones); lo que no puede hacer, lo dice la propia hoja: las
 #   reglas se cumplen mientras CORT está en pantalla.
-APK_VERSION="${APK_VERSION:-2.7.0}"   # desde aquí sale UN SOLO APK: este
+# · `Ollama.java` crece en 2.8.0 con el **aviso de bajada**: cuando el modelo termina
+#   —o cuando se corta— sale una notificación normal de `NotificationManager` (canal
+#   `cort-modelos`), así que la hoja de Modelos se puede cerrar y el teléfono se puede
+#   bloquear. Cero permisos nuevos: `POST_NOTIFICATIONS` ya estaba desde el
+#   reproductor, y seguir metiendo superficie en el manifiesto es lo que rechazaba
+#   Play Protect.
+APK_VERSION="${APK_VERSION:-2.8.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.7.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.8.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -90,7 +90,12 @@ jobs:
                                  # hay baldosín en la cortina rápida (`.Panel`), tres
                                  # atajos en el icono del cajón (`res/xml/atajos.xml`)
                                  # y el doble toque funciona también con la cara
-                                 # cerrada (`Reproductor.onMediaButtonEvent`).
+                                 # cerrada (`Reproductor.onMediaButtonEvent`), y en
+                                 # 2.8.0 el CATÁLOGO MEDIDO (107 modelos con los bytes
+                                 # leídos del registro), el COPILOTO de Código (sólo
+                                 # comandos de sólo lectura, dos puertas) y el AVISO de
+                                 # que la bajada de un modelo terminó, sin tocar el
+                                 # manifiesto.
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -502,14 +507,14 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.7.0**. Esta Release trae
+            .deb) y el APK del teléfono, que sube a la **2.8.0**. Esta Release trae
             **tres APK de Android a propósito**. No son versiones distintas de CORT:
             es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
             mismo `versionCode`— con dos mandos distintos, para poder medir en el
             teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
             «Por qué hay tres envases»).
-            `CORT-IA-2.7.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
-            `CORT-IA-2.7.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
+            `CORT-IA-2.8.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.8.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
             sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
             cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
             `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
@@ -518,7 +523,7 @@ jobs:
             notificaciones, poner baldosín en la cortina rápida ni marcar por el
             auricular. **Empieza por éste**: es el que tiene que instalarse sin el
             aviso.
-            `CORT-IA-2.7.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            `CORT-IA-2.8.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
             bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
             alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
             `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
@@ -526,7 +531,7 @@ jobs:
             `perfil:` con los permisos y los servicios `BIND_*` leídos del
             `AndroidManifest.xml` **binario** del archivo.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0 y del 2.6.0 sin desinstalar y
+            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0, del 2.6.0 y del 2.7.0 sin desinstalar y
             sin perder nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos; el
             `versionCode` lo deriva `apps/apk/compilar.sh` de la versión con
             `MA*10000 + MI*100 + PA`, así que siempre sale mayor que el del envase
@@ -572,6 +577,36 @@ jobs:
             `⋮` del reproductor trae Velocidad / Dormir / Ocultar / Compartir, y **Charla
             piensa en el teléfono** cuando el portátil no está (cae al puente `mente` y
             la respuesta vuelve por el evento, en vez de dejar la frase de error).
+
+            **La ronda F11: el catálogo medido, el copiloto de verdad y el aviso de la
+            bajada.** (1) El catálogo de modelos del teléfono son **107 modelos con el
+            peso medido** en el registro de Ollama (`scripts/mede-catalogo.py`), no
+            inventado: los 14 que ofrece la hoja de modelos del PC son un subconjunto de
+            esos 107 y salen de los mismos bytes, así que «cabe en tu portátil» se decide
+            con un número que existe. (2) La pantalla **Código** tiene modo **copiloto**:
+            escribes lo que quieres averiguar y CORT te lo devuelve como **plan de pasos**,
+            cada uno con su ▶. El plan lo arma `backend/app/copiloto.py`, que **sólo
+            ejecuta comandos de sólo lectura** —una lista escrita a mano de verbos, con
+            sus subórdenes y sus banderas prohibidas—, y la puerta se comprueba **dos
+            veces**: al planear y otra vez al ejecutar, así que un plan falso que se
+            declare `seguro: True` con un `rm` dentro sigue sin correrse. No hay `shell`,
+            la salida se corta en 8000 caracteres y cada plan caduca a los 900 s. Lo que
+            ella quiera añadir se escribe en `~/.cort/copiloto.json`, que **no puede abrir
+            lo que está en la lista de nunca**: un `permito: ["rm"]` se ignora. La cara
+            pinta ▶ sólo en los pasos que el backend marcó como seguros; los demás salen
+            con su motivo y su botón de copiar, y poner `> ` delante de la línea salta el
+            modo y manda la orden como siempre. (3) **La bajada avisa sola**: `Ollama.java`
+            manda una notificación cuando el modelo termina —y también cuando se corta—,
+            con su propio canal, y la hoja ya no pide la pantalla encendida: se puede
+            cerrar y bloquear el teléfono. Es una notificación normal —cero
+            `foregroundServiceType`, cero permisos nuevos en el manifiesto, que es lo que
+            mira Play Protect—; lo que no promete es llegar si Android mata la app por
+            memoria, y lo dice. (4) Todo eso está comprobado **sin encender el teléfono**:
+            `scripts/prueba-costura.py` trae los sectores [23] y [24], donde el módulo del
+            copiloto se importa y se le preguntan 20 comandos de escritura negados y 14 de
+            lectura autorizados, y las 16 mutaciones de la batería (10 del copiloto, 6 del
+            aviso) se prueban en un árbol aparte: cada comprobación nueva tiene su rojo.
+
             **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
             (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC
             y desde la hoja **Equipo · 3 · Cerebro** se puede **buscar** el PC en la
@@ -681,7 +716,7 @@ jobs:
             `CORT-IA-2.5.0-nucleo.apk` en su teléfono el 2026-10-22 y funcionó. Cero
             `BIND_*` entra; cuatro `BIND_*` se bloquea. Por eso el `nucleo` es desde
             aquí el envase recomendado y éste sigue siendo el archivo que hay que
-            instalar primero: `CORT-IA-2.7.0-nucleo.apk`. Si alguna vez se volviera a
+            instalar primero: `CORT-IA-2.8.0-nucleo.apk`. Si alguna vez se volviera a
             bloquear, el siguiente paso sigue escrito en
             `docs/BLOQUEO-PLAY-PROTECT.md` —probar el `‑ligero` (1,6 MB) y, si ése
             entra, sacar el modelo de 39,8 MB del APK—, y si ninguno de los tres

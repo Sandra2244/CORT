@@ -218,6 +218,24 @@ window.fetch = (u, opts) => {
     { name: 'Apuntes', type: 'dir', size: 0, folders: 2, files: 1, fecha: '2026-10-01' },
     { name: 'nota.txt', type: 'file', size: 1200, fecha: '2026-10-02' }] });
   if (url.includes('/api/notes')) return R([{ id: 1, fecha: '2026-10-02 09:00', texto: 'comprar pilas' }]);
+  /* El copiloto (F11). Tres respuestas de mentira con la FORMA de las verdaderas, y
+     un plan deliberately MIXTO: un paso de sólo lectura y un `rm -rf`. La prueba que
+     importa es que la cara no le pida ejecutar el segundo a nadie. */
+  if (url.includes('/api/copiloto/ejecuta')) return R({ ok: true, ejecutado: true, codigo: 0,
+    orden: 'uname -a', ms: 12, salida: 'Linux sonda 6.12.107 x86_64 GNU/Linux',
+    dice: 'salió bien en 12 ms' });
+  if (url.includes('/api/copiloto/plan')) return R({ ok: true, origen: 'plantilla probada',
+    objetivo: (cuerpo && cuerpo.objetivo) || '', token: 'sonda-token', caduca_en: 900, seguros: 1,
+    dice: '2 pasos · 1 se puede ejecutar solo · 1 queda escrito para que lo copies',
+    pasos: [{ indice: 0, paso: 'paso 1', orden: 'uname -a', seguro: true, motivo: 'sólo lectura',
+              permitido_por_ella: false },
+            { indice: 1, paso: 'paso 2', orden: 'rm -rf /tmp/ejemplo', seguro: false,
+              motivo: '`rm` escribe o no tiene vuelta atrás: CORT no lo ejecuta',
+              permitido_por_ella: false }] });
+  if (url.includes('/api/copiloto')) return R({ ok: true, recetas: ['ver cómo está el equipo',
+    'ver qué está ocupando el disco'], solo_lectura: ['ls', 'df', 'free'],
+    negados_siempre: ['rm', 'mv'], archivo: '~/.cort/copiloto.json',
+    dice: '77 comandos de sólo lectura · 14 que dependen del suborden' });
   return R({});
 };
 
@@ -775,6 +793,75 @@ dice($$('#dock button:not([data-pc])').length > 0
      && getComputedStyle(document.getElementById('dock')).display !== 'none'
      && !document.getElementById('pantalla-menu') && !document.getElementById('pantalla-bar'),
   'en el orbe no queda ni la barra de hojas ni el menú viejo: sólo ☰');
+
+/* ── 9 · el copiloto: piensa los comandos y ejecuta sólo los que no rompen ───
+   El punto 4 de su lista era «CORT debe guiarte como copiloto y ejecutar los comandos
+   él solo». La promesa tiene dos mitades, y la sonda caza las dos: que la cara PIDA
+   el plan al backend (no lo inventa en JS) y que el ▶ sólo esté encendido en los pasos
+   que el backend marcó como de sólo lectura. Para eso el plan de mentira trae un
+   `uname -a` y un `rm -rf`: si la cara pidiera ejecutar el segundo, el `rm` llegaría
+   al portátil — y aquí se vería, porque se anota cada `fetch` con su cuerpo. */
+m.ir('codigo');
+const cpOn = $('#cod-cop-on');
+dice(!!cpOn, 'la hoja de Código tiene el interruptor del modo copiloto');
+dice(!!$('#cod-cop-chips') && !!$('#cod-cop-plan'), 'y trae su caja de sugerencias y su caja de plan');
+peticiones.length = 0;
+cpOn.checked = true; cpOn.dispatchEvent(new Event('change'));
+await espera(220);
+dice(peticiones.some(x => x.url.includes('/api/copiloto') && !x.cuerpo),
+  'al encenderlo pregunta al backend qué recetas sabe hacer (no las escribe la cara)');
+dice($$('#cod-cop-chips .eq-chip').length === 2,
+  'y pinta las recetas que devolvió, no dos inventadas (' + $$('#cod-cop-chips .eq-chip').length + ')');
+dice(localStorage.getItem('cort-copiloto') === '1', 'el modo se recuerda en localStorage (mañana sigue puesto)');
+dice(/objetivo/.test($('#cod-entrada').placeholder),
+  'la pista de la línea cambia de objetivo: pide un OBJETIVO, no un comando');
+peticiones.length = 0;
+$('#cod-entrada').value = 'cómo está el equipo';
+$('#cod-enviar').click();
+await espera(260);
+const cpPlan = peticiones.find(x => x.url.includes('/api/copiloto/plan'));
+dice(!!cpPlan && cpPlan.cuerpo && cpPlan.cuerpo.objetivo === 'cómo está el equipo',
+  'la línea se mandó como OBJETIVO a /api/copiloto/plan');
+dice(!peticiones.some(x => x.url.includes('/api/command')),
+  'y NO se mandó a /api/command: con el copiloto puesto la terminal no actúa a ciegas');
+dice($$('#cod-cop-plan .cp-paso').length === 2, 'el plan se pinta paso por paso ('
+  + $$('#cod-cop-plan .cp-paso').length + ' pasos)');
+const cpBtns = $$('#cod-cop-plan [data-ejecuta]');
+dice(cpBtns.length === 1 && cpBtns[0].dataset.ejecuta === '0',
+  'sólo el paso de sólo lectura tiene ▶ (el `rm -rf` no lo tiene, no está desvanecido: no existe)');
+const cpMalo = $$('#cod-cop-plan .cp-paso').find(d => d.classList.contains('malo'));
+dice(!!cpMalo && /vuelta atrás/.test(cpMalo.querySelector('.cp-motivo').textContent),
+  'el paso que escribe se muestra con su motivo y su botón de copiar');
+dice(!!cpMalo && !!cpMalo.querySelector('[data-copia="1"]')
+     && !!cpMalo.querySelector('.cp-b[disabled]'), 'y el ▶ del paso malo está apagado');
+peticiones.length = 0;
+cpBtns[0].click();
+await espera(260);
+const cpEje = peticiones.find(x => x.url.includes('/api/copiloto/ejecuta'));
+dice(!!cpEje && cpEje.cuerpo.token === 'sonda-token' && cpEje.cuerpo.indice === 0,
+  'al pulsar ▶ se ejecuta ese paso con el token del plan (token ' + (cpEje?.cuerpo?.token || 'ninguno') + ')');
+dice(!!$('#cod-cop-plan .cp-salida') && /Linux sonda/.test($('#cod-cop-plan .cp-salida').textContent),
+  'la salida del comando aparece en la tarjeta del paso');
+peticiones.length = 0;
+$('#cp-todos').click();
+await espera(260);
+const cpTodos = peticiones.filter(x => x.url.includes('/api/copiloto/ejecuta'));
+dice(cpTodos.length === 1 && cpTodos.every(x => x.cuerpo.indice === 0),
+  '«ejecuta los seguros» sólo corre el paso 1: el 2 quedó fuera (' + cpTodos.length + ' orden(es))');
+// La salida de emergencia: prefijar `> ` no pide ningún plan (y deja la línea a la
+// terminal de siempre, que en el teléfono es el puente y en el PC es `/api/command`).
+peticiones.length = 0;
+$('#cod-entrada').value = '> reproduce música';
+$('#cod-enviar').click();
+await espera(260);
+dice(!peticiones.some(x => x.url.includes('/api/copiloto')),
+  'prefijar `> ` salta el copiloto: no se le pide un plan a nada');
+// Y el plan se puede cerrar sin dejar restos.
+$('#cp-cierra')?.click(); await espera(60);
+dice($$('#cod-cop-plan .cp-paso').length === 0, '«cerrar el plan» vacía la caja');
+cpOn.checked = false; cpOn.dispatchEvent(new Event('change')); await espera(60);
+dice(localStorage.getItem('cort-copiloto') === '0' && !$('#cod-cop-chips').childElementCount,
+  'y al apagarlo se borran las sugerencias y se guarda el apagado (no despierta el modo solo)');
 
 salida.innerHTML = lineas.join('') +
   `<div><button id="otro">otra pista</button><button id="sin-cara">pista sin carátula</button>` +
