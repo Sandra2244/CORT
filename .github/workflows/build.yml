@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.8.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.9.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -95,7 +95,15 @@ jobs:
                                  # leídos del registro), el COPILOTO de Código (sólo
                                  # comandos de sólo lectura, dos puertas) y el AVISO de
                                  # que la bajada de un modelo terminó, sin tocar el
-                                 # manifiesto.
+                                 # manifiesto; y en 2.9.0 la BAJADA FÍABLE: el progreso
+                                 # se suma por capa del manifiesto (antes la última
+                                 # ganaba y la barra se quedaba quieta), un `GET
+                                 # /api/version` delante corta a los ~3 s un PC dormido
+                                 # en vez de esperar 90 s a un timeout, hay CANCELAR
+                                 # (botón, voz y la acción `cancela` del puente que ya
+                                 # existía: cero permisos nuevos, cero métodos nuevos),
+                                 # y mientras baja algo no se lanza una segunda bajada
+                                 # que pise el cancelar.
                                  # Tiene que ser IGUAL que el valor por defecto de
                                  # `APK_VERSION` en `apps/apk/compilar.sh`: el
                                  # sector [5] de `scripts/prueba-costura.py` cruza
@@ -537,14 +545,14 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.8.0**. Esta Release trae
+            .deb) y el APK del teléfono, que sube a la **2.9.0**. Esta Release trae
             **tres APK de Android a propósito**. No son versiones distintas de CORT:
             es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
             mismo `versionCode`— con dos mandos distintos, para poder medir en el
             teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
             «Por qué hay tres envases»).
-            `CORT-IA-2.8.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
-            `CORT-IA-2.8.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
+            `CORT-IA-2.9.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.9.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
             sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
             cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
             `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
@@ -553,15 +561,35 @@ jobs:
             notificaciones, poner baldosín en la cortina rápida ni marcar por el
             auricular. **Empieza por éste**: es el que tiene que instalarse sin el
             aviso.
-            `CORT-IA-2.8.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            `CORT-IA-2.9.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
             bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
             alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
             `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
             está en su `-firma.txt` de al lado, y en esa hoja va también el renglón
             `perfil:` con los permisos y los servicios `BIND_*` leídos del
             `AndroidManifest.xml` **binario** del archivo.
+            **Qué cambia en la 2.9.0 (la descarga de modelos del teléfono):** en
+            **Equipo · Cerebros de casa** la barra ahora suma las capas del modelo en vez
+            de quedarse con lo que dice la última línea que llegó —ese era el «no descarga
+            los modelos»: la barra temblaba y parecía clavada—, se ve cuántas capas lleva
+            el modelo, y la hoja pinta la dirección del PC con el que está hablando. Antes
+            de lanzar una bajada CORT hace una pregunta corta (`/api/version`): si el
+            portátil está apagado o dormido, lo dice en unos 3 segundos con la frase que
+            nombra `OLLAMA_HOST=0.0.0.0:11434`, en vez de quedarse noventa segundos
+            esperando un timeout mudo. Y hay botón nuevo **✕ cancelar** (también por voz:
+            «cancela la bajada»), que suelta la conexión abierta del teléfono; al cancelar
+            no salta aviso, porque eso lo pediste tú. Si ya está bajando un modelo, la
+            segunda orden se rechaza diciendo cuál va. Sin permisos nuevos y sin métodos
+            nuevos en el puente: la cancelación entra por la acción que ya existía, así
+            que el manifiesto del `nucleo` —el que se instala limpio— no se ha tocado.
+            **Todavía no lo has visto en tu teléfono**: son cambios medidos en el portátil,
+            contra un Ollama de mentira (58 comprobaciones) y en las costuras entre Java,
+            el contrato y la cara (8 más). Lo que se comprueba al instalar esta Release es
+            que la barra suba de verdad, que un PC apagado responda en español en pocos
+            segundos y que el botón ✕ pare la bajada.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0, del 2.6.0 y del 2.7.0 sin desinstalar y
+            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0, del 2.6.0, del 2.7.0 y del
+            2.8.0 sin desinstalar y
             sin perder nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos; el
             `versionCode` lo deriva `apps/apk/compilar.sh` de la versión con
             `MA*10000 + MI*100 + PA`, así que siempre sale mayor que el del envase
@@ -757,7 +785,7 @@ jobs:
             `CORT-IA-2.5.0-nucleo.apk` en su teléfono el 2026-10-22 y funcionó. Cero
             `BIND_*` entra; cuatro `BIND_*` se bloquea. Por eso el `nucleo` es desde
             aquí el envase recomendado y éste sigue siendo el archivo que hay que
-            instalar primero: `CORT-IA-2.8.0-nucleo.apk`. Si alguna vez se volviera a
+            instalar primero: `CORT-IA-2.9.0-nucleo.apk`. Si alguna vez se volviera a
             bloquear, el siguiente paso sigue escrito en
             `docs/BLOQUEO-PLAY-PROTECT.md` —probar el `‑ligero` (1,6 MB) y, si ése
             entra, sacar el modelo de 39,8 MB del APK—, y si ninguno de los tres

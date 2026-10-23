@@ -95,6 +95,26 @@ public class Ollama {
     private final Context app;              // para poder avisar sin Activity a la vista
     private String ultimoFallo = "";
 
+    /* Lo que se guarda para poder CORTAR una bajada que está leyendo otro hilo.
+       `descarga` corre en `cort-ollama` y la cara llama a `cancela` desde el hilo
+       del puente, así que los tres campos son `volatile`: sin eso, el hilo que lee
+       puede quedarse mirando su copia vieja del interruptor y seguir emitiendo
+       cuadros veinte segundos después de que la dueña pulsara «cancelar».
+       Se cierran LAS DOS cosas —la corriente y la conexión—, y se hizo así por lo que
+       se midió en el portátil con `Prueba4` (el escenario `callada`: el servidor calla
+       tres segundos y la prueba espera dos). Quitar sólo el `cerr(...)` del
+       `InputStream` sigue despertando al lector porque `disconnect()` lo consigue en
+       esta pila del JDK; quitar sólo `disconnect()` también, porque cerrar la corriente
+       le suelta una `IOException` en el acto. O sea: cada una por separado basta, y la
+       única mutación que cae en el taller (`scripts/taller-ollama.sh cancelar`) es
+       quitar las dos. Se dejan las dos porque en Android la implementación de
+       `HttpURLConnection` es otra (`com.android.okhttp`) y no se puede medir aquí: lo
+       que en el JDK es redundante puede ser lo único que obedece en el teléfono. */
+    private volatile boolean quieroCancelar = false;
+    private volatile HttpURLConnection bajando = null;
+    private volatile InputStream entradaBajada = null;
+    private volatile String bajandoModelo = "";
+
     Ollama(Context contexto) {
         this.app = contexto.getApplicationContext();
         this.prefs = contexto.getApplicationContext()
@@ -255,6 +275,21 @@ public class Ollama {
      * es lo que la dueña espera ver moverse. Se emite un cuadro cuando cambia el
      * estado, cuando el porcentaje salta 5 puntos, cuando pasan ~400 ms, y uno
      * final con `listo`, para no ahogar a la cara de eventos.
+     *
+     * Dos cosas que se arreglaron mirando el fallo de la dueña («no descarga los
+     * modelos», y la barra quieta):
+     *
+     * · **el ping antes de tirar.** Un `POST /api/pull` contra un PC dormido no
+     *   da un error claro: abre la conexión y se queda esperando, y a los 90 s
+     *   devuelve un timeout que no dice qué faltaba. Con `version()` delante, el
+     *   motivo sale en tres segundos y en español.
+     * · **el progreso se SUMA por `digest`.** Un modelo son varias capas y el
+     *   servidor va intercalando líneas de unas y otras: cada línea trae el
+     *   `total` y el `completed` de ESA capa, no del modelo entero. Antes se
+     *   asignaban (`total = j.optLong("total", total)`), así que la última línea
+     *   de una capa chica ganaba la partida y la barra se caía a un porcentaje
+     *   sin sentido. Ahora hay un mapa `digest → {hecho, total}` que se reemplaza
+     *   por capa y se suma, que es lo que ya hace el PC en `models.py`.
      */
     public String descarga(String modelo, Progreso sigue) {
         ultimoFallo = "";
@@ -264,18 +299,46 @@ public class Ollama {
         String nombre = modelo.trim();
         long ultimoEnvio = 0;
         double puntoEnvio = 0;
+        /* Una sola bajada a la vez, y dicho en vez de permitido: el botón ↓ del
+           catálogo se puede tocar dos veces (o dos modelos seguidos) y si se
+           admitiera la segunda, los dos hilos se pelearían por `bajando` y
+           `entradaBajada`, que son los que usan el cancelar. La dueña se quedaría
+           sin barra y sin poder cortar ninguna. */
+        synchronized (this) {
+            if (bajandoModelo != null && !bajandoModelo.isEmpty()) {
+                ultimoFallo = "ya está bajando " + bajandoModelo + ": pulsa cancelar antes de pedir otra";
+                return mal("descarga", ultimoFallo);
+            }
+            quieroCancelar = false;
+            bajandoModelo = nombre;
+        }
+        /* El ping corto: si aquí no contesta nadie, la bajada no va a empezar
+           nunca y lo que hay que decir es DÓNDEDuele (el PC apagado, otra Wi-Fi,
+           Ollama sin OLLAMA_HOST), no «se cortó». */
+        String ver = version(servidor());
+        if (ver == null) {
+            bajandoModelo = "";
+            ultimoFallo = "en " + servidor() + " no contesta nadie: ¿está el PC encendido, en esta "
+                        + "Wi-Fi y con Ollama arrancado con OLLAMA_HOST=0.0.0.0:11434?";
+            Timbre.bajada(app, false, nombre, 0, 0, ultimoFallo, servidor());
+            return mal("descarga", ultimoFallo);
+        }
+        java.util.Map<String, long[]> capas = new java.util.LinkedHashMap<String, long[]>();
         try {
             HttpURLConnection c = post(r + "/api/pull", "{\"model\":\"" + escapa(nombre)
                                   + "\",\"name\":\"" + escapa(nombre) + "\",\"insecure\":true}",
                                   CONEXION_MS, LECTURA_PULL_MS);
+            bajando = c;
             InputStream entrada = c.getInputStream();          // 2xx: stream abierto
+            entradaBajada = entrada;
             java.io.BufferedReader lector = new java.io.BufferedReader(
                 new java.io.InputStreamReader(entrada, StandardCharsets.UTF_8));
             String linea;
             String estado = "empezando";
             long total = 0, hecho = 0;
-            boolean error = false, motes = false;
+            boolean error = false, motes = false, cancelada = false;
             while ((linea = lector.readLine()) != null) {
+                if (quieroCancelar) { cancelada = true; break; }
                 if (linea.trim().isEmpty()) continue;
                 JSONObject j;
                 try { j = new JSONObject(linea); } catch (Exception basura) { continue; }
@@ -286,9 +349,22 @@ public class Ollama {
                 }
                 String antes = estado;
                 estado = j.optString("status", estado);
-                total = j.optLong("total", total);
-                hecho = j.optLong("completed", hecho);
                 if ("success".equals(estado)) motes = true;
+                /* El acumulado por capa. Las líneas sin `digest` ("pulling
+                   manifest", "success", "verifying…") no pintan nada en la suma y
+                   se ignoran; las que lo traen reemplazan SU par de números, porque
+                   dentro de una misma capa el servidor siempre manda el total de la
+                   capa y lo lleva de lo bajado hasta ese momento. */
+                String mota = j.optString("digest", "");
+                if (!mota.isEmpty()) {
+                    long t = Math.max(0L, j.optLong("total", 0));
+                    long h = Math.max(0L, j.optLong("completed", 0));
+                    if (t <= 0 && capas.containsKey(mota)) t = capas.get(mota)[1];
+                    long[] viejos = capas.get(mota);
+                    capas.put(mota, new long[]{ Math.max(h, viejos == null ? 0L : viejos[0]), t });
+                }
+                hecho = 0; total = 0;
+                for (long[] capa : capas.values()) { hecho += capa[0]; total += capa[1]; }
                 double pct = total > 0 ? Math.min(1.0, (double) hecho / total) : 0;
                 long ahora = System.currentTimeMillis();
                 /* Tres motivos para emitir, en este orden de importancia: cambió el
@@ -306,11 +382,22 @@ public class Ollama {
                         + ",\"modelo\":" + comilla(nombre)
                         + ",\"estado\":" + comilla(estado)
                         + ",\"hecho\":" + hecho + ",\"total\":" + total
+                        + ",\"capas\":" + capas.size()
                         + ",\"porcentaje\":" + String.format(java.util.Locale.ROOT, "%.4f", pct) + "}");
                 }
             }
             cerr(lector);
             c.disconnect();
+            /* Cancelar no es un fallo: la dueña lo pidió. Se dice `cancelado:true`
+               para que la cara suelte la barra, y NO se manda aviso —un timbre por
+               algo que ella misma cortó sería ruido. */
+            if (cancelada || quieroCancelar) {
+                ultimoFallo = "cancelaste la bajada de " + nombre;
+                return "{\"ok\":false,\"de\":\"ollama\",\"que\":\"descarga\",\"cancelado\":true"
+                     + ",\"modelo\":" + comilla(nombre)
+                     + ",\"hecho\":" + hecho + ",\"total\":" + total
+                     + ",\"dice\":" + comilla(ultimoFallo) + "}";
+            }
             if (error) { Timbre.bajada(app, false, nombre, hecho, total, ultimoFallo, servidor()); return mal("descarga", ultimoFallo); }
             if (!motes) Log.i("cort", "ollama-pull terminó sin 'success': " + estado);
             /* El aviso va AQUÍ y no en la cara: la hoja se cierra, el teléfono se
@@ -322,22 +409,75 @@ public class Ollama {
                  + ",\"modelo\":" + comilla(nombre)
                  + ",\"listo\":" + motes
                  + ",\"estado\":" + comilla(estado)
+                 + ",\"capas\":" + capas.size()
                  + ",\"hecho\":" + hecho + ",\"total\":" + total + "}";
         } catch (SocketTimeoutException tardo) {
+            if (quieroCancelar) return cuadroCancela(nombre);
             ultimoFallo = "el PC dejó de mandar trozos: el modelo sigue bajando por su lado o se cortó la Wi-Fi";
             Timbre.bajada(app, false, nombre, 0, 0, ultimoFallo, servidor());
             return mal("descarga", ultimoFallo);
         } catch (IOException noHay) {
+            /* El `cerr()` de `cancela()` se nota aquí como corriente cerrada: si el
+               interruptor está puesto, eso es la cancelación y no un problema de red,
+               así que tampoco se avisa de un corte que pidió la dueña. */
+            if (quieroCancelar) return cuadroCancela(nombre);
             ultimoFallo = "no llego a " + servidor() + " (" + noHay.getMessage() + ")";
             Timbre.bajada(app, false, nombre, 0, 0, ultimoFallo, servidor());
             return mal("descarga", ultimoFallo);
         } catch (Exception bulto) {
+            if (quieroCancelar) return cuadroCancela(nombre);
             ultimoFallo = "no pude bajar " + nombre;
             Log.w("cort", "ollama-pull", bulto);
             Timbre.bajada(app, false, nombre, 0, 0, ultimoFallo, servidor());
             return mal("descarga", ultimoFallo);
+        } finally {
+            bajando = null;
+            entradaBajada = null;
+            bajandoModelo = "";
+            quieroCancelar = false;
         }
     }
+
+    /** El cuadro de una bajada cortada por la dueña: `ok:false` pero `cancelado`. */
+    private String cuadroCancela(String nombre) {
+        ultimoFallo = "cancelaste la bajada de " + nombre;
+        return "{\"ok\":false,\"de\":\"ollama\",\"que\":\"descarga\",\"cancelado\":true"
+             + ",\"modelo\":" + comilla(nombre) + ",\"hecho\":0,\"total\":0"
+             + ",\"dice\":" + comilla(ultimoFallo) + "}";
+    }
+
+    /**
+     * Corta la bajada en curso. La API de Ollama no tiene un `/api/pull/cancel`
+     * (mirado en `docs/api.md` antes de escribir esto), así que lo que se hace es
+     * cerrar el stream por nuestro lado: el hilo que lee suelta una `IOException`,
+     * ve el interruptor puesto y devuelve el cuadro `cancelado:true`.
+     *
+     * Dicho con honestidad: el servidor puede seguir bajando por su cuenta unos
+     * segundos más (Ollama no entera la cuenta de cada cliente). Lo que se corta
+     * seguro es la barra de la cara y los cuadros de progreso, que es lo que la
+     * dueña ve desde el teléfono.
+     */
+    public String cancela() {
+        quieroCancelar = true;
+        String nombre = bajandoModelo;
+        cerr(entradaBajada);
+        HttpURLConnection c = bajando;
+        if (c != null) { try { c.disconnect(); } catch (Exception yaCerrada) { } }
+        if (nombre == null || nombre.isEmpty()) {
+            ultimoFallo = "no había ninguna bajada que cancelar";
+            return mal("cancela", ultimoFallo);
+        }
+        return "{\"ok\":true,\"de\":\"ollama\",\"que\":\"cancela\",\"cancelado\":true"
+             + ",\"modelo\":" + comilla(nombre)
+             + ",\"dice\":" + comilla("cortada la bajada de " + nombre
+                + "; el PC puede tardar unos segundos en pararla del todo") + "}";
+    }
+
+    /** Si hay una bajada abierta, para que la cara sepa si el botón tiene función. */
+    public boolean bajando() { return bajandoModelo != null && !bajandoModelo.isEmpty(); }
+
+    /** El modelo que está bajando ahora mismo, o vacío. */
+    public String queBaja() { String s = bajandoModelo; return s == null ? "" : s; }
 
     /* ─────────────────────────── borrar y usar ──────────────────── */
 

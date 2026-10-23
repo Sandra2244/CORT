@@ -84,7 +84,16 @@ cd "$(dirname "$0")"
 #   un `NotificationManager` de verdad no existe, y ahí entra su gemelo de papel.
 #   Cero permisos nuevos: `POST_NOTIFICATIONS` ya estaba desde el reproductor, y
 #   seguir metiendo superficie en el manifiesto es lo que rechazaba Play Protect.
-APK_VERSION="${APK_VERSION:-2.8.0}"   # desde aquí sale UN SOLO APK: este
+# · En 2.9.0 la bajada del teléfono se vuelve de fiar (F13): `descarga()` hace un
+#   `GET /api/version` ANTES de abrir `POST /api/pull` —un PC dormido se cortaba en
+#   90 s con un timeout mudo; ahora son ~3 s con un aviso que nombra `OLLAMA_HOST`—,
+#   el progreso se **suma por `digest`** (antes la última capa ganaba y la barra
+#   quedaba quieta: eso era el «no descarga los modelos»), hay `cancela()` que cierra
+#   la corriente bloqueada por el puente de siempre (`mente({que:'ollama',
+#   accion:'cancela'})`), y mientras baja otro modelo se rechaza la segunda orden.
+#   Cero permisos y cero métodos nuevos en el puente: la cancelación entra por la
+#   acción que ya existedía, así que el manifiesto del `nucleo` no se toca.
+APK_VERSION="${APK_VERSION:-2.9.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

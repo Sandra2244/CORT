@@ -619,28 +619,46 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       anterior de los conteos de la batería (sin token no se edita, y se corrige hacia
       adelante en el repo, que es lo que se lee aquí); y la memoria, la agenda por voz y los
       interruptores de Ajustes de su punto 5 siguen en la cola.
-- [~] **F12 + F13 (en curso, elegidas por la dueña para ir juntas en la 2.9.0)** —
-      ella eligió «la descarga de modelos fiable **y** que la voz responda» en una sola
-      Release, así que va esta tanda. **Cerrado y medido (mitad del PC, 2026-10-23):**
-      `ollama serve` se levanta ahora con `OLLAMA_HOST=0.0.0.0:11434` —era el motivo nº 1
-      por el que el teléfono no veía los modelos, y no era de Ollama: era nuestro
-      arranque—, el mando nuevo `ollama_red` vive en `config_store.DEFAULTS` (sin eso
-      `raw()` lo filtraba y ponerlo en Ajustes no servía), `psutil` es opcional con
-      veredicto `sin medir` en vez de inventado, `info_red()` dice la IP que responde con
-      sus cinco notas honestas, y el sitio del disco se comprueba **antes** de lanzar la
-      bajada sin negativear un modelo fuera del catálogo. Suite nueva
-      `scripts/prueba-modelos.py`: **53 comprobaciones** en 1 s, sin red y sin tocar
-      `~/.cort`; taller nuevo `scripts/taller-modelos.sh`: **17 mutaciones, caen las 17**
-      (dos de ellas obligaron a reescribir su comprobación, porque dar verde con el
-      código roto es decoración); sector **[25]** en `scripts/prueba-costura.py` (256
-      `ok`) cosiendo pipeline ↔ config ↔ teléfono: la suite se invoca, el taller **no**
-      se cuela en Actions, `quiere_red()` pregunta `ollama_red` con `ast` (no con
-      subcadenas) y el puerto del PC es el que busca `Ollama.java`. **Falta, dicho en vez
-      de fingido:** la mitad del teléfono (`Ollama.java`: pre-ping, sumar el NDJSON por
-      `digest` en vez de sobrescribirlo, cancelar con su puente, la `red.url` en la hoja,
-      catálogo único generado para los 107) y todo F12 (ducking, `dispatchMediaKeyEvent`
-      para «pausa» cuando manda otro reproductor, barrido de botones muertos); nada de
-      esto llega a su teléfono hasta que se etiquete y el pipeline dé verde.
+- [x] **F13 · la descarga de modelos fiable (publicada en la 2.9.0)** — cerrada en dos
+      mitades medidas, la del PC primero y la del teléfono después.
+      **Mitad del PC (2026-10-23):** `ollama serve` se levanta ahora con
+      `OLLAMA_HOST=0.0.0.0:11434` —era el motivo nº 1 por el que el teléfono no veía los
+      modelos, y no era de Ollama: era nuestro arranque—, el mando nuevo `ollama_red`
+      vive en `config_store.DEFAULTS` (sin eso `raw()` lo filtraba y ponerlo en Ajustes no
+      servía), `psutil` es opcional con veredicto `sin medir` en vez de inventado,
+      `info_red()` dice la IP que responde con sus cinco notas honestas, y el sitio del
+      disco se comprueba **antes** de lanzar la bajada sin negativear un modelo fuera del
+      catálogo. Suite nueva `scripts/prueba-modelos.py`: **53 comprobaciones** en 1 s, sin
+      red y sin tocar `~/.cort`; taller nuevo `scripts/taller-modelos.sh`: **17
+      mutaciones, caen las 17** (dos de ellas obligaron a reescribir su comprobación,
+      porque dar verde con el código roto es decoración); sector **[25]** de
+      `scripts/prueba-costura.py` cosiendo pipeline ↔ config ↔ teléfono.
+      **Mitad del teléfono (2026-10-23):** el progreso se **suma por `digest`** (antes la
+      última capa ganaba y la barra se quedaba quieta: eso era el «no descarga los
+      modelos»), `descarga()` hace un `GET /api/version` **delante** de `POST /api/pull`
+      para que un PC dormido se corte en ~3 s con un aviso que nombra `OLLAMA_HOST` en vez
+      de un timeout de noventa segundos, existe `cancelar` de verdad (botón `✕`, frase de
+      voz y puente `mente({que:'ollama',accion:'cancela'})`, sin superficie nueva en el
+      manifiesto) que cierra la corriente bloqueada y **no** manda un aviso por algo que la
+      dueña cortó, dos bajadas a la vez se rechazan nombrando la que ya va, y la hoja pinta
+      la dirección del PC con el que está hablando. `Prueba4` sube a **58
+      comprobaciones** contra un Ollama de mentira levantado en el propio JDK, el sector
+      **[26]** de la costura añade **8** comprobaciones de las tres capas (la suite llega a
+      **264 `ok`**) y `scripts/taller-ollama.sh` tiene **12 mutaciones, caen las 12**. Lo
+      que se midió y contradice un comentario que habíamos escrito: basta **una** de las dos
+      cerradas (corriente o conexión) para despertar al lector en este JDK; la mutación que
+      cae es quitar las dos, y por eso el cierre doble se queda con su explicación puesta.
+      **Falta, dicho en vez de fingido:** el catálogo único generado para los 107 modelos
+      (hoy 14 en `models.py` y 107 en `telefono.js`, con [23.d] vigilando que las 14 sean
+      subconjunto idéntico de las 107), y que nada de esto esté visto en su teléfono ni en
+      su PC hasta que el pipeline termine la Release.
+- [~] **F12 · que la voz responda (en curso)** — lo que ella pidió junto a F13: ducking en
+      el oído (`AudioManager.requestAudioFocus(... MAY_DUCK)`, sin superficie nueva de
+      manifiesto), escuchar en segundo plano, «pausa / siguiente / anterior» con
+      `dispatchMediaKeyEvent` cuando manda otro reproductor y no `e.vivo`, y el barrido
+      sistemático de botones muertos (cada `llama('x')` de la cara contra su puente en
+      `CortNative.java`, cada `post('/api/…')` contra su ruta en `main.py`) como sector
+      nuevo de la costura. Nada de esto está hecho todavía.
 - [ ] F7b Contestar llamadas por ti y buzón de voz: pide el rol `ROLE_CALLING` con su `InCallService` (Android no deja otra cosa); leer SMS o el contenido de WhatsApp no tiene API, así que no se finge
 - [ ] F14 Idiomas adicionales y temas visuales *(estaba numerada como F8; el plan maestro
   ocupó ese hueco con «la cara ordenada», así que ésta se renumeró hacia adelante)*

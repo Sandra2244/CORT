@@ -219,6 +219,10 @@ public class Mente {
                 json = ollama.descubre(servidor);
             } else if ("borra".equals(accion) || "rm".equals(accion)) {
                 json = ollama.borra(modelo);
+            } else if ("cancela".equals(accion) || "cancelar".equals(accion)) {
+                // No hace falta esperar a nada: `cancela()` cierra el stream de la
+                // bajada que está en otro hilo y contesta enseguida.
+                json = ollama.cancela();
             } else {
                 json = "{\"ok\":false,\"de\":\"ollama\",\"dice\":" + comilla(
                     "no conozco esa acción de ollama: " + (accion.isEmpty() ? "(venía vacía)" : accion)) + "}";

@@ -43,6 +43,9 @@ public class Prueba4 {
 
     static HttpServer servidor;
     static int puerto;
+    static HttpServer sinVersion;           // el PC con el puerto abierto y sin Ollama
+    static int puertoSinVersion;
+    static volatile int PULLS_SIN_VERSION = 0;
     static List<String> vistos = new ArrayList<>();   // peticiones recibidas, para mirar el método
 
     /* ─────────────────────────── el Ollama de papel ─────────────── */
@@ -87,6 +90,61 @@ public class Prueba4 {
                 if (peticion.contains("roto")) {
                     s.write("{\"error\":\"pull failed: no such model\"}\n"
                             .getBytes(StandardCharsets.UTF_8));
+                } else if (peticion.contains("lenta")) {
+                    /* Cuatro segundos de bajada a propósito: lo que se comprueba con
+                       ella es `cancela()`, y para eso hace falta que la bajada siga
+                       viva cuando el otro hilo cierre el stream. */
+                    s.write("{\"status\":\"pulling manifest\"}\n".getBytes(StandardCharsets.UTF_8));
+                    s.flush();
+                    for (int i = 1; i <= 40; i++) {
+                        s.write(("{\"status\":\"downloading\",\"digest\":\"z\",\"total\":40000,"
+                            + "\"completed\":" + (i * 1000) + "}\n").getBytes(StandardCharsets.UTF_8));
+                        s.flush();
+                        try { Thread.sleep(100); } catch (InterruptedException yaNo) { break; }
+                    }
+                    s.write("{\"status\":\"success\"}\n".getBytes(StandardCharsets.UTF_8));
+                } else if (peticion.contains("callada")) {
+                    /* El caso que decide si el cancelar es de verdad o es una mentira:
+                       dos líneas y tres segundos de silencio, como el PC que se queda
+                       pensando mientras el teléfono mira la barra. La prueba espera DOS
+                       segundos, así que sólo pasa si algo desbloquea el `readLine()` —
+                       cerrar la corriente o soltar la conexión, que en el JDK bastan por
+                       separado (el taller lo midió: quitar una sola sigue dando verde;
+                       quitar las dos cae). Si aquí nadie cerrara nada, el hilo seguiría
+                       clavado hasta el segundo 3 y `resultado2[0]` sería `null`. */
+                    s.write("{\"status\":\"pulling manifest\"}\n".getBytes(StandardCharsets.UTF_8));
+                    s.write(("{\"status\":\"downloading\",\"digest\":\"q\",\"total\":900000,"
+                            + "\"completed\":100000}\n").getBytes(StandardCharsets.UTF_8));
+                    s.flush();
+                    try { Thread.sleep(3000); } catch (InterruptedException yaNo) { }
+                    s.write("{\"status\":\"success\"}\n".getBytes(StandardCharsets.UTF_8));
+                } else if (peticion.contains("capas")) {
+                    /* El NDJSON de un modelo de VARIAS capas, intercalado y con una
+                       línea de verificación que trae `digest` pero no `total`. Cada
+                       línea habla de SU capa: sumar mal (o sobrescribir) se ve aquí
+                       enseguida, porque el total del modelo son 5.000.000 y los de
+                       las capas sueltas no llegan a esa cifra. */
+                    s.write("{\"status\":\"pulling manifest\"}\n".getBytes(StandardCharsets.UTF_8));
+                    s.flush();
+                    String[][] lineas = {
+                        {"downloading", "aaa", "4000000", "100000"},
+                        {"downloading", "bbb", "1000000", "20000"},
+                        {"downloading", "aaa", "4000000", "2000000"},
+                        {"downloading", "bbb", "1000000", "500000"},
+                        {"downloading", "aaa", "4000000", "4000000"},
+                        {"downloading", "bbb", "1000000", "500000"},
+                        {"verifying sha256 digest", "aaa", "", ""},
+                        {"writing manifest", "", "", ""},
+                        {"success", "", "", ""},
+                    };
+                    for (String[] l : lineas) {
+                        StringBuilder j = new StringBuilder("{\"status\":\"" + l[0] + "\"");
+                        if (!l[1].isEmpty()) j.append(",\"digest\":\"" + l[1] + "\"");
+                        if (!l[2].isEmpty()) j.append(",\"total\":" + l[2]);
+                        if (!l[3].isEmpty()) j.append(",\"completed\":" + l[3]);
+                        s.write((j.append("}\n").toString()).getBytes(StandardCharsets.UTF_8));
+                        s.flush();
+                    }
                 } else {
                     s.write("{\"status\":\"pulling manifest\"}\n".getBytes(StandardCharsets.UTF_8));
                     s.flush();
@@ -130,6 +188,27 @@ public class Prueba4 {
         servidor.start();
         puerto = servidor.getAddress().getPort();
         System.out.println("ollama de mentira en 127.0.0.1:" + puerto);
+
+        /* Un segundo servidor que SÍ tiene `/api/pull` y NO tiene `/api/version`: es
+           el PC con el puerto abierto pero sin Ollama detrás (el backend de CORT, un
+           servidor a medio arrancar, cualquier cosa que escuche). Sin el ping de
+           delante, la bajada se iría a los 90 s de timeout; con él, `descarga` tiene
+           que cortar antes y —esto es lo que se comprueba— sin llamar a `/api/pull`. */
+        sinVersion = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        sinVersion.createContext("/api/pull", new HttpHandler() {
+            @Override public void handle(HttpExchange e) throws java.io.IOException {
+                leido(e);
+                PULLS_SIN_VERSION++;
+                e.getResponseHeaders().set("Content-Type", "application/x-ndjson");
+                e.sendResponseHeaders(200, 0);
+                OutputStream s = e.getResponseBody();
+                s.write("{\"status\":\"success\"}\n".getBytes(StandardCharsets.UTF_8));
+                s.close();
+            }
+        });
+        sinVersion.setExecutor(null);
+        sinVersion.start();
+        puertoSinVersion = sinVersion.getAddress().getPort();
 
         Context ctx = new Context();
         ctx.prefs.edit()
@@ -224,6 +303,99 @@ public class Prueba4 {
             && Timbre.PUESTOS.get(1).contains("no such model"),
             String.valueOf(Timbre.PUESTOS));
 
+        // ── 6b · varias capas: el progreso se SUMA, no se sobrescribe ──────
+        // El bug que la dueña veía («la barra no se mueve, o se va a atrás»): un
+        // modelo son N capas y el servidor intercala sus líneas. Cada línea trae el
+        // total y lo bajado de ESA capa, así que asignar (`total = j.total`) hacía
+        // que la última línea leída mandara sobre el modelo entero.
+        Timbre.limpia();
+        final List<String> porCapas = new ArrayList<>();
+        String multi = ollama.descarga("varias-capas",
+            c -> { synchronized (porCapas) { porCapas.add(c); } });
+        check("capas: el total del modelo es la suma de sus capas (4.500.000 de 5.000.000)",
+            multi.contains("\"hecho\":4500000") && multi.contains("\"total\":5000000"), multi);
+        check("capas: dice cuántas capas lleva el modelo", multi.contains("\"capas\":2"), multi);
+        check("capas: una línea de verificación sin `total` no borra el de su capa",
+            multi.contains("\"total\":5000000") && multi.contains("\"capas\":2"), multi);
+        check("capas: el último cuadro trae el porcentaje SUMADO (90 %)",
+            !porCapas.isEmpty()
+              && porCapas.get(porCapas.size() - 1).contains("\"porcentaje\":0.9000"),
+            porCapas.isEmpty() ? "sin cuadros" : porCapas.get(porCapas.size() - 1));
+        check("capas: ningún cuadro de progreso retrocede",
+            subeSiempre(porCapas), String.valueOf(porCapas.size()));
+
+        // ── 6c · el ping delante: un puerto abierto sin Ollama detrás ───────
+        Timbre.limpia();
+        ollama.fija("127.0.0.1:" + puertoSinVersion);
+        String sinVer = ollama.descarga("cualquiera", null);
+        check("ping delante: lo que no contesta se dice en español, no con un timeout",
+            sinVer.contains("\"ok\":false") && sinVer.contains("no contesta nadie")
+              && sinVer.contains("OLLAMA_HOST"), sinVer);
+        check("ping delante: con el PC mudo no se llega a llamar a /api/pull",
+            PULLS_SIN_VERSION == 0, String.valueOf(PULLS_SIN_VERSION));
+        check("ping delante: el aviso cuenta lo mismo (falló, y dice por qué)",
+            Timbre.PUESTOS.size() == 1 && Timbre.PUESTOS.get(0).startsWith("paró cualquiera")
+              && Timbre.PUESTOS.get(0).contains("no contesta nadie"), String.valueOf(Timbre.PUESTOS));
+        ollama.fija("127.0.0.1:" + puerto);                     // y se vuelve a casa
+
+        // ── 6d · cancelar una bajada en curso ──────────────────────────────
+        Timbre.limpia();
+        final List<String> enVivo = new ArrayList<>();
+        final String[] resultado = new String[1];
+        Thread bajada = new Thread(() -> {
+            resultado[0] = ollama.descarga("lenta", c -> { synchronized (enVivo) { enVivo.add(c); } });
+        });
+        bajada.start();
+        for (int n = 0; n < 160 && enVivo.isEmpty(); n++) Thread.sleep(10);
+        check("cancelar: sólo se puede cortar una bajada que esté abierta",
+            ollama.bajando() && "lenta".equals(ollama.queBaja()), ollama.queBaja());
+        String otra = ollama.descarga("mientras", null);
+        check("una sola bajada: pedir la segunda se dice, no pisa la primera",
+            otra.contains("\"ok\":false") && otra.contains("ya está bajando lenta")
+              && "lenta".equals(ollama.queBaja()), otra + " | " + ollama.queBaja());
+        long t0 = System.currentTimeMillis();
+        String aviso = ollama.cancela();
+        long tardo = System.currentTimeMillis() - t0;
+        bajada.join(6000);
+        check("cancelar: contesta enseguida y dice qué estaba bajando",
+            aviso.contains("\"ok\":true") && aviso.contains("\"cancelado\":true")
+              && aviso.contains("lenta") && tardo < 2000, aviso + " | " + tardo + " ms");
+        check("cancelar: el hilo de la bajada para, no espera al final del servidor",
+            resultado[0] != null && resultado[0].contains("\"cancelado\":true"),
+            String.valueOf(resultado[0]));
+        check("cancelar: la cara recibe `ok:false` con su `dice` (la barra se suelta)",
+            resultado[0] != null && resultado[0].contains("\"ok\":false")
+              && resultado[0].contains("cancelaste"), String.valueOf(resultado[0]));
+        check("cancelar: NO se avisa de algo que la dueña cortó por su mano",
+            Timbre.PUESTOS.isEmpty(), String.valueOf(Timbre.PUESTOS));
+        check("cancelar: después de cortar no queda ninguna bajada abierta",
+            !ollama.bajando() && ollama.queBaja().isEmpty(), ollama.queBaja());
+        String segunda = ollama.cancela();
+        check("cancelar dos veces: la segunda dice que no había nada que cortar",
+            segunda.contains("\"ok\":false") && segunda.contains("no había ninguna bajada"), segunda);
+        Timbre.limpia();
+        String cuadroCancela = cuadroContrato(mente, "{\"que\":\"ollama\",\"accion\":\"cancela\"}");
+        check("cancelar: por el contrato de la cara (`accion:cancela`) contesta `que:cancela`",
+            cuadroCancela.contains("\"que\":\"cancela\""), cuadroCancela);
+
+        // ── 6e · cancelar con el PC CALLADO (el caso que arregla el silencio) ──
+        Timbre.limpia();
+        final List<String> mudos = new ArrayList<>();
+        final String[] resultado2 = new String[1];
+        Thread callada = new Thread(() -> resultado2[0] = ollama.descarga("callada",
+            c -> { synchronized (mudos) { mudos.add(c); } }));
+        callada.start();
+        for (int n = 0; n < 160 && mudos.isEmpty(); n++) Thread.sleep(10);
+        ollama.cancela();
+        callada.join(2000);              // el servidor calla 3 s: esperarlos sería el fallo
+        check("cancelar con el PC callado: cerrar la corriente despierta al lector",
+            resultado2[0] != null && resultado2[0].contains("\"cancelado\":true"),
+            String.valueOf(resultado2[0]));
+        check("cancelar con el PC callado: lo bajado hasta el corte se dice, no se inventa",
+            resultado2[0] != null && resultado2[0].contains("\"ok\":false")
+              && !resultado2[0].contains("\"listo\":true"), String.valueOf(resultado2[0]));
+        Timbre.limpia();
+
         // ── 7 · borrar, con las dos formas de la API ──────────────────
         String borra = ollama.borra("qwen2.5:1.5b");
         check("borra con DELETE", borra.contains("\"ok\":true") && borra.contains("borrado"), borra);
@@ -275,6 +447,7 @@ public class Prueba4 {
             porContrato.isEmpty() ? "no llegó nada" : porContrato.get(0));
 
         servidor.stop(0);
+        sinVersion.stop(0);
         check("el servidor recibió las rutas correctas",
             vistos.contains("GET /api/tags") && vistos.contains("POST /api/pull")
               && vistos.contains("DELETE /api/delete") && vistos.contains("POST /v1/chat/completions"),
@@ -290,8 +463,47 @@ public class Prueba4 {
         }
     }
 
-    static String leido(HttpExchange e) throws java.io.IOException {
-        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+    /**
+     * Que la barra no retroceda nunca: se leen los `porcentaje` de los cuadros en el
+     * orden en que salieron. Con el progreso mal sumado, un cuadro de una capa chica
+     * valía menos que el anterior y la cara veía la barra irse hacia atrás.
+     */
+    static boolean subeSiempre(List<String> cuadros) {
+        double antes = -1;
+        for (String c : cuadros) {
+            int i = c.indexOf("\"porcentaje\":");
+            if (i < 0) continue;
+            int j = i + 13, k = j;
+            while (k < c.length() && (Character.isDigit(c.charAt(k)) || c.charAt(k) == '.')) k++;
+            double p;
+            try { p = Double.parseDouble(c.substring(j, k)); } catch (Exception rara) { return false; }
+            if (p < antes - 1e-9) return false;
+            antes = p;
+        }
+        return antes > 0;
+    }
+
+    /**
+     * Manda una orden por el CONTRATO que usa la cara (`mente` con `que:"ollama"`,
+     * que contesta `pendiente` y entrega el cuadro por el evento) y devuelve el
+     * primer cuadro que llegue con `de:"ollama"`. Es la comprobación que ata la hoja
+     * del teléfono con Java: si `Mente` no conoce la acción, lo que llega es el aviso
+     * de «no conozco esa acción» y aquí se ve, en vez de quedarse la cara sin nada.
+     */
+    static String cuadroContrato(Mente mente, String orden) {
+        final List<String> caja = new ArrayList<>();
+        mente.engancha(json -> { synchronized (caja) { caja.add(json); } });
+        mente.mente(orden);
+        for (int n = 0; n < 100; n++) {
+            synchronized (caja) {
+                for (String c : caja) if (c.contains("\"de\":\"ollama\"")) return c;
+            }
+            try { Thread.sleep(20); } catch (InterruptedException cortan) { break; }
+        }
+        return "(no llegó ningún cuadro de ollama)";
+    }
+
+    static String leido(HttpExchange e) throws java.io.IOException {        java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
         byte[] trozo = new byte[4096];
         int n;
         while ((n = e.getRequestBody().read(trozo)) > 0) b.write(trozo, 0, n);

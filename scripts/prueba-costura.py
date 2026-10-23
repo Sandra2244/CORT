@@ -1413,7 +1413,7 @@ else:
                                       "y devuelve el eco a su propia consola")
 
     # El grupo 4b: sin él, «busca cerebros» se lo llevaban la app o el buscador.
-    if not re.search(r"\\b\(ollama\|modelo\|modelos\|cerebros\)\\b", CARA_21):
+    if not re.search(r"\\b\(ollama\|modelo\|modelos\|cerebros[^)]*\)\\b", CARA_21):
         falla("terminal · router", "`telefonoPorVoz` no tiene el grupo de `ollama|modelo|modelos|cerebros`: "
                                    "escribir «modelos» abriría una app o el navegador")
     else:
@@ -3161,11 +3161,13 @@ f24_mal = len(re.findall(r"Timbre\.bajada\(app, false", F24_OL))
 if f24_bien != 1:
     f24_huecos.append(f"el aviso de éxito se dispara {f24_bien} veces (con la cuenta de "
                       "`motes` debe ser justo una: dos avisos de un modelo que no bajó)")
-if f24_mal != 4:
-    f24_huecos.append(f"los fallos disparan el aviso {f24_mal} veces en vez de 4: son "
-                      "cuatro las salidas malas de `descarga` (el `error` del stream, el "
-                      "tiempo de espera, el `IOException` y el bulto), y sin avisar en una "
-                      "se queda esperando un modelo que no va a llegar")
+if f24_mal != 5:
+    f24_huecos.append(f"los fallos disparan el aviso {f24_mal} veces en vez de 5: son "
+                      "cinco las salidas malas de `descarga` (el ping que no contesta, "
+                      "el `error` del stream, el tiempo de espera, el `IOException` y el "
+                      "bulto), y sin avisar en una se queda esperando un modelo que no va "
+                      "a llegar. El corte que ella pide NO entra en la cuenta: "
+                      "`cancela()` tampoco debe sonar.")
 if "if (motes) Timbre.bajada(app, true" not in F24_OL:
     f24_huecos.append("el aviso de éxito ya no está condicionado a `motes`: prometería un "
                       "modelo que el servidor no confirmó")
@@ -3359,6 +3361,184 @@ elif f25_pc.group(1) != f25_tel.group(1):
           f"{f25_tel.group(1)}: el barrido /24 nunca lo encuentra")
 else:
     dice_ok("F13 · puerto", f"los dos lados dicen {f25_pc.group(1)}")
+
+# ── [26] F13 · la bajada del teléfono: Java, el contrato y la cara, las tres capas ──
+# La mitad del PC está cosida en [25]. Lo que se comprueba aquí es la mitad que la
+# dueña tiene en la mano: que el progreso se SUME por capa (con el `total = línea.total`
+# de antes la barra se caía y ella lo llamaba «no descarga los modelos»), que el ping
+# corto vaya DELANTE del `POST /api/pull` (sin él, un PC dormido se tragaba noventa
+# segundos y devolvía un timeout mudo), y que exista un cancelar de verdad en las tres
+# capas: `Ollama.java` cierra la corriente, `Mente.java` conoce la acción y la cara la
+# pide con su botón. Cada una de estas redes tiene su mutación en
+# `scripts/taller-ollama.sh`, medida sobre el Ollama de mentira del JDK (`Prueba4`).
+print("\n[26] F13 · la bajada del teléfono, en sus tres capas")
+
+F26_OLL = (APK / "src" / "com" / "cort" / "ia" / "Ollama.java").read_text(encoding="utf-8")
+# El docstring de `descarga` CUENTA el bug antiguo citando la línea de Java tal cual
+# (`total = j.optLong("total", total)`), así que las comprobaciones de abajo trabajan
+# sobre el código sin comentarios: si no, un verde dependería de una frase en prosa.
+# OJO: aquí NO vale el `sin_comentarios` de arriba, que también se come los literales
+# —y buena parte de lo que se comprueba son palabras que Java dice a la dueña (`ya
+# está bajando`, `no contesta nadie`). Se quitan sólo los comentarios.
+def f26_sin_com(texto: str) -> str:
+    limpio = re.sub(r"/\*.*?\*/", "", texto, flags=re.S)
+    return "\n".join(l.split("//")[0] for l in limpio.splitlines())
+
+
+F26_COD = f26_sin_com(F26_OLL)
+F26_MEN = (APK / "src" / "com" / "cort" / "ia" / "Mente.java").read_text(encoding="utf-8")
+F26_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+F26_YML = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+F26_TALLER = RAIZ / "scripts" / "taller-ollama.sh"
+# Las hojas del teléfono viven dentro de `telefono.js` (plantillas), pero el índice
+# puede traer más: se buscan los `id=` en los dos sitios para no acusar de muerto a
+# un botón que está en `index.html`.
+F26_CARAS = F26_TEL
+if (RAIZ / "ui" / "index.html").exists():
+    F26_CARAS += "\n" + (RAIZ / "ui" / "index.html").read_text(encoding="utf-8")
+
+
+# 26.a · el progreso por capa: mapa de digests, suma, y el viejo `=` desapareció
+f26_suma = re.search(r"hecho \+= capa\[0\]; total \+= capa\[1\];", F26_COD)
+f26_mapa = "capas.put(mota," in F26_COD
+f26_sobrescribe = re.search(r'total = j\.optLong\("total", total\)', F26_COD)
+if not (f26_suma and f26_mapa):
+    falla("F13 · progreso por capa", "el NDJSON ya no se acumula por `digest` "
+          f"(mapa: {f26_mapa}, suma: {bool(f26_suma)}): con las capas intercaladas la "
+          "barra vuelve a saltar según la última línea que llegó")
+elif f26_sobrescribe:
+    falla("F13 · progreso por capa", "queda una asignación `total = j.optLong(\"total\", "
+          "total)`: es el bug original, la última capa ganaba sobre el modelo entero")
+else:
+    dice_ok("F13 · progreso por capa", "un mapa `digest → {hecho, total}` y la barra "
+              "sale de sumarlo; `Prueba4` lo mide con un modelo de dos capas")
+
+# 26.b · el ping corto, DELANTE de la bajada
+if "String ver = version(servidor());" not in F26_COD:
+    falla("F13 · ping antes de bajar", "`descarga()` ya no hace el `GET /api/version` "
+          "delante: un PC dormido se traga 90 s de `LECTURA_PULL_MS` y devuelve un "
+          "timeout que no dice qué faltaba")
+elif not (0 <= F26_COD.find("String ver = version(servidor());")
+          < F26_COD.find('post(r + "/api/pull"')):
+    falla("F13 · ping antes de bajar", "el ping se hace DESPUÉS de abrir `/api/pull`, "
+          "que es exactamente cuando ya no sirve para nada")
+elif "no contesta nadie" not in F26_COD:
+    falla("F13 · ping antes de bajar", "el ping contestó mal y no hay frase honesta "
+          "(`no contesta nadie`): la dueña se queda sin saber si era el PC, la Wi-Fi "
+          "o el OLLAMA_HOST")
+else:
+    dice_ok("F13 · ping antes de bajar", "versión primero, bajada después, y motivo "
+              "en español si el PC no contesta")
+
+# 26.c · el cancelar, en las tres capas
+f26_java = re.search(r"public String cancela\(\)", F26_COD)
+f26_corriente = re.search(r"cerr\(entradaBajada\);", F26_COD)
+f26_contrato = '"cancela".equals(accion)' in F26_MEN
+f26_boton = "ollamaOrden('cancela')" in F26_TEL
+if not f26_java:
+    falla("F13 · cancelar", "no hay `cancela()` en `Ollama.java`: una bajada colgada "
+          "no se puede cortar sin cerrar la app")
+elif not f26_corriente:
+    falla("F13 · cancelar", "`cancela()` ya no cierra la CORRIENTE de entrada: con el "
+          "PC callado el hilo lector se queda bloqueado hasta el timeout (medido en "
+          "`Prueba4`, sección 6e, que sólo pasa cerrándola)")
+elif not f26_contrato:
+    falla("F13 · cancelar", "`Mente.java` no conoce la acción `cancela`: la cara "
+          "mandaría `accion:'cancela'` y recibiría «no conozco esa acción»")
+elif not f26_boton:
+    falla("F13 · cancelar", "la cara no ofrece cancelar: el botón y su `ollamaOrden` "
+          "desaparecieron de la hoja Equipo")
+else:
+    dice_ok("F13 · cancelar", "Java cierra la corriente, `Mente` enruta la acción y "
+              "la hoja Equipo la pide")
+
+# 26.d · una sola bajada: el puente no se pisa a sí mismo
+if 'ya está bajando ' not in F26_COD or "synchronized (this)" not in F26_COD:
+    falla("F13 · una sola bajada", "`descarga()` admite dos a la vez: los dos hilos se "
+          "pelearían por `bajando`/`entradaBajada`, que son los que usan el cancelar, "
+          "y la dueña se quedaría sin barra y sin poder cortar ninguna")
+else:
+    dice_ok("F13 · una sola bajada", "la segunda petición se rechaza nombrando la "
+              "primera (`Prueba4` lo mide con la bajada lenta en curso)")
+
+# 26.e · lo que la cara PROMETE: un corte propio no se anuncia como aviso recibido
+f26_renuncia = F26_TEL.find("if (ev.cancelado) {")
+f26_promesa = F26_TEL.find("CORT también te lo avisó")
+if f26_renuncia < 0:
+    falla("F13 · el aviso y el corte", "la cara ya no distingue un corte pedido por "
+          "ella de un fallo: Java no manda notificación al cancelar, así que "
+          "prometería un aviso que no llegó")
+elif f26_promesa >= 0 and f26_renuncia > f26_promesa:
+    falla("F13 · el aviso y el corte", "la salida del `cancelado` está DESPUÉS del "
+          "«te lo avisé»: el cuadro de una cancelación se tomaría con la promesa del "
+          "timbre")
+elif "private String cuadroCancela" not in F26_COD:
+    falla("F13 · el aviso y el corte", "no existe `cuadroCancela()`: la comprobación "
+          "de que un corte no avisa quedó ciega")
+elif "Timbre.bajada" in F26_COD[F26_COD.find("private String cuadroCancela"):
+                                F26_COD.find("public String cancela()")]:
+    falla("F13 · el aviso y el corte", "`cuadroCancela()` manda notificación: sonaría "
+          "un aviso por algo que la dueña cortó por su mano")
+else:
+    dice_ok("F13 · el aviso y el corte", "el corte propio suelta la barra y no "
+              "promete un timbre que Java no manda")
+
+# 26.f · ningún botón muerto en esta hoja: los `el('eq-oll-*').onclick` existen, y
+# cada acción que pide la cara la conoce Java. Es la barrida sistemática de F12
+# aplicada a la hoja que se tocó en F13 (los `▶` de la cara contra su puente).
+f26_ids = set(re.findall(r"el\('(eq-oll-[a-z-]+)'\)\??\.onclick", F26_TEL))
+f26_huecos = sorted(i for i in f26_ids if f'id="{i}"' not in F26_CARAS)
+f26_ordenes = set(re.findall(r"ollamaOrden\('([a-z]+)'", F26_TEL))
+f26_huerfanas = sorted(a for a in f26_ordenes
+                       if f'"{a}".equals(accion)' not in F26_MEN)
+if not f26_ids:
+    falla("F13 · botones de la hoja", "no se encuentra ningún `el('eq-oll-*').onclick`: "
+          "la comprobación quedó ciega (cambió la forma de enganchar los botones)")
+elif f26_huecos:
+    falla("F13 · botones de la hoja", ", ".join(f26_huecos) + " se engancha a un "
+          "`onclick` que no tiene `id=` en la hoja: botón muerto")
+elif f26_huerfanas:
+    falla("F13 · acciones de ollama", "la cara pide " + ", ".join(f26_huerfanas)
+          + " y `Mente.java` no las conoce: la hoja recibiría «no conozco esa acción»")
+else:
+    dice_ok("F13 · botones y acciones", f"los {len(f26_ids)} botones de la hoja tienen "
+              f"su `id=` y las {len(f26_ordenes)} acciones las conoce Java")
+
+# 26.g · su taller de mutaciones existe y no se coló en el pipeline
+if not F26_TALLER.exists():
+    falla("F13 · taller del teléfono", "no existe `scripts/taller-ollama.sh`: nada "
+          "demuestra que las 58 comprobaciones de `Prueba4` pueden caer")
+elif "taller-ollama.sh" in F26_YML:
+    falla("F13 · taller del teléfono", "el taller se coló en el pipeline: rompe Java a "
+          "propósito y ahí siempre daría rojo")
+elif not re.search(r"bash[^\n]*prueba-mente\.sh", F26_YML):
+    falla("F13 · suite del teléfono", "`build.yml` ya no invoca `prueba-mente.sh`: las "
+          "bajadas se comprueban sólo en casa")
+else:
+    dice_ok("F13 · taller del teléfono", "taller-ollama.sh tiene sus mutaciones (fuera "
+              "de Actions) y `prueba-mente.sh` corre en el pipeline")
+
+# 26.h · la dirección del PC se VE en la hoja. No es adorno: cuando una bajada falla,
+# la dueña tiene que poder decir «está hablando con 192.168.1.20» o darse cuenta de que
+# no hay PC señalado. Es el campo `servidor` del cuadro `estado` de Java (y del `usa`),
+# y se comprueba el viaje entero: nace en `estadoJson()`, lo recoge `pintaEstadoOllama`
+# y lo pinta `pintaOllamaLinea` — si Java lo renombra, la hoja se queda en blanco sin
+# que nadie se entere.
+f26_nace = F26_COD.replace('\\"', '"').count('"servidor":')
+f26_recoge = re.search(r"estado\.ollama\.servidor\s*=\s*r\.servidor", F26_TEL)
+f26_pinta = re.search(r"o\.servidor\s*\?\s*o\.servidor", F26_TEL)
+if not f26_nace:
+    falla("F13 · la dirección a la vista", "`Ollama.java` ya no mete `servidor` en el "
+          "cuadro `estado`: la hoja no tiene de dónde sacarlo")
+elif not f26_recoge:
+    falla("F13 · la dirección a la vista", "la cara ya no guarda `r.servidor` en "
+          "`estado.ollama`: el campo de Java llega y se pierde")
+elif not f26_pinta:
+    falla("F13 · la dirección a la vista", "`pintaOllamaLinea()` ya no pinta la "
+          "dirección: si falla una bajada no se ve con qué PC se hablaba")
+else:
+    dice_ok("F13 · la dirección a la vista", "el `servidor` que dice Java se guarda y "
+              "se pinta en la hoja del teléfono (con su alternativa cuando no hay PC)")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

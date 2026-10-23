@@ -497,10 +497,37 @@ Dos mutaciones que **aguantaron** al primer intento y obligaron a reescribir la
 comprobación: buscar `"ollama_red"` en el texto de `config_store.py` (lo salva
 `ENV_NAMES`) y en el de `quiere_red()` (lo salva el docstring).
 
-**Lo que falta de F13** (mitad del teléfono, sin hacer todavía): el pre-ping de
-`Ollama.java:262` antes de tirar de la bajada, sumar el NDJSON por `digest` en vez de
-sobrescribirlo (`Ollama.java:289-292`, el PC sí suma), el botón de cancelar con su
-puente `ollamaCancelar`, enseñar `red.url` en la hoja del teléfono, y un catálogo
-generado una sola vez para los 107 en vez de los 14 de `models.py` frente a los 107 de
-`telefono.js:943`. Y **ninguna de estas medias palabras llega a su teléfono hasta que
-salga la Release**: el pipeline no se ha corrido todavía con esto.
+**Cerrado y medido (mitad del teléfono, 2026-10-23)** — `apps/apk/src/com/cort/ia/Ollama.java`,
+su puente en `Mente.java` y la hoja de Modelos en `ui/js/telefono.js`:
+
+| lo que se arregló | cómo se prueba ahora |
+| --- | --- |
+| la barra no se quedaba quieta: el NDJSON se **suma por `digest`** | `Prueba4` monta un modelo de dos capas intercaladas (4.000.000 + 1.000.000) y exige `hecho:4500000 / total:5000000`, `"capas":2` y que el porcentaje **nunca baje** entre cuadros |
+| una línea de `verifying` (trae `digest` pero no `total`) borraba el total de su capa | el mismo cuadro, con esa línea metida en medio: el total del modelo sigue siendo 5.000.000 |
+| un PC dormido se tragaba 90 s y devolvía un timeout mudo | `descarga()` hace un `GET /api/version` **delante** de `POST /api/pull`; con un servidor que sólo contesta a `/api/pull`, `Prueba4` cuenta `PULLS_SIN_VERSION == 0` y lee el aviso que nombra `OLLAMA_HOST` |
+| no había forma de parar una bajada | `cancela()` sube el interruptor y **cierra la corriente y la conexión**; en el escenario `callada` (el servidor calla 3 s) la prueba espera 2 s y exige `"cancelado":true` |
+| el aviso sonaba por algo que la dueña cortó | cancelando, la lista de timbres de papel está vacía, y la cara dice «bajada cancelada» en vez de prometer el aviso |
+| dos bajadas a la vez se pisaban los campos del cancelar | la segunda se rechaza nombrando la que ya está bajando (`synchronized`) |
+| la hoja no decía con qué PC estaba hablando | el campo `servidor` de Java se guarda y se pinta en la línea de estado (costura [26.h]) |
+
+El cancelar **no abre ninguna superficie nueva**: entra por el puente que ya existía,
+`mente({que:'ollama',accion:'cancela'})`, con su botón `✕ cancelar` y su frase de voz
+(«cancela la bajada»). Cifras: `Prueba4` pasa de 39 a **58 comprobaciones**, las cuatro
+suites de `scripts/prueba-mente.sh` dan verde en el portátil con los gemelos de papel,
+el sector **[26]** de `scripts/prueba-costura.py` cose las tres capas (8 comprobaciones;
+la suite llega a **264 `ok`**) y su taller `scripts/taller-ollama.sh` tiene **12
+mutaciones que caen las 12**, cada una nombrando la comprobación que echaba de menos.
+
+Lo que **no** salió como se esperaba, dicho en vez de fingido: el comentario del campo
+aseguraba que `HttpURLConnection.disconnect()` no despierta a un `readLine()` bloqueado y
+que cerrar el `InputStream` es imprescindible. El taller lo midió y **no es cierto en
+esta pila del JDK**: quitando sólo una de las dos cerradas la cancelación sigue
+funcionando; la mutación que cae es quitarlas **las dos**. Por eso el taller tiene una
+sola mutación para el tema (y se dejó el doble cierre: en Android la implementación es
+`com.android.okhttp`, otra, y aquí no se puede medir).
+
+**Lo que queda de F13**: un catálogo generado una vez para los 107 modelos —hoy son 14
+en `backend/app/models.py` y 107 en `ui/js/telefono.js`, cosidos por la comprobación
+[23.d], que exige que las 14 filas del PC sean un subconjunto idéntico de las 107 del
+teléfono, así que no pueden ir cada una por su lado—. Y **nada de esto llega a su
+teléfono hasta que salga la Release**: el pipeline no se ha corrido todavía con esto.

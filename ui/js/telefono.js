@@ -53,7 +53,7 @@ const estado = {
   // Los cerebros de casa (Ollama en el PC, por Wi-Fi). `modelos` y `servidores` son
   // lo que vino de Java, sin retocar: la hoja se pinta sólo desde aquí.
   ollama: { servidor: '', origen: '', version: '', modelo: '', enCasa: false,
-            modelos: [], servidorVisto: [], descargando: false,
+            modelos: [], servidorVisto: [], descargando: false, bajando: '',
             // F11 · el catálogo: con qué filtro está pintado y si está desplegado
             filtro: '', abierto: false },
   hechos: 0, conPortatil: false, direccion: '', recuerdos: [], quien: '', ultimaMemoria: null,
@@ -332,6 +332,7 @@ const CARA_CEREBRO = `
     <input id="eq-oll-nuevo" placeholder="bajar uno nuevo: qwen2.5:0.5b"
       autocomplete="off" spellcheck="false">
     <button class="eq-b" id="eq-oll-baja">↓ descargar</button>
+    <button class="eq-b" id="eq-oll-cancela" hidden>✕ cancelar</button>
   </div>
   <div class="eq-tit">catálogo de modelos <small id="eq-cat-cuenta"></small></div>
   <div class="eq-fila">
@@ -928,6 +929,15 @@ const barra = p => {
   if (b) b.style.width = Math.round(Math.max(0, Math.min(1, Number(p) || 0)) * 100) + '%';
 };
 
+/* El botón de cancelar sólo se enseña mientras hay una bajada abierta. No es adorno:
+   Java no admite dos a la vez (el segundo `descarga` contesta «ya está bajando X»),
+   así que cortar es lo único que queda cuando una se queda colgada, y la cara tiene
+   que dar esa salida sin cerrar la hoja. */
+const muestraCancela = si => {
+  const b = el('eq-oll-cancela');
+  if (b) b.hidden = !si;
+};
+
 /* ── F11 · el catálogo medido ──
    La dueña pidió «catálogo 1–100 con descarga en segundo plano, barra y aviso».
    Lo que NO se hizo: inventarse los pesos. Cada `b` de la tabla son los bytes de
@@ -1154,6 +1164,7 @@ function enganchaOllama() {
   el('eq-oll-nuevo').addEventListener('keydown', e => {
     if (e.key === 'Enter') el('eq-oll-baja').click();
   });
+  el('eq-oll-cancela').onclick = () => ollamaOrden('cancela');
   el('eq-cat-abre').onclick = () => {
     estado.ollama.abierto = !estado.ollama.abierto;
     el('eq-cat-abre').textContent = estado.ollama.abierto ? 'cerrar catálogo' : 'ver catálogo';
@@ -1195,7 +1206,8 @@ function ollamaOrden(accion, extra) {
          `Timbre.java`, por dentro), así que se puede cerrar la hoja y apagar la
          pantalla. Lo que no puede prometer es que el aviso llegue si Android mata
          la app por memoria. */
-      descarga: 'bajando ' + (cuerpo.modelo || '') + ' · cierra la hoja si quieres, te aviso cuando termine' }[accion] || 'mirando…');
+      descarga: 'bajando ' + (cuerpo.modelo || '') + ' · cierra la hoja si quieres, te aviso cuando termine',
+      cancela: 'cortando la bajada… (el PC puede tardar unos segundos más)' }[accion] || 'mirando…');
   }
   return true;
 }
@@ -1276,8 +1288,16 @@ function pintaServidoresOllama(servidores) {
 function manejaOllama(ev) {
   const o = estado.ollama;
   if (ev.ok === false) {
-    if (ev.que === 'descarga') { o.descargando = false; barra(0); }
+    if (ev.que === 'descarga') { o.descargando = false; o.bajando = ''; barra(0); muestraCancela(false); }
     const dicho = ev.dice || 'el PC de casa no contestó.';
+    /* Un corte pedido por ella misma no es un fallo, y tampoco es algo que CORT
+       haya avisado: Java no manda notificación cuando la bajada la cancelas tú, así
+       que aquí no se puede prometer el «te lo avisé». */
+    if (ev.cancelado) {
+      diceBien('oll', dicho);
+      salida('bajada cancelada: ' + (ev.modelo || ''));
+      return true;
+    }
     avisa('oll', dicho + (ev.que === 'descarga' ? ' · CORT también te lo avisó' : ''));
     if (ev.que !== 'descarga') salida('ollama: ' + dicho);
     else salida('no pude bajar ' + (ev.modelo || 'el modelo') + ': ' + dicho);
@@ -1285,6 +1305,12 @@ function manejaOllama(ev) {
     return true;
   }
   switch (ev.que) {
+    case 'cancela':
+      // Java ya dijo `cancelado:true` por su lado; aquí sólo se suelta la barra.
+      o.descargando = false; o.bajando = ''; barra(0); muestraCancela(false);
+      diceBien('oll', ev.dice || 'bajada cortada.');
+      salida('cancelado: ' + (ev.modelo || ''));
+      return true;
     case 'fija':
       o.servidor = ev.servidor || o.servidor;
       o.version = ev.version || '';
@@ -1320,12 +1346,15 @@ function manejaOllama(ev) {
     case 'descarga': {
       if (ev.listo === undefined) {                 // va bajando: sólo la barra
         o.descargando = true;
+        o.bajando = ev.modelo || o.bajando;
         barra(ev.porcentaje);
+        muestraCancela(true);
         linea('oll', 'bajando ' + (ev.modelo || '') + ' · ' + (ev.estado || '')
-          + (Number(ev.total) ? ' · ' + giga(Number(ev.hecho) || 0) + ' de ' + giga(Number(ev.total) || 0) : ''));
+          + (Number(ev.total) ? ' · ' + giga(Number(ev.hecho) || 0) + ' de ' + giga(Number(ev.total) || 0) : '')
+          + (Number(ev.capas) > 1 ? ' · ' + ev.capas + ' capas' : ''));
         return true;
       }
-      o.descargando = false; barra(1);
+      o.descargando = false; o.bajando = ''; barra(1); muestraCancela(false);
       if (ev.listo) {
         const dicho = 'ya está ' + (ev.modelo || 'el modelo') + ' en tu PC ('
           + giga(Number(ev.total) || 0) + '). Toca «usar» y CORT piensa con él.';
@@ -2194,13 +2223,20 @@ export function telefonoPorVoz(texto) {
         orden se los llevaban la app o el buscador. Sólo se atiende con palabras
         suyas (`cerebros`, `ollama`, `modelo(s)`), así que no pisa «muéstrame tu
         cerebro» (el muro de recuerdos) ni las frases normales. */
-  if (/\b(ollama|modelo|modelos|cerebros)\b/.test(b)
+  if (/\b(ollama|modelo|modelos|cerebros|bajada)\b/.test(b)
       || (/\bwifi\b/.test(b) && /^(busca|buscar|buscame|localiza|encuentra)\b/.test(b))) {
     // El nombre del modelo se saca del TEXTO, no de `b`: lleva dos puntos, puntos y
     // a veces mayúsculas, y todo eso `normaliza()` lo estropea.
     const MODELO = (texto.match(/(?:modelo|cerebro)\s*(?:de|:)?\s*["']?([A-Za-z0-9._:@\/-]{2,42})/i) || [])[1]
       || (texto.match(/(?:descarga|baja|borra|usa|pon|elimina)\s+(?:el\s+|la\s+|un\s+)?["']?([A-Za-z0-9._:@\/-]{2,42})/i) || [])[1] || '';
     abre('men');
+    // «cancela la bajada», «para la descarga»: lo pide ella porque la barra no se
+    // mueve, así que la salida tiene que estar también en la voz, no sólo en el botón.
+    if (/^(cancela|cancelar|para|para\s+la|alto|frena)\b/.test(b) && /\b(bajada|descarga|descargando)\b/.test(b)) {
+      return ollamaOrden('cancela')
+        ? di('Cortando la bajada' + (estado.ollama.bajando ? ' de ' + estado.ollama.bajando : '') + '.', 'oll')
+        : false;
+    }
     if (/^(busca|buscar|buscame|localiza|encuentra)\b/.test(b)) {
       return ollamaOrden('descubre') ? di('Mirando tu Wi-Fi a ver dónde está Ollama…') : false;
     }
