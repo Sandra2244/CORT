@@ -148,7 +148,7 @@ jobs:
         # que la cara llama con otro nombre, una pantalla que Java nombra `equipo`
         # y `pantallas.js` no tiene, un `<service>` sin su `android:permission`, un
         # atajo con la etiqueta escrita como literal, un símbolo `@hide` que el
-        # `android.jar` no exporta. Son doce sectores y cuesta una fracción de
+        # `android.jar` no exporta. Son 21 sectores y cuesta una fracción de
         # segundo, así que va EL PRIMERO del trabajo: si la costura está abierta,
         # no gasta ni motor ni SDK. La anotación es obligatoria —los registros de
         # Actions son privados y este repo no tiene token para leerlos—.
@@ -207,6 +207,36 @@ jobs:
                   | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
             [ -n "$msg" ] || msg=$(tail -10 /tmp/clima.log | tr '\n\r' '  ' | sed 's/%/%25/g')
             echo "::error::prueba-clima.py salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
+      - name: Probar el gestor de modelos de Ollama (sin Ollama, sin red)
+        id: modelos
+        # `scripts/prueba-modelos.py` es la red que falta para que «no descarga los
+        # modelos» deje de ser un misterio. Vigila cuatro cosas, todas con gemelos
+        # del taller y `CORT_HOME` en `mktemp` (no enciende nada, no le baja nada a
+        # ella): (1) que el módulo VIVA sin `psutil` —el run 39879890814 se cayó
+        # justo ahí— y que entonces declare «sin medir» en vez de inventarse el
+        # veredicto; (2) que `ollama serve` se arranque con `OLLAMA_HOST` de red
+        # (0.0.0.0), que el mando `ollama_red` de Ajustes llegue de verdad al
+        # entorno y que el `OLLAMA_HOST` que ella ya puso no se pise; (3) que la
+        # dirección que se enseña en pantalla sea la que responde —y que con Ollama
+        # apagado nadie salga a la red a preguntarse—; (4) que el sitio del disco se
+        # compruebe ANTES de lanzar la bajada, sin negativear un modelo que no está
+        # en el catálogo medido.
+        #
+        # No necesita `psutil` ni `requests`: las dos dependencias se sustituyen o se
+        # declaran ausentes a propósito, que es el caso del runner.
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/prueba-modelos.py > /tmp/modelos.log 2>&1
+          st=$?
+          tail -30 /tmp/modelos.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '^  FALLA' /tmp/modelos.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/modelos.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-modelos.py salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Probar la boca del escritorio (sin sonido, sin red)

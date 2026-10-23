@@ -3254,6 +3254,112 @@ else:
     dice_ok("aviso de bajada · cara", "al pulsar ↓ la hoja dice que puede cerrarse, y el "
             "fallo también avisa; la promesa vive en la rama de `descarga`, no en todas")
 
+# ── [25] F13 · el PC que sirve Ollama al teléfono, cosido por las cuatro capas ──
+# «No descarga los modelos» tiene cuatro causas que viven en ficheros DISTINTOS, y
+# cada una se ve sólo si se cruzan las capas:
+#   · la suite existe pero el pipeline no la corre (un paso borrado de `build.yml`
+#     es una red que se abre sin que nadie se entere);
+#   · el mando de Ajustes `ollama_red`: lo lee `models.quiere_red()`, pero lo
+#     filtra `config_store.DEFAULTS`. De hecho ESTABA filtrado —la dueña podía
+#     escribirlo y `raw()` lo tiraba—, y por eso la comprobación es por el nombre
+#     en los dos ficheros, no por la buena suerte;
+#   · el puerto: el portátil lo escribe (`PUERTO_OLLAMA`) y el teléfono lo busca
+#     (`Ollama.java` → `PUERTO`). Si se separan, el barrido /24 del teléfono nunca
+#     encuentra el PC y el fallo dice «no hay nadie al 11434» mentirosamente.
+print("\n[25] F13 · el gestor de modelos, cosido con el pipeline y con el teléfono")
+
+F25_MOD = (RAIZ / "backend" / "app" / "models.py").read_text(encoding="utf-8")
+F25_CFG = (RAIZ / "backend" / "app" / "config_store.py").read_text(encoding="utf-8")
+F25_OLL = (APK / "src" / "com" / "cort" / "ia" / "Ollama.java").read_text(encoding="utf-8")
+F25_YML = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+F25_SUITE = RAIZ / "scripts" / "prueba-modelos.py"
+F25_TALLER = RAIZ / "scripts" / "taller-modelos.sh"
+
+# 25.a · la suite está, el workflow la INVoca (no basta con que la nombre: el
+# comentario del paso también la nombra) y su taller NO se coló en Actions —las
+# mutaciones son del taller; en el pipeline estorban y duplican seis minutos—.
+if not F25_SUITE.exists():
+    falla("F13 · suite", "no existe `scripts/prueba-modelos.py`: la descarga de "
+                         "modelos vuelve a depender de que alguien la pruebe a mano")
+elif not re.search(r"python3[^\n]*prueba-modelos\.py", F25_YML):
+    falla("F13 · pipeline", "`build.yml` ya no INVoca `python3 scripts/prueba-modelos.py`: "
+                           "en casa pasa y en Actions nadie lo mira")
+elif "taller-modelos.sh" in F25_YML:
+    falla("F13 · taller", "el taller de mutaciones se coló en el pipeline: rompe el "
+                          "código a propósito y ahí siempre daría rojo")
+elif not F25_TALLER.exists():
+    falla("F13 · taller", "no existe `scripts/taller-modelos.sh`: las mutaciones que "
+                          "demuestran que esta suite puede caer se perdieron")
+else:
+    dice_ok("F13 · suite y taller", "prueba-modelos.py corre en el pipeline y "
+              "taller-modelos.sh tiene sus mutaciones (en el taller, no en Actions)")
+
+# 25.b · el mando viaja: lo lee `models.quiere_red()` y lo deja pasar
+# `config_store`. Se mira DENTRO de la función y DENTRO del diccionario (con `ast`,
+# como en los sectores del oído), no en el texto entero: `ollama_red` aparece también
+# en la nota que se le enseña a la dueña y en `ENV_NAMES`, así que una búsqueda de
+# subcadenas daría verde con el mando roto. Lo comprobamos con dos mutaciones.
+def f25_dict(texto, nombre) -> list:
+    """Las claves de un diccionario de módulo (`DEFAULTS`), leídas como datos."""
+    try:
+        arbol = ast.parse(texto)
+    except (SyntaxError, ValueError):
+        return []
+    for nodo in arbol.body:
+        if isinstance(nodo, ast.Assign) and any(getattr(t, "id", "") == nombre
+                                                for t in nodo.targets):
+            if isinstance(nodo.value, ast.Dict):
+                return [k.value for k in nodo.value.keys if isinstance(k, ast.Constant)]
+    return []
+
+
+def f25_lee_mando(texto, funcion, clave) -> bool:
+    """¿`funcion` pide `clave` a `config_store` DE VERDAD? Se mira el árbol, no el
+    texto: el nombre de la clave también está en el docstring de la función (lo que
+    le explica a la dueña qué escribir), y buscar subcadenas daría verde con el
+    `.get()` apuntando a otra parte. La mutación «lee otra clave» lo comprobó."""
+    try:
+        arbol = ast.parse(texto)
+    except (SyntaxError, ValueError):
+        return False
+    for nodo in arbol.body:
+        if isinstance(nodo, ast.FunctionDef) and nodo.name == funcion:
+            for parte in ast.walk(nodo):
+                if (isinstance(parte, ast.Call) and isinstance(parte.func, ast.Attribute)
+                        and parte.func.attr == "get" and parte.args
+                        and isinstance(parte.args[0], ast.Constant)
+                        and parte.args[0].value == clave):
+                    return True
+    return False
+
+
+if not f25_lee_mando(F25_MOD, "quiere_red", "ollama_red"):
+    falla("F13 · mando `ollama_red`", "`quiere_red()` ya no pregunta `ollama_red` a "
+          "la config (lee otra clave o ninguna): el arreglo de la red se quedó sin "
+          "interruptor, aunque el docstring lo nombre")
+elif "ollama_red" not in f25_dict(F25_CFG, "DEFAULTS"):
+    falla("F13 · mando `ollama_red`", "`ollama_red` no está en la tabla de "
+          "`config_store.DEFAULTS`: `raw()` filtra por esa lista y `set_value` lo "
+          "rechaza, así que ponerlo en Ajustes no serviría de nada "
+          "(así estaba el 2026-10-23)")
+else:
+    dice_ok("F13 · mando `ollama_red`", "lo escribe Ajustes (`DEFAULTS`), lo devuelve "
+              "`raw()` y lo obedece `host_sirve()`")
+
+# 25.c · el puerto, el mismo en el PC que escucha y en el teléfono que busca
+f25_pc = re.search(r"PUERTO_OLLAMA\s*=\s*(\d+)", F25_MOD)
+f25_tel = re.search(r"int\s+PUERTO\s*=\s*(\d+)", F25_OLL)
+if not f25_pc or not f25_tel:
+    falla("F13 · puerto", "no se encuentra el puerto en "
+          + ("" if f25_pc else "`models.PUERTO_OLLAMA` ")
+          + ("" if f25_tel else "`Ollama.java.PUERTO`")
+          + ": la comprobación queda ciega y hay que escribirla a mano otra vez")
+elif f25_pc.group(1) != f25_tel.group(1):
+    falla("F13 · puerto", f"el PC escucha en {f25_pc.group(1)} y el teléfono busca en "
+          f"{f25_tel.group(1)}: el barrido /24 nunca lo encuentra")
+else:
+    dice_ok("F13 · puerto", f"los dos lados dicen {f25_pc.group(1)}")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

@@ -385,7 +385,30 @@ llave, `nucleo` como default de ella.
 
 ---
 
-## 11 · Reglas que se mantienen (son las suyas, puestas por escrito)
+## 11 · Decisiones de la dueña (2026-10-23, tomadas con opciones)
+
+1. **Arranque: F13 + F12 juntas en la 2.9.0** — la descarga de modelos fiable *y* que la
+   voz responda, en una sola Release. F14 (diccionario y turnos) detrás.
+2. **Asistente: envase NUEVO, el `nucleo` no se toca.** Se añade un cuarto archivo
+   `nucleo+asistencia` con la superficie mínima (servicio de voz + reconocedor + sesión)
+   y su precio medido y dicho; el `nucleo` de siempre sigue siendo el recomendado y el
+   que ella instala. **Nada de tocar los 12.636 B del `nucleo`.**
+3. **Oído: sí al ducking, y sí al segundo plano.** Con una separación honesta:
+   - **El ducking no cuesta superficie** —`requestAudioFocus` con
+     `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` no necesita permiso—, así que **entra ya en el
+     `nucleo`** de la 2.9.0: con música sonando, CORT baja el volumen un momento, escucha
+     y lo devuelve.
+   - **La escucha permanente con la pantalla apagada sí cuesta**: necesita un servicio en
+     primer plano con `FOREGROUND_SERVICE_MICROPHONE`, y esa es justo la superficie que
+     cerró Play Protect. **Esa parte se queda en el envase `nucleo+asistencia`** y se mide
+     allí antes de prometerla.
+4. Además del ducking, «pausa / siguiente / retrocede» tienen que valer **cuando la música
+   la pone otra app** (Lark, Spotify): se manda la tecla de medios al sistema
+   (`AudioManager.dispatchMediaKeyEvent`, cero permisos) en vez de exigir `e.vivo`.
+
+---
+
+## 12 · Reglas que se mantienen (son las suyas, puestas por escrito)
 
 No inventar: verificar antes de afirmar y confesar el fallo antes de arreglarlo. Un
 verde que no puede caerse no es prueba (mutación). Nada de relleno: ni un byte, ni un
@@ -398,7 +421,7 @@ rompe. Y ninguna auto-actualización sin puerta humana.
 
 ---
 
-## 12 · El prompt maestro (para cualquier IA que trabaje en CORT)
+## 13 · El prompt maestro (para cualquier IA que trabaje en CORT)
 
 > Eres **arquitecta de software e IA** en el proyecto **CORT** (repo público
 > `Sandra2244/CORT`, rama `v0.2-demo`): asistente de voz tipo **JARVIS + Cortana**, con
@@ -438,3 +461,46 @@ rompe. Y ninguna auto-actualización sin puerta humana.
 > `prueba-mente.sh` en verde con su recuento, etiqueta, pipeline verde, **pesos y sha256
 > medidos de los tres envases**, README/docs con cifras reales, e informe que empieza
 > por el enlace de la Release y nombra **lo que sigue sin verse en su teléfono**.
+
+---
+
+## 14 · Cerrado y medido (se actualiza fase por fase)
+
+### F13 · la mitad del PC (2026-10-23)
+
+El **motivo nº 1** por el que «no se pueden descargar modelos» desde el teléfono era
+nuestro: `models.arrancar_servidor()` levantaba `ollama serve` con el entorno de
+siempre, y Ollama se quedaba escuchando sólo en `127.0.0.1`. En el portátil de la
+dueña los modelos **ya están bajados** (231,71 GB libres medidos) y aun así el
+teléfono no los veía.
+
+Qué entró en `backend/app/models.py`:
+
+| lo que se arregló | cómo se prueba ahora |
+| --- | --- |
+| `psutil` es opcional (antes mataba el módulo entero sin él) | se importa con bloqueador de `sys.meta_path` en un proceso aparte y se exige `PSUTIL None` + veredicto `sin medir` + cierre por `/proc` |
+| Ollama se levanta con `OLLAMA_HOST=0.0.0.0:11434` | se anota el `env` que recibe `Popen` (gemelo), y se comprueba también que el `OLLAMA_HOST` que ella ya puso **no** se pisa (`setdefault`) |
+| `ollama_red` es un mando de Ajustes de verdad | escrito en `config_store.DEFAULTS` (sin eso, `raw()` lo filtra y `set_value` lo rechaza), probado con JSON real en caja de arena |
+| la IP que se enseña es la que responde | `info_red()` con sus cinco notas honestas; `visible_en_red()` no sale a la red con Ollama apagado (el stub de `requests` hereda de `BaseException` porque un `except Exception` se traga un `AssertionError`) |
+| el disco se mira **antes** de lanzar la bajada | niega `llama3.1:8b` con 0,5 GB libres nombrando los bytes; **no** negativea un modelo fuera del catálogo ni un disco sin medir |
+| `/api/models` lleva `red`, `ram_libre_gb` y `disco_libre_gb` | `estado_completo()` comprobado con gemelos: 14 entradas del catálogo y su veredicto |
+
+Cifras: **53 comprobaciones** en `scripts/prueba-modelos.py` (1 s) y
+**17 mutaciones** en `scripts/taller-modelos.sh` — todas caen, cada una nombrando la
+comprobación que le faltaba a la suite, y el código limpio vuelve a dar verde. El
+sector **[25]** de `scripts/prueba-costura.py` añade las tres costuras entre capas:
+que el pipeline invoque la suite (y que el taller **no** se cuele en Actions), que
+`quiere_red()` pregunte `ollama_red` a la config leyéndolo con `ast` (no con
+subcadenas: el docstring también nombra la clave), y que el puerto del PC
+(`models.PUERTO_OLLAMA`) sea el mismo que busca el teléfono (`Ollama.java:92`).
+Dos mutaciones que **aguantaron** al primer intento y obligaron a reescribir la
+comprobación: buscar `"ollama_red"` en el texto de `config_store.py` (lo salva
+`ENV_NAMES`) y en el de `quiere_red()` (lo salva el docstring).
+
+**Lo que falta de F13** (mitad del teléfono, sin hacer todavía): el pre-ping de
+`Ollama.java:262` antes de tirar de la bajada, sumar el NDJSON por `digest` en vez de
+sobrescribirlo (`Ollama.java:289-292`, el PC sí suma), el botón de cancelar con su
+puente `ollamaCancelar`, enseñar `red.url` en la hoja del teléfono, y un catálogo
+generado una sola vez para los 107 en vez de los 14 de `models.py` frente a los 107 de
+`telefono.js:943`. Y **ninguna de estas medias palabras llega a su teléfono hasta que
+salga la Release**: el pipeline no se ha corrido todavía con esto.

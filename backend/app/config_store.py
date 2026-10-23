@@ -34,6 +34,11 @@ DEFAULTS = {
     "ollama_model": "",
     "gemini_model": "",
     "bg_beeps": "1",
+    # `ollama_red`: si Ollama escucha fuera de este equipo (0.0.0.0) para que el
+    # teléfono lo vea, o sólo para él (127.0.0.1). Tiene que estar aquí, en la
+    # lista, o `raw()` lo descarta y `set_value` lo rechaza: lo que lee
+    # `models.quiere_red()` sale de esta misma tabla.
+    "ollama_red": "1",
 }
 
 ENV_NAMES = {
@@ -42,6 +47,7 @@ ENV_NAMES = {
     "gemini_key": "GEMINI_API_KEY",
     "ollama_url": "OLLAMA_URL",
     "ollama_model": "OLLAMA_MODEL",
+    "ollama_red": "OLLAMA_RED",
     "gemini_model": "GEMINI_MODEL",
 }
 

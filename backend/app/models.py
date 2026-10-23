@@ -16,11 +16,21 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import threading
 import time
 
-import psutil
+# `psutil` es OPCIONAL, y por eso se importa con red. Importarlo en cabecera a pelo
+# (`import psutil`) mata el módulo ENTERO si el equipo no lo tiene: ya pasó en el
+# runner de Actions (run 39879890814, `ModuleNotFoundError: No module named
+# 'psutil'`) y pasaría en cualquier instalación sin `.venv`. Sin `psutil` el
+# gestor sigue trabajando —la descarga no depende de él— y lo único que falta es la
+# RAM medida, que se declara como «sin medir» en vez de inventarse un veredicto.
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 OLLAMA_URL = "http://127.0.0.1:11434"
 PULLS: dict[str, dict] = {}          # nombre -> progreso
@@ -73,13 +83,33 @@ POR_NOMBRE = {c["modelo"]: c for c in CATALOGO}
 
 # ───────────────────────────── estado del equipo ─────────────────────────────
 def ram_total_gb() -> float:
+    """RAM del equipo, o `0,0` si `psutil` no está. Cero y no `None` para que el
+    veredicto sepa distinguirlo sin tener que comprobar tipos."""
+    if psutil is None:
+        return 0.0
     return round(psutil.virtual_memory().total / 1e9, 2)
+
+
+def ram_libre_gb() -> float:
+    """Lo que queda libre AHORA (con esto se dice por qué un modelo de 4,7 GB no va
+    en un portátil de 1,8 GB con el navegador abierto)."""
+    if psutil is None:
+        return 0.0
+    return round(psutil.virtual_memory().available / 1e9, 2)
 
 
 def veredicto(ficha: dict) -> dict:
     """Si este modelo va a poder correr aquí, con la RAM que hay."""
     total = ram_total_gb()
     necesita = ficha["ram"]
+    if not total:
+        # Sin `psutil` no nos inventamos el veredicto: lo que se puede hacer con
+        # los números que sí tenemos es comparar contra la RAM que DECLARA la
+        # dueña en Ajustes, y eso lo hace la cara, no este fichero.
+        return {"estado": "sin medir",
+                "nota": "no puedo medir la RAM de este equipo (instalando `psutil` "
+                        "vuelve el veredicto; descargar sigue funcionando igual)",
+                "ram_equipo": 0.0}
     if necesita <= total * 0.6:
         estado, nota = "va", "te sobra RAM para correrlo"
     elif necesita <= total * 0.95:
@@ -107,6 +137,91 @@ def _raiz_modelos():
     from pathlib import Path
     r = os.environ.get("OLLAMA_MODELS") or str(Path.home() / ".ollama" / "models")
     return Path(r)
+
+
+# ─────────────────────────── la red: lo que ve el teléfono ───────────────────
+# El motivo nº 1 por el que «no se pueden descargar modelos» desde el móvil:
+# `ollama serve` arranca escuchando SOLO en 127.0.0.1, así que el portátil
+# contestó siempre a CORT-PC y nunca a CORT-teléfono. Antes esto se explicaba en
+# un `docs/` (hacerlo a mano con `systemctl edit ollama`), que es un manual, no un
+# arreglo. Aquí se arranca YA con `OLLAMA_HOST=0.0.0.0` y se comprueba de verdad
+# si se le ve desde la red, en vez de dar una dirección esperando que funcione.
+PUERTO_OLLAMA = 11434
+
+
+def quiere_red() -> bool:
+    """Si Ollama debe escuchar fuera de este equipo. Mando de la dueña:
+    `ollama_red` a `false`/`no`/`0` en `~/.cort/cort_config.json` lo deja en casa
+    (127.0.0.1), que es lo que querrá quien no quiera tener el puerto abierto."""
+    try:
+        import config_store
+        v = str(config_store.raw().get("ollama_red", "")).strip().lower()
+    except Exception:
+        return True                      # sin config: el default es la red
+    return v not in ("false", "0", "no", "off", "apagado", "nunca")
+
+
+def host_sirve() -> str:
+    """La dirección que se le pasa a `OLLAMA_HOST` al levantar el servidor."""
+    return f"0.0.0.0:{PUERTO_OLLAMA}" if quiere_red() else f"127.0.0.1:{PUERTO_OLLAMA}"
+
+
+def ip_local() -> str:
+    """La IP que vería el teléfono. El truco del socket UDP **no manda ningún
+    paquete**: sólo le pregunta a la tabla de rutas por qué interfaz saldría, así
+    que funciona sin internet y sin vecinos que escuchen."""
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.2)
+        s.connect(("10.255.255.255", 1))         # dirección imposible: cero tráfico
+        return s.getsockname()[0]
+    except OSError:
+        return ""
+    finally:
+        if s is not None:
+            try:
+                s.close()
+            except OSError:
+                pass
+
+
+def visible_en_red() -> bool:
+    """¿Se le ve de verdad desde fuera? Se comprueba entrando por SU propia IP de
+    la red, no por 127.0.0.1: es la única forma de no escribir en la pantalla una
+    dirección que no responde. Con Ollama apagado responde `False` (y la cara lo
+    dice como lo que es)."""
+    ip = ip_local()
+    if not ip or not corriendo():
+        return False
+    import requests
+    try:
+        return requests.get(f"http://{ip}:{PUERTO_OLLAMA}/api/tags",
+                            timeout=1.5).status_code == 200
+    except Exception:
+        return False
+
+
+def info_red() -> dict:
+    """Lo que la cara del PC tiene que enseñar para que el móvil se conecte a
+    primera: la dirección exacta, si de verdad se ve, y qué hacer si no."""
+    ip = ip_local()
+    url = f"http://{ip}:{PUERTO_OLLAMA}" if ip else ""
+    if not ip:
+        nota = "no encuentro la IP de este equipo: conéctalo a la Wi-Fi del teléfono"
+    elif not corriendo():
+        nota = "Ollama está apagado: al pulsar ↓ lo levanto escuchando la red"
+    elif visible_en_red():
+        nota = "se ve desde la Wi-Fi: pon esa dirección en el teléfono"
+    elif not quiere_red():
+        nota = ("escucha solo para este equipo porque `ollama_red` está apagado; "
+                "ponlo en `verdadero` para que el teléfono lo vea")
+    else:
+        nota = ("Ollama está levantado pero NO se ve desde fuera: suele ser el "
+                "cortafuegos del portable (abrir el puerto 11434 en la red local) "
+                "o que lo arrancó otro programa sin `OLLAMA_HOST=0.0.0.0`")
+    return {"ip": ip, "puerto": PUERTO_OLLAMA, "url": url,
+            "escucha": host_sirve(), "visible": visible_en_red(), "nota": nota}
 
 
 def en_disco() -> dict[str, dict]:
@@ -183,6 +298,18 @@ def uso_disco_gb() -> float:
     return round(total / 1e9, 2)
 
 
+def disco_libre_gb() -> float:
+    """Sitio libre DONDE Ollama escribe (no donde vive el repo: si `OLLAMA_MODELS`
+    apunta a otro disco, ese es el que hay que mirar)."""
+    try:
+        raiz = _raiz_modelos()
+        while not raiz.exists() and raiz.parent != raiz:
+            raiz = raiz.parent
+        return round(shutil.disk_usage(str(raiz)).free / 1e9, 2)
+    except OSError:
+        return 0.0
+
+
 def estado_completo() -> dict:
     """Catálogo + qué hay descargado + el veredicto de cada uno."""
     hay_binario = bool(binario())
@@ -221,9 +348,10 @@ def estado_completo() -> dict:
                  "lo enciendo solo, y puedes apagarlo para devolver memoria.")
     return {"instalado": hay_binario, "corriendo": encendido,
             "binario": binario() or "", "ram_equipo": ram_total_gb(),
-            "ram_libre_gb": round(psutil.virtual_memory().available / 1e9, 2),
+            "ram_libre_gb": ram_libre_gb(),
             "activo": activo, "modelos": modelos, "aviso": aviso,
-            "disco_gb": uso_disco_gb()}
+            "disco_gb": uso_disco_gb(), "disco_libre_gb": disco_libre_gb(),
+            "red": info_red()}
 
 
 def _coincide(nombre_catalogo: str, dic: dict) -> str | None:
@@ -247,19 +375,64 @@ def arrancar_servidor() -> dict:
     if not binario():
         return {"ok": False, "error": "no hay ollama instalado"}
     if corriendo():
-        return {"ok": True, "ya": True, "detalle": "Ollama ya estaba en marcha"}
-    subprocess.Popen([binario(), "serve"],
+        return {"ok": True, "ya": True, "detalle": "Ollama ya estaba en marcha",
+                "red": info_red()}
+    entorno = dict(os.environ)
+    # `setdefault`, no `=`: si la dueña ya puso su `OLLAMA_HOST` (en systemd, en el
+    # perfil de Windows o a mano), Mandamos su decisión y no la pisamos.
+    entorno.setdefault("OLLAMA_HOST", host_sirve())
+    subprocess.Popen([binario(), "serve"], env=entorno,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     for _ in range(20):
         time.sleep(0.5)
         if corriendo():
-            return {"ok": True, "detalle": "Ollama encendido en 11434"}
+            r = {"ok": True, "detalle": f"Ollama encendido en {entorno['OLLAMA_HOST']}"}
+            if quiere_red():
+                visto = visible_en_red()
+                r["red"] = info_red()
+                if not visto:
+                    r["aviso_red"] = ("levanté Ollama para toda la red pero el teléfono "
+                                      "aún no lo ve: revisa el cortafuegos del portable")
+            return r
     return {"ok": False, "error": "tardó demasiado en responder"}
+
+
+def _procs_ollama_sin_psutil() -> list[int]:
+    """Los PIDs de `ollama` leyendo `/proc`, para equipos sin `psutil` (Linux)."""
+    salida = []
+    for entrada in os.listdir("/proc"):
+        if not entrada.isdigit():
+            continue
+        pid = int(entrada)
+        if pid == os.getpid():
+            continue
+        try:
+            with open(f"/proc/{pid}/comm", "r", encoding="utf-8") as f:
+                nombre = f.read().strip().lower()
+        except OSError:
+            continue
+        if nombre in ("ollama", "ollama_llama_server"):
+            salida.append(pid)
+    return salida
 
 
 def detener_servidor() -> dict:
     muertos = 0
+    if psutil is None:
+        import signal
+        for pid in _procs_ollama_sin_psutil():
+            try:
+                os.kill(pid, signal.SIGTERM)
+                muertos += 1
+            except OSError:
+                pass
+        return {"ok": muertos > 0, "cerrados": muertos, "via": "/proc",
+                "detalle": (f"{muertos} proceso(s) de Ollama cerrados" if muertos
+                            else "no había ninguno en marcha")
+                            if muertos else
+                            "sin `psutil` sólo puedo cerrar Ollama en Linux; en "
+                            "Windows usa el icono de la bandeja"}
     for p in psutil.process_iter(["name"]):
         try:
             if (p.info["name"] or "").lower() in ("ollama", "ollama_llama_server"):
@@ -267,7 +440,7 @@ def detener_servidor() -> dict:
                 muertos += 1
         except Exception:
             pass
-    return {"ok": muertos > 0, "cerrados": muertos,
+    return {"ok": muertos > 0, "cerrados": muertos, "via": "psutil",
             "detalle": f"{muertos} proceso(s) de Ollama cerrados" if muertos
             else "no había ninguno en marcha"}
 
@@ -295,6 +468,17 @@ def descargar(nombre: str) -> dict:
     nombre = (nombre or "").strip()
     if not re.fullmatch(r"[A-Za-z0-9._:/@-]{2,64}", nombre):
         return {"ok": False, "error": "nombre de modelo no válido"}
+    # El sitio se comprueba ANTES de lanzar nada: cortar una bajada de 4,7 GB
+    # cuando el disco ya está lleno deja el modelo a medias y la cara sin saber
+    # por qué. Si no está en el catálogo (`b` medido) no se puede prometer nada:
+    # se deja pasar, porque negativear un modelo desconocido sería peor.
+    ficha = POR_NOMBRE.get(nombre)
+    libre = disco_libre_gb()
+    if ficha and ficha.get("b") and libre and ficha["b"] / 1e9 > libre - 1.0:
+        return {"ok": False,
+                "error": (f"no cabe en el disco: {nombre} pesa "
+                          f"{ficha['gb']:g} GB y quedan {libre:g} GB libres"),
+                "detalle": "borra modelos con 🗑 o libera sitio; la descarga no se lanzó"}
     with _CANDADO:
         previo = PULLS.get(nombre)
         if previo and previo.get("estado") in ("descargando", "en cola", "encendiendo"):

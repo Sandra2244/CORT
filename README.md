@@ -619,6 +619,28 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       anterior de los conteos de la batería (sin token no se edita, y se corrige hacia
       adelante en el repo, que es lo que se lee aquí); y la memoria, la agenda por voz y los
       interruptores de Ajustes de su punto 5 siguen en la cola.
+- [~] **F12 + F13 (en curso, elegidas por la dueña para ir juntas en la 2.9.0)** —
+      ella eligió «la descarga de modelos fiable **y** que la voz responda» en una sola
+      Release, así que va esta tanda. **Cerrado y medido (mitad del PC, 2026-10-23):**
+      `ollama serve` se levanta ahora con `OLLAMA_HOST=0.0.0.0:11434` —era el motivo nº 1
+      por el que el teléfono no veía los modelos, y no era de Ollama: era nuestro
+      arranque—, el mando nuevo `ollama_red` vive en `config_store.DEFAULTS` (sin eso
+      `raw()` lo filtraba y ponerlo en Ajustes no servía), `psutil` es opcional con
+      veredicto `sin medir` en vez de inventado, `info_red()` dice la IP que responde con
+      sus cinco notas honestas, y el sitio del disco se comprueba **antes** de lanzar la
+      bajada sin negativear un modelo fuera del catálogo. Suite nueva
+      `scripts/prueba-modelos.py`: **53 comprobaciones** en 1 s, sin red y sin tocar
+      `~/.cort`; taller nuevo `scripts/taller-modelos.sh`: **17 mutaciones, caen las 17**
+      (dos de ellas obligaron a reescribir su comprobación, porque dar verde con el
+      código roto es decoración); sector **[25]** en `scripts/prueba-costura.py` (256
+      `ok`) cosiendo pipeline ↔ config ↔ teléfono: la suite se invoca, el taller **no**
+      se cuela en Actions, `quiere_red()` pregunta `ollama_red` con `ast` (no con
+      subcadenas) y el puerto del PC es el que busca `Ollama.java`. **Falta, dicho en vez
+      de fingido:** la mitad del teléfono (`Ollama.java`: pre-ping, sumar el NDJSON por
+      `digest` en vez de sobrescribirlo, cancelar con su puente, la `red.url` en la hoja,
+      catálogo único generado para los 107) y todo F12 (ducking, `dispatchMediaKeyEvent`
+      para «pausa» cuando manda otro reproductor, barrido de botones muertos); nada de
+      esto llega a su teléfono hasta que se etiquete y el pipeline dé verde.
 - [ ] F7b Contestar llamadas por ti y buzón de voz: pide el rol `ROLE_CALLING` con su `InCallService` (Android no deja otra cosa); leer SMS o el contenido de WhatsApp no tiene API, así que no se finge
 - [ ] F14 Idiomas adicionales y temas visuales *(estaba numerada como F8; el plan maestro
   ocupó ese hueco con «la cara ordenada», así que ésta se renumeró hacia adelante)*
