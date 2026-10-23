@@ -77,7 +77,13 @@ pregunta **20 comandos de escritura** (todos negados), **14 de lectura** (todos
 autorizados) y los **25 pasos de las 8 plantillas** (todos ejecutables); forja un plan
 con `seguro: true` sobre un `rm -rf` y exige el «no»; prueba `permito`/`nunca` con una
 casa de mentira (`CORT_CASA`); cruza las tres rutas entre `main.py` y `pantallas.js`; y
-verifica que la cara pinta ▶ sólo dentro de la rama segura. Después, una batería de
-**10 mutaciones** en un árbol de enlaces duros (`sed -i` sólo, para no tocar el
-original) confirma que cada una de esas comprobaciones **se pone roja** si se rompe lo
-que dice mirar: un verde que no puede caer no es prueba.
+verifica que la cara pinta ▶ sólo dentro de la rama segura. Cosido también la cara
+contra su hoja de estilo: los **5 `id`** que el copiloto consulta tienen estar montados
+en su propia plantilla (un `$('#cod-cop-chips')` contra un hueco devuelve `null` y la
+hoja se queda muda sin error) y las **12 clases `cp-*`** que usa tienen tener en
+`hud.css` una regla **sola** —contar el texto a secas tapaba el rojo, porque
+`.cp-paso.maloz` contiene `.cp-paso`—. Después, una batería de **13 mutaciones** en un
+árbol de enlaces duros (`sed -i` sólo, `cmp` para que ningún sed se quede ciego, y `rm`
+antes de restaurar para no truncar el inodo compartido) confirma que cada una de esas
+comprobaciones **se pone roja** si se rompe lo que dice mirar: un verde que no puede
+caer no es prueba.

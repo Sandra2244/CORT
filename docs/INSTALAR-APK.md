@@ -8,6 +8,9 @@ una lista de consejos generales: cada fila de la tabla salió de `keytool
 
 | Archivo de la Release | SHA-256 del certificado | Se instala encima de |
 | --- | --- | --- |
+| `CORT-IA-2.8.0.apk` (v0.2.36-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y **comprobada bajando el archivo en este portátil**: **47.443.765 bytes** sobre 62.077.803 sin comprimir, **50 entradas**, proporción 0,76, `sha256 2734c20c1649cddccbc58af0a4fb199857ba345f0e06c4bc5c4e0fb16856c0a9` — exacto a su hoja, al `-firma.txt` y al digest que declara la API; CRC de las 50 entradas íntegros; `versionCode` **20800**, veredicto `INSTALABLE`; manifiesto binario **16.048 B, 28 permisos y 4 servicios `BIND_*`**, `perfil declarado: completo`; y **la cara F11 dentro**: `assets/ui/` con **15 archivos**, 1.844.863 B sueltos / 435.789 B comprimidos, **sin sonda del taller**) | cualquier 2.x: **20800 > 20700**, así que entra ENCIMA del 2.7.0 sin desinstalar y sin perder perfil, clave de Groq, micrófono concedido ni gustos |
+| `CORT-IA-2.8.0-nucleo.apk` (v0.2.36-demo) | **la misma** (`versionCode` **20800**; **47.443.765 bytes** —pesa igual que el completo y **no es el mismo archivo**: `sha256 b010f2a539b9c427e8365a5c70faa147309e0ccafafc16d383f8f2bfafaec320`, 62.074.391 sin comprimir, **3.412 B menos**, que es exactamente la diferencia de manifiesto—, bajado y hasheado aquí, CRC íntegros; su `AndroidManifest.xml` binario **cuenta 21 permisos y CERO `BIND_*`** y pesa **12.636 B —los mismos que en la 2.7.0**: el aviso de la bajada no añadió ni una línea al manifiesto—; `-firma.txt` de 3.746 B con veredicto `INSTALABLE`) | igual que el completo. **Es el envase recomendado**: el `nucleo` ya está probado y funcionando en el teléfono de la dueña desde el 2026-10-22, y es el que lleva la cara de la F11 con su aviso de bajada |
+| `CORT-IA-2.8.0-nucleo-ligero.apk` (v0.2.36-demo) | **la misma** (`versionCode` **20800**; **1.674.580 bytes** sobre 4.643.436 sin comprimir, 45 entradas, proporción 0,36, `sha256 9c5f38757557cd8d6050daef28eaf46b167e00c8c6b4cacab1b5c3d5f13d3e98`, bajado y hasheado aquí; **cero** entradas `lib/*.so` y **cero** `assets/motor/`, leído dentro del `.apk`; su `AndroidManifest.xml` es **byte a byte el del núcleo** —los dos, 12.636 B y `sha256 20c2d51167dff910…`—, así que la variedad no toca el manifiesto y el perfil no toca el peso. *La huella del manifiesto cambia con cada versión porque dentro va escrita la `versionName`: para comparar, compara los dos envases de LA MISMA etiqueta* | los otros dos. Existe para separar las dos variables de Play Protect, no para el uso diario |
 | `CORT-IA-2.7.0.apk` (v0.2.33-demo) | la misma `fa:ab:ef:46:8f:3a…` (leída en su `-firma.txt` y **comprobada bajando el archivo en este portátil**: **47.435.573 bytes** sobre 62.049.149 sin comprimir, **50 entradas**, proporción 0,76, `sha256 6d3c95c2c685f0a40fd6843a0d5860db0800765d19d5244b1486fc2e39e8d998` — exacto a su hoja y CRC de las 50 entradas íntegros; `versionCode` **20700**, veredicto `INSTALABLE`; manifiesto binario **16.048 B, 28 permisos y 4 servicios `BIND_*`**, `perfil declarado: completo`; y **la cara F10 dentro**: `assets/ui/` con **15 archivos**, 1.818.285 B sueltos / 428.148 B comprimidos, **sin la sonda del taller** —el `sonda-*.html` que en la 2.6.0 viajaba sin utilidad ya no está, leído dentro del `.apk`—) | cualquier 2.x: **20700 > 20600**, así que entra ENCIMA del 2.6.0 sin desinstalar y sin perder perfil, clave de Groq, micrófono concedido ni gustos |
 | `CORT-IA-2.7.0-nucleo.apk` (v0.2.33-demo) | **la misma** (`versionCode` **20700**; **47.435.573 bytes** —pesa igual que el completo y **no es el mismo archivo**: `sha256 f2ffbf26fbc10f0bd1482253a30bedac729a2d600a0c281090be81ec7bcefc5c`, 62.045.737 sin comprimir, **3.412 B menos**, que es exactamente la diferencia de manifiesto—, bajado y hasheado aquí, CRC íntegros; su `AndroidManifest.xml` binario **cuenta 21 permisos y CERO `BIND_*`** y pesa 12.636 B (`sha256 5118287f97be22df…`); `-firma.txt` de 3.746 B con veredicto `INSTALABLE`) | igual que el completo. **Es el envase recomendado**: el `nucleo` ya está probado y funcionando en el teléfono de la dueña desde el 2026-10-22, y es el que lleva la Música de la F10 |
 | `CORT-IA-2.7.0-nucleo-ligero.apk` (v0.2.33-demo) | **la misma** (`versionCode` **20700**; **1.662.292 bytes** sobre 4.614.778 sin comprimir, 45 entradas, proporción 0,36, `sha256 937ad3284c5af727257c1bffb8f4da1bdb78f10f43561c4b954417b58a1a5e5e`, bajado y hasheado aquí; **cero** entradas `lib/*.so` y **cero** `assets/motor/`, leído dentro del `.apk`; su `AndroidManifest.xml` es **byte a byte el del núcleo** —los dos, 12.636 B y `sha256 5118287f97be22df…`—, así que la variedad no toca el manifiesto y el perfil no toca el peso. *La huella del manifiesto cambia con cada versión porque dentro va escrita la `versionName`: para comparar, compara los dos envases de LA MISMA etiqueta* | los otros dos. Existe para separar las dos variables de Play Protect, no para el uso diario |
@@ -35,23 +38,29 @@ Por eso «sale error al instalar» justo al saltar de un 1.x (o del APK original
 2.x: no está roto el APK, es otra llave. Desde el 2.0.0 la llave es estable — la del
 secreto `CORT_APK_KEYSTORE_B64` del repo — así que el costo es de **una sola vez**.
 
-## ¿Cuál de los tres envases del 2.7.0 bajo?
+## ¿Cuál de los tres envases del 2.8.0 bajo?
 
-La Release `v0.2.33-demo` (el **2.7.0**) publica tres APK del mismo CORT. Dentro llevan
-la cara F9 —el cajón de un botón, la hoja de Música calcada de Lark Player y la Charla
-con modelo, modos y adjunto— y los arreglos de la F10 que ella pidió: las carátulas
-reales, la pestaña de Vídeos con su propio tope y en rejilla, el buscador que acierta
-con tildes y ñ, la letra fusionada dentro del reproductor, el botón «CORT · PC» que ya
-no tapa la píldora, el `⋮` con Velocidad/Dormir/Ocultar/Compartir y la Charla que piensa
-en el teléfono cuando el portátil no está. Se diferencian por dos
-cosas, y nada más: la **superficie privilegiada** que declara el manifiesto y si el
-**oído sin internet** viaja dentro del archivo o no.
+La Release `v0.2.36-demo` (el **2.8.0**) publica tres APK del mismo CORT. Dentro llevan
+la cara de la F10 que ella pidió —las carátulas reales, la pestaña de Vídeos con su
+propio tope y en rejilla, el buscador que acierta con tildes y ñ, la letra fusionada
+dentro del reproductor, el botón «CORT · PC» que ya no tapa la píldora, el `⋮` con
+Velocidad/Dormir/Ocultar/Compartir y la Charla que piensa en el teléfono cuando el
+portátil no está— y la de la **F11**: el catálogo de **107 cerebros de casa con el peso
+medido en el registro**, la pantalla **Código convertida en copiloto** (planea y ejecuta
+los comandos de sólo lectura, con el mando en el portátil), la **paleta de atuendos** y
+**el aviso de Android cuando la bajada de un modelo termina o se corta** (`Timbre.java`).
+Los cuatro se quedan **en los tres envases**: el aviso no añadió ni un permiso ni un
+componente, y el manifiesto del `nucleo` pesa en la 2.8.0 lo mismo exacto que en la 2.7.0
+(**12.636 B**, medido dentro del `.apk`), que es la condición que se puso para no volver a
+despertar al escáner. Se diferencian por dos cosas, y nada más: la **superficie
+privilegiada** que declara el manifiesto y si el **oído sin internet** viaja dentro del
+archivo o no.
 
 | Archivo | superficie privilegiada | oído offline dentro | permisos leídos del manifiesto binario |
 | --- | --- | --- | --- |
-| `CORT-IA-2.7.0.apk` | sí: asistente del sistema, oído de notificaciones, baldosín de la cortina, llamadas y agenda | sí | **28** (y 4 servicios `BIND_*`) |
-| `CORT-IA-2.7.0-nucleo.apk` | **no**: cero servicios `BIND_*`, cero `CALL_PHONE`/`READ_CONTACTS`/`READ_CALENDAR` | sí | **21** |
-| `CORT-IA-2.7.0-nucleo-ligero.apk` | **no** | no: la hoja Equipo ▸ 7 dice `sin-modelo` y escucha con el reconocedor del sistema | **21** |
+| `CORT-IA-2.8.0.apk` | sí: asistente del sistema, oído de notificaciones, baldosín de la cortina, llamadas y agenda | sí | **28** (y 4 servicios `BIND_*`) |
+| `CORT-IA-2.8.0-nucleo.apk` | **no**: cero servicios `BIND_*`, cero `CALL_PHONE`/`READ_CONTACTS`/`READ_CALENDAR` | sí | **21** |
+| `CORT-IA-2.8.0-nucleo-ligero.apk` | **no** | no: la hoja Equipo ▸ 7 dice `sin-modelo` y escucha con el reconocedor del sistema | **21** |
 
 **Empieza por el `nucleo`.** Es el envase que tiene que instalarse sí o sí, porque su
 superficie declarada es la que tenía el `1.1.4` que a ella le funciona bien. Sigue
@@ -73,7 +82,7 @@ está explicado, con la tabla de los tres APK leídos del binario, en
 [`docs/BLOQUEO-PLAY-PROTECT.md`](BLOQUEO-PLAY-PROTECT.md).
 
 Para pasar de un envase a otro **no hay que desinstalar nada**: los tres comparten el
-paquete `com.cort.ia`, la llave `fa:ab:ef:46…` y el `versionCode` **20700**, así que el
+paquete `com.cort.ia`, la llave `fa:ab:ef:46…` y el `versionCode` **20800**, así que el
 segundo entra encima del primero como reinstalación (el número no baja, luego no es
 bajada) y se conservan el micrófono concedido, los gustos de música y la dirección del
 PC. Es lo que declara la medida, no lo que se probó en un teléfono: si el instalador de
@@ -160,7 +169,7 @@ o «ordena mis descargas», y el doble toque del auricular sobre el reproductor�
 bash scripts/instala-apk.sh                            # baja el COMPLETO de la Release y lo instala por USB
 bash scripts/instala-apk.sh --nucleo                   # el envase sin superficie privilegiada (la prueba que decide)
 bash scripts/instala-apk.sh --nucleo-ligero            # y el núcleo sin el modelo de 40 MB dentro
-bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.7.0-nucleo.apk
+bash scripts/instala-apk.sh ~/Descargas/CORT-IA-2.8.0-nucleo.apk
 ```
 
 El script traduce la salida de `adb install -r` a español con las filas de arriba y
