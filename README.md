@@ -490,6 +490,16 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
 
 ## Hoja de ruta
 
+> **El plan de las rondas que vienen está escrito y medido** en
+> [`docs/CEREBRO-MAESTRO.md`](docs/CEREBRO-MAESTRO.md): el diagnóstico de la 2.8.0 con
+> la línea de código que lo prueba (por qué «pausa» no se oye, por qué se cae la
+> descarga de modelos, por qué los atuendos no pintan el orbe, qué le falta al `nucleo`
+> para aparecer como asistente), la arquitectura de siete capas con lo que existe y lo
+> que falta, el **diccionario grande de intents** (la unidad deja de ser el comando y
+> pasa a ser el intent), la **política de turnos entre los modelos descargados**, las
+> **NEGATIVOS** con su motivo y las fases **F12 → F17**, una Release por fase con su
+> prueba decisiva y su cifra medida.
+
 - [x] **F1** Backend híbrido + memoria SQLite + comandos locales
 - [x] **F2** Orbe Three.js conectado al backend, chat y reloj
 - [x] **F3** Paneles HUD, secuencia de arranque, sensores, ventanas de vidrio
