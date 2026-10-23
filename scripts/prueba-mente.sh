@@ -18,12 +18,21 @@
 #                   por orden — sólo se ven aquí, nunca en la cara.
 #   Prueba4.java  · `Ollama` contra un Ollama de mentira levantado en el propio
 #                   JDK (`com.sun.net.httpserver`): listar, bajar con progreso,
+#                   avisar una vez por final (el aviso bueno, y el de la cortada),
 #                   borrar en las dos formas de la API, descubrir y que la pregunta
 #                   se conteste con el modelo de casa. Todo por `127.0.0.1`.
 #
 # `--release 11` no se pasa: en este portátil `javac` sólo existe como módulo del
 # JDK (`java -m jdk.compiler/…`) y ese punto de entrada no acepta la bandera. El
 # APK se compila con `--release 11` en GitHub Actions; aquí se comprueba LOGICA.
+#
+# Por eso `Timbre.java` (el aviso de Android de que la bajada terminó) NO se copia
+# aquí: habla con `NotificationManager` y eso en el JDK no existe. Lo que sí entra
+# es su gemelo de papel (`prueba/papeles/com/cort/ia/Timbre.java`), que anota cada
+# aviso en `Timbre.PUESTOS`, y `Prueba4` los cuenta: así se comprueba en casa que
+# `Ollama` avisa justo cuando toca, y el `notify` de verdad se mira en la costura
+# [24] sobre el fichero del APK. La firma de los dos `Timbre` es la misma, y si un
+# día cambian una sin la otra, este `javac` no compila.
 #
 # Uso:  bash scripts/prueba-mente.sh
 #       JAVA_MEM=192m bash scripts/prueba-mente.sh   (si el portátil va justo)

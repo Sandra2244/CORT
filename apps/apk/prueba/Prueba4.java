@@ -196,6 +196,7 @@ public class Prueba4 {
             respuesta.contains("\"de\":\"casa\"") || respuesta.contains("\"de\":\"nube\""), respuesta);
 
         // ── 6 · la descarga, con progreso de verdad ───────────────────
+        Timbre.limpia();                       // la libreta de avisos, en cero
         final List<String> progreso = new ArrayList<>();
         String fin = ollama.descarga("qwen2.5:0.5b", cuadro -> { synchronized (progreso) { progreso.add(cuadro); } });
         check("descarga: emite varios cuadros de progreso", progreso.size() >= 3, String.valueOf(progreso.size()));
@@ -204,9 +205,24 @@ public class Prueba4 {
         check("descarga: termina con listo", fin.contains("\"listo\":true") && fin.contains("\"ok\":true"), fin);
         check("descarga: dice 1000 de 1000", fin.contains("\"hecho\":1000") && fin.contains("\"total\":1000"), fin);
 
+        // El aviso de que la bajada terminó (#119) se dispara DESDE AQUÍ, no desde la
+        // cara: la hoja se cierra y el teléfono se va, y el hilo que lee el NDJSON es
+        // este. Aquí se prueba la llamada con el `Timbre` de papel; el `notify` de
+        // Android se comprueba en `prueba-costura.py` [24] sobre el fichero real.
+        check("aviso: al terminar bien ya se puso uno",
+            Timbre.PUESTOS.size() == 1 && Timbre.PUESTOS.get(0).startsWith("listo qwen2.5:0.5b"),
+            String.valueOf(Timbre.PUESTOS));
+        check("aviso: el texto trae el peso (1 KB, nunca un 0 MB) y el servidor",
+            !Timbre.PUESTOS.isEmpty() && Timbre.PUESTOS.get(0).contains("|1 KB|1 KB|"),
+            String.valueOf(Timbre.PUESTOS));
+
         String roto = ollama.descarga("roto", null);
         check("descarga rota: ok:false y el error del servidor se ve",
             roto.contains("\"ok\":false") && roto.contains("no such model"), roto);
+        check("aviso: la bajada cortada también avisa, y dice por qué",
+            Timbre.PUESTOS.size() == 2 && Timbre.PUESTOS.get(1).startsWith("paró roto")
+            && Timbre.PUESTOS.get(1).contains("no such model"),
+            String.valueOf(Timbre.PUESTOS));
 
         // ── 7 · borrar, con las dos formas de la API ──────────────────
         String borra = ollama.borra("qwen2.5:1.5b");

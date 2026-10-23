@@ -595,17 +595,23 @@ jobs:
             lo que está en la lista de nunca**: un `permito: ["rm"]` se ignora. La cara
             pinta ▶ sólo en los pasos que el backend marcó como seguros; los demás salen
             con su motivo y su botón de copiar, y poner `> ` delante de la línea salta el
-            modo y manda la orden como siempre. (3) **La bajada avisa sola**: `Ollama.java`
-            manda una notificación cuando el modelo termina —y también cuando se corta—,
-            con su propio canal, y la hoja ya no pide la pantalla encendida: se puede
-            cerrar y bloquear el teléfono. Es una notificación normal —cero
-            `foregroundServiceType`, cero permisos nuevos en el manifiesto, que es lo que
-            mira Play Protect—; lo que no promete es llegar si Android mata la app por
-            memoria, y lo dice. (4) Todo eso está comprobado **sin encender el teléfono**:
+            modo y manda la orden como siempre. (3) **La bajada avisa sola**: cuando el
+            modelo termina —o cuando se corta— se pone una notificación con su propio
+            canal, y la hoja ya no pide la pantalla encendida: se puede cerrar y bloquear
+            el teléfono. El aviso vive en su propio fichero, `Timbre.java`, y no dentro de
+            `Ollama.java`, porque `Ollama` se compila y se prueba **en el portátil con el
+            JDK** (ahí un `NotificationManager` de verdad no existe): `Prueba4` llama a la
+            descarga contra un Ollama de mentira y cuenta los avisos que se habrían puesto
+            —3 de sus 39 comprobaciones son justo ésa, y se ponen rojas si el aviso deja
+            de llamarse—. Es una notificación normal —cero `foregroundServiceType`, cero
+            permisos nuevos en el manifiesto, que es lo que mira Play Protect—; lo que no
+            promete es llegar si Android mata la app por memoria, y lo dice.
+            (4) Todo eso está comprobado **sin encender el teléfono**:
             `scripts/prueba-costura.py` trae los sectores [23] y [24], donde el módulo del
             copiloto se importa y se le preguntan 20 comandos de escritura negados y 14 de
-            lectura autorizados, y las 16 mutaciones de la batería (10 del copiloto, 6 del
-            aviso) se prueban en un árbol aparte: cada comprobación nueva tiene su rojo.
+            lectura autorizados, y las 18 mutaciones de la batería (10 del copiloto y 8 del
+            aviso y de la cara) se prueban en un árbol aparte: cada comprobación nueva
+            tiene que saber ponerse roja, y aquí todas lo hacen.
 
             **Los cerebros de casa: Ollama por Wi-Fi desde el teléfono**
             (`docs/CEREBROS-DE-CASA.md`). `Ollama.java` habla con el Ollama de tu PC

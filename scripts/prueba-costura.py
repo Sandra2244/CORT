@@ -3041,12 +3041,50 @@ if "/^>/" not in F23_JS or "saltoCopiloto" not in F23_JS:
     f23_js_falta.append("se perdió la salida de emergencia `> ` (prefijar para saltar el copiloto)")
 if "cort-copiloto" not in F23_JS:
     f23_js_falta.append("el modo ya no se recuerda en `localStorage` (mañana no sabría que estaba puesto)")
+# Cuatro comprobaciones más, y cada una caza un rojo que la cara NO daría: los `id`
+# que el copiloto consulta tienen estar escritos en su propia plantilla (un
+# `$('#cod-cop-chips')` contra un hueco que no existe da `null` y la hoja se queda
+# muda sin lanzar un error), y las clases `cp-*` tienen existir en `hud.css` (una
+# clase mal escrita se pinta como texto suelto: funciona y se ve fatal).
+F23_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+for f23_id in ("cod-cop-on", "cod-cop-chips", "cod-cop-plan", "cp-todos", "cp-cierra"):
+    if 'id="' + f23_id + '"' not in F23_JS:
+        f23_js_falta.append(f"el copiloto consulta `#{f23_id}` pero la hoja no lo monta")
+# El `class="cp-paso' + (p.seguro ? '' : ' malo') + '"` de la plantilla corta el
+# atributo en una comilla: se capturan sólo nombres de clase de verdad (`[a-z0-9- ]`),
+# que es lo que la hoja pinta, y el modificador pegado por concatenación se comprueba
+# aparte, con su nombre completo en la hoja de estilo.
+f23_clases = sorted({c for f23_attr in re.findall(r'class="([a-z0-9_ -]*)', F23_JS)
+                     for c in f23_attr.split() if c.startswith("cp-")})
+# Qué clases están PINTADAS: las que tienen una regla SOLA (`.cp-b,.cp-pie{`). Buscar
+# `".cp-paso" in css` a secas no sirve: una clase escrita mal, `.cp-paso.maloz`,
+# CONTIENE el texto y taparía el rojo; y quedarse sólo con `.cp-paso.malo{` tampoco
+# vale, porque la tarjeta sin el modificador iría sin pintar. Las mutaciones M2 y M3
+# son las que escribieron estas dos líneas.
+f23_pintadas = set()
+# Primero se quitan los comentarios: el que anuncia este bloque tiene comas, y
+# `split(",")` lo partiría en pedazos que no empiezan por `.` (lo probó M2 al segundo
+# intento: `.cp-cab` seguía sin reconocerse pintada).
+for f23_pre in re.findall(r'([^{}]+)\{', re.sub(r"/\*.*?\*/", "", F23_CSS, flags=re.S)):
+    for f23_sel in f23_pre.split(","):
+        f23_m = re.fullmatch(r"\s*\.([A-Za-z][\w-]*)\s*", f23_sel)
+        if f23_m:
+            f23_pintadas.add(f23_m.group(1))
+f23_sin_css = sorted(c for c in f23_clases if c not in f23_pintadas)
+if f23_sin_css:
+    f23_js_falta.append("estas clases del copiloto no están en `hud.css`: "
+                        + ", ".join(f"`.{c}`" for c in f23_sin_css)
+                        + " · la tarjeta saldría sin pintar y nadie se entera")
+if "' malo'" in F23_JS and not re.search(r"\.cp-paso\.malo\b", F23_CSS):
+    f23_js_falta.append("el paso que no es seguro se marca con `malo` y esa clase no está "
+                        "en `hud.css` · el paso malo se vería igual que el bueno")
 if f23_js_falta:
     falla("copiloto · cara", "; ".join(f23_js_falta))
 else:
-    dice_ok("copiloto · cara", "el ▶ sólo se pinta en los pasos seguros, los demás salen "
+    dice_ok("copiloto · cara", f"el ▶ sólo se pinta en los pasos seguros, los demás salen "
             "con su motivo y su botón de copiar, la fila «seguros» filtra, `> ` salta el "
-            "modo y el modo se recuerda")
+            f"modo y el modo se recuerda · los 5 `id` que consulta están montados y sus "
+            f"{len(f23_clases)} clases `cp-*` están pintadas en `hud.css`")
 
 # 23.d · el catálogo: los mismos bytes medidos en la cara del teléfono, en la hoja de
 # modelos del PC y en la herramienta que los midió
@@ -3096,16 +3134,19 @@ else:
 print("\n[24] F11 · el aviso de que la bajada terminó")
 
 F24_OL = (APK / "src" / "com" / "cort" / "ia" / "Ollama.java").read_text(encoding="utf-8")
+F24_TIM = (APK / "src" / "com" / "cort" / "ia" / "Timbre.java").read_text(encoding="utf-8")
+F24_PAP = (APK / "prueba" / "papeles" / "com" / "cort" / "ia" / "Timbre.java").read_text(encoding="utf-8")
+F24_MENTE = (RAIZ / "scripts" / "prueba-mente.sh").read_text(encoding="utf-8")
 F24_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
 F24_JAVA = {p.name: p.read_text(encoding="utf-8")
             for p in sorted((APK / "src" / "com" / "cort" / "ia").glob("*.java"))}
 
 # 24.a · el aviso, y desde dónde se dispara
 f24_huecos = []
-if "private void avisaBajada(" not in F24_OL:
-    f24_huecos.append("`Ollama.java` ya no tiene `avisaBajada`")
-f24_bien = len(re.findall(r"avisaBajada\(true", F24_OL))
-f24_mal = len(re.findall(r"avisaBajada\(false", F24_OL))
+if "public static void bajada(" not in F24_TIM:
+    f24_huecos.append("`Timbre.java` ya no tiene `bajada`")
+f24_bien = len(re.findall(r"Timbre\.bajada\(app, true", F24_OL))
+f24_mal = len(re.findall(r"Timbre\.bajada\(app, false", F24_OL))
 if f24_bien != 1:
     f24_huecos.append(f"el aviso de éxito se dispara {f24_bien} veces (con la cuenta de "
                       "`motes` debe ser justo una: dos avisos de un modelo que no bajó)")
@@ -3114,24 +3155,51 @@ if f24_mal != 4:
                       "cuatro las salidas malas de `descarga` (el `error` del stream, el "
                       "tiempo de espera, el `IOException` y el bulto), y sin avisar en una "
                       "se queda esperando un modelo que no va a llegar")
-if "if (motes) avisaBajada(true" not in F24_OL:
+if "if (motes) Timbre.bajada(app, true" not in F24_OL:
     f24_huecos.append("el aviso de éxito ya no está condicionado a `motes`: prometería un "
                       "modelo que el servidor no confirmó")
 for f24_falta in ("nm.notify(", "NotificationChannel", "getSystemService(Context.NOTIFICATION_SERVICE)",
                   "FLAG_ACTIVITY_NEW_TASK"):
-    if f24_falta not in F24_OL:
+    if f24_falta not in F24_TIM:
         f24_huecos.append(f"en el aviso falta `{f24_falta}`")
 # Un aviso normal, no un servicio en primer plano: el `foregroundServiceType` extra
 # es superficie de manifiesto, y la superficie es lo que rechaza Play Protect.
-if "startForeground" in F24_OL:
-    f24_huecos.append("`Ollama.java` se puso en primer plano: eso es manifiesto nuevo y "
-                      "es exactamente lo que hizo rechazar el APK")
+if "startForeground" in F24_TIM or "startForeground" in F24_OL:
+    f24_huecos.append("el aviso se puso en primer plano: eso es manifiesto nuevo y es "
+                      "exactamente lo que hizo rechazar el APK")
+# El motivo del reparto está en el comentario de `Timbre.java`, y aquí se vigila que
+# siga siendo verdad: `Ollama` se compila y se prueba en el portátil con el JDK
+# (`scripts/prueba-mente.sh`) sobre gemelos de papel; si ahí volviera a aparecer un
+# `android.app.Notification`, la prueba del JDK dejaría de compilar, y si `Timbre`
+# entrara en la lista copiada, el papel se quedaría corto. Se mira el CÓDIGO, no los
+# comentarios: el aviso de dónde vive se explica precisamente nombrando al bulto.
+f24_ol_code = re.sub(r"/\*.*?\*/", "", F24_OL, flags=re.S)
+f24_ol_code = "\n".join(l.split("//")[0] for l in f24_ol_code.splitlines())
+if "android.app.Notification" in f24_ol_code or "NotificationManager" in f24_ol_code:
+    f24_huecos.append("`Ollama.java` volvió a hablar con Android directamente: se prueba "
+                      "con JDK puro en el portátil y ahí eso no compila")
+if "Timbre.java" in F24_MENTE:
+    f24_huecos.append("`prueba-mente.sh` copia `Timbre.java`: el aviso de verdad necesita "
+                      "`android.jar` y el rojo saldría en el runner, no en el teléfono")
+# El gemelo de papel y el de Android tienen que ser la MISMA firma: si una cambia y la
+# otra no, `Prueba4` avisa sobre un método que ya no es el que llama `descarga`.
+def f24_firma(fuente):
+    m = re.search(r"static void bajada\(([^)]*)\)", fuente)
+    if not m:
+        return None
+    return tuple(re.sub(r"\s+", " ", q).strip()
+                 for q in m.group(1).split(","))
+if f24_firma(F24_TIM) != f24_firma(F24_PAP) or f24_firma(F24_TIM) is None:
+    f24_huecos.append(f"la firma de `bajada` no coincide entre el Timbre de Android "
+                      f"{f24_firma(F24_TIM)} y el de papel {f24_firma(F24_PAP)}: la prueba "
+                      "del JDK estaría comprobando otro método")
 if f24_huecos:
     falla("aviso de bajada", "; ".join(f24_huecos))
 else:
-    dice_ok("aviso de bajada", f"`avisaBajada` se dispara 1 vez bien (con `motes`) y "
-            f"{f24_mal} veces mal, con su canal, su `notify` y su `NEW_TASK`, y sin "
-            "servicio en primer plano ni manifiesto nuevo")
+    dice_ok("aviso de bajada", f"`Timbre.bajada` se dispara 1 vez bien (con `motes`) y "
+            f"{f24_mal} veces mal, con su canal, su `notify` y su `NEW_TASK`, sin servicio "
+            "en primer plano ni manifiesto nuevo, y con el mismo recibo en el Timbre de "
+            "papel que ejercita `Prueba4`")
 
 # 24.b · los iconos: NINGUNDO inventado. El `javac` de casa no tiene `android.jar`,
 # así que un `android.R.drawable.stat_sys_descarga` local pasa verde y el runner

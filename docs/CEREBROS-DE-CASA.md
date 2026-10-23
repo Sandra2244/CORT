@@ -104,10 +104,20 @@ de la tabla) y a `Razon` (cuentas, unidades, fechas), que viven dentro del APK.
 ## 6 · El aviso cuando termina la bajada (ronda 2.8)
 
 Bajar `qwen2.5:7b` son **4,7 GB medidos** y por la Wi-Fi de casa es media hora larga.
-Desde la 2.8 el `Ollama.java` manda **una notificación al terminar** —y otra si la
+Desde la 2.8 el APK manda **una notificación al terminar** —y otra si la
 bajada se corta, con el motivo que dio el servidor—, así que la hoja de Modelos se
 puede cerrar y el teléfono se puede bloquear. Al pulsar ↓ la propia cara lo dice:
 *«cierra la hoja si quieres, te aviso cuando termine»*.
+
+El aviso lo pone un fichero nuevo, **`Timbre.java`**, y no el propio `Ollama.java`, que
+es el que baja el modelo. No es un capricho de ordenación: `Ollama` es Java puro y se
+compila **aquí, en el portátil, con el JDK** (`scripts/prueba-mente.sh`) para poder
+probarlo sin teléfono, y un `NotificationManager` de Android ahí no existe. Lo que entra
+en esa prueba es su **gemelo de papel**, `apps/apk/prueba/papeles/com/cort/ia/Timbre.java`,
+que anota en `Timbre.PUESTOS` cada aviso que se habría puesto, y `Prueba4` lo cuenta: si
+el día de mañana `Ollama` deja de avisar, la prueba del portátil se pone roja en casa,
+sin encender nada. La firma de los dos `Timbre` es idéntica a propósito, y el sector [24]
+de `scripts/prueba-costura.py` la cruza.
 
 Es una notificación normal de `NotificationManager`, con su canal
 **`CORT · modelos`**, no un servicio en primer plano: no añade ningún permiso ni ningún

@@ -1191,9 +1191,10 @@ function ollamaOrden(accion, extra) {
       fija: 'llamando a ese PC…',
       borra: 'borrando ese modelo…',
       /* Lo de «te aviso» no es adorno: desde la ronda 2.8 el APK manda una
-         notificación cuando la bajada termina o se corta (`Ollama.avisaBajada`),
-         así que se puede cerrar la hoja y apagar la pantalla. Lo que no puede
-         prometer es que el aviso llegue si Android mata la app por memoria. */
+         notificación cuando la bajada termina o se corta (el aviso lo pone
+         `Timbre.java`, por dentro), así que se puede cerrar la hoja y apagar la
+         pantalla. Lo que no puede prometer es que el aviso llegue si Android mata
+         la app por memoria. */
       descarga: 'bajando ' + (cuerpo.modelo || '') + ' · cierra la hoja si quieres, te aviso cuando termine' }[accion] || 'mirando…');
   }
   return true;
