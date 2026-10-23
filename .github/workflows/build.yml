@@ -170,10 +170,30 @@ jobs:
         # otra, y que «hazme una app del clima en Python» se conteste con código y no
         # con el termómetro. Con `sensors.weather` sustituido por un gemelo y la base
         # de memoria en `mktemp`: no gasta cuota de Groq ni abre su .env.
+        #
+        # Y LO QUE NINGUNA PRUEBA EN CASA PUEDE VER: el guion arrastra dos paquetes
+        # de terceros. `brain.local_command` hace `import local_commands`, y ése
+        # abre con `import psutil`; `sensors.weather` abre con `import requests`.
+        # Los dos están en `backend/requirements.txt` y en el `.venv` de la dueña,
+        # pero el `python3` del runner NO los trae: el run 39879890814 (etiqueta
+        # v0.2.30-demo) se cayó ahí, con `ModuleNotFoundError: No module named
+        # 'psutil'`, en verde en casa y rojo en Actions. Por eso se instalan los dos
+        # y luego se comprueba IMPORTANDO, no esperando: la imagen nueva (Ubuntu 26
+        # desde el 19-10-2026) puede bloquear `pip` por PEP 668, así que se reintenta
+        # con `--user` y con `--break-system-packages`; si aun así no cuela, la
+        # anotación dice lo que contestó pip en vez de un traceback a medias.
         shell: bash
         run: |
           set +e
-          python3 -m pip install --quiet requests > /tmp/pip-clima.log 2>&1
+          hacen_falta() { ! python3 -c "import requests, psutil" >/dev/null 2>&1; }
+          for opciones in "" "--user" "--break-system-packages" "--break-system-packages --user"; do
+            hacen_falta || break
+            python3 -m pip install --quiet $opciones requests psutil >> /tmp/pip-clima.log 2>&1
+          done
+          if hacen_falta; then
+            echo "::error::el runner no tiene requests/psutil y pip no los instaló — $(tail -4 /tmp/pip-clima.log | tr '\n\r' '  ' | sed 's/%/%25/g')"
+            exit 1
+          fi
           python3 scripts/prueba-clima.py > /tmp/clima.log 2>&1
           st=$?
           tail -25 /tmp/clima.log

@@ -46,6 +46,7 @@ Uso:  python3 scripts/prueba-costura.py     (una fracción de segundo)
 """
 from __future__ import annotations
 
+import ast
 import pathlib
 import re
 import subprocess
@@ -2386,6 +2387,115 @@ elif "stopImmediatePropagation" not in f9_js or "{ capture: true }" not in f9_js
                          "un Escape cerraría la hoja Y abriría las ventanas de vidrio a la vez")
 else:
     dice_ok("F9 · teclas", "Escape lo coge primero la cara (capture) y no lo deja llegar a hud.js")
+
+
+# ── [19] El entorno del runner: cada guion que Actions ejecuta tiene que poder
+#         importar lo que arrastra SU cadena de `import`, no sólo lo que importa él.
+# El run 39879890814 (etiqueta v0.2.30-demo) se cayó aquí, y el código no tenía nada
+# que ver: `scripts/prueba-clima.py` llamaba a `brain.local_command` → `import
+# local_commands` → `import psutil`. El paso instalaba `requests` y nada más, así que
+# el rojo fue un `ModuleNotFoundError` que en el portátil de la dueña NO se ve nunca,
+# porque ahí el `.venv` tiene todo. Esta comprobación rehace en local la cadena de
+# imports de cada guion del workflow y exige que el workflow declare, en un `pip
+# install`, cada paquete de terceros que hace falta —y que lo compruebe importando,
+# porque un `pip install` que falla en silencio da el mismo rojo vacío—.
+print("\n[19] El runner instala lo que los guiones importan")
+
+F19_WORKFLOW = RAIZ / ".github" / "workflows" / "build.yml"
+f19_yml = F19_WORKFLOW.read_text(encoding="utf-8") if F19_WORKFLOW.exists() else ""
+# Los paquetes se buscan por el nombre del MÓDULO; estos dos se escriben distinto.
+F19_ALIAS = {"python-dotenv": "dotenv", "pyyaml": "yaml", "pillow": "PIL"}
+F19_CARPETAS = [RAIZ / "backend" / "app", RAIZ / "scripts", RAIZ / "backend", RAIZ]
+
+
+def f19_local(nombre: str):
+    """La ruta del módulo si es de este proyecto, o `None` (no está en `site-packages`)."""
+    for f19_c in F19_CARPETAS:
+        f19_p = f19_c / (nombre + ".py")
+        if f19_p.exists():
+            return f19_p
+    return None
+
+
+def f19_terceros(f19_ruta, f19_vistos) -> set:
+    """Nombres que hay que instalar por `pip` para leer este archivo sin `ImportError`.
+
+    Camina los `import` del guion y, cuando el módulo es del proyecto, entra en él:
+    el bug no estaba en `prueba-clima.py`, estaba en la tercera capa de su cadena.
+    """
+    hace_falta = set()
+    try:
+        f19_arbol = ast.parse(f19_ruta.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return hace_falta
+    for f19_nodo in ast.walk(f19_arbol):
+        f19_nombres = []
+        if isinstance(f19_nodo, ast.Import):
+            f19_nombres = [a.name.split(".")[0] for a in f19_nodo.names]
+        elif isinstance(f19_nodo, ast.ImportFrom) and f19_nodo.level == 0 and f19_nodo.module:
+            f19_nombres = [f19_nodo.module.split(".")[0]]
+        for f19_n in f19_nombres:
+            if f19_n in f19_vistos:
+                continue
+            f19_p = f19_local(f19_n)
+            if f19_p is not None:
+                f19_vistos.add(f19_n)
+                hace_falta |= f19_terceros(f19_p, f19_vistos)
+            elif f19_n not in sys.stdlib_module_names:
+                f19_vistos.add(f19_n)
+                hace_falta.add(f19_n)
+    return hace_falta
+
+
+f19_guiones = sorted(set(re.findall(r"python3[^\n]*?\b(scripts/[a-z0-9_-]+\.py)", f19_yml)))
+f19_instalados = set()
+for f19_linea in re.findall(r"pip install[^\n>]+", f19_yml):   # hasta el primer `>`
+    for f19_token in f19_linea.split()[2:]:          # se salta «pip install»
+        if not f19_token.startswith(("-", "$", "/")):
+            f19_instalados.add(F19_ALIAS.get(f19_token, f19_token).replace("-", "_"))
+
+if not f19_yml:
+    falla("runner · workflow", "no se puede leer `.github/workflows/build.yml`: esta comprobación "
+                               "queda ciega y el rojo sólo saldría en Actions")
+elif not hasattr(sys, "stdlib_module_names"):
+    falla("runner · entorno", f"este Python ({sys.version.split()[0]}) no tiene "
+                              "`sys.stdlib_module_names` y no sabe distinguir la librería "
+                              "estándar de la que hay que instalar: hay que ejecutar la "
+                              "costura con Python 3.10 o más nuevo")
+elif len(f19_guiones) < 3:
+    falla("runner · workflow", f"el workflow sólo declara {len(f19_guiones)} guiones "
+                               f"({', '.join(f19_guiones) or 'ninguno'}): se cambió la forma de "
+                               "invocarlos y esta comprobación ya no mira los de verdad")
+elif not f19_instalados:
+    falla("runner · workflow", "no hay ningún `pip install` en el workflow, y los guiones sí "
+                               "arrastran paquetes de terceros: en casa el `.venv` los tiene y "
+                               "aquí nadie los instala")
+else:
+    f19_rojos = []
+    for f19_g in f19_guiones:
+        f19_ruta = RAIZ / f19_g
+        if not f19_ruta.exists():
+            f19_rojos.append(f"{f19_g} no existe")
+            continue
+        f19_quedan = sorted(f19_terceros(f19_ruta, set()) - f19_instalados)
+        if f19_quedan:
+            f19_rojos.append(f"{f19_g} importa " + ", ".join(f19_quedan))
+    if f19_rojos:
+        falla("runner · dependencias", "; ".join(f19_rojos) +
+              " y el workflow no los instala — `ModuleNotFoundError` en Actions, verde en casa, "
+              "que es justo el fallo que el run 39879890814")
+    elif not any('-c "import' in f19_yml[max(0, i - 900):i + 900]
+                 for i in (m.start() for m in re.finditer(r"pip install", f19_yml))):
+        falla("runner · dependencias", "ningún `pip install` va acompañado de una comprobación "
+                                       "`python3 -c \"import …\"` cerca: si la imagen bloquea pip "
+                                       "(PEP 668) el paso sigue adelante y el fallo llega dentro "
+                                       "del guion, sin decir quién fue")
+    else:
+        dice_ok("runner · dependencias",
+                "los " + str(len(f19_guiones)) + " guiones de Actions (" + ", ".join(
+                    g.split("/")[-1] for g in f19_guiones) + ") importan sólo lo que el workflow "
+                    "instala (" + ", ".join(sorted(f19_instalados)) + "), y lo comprueba antes de "
+                    "lanzarlos")
 
 
 # ── veredicto ───────────────────────────────────────────────────────────────

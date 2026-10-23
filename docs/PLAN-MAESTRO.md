@@ -268,6 +268,10 @@ REGLAS DURAS, no negociables:
 6. Nada de relleno: ningún byte, permiso o botón que no haga algo.
 7. Cada cambio suyo lleva su prueba en scripts/prueba-*.py (o .mjs/.sh), stdlib, en español,
    y se monta en el pipeline con anotación ::error:: si falla (los logs de Actions son privados).
+   Si el guion necesita paquetes de terceros, **el workflow los instala**: el `python3` del
+   runner no es el `.venv` de la casa —medido el 2026-10-23, el run 39879890814 se cayó por
+   `psutil` en verde local—. Lo vigila el sector [19] de la costura, que recorre la cadena de
+   `import` de cada guion y exige que el workflow declare cada paquete y lo compruebe importando.
 8. Corrige hacia delante: no reescribas etiquetas ni hagas force-push de lo publicado.
 
 CÓMO PEDIRTE LAS COSAS: te doy UNA área por mensaje, con este orden:
