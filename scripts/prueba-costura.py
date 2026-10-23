@@ -2223,9 +2223,15 @@ if "cp -r ../../ui/. assets/ui/" not in f9_emp:
     falla("F9 · envase", "`compilar.sh` ya no copia `ui/.` entero a `assets/ui/`: si la lista de "
                          "archivos pasa a ser fija, `css/apps.css` se queda fuera y el APK sale con "
                          "la cara vieja sin que ningún check se entere")
+elif "sonda-*.html" not in f9_emp:
+    falla("F9 · envase", "el instrumento del taller (`ui/sonda-carita.html`) vuelve a viajar dentro "
+                         "del APK: se copia `ui/.` entero y la sonda se saca con el patrón "
+                         "`sonda-*.html`, así que si ese `find … -delete` se borra el teléfono "
+                         "engulle 26.424 B que nadie puede abrir (no hay barra de direcciones en el "
+                         "`WebView`)")
 else:
-    dice_ok("F9 · envase", "el pipeline copia `ui/.` completo: la ropa nueva entra en el APK sin que "
-                           "nadie la anuncie archivo por archivo")
+    dice_ok("F9 · envase", "el pipeline copia `ui/.` completo —la ropa nueva entra sin que nadie la "
+                           "anuncie archivo por archivo— y descarta la sonda del taller")
 
 # 3 · el cajón: los nodos los pinta el índice y la cara los enchufa (en los dos sentidos)
 F9_DUEÑOS = ("orb-menu", "cortina", "cj-cierra", "cj-apps", "cj-ajustes")

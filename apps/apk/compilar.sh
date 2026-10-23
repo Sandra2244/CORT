@@ -150,6 +150,14 @@ rm -rf assets/ui
 mkdir -p assets/ui
 [ -f ../../ui/index.html ] || { echo "no está ui/index.html: el repo cambió de forma"; exit 1; }
 cp -r ../../ui/. assets/ui/
+# La sonda del taller NO viaja. `ui/sonda-carita.html` se abre en el navegador del
+# portátil contra el servidor de la cara; dentro del teléfono no tiene quién la abra,
+# porque la cara es un `WebView` sin barra de direcciones, y son 26.424 B sobre los
+# 1.658.269 B del `nucleo-ligero` (el 1,6 % del envase). Como arriba se copia `ui/.`
+# entero —que es lo que hace que `css/apps.css` viaje sin que nadie lo anuncie—, la
+# sonda se saca aquí con un patrón y no con una lista de nombres: la regla de la casa
+# es ningún byte que no haga algo en el aparato.
+find assets/ui -maxdepth 1 -name 'sonda-*.html' -delete
 echo "cara embebida: $(find assets/ui -type f | wc -l) archivos, $(du -sh assets/ui | cut -f1)"
 
 # -- El oído propio: Vosk, JNA y su modelo de español ------------------------

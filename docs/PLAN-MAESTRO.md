@@ -218,10 +218,16 @@ pedírselo antes.
    `/api/notes`, cuyo modelo `Nota` sólo tiene `texto` → 422 contado como «el núcleo no dejó
    guardarlo». Queda de esta entrada lo que depende del aparato: que **Lark Player** se
    ofrencia por nombre como reproductor predeterminado (#95) y el gesto karaoke de MV (#96).
-   *Pruebas:* `ui/sonda-carita.html` **77 `ok` / 0 fallos** y costura **229 `ok`** con el
-   sector **[18]** (10 comprobaciones; tres mutaciones las pusieron rojas).
-   **Nada de esto se ve en el teléfono hasta recompilar el `nucleo`**, porque `ui/` viaja
-   dentro del APK.
+   *Pruebas:* `ui/sonda-carita.html` **77 `ok` / 0 fallos** y costura **230 `ok`** con los
+   sectores **[18]** (10 comprobaciones; tres mutaciones las pusieron rojas) y **[19]**
+   (el entorno del runner: la cadena de `import` de cada guion tiene que estar instalada en
+   `build.yml` — el primer intento, `v0.2.30-demo`, se cayó en Actions por faltar `psutil`,
+   en verde en casa).
+   **Ya está dentro del teléfono:** `v0.2.31-demo` compiló y publicó la Release 2.6.0 (`versionCode` 20600)
+   con los tres envases medidos aquí — 47.431.550 B el completo y el `nucleo` (otro `sha256`,
+   3.412 B menos sin comprimir), 1.658.269 B el `nucleo-ligero`—, misma llave `fa:ab:ef:46…`
+   que su 2.5.0, así que se instala encima sin desinstalar. Lo que falta de ver es sólo lo
+   que puede verse en su aparato: la cara montada con el `CortNative` de verdad.
 3. **F10 · Perfil vivo y voz por frase** (#100, #91, #90) — nombre de la IA, rol,
    «sobre mí», «más grave / más rápido», clima en el teléfono sin PC.
 4. **F11 · CORT actúa por ella** (#97, #98) — la escalera de envases y el mensaje
