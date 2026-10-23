@@ -301,12 +301,20 @@ public class CortNative {
     private void arrancarEscucha(String lang, String modo) {
         // Modo juego: ni micro abierto. `pausa()` ya mandó `pause` a la cara, así
         // que voice.js no va a rearmar; estos dos eventos son sólo para que el orbe
-        // no se quede pintando «escuchando» cuando no se está escuchando nada. El
-        // error se reporta como `abort` y **no** como `not-allowed` a propósito:
-        // `voice.js` apaga la palabra de activación al ver «not-allowed», y apagarla
-        // por un capricho del interruptor sería dejarla muda para siempre.
+        // no se quede pintando «escuchando» cuando no se está escuchando nada.
+        //
+        // Medido en el teléfono de la dueña el 2026-10-22 con `2.6.0-nucleo`: se
+        // reportaba como `abort`, y `ui/js/voice.js` **no tiene rama para `abort` en
+        // modo `cmd`** —sólo en `wake`—, así que el `onError` de la cara nunca se
+        // disparaba y el botón del micrófono parecía roto: ni oía, ni explicaba por
+        // qué. Ahora se nombra el motivo (`juego`), voice.js lo sube a `onError`, y
+        // la cara dice «estoy en modo juego» en vez de callarse.
+        //
+        // Sigue **sin** ser `not-allowed` a propósito: `voice.js` apaga la palabra de
+        // activación al ver «not-allowed», y apagarla por un capricho del
+        // interruptor sería dejarla muda para siempre.
         if (juego) {
-            cuadro("{\"type\":\"stt-error\",\"error\":\"abort\"}");
+            cuadro("{\"type\":\"stt-error\",\"error\":\"juego\"}");
             oidoCerrado();
             return;
         }
@@ -1041,6 +1049,98 @@ public class CortNative {
         return Musica.listaJson(Musica.buscar(act, q, incluirVideo));
     }
 
+    /**
+     * La carátula de una pista, en `data:image/jpeg;base64,…`, o cadena vacía si el
+     * teléfono no la tiene. Ver el comentario de `Musica.caratula`: es lo que faltaba
+     * para que la hoja Música pareciera Lark Player en vez de una lista de glifos.
+     *
+     * Se llama por fila visible desde la cara (`musicaCaratula` en `pantallas.js`),
+     * nunca para la lista entera: son ~12 KB por imagen y 800 imágenes cruzando el
+     * puente de una vez es la traba que CORT prometió no dar.
+     */
+    @JavascriptInterface
+    public String musicaCaratula(final String uri, final int lado) {
+        return Musica.caratula(act, uri, lado);
+    }
+
+    /** «Velocidad», la fila de Lark: 0,75× · 1× · 1,25×… Devuelve el motivo si no pudo. */
+    @JavascriptInterface
+    public String musicaVelocidad(final float x) {
+        return Reproductor.velocidad(x);
+    }
+
+    /** «Ocultar» de Lark: esta pista deja de salir en la lista (no se borra nada). */
+    @JavascriptInterface
+    public void musicaOculta(final String uri) {
+        Musica.oculta(act, uri);
+    }
+
+    /** Cuántas hay ocultadas, para enseñarlo en Ajustes como hace Lark. */
+    @JavascriptInterface
+    public int musicaOcultas() {
+        return Musica.ocultas(act).size();
+    }
+
+    /** «Mostrar las ocultadas»: devuelve todo a la lista. */
+    @JavascriptInterface
+    public void musicaMuestraTodas() {
+        Musica.muestraTodas(act);
+    }
+
+    /**
+     * «Temporizador para dormir» de Lark: a los `minutos` se pausa la música sola.
+     * Con `0` se quita el temporizador puesto. Es un `postDelayed` sobre el hilo
+     * principal llamando al `pausar()` que ya existe — no hay hilo nuevo ni permiso
+     * nuevo, y si la app se cierra el aviso muere con ella, que es lo honesto.
+     */
+    @JavascriptInterface
+    public void musicaDuerme(final int minutos) {
+        android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+        if (temporizador != null) h.removeCallbacks(temporizador);
+        temporizador = null;
+        if (minutos <= 0) { act.avisa("Temporizador quitado: suena hasta que tú digas"); return; }
+        temporizador = () -> {
+            Reproductor.pausar();
+            act.avisa("Se acabó el tiempo: pauso la música como pediste");
+            musicaCambio();
+        };
+        h.postDelayed(temporizador, minutos * 60000L);
+        act.avisa("Me callo sola en " + minutos + " minutos");
+    }
+    private Runnable temporizador;
+
+    /**
+     * Abrir una dirección con la app que corresponda (los «Sitios» de la pantalla de
+     * búsqueda de Lark: YouTube, Instagram, SoundCloud…). Si el teléfono no tiene app
+     * para ese enlace, se dice con palabras en vez de quedarse muda.
+     */
+    @JavascriptInterface
+    public String abreEnlace(final String url) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            act.startActivity(i);
+            return "";
+        } catch (Exception noHayAppParaEso) {
+            return "ese teléfono no tiene app abierta para " + url;
+        }
+    }
+
+    /**
+     * Que el botón flotante «CORT · PC» se vea o no, hoja por hoja.
+     *
+     * La queja de la dueña con `2.6.0-nucleo` fue literal: «el botón CORT PC está
+     * atravesado, no se oculta». Y tenía razón: el botón lo añade `MainActivity` por
+     * encima del `WebView` (`MainActivity.java:171-186`) y en todo el repo no había un
+     * solo `setVisibility` para él — estaba en la misma esquina inferior izquierda
+     * donde la cara pinta la píldora de la música (`ui/css/hud.css:732`). Ahora la cara
+     * lo esconde cuando entra en una hoja con barra propia y lo devuelve en el orbe.
+     */
+    @JavascriptInterface
+    public void menuPC(final boolean visible) {
+        act.muestraMenuPC(visible);
+    }
+
     /** Las que mejor encajan con lo que ha oído, de más a menos. */
     @JavascriptInterface
     public String musicaPorGusto(final String filtro, final int cuantas) {
@@ -1075,6 +1175,7 @@ public class CortNative {
     public boolean musicaPoner(final String uris, final int desde) {
         java.util.List<Reproductor.Pista> pistas = alReproductor(Musica.porUri(act, trocea(uris)));
         if (pistas.isEmpty()) return false;
+        salirDeJuegoPorMusica();
         Reproductor.ponerCola(act, pistas, desde);
         Reproductor.reproducir();
         return true;
@@ -1086,6 +1187,7 @@ public class CortNative {
         java.util.List<Reproductor.Pista> pistas =
             alReproductor(Musica.porUri(act, Musica.urisDeLista(act, nombre)));
         if (pistas.isEmpty()) return false;
+        salirDeJuegoPorMusica();
         Reproductor.ponerCola(act, pistas, desde);
         Reproductor.reproducir();
         return true;
@@ -1105,6 +1207,7 @@ public class CortNative {
             act.pidePermiso("medios");
             return;
         }
+        salirDeJuegoPorMusica();
         new Thread(() -> {
             java.util.List<Reproductor.Pista> pistas =
                 alReproductor(Musica.porGusto(act, "", 40));
@@ -1119,7 +1222,7 @@ public class CortNative {
     }
 
     @JavascriptInterface
-    public void musicaPlay() { Reproductor.reproducir(); }
+    public void musicaPlay() { salirDeJuegoPorMusica(); Reproductor.reproducir(); }
 
     @JavascriptInterface
     public void musicaPausa() { Reproductor.pausar(); }
@@ -1252,6 +1355,29 @@ public class CortNative {
 
     /** Lo mismo, desde Java: lo leen `Reproductor` y `MainActivity`. */
     static boolean enJuego() { return juego; }
+
+    /**
+     * Que la dueña pida una canción **es** salir del modo juego.
+     *
+     * El modo existe para no estorbar dentro de una partida, y lo que hace es
+     * negarse a pedir el foco de audio (`Reproductor.pideFoco()`, línea 287 de esa
+     * clase). Medido el 2026-10-22 en su teléfono con `2.6.0-nucleo`: el interruptor
+     * se quedó puesto y CORT cargaba las pistas **en silencio** — `onPrepared` llama
+     * a `m.start()` sólo si el foco se concede (`Reproductor.java:342-347`) —, de
+     * manera que «no reproduce música» y «el micrófono no hace nada» eran el mismo
+     * fallo con dos caras, y la única salida era meterse en la hoja Música.
+     *
+     * La regla que cierra el callejón: una orden **explícita** de música gana al
+     * modo. Nadie que está en plena partida se pone a tocar la lista de canciones
+     * desde dentro de CORT; si lo hace, quiere oír. Y al desactivar se hace por el
+     * camino de siempre (`modoJuego(false)`), que devuelve el oído y la sesión de
+     * audio, en vez de escribir la preferencia a mano y dejar la bandera mintiendo.
+     */
+    private void salirDeJuegoPorMusica() {
+        if (!juego) return;
+        modoJuego(false);
+        act.avisa("Salgo del modo juego: ahora sí suena CORT");
+    }
 
     /* ─────────────────── contactos y marcar ─────────────────── */
 

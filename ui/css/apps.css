@@ -114,9 +114,13 @@ html.mobile #cajon #dock{gap:6px}
    falta: cada app escribe su nombre en SU cabecera (`.scr-top`, `.lk-barra`,
    `.gm-cab`) y para saltar de una a otra está el cajón. */
 html.pantallas-montadas #pantalla-bar{display:none}
-/* El cartel del modo juego se queda, flotando arriba: es un aviso, no un botón. */
+/* El cartel del modo juego es un aviso **y** la salida: se apaga con un toque, porque
+   la otra vía —decir «vuelve CORT»— necesita el micro que el propio modo cerró. Por
+   eso lleva `cursor` y `font:inherit`: es un `<button>`, y sin esto heredaba el
+   centrado y la fuente del botón del navegador. */
 #pantalla-juego{position:fixed;left:50%;transform:translateX(-50%);top:12px;z-index:90;
-  display:none;padding:6px 14px;border-radius:16px;font-size:11.5px;letter-spacing:.06em;
+  display:none;padding:6px 14px;border-radius:16px;font:inherit;font-size:11.5px;
+  letter-spacing:.06em;cursor:pointer;
   background:rgba(20,10,2,.9);border:1px solid rgba(255,179,71,.55);color:#ffd79a;
   box-shadow:0 8px 22px rgba(0,0,0,.5)}
 #pantalla-juego.viva{display:block}
@@ -195,8 +199,9 @@ html.mobile.pantallas-montadas:not(.p-orbe) .scr{padding:8px 12px calc(18px + en
    activo RELLENO, la lista (miniatura · título en negrita · artista gris · duración a
    la derecha), el reproductor a pantalla completa con el título teñido del acento y
    los tres botones gordos, y las hojas que suben desde abajo.
-   Lo que Lark tiene y CORT no: carátulas reales, carpetas, ecualizador y «más
-   reproducido» — no se pintan falsos. */
+   Lo que Lark tiene y CORT aún no: carpetas y ecualizador (el puente no los da). Las
+   carátulas sí están desde 2.7.0 (`musicaCaratula` en Java, base64 en la cara), y
+   «más reproducido» NO se copia: Android no expone ese dato. Nada de pintarlo falso. */
 
 /* La barra de la app: título + buscador + orden + más opciones, como en Lark. */
 .lk-barra{display:flex;align-items:center;gap:10px;padding:2px 0 6px}
@@ -262,6 +267,68 @@ html.mobile.pantallas-montadas:not(.p-orbe) .scr{padding:8px 12px calc(18px + en
 .lk-pastillas .mu-chip{background:var(--app-pastilla,#232329);border-color:rgba(255,255,255,.12);
   color:#dcdce2;font-size:11.5px;padding:7px 12px}
 .lk-pastillas .mu-chip.on{border-color:var(--app-accent);color:var(--app-accent)}
+
+/* ── las carátulas de verdad (la queja de 2.6.0: «no se ven las carátulas») ──
+   La fila de Lark lleva la miniatura de 46 px redondeada; detrás está siempre el
+   degradado con su glifo, y la foto se superpone con `position:absolute`. Si Java no
+   tiene carátula para esa pista, `pintaCaratulas` **quita** el `<img>`: queda el glifo,
+   que es la verdad, en vez de un cuadro vacío o un icono roto. */
+.lk-portada{position:relative;overflow:hidden}
+.lk-portada img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+  border-radius:9px;display:block;background:#000}
+.lk-portada-grande.con-foto i,.lk-portada-grande.con-foto{background-size:cover;background-position:center}
+.lk-portada-grande.con-foto i{display:none}
+#mus-mini-portada.con-foto,#rp-portada.con-foto{color:transparent;background-size:cover;
+  background-position:center}
+
+/* Las pildoritas de Lark a la derecha de cada fila: `LETRAS` y `MV`. */
+.lk-pilda{font-style:normal;font-size:9px;letter-spacing:.06em;flex:0 0 auto;
+  padding:3px 7px;border-radius:6px;color:#c9c9d2;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.12)}
+.lk-pilda+.lk-pilda{margin-left:6px}
+
+/* La pestaña «Vídeos»: rejilla de dos columnas, como la suya, con la miniatura a
+   16:9, la duración escrita encima abajo a la derecha (`0:22`) y el título debajo. */
+.lk-cuadricula{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:4px 2px 10px}
+.lk-cuadricula .lk-fila{display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:0}
+.lk-miniatura{position:relative;width:100%;aspect-ratio:16/9;border-radius:12px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;font-size:26px;color:#0b0b0f;
+  background:linear-gradient(150deg,var(--app-accent),#3c3c46 70%)}
+.lk-miniatura img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;background:#000}
+.lk-miniatura em{position:absolute;right:6px;bottom:4px;font-style:normal;font-size:10px;color:#f0f0f4;
+  background:rgba(0,0,0,.62);padding:1px 6px;border-radius:8px;font-family:ui-monospace,Consolas,monospace}
+.lk-cuadricula .lk-txt b{font-size:13px;white-space:normal;display:-webkit-box;
+  -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.lk-cuadricula .lk-pilda{align-self:flex-start;margin:0}
+
+/* El buscador de Lark: pantalla con Historial y Sitios, no un campo suelto. */
+.lk-buscador{padding:2px 0 10px}
+.lk-busca-fila{display:flex;align-items:center;gap:8px}
+.lk-busca-fila input{flex:1;min-width:0;background:var(--app-pastilla,#232329);
+  border:1px solid rgba(255,255,255,.12);border-radius:20px;color:#f2f2f6;
+  font:inherit;font-size:14px;padding:11px 15px}
+.lk-busca-fila input:focus{border-color:var(--app-accent);outline:none}
+.lk-busca-titulo{font-size:12px;color:#8d8d97;margin-top:12px}
+.lk-historial,.lk-sitios{justify-content:flex-start}
+.lk-historial-vacio{font-size:11.5px;color:#6f6f79;padding:2px 4px}
+.lk-historial .mu-chip,.lk-sitios .mu-chip{background:var(--app-pastilla,#232329);
+  border:1px solid rgba(255,255,255,.12);color:#dcdce2;font-size:12px;padding:7px 13px;border-radius:16px}
+
+/* La flecha `↓↑` de «Ordenar por» y la nota al pie de las hojas de Lark. */
+.hoja-fila .lk-flecha{margin-left:auto;font-style:normal;color:var(--app-accent);
+  font-size:15px;padding:0 6px}
+.hoja-nota{font-size:11px;color:#7f7f89;padding:10px 6px 2px;text-align:center}
+
+/* El tinte de Lark: la barra y el mini se colorean con el promedio de la portada
+   (`tinteDe` en pantallas.js). Sin `--tinte` puesta, el acento de la app hace de
+   color y la hoja no cambia de aspecto con la música parada. */
+/* El tinte de Lark: el mini se colorea con el promedio de la portada (`tinteDe` en
+   pantallas.js). Se pone como `background-color` DESPUÉS del `background` de la regla
+   de arriba: si un WebView viejo no conoce `color-mix`, la declaración se cae y queda
+   la superficie oscura de siempre — nunca un fondo transparente sobre la lista. */
+.lk-mini{background-color:color-mix(in srgb, var(--tinte, #141417) 74%, #000)}
+.lk-player{background:radial-gradient(58% 34% at 50% 0,
+  color-mix(in srgb, var(--tinte, transparent) 30%, transparent), transparent 72%)}
 
 /* La píldora de F8, vestida de Lark: superficie teñida, portada y pausa a la derecha. */
 html.pantallas-montadas #repro-pildora{background:var(--app-sup,#141417);

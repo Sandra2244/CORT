@@ -2504,6 +2504,268 @@ else:
                     "lanzarlos")
 
 
+# ── [20] F10 · la Música de Lark: carátulas, vídeos, buscador, letra dentro del
+#         reproductor y el botón nativo que no estorba.
+# La dueña describió 2.6.0-nucleo con cinco fallos de frente («no se ven las carátulas,
+# no reproduce, no cargan los vídeos, la playlist no es Lark, el buscador no acierta, y
+# el cartel de modo juego no se quita»). Cada comprobación de abajo ata UNO de esos
+# quejas con las dos capas que tienen que decir lo mismo: si la cara pide una carátula
+# que Java no sabe dar, la fila sale vacía en el teléfono y verde en cualquier prueba
+# que sólo mire el JS.
+print("\n[20] F10 · carátulas, vídeos, buscador y la letra fusionada")
+
+F20_JAVA = puente_texto()
+F20_CARA = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+F20_SIN = sin_comentarios_js(F20_CARA)
+F20_MAIN = (APK / "src" / "com" / "cort" / "ia" / "MainActivity.java").read_text(encoding="utf-8")
+F20_MUS = (APK / "src" / "com" / "cort" / "ia" / "Musica.java").read_text(encoding="utf-8")
+F20_HUDJS = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+F20_HUDCSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+F20_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
+
+# 20.a · `llama('X')` / `puede('X')`: la cara no puede pedir un método que Java no
+# expone. `llama` devuelve `null` en silencio cuando falta (`pantallas.js:81`), así que
+# el síntoma en el teléfono es un botón mudo — que es exactamente lo que reportó.
+f20_llamados = set()
+for _f20 in sorted((RAIZ / "ui" / "js").glob("*.js")):
+    f20_llamados |= set(re.findall(
+        r"\b(?:llama|puede)\(\s*['\"](\w+)['\"]",
+        sin_comentarios_js(_f20.read_text(encoding="utf-8"))))
+if not f20_llamados:
+    falla("puente · llama()", "la prueba no encontró NINGÚN `llama(…)`: está vacía, "
+                              "y un verde que no puede ponerse rojo no es prueba")
+else:
+    f20_faltan = sorted(n for n in f20_llamados if n not in metodos_javascript)
+    if f20_faltan:
+        falla("puente · llama()", "la cara llama " + ", ".join(f"`{n}`" for n in f20_faltan)
+              + " y no hay `@JavascriptInterface` con ese nombre → `null` en silencio, "
+                "botón muerto en el teléfono")
+    else:
+        dice_ok("puente · llama()", f"los {len(f20_llamados)} métodos que la cara pide por "
+                                    f"`llama`/`puede` están expuestos en Java")
+
+# 20.b · Las carátulas: Java las da (con `loadThumbnail`, y en base64 porque el WebView
+# tiene `setAllowFileAccess(false)`), y la cara las pide detrás de `puede(...)` para que
+# un APK viejo congele la lista.
+if "musicaCaratula" not in F20_JAVA:
+    falla("carátulas", "CortNative no expone `musicaCaratula`: «no se ven las carátulas»")
+elif "loadThumbnail" not in F20_MUS or "base64" not in F20_MUS:
+    falla("carátulas", "Musica.java no saca la imagen del índice (`loadThumbnail`) o no la "
+                       "mete en base64, y un `file://` nunca carga en este WebView")
+elif "musicaCaratula" not in F20_SIN:
+    falla("carátulas", "la cara no pide carátulas: la fila seguiría con su glifo")
+elif "data-cara" not in F20_CARA:
+    falla("carátulas", "la cara pide la imagen pero ningún `<img data-cara=…>` la recibe")
+else:
+    dice_ok("carátulas", "`musicaCaratula` en Java, `loadThumbnail`+base64, y la cara la "
+                         "pide de 4 en 4 con su `<img data-cara>`")
+
+# 20.c · Vídeos y buscador, que eran el mismo bug con dos caras: `MAX` era compartido.
+if "MAX_VIDEO" not in F20_MUS:
+    falla("vídeos", "Musica.java no separa el tope de vídeos del de canciones: 400 para "
+                    "todo y la pestaña de vídeos sale medio vacía")
+elif "plegar" not in F20_MUS:
+    falla("buscador", "sin `plegar()` el filtro queda en el `LIKE` del SQLite, que sólo "
+                      "ignora mayúsculas del ASCII: los acentos y la ñ no aciertan")
+elif "lk-cuadricula" not in F20_APPS:
+    falla("vídeos", "la pestaña de vídeos no tiene rejilla: `.lk-cuadricula` no está en apps.css")
+else:
+    dice_ok("vídeos y buscador", "topes separados, filtro plegado en Java y rejilla para los vídeos")
+
+# 20.d · La letra fusionada: sigue existiendo como hoja, pero ya no se ofrece como otra
+# app, y el orbe no se despierta encima del vídeo (lo pidió dicho: «no me gusta que
+# aparezca en MV»).
+if "escondida: true" not in F20_CARA:
+    falla("letra fusionada", "MV sigue ofreciéndose sola en el cajón: no está fusionada en Música")
+elif "montables()" not in F20_CARA or "const visibles" not in F20_CARA:
+    falla("letra fusionada", "no hay dos listas (`montables`/`visibles`): esconder MV dejaría "
+                             "de montarla y el botón «letra» no tendría adónde ir")
+elif "p-mv #scene" in F20_HUDCSS:
+    falla("letra fusionada", "hud.css sigue intentando poner el orbe encima del vídeo")
+elif "orb.pausa(false); orb.setDisc(true)" in F20_HUDJS:
+    falla("letra fusionada", "hud.js sigue despertando el WebGL en la hoja de letra")
+elif "abreLetra" not in F20_SIN:
+    falla("letra fusionada", "el botón «letra» no llama a `abreLetra()`: no hay fusión")
+else:
+    dice_ok("letra fusionada", "la letra vive dentro de Música (hoja escondida + `abreLetra`) "
+                               "y el orbe se apaga como en las demás hojas")
+
+# 20.e · El botón nativo «CORT · PC»: la cara lo esconde en las hojas que no son el
+# orbe. Un `@JavascriptInterface` que llama a un método ausente en `MainActivity` es un
+# `NoSuchMethodError` que tiraría el puente, así que se cruzan las dos mitades Java.
+if "menuPC" not in F20_JAVA:
+    falla("botón nativo", "CortNative no expone `menuPC`: el botón no se puede ocultar")
+elif "muestraMenuPC" not in F20_MAIN:
+    falla("botón nativo", "`menuPC` llama a `act.muestraMenuPC` y ese método no está en "
+                          "MainActivity: `NoSuchMethodError` en cuanto la cara cambie de hoja")
+elif "menuPC" not in F20_SIN:
+    falla("botón nativo", "la cara nunca lo oculta: sigue atravesado sobre la píldora")
+else:
+    dice_ok("botón nativo", "`menuPC` ↔ `MainActivity.muestraMenuPC`, y la cara lo usa al cambiar de hoja")
+
+# 20.f · El modo juego clavado: el negativo tiene que tener nombre en las tres capas
+# (Java lo dice, voice.js lo pasa, hud.js lo explica). Sin una de las tres, la dueña
+# vuelve a quedarse con un micrófono mudo y un cartel que no se quita.
+if not re.search(r'stt-error[^\n]*juego', F20_JAVA):
+    falla("modo juego", "Java sigue abortando la escucha sin decir `juego`: el micro parece roto")
+elif "'juego'" not in (RAIZ / "ui" / "js" / "voice.js").read_text(encoding="utf-8"):
+    falla("modo juego", "voice.js no traduce el `juego` de Java a `onError`")
+elif "e === 'juego'" not in F20_HUDJS:
+    falla("modo juego", "hud.js no le pone palabras al negativo: la boca no dice qué pasa")
+elif "juego.id = 'pantalla-juego'" not in F20_CARA:
+    falla("modo juego", "el cartel sigue siendo un aviso: no hay forma de tocarlo para salir")
+elif "salirDeJuegoPorMusica" not in F20_JAVA:
+    falla("modo juego", "poner música desde la cara no sale del modo: `.Reproductor` pide el "
+                        "foco, lo rechaza y la canción carga en silencio")
+else:
+    dice_ok("modo juego", "el negativo se nombra (Java→voice.js→hud.js), el cartel es un botón "
+                          "y la música manda salir del modo")
+
+# 20.g · La cara no puede prometer lo que el puente no da: las cuatro funciones nuevas
+# del menú ⋮ se exigen por su nombre en las dos mitades.
+for f20_metodo, f20_qu in (("musicaVelocidad", "Velocidad"), ("musicaDuerme", "dormir"),
+                           ("musicaOculta", "Ocultar"), ("abreEnlace", "Sitios")):
+    if f20_metodo not in F20_JAVA:
+        falla(f"menú ⋮ · {f20_qu}", f"CortNative no expone `{f20_metodo}`")
+    elif f20_metodo not in F20_SIN:
+        falla(f"menú ⋮ · {f20_qu}", f"`{f20_metodo}` está en Java pero la cara no lo llama: "
+                                     "la fila sería un adorno")
+    else:
+        dice_ok(f"menú ⋮ · {f20_qu}", f"`{f20_metodo}` en las dos capas")
+
+# ── [21] F10 · la sonda no puede comprobar una cara que no existe ───────────
+# `ui/sonda-carita.html` es lo único que permite VER la cara del teléfono en este
+# portátil. Y tiene su propio modo de mentir: si un selector está mal escrito,
+# `querySelector` devuelve `null`, `[].length` da `0` y una prueba negativa se pone
+# VERDE sin haber mirado nada. Antes de fiarse de un verde de la sonda se comprueba,
+# sin abrir el navegador, que cada selector que consulta existe en la cara que se
+# instala, y que su puente de mentira simula TODO lo que la cara pide: si falta un
+# método, el `puede()` de `pantallas.js:83` da `false` y la sonda recorre la rama del
+# APK viejo — que no es la que la dueña lleva en el bolsillo.
+print("\n[21] F10 · la sonda, la cara y el puente de mentira, los tres a la vez")
+
+F21_SONDA = (RAIZ / "ui" / "sonda-carita.html").read_text(encoding="utf-8")
+F21_MODULO = re.search(r'<script type="module">(.*)</script>', F21_SONDA, re.S)
+if not F21_MODULO:
+    falla("sonda", 'no hay `<script type="module">` que leer: la sonda dejó de ser un módulo')
+else:
+    F21_JS = sin_comentarios_js(F21_MODULO.group(1))
+
+    def f21_sin_html(txt: str) -> str:
+        return re.sub(r"<!--.*?-->", "", txt, flags=re.S)
+
+    # Los módulos que la sonda carga DE VERDAD: `pantallas.js` y su cadena de `import`.
+    # `hud.js` queda fuera a propósito: es la cara del PC, y exigirle sus nodos a esta
+    # hoja sería pedirle a la sonda que simule una pantalla que no monta.
+    F21_COLA, F21_MODS = ["pantallas.js"], {}
+    while F21_COLA:
+        f21_nombre = F21_COLA.pop()
+        if f21_nombre in F21_MODS:
+            continue
+        f21_txt = sin_comentarios_js((RAIZ / "ui" / "js" / f21_nombre).read_text(encoding="utf-8"))
+        F21_MODS[f21_nombre] = f21_txt
+        F21_COLA += re.findall(r"from '\./([\w.-]+\.js)'", f21_txt)
+    F21_CARA = "".join(F21_MODS.values()) + "".join(
+        f21_sin_html(sin_comentarios_js(f.read_text(encoding="utf-8")))
+        for f in sorted((RAIZ / "ui" / "css").glob("*.css"))) + f21_sin_html(
+        sin_comentarios_js((RAIZ / "ui" / "index.html").read_text(encoding="utf-8")))
+
+    # 21.a · El puente de mentirijilla no puede prometer más de lo que el teléfono da,
+    # ni quedarse por debajo de lo que la cara pide. Las dos direcciones, porque en la
+    # práctica fallan las dos: una tecla que Java no tiene es adorno, y una que falta
+    # apaga la pantalla entera sin decir nada.
+    f21_lin = F21_MODULO.group(1).splitlines()
+    if not any(l.startswith("window.CortNative =") for l in f21_lin):
+        falla("sonda · puente", "no se encuentra `window.CortNative = {`: la prueba está ciega")
+    else:
+        f21_ini = next(k for k, l in enumerate(f21_lin) if l.startswith("window.CortNative ="))
+        f21_fin = next(k for k in range(f21_ini + 1, len(f21_lin)) if f21_lin[k].strip() == "};")
+        f21_fake = {m.group(1) for k in range(f21_ini + 1, f21_fin)
+                    for m in [re.match(r"  (\w+)\s*:", f21_lin[k])] if m}
+        f21_pide = set()
+        for f21_txt in F21_MODS.values():
+            f21_pide |= set(re.findall(r"\b(?:llama|puede)\(\s*['\"](\w+)['\"]", f21_txt))
+        if not f21_pide:
+            falla("sonda · puente", "ningún módulo montado por la sonda pide métodos: la prueba no mira nada")
+        else:
+            f21_fingidos = sorted(f21_fake - metodos_javascript)
+            f21_sin_simular = sorted(f21_pide - f21_fake)
+            if f21_fingidos:
+                falla("sonda · puente", "la sonda simula " + ", ".join(f"`{n}`" for n in f21_fingidos)
+                      + " y `CortNative.java` no los expone: es un método inventado, y la cara "
+                        "del teléfono jamás lo va a contestar")
+            elif f21_sin_simular:
+                falla("sonda · puente", f"la cara pide {len(f21_sin_simular)} métodos ("
+                      + ", ".join(f"`{n}`" for n in f21_sin_simular)
+                      + ") y el puente de mentira no los tiene: `puede()` da `false` y la sonda "
+                        "recorre la rama del APK viejo, verde pero mirando otra cosa")
+            else:
+                dice_ok("sonda · puente", f"los {len(f21_pide)} métodos que piden "
+                      + ", ".join(sorted(F21_MODS)) + " están simulados, y las "
+                      f"{len(f21_fake)} teclas fingidas existen todas en Java")
+
+    # 21.b · Cada selector que la sonda consulta tiene que existir en la cara montada,
+    # salvo los que la sonda DECLARA como negativos (`NEGATIVOS`): Lark trae ecualizador,
+    # cola y carpetas y el puente de CORT no los da, así que ahí se prueba la ausencia.
+    # Los ids compuestos (`${p}-play`, `'scr-' + p.id`) y los que la propia sonda se
+    # fabrica (`<button id="otro">`) también valen: se buscan por su regla de nombre.
+    # Un selector empieza en `#id` o `.clase`, y puede llevar detrás lo que lleva
+    # cualquier selector de verdad: atributos (`[data-c="videos"]`), pseudo-clases
+    # (`:last-child`), descendientes (`.lk-fila .lk-txt b`) y etiquetas sueltas.
+    f21_forma = re.compile(r"[.#][\w-]+[A-Za-z0-9_\-\s.,>+~#*:\[\]='\"|()^$]*")
+    f21_sels: set[str] = set()
+    for f21_q in (re.findall(r"'([^'\n]*)'", F21_JS) + re.findall(r'"([^"\n]*)"', F21_JS)):
+        if f21_forma.fullmatch(f21_q.strip()):
+            f21_sels |= set(re.findall(r"[.#][A-Za-z][\w-]*", f21_q))
+    f21_sels = {s for s in f21_sels if not re.fullmatch(r"#[0-9a-fA-F]{3,8}", s)}
+    f21_compuestos = {"#" + f21_pre + "-" + f21_cola
+                      for f21_pre in set(re.findall(r"transporteHTML\('(\w+)'\)", F21_CARA))
+                      for f21_cola in re.findall(r"\$\{p\}-([\w-]+)", F21_CARA)}
+    f21_compuestos |= {"#scr-" + f21_p for f21_p in re.findall(r"\{\s*id:\s*'(\w+)'", F21_CARA)}
+    f21_propios = set(re.findall(r'id="([\w-]+)"', F21_JS))
+    f21_neg = {m for bloque in re.findall(r"const NEGATIVOS\s*=\s*\[([^\]]*)\]", F21_JS, re.S)
+               for m in re.findall(r"['\"]([.#][\w-]+)['\"]", bloque)}
+    if not f21_sels:
+        falla("sonda · selectores", "la sonda no consulta NINGÚN selector: la prueba está vacía")
+    else:
+        f21_huerfanos = sorted(s for s in f21_sels
+                               if s[1:] not in F21_CARA and s[1:] not in f21_propios
+                               and s not in f21_compuestos and s not in f21_neg)
+        f21_vivos = sorted(s for s in f21_neg if s[1:] in F21_CARA or s in f21_compuestos)
+        if f21_huerfanos:
+            falla("sonda · selectores", "la sonda pregunta por "
+                  + ", ".join(f"`{s}`" for s in f21_huerfanos)
+                  + " y nada en la cara lo monta: `null` o lista vacía, y una prueba "
+                    "negativa con un selector roto se pone verde sin haber visto nada")
+        elif f21_vivos:
+            falla("sonda · selectores", "declarados como «lo que CORT no tiene» pero la cara ya "
+                  "los montó: " + ", ".join(f"`{s}`" for s in f21_vivos)
+                  + " · la comprobación `nada inventado` está caducada")
+        else:
+            dice_ok("sonda · selectores", f"los {len(f21_sels)} selectores que la sonda consulta "
+                    f"existen en la cara (montada, compuesta o fabricada por la propia sonda), "
+                    f"y los {len(f21_neg)} negativos declarados siguen sin existir")
+
+    # 21.c · Ninguna pantalla que se le ofrece a la dueña puede quedarse sin mirar.
+    f21_tabla = re.search(r"const PANTALLAS = \[(.*?)\n\];", F21_CARA, re.S)
+    if not f21_tabla:
+        falla("sonda · pantallas", "`pantallas.js` no tiene la tabla `PANTALLAS`: no hay qué mirar")
+    else:
+        f21_visibles = [m.group(1) for f21_p in re.split(r"(?=\{\s*id:)", f21_tabla.group(1))
+                        for m in [re.search(r"\{\s*id:\s*'(\w+)'", f21_p)]
+                        if m and "escondida" not in f21_p]
+        f21_visitas = set(re.findall(r"\.ir\('(\w+)'\)", F21_JS))
+        f21_ciegas = [p for p in f21_visibles if p not in f21_visitas]
+        if not f21_visibles:
+            falla("sonda · pantallas", "la tabla no deja NI UNA pantalla visible: está vacía")
+        elif f21_ciegas:
+            falla("sonda · pantallas", "estas hojas se le ofrecen a la dueña y la sonda nunca "
+                  "entra en ellas: " + ", ".join(f"`{p}`" for p in f21_ciegas))
+        else:
+            dice_ok("sonda · pantallas", "las " + str(len(f21_visibles)) + " hojas visibles ("
+                    + ", ".join(f21_visibles) + ") las recorre la sonda, y la escondida (`mv`) "
+                      "sigue montada sin ofrecerse")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

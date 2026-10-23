@@ -112,6 +112,14 @@ export function createVoice(h = {}) {
         else if (ev.error === 'busy') { intentos += 2; retroceso(); }  // el micro lo tiene otro
         else if (mode === 'wake' && (ev.error === 'no-speech' || ev.error === 'abort')) { intentos++; retroceso(); }
         else if (mode === 'cmd' && ev.error === 'no-speech') h.onError && h.onError('no-speech');
+        // El modo juego contesta `juego` (lo manda `arrancarEscucha`, en Java). Sin
+        // esta rama el botón del micrófono se quedaba **mudo sin explicarse**: la
+        // dueña pulsaba, no pasaba nada, y CORT no decía que estaba callado a
+        // propósito. Medido en su teléfono con `2.6.0-nucleo` el 2026-10-22.
+        // No se reintenta ni se apaga `wakeOn`: `modoJuego(true)` ya mandó `pause`,
+        // `enPausa` corta el rearmado arriba (`motivoFreno`), y apagar la palabra de
+        // activación por un interruptor sería dejarla muda al volver.
+        else if (ev.error === 'juego') h.onError && h.onError('juego');
         break;
       case 'stt-end':
         mode = 'idle'; emitState(); scheduleWake(); break;

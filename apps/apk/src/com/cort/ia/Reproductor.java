@@ -353,6 +353,31 @@ public class Reproductor extends Service {
         r.estadoSesion();
     }
 
+    /**
+     * La velocidad de reproducción, como la fila «Velocidad» de Lark (0,5× … 2,0×).
+     *
+     * Es `MediaPlayer.setPlaybackParams`, de verdad: Android obliga a **pausar**
+     * antes de cambiar los parámetros y a reanudar después si estaba sonando, y así
+     * está hecho. Con `Build.VERSION` por debajo de 23 no hay forma sin librerías, y
+     * se dice con la cadena vacía en vez de fingir un número.
+     */
+    public static String velocidad(float v) {
+        Reproductor r = vivo;
+        if (r == null || r.mp == null) return "nada puesto";
+        if (android.os.Build.VERSION.SDK_INT < 23) return "este Android no puede cambiar la velocidad";
+        float buena = Math.max(0.25f, Math.min(3f, v));
+        try {
+            boolean sonaba = r.sonando();
+            if (sonaba) r.mp.pause();
+            r.mp.setPlaybackParams(r.mp.getPlaybackParams().setSpeed(buena));
+            if (sonaba) r.mp.start();
+            r.refresca();
+            return "";
+        } catch (Exception eseFabricanteNoDeja) {
+            return "el teléfono no dejó cambiar la velocidad";
+        }
+    }
+
     /** Que suene lo que ya está en la cola (o lo que se acaba de poner). */
     public static void reproducir() {
         Reproductor r = vivo;

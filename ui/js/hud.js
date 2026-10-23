@@ -1898,6 +1898,16 @@ export function wireUI(orbRef) {
       const lv = document.getElementById('livetxt'); lv && lv.classList.remove('show');
       document.getElementById('q').classList.remove('live');
       if (e === 'not-allowed') { add('a', 'Necesito permiso de micrófono para escucharte.', 'error'); document.getElementById('wake').classList.remove('on'); }
+      /* El modo juego cerró el micro a propósito, y hasta ahora **no lo decía**: la
+         dueña pulsaba el botón, Java respondía `abort`, `voice.js` no tenía rama para
+         `abort` en modo `cmd`, y el resultado era un botón que parecía roto. Ahora
+         CORT se explica y dice la salida, que es un toque en el cartel — no la voz,
+         porque la voz es justo lo que el modo cerró. */
+      else if (e === 'juego') {
+        add('a', 'Estoy en modo juego: no escucho para no estorbarte. Toca el cartel «🎮 modo juego» de arriba para volver, o apaga el interruptor en Música.', 'error');
+        term('micro cerrado por el modo juego', 'voz');
+        setState('reposo');
+      }
       else if (e === 'service-not-allowed') add('a', 'Este teléfono no tiene servicio de reconocimiento de voz. Instala o actualiza la app «Google» y vuelve a intentar.', 'error');
       else if (e === 'network') term('reconocimiento de voz sin red (reintento)', 'voz');
       else if (e === 'no-speech') { term('no escuché nada', 'voz'); setState('reposo'); }
@@ -2115,11 +2125,13 @@ export function wireUI(orbRef) {
   }
   // Fuera de su pantalla, el orbe no se queda dibujando a escondidas: el bucle
   // WebGL se congela (CPU, RAM y batería para el teléfono y para el portátil).
-  // La excepción es MV: ahí el holograma no se apaga, se hace disco en la esquina
-  // (el CSS pone #scene pequeñito sobre el vídeo) y gira mientras suena la pista.
+  // La hoja de letra ya NO es la excepción: con la fusión de Música, delante tiene
+  // que estar el vídeo y nada más (la dueña: «no me gusta que el orbe aparezca en
+  // MV»). `#scene` ya estaba oculto por el apagón de `css/hud.css`; lo que quedaba
+  // aquí era el bucle despierto, y eso también se apaga.
   window.addEventListener('cort-pantalla', e => {
-    if (e.detail === 'mv') { orb.pausa(false); orb.setDisc(true); }
-    else { orb.setDisc(false); orb.pausa(e.detail !== 'orbe'); }
+    orb.setDisc(false);
+    orb.pausa(e.detail !== 'orbe');
   });
   // Las pantallas piden ventanas que viven aquí: el botón «↓ bajar modelos» de la
   // Charla abre 10 · Modelos, que es donde está el descargador de verdad — no se

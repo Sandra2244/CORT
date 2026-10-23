@@ -49,7 +49,14 @@ let telefono = { pinta: () => {} }; // lo que monta `telefono.js`; en el PC es u
 const PANTALLAS = [
   { id: 'orbe',   titulo: 'Orbe',    sub: 'el holograma de siempre', ic: '◉' },
   { id: 'musica', titulo: 'Música',   sub: 'el reproductor de CORT', telefono: true, ic: '♪' },
-  { id: 'mv',     titulo: 'MV',       sub: 'el video con su letra', telefono: true, ic: '▣' },
+  /* La letra y el vídeo siguen siendo SU propia pantalla completa (con su `<video>`
+     y su karaoke), pero **ya no se ofrecen solas en el cajón**: la dueña lo pidió el
+     22/10 «debería fusionarse directamente con el reproductor de música… se llamará
+     reproductor de música o otro nombre pero será una réplica exacta a Lark Player».
+     En Lark eso es el botón `❝ Letras` del reproductor, y aquí es `abreLetra()`, que
+     entra y sale con ‹ sin que la hoja aparezca como otra app. */
+  { id: 'mv',     titulo: 'Letra',    sub: 'el vídeo con su letra', telefono: true,
+    ic: '❝', escondida: true },
   { id: 'charla', titulo: 'Charla',   sub: 'conversa con tus modelos', ic: '✦' },
   { id: 'codigo', titulo: 'Código',   sub: 'terminal y programar', ic: '⌗' },
   // La hoja del contrato 2.1: manda sobre el aparato. Sin puente no existe — en el
@@ -60,10 +67,12 @@ const PANTALLAS = [
   { id: 'equipo', titulo: 'Equipo',   sub: 'lo que manda CORT en el teléfono',
     telefono: true, puente: 'accion', ic: '⚙' },
 ];
-// `visibles()` es la única lista que se pinta (cajón, teclas, deslizar, `ir`). Una
-// hoja con `puente` solo se ofrece si el puente de Java trae ese método de verdad.
-const visibles = () => PANTALLAS.filter(p => (!p.telefono || enTelefono())
+// `montables()` es lo que se construye en el DOM (todas, escondidas o no); `visibles()`
+// es la única lista que se OFRECE (cajón, teclas, deslizar). Una hoja con `puente` solo
+// existe si el puente de Java trae ese método de verdad.
+const montables = () => PANTALLAS.filter(p => (!p.telefono || enTelefono())
   && (!p.puente || puede(p.puente)));
+const visibles = () => montables().filter(p => !p.escondida);
 
 /* Cada hoja es SU app: el color con el que se pinta su icono del cajón, su fondo y su
    acento. Los valores coinciden con las variables `--app-*` de `css/apps.css`, que es
@@ -108,9 +117,11 @@ function montaCarcasa() {
   montaCajon();
 
   // Las hojas: cada `<section>` es la pantalla completa de SU app. Las que llevan
-  // `sin-cab` dibujan su propia barra (Lark y Gemini), y la genérica estorba.
-  const CON_BARRA_PROPIA = ['musica', 'charla'];
-  visibles().filter(p => p.id !== 'orbe').forEach(p => {
+  // `sin-cab` dibujan su propia barra (Lark y Gemini), y la genérica estorba. Se
+  // montan con `montables()`, no con `visibles()`: la letra es una hoja que no se
+  // ofrece en el cajón pero que SÍ existe, porque el reproductor la abre.
+  const CON_BARRA_PROPIA = ['musica', 'charla', 'mv'];
+  montables().filter(p => p.id !== 'orbe').forEach(p => {
     const s = document.createElement('section');
     s.className = 'scr' + (CON_BARRA_PROPIA.includes(p.id) ? ' sin-cab' : '');
     s.id = 'scr-' + p.id;
@@ -119,16 +130,34 @@ function montaCarcasa() {
       <b>${esc(p.titulo)}</b><span class="scr-estado"></span></header>
       <div class="scr-cuerpo"></div>`;
     document.body.appendChild(s);
-    s.querySelector('.scr-vuelve').onclick = () => ir('orbe');
+    // El ‹ genérico vuelve al orbe, salvo en la hoja de letra: ahí el sitio del que
+    // se viene es el reproductor, y eso es justo lo que significa «fusionada».
+    s.querySelector('.scr-vuelve').onclick = () => {
+      if (p.id === 'mv') { ir('musica'); vistaMusica('player'); return; }
+      ir('orbe');
+    };
     s.querySelector('.scr-menu').onclick = abreCajon;
   });
 
-  // El cartel del modo juego: aviso flotante, no botón (la barra de hojas ya no está).
-  const juego = document.createElement('div');
+  // El cartel del modo juego. Antes era un aviso mudo; ahora es **la salida**, y por
+  // escrito: hasta `2.6.0` el modo se guardaba en Java y sobrevivía a cerrar la app
+  // (`CortNative.java:228`), la única forma de quitarlo por voz era decir «vuelve
+  // CORT» (`hud.js:1657`) y el propio modo es lo que cierra el micro
+  // (`CortNative.arrancarEscucha`). La dueña se quedó clavada en «modo juego» sin
+  // poder salir: el interruptor vivía dentro de la hoja Música, que tampoco sonaba.
+  // Un toque aquí apaga el modo. No depende del puente para pintarse, pero sí para
+  // apagarse, así que con un APK viejo el cartel se queda de aviso y no de botón.
+  const juego = document.createElement('button');
   juego.id = 'pantalla-juego';
+  juego.type = 'button';
   juego.hidden = true;
-  juego.title = 'CORT está en silencio mientras juegas';
-  juego.textContent = '🎮 modo juego';
+  juego.title = 'CORT está en silencio mientras juegas · toca para volver';
+  juego.textContent = '🎮 modo juego · toca para salir';
+  juego.onclick = () => {
+    const dicho = modoJuego(false);
+    ctx?.say?.(dicho);
+    ctx?.term?.('modo juego quitado desde el cartel', 'pantallas');
+  };
   document.body.appendChild(juego);
 }
 
@@ -318,13 +347,21 @@ function montaTeclas() {
 }
 
 export function ir(id) {
-  const p = visibles().find(x => x.id === id) || PANTALLAS[0];
+  // `montables()`, no `visibles()`: la hoja de letra está escondida del cajón, pero
+  // existe y hay que poder entrar en ella. Con `visibles()` se habría caído al Orbe.
+  const p = montables().find(x => x.id === id) || PANTALLAS[0];
   actual = p.id;
   const raiz = document.documentElement;
-  visibles().forEach(x => raiz.classList.remove('p-' + x.id));
+  montables().forEach(x => raiz.classList.remove('p-' + x.id));
   raiz.classList.add('p-' + actual);
   cierraMenu();
   cierraHoja();
+  /* El botón «CORT · PC» del teléfono es nativo: lo pinta `MainActivity` ENCIMA del
+     WebView, así que la cara no puede taparlo — y en 2.6.0 se quedaba atravesado sobre
+     la píldora de la música («el botón CORT PC está atravesado, no se oculta»). Ahora
+     sólo se ve en el orbe, que es donde no estorba a ningún control. En un PC no hay
+     botón que ocultar: `menuPC` no existe y `llama` devuelve `null` en silencio. */
+  if (puede('menuPC')) llama('menuPC', id === 'orbe');
   // El cajón es la única tira de botones que queda, así que la hoja activa se marca
   // ahí. Se repinta siempre: `visibles()` puede haber cambiado (un aviso de Java trae
   // un método que antes no estaba) y un cajón desactualizado ofrecería una hoja muerta.
@@ -705,6 +742,29 @@ async function charla(texto) {
     + (adjUntado ? ' · 📎 ' + esc(adjUntado.nombre) : '');
   estado.textContent = 'pensando…';
   if (!await avisaSinNucleo(estado)) {
+    /* «Charla con IA… microfono no funciona chat tampoco», dicho el 22/10 con el
+       2.6.0-nucleo delante. Aquí se acababa la conversación: la hoja pedía
+       `/api/chat` y sin portátil contestaba con una frase de disculpa. Pero el
+       teléfono NO está tonto: Java tiene `mente()`, que contesta con Groq si el
+       perfil tiene clave, y con sus reglas locales si no. Se le manda la misma
+       pregunta y la respuesta llega por el puente (`escuchaMente`), como llega todo
+       lo largo que hace el aparato. Con un APK sin puente, se dice la verdad. */
+    if (puede('mente')) {
+      const bruto = llama('mente', JSON.stringify({ que: 'preguntar',
+        args: { texto: envio, eco: 'charla' } }));
+      let j = null;
+      // `llama` ya trapsa el `catch`, pero un puente que devuelva texto suelto no es
+      // una respuesta: es un `JSON.parse` tirando la promesa de la Charla al vacío.
+      try { j = typeof bruto === 'string' ? JSON.parse(bruto) : bruto; } catch { j = null; }
+      if (j && j.ok !== false) {
+        charlaPendiente = true;
+        estado.textContent = 'pensando en el teléfono…';
+        if (usando) usando.innerHTML = '<b>el cerebro del teléfono</b> · modo ' + esc(modo.txt)
+          + (adjUntado ? ' · 📎 ' + esc(adjUntado.nombre) : '');
+        if (j && !j.pendiente) reciboMente(j);      // contestó en el sitio: nada que esperar
+        return;
+      }
+    }
     mensajes.push({ de: 'cort', texto: sinNucleoFrase() });
     estado.textContent = 'sin núcleo';
     if (usando) usando.innerHTML = '<b>sin núcleo</b> · ' + esc(sinNucleoFrase());
@@ -726,8 +786,50 @@ async function charla(texto) {
     mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e });
     estado.textContent = 'sin núcleo';
     if (usando) usando.innerHTML = '<b>sin núcleo</b>';
+    // El portátil dejó de responder: el «sí hay» que estaba guardado es mentira. Se
+    // borra para que la siguiente pregunta se vuelva a comprobar, y si el PC no
+    // vuelve, esa pregunta ya se piensa en el teléfono.
+    nucleo = null;
   }
   guardaMensajes(); pintaCharla();
+}
+
+/* ── la Charla sin portátil: la respuesta llega por el puente ────────────────
+   `Mente.mente({que:'preguntar'})` contesta `{"ok":true,"pendiente":true}` al instante
+   y lanza el hilo `cort-mente`; cuando termina, Java empuja `{"type":"mente", …}` por
+   `__cortNative`. Esta hoja no puede quedarse sorda a ese aviso sólo porque el Equipo
+   lo escuche: la dueña preguntó en la Charla, en la Charla quiere la respuesta.
+
+   Se filtra `de:'ollama'` porque ese mismo evento trae la lista de modelos y el
+   progreso de una descarga, y no es una respuesta de nadie. `charlaPendiente` hace el
+   resto: si la dueña no está esperando, el aviso se ignora y no se pinta una burbuja
+   que no se pidió. */
+let charlaPendiente = false;
+
+function reciboMente(ev) {
+  charlaPendiente = false;
+  const dicho = ev.ok === false
+    ? (ev.dice || 'El cerebro del teléfono no supo contestar.')
+    : (ev.responde || ev.texto || 'Ya pensé lo mío, pero no volvió texto.');
+  const de = ev.de === 'local' || ev.de === 'nube' ? ev.de : '';
+  mensajes.push({ de: 'cort', texto: String(dicho), fuente: de });
+  const estado = document.querySelector('#scr-charla .scr-estado');
+  if (estado) estado.textContent = 'cerebro del teléfono' + (de ? ': ' + de : '');
+  const usando = document.getElementById('gm-usando');
+  if (usando) usando.innerHTML = '<b>el cerebro del teléfono</b>' + (de ? ' · ' + esc(de) : '');
+  ctx?.orb?.burst?.();
+  guardaMensajes(); pintaCharla();
+}
+
+let menteViva = false;
+function escuchaMente() {
+  if (menteViva || !window.__cortNative) return;
+  menteViva = true;
+  window.__cortNative.on(ev => {
+    if (!ev || ev.type !== 'mente' || ev.de === 'ollama') return;
+    if (!charlaPendiente) return;
+    reciboMente(ev);
+  });
 }
 
 /* El historial de verdad está en el núcleo (`GET /api/history`), y la cara nunca lo
@@ -1081,9 +1183,11 @@ let musViva = false;
    `0:02 / 3:11`, los tres botones gordos, el volumen, la fila de chips y abajo las
    tres acciones de Lark («ponme algo», «letra», «modo juego»).
 
-   Lo que Lark tiene y CORT **no** puede copiar porque el puente no lo da: carátula
-   real (`.Reproductor` no devuelve ninguna imagen), ecualizador, carpetas y cola.
-   No se pintan falsos: el cuadro grande lleva el glifo y el acento de la app. */
+   Lo que Lark tiene y CORT **no** puede copiar porque el puente no lo da: ecualizador,
+   carpetas y cola de reproducción. No se pintan falsos. La carátula, en cambio, ya es
+   de verdad: `musicaCaratula` devuelve un `data:image/jpeg;base64,…` y este cuadro lo
+   lleva como fondo; sin carátula se queda el glifo y el acento de la app, que es la
+   verdad de esa pista. */
 const transporteHTML = p => `
   <div class="lk-player">
     <div class="lk-portada-grande" id="${p}-caratula"><i>♪</i></div>
@@ -1111,7 +1215,7 @@ const transporteHTML = p => `
     </div>
     <div class="lk-abajo">
       <button id="${p}-auto" title="una pista sacada de tus gustos"><i>♪</i><span>ponme algo</span></button>
-      <button id="${p}-letras" title="el vídeo con su letra (MV)"><i>▣</i><span>letra</span></button>
+      <button id="${p}-letras" title="la letra y el vídeo, dentro de Música"><i>❝</i><span>letra</span></button>
       <button id="${p}-juego" title="CORT se calla y no escucha mientras juegas"><i>🎮</i><span>modo juego</span></button>
     </div>
   </div>`;
@@ -1159,12 +1263,11 @@ function enganchaTransporte(donde, p) {
   $('cuadro-a').onclick = () => { llama('musicaCuadro', true); mueveVideoLocal(-1 / 30); };
   $('cuadro-b').onclick = () => { llama('musicaCuadro', false); mueveVideoLocal(1 / 30); };
   $('auto').onclick = () => llama('musicaAutomatica');
-  // «Letra» es el botón de Lark que sube el vídeo con su karaoke: es OTRA hoja del
-  // mismo servicio, así que se cambia de hoja en vez de duplicar el reproductor.
+  // «Letra» es el botón `❝` de Lark, que en su reproductor sube el panel del karaoke:
+  // aquí es la hoja fusionada, y volver de ella es volver al reproductor.
   $('letras').onclick = () => {
-    ir('mv');
-    const caja = document.getElementById('mv-letra');
-    if (caja) caja.scrollIntoView({ block: 'start' });
+    if (actual === 'mv') { ir('musica'); vistaMusica('player'); return; }
+    abreLetra();
   };
   $('vol').oninput = e => llama('musicaVolumen', +e.target.value);
   $('barra').onclick = ev => {
@@ -1229,28 +1332,36 @@ function pintaPildora(e) {
   p.querySelector('#rp-artista').textContent =
     [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ');
   p.querySelector('#rp-play').textContent = e.suena ? '⏸' : '▶';
+  fondoCara(p.querySelector('#rp-portada'), e.pista.uri, 72);
 }
 
 /* ───────────── la hoja de Música, calco de Lark Player (F9) ─────────────
    De sus doce capturas se copió la estructura: barra arriba (nombre + buscar +
    ordenar + ⋮), fila de chips con el activo RELLENO, sección con su cuenta, lista de
-   filas (miniatura · título · artista · duración) y mini-reproductor anclado abajo
-   que, al tocarlo, sube el reproductor a pantalla completa. Las tres acciones se
-   hacen con las **hojas que suben de abajo**, igual que Lark con «Ordenar videos por»
-   y su menú de contexto.
+   filas (carátula · título · artista · duración · pildoras `LETRAS`/`MV`), pestaña de
+   vídeos en rejilla de dos columnas, mini-reproductor anclado abajo teñido con la
+   portada y el reproductor a pantalla completa. Las tres acciones se hacen con las
+   **hojas que suben de abajo**, igual que Lark con «Ordenar videos por» y su menú de
+   contexto.
 
-   Lo que se copió es lo que el puente da: `musicaBuscar`, `musicaPorGusto`,
-   `musicaListas`, `musicaPerfil`, `musicaPoner…`. El orden es cliente (sobre la
-   lista ya leída, con su `dur` real) porque `.Reproductor` no acepta un criterio de
-   orden; y no hay carátula, carpetas ni ecualizador por el mismo motivo. */
+   Lo que se copió es lo que el puente da: `musicaBuscar`, `musicaCaratula`,
+   `musicaPorGusto`, `musicaListas`, `musicaPerfil`, `musicaPoner…`, y desde 2.7.0
+   también `musicaVelocidad`, `musicaDuerme`, `musicaOculta` y `abreEnlace`. Artistas y
+   Álbumes se agrupan aquí, sobre la lista ya leída (Java ahora manda `album`), que es
+   como Lark los pinta: sin volver a preguntar al índice. El orden también es cliente
+   (con su `dur` y su `fecha` reales) porque `.Reproductor` no acepta un criterio; y no
+   hay ecualizador ni carpetas porque el puente no los da. */
 let musLista = [];          // última lista leída del índice: con ella se ordena sin volver a Java
 let musVista = 'lista';     // 'lista' | 'player'
 let musChip = 'canciones';  // la pestaña que va rellena
-let musOrden = 'indice';    // 'indice' | 'titulo' | 'artista' | 'dur'
+let musOrden = 'indice';    // 'indice' | 'recientes' | 'titulo' | 'artista' | 'album' | 'dur'
+let musDir = 1;             // 1 hacia adelante, -1 invertido (el ↓↑ de Lark)
 
 const MUS_CHIPS = [
   { id: 'canciones', txt: 'Canciones' },
   { id: 'videos', txt: 'Vídeos' },
+  { id: 'artistas', txt: 'Artistas' },
+  { id: 'albumes', txt: 'Álbumes' },
   { id: 'listas', txt: 'Playlists' },
   { id: 'gustos', txt: 'Tus gustos' },
 ];
@@ -1267,10 +1378,17 @@ function montaMusica() {
       <button class="lk-btn" id="mu-orden-btn" title="Ordenar">↕</button>
       <button class="lk-btn" id="mu-mas-btn" title="Más acciones">⋮</button>
     </div>
-    <div class="mu-lista-top" id="mu-buscador" hidden>
-      <input id="mu-busca" placeholder="busca título, artista o género…">
-      <button id="mu-buscar">buscar</button>
-      <button id="mu-gusto" title="las que mejor encajan con tus gustos">por gusto</button>
+    <div class="mu-lista-top lk-buscador" id="mu-buscador" hidden>
+      <div class="lk-busca-fila">
+        <input id="mu-busca" placeholder="título, artista, álbum o género…">
+        <button id="mu-buscar" class="lk-btn" title="buscar en tu música">🔍</button>
+        <button id="mu-gusto" class="lk-btn" title="las que mejor encajan con tus gustos">♥</button>
+        <button id="mu-busca-cierra" class="lk-btn" title="cerrar la búsqueda">✕</button>
+      </div>
+      <div class="lk-seccion lk-busca-titulo">Historial<small id="mu-busca-limpia">borrar</small></div>
+      <div class="lk-pastillas lk-historial" id="mu-historial"></div>
+      <div class="lk-seccion lk-busca-titulo">Sitios<small>abren el navegador</small></div>
+      <div class="lk-pastillas lk-sitios" id="mu-sitios"></div>
     </div>
     <div class="lk-pestanas" id="mu-chips"></div>
     <div id="mu-lista">
@@ -1299,16 +1417,30 @@ function montaMusica() {
     <div id="mu-player" hidden>${transporteHTML('mu')}</div>`;
 
   const q = cuerpo.querySelector('#mu-busca');
+  const buscador = cuerpo.querySelector('#mu-buscador');
   enganchaTransporte(cuerpo, 'mu');
   pintaChipsMusica();
+  /* La lupa de Lark abre UNA PANTALLA de búsqueda, no un cuadrito: historial de lo que
+     ya buscaste (en `localStorage`, como él) y los «Sitios» para buscar fuera del
+     teléfono. Y busca **mientras se escribe** (320 ms de silencio), porque la dueña
+     llamó «no funciona bien» a un buscador que había que estar pulsando «buscar». */
+  let rulo = 0;
   cuerpo.querySelector('#mu-busca-btn').onclick = () => {
-    const caja = cuerpo.querySelector('#mu-buscador');
-    caja.hidden = !caja.hidden;
-    if (!caja.hidden) q.focus();
+    buscador.hidden = !buscador.hidden;
+    if (!buscador.hidden) { pintaBuscador(); q.focus(); }
   };
+  cuerpo.querySelector('#mu-busca-cierra').onclick = () => { buscador.hidden = true; };
+  q.addEventListener('input', () => {
+    clearTimeout(rulo);
+    rulo = setTimeout(() => buscaMusica(q.value, false), 320);
+  });
   cuerpo.querySelector('#mu-buscar').onclick = () => buscaMusica(q.value, false);
   q.addEventListener('keydown', e => { if (e.key === 'Enter') buscaMusica(q.value, false); });
   cuerpo.querySelector('#mu-gusto').onclick = () => buscaMusica(q.value, true);
+  cuerpo.querySelector('#mu-busca-limpia').onclick = () => {
+    localStorage.setItem(CLAVE_BUSCA, '[]'); pintaBuscador();
+    ctx?.say?.('Historial de búsquedas borrado.');
+  };
   cuerpo.querySelector('#mu-orden-btn').onclick = hojaOrden;
   cuerpo.querySelector('#mu-mas-btn').onclick = hojaMas;
   cuerpo.querySelector('#mu-vuelve').onclick = () => {
@@ -1360,7 +1492,7 @@ function eligeChip(c) {
   const pistas = document.getElementById('mu-pistas');
   const listas = document.getElementById('mu-listas');
   const gustos = document.getElementById('mu-gustos');
-  const enLista = c === 'canciones' || c === 'videos';
+  const enLista = ['canciones', 'videos', 'artistas', 'albumes'].includes(c);
   if (pistas) pistas.hidden = !enLista;
   if (seccion) seccion.textContent = (MUS_CHIPS.find(x => x.id === c) || {}).txt || 'Canciones';
   if (listas) listas.hidden = c !== 'listas';
@@ -1374,43 +1506,153 @@ function eligeChip(c) {
   if (enLista) buscaMusica(document.getElementById('mu-busca')?.value || '', false);
 }
 
+/* ─────────────────────────── las carátulas de verdad ───────────────────────────
+   La queja con `2.6.0-nucleo` fue literal: «no se ven las carátulas de los álbumes».
+   Y era cierto de raíz: en todo el repo no había ni una línea que pidiera una imagen
+   — la fila pintaba un `♪` sobre un degradado y el propio comentario lo decía. Ahora
+   el puente tiene `musicaCaratula(uri, lado)`, que en Java responde con un
+   `data:image/jpeg;base64,…` (el WebView del APK tiene `setAllowFileAccess(false)`, así
+   que un `file://` o una ruta nunca se cargarían; base64 sí).
+
+   Tres cosas que aquí importan en un teléfono modesto:
+   · **Se pregunta una vez por pista y por tamaño** (`CARAS`): la misma canción en la
+     lista, en el mini y en el reproductor grande es la misma imagen, no tres JNI.
+   · **De pocas en pocas**: `musicaCaratula` es sincrónica, y pedir cuatrocientas de
+     un tirón congela la cara justo cuando la dueña acaba de abrir la lista. Se
+     surten de 4 en 4 con un `setTimeout` corto, y un número de generación corta la
+     cola cuando la lista cambia mientras stillaba (buscar, cambiar de pestaña).
+   · **Sin carátula no se miente**: si Java devuelve vacío se quita el `<img>` y queda
+     el glifo de detrás, que es honesto; nunca se pone un cuadro de relleno. */
+const CARAS = new Map();               // «uri@lado» → data URL ('' = ya pregunté: no hay)
+const TINTOS = new Map();              // uri → «rgb(r,g,b)» medio de esa carátula
+let carasGen = 0;
+
+function caratula(uri, lado) {
+  if (!uri || !puede('musicaCaratula')) return '';
+  const k = uri + '@' + lado;
+  if (!CARAS.has(k)) {
+    let d = '';
+    try { d = llama('musicaCaratula', uri, lado) || ''; } catch { d = ''; }
+    CARAS.set(k, d);
+  }
+  return CARAS.get(k);
+}
+
+function pintaCaratulas(raiz, lado) {
+  if (!raiz || !puede('musicaCaratula')) return;
+  const nodos = [...raiz.querySelectorAll('img[data-cara]:not([src])')];
+  const mia = ++carasGen;
+  let i = 0;
+  (function surte() {
+    if (carasGen !== mia) return;            // ya se pintó otra lista: esta cola sobra
+    const fin = Math.min(i + 4, nodos.length);
+    for (; i < fin; i++) {
+      const im = nodos[i];
+      const d = caratula(im.dataset.cara, lado);
+      if (!d) { if (im.isConnected) im.remove(); continue; }
+      if (im.isConnected) im.src = d;
+    }
+    if (i < nodos.length) setTimeout(surte, 12);
+  })();
+}
+
+/* La carátula como fondo de un cuadro grande (el reproductor, el mini, la píldora):
+   con `background-image` no hace falta cambiar el nodo ni perder el glifo si no hay. */
+function fondoCara(el, uri, lado) {
+  if (!el) return;
+  const d = uri ? caratula(uri, lado) : '';
+  el.style.backgroundImage = d ? 'url("' + d + '")' : '';
+  el.classList.toggle('con-foto', !!d);
+}
+
+/* El tinte de Lark: la barra y el fondo se tiñen con el color medio de la portada.
+   Sacar ese promedio aquí (un lienzo de 8×8) es lo que en Android hace Lark con su
+   `Palette`; sin carátula no hay tinte y se queda el acento de la app. */
+function tinteDe(uri, cb) {
+  if (!uri) { cb(''); return; }
+  if (TINTOS.has(uri)) { cb(TINTOS.get(uri)); return; }
+  const d = caratula(uri, 128);
+  if (!d) { TINTOS.set(uri, ''); cb(''); return; }
+  const im = new Image();
+  im.onload = () => {
+    try {
+      const c = document.createElement('canvas');
+      c.width = c.height = 8;
+      const g = c.getContext('2d');
+      g.drawImage(im, 0, 0, 8, 8);
+      const px = g.getImageData(0, 0, 8, 8).data;
+      let r = 0, gg = 0, b = 0, n = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        if (px[i + 3] < 128) continue;                  // transparente: no cuenta
+        r += px[i]; gg += px[i + 1]; b += px[i + 2]; n++;
+      }
+      const t = n ? 'rgb(' + [r, gg, b].map(x => Math.round(x / n)).join(',') + ')' : '';
+      TINTOS.set(uri, t); cb(t);
+    } catch (lienzoTorcido) { TINTOS.set(uri, ''); cb(''); }
+  };
+  im.onerror = () => { TINTOS.set(uri, ''); cb(''); };
+  im.src = d;
+}
+
 /* El «Ordenar» de Lark, pero dicho como es: los criterios se aplican a la lista que
    ya está leída. La duración es la que manda `.Reproductor` (`dur` en ms), no un
-   adorno. */
+   adorno. La flecha de la derecha es la de sus capturas (`↓↑`): invierte el criterio,
+   así que «más antiguas primero» no necesita una fila más en el menú.
+
+   Lo que NO se copió: «Más reproducido». Android no expone una columna pública de
+   reproducciones para la música del índice (era dato interno del reproductor de
+   Google), y pintarla con ceros sería un botón que miente. */
 function hojaOrden() {
   const OPC = [
-    ['indice', 'Como vinieron', 'el orden del índice'],
+    ['recientes', 'Más recientes', 'lo que entró hace poco al índice'],
+    ['indice', 'Como vinieron', 'el orden del índice, sin tocar'],
     ['titulo', 'Título', 'A → Z'],
     ['artista', 'Artista', 'A → Z'],
+    ['album', 'Álbum', 'A → Z'],
     ['dur', 'Duración', 'las más largas primero'],
   ];
+  const relleno = OPC.map(([id, txt, sub]) => `<div class="hoja-fila${id === musOrden ? ' elegida' : ''}"
+    data-o="${id}"><i>${id === musOrden ? '✓' : '·'}</i>${txt}<small>${sub}</small>${
+      id === 'indice' || id === 'dur' ? '' : `<b class="lk-flecha">${musDir < 0 ? '↑' : '↓'}</b>`
+    }</div>`).join('');
   abreHoja({
     titulo: 'Ordenar por',
-    html: OPC.map(([id, txt, sub]) => `<div class="hoja-fila${id === musOrden ? ' elegida' : ''}"
-      data-o="${id}"><i>${id === musOrden ? '✓' : '·'}</i>${txt}<small>${sub}</small></div>`).join(''),
+    html: relleno + '<div class="hoja-nota">tocar dos veces el criterio lo invierte, como el ↓↑ de Lark</div>',
     alAbrir: raiz => raiz.querySelectorAll('[data-o]').forEach(f => f.onclick = () => {
-      musOrden = f.dataset.o;
+      if (f.dataset.o === musOrden) musDir = -musDir;                 // repetir criterio = girarlo
+      else { musOrden = f.dataset.o; musDir = 1; }
       pintaMusicaLista();
-      ctx?.say?.('Ordenado por ' + (OPC.find(o => o[0] === musOrden) || ['', 'el índice'])[1].toLowerCase() + '.');
+      ctx?.say?.('Ordenado por ' + (OPC.find(o => o[0] === musOrden) || OPC[1])[1].toLowerCase()
+        + (musDir < 0 ? ', al revés.' : '.'));
       cierraHoja();
     }),
   });
 }
 
-/* El menú ⋮: sólo cosas que el puente sabe hacer. «Añadir a la lista» guarda la
-   pista actual con `musicaGuardarLista`; no hay cola que editar (`.Reproductor` no
-   la expone), así que aquí no se finge. */
+/* El menú ⋮, fila por fila como el de sus capturas (Agregar a la lista · Compartir ·
+   Velocidad · Temporizador para dormir · Ocultar · Borrar), pero sólo con lo que el
+   puente sabe hacer de verdad:
+
+   · Compartir y Ocultar son nuevos y reales: `comparte(uri)` abre el cuadro de apps de
+     Android, y `musicaOculta(uri)` esconde la pista del índice para CORT (vive en las
+     preferencias, no borra el archivo).
+   · «Borrar» de Lark **no** se copió: borraría el archivo de la memoria de la dueña, y
+     un botón que tira música por accidente no es una réplica, es un peligro.
+   · «Modo de ahorro de energía» tampoco: Android no deja que una app se ponga a sí misma
+     en ahorro, es del sistema. Se dice en la hoja, no se finge.
+   · No hay cola que editar (`.Reproductor` no la expone), así que aquí no se inventa. */
 function hojaMas() {
   const e = estadoMusica();
   const pista = e?.pista;
+  const tapadas = puede('musicaOcultas') ? (llama('musicaOcultas') || 0) : 0;
   const filas = [
     ['♪', 'Ponme algo de tus gustos', 'sin tocar nada', () => { llama('musicaAutomatica'); cierraHoja(); }],
     ['👍', pista ? 'Me gusta: ' + (pista.titulo || '') : 'Me gusta', 'entrena tus gustos', () => {
       if (!pista) return ctx?.say?.('No hay nada puesto que evaluar.');
       llama('musicaGustar', pista.uri, true); cierraHoja();
     }],
-    ['▣', 'Letra y vídeo (MV)', 'la misma pista', () => { cierraHoja(); ir('mv'); }],
-    ['💾', 'Guardar en una lista', pista ? (pista.titulo || '') : 'necesita una pista puesta', () => {
+    ['❝', 'Letra y vídeo', 'la misma pista, sin orbe', () => { cierraHoja(); abreLetra(); }],
+    ['💾', 'Agregar a la lista', pista ? (pista.titulo || '') : 'necesita una pista puesta', () => {
       if (!pista) return ctx?.say?.('Primero pon algo, que se guarda lo que está sonando.');
       const caja = document.getElementById('mu-listas');
       if (caja) caja.hidden = false;
@@ -1418,8 +1660,38 @@ function hojaMas() {
       if (nombre) { nombre.value = pista.titulo || 'mi lista'; nombre.focus(); }
       cierraHoja(); eligeChip('listas');
     }],
+    ['📤', 'Compartir', 'por WhatsApp, correo o lo que haya', () => {
+      if (!pista) return ctx?.say?.('No hay nada puesto que compartir.');
+      if (!puede('comparte')) return ctx?.say?.('Compartir con CORT lo trae el APK nuevo de la Release.');
+      const crudo = llama('comparte', pista.uri || '');
+      let r = null; try { r = crudo ? JSON.parse(crudo) : null; } catch { r = null; }
+      if (r && r.ok === false) return ctx?.say?.(r.dice || 'ese archivo no se pudo compartir.');
+      cierraHoja();
+      ctx?.say?.('Elige por dónde lo mandas.');
+    }],
+    ['⏱', 'Velocidad', e?.velocidad ? 'ahora ' + e.velocidad + '×' : 'de 0,5× a 2×', () => hojaVelocidad()],
+    ['🌙', 'Temporizador para dormir', 'para la música sola', () => hojaDormir()],
+    ['🚫', 'Ocultar esta pista', pista ? (pista.titulo || '') : 'necesita una pista puesta', () => {
+      if (!pista) return ctx?.say?.('No hay nada puesto que ocultar.');
+      if (!puede('musicaOculta')) return ctx?.say?.('Ocultar pistas lo trae el APK nuevo de la Release.');
+      llama('musicaOculta', pista.uri);
+      ctx?.say?.('Oculta para CORT: el archivo sigue en tu teléfono.');
+      cierraHoja();
+      buscaMusica(document.getElementById('mu-busca')?.value || '', false);
+    }],
+    ['👁', 'Mostrar las ocultadas', tapadas ? tapadas + ' escondidas' : 'ninguna escondida', () => {
+      if (!tapadas) return ctx?.say?.('No hay ninguna pista escondida.');
+      llama('musicaMuestraTodas');
+      ctx?.say?.('Enseño las ' + tapadas + ' que habías escondido.');
+      cierraHoja();
+      buscaMusica(document.getElementById('mu-busca')?.value || '', false);
+    }],
     ['🎮', 'Modo juego', 'CORT se aparta mientras juegas', () => {
       ctx?.say?.(modoJuego(!((estadoMusica() || {}).juego))); cierraHoja();
+    }],
+    ['🔋', 'Ahorro de energía', 'lo pone Android, no CORT', () => {
+      cierraHoja();
+      ctx?.say?.('El ahorro de energía lo decide Android, no yo: está en Ajustes del teléfono ▸ Batería.');
     }],
   ];
   abreHoja({
@@ -1429,6 +1701,51 @@ function hojaMas() {
     alAbrir: raiz => raiz.querySelectorAll('[data-i]').forEach(f => f.onclick = () => filas[+f.dataset.i][3]()),
   });
 }
+
+/* La velocidad de Lark (0,5× a 2×) manda a `MediaPlayer.setPlaybackParams`, que en
+   Android sólo funciona con el reproductor **en pausa**: por eso `Reproductor.velocidad`
+   pausa, ajusta y reanuda si estaba sonando. Se dice el resultado, no se supone. */
+function hojaVelocidad() {
+  if (!puede('musicaVelocidad')) {
+    ctx?.say?.('Cambiar la velocidad lo trae el APK nuevo de la Release.');
+    return;
+  }
+  const VAL = [.5, .75, 1, 1.25, 1.5, 1.75, 2];
+  abreHoja({
+    titulo: 'Velocidad',
+    html: VAL.map(v => `<div class="hoja-fila" data-v="${v}"><i>${v === 1 ? '✓' : '·'}</i>${
+      String(v).replace('.', ',') + '×'}<small>${
+      v < 1 ? 'más despacio' : v > 1 ? 'más rápido' : 'normal'}</small></div>`).join('')
+      + '<div class="hoja-nota">se pone en pausa un instante: Android no admite cambiar la velocidad sonando</div>',
+    alAbrir: raiz => raiz.querySelectorAll('[data-v]').forEach(f => f.onclick = () => {
+      const motivo = llama('musicaVelocidad', parseFloat(f.dataset.v));
+      cierraHoja();
+      ctx?.say?.(motivo ? motivo : 'A ' + String(parseFloat(f.dataset.v)).replace('.', ',') + '×.');
+    }),
+  });
+}
+
+/* «Temporizador para dormir»: Java para el `Reproductor` y avisa, con un `Handler` del
+   servicio. 0 lo quita, igual que Lark con su fila «Apagar». */
+function hojaDormir() {
+  if (!puede('musicaDuerme')) {
+    ctx?.say?.('El temporizador para dormir lo trae el APK nuevo de la Release.');
+    return;
+  }
+  const MIN = [5, 10, 20, 30, 45, 60, 0];
+  abreHoja({
+    titulo: 'Duerme en…',
+    html: MIN.map(m => `<div class="hoja-fila" data-m="${m}"><i>·</i>${
+      m ? m + ' minutos' : 'Apagar el temporizador'}<small>${m ? 'para la música sola' : 'que siga sonando'}</small></div>`).join(''),
+    alAbrir: raiz => raiz.querySelectorAll('[data-m]').forEach(f => f.onclick = () => {
+      const m = +f.dataset.m;
+      llama('musicaDuerme', m);
+      cierraHoja();
+      ctx?.say?.(m ? 'Paro la música en ' + m + ' minutos.' : 'Sin temporizador: sigue sonando.');
+    }),
+  });
+}
+
 
 /* El mini-reproductor anclado de Lark: portada · título · artista · play. Se pinta
    desde `pintaProgreso`, que es el único sitio que recibe los avisos de Java, así
@@ -1445,6 +1762,10 @@ function pintaMini(e) {
   if (art) art.textContent = e?.pista
     ? [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ') : '';
   if (play) play.textContent = e?.suena ? '⏸' : '▶';
+  fondoCara(document.getElementById('mus-mini-portada'), e?.pista?.uri, 96);
+  if (viva && e.pista.uri) tinteDe(e.pista.uri, t => {
+    if (t) mini.style.setProperty('--tinte', t);
+  });
   // La fila que suena se tiñe, como en Lark: se compara la `uri` del índice, no el
   // título, porque dos pistas pueden llamarse igual.
   document.querySelectorAll('#mu-pistas .lk-fila').forEach(f =>
@@ -1479,9 +1800,73 @@ const estadoMusica = () => {
   try { return JSON.parse(crudo); } catch { return null; }
 };
 
+/* El buscador de Lark es una pantalla, no un campo suelto: arriba lo buscado antes
+   («hot girl», «hard», «stereo», «douyin»… en sus capturas) y debajo los Sitios. El
+   historial vive en `localStorage` (el WebView tiene `setDomStorageEnabled(true)`,
+   `MainActivity.java:126`), máximo diez frases y las más recientes delante.
+
+   Los Sitios **sí** abren: `abreEnlace(uri)` lanza un `ACTION_VIEW` en Java, que es lo
+   único que puede en un WebView sin ventana nueva. Si el APK stilla viejo y no trae el
+   método, se dice en vez de quedarse muda. */
+const CLAVE_BUSCA = 'cort-busca-historial';
+const SITIOS = [
+  ['YouTube', t => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(t)],
+  ['SoundCloud', t => 'https://soundcloud.com/search?q=' + encodeURIComponent(t)],
+  ['Instagram', t => 'https://www.instagram.com/explore/tags/' + encodeURIComponent(t.replace(/\s+/g, ''))],
+  ['Facebook', t => 'https://www.facebook.com/search/top?q=' + encodeURIComponent(t)],
+  ['X', t => 'https://twitter.com/search?q=' + encodeURIComponent(t)],
+];
+
+function historialBusca() {
+  try {
+    const v = JSON.parse(localStorage.getItem(CLAVE_BUSCA) || '[]');
+    return Array.isArray(v) ? v.filter(x => typeof x === 'string' && x) : [];
+  } catch (torcido) { return []; }
+}
+
+function apuntaBusca(frase) {
+  const viejo = historialBusca().filter(x => x.toLowerCase() !== frase.toLowerCase());
+  localStorage.setItem(CLAVE_BUSCA, JSON.stringify([frase, ...viejo].slice(0, 10)));
+  pintaBuscador();
+}
+
+function pintaBuscador() {
+  const hist = document.getElementById('mu-historial');
+  const sitios = document.getElementById('mu-sitios');
+  const q = document.getElementById('mu-busca');
+  if (!hist || !sitios) return;
+  montaSitios();
+  const h = historialBusca();
+  hist.innerHTML = h.length
+    ? h.map((x, i) => `<button class="mu-chip" data-h="${i}">${esc(x)}</button>`).join('')
+    : '<span class="lk-historial-vacio">aún no buscaste nada</span>';
+  hist.querySelectorAll('[data-h]').forEach(b => b.onclick = () => {
+    if (q) q.value = h[+b.dataset.h];
+    buscaMusica(h[+b.dataset.h], false);
+  });
+  const uno = (q?.value || '').trim() || h[0] || '';
+  sitios.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+    const url = SITIOS[+b.dataset.s][1](uno);
+    if (!puede('abreEnlace')) return ctx?.say?.('Abrir enlaces con CORT lo trae el APK nuevo de la Release.');
+    const motivo = llama('abreEnlace', url);
+    ctx?.say?.(motivo ? motivo : 'Abriendo ' + SITIOS[+b.dataset.s][0] + '.');
+    cierraHoja();
+  });
+}
+
+/* Los botones de los Sitios se montan una sola vez (no cambian nunca); lo que se
+   repinta es su comportamiento, que depende de lo que haya escrito la dueña. */
+function montaSitios() {
+  const sitios = document.getElementById('mu-sitios');
+  if (!sitios || sitios.childElementCount) return;
+  sitios.innerHTML = SITIOS.map(([n], i) => `<button class="mu-chip" data-s="${i}">${n}</button>`).join('');
+}
+
 function buscaMusica(texto, porGusto) {
   const caja = document.getElementById('mu-pistas');
   if (!caja) return;
+  const t = String(texto || '').trim();
+  if (t && !porGusto) apuntaBusca(t);
   if (llama('musicaPuedeLeer') === false) {
     // El permiso **no** se pide solo: Android sólo deja pedirlo desde una
     // pulsación, y aquí la dueña puede pulsar este aviso o el menú del botón
@@ -1510,32 +1895,60 @@ function buscaMusica(texto, porGusto) {
 
 /* Pintar lo leído, con el chip de en medio y el orden elegido. Se separa de la
    lectura porque las pestañas y la hoja «Ordenar por» vuelven a pintar **la misma
-   lista**, sin volverle a pedir nada a Java. */
+   lista**, sin volverle a pedir nada a Java.
+
+   Con las capturas de Lark por delante hay dos formas de fila: la de siempre (lista
+   de canciones) y la rejilla de dos columnas de la pestaña «Vídeos», que es como Lark
+   enseña sus `1786 Vídeos` — miniatura grande arriba, título debajo y la duración
+   escrita como él (`0:22`). Las dos llevan las pildoritas `LETRAS` y `MV` que Lark
+   pega a la derecha del artista: salen de `letra` y `mv`, que ahora rellena Java
+   leyendo el índice (la letra puede ser marca ID3 o un `.lrc`/`.txt` hermano), así
+   que la píldora promete algo que luego la hoja de letra va a encontrar. */
+/* La cuenta de cada sección, escrita como la escribe Lark: en singular cuando es una.
+   «1 canciones» es de texto puesto a machine, y la dueña mira esos detalles. */
+const cuentaDe = (n, uno, muchos) => n ? n + ' ' + (n === 1 ? uno : muchos) : '';
+
 function pintaMusicaLista() {
   const caja = document.getElementById('mu-pistas');
   if (!caja) return;
   const cuenta = document.getElementById('mu-cuenta');
-  let lista = musChip === 'videos' ? musLista.filter(p => p.video) : musLista;
-  const ordenada = musOrden === 'indice' ? lista : [...lista].sort((a, b) =>
+  if (musChip === 'artistas' || musChip === 'albumes') {
+    pintaGrupos(musChip === 'artistas' ? 'artista' : 'album', caja, cuenta);
+    return;
+  }
+  const videos = musChip === 'videos';
+  let lista = videos ? musLista.filter(p => p.video) : musLista.filter(p => !p.video);
+  const ordenada = musOrden === 'indice' ? lista : [...lista].sort((a, b) => musDir * (
     musOrden === 'dur' ? (b.dur || 0) - (a.dur || 0)
-      : String(a[musOrden] || '').localeCompare(String(b[musOrden] || ''), 'es', { sensitivity: 'base' }));
-  if (cuenta) cuenta.textContent = ordenada.length
-    ? ordenada.length + (musChip === 'videos' ? ' vídeos' : ' canciones') : '';
+      : musOrden === 'recientes' ? (b.fecha || 0) - (a.fecha || 0)
+      : String(a[musOrden] || '').localeCompare(String(b[musOrden] || ''), 'es', { sensitivity: 'base' })));
+  if (cuenta) cuenta.textContent = videos ? cuentaDe(ordenada.length, 'vídeo', 'vídeos')
+                                          : cuentaDe(ordenada.length, 'canción', 'canciones');
+  caja.classList.toggle('lk-cuadricula', videos);
   caja.innerHTML = '';
   if (!ordenada.length) {
-    caja.innerHTML = '<div class="mu-vacio">nada con ese nombre · prueba con otra palabra o «por gusto»</div>';
+    caja.innerHTML = '<div class="mu-vacio">' + (videos
+      ? 'nada de vídeo por aquí · el índice del teléfono no trae clips, o hay que dar el permiso de vídeos'
+      : 'nada con ese nombre · prueba con otra palabra o «por gusto»') + '</div>';
     return;
   }
   const uris = ordenada.map(p => p.uri);
   const e = estadoMusica();
   ordenada.forEach((p, i) => {
     const d = document.createElement('div');
-    d.className = 'lk-fila' + (e?.pista && e.pista.uri === p.uri ? ' sonando' : '');
+    d.className = 'lk-fila' + (videos ? ' lk-card' : '')
+      + (e?.pista && e.pista.uri === p.uri ? ' sonando' : '');
     d.dataset.uri = p.uri || '';
-    d.innerHTML = `<span class="lk-portada">${p.video ? '▣' : '♪'}</span>
-      <span class="lk-txt"><b>${esc(p.titulo)}</b>
-        <span>${esc([p.artista, p.genero].filter(Boolean).join(' · '))}</span></span>
-      <em>${p.dur ? reloj(p.dur) : ''}</em>`;
+    const pildoras = [p.letra ? 'LETRAS' : '', p.mv ? 'MV' : ''].filter(Boolean)
+      .map(t => `<b class="lk-pilda">${t}</b>`).join('');
+    const quien = esc([p.artista, p.genero].filter(Boolean).join(' · '));
+    d.innerHTML = videos
+      ? `<span class="lk-miniatura"><i>▣</i><img data-cara="${esc(p.uri)}" alt="" loading="lazy">
+           <em>${p.dur ? reloj(p.dur) : ''}</em></span>
+         <span class="lk-txt"><b>${esc(p.titulo)}</b><span>${quien}</span></span>${pildoras}`
+      : `<span class="lk-portada"><i>♪</i><img data-cara="${esc(p.uri)}" alt="" loading="lazy"></span>
+         <span class="lk-txt"><b>${esc(p.titulo)}</b><span>${quien || esc(p.album || '')}</span></span>
+         ${pildoras}<em>${p.dur ? reloj(p.dur) : ''}</em>`;
     d.onclick = () => {
       if (llama('musicaPoner', uris.join('\n'), i) === false) {
         ctx?.say?.('Esa pista no está en el índice: recarga la lista.');
@@ -1547,6 +1960,53 @@ function pintaMusicaLista() {
     };
     caja.appendChild(d);
   });
+  pintaCaratulas(caja, videos ? 220 : 96);
+}
+
+/* Artistas y Álbumes, que en Lark son dos pestañas más. Se agrupan **aquí**, sobre la
+   lista que ya está leída: Java manda `album` y `artista` en cada pista desde 2.7.0, así
+   que no hace falta otra consulta al índice. Tocar un grupo pone sus canciones en orden
+   de álbum (es el mismo `musicaPoner` de la lista, con sus propias URIs), y la carátula
+   del grupo es la de su primera pista — que es la del álbum, porque comparten `ALBUM_ID`. */
+function pintaGrupos(clave, caja, cuenta) {
+  const grupos = new Map();
+  musLista.filter(p => !p.video && (p[clave] || '').trim()).forEach(p => {
+    const nombre = p[clave].trim();
+    if (!grupos.has(nombre)) grupos.set(nombre, []);
+    grupos.get(nombre).push(p);
+  });
+  const nombres = [...grupos.keys()].sort((a, b) =>
+    a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  caja.classList.remove('lk-cuadricula');
+  caja.innerHTML = '';
+  if (cuenta) cuenta.textContent = clave === 'album'
+    ? cuentaDe(nombres.length, 'álbum', 'álbumes')
+    : cuentaDe(nombres.length, 'artista', 'artistas');
+  if (!nombres.length) {
+    caja.innerHTML = '<div class="mu-vacio">el índice del teléfono no trae '
+      + (clave === 'album' ? 'nombres de álbum' : 'nombres de artista')
+      + ' en esas etiquetas · prueba a buscar una palabra</div>';
+    return;
+  }
+  nombres.forEach(n => {
+    const pistas = grupos.get(n);
+    const e = estadoMusica();
+    const d = document.createElement('div');
+    d.className = 'lk-fila' + (e?.pista && pistas.some(x => x.uri === e.pista.uri) ? ' sonando' : '');
+    d.innerHTML = `<span class="lk-portada"><i>${clave === 'album' ? '◉' : '🎤'}</i>
+        <img data-cara="${esc(pistas[0].uri)}" alt="" loading="lazy"></span>
+      <span class="lk-txt"><b>${esc(n)}</b>
+        <span>${pistas.length} ${pistas.length === 1 ? 'canción' : 'canciones'}${
+          clave === 'album' ? ' · ' + esc(pistas[0].artista || '') : ''}</span></span>`;
+    d.onclick = () => {
+      const uris = pistas.map(p => p.uri).join('\n');
+      if (llama('musicaPoner', uris, 0) === false) ctx?.say?.('Ese grupo ya no está en el teléfono.');
+      pintaMusicaLista();
+      pintaMini(estadoMusica());
+    };
+    caja.appendChild(d);
+  });
+  pintaCaratulas(caja, 96);
 }
 
 function guardaLista() {
@@ -1619,7 +2079,10 @@ function pintaProgreso(e) {
   });
 }
 
-/* El título y el artista, dicho una vez y pintado en las dos hojas. */
+/* El título y el artista, dicho una vez y pintado en las dos hojas. Y con ellos la
+   carátula grande y el tinte: `ponRotulos` es el único sitio al que llegan los avisos
+   de Java (`escuchaMusica`) y las entradas en la hoja (`arrancaMusica`, `arrancaMV`),
+   así que poner la foto aquí es ponerla una sola vez para todas las vistas. */
 function ponRotulos(e) {
   ['mu', 'mv'].forEach(p => {
     const ahora = document.getElementById(p + '-ahora');
@@ -1628,6 +2091,19 @@ function ponRotulos(e) {
     const art = document.getElementById(p + '-artista');
     if (art) art.textContent = e?.pista
       ? [e.pista.artista, e.pista.genero].filter(Boolean).join(' · ') : '';
+    fondoCara(document.getElementById(p + '-caratula'), e?.pista?.uri, 320);
+  });
+  const uri = e?.pista?.uri || '';
+  if (!uri) {                     // sin pista no hay foto ni tinte: se quitan los dos
+    ['mu', 'mv'].forEach(p => document.getElementById(p + '-player')
+      ?.style.removeProperty('--tinte'));
+    return;
+  }
+  tinteDe(uri, t => {
+    if (!t) return;
+    ['mu', 'mv'].forEach(p => document.getElementById(p + '-player')
+      ?.style.setProperty('--tinte', t));
+    document.getElementById('mus-mini')?.style.setProperty('--tinte', t);
   });
 }
 
@@ -1667,6 +2143,12 @@ function montaMV() {
   const cuerpo = document.querySelector('#scr-mv .scr-cuerpo');
   if (!cuerpo) return;                       // en el PC esta hoja no existe
   cuerpo.innerHTML = `
+    <div class="lk-barra">
+      <button class="lk-btn" id="mv-vuelve" title="Volver al reproductor">‹</button>
+      <span class="lk-nombre">Música · Letra</span>
+      <span class="lk-espacio"></span>
+      <button class="lk-btn" id="mv-mas" title="Más acciones">⋮</button>
+    </div>
     <div class="mv-pantalla">
       <video id="mv-video" playsinline preload="metadata" muted></video>
       <div class="mv-aviso" id="mv-aviso" hidden></div>
@@ -1686,12 +2168,29 @@ function montaMV() {
     'La imagen no abrió: este WebView no sabe qué hacer con esa dirección de vídeo '
     + '(content://). La canción sigue sonando —el audio lo pone el servicio, no esta página.'));
   video.addEventListener('loadeddata', () => avisoImagen(''));
+  cuerpo.querySelector('#mv-vuelve').onclick = () => { ir('musica'); vistaMusica('player'); };
+  cuerpo.querySelector('#mv-mas').onclick = hojaMas;
   cuerpo.querySelector('#mv-rebuscar').onclick = () => pideLetra(true);
   cuerpo.querySelector('#mv-copiar').onclick = () => {
     if (!letraPlana) return ctx?.say?.('Aún no hay letra que copiar: pulsa «rebuscar la letra».');
     copia(letraPlana, 'Letra copiada.');
   };
   enganchaTransporte(cuerpo, 'mv');
+}
+
+/* El `❝ Letras` de Lark: la misma pista, pero con la imagen y el karaoke delante.
+   Desde la fusión es un botón del reproductor, no una app del cajón — por eso sale de
+   aquí y no de `ir('mv')` a pelo: si el puente no monta la hoja (un PC, o un APK sin
+   vídeos), lo dice en vez de llevar a un sitio vacío. */
+function abreLetra() {
+  if (!document.getElementById('mv-video')) {
+    ctx?.say?.('Sin el teléfono no hay letra dentro de CORT: la letra la trae la hoja de música del APK.');
+    return false;
+  }
+  ir('mv');
+  const caja = document.getElementById('mv-letra');
+  if (caja) caja.scrollIntoView({ block: 'start' });
+  return true;
 }
 
 function arrancaMV() {
@@ -1953,9 +2452,10 @@ function escuchaMusica() {
    mismo que ejecuta un toque en la barra.
 
    Se comprueba que la hoja exista en este aparato antes de saltar: `ir()` con un id
-   que no está en `visibles()` cae en el Orbe sin decir nada, y un atajo que abre la
+   que no está en `montables()` cae en el Orbe sin decir nada, y un atajo que abre la
    ventana equivocada es peor que un atajo que avisa. «Equipo», por ejemplo, pide el
-   puente de acciones: con un APK viejo no existe. */
+   puente de acciones: con un APK viejo no existe. Se usa `montables()` y no
+   `visibles()` para que un atajo futuro pueda abrir también la letra fusionada. */
 let atajosViva = false;
 function escuchaAtajos() {
   if (atajosViva || !window.__cortNative) return;
@@ -1963,7 +2463,7 @@ function escuchaAtajos() {
   window.__cortNative.on(ev => {
     if (!ev || ev.type !== 'atajo') return;
     const id = String(ev.hoja || '');
-    const p = visibles().find(x => x.id === id);
+    const p = montables().find(x => x.id === id);
     if (!p) { ctx?.term?.('ese atajo pide una hoja que no está en este aparato: ' + id, 'pantallas'); return; }
     ir(id);
     ctx?.term?.('atajo: ' + p.titulo, 'pantallas');
@@ -1981,6 +2481,7 @@ export function initPantallas(contexto) {
   montaTeclas();
   escuchaMusica();
   escuchaAtajos();
+  escuchaMente();          // la Charla también recibe al cerebro del teléfono
   if (enTelefono()) { montaMusica(); montaMV(); montaPildora(); }
   // El Equipo lleva el `ctx` de siempre **más `ir`**: si la dueña dice «cambia la
   // voz» y no nombra ninguna, la hoja tiene que traer la pantalla delante, y eso

@@ -531,6 +531,25 @@ public class MainActivity extends Activity {
     }
 
     /**
+     * Mostrar u ocultar el botón flotante, hoja por hoja (`CortNative.menuPC`).
+     *
+     * El botón se añade encima del `WebView` (`MainActivity.java:171-186`), así que
+     * no lo tapa la cara: se pinta encima de lo que ella muestre. Antes de este
+     * método no existía un solo `setVisibility` para él en todo el repo, y por eso la
+     * dueña lo encontró «atravesado» sobre la píldora de la música. Se oculta en las
+     * hojas con barra propia y vuelve en el orbe, donde no estorba nada.
+     *
+     * Va con `runOnUiThread` porque el puente lo llama desde el hilo del JavaScript de
+     * la WebView, y tocar una vista desde otro hilo es el `CalledFromWrongThreadException`
+     * que cerraría la app.
+     */
+    void muestraMenuPC(boolean visible) {
+        if (botonMenu == null) return;
+        Button boton = botonMenu;
+        runOnUiThread(() -> boton.setVisibility(visible ? View.VISIBLE : View.GONE));
+    }
+
+    /**
      * La línea que se enseña en el menú: el `dice` del JSON del puente, sin tener
      * que meter un parser en la actividad. Si el cuadro venía torcido, se dice tal
      * cual, que es peor de leer pero nunca mentira.

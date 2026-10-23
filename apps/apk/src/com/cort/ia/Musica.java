@@ -38,7 +38,14 @@ import java.util.Map;
 
 public class Musica {
 
-    private static final int MAX = 400;          // canciones por consulta
+    /* Los dos topes van **separados** a propósito, y el motivo es una medida de su
+     * teléfono del 2026-10-22: con `MAX = 400` para todo, `buscar()` llenaba la lista
+     * de audio hasta 400 y la llamada de vídeos entraba después con el cupo ya
+     * agotado (`while (cur.moveToNext() && salida.size() < MAX)`). Resultado: la
+     * pestaña «Vídeos» de la cara salía vacía con 1786 vídeos delante. Un tope por
+     * tipo de medio, y uno por consulta. */
+    private static final int MAX = 800;           // canciones por consulta
+    private static final int MAX_VIDEO = 400;     // vídeos por consulta
 
     /* ───────────────────────── permisos ─────────────────────────── */
 
@@ -58,9 +65,9 @@ public class Musica {
     /* ───────────────────────── una pista ────────────────────────── */
 
     static class Pista {
-        String uri, titulo, artista, genero;
-        long dur;
-        boolean video;
+        String uri, titulo, artista, genero, album;
+        long dur, id, fecha;         // `fecha` = DATE_ADDED en segundos: «Más recientes»
+        boolean video, letra, mv;
 
         Reproductor.Pista alReproductor() {
             return new Reproductor.Pista(uri, titulo, artista, genero, dur, video);
@@ -71,83 +78,104 @@ public class Musica {
                  + "\",\"titulo\":\"" + Reproductor.esc(titulo)
                  + "\",\"artista\":\"" + Reproductor.esc(artista)
                  + "\",\"genero\":\"" + Reproductor.esc(genero)
-                 + "\",\"dur\":" + dur + ",\"video\":" + video + "}";
+                 + "\",\"album\":\"" + Reproductor.esc(album)
+                 + "\",\"dur\":" + dur + ",\"id\":" + id + ",\"fecha\":" + fecha
+                 + ",\"video\":" + video + ",\"letra\":" + letra + ",\"mv\":" + mv + "}";
         }
     }
 
     /* ───────────────── buscar en el índice del sistema ──────────── */
 
     /**
-     * Lista canciones por texto: título, artista o género que contenga `q`.
-     * Con `q` vacío devuelve toda la discoteca (hasta `MAX`).
+     * Lista canciones por texto: título, artista, álbum o género que contenga `q`.
+     * Con `q` vacío devuelve toda la discoteca (hasta `MAX`, y `MAX_VIDEO` de vídeos).
+     *
+     * Dos cosas que antes no se hacían y salieron caras en su teléfono:
+     *
+     * 1. **El filtro se aplica aquí, en Java, plegado; no en el SQL.** Con
+     *    `TITLE LIKE ?` SQLite sólo ignora las mayúsculas del ASCII: «marshmello»
+     *    contra «Marshmello» acierta, pero una búsqueda con acentos o con la ñ se cae,
+     *    y la fila ni siquiera llega al filtro fino de `encaja()`. Por eso «el buscador
+     *    no funciona bien».
+     * 2. **Cada medio tiene su tope.** Antes compartían `MAX`, el audio se lo comía
+     *    entero y la pestaña de vídeos salía vacía con 1786 vídeos delante.
+     *
+     * El orden de consulta es `DATE_ADDED DESC` (lo más nuevo primero), que es como
+     * abre Lark: con un tope por delante, ordenar por título dejaba fuera justo lo que
+     * la dueña acaba de bajar.
      */
     static List<Pista> buscar(Context c, String q, boolean incluirVideo) {
         List<Pista> salida = new ArrayList<>();
         if (!puedeLeer(c)) return salida;
-        String filtro = q == null ? "" : q.trim().toLowerCase();
-        buscarEn(c, MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, false, filtro, salida, incluirVideo);
-        if (incluirVideo) {
-            buscarEn(c, MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, filtro, salida, true);
+        String filtro = plegar(q == null ? "" : q.trim());
+        List<Pista> audios = new ArrayList<>();
+        List<Pista> videos = new ArrayList<>();
+        leerEn(c, MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, false, audios, MAX);
+        if (incluirVideo) leerEn(c, MediaStore.Video.Media.EXTERNAL_CONTENT_URI, true, videos, MAX_VIDEO);
+
+        // La píldora `MV` de Lark significa «esta canción tiene vídeo». Aquí se saca de
+        // verdad: se cruzan los títulos plegados de la biblioteca de vídeo con cada
+        // canción. Si no se leyeron vídeos (el modo sólo-audio) la bandera queda falsa,
+        // que es la verdad de este aparato en este momento.
+        java.util.HashSet<String> deVideo = new java.util.HashSet<>();
+        for (Pista v : videos) if (!v.titulo.isEmpty()) deVideo.add(plegar(v.titulo));
+        java.util.Set<String> tapadas = ocultas(c);
+
+        for (Pista p : audios) {
+            if (tapadas.contains(p.uri)) continue;
+            if (!filtro.isEmpty() && !encaja(p, filtro)) continue;
+            p.mv = deVideo.contains(plegar(p.titulo));
+            salida.add(p);
+        }
+        for (Pista v : videos) {
+            if (tapadas.contains(v.uri)) continue;
+            if (!filtro.isEmpty() && !encaja(v, filtro)) continue;
+            salida.add(v);
         }
         return salida;
     }
 
-    private static void buscarEn(Context c, Uri tabla, boolean video, String filtro,
-                                 List<Pista> salida, boolean permiteVideo) {
-        if (video && !permiteVideo) return;
+    /** Una pasada del cursor del índice, sin filtro SQL: aquí sólo se lee y se llena. */
+    private static void leerEn(Context c, Uri tabla, boolean video,
+                               List<Pista> salida, int tope) {
         ContentResolver cr = c.getContentResolver();
         String[] columnas = video
             ? new String[] { MediaStore.Video.Media._ID, MediaStore.Video.Media.TITLE,
-                             MediaStore.Video.Media.ARTIST, MediaStore.Video.Media.DURATION }
+                             MediaStore.Video.Media.ARTIST, MediaStore.Video.Media.DURATION,
+                             MediaStore.Video.Media.DATE_ADDED, MediaStore.Video.Media.DATA }
             : new String[] { MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE,
                              MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.GENRE,
-                             MediaStore.Audio.Media.DURATION };
-        String[] argu = null;
-        String seleccion = null;
-        if (!video) {
-            // `IS_MUSIC != 0`: sin ese filtro la discoteca de CORT se llena de
-            // tonos de llamada, avisos del sistema y grabaciones de la dictadora,
-            // que también viven en la tabla de audio.
-            seleccion = MediaStore.Audio.Media.IS_MUSIC + " != 0";
-        }
-        if (!filtro.isEmpty()) {
-            String como = "%" + filtro + "%";
-            if (video) {
-                seleccion = "(TITLE LIKE ? OR ARTIST LIKE ?)";
-                argu = new String[] { como, como };
-            } else {
-                seleccion = "(TITLE LIKE ? OR ARTIST LIKE ? OR GENRE LIKE ?) AND "
-                          + MediaStore.Audio.Media.IS_MUSIC + " != 0";
-                argu = new String[] { como, como, como };
-            }
-        }
+                             MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION,
+                             MediaStore.Audio.Media.DATE_ADDED, MediaStore.Audio.Media.LYRICS,
+                             MediaStore.Audio.Media.DATA };
+        // `IS_MUSIC != 0`: sin ese filtro la discoteca de CORT se llena de tonos de
+        // llamada, avisos del sistema y grabaciones de la dictadora, que también viven
+        // en la tabla de audio.
+        String seleccion = video ? null : MediaStore.Audio.Media.IS_MUSIC + " != 0";
         Cursor cur = null;
         try {
-            cur = cr.query(tabla, columnas, seleccion, argu, video ? null : "TITLE ASC");
+            cur = cr.query(tabla, columnas, seleccion, null,
+                           MediaStore.MediaColumns.DATE_ADDED + " DESC");
             if (cur == null) return;
-            int iId = cur.getColumnIndexOrThrow(video ? MediaStore.Video.Media._ID
-                                                     : MediaStore.Audio.Media._ID);
-            int iTit = cur.getColumnIndexOrThrow(video ? MediaStore.Video.Media.TITLE
-                                                      : MediaStore.Audio.Media.TITLE);
-            int iArt = cur.getColumnIndexOrThrow(video ? MediaStore.Video.Media.ARTIST
-                                                      : MediaStore.Audio.Media.ARTIST);
-            int iGen = video ? -1 : cur.getColumnIndexOrThrow(MediaStore.Audio.Media.GENRE);
-            int iDur = cur.getColumnIndexOrThrow(video ? MediaStore.Video.Media.DURATION
-                                                      : MediaStore.Audio.Media.DURATION);
-            while (cur.moveToNext() && salida.size() < MAX) {
-                long id = cur.getLong(iId);
-                // Las pistas de vídeo del sistema (clips) no tienen URI de audio:
-                // se salta la fila si el índice no devuelve ninguna de las dos.
+            while (cur.moveToNext() && salida.size() < tope) {
+                long id = cur.getLong(0);
                 if (id <= 0) continue;
                 Pista p = new Pista();
-                p.uri = (video ? MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                               : MediaStore.Audio.Media.EXTERNAL_CONTENT_URI) + "/" + id;
-                p.titulo = texto(cur, iTit);
-                p.artista = texto(cur, iArt);
-                p.genero = iGen >= 0 ? texto(cur, iGen) : "";
-                p.dur = cur.getLong(iDur);
+                p.id = id;
+                p.uri = tabla + "/" + id;
+                p.titulo = texto(cur, 1);
+                p.artista = texto(cur, 2);
+                p.genero = video ? "" : texto(cur, 3);
+                p.album = video ? "" : texto(cur, 4);
+                p.dur = cur.getLong(video ? 3 : 5);
+                p.fecha = cur.getLong(video ? 4 : 6);
                 p.video = video;
-                if (!filtro.isEmpty() && !encaja(p, filtro)) continue;
+                // La píldora `LETRAS` de Lark: sólo si la letra **existe de verdad** en
+                // el teléfono — incrustada en la etiqueta LYRICS del archivo, o en un
+                // `.lrc` / `.txt` con el mismo nombre al lado.
+                String incrustada = video ? "" : texto(cur, 7);
+                p.letra = !incrustada.isEmpty()
+                    || hayArchivoDeLetra(texto(cur, video ? 5 : 8));
                 salida.add(p);
             }
         } catch (Exception e) {
@@ -157,13 +185,50 @@ public class Musica {
         }
     }
 
+    /** ¿Hay `.lrc` o `.txt` hermano de esta ruta? Sin ruta (almacén con puntero raro,
+     *  Android 13 sin `DATA`) dice que no, que es lo que se sabe. */
+    private static boolean hayArchivoDeLetra(String ruta) {
+        if (ruta == null || ruta.isEmpty()) return false;
+        int punto = ruta.lastIndexOf('.');
+        String base = punto > 0 ? ruta.substring(0, punto) : ruta;
+        try {
+            return new java.io.File(base + ".lrc").isFile()
+                || new java.io.File(base + ".txt").isFile();
+        } catch (Exception eseArchivoNoSePuedeMirar) {
+            return false;
+        }
+    }
+
     private static boolean encaja(Pista p, String filtro) {
         return contiene(p.titulo, filtro) || contiene(p.artista, filtro)
-            || contiene(p.genero, filtro);
+            || contiene(p.genero, filtro) || contiene(p.album, filtro);
     }
 
     private static boolean contiene(String donde, String que) {
-        return donde != null && donde.toLowerCase().contains(que);
+        return donde != null && plegar(donde).contains(que);
+    }
+
+    /**
+     * Minúsculas y sin acentos, para comparar como compara Lark. Es la pieza que
+     * faltaba: `toLowerCase()` a secas deja «Canción» y «cancion» como dos mundos.
+     */
+    static String plegar(String s) {
+        if (s == null) return "";
+        String bajo = s.toLowerCase(java.util.Locale.ROOT);
+        char[] buf = bajo.toCharArray();
+        for (int i = 0; i < buf.length; i++) {
+            switch (buf[i]) {
+                case 'á': case 'à': case 'ä': case 'â': case 'ã': buf[i] = 'a'; break;
+                case 'é': case 'è': case 'ë': case 'ê': buf[i] = 'e'; break;
+                case 'í': case 'ì': case 'ï': case 'î': buf[i] = 'i'; break;
+                case 'ó': case 'ò': case 'ö': case 'ô': case 'õ': buf[i] = 'o'; break;
+                case 'ú': case 'ù': case 'ü': case 'û': buf[i] = 'u'; break;
+                case 'ñ': buf[i] = 'n'; break;
+                case 'ç': buf[i] = 'c'; break;
+                default: break;
+            }
+        }
+        return new String(buf);
     }
 
     private static String texto(Cursor cur, int i) {
@@ -292,6 +357,34 @@ public class Musica {
         return m;
     }
 
+    /* ───────────────────────── ocultar pistas ──────────────────────
+     *
+     * «Ocultar» es la fila que Lark tiene bajo el ojo tachado: la pista deja de
+     * aparecer en la lista, pero **el archivo no se toca**. Es lo que la dueña
+     * necesita con una biblioteca de 1786 vídeos llena de tonterías bajadas de
+     * SnapTube, y es lo contrario de «Borrar», que CORT **no** ofrece: borrar el
+     * archivo de alguien sin red de seguridad no es una función, es un accidente.
+     * Se guarda la URI en las mismas preferencias de siempre, con prefijo. */
+
+    static void oculta(Context c, String uri) {
+        if (uri == null || uri.isEmpty()) return;
+        prefs(c).edit().putString("oculta|" + uri, "1").apply();
+    }
+
+    static java.util.Set<String> ocultas(Context c) {
+        java.util.Set<String> salida = new java.util.HashSet<>();
+        for (String k : prefs(c).getAll().keySet()) {
+            if (k.startsWith("oculta|")) salida.add(k.substring(7));
+        }
+        return salida;
+    }
+
+    static void muestraTodas(Context c) {
+        SharedPreferences.Editor e = prefs(c).edit();
+        for (String k : ocultas(c)) e.remove("oculta|" + k);
+        e.apply();
+    }
+
     /* ─────────────────────────── listas ─────────────────────────── */
 
     /** Guardar una playlist con nombre: son URIs separados por `;`. */
@@ -318,13 +411,139 @@ public class Musica {
         return s.append(']').toString();
     }
 
-    /** Convertir URIs guardadas en pistas, buscando en el índice por URI. */
+    /** Convertir URIs guardadas en pistas, leyendo cada una **por su URI**.
+     *
+     *  Antes esta función escaneaba la discoteca entera (`buscar(c, "", true)`) y
+     *  buscaba el texto de la URI entre lo que cupiera en `MAX`. Con el tope de 400
+     *  compartido, las URI de vídeo no estaban nunca: `musicaPoner` recibía `[]`,
+     *  devolvía `false` (`CortNative.java:1077`) y **pulsar un vídeo no hacía nada**.
+     *  Ahora se pregunta al índice por esa URI concreta, que es lo que MediaStore
+     *  sabe hacer bien. */
     static List<Pista> porUri(Context c, List<String> uris) {
-        List<Pista> todas = buscar(c, "", true);
         List<Pista> salida = new ArrayList<>();
+        if (uris == null) return salida;
         for (String u : uris) {
-            for (Pista p : todas) if (p.uri.equals(u)) { salida.add(p); break; }
+            Pista p = unaPorUri(c, u);
+            if (p != null) salida.add(p);
         }
         return salida;
+    }
+
+    private static Pista unaPorUri(Context c, String u) {
+        if (u == null || u.isEmpty()) return null;
+        Cursor cur = null;
+        try {
+            // `null` en las columnas = todas: una URI de audio y una de vídeo no
+            // comparten GENRE / ALBUM / LYRICS, y pedir una que no existe revienta.
+            cur = c.getContentResolver().query(Uri.parse(u), null, null, null, null);
+            if (cur == null || !cur.moveToFirst()) return null;
+            Pista p = new Pista();
+            p.uri = u;
+            p.video = u.startsWith(MediaStore.Video.Media.EXTERNAL_CONTENT_URI.toString());
+            p.id = largo(cur, MediaStore.MediaColumns._ID);
+            p.titulo = textoDe(cur, MediaStore.MediaColumns.TITLE);
+            p.artista = textoDe(cur, MediaStore.MediaColumns.ARTIST);
+            p.genero = p.video ? "" : textoDe(cur, MediaStore.Audio.Media.GENRE);
+            p.album = p.video ? "" : textoDe(cur, MediaStore.Audio.Media.ALBUM);
+            p.dur = largo(cur, MediaStore.MediaColumns.DURATION);
+            p.fecha = largo(cur, MediaStore.MediaColumns.DATE_ADDED);
+            p.letra = !p.video && !textoDe(cur, MediaStore.Audio.Media.LYRICS).isEmpty();
+            return p;
+        } catch (Exception esaUriYaNoEstá) {
+            return null;                      // borrada, o de otra app que ya no está
+        } finally {
+            if (cur != null) try { cur.close(); } catch (Exception ignorado) { }
+        }
+    }
+
+    /* ─────────────────────────── la carátula ───────────────────────────
+     *
+     * Lo que Lark enseña en cada fila y CORT **no tenía**: en todo el repo no había
+     * una sola línea que pidiera una portada (`Musica.Pista.json()` devolvía
+     * uri/titulo/artista/genero/dur/video), así que la cara pintaba el glifo `♪` y
+     * se lo decía a la dueña en un comentario. «No se ven las carátulas» no era un
+     * fallo de permisos: es que nadie las pedía.
+     *
+     * Se pide al sistema, que ya tiene el miniatura hecho: `loadThumbnail` (API 29
+     * en adelante) sirve la carátula incrustada en el MP3 **y** la miniatura del
+     * vídeo, sin decodificar el archivo. Para Android 8 y 9 queda la portada del
+     * álbum por `ALBUM_ID`. Y si nada funciona devuelve cadena vacía: la cara
+     * mantiene el glifo, que es peor que la foto pero no es mentira.
+     *
+     * Sale en `base64` (`data:image/jpeg`) porque el `WebView` tiene
+     * `setAllowFileAccess(false)` (`MainActivity.java:128`): un `file://` de la caché
+     * no cargaría, y abrir un proveedor de ficheros para esto es más superficie de la
+     * que hace falta. Se llama **por fila visible**, no para las 800 de golpe: una
+     * miniatura de 220 px son ~12 KB, y 800 de ellas serían 9 MB de texto cruzando el
+     * puente. */
+    static String caratula(Context c, String u, int lado) {
+        if (u == null || u.isEmpty()) return "";
+        int ladoBueno = lado <= 0 ? 220 : Math.min(lado, 512);
+        android.graphics.Bitmap bmp = null;
+        try {
+            Uri uri = Uri.parse(u);
+            if (android.os.Build.VERSION.SDK_INT >= 29) {
+                try {
+                    bmp = c.getContentResolver()
+                            .loadThumbnail(uri, new android.util.Size(ladoBueno, ladoBueno), null);
+                } catch (Exception sinMiniaturaDelSistema) {
+                    bmp = null;               // sin carátula incrustada: se intenta el álbum
+                }
+            }
+            if (bmp == null) bmp = portadaDeAlbum(c, uri, ladoBueno);
+            if (bmp == null) return "";
+            java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, bytes);
+            bmp.recycle();
+            return "data:image/jpeg;base64," + android.util.Base64.encodeToString(
+                    bytes.toByteArray(), android.util.Base64.NO_WRAP);
+        } catch (Exception nadaQuePintar) {
+            return "";
+        }
+    }
+
+    /** La portada del álbum al que pertenece esta pista (el camino de Android 8-9). */
+    private static android.graphics.Bitmap portadaDeAlbum(Context c, Uri uri, int lado) {
+        if (uri.toString().startsWith(MediaStore.Video.Media.EXTERNAL_CONTENT_URI.toString()))
+            return null;                       // un vídeo no tiene álbum
+        Cursor cur = null;
+        long albumId = 0;
+        try {
+            cur = c.getContentResolver().query(uri,
+                new String[] { MediaStore.Audio.Media.ALBUM_ID }, null, null, null);
+            if (cur != null && cur.moveToFirst() && cur.getColumnCount() > 0) albumId = cur.getLong(0);
+        } catch (Exception sinColumnaDeAlbum) {
+            albumId = 0;
+        } finally {
+            if (cur != null) try { cur.close(); } catch (Exception ignorado) { }
+        }
+        if (albumId <= 0) return null;
+        java.io.InputStream entrada = null;
+        try {
+            Uri arte = android.content.ContentUris.withAppendedId(
+                Uri.parse("content://media/external/audio/albumart"), albumId);
+            entrada = c.getContentResolver().openInputStream(arte);
+            if (entrada == null) return null;
+            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeStream(entrada);
+            return bmp == null ? null : android.graphics.Bitmap.createScaledBitmap(bmp, lado, lado, true);
+        } catch (Exception eseTelefonoNoTieneEsaPortada) {
+            return null;
+        } finally {
+            if (entrada != null) try { entrada.close(); } catch (Exception ignorado) { }
+        }
+    }
+
+    private static String textoDe(Cursor cur, String columna) {
+        try {
+            int i = cur.getColumnIndex(columna);
+            return i < 0 ? "" : texto(cur, i);
+        } catch (Exception columnaQueNoEstaba) { return ""; }
+    }
+
+    private static long largo(Cursor cur, String columna) {
+        try {
+            int i = cur.getColumnIndex(columna);
+            return i < 0 ? 0 : cur.getLong(i);
+        } catch (Exception columnaQueNoEstaba) { return 0; }
     }
 }

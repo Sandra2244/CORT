@@ -682,16 +682,15 @@ html.pantallas-montadas:not(.p-orbe) #status,html.pantallas-montadas:not(.p-orbe
 html.pantallas-montadas:not(.p-orbe) #hand{display:none!important}
 html.pantallas-montadas:not(.p-orbe) body.sheet #scene{transform:none}
 
-/* MV es la excepción: ahí el holograma no se apaga, se hace disco. `hud.js` pone
-   `orb.setDisc(true)` (orb.js ya tiene el vinilo giratorio del ejecutor de música)
-   y esta regla encoge `#scene` a la esquina superior derecha, encima del vídeo y
-   sin robar el toque: quien manda a la pista sigue siendo `.Reproductor`. Cuelga
-   de `.pantallas-montadas` igual que el apagón de arriba: si el módulo de
-   pantallas falla, no hay disco raro ni pantalla en negro: queda la cara de siempre. */
-html.pantallas-montadas.p-mv #scene{display:block!important;z-index:68;pointer-events:none;
-  opacity:.92;transform:scale(.34);transform-origin:88% 8%}
-html.mobile.pantallas-montadas.p-mv #scene{transform-origin:96% 26%}
-html.pantallas-montadas.p-mv body.sheet #scene{transform:scale(.34);transform-origin:88% 8%}
+/* MV **ya no es la excepción del orbe** (22/10, con sus capturas delante): la dueña
+   lo pidió dicho «el orbe de CORT no me gusta que aparezca en MV». Y al mirarlo de
+   cerca había dos cosas que decir: la regla que lo encogía a la esquina estaba MUERTA
+   — el `#scene{display:none!important}` del apagón de arriba tiene más especificidad
+   (`:not(.p-orbe)` cuenta como clase) y ganaba, así que el holograma nunca se veía —
+   y sin embargo `hud.js` seguía llamando a `orb.pausa(false)`, que es dejar el bucle
+   WebGL dibujando a escondidas sobre un teléfono de gama media. Se quitan las dos: la
+   hoja de letra se apaga como cualquier otra, y el vídeo con su karaoke es lo único
+   que queda delante. */
 
 /* El avispón del modo juego vive en la barra de la pantalla activa: discreto y
    sin tapar nada (lo enciende `pintaJuego()` en pantallas.js con el estado Java). */
