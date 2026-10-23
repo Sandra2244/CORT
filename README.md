@@ -652,6 +652,19 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       (hoy 14 en `models.py` y 107 en `telefono.js`, con [23.d] vigilando que las 14 sean
       subconjunto idéntico de las 107), y que nada de esto esté visto en su teléfono ni en
       su PC hasta que el pipeline termine la Release.
+      **La Release ya está fuera (2026-10-23, `v0.2.37-demo`, los cuatro trabajos en
+      verde):** `CORT-IA-2.9.0.apk` 47.443.765 B comprimidos sobre **62.081.945** sin
+      comprimir, `…-nucleo.apk` 47.443.765 B sobre **62.078.533** y `…-nucleo-ligero.apk`
+      1.674.580 B sobre **4.647.566** —mismos pesos comprimidos que la 2.8.0 por casualidad
+      (el bloque de alineación se traga los ~4,1 KB que suman la cara y `Ollama.java`), y
+      por eso lo que cambia es el `sha256` y el tamaño sin comprimir, no la cifra de
+      encima—. Las tres hojas `-firma.txt` dicen **`cara embebida: ui/ de este commit
+      (4234b96)`**, así que el APK es este código y no el anterior, y la del núcleo repite
+      el veredicto que importa: **21 permisos, cero servicios `BIND_*`, `INSTALABLE`**. Lo
+      que NO se ha hecho todavía con la 2.9.0: descargar los tres archivos aquí para
+      hashearlos y medirlos entrada a entrada —la tabla de artefactos de abajo sigue con
+      las cifras reales de la 2.8.0, que es lo que se midió, y no se renombra para no
+      prestarle a la 2.9.0 unos números que no tiene.
 - [~] **F12 · que la voz responda (en curso)** — lo que ella pidió junto a F13: ducking en
       el oído (`AudioManager.requestAudioFocus(... MAY_DUCK)`, sin superficie nueva de
       manifiesto), escuchar en segundo plano, «pausa / siguiente / anterior» con
