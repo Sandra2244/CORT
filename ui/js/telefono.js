@@ -2068,6 +2068,26 @@ function ejecutaLocal(accion, param) {
       'sé lo que querías hacer, pero este APK no manda sobre el aparato.');
   }
   if (accion === 'musica') {
+    // F15 · la tabla también puede pedir música por NOMBRE, listas y ecualizador:
+    // el cerebro devuelve `musica` con `poner:X`, `lista:X`, `listas`,
+    // `ecualiza:X` o `ecualizaestado`. Aquí se ejecuta con las manos de verdad.
+    const dos = String(param).split(':');
+    const verbo = dos[0].trim();
+    const nombre = dos.slice(1).join(':').trim();
+    if (verbo === 'poner' && nombre) return parsea(llama('musicaPonerNombre', nombre));
+    if (verbo === 'lista' && nombre) {
+      const puesta = llama('musicaPonerLista', nombre, 0);
+      return puesta ? { ok: true, dice: 'Pongo la lista «' + nombre + '».' }
+        : { ok: false, dice: 'No encuentro la lista «' + nombre + '» con canciones.' };
+    }
+    if (verbo === 'listas') {
+      const listas = parsea(llama('musicaListas')) || [];
+      return { ok: true, dice: listas.length
+        ? 'Tus playlists: ' + listas.join(', ') + '.'
+        : 'No tienes playlists guardadas en el teléfono.' };
+    }
+    if (verbo === 'ecualiza' && nombre) return parsea(llama('ecualiza', nombre));
+    if (verbo === 'ecualizaestado') return parsea(llama('ecualizaEstado'));
     const tecla = { pausa: 'pausa', reanuda: 'play', siguiente: 'siguiente',
                     anterior: 'anterior' }[param];
     if (tecla && puede('teclaMedia') && llama('teclaMedia', tecla) !== false) return true;
@@ -2146,6 +2166,10 @@ function handleTelefonoEvento(ev) {
             + '.';
           diceBien('mando', frase); ctx?.say?.(frase);
         } else if (ev.accion === 'cronometro' && hecha.dice) {
+          diceBien('mando', hecha.dice); ctx?.say?.(hecha.dice);
+        } else if (ev.accion === 'musica' && hecha.dice) {
+          // F15 · el nombre de la canción, la lista o el preset que de verdad se
+          // puso, y su motivo si no se pudo: la frase sale del aparato, no de aquí.
           diceBien('mando', hecha.dice); ctx?.say?.(hecha.dice);
         }
       }
@@ -2292,6 +2316,60 @@ export function telefonoPorVoz(texto) {
     const hechas = misApps();
     if (hechas) ctx?.say?.('Te dejo la lista de apps en la hoja Equipo.');
     return hechas;
+  }
+
+  /* 4d · F15 · la música por NOMBRE, las listas y el ecualizador. Va antes que la
+        agenda y que el cerebro porque aquí SÍ se puede hacer en el teléfono: se
+        busca en su biblioteca (`musicaPonerNombre`, que decide con `Elige`) y sólo
+        si no hay nada parecido la frase sigue su camino (el cerebro abre YouTube).
+        Los transportes («pausa», «siguiente») NO entran aquí: los casa el oído y,
+        si llegan al cerebro, `ejecutaLocal` los manda a `teclaMedia`. */
+  if (puede('musicaPonerNombre')) {
+    // 4d.1 · «qué playlists tengo», «mis listas»
+    if (/\b(playlists|listas)\b/.test(b)
+        && /^(que|dime|mis|listame|muestra|muestrame|cuantas)\b/.test(b)
+        && !/\b(pon|ponme|reproduce|escucha|oir)\b/.test(b)) {
+      const listas = parsea(llama('musicaListas'));
+      const nombres = Array.isArray(listas) ? listas.filter(x => typeof x === 'string') : [];
+      return di(nombres.length
+        ? 'Tus playlists: ' + nombres.join(', ') + '.'
+        : 'No tienes playlists guardadas. Guarda una desde Música con «guardar lista».', 'mando');
+    }
+    // 4d.2 · «pon la playlist para correr» / «ponme la lista X»
+    const lista = texto.match(/^\s*(?:oye\s+cort[,\s]+)?(?:pon|ponme|reproduce|escucha|quiero oir)\s+(?:la\s+|mi\s+)?(?:playlist|lista)\s+(.+)$/i);
+    if (lista) {
+      const nombre = lista[1].trim();
+      const puesta = llama('musicaPonerLista', nombre, 0);
+      if (puesta) return di('Pongo la lista «' + nombre + '».', 'mando');
+      return di('No encuentro la lista «' + nombre + '» con canciones. Dime «qué playlists tengo».', 'mando');
+    }
+    // 4d.3 · «qué ecualizador tengo» / «cómo suena el ecualizador»
+    if (/\b(ecualizador|preset|ecualizacion)\b/.test(b)
+        && /^(que|dime|como|en que|hay)\b/.test(b)) {
+      const r = parsea(llama('ecualizaEstado'));
+      return di(r && r.dice ? r.dice : 'El ecualizador se enciende con la música.', 'mando');
+    }
+    // 4d.4 · «pon el ecualizador en rock» / «cambia el sonido a clásica»
+    const ec = texto.match(/^\s*(?:oye\s+cort[,\s]+)?(?:pon|cambia|ecualiza)\s+(?:el\s+)?(?:ecualizador|sonido|preset)\s+(?:(?:a|en|al)\s+)?(.+)$/i)
+      || texto.match(/^\s*(?:oye\s+cort[,\s]+)?ecualiza\s+(?:a\s+)?(.+)$/i);
+    if (ec) {
+      const r = parsea(llama('ecualiza', ec[1].trim()));
+      return di(r && r.dice ? r.dice : 'No pude cambiar el ecualizador.', 'mando');
+    }
+    // 4d.5 · «pon After Dark», «pon la canción a After Dark», «cámbialo a X»
+    const cancion = texto.match(/^\s*(?:oye\s+cort[,\s]+)?(?:cambia|cambialo|cambiala|ponme|pon)\s+(?:la\s+|el\s+)?(?:cancion|tema|musica|video)\s+(?:a|al|por)\s+(.+)$/i)
+      || texto.match(/^\s*(?:oye\s+cort[,\s]+)?cambia(?:lo|la)?\s+(?:a|al|por)\s+(.+)$/i)
+      || texto.match(/^\s*(?:oye\s+cort[,\s]+)?(?:ponme|pon|reproduce|suena|escucha)\s+(?:(?:la|el)\s+(?:cancion|tema|musica|video)\s+)?(.+)$/i);
+    if (cancion) {
+      const pedida = cancion[1].trim();
+      if (pedida && !/^(la |el |una |un )?(playlist|lista|alarma|temporizador|volumen|linterna|cronometro|modo juego|siguiente|anterior|musica|de |la de |otra vez|de nuevo)\b/.test(normaliza(pedida))) {
+        const r = parsea(llama('musicaPonerNombre', pedida));
+        if (r && r.ok) return di(r.dice || ('Pongo «' + pedida + '».'), 'mando');
+        // «cámbialo a X» no cae a YouTube: estaba sonando algo y pidió cambiar.
+        if (r && /^\s*cambia/i.test(texto)) return di(r.dice || ('No encuentro «' + pedida + '».'), 'mando');
+        // «pon X» sin nada en la biblioteca sigue al cerebro (su `poner` abre YouTube).
+      }
+    }
   }
 
   /* 4b · los cerebros de casa (Ollama por Wi-Fi). Va ANTES que «abre una app» y

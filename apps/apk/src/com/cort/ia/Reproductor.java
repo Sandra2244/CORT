@@ -149,6 +149,9 @@ public class Reproductor extends Service {
     }
 
     @Override public void onDestroy() {
+        // El efecto se suelta ANTES que su `MediaPlayer`: al revés, algunos
+        // fabricantes dejan el efecto colgado de una sesión que ya no existe.
+        try { Ecualizador.suelta(); } catch (Throwable yaNo) { /* se apaga igual */ }
         try { if (mp != null) { mp.release(); mp = null; } } catch (Exception e) { }
         try { if (sesion != null) { sesion.setActive(false); sesion.release(); sesion = null; } }
         catch (Exception e) { }
@@ -341,6 +344,11 @@ public class Reproductor extends Service {
             r.mp.setDataSource(r, Uri.parse(p.uri));
             r.mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
                 @Override public void onPrepared(MediaPlayer m) {
+                    // F15 · la sesión de audio ya existe: aquí se engancha el
+                    // ecualizador de verdad, y si había un preset puesto se
+                    // vuelve a poner para esta canción.
+                    try { Ecualizador.engancha(m.getAudioSessionId()); }
+                    catch (Throwable noHayEcualizador) { /* sin efecto, hay música */ }
                     if (pideFoco()) { m.start(); }
                     refresca();
                     avisa();

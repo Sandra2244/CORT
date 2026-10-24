@@ -373,8 +373,8 @@ siempre, y que CORT conteste.
 | --- | --- | --- | --- |
 | **F12 · que la voz responda** | barge-in con ducking en vez de micro cerrado; normalizar puntuación; `pausa/play/siguiente/anterior/volumen` sin `e.vivo` estricto; **barrido de botones** (elemento → método del puente que no existe) | decir «pausa» con música sonando en una prueba de cara; y la sonda con el puente falso | peso del APK y nº de botones muertos antes/después |
 | **F13 · modelos que se descargan** | ping antes de tirar; progreso **sumando por capa**; cancelar y reintentar en el móvil; `psutil` opcional en el backend; catálogo **único generado** (107) para PC y móvil; el requisito `OLLAMA_HOST` dicho en pantalla | prueba del parser NDJSON con dos capas y con líneas fuera de orden | peso real de un ↓ con y sin el arreglo |
-| **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | **87 intents / 699 frases** (37 mando, 26 razón, 13 casa, 11 nube); 208 frases de razón contestadas sin red |
-| **F15 · cerebro de casa con nombres** | «pon *Afterk Dark*», «qué playlist», «cámbialo a <canción>», ecualizador real (`audiofx.Equalizer` en su propio fichero, fuera de las clases de papel), auricular con acción | pruebas de lógica en el portátil con `java -m jdk.compiler` | nº de acciones de música ejecutadas por voz |
+| **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | **91 intents / 736 frases** (41 mando, 26 razón, 13 casa, 11 nube); 208 frases de razón contestadas sin red |
+| **F15 · cerebro de casa con nombres** | «pon *After Dark*», «qué playlist», «cámbialo a <canción>», ecualizador real (`audiofx.Equalizer` en su propio fichero, fuera de las clases de papel), auricular con acción | `Prueba6` (18/18) sobre `Elige` puro + costura [30] (7 comprobaciones) + taller de 8 mutaciones | **41 intenciones / 736 frases** (F15 añadió 4 reglas y convirtió «pon» en búsqueda); 18 elecciones de canción/listas/preset medidas en el JDK; 336 frases de tabla en `Prueba3` |
 | **F16 · rutinas y despertar** | intent compuesto de alarma (hora + canción + nota), pantalla de alarma propia, disparador por hora exacta, rutina de buenos días | prueba de `AlarmManager` en el envase + la cara pintando la rutina | latencia del disparo y sitio ocupado |
 | **F17 · cara vestida** | orbe/burbuja que leen el atuendo, burbuja estilo 1.1.4 (azul, transparente, arrastrable, no molesta), agua y vidrio con freno por RAM/juego | sonda de colores: cambiar traje ⇒ cambian **todos** los colores del orbe | nº de variables leídas por `orb.js` (hoy 0) |
 
@@ -541,7 +541,7 @@ generador es `scripts/habilidades.py`; la mitad que no mueve el aparato vive en
 
 | lo que se cerró | cómo se prueba ahora |
 | --- | --- |
-| 37 órdenes + 50 saberes = **87 intenciones / 699 frases**, sin duplicados ni `{resto}` a mitad de palabra | el generador se niega a escribir si baja de `MIN_INTENTS`/`MIN_FRASES` o si una frase se repite en dos reglas |
+| 41 órdenes + 50 saberes = **91 intenciones / 736 frases** (F15 sumó las cuatro de música), sin duplicados ni `{resto}` a mitad de palabra | el generador se niega a escribir si baja de `MIN_INTENTS`/`MIN_FRASES` o si una frase se repite en dos reglas |
 | las 208 frases de razón se contestan **sin red** | `Prueba5` recorre `casos-razon.txt` (una frase por línea, con prefijo esperado sólo en la frase de prueba de cada intención) contra `Razon` |
 | las 192 de casa/nube **no** se contestan en el teléfono con una respuesta floja | `Prueba5` exige que `Cerebro.procesar` devuelva `desconocido` y que `Razon.intenta` devuelva `null` |
 | `x`, `×` y las palabras «suma/resta … y …» entran en cuentas; «dime cuánto es 3 x 3» ya no se queda a medias | `Prueba` (43/43) con el caso repetido de prefijos |
@@ -550,11 +550,44 @@ generador es `scripts/habilidades.py`; la mitad que no mueve el aparato vive en
 | una acción de la tabla ya no se manda a `Acciones` cuando su boca es la cara | `ejecutaLocal()` reparte: 10 de aparato → `Acciones.java`, música → `teclaMedia` (o el reproductor propio) y 5 que la cara atiende antes de pensar; antes, tras «Hola, te escucho.» salía «todavía no sé hacer saludo» |
 | la sonda no se quedó mirando la rama del APK viejo | el puente de mentira de `ui/sonda-carita.html` simula `teclaMedia`, y la costura [29] exige que simule todo lo que la cara pide |
 
-Cifras medidas en el portátil: `Prueba` 43/43, `Prueba2` 45, `Prueba3` TABLA OK,
-`Prueba4` 58 y `Prueba5` DICCIONARIO OK (208 + 192 frases) — la línea final dice «las 5
-suites»; la costura sube a **280 `ok`**, de los que **12** son del sector [29]. El taller
-de mutaciones de F14 hace caer cinco comprobaciones (una frase menos en la cara, un total
-que no cuadra, una acción sin boca, un caso de razón perdido y `Prueba5` fuera del bucle)
-y el código limpio vuelve a verde. Queda por verificar **en su teléfono** que el APK real
-compila con estas tablas y que las voces nuevas (cronómetro, estado y apps) se oyen.
+Cifras medidas en el portátil cuando se cerró F14: `Prueba` 43/43, `Prueba2` 45,
+`Prueba3` TABLA OK, `Prueba4` 58 y `Prueba5` DICCIONARIO OK (208 + 192 frases) — la línea
+final dice «las 5 suites»; la costura subió a **280 `ok`**, de los que **12** son del
+sector [29]. El taller de mutaciones de F14 hace caer cinco comprobaciones (una frase
+menos en la cara, un total que no cuadra, una acción sin boca, un caso de razón perdido y
+`Prueba5` fuera del bucle) y el código limpio vuelve a verde. Queda por verificar **en su
+teléfono** que el APK real compila con estas tablas y que las voces nuevas (cronómetro,
+estado y apps) se oyen.
+
+### F15 · «pon After Dark»: la canción, la lista y el ecualizador (2026-10-23)
+
+El cerebro ya puede devolver `musica` con `poner:<canción>`, `lista:<nombre>`, `listas`,
+`ecualiza:<preset>` y `ecualizaestado`. La decisión de **cuál** de las canciones que
+salen es la que suena no se toma en la cara ni en el puente: se toma en `Elige`, Java
+puro y sin `android.*`, para que `Prueba6` la mida en el JDK del portátil.
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| «pon After Dark» busca en la biblioteca y **el título exacto gana al remix**; «mr kitty» elige por artista; «horizonte sucesos» por palabras | `Prueba6` (18/18): exacto, tildes, artista, palabras, y lo que no está se queda en `—` |
+| una canción **no** se elige por debajo de 200 puntos: mejor decir «no la encuentro» que poner otra | la mutación del umbral (`return mejor;`) hace caer «lo que no está se queda en —» |
+| «pon la playlist para correr» cruza el nombre dicho con las listas reales del teléfono (`Musica.listas`) | `Elige.lista` en `musicaPonerLista`; el puente devuelve el nombre real, no el dicho |
+| «pon el ecualizador en clásica/graves» usa el `audiofx.Equalizer` del aparato, no una curva inventada | `Ecualizador.java` en su propio fichero, `usePreset` tras `Elige.preset`; si el aparato no trae ese preset, se dice cuáles tiene |
+| el efecto va pegado a la sesión del `MediaPlayer` y se suelta **antes** que él | costura [30.d] por índices dentro de `onPrepared`/`onDestroy`, no por búsqueda global |
+| el ecualizador no finge estar medido en el JDK | no se copia a `prueba-mente.sh`; la costura [30.c] mira la línea de `cp` (el comentario sí lo nombra) |
+| «pon una alarma a las 7:30» no acaba buscando una canción con ese nombre | la sección 4d va **después** de la alarma y **antes** de los cerebros de casa; costura [30.f] por índices |
+| la sección de música por nombre no corre en un APK viejo | `puede('musicaPonerNombre')` y el puente de mentira de la sonda simula las tres teclas nuevas |
+| los verbos que el diccionario puede devolver tienen boca en `ejecutaLocal` | costura [30.e]: los 9 verbos atendidos; «mueve» sigue sin inventarse un salto |
+| `Prueba3` cazó un `param` en camelCase que `Cerebro.normaliza` devolvía en minúsculas | el param se llama `ecualizaestado` en las cuatro bocas; antes las 8 frases del estado fallaban |
+
+Cifras medidas en el portátil: `Prueba6` **18/18**, las **6 suites** de
+`scripts/prueba-mente.sh` en verde sobre **336 frases de tabla**, la costura sube a
+**287 `ok`** (7 del sector [30]) y `scripts/taller-f15.sh` tiene **8 mutaciones que caen
+las 8**, cada una nombrando la comprobación que la echaba de menos. Además se añadió el
+gemelo de papel de `AudioManager`/`AudioAttributes` (`apps/apk/prueba/papeles`), sin el
+cual `prueba-oido.sh` no compilaba el ducking de F12: ahora da verde con sus **6
+comprobaciones** sobre el Vosk real.
+
+Lo que **no** se puede medir aquí: que el `Equalizer` de su teléfono traiga los presets
+que dice, y que el ducking se oiga. Eso es de aparato. Y **nada de esto llega a su
+teléfono hasta que salga la Release**: el pipeline no se ha corrido con F15 todavía.
 

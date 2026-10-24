@@ -3940,8 +3940,8 @@ if "Prueba5.java" not in f29_sh or "casos-razon.txt" not in f29_sh \
     f29_falta.append("prueba-mente.sh no copia Prueba5 y sus dos casos")
 if not re.search(r"for suite in [^\n]*Prueba5", f29_sh):
     f29_falta.append("Prueba5 no está en el bucle de suites")
-if "de 5" not in f29_sh or "las 5 suites" not in f29_sh:
-    f29_falta.append("las cuentas de la suite siguen diciendo otra cosa que 5")
+if "de 6" not in f29_sh or "las 6 suites" not in f29_sh:
+    f29_falta.append("las cuentas de la suite siguen diciendo otra cosa que 6")
 if "import { AYUDA } from './diccionario.js'" not in f29_tel:
     f29_falta.append("telefono.js no importa AYUDA")
 if "import { EJEMPLOS } from './diccionario.js'" not in f29_hud:
@@ -3953,6 +3953,213 @@ if f29_falta:
 else:
     dice_ok("F14 · la suite enchufada", "Prueba5 corre con sus dos casos y la cara importa "
               "la ayuda del diccionario")
+
+# ── [30] F15 · «pon After Dark»: la canción, la lista y el ecualizador ──────
+# Tres piezas nuevas, y cada una tiene que estar cosida a su sitio:
+#
+#   · `Elige` decide CUÁL de las canciones suena. Es Java puro a propósito (sin
+#     `android.*`, sin JSON) para que `Prueba6` lo mida en el JDK del portátil y
+#     no se descubra en el bolsillo de la dueña. Sus tres decisiones (`mejor`,
+#     `lista`, `preset`) tienen que tener un dueño de producción y SÓLO uno: una
+#     función que nadie llama es código que nadie ha probado de verdad.
+#   · `Ecualizador` habla con `android.media.audiofx.Equalizer`, que en el JDK no
+#     existe. Por eso NO se copia a la prueba de papel: fingir que la suite lo ha
+#     medido sería el verde de cartón que esta casa no acepta. Va pegado a la
+#     sesión del `MediaPlayer` en `onPrepared` y se suelta en `onDestroy` antes
+#     que él.
+#   · La cara pide tres teclas nuevas y el puente las expone; y `ejecutaLocal`
+#     atiende TODOS los `parametros["musica"]` que el diccionario puede devolver,
+#     porque uno sin boca acaba en «no sé hacer eso» después de prometerlo.
+print("\n[30] F15 · la canción por nombre, la lista y el ecualizador")
+
+F30_IA = APK / "src" / "com" / "cort" / "ia"
+try:
+    F30_ELIGE = sin_comentarios((F30_IA / "Elige.java").read_text(encoding="utf-8"))
+    F30_EQ = sin_comentarios((F30_IA / "Ecualizador.java").read_text(encoding="utf-8"))
+    F30_REP = sin_comentarios((F30_IA / "Reproductor.java").read_text(encoding="utf-8"))
+    F30_P6 = sin_comentarios((APK / "prueba" / "Prueba6.java").read_text(encoding="utf-8"))
+    F30_SH = (RAIZ / "scripts" / "prueba-mente.sh").read_text(encoding="utf-8")
+    F30_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+    F30_JS = sin_comentarios_js(F30_TEL)
+    F30_ROTO = ""
+except OSError as f30_falta:
+    F30_ELIGE = F30_EQ = F30_REP = F30_P6 = F30_SH = F30_TEL = F30_JS = ""
+    F30_ROTO = str(f30_falta)
+    falla("F15 · los ficheros", f"no se pudieron leer: {f30_falta}")
+
+# 30.a · `Elige` es puro y se prueba en el portátil. Si mañana alguien le mete un
+#        `Context` para leer la biblioteca, `Prueba6` deja de compilar y la
+#        decisión se vuelve a esconder en el teléfono: esto lo caza antes.
+f30_android = [s for s in ("android.", "Context", "JSONObject") if s in F30_ELIGE]
+f30_metodos = [m for m in ("mejor", "lista", "preset") if f"int {m}(" not in F30_ELIGE]
+if F30_ROTO:
+    pass
+elif f30_android:
+    falla("F15 · Elige puro", f"`Elige` ya no es Java puro: nombra {f30_android} y `Prueba6` "
+          "no lo puede compilar en el portátil")
+elif f30_metodos:
+    falla("F15 · Elige puro", f"le faltan decisiones: {f30_metodos}")
+elif not all(f"Elige.{m}(" in F30_P6 for m in ("mejor", "lista", "preset")):
+    falla("F15 · Elige puro", "Prueba6 no llama a las tres decisiones: alguna se mide a ciegas")
+else:
+    dice_ok("F15 · Elige puro", "sin android ni Context, con mejor/lista/preset, y las tres "
+              "se ejecutan en Prueba6 con el JDK")
+
+# 30.b · las tres decisiones tienen dueño de producción, y sólo uno. `mejor` elige
+#        la canción en `musicaPonerNombre`; `lista` resuelve la playlist; `preset`
+#        el del ecualizador. Un dueño de más también es un fallo: significa que dos
+#        sitios deciden distinto lo mismo.
+f30_duenos = {}
+for f30_m in ("mejor", "lista", "preset"):
+    f30_duenos[f30_m] = sorted(
+        p.name for p in F30_IA.glob("*.java")
+        if f"Elige.{f30_m}(" in sin_comentarios(p.read_text(encoding="utf-8")))
+f30_esperado = {"mejor": ["CortNative.java"], "lista": ["CortNative.java"],
+                "preset": ["Ecualizador.java"]}
+if F30_ROTO:
+    pass
+elif f30_duenos != f30_esperado:
+    falla("F15 · dueño de Elige", f"los dueños son {f30_duenos} y deben ser {f30_esperado}: "
+          "una decisión sin dueño no corre, y con dos cada uno decide distinto")
+else:
+    dice_ok("F15 · dueño de Elige", "mejor y lista deciden en el puente, preset en el "
+              "ecualizador; ninguna sin dueño ni repetida")
+
+# 30.c · el ecualizador es Android de verdad y NO entra en la prueba de papel.
+#        Se comprueba la línea de `cp` del escenario, no el comentario de la
+#        cabecera (que sí lo nombra para explicar por qué no está).
+f30_cp = [l for l in F30_SH.splitlines() if l.startswith("cp ")]
+f30_eq_papel = [l.strip() for l in f30_cp if "Ecualizador.java" in l]
+if F30_ROTO:
+    pass
+elif "android.media.audiofx.Equalizer" not in F30_EQ:
+    falla("F15 · ecualizador", "`Ecualizador.java` no usa `android.media.audiofx.Equalizer`: "
+          "o se ha quedado en un dibujo o cambió de API sin decirlo")
+elif "usePreset(" not in F30_EQ or "Elige.preset(" not in F30_EQ:
+    falla("F15 · ecualizador", "no pone un preset del aparato (`usePreset`) elegido con "
+          "`Elige.preset`: estaría prometiendo un sonido que no cambia")
+elif f30_eq_papel:
+    falla("F15 · ecualizador", f"`Ecualizador.java` se copia a la prueba de papel ({f30_eq_papel[0]}): "
+          "el JDK no tiene `android.media.audiofx` y ese verde sería de cartón")
+else:
+    dice_ok("F15 · ecualizador", "es el Equalizer real, pone presets del aparato y no se "
+              "cuela en la suite de papel")
+
+# 30.d · el efecto va pegado a la sesión del reproductor y se suelta ANTES que él.
+#        El orden importa: engancharlo antes de que exista la sesión no hace nada,
+#        y soltarlo después del `MediaPlayer` deja el efecto colgado en algunos
+#        fabricantes. Se mira por índices dentro de cada bloque, no en todo el file.
+f30_prep = F30_REP.find("onPrepared(MediaPlayer m)")
+f30_prep_fin = F30_REP.find("prepareAsync()", f30_prep)
+f30_dest = F30_REP.find("void onDestroy()")
+f30_dest_fin = F30_REP.find("super.onDestroy()", f30_dest)
+f30_en_prep = F30_REP.find("Ecualizador.engancha(", f30_prep)
+f30_arranca = F30_REP.find("m.start()", f30_prep)
+f30_suelta = F30_REP.find("Ecualizador.suelta(", f30_dest)
+f30_suelta_mp = F30_REP.find("mp.release()", f30_dest)
+if F30_ROTO:
+    pass
+elif min(f30_prep, f30_prep_fin, f30_dest, f30_dest_fin) < 0:
+    falla("F15 · reproductor", "no encuentro `onPrepared`, `onDestroy`, `prepareAsync` o "
+          "`super.onDestroy` en `Reproductor.java`: el anclaje ya no existe")
+elif not (f30_prep < f30_en_prep < f30_arranca < f30_prep_fin):
+    falla("F15 · reproductor", "el ecualizador no se engancha entre `onPrepared` y el "
+          "`start()`: se engancharía a una sesión que aún no existe")
+elif not (f30_dest < f30_suelta < f30_suelta_mp < f30_dest_fin):
+    falla("F15 · reproductor", "el ecualizador no se suelta antes del `mp.release()`: "
+          "quedaría colgado de una sesión muerta")
+elif "m.getAudioSessionId()" not in F30_REP:
+    falla("F15 · reproductor", "se engancha sin `getAudioSessionId()`: el efecto iría a "
+          "la sesión equivocada")
+else:
+    dice_ok("F15 · reproductor", "se engancha con la sesión real en `onPrepared` antes "
+              "de `start()`, y se suelta antes del `mp.release()`")
+
+# 30.e · las tres teclas nuevas: el puente las expone y la cara las llama con
+#        guardia. Sin `puede('musicaPonerNombre')` la sección 4d correría en un APK
+#        viejo y cada frase de música acabaría en un error de puente.
+f30_teclas = ("musicaPonerNombre", "ecualiza", "ecualizaEstado")
+f30_no_expuestas = [t for t in f30_teclas if t not in metodos_javascript]
+f30_sin_llamar = [t for t in f30_teclas if f"llama('{t}'" not in F30_JS]
+f30_musica = F29_JSON.get("parametros", {}).get("musica", []) if F29_JSON else []
+f30_rama_ini = F30_JS.find("if (accion === 'musica')")
+f30_rama_fin = F30_JS.find("return ACCION_DE_CARA", f30_rama_ini)
+f30_rama = F30_JS[f30_rama_ini:f30_rama_fin] if f30_rama_ini >= 0 else ""
+f30_verbos = [t.split(":", 1)[0] for t in f30_musica]
+f30_sin_boca = [v for v in f30_verbos
+                if v != "mueve" and not re.search(rf"\b{v}\b", f30_rama)]
+if F30_ROTO:
+    pass
+elif f30_no_expuestas:
+    falla("F15 · las teclas", f"la cara las pide y Java no las expone: {f30_no_expuestas}")
+elif f30_sin_llamar:
+    falla("F15 · las teclas", f"Java las tiene y la cara no las llama: {f30_sin_llamar}")
+elif "puede('musicaPonerNombre')" not in F30_JS:
+    falla("F15 · las teclas", "la sección de música por nombre no lleva guardia "
+          "`puede('musicaPonerNombre')`: en un APK viejo correría igual y fallaría")
+elif not f30_musica:
+    falla("F15 · las teclas", "el diccionario no declara `parametros['musica']`: la "
+          "comprobación de bocas se quedaría mirando el vacío")
+elif f30_sin_boca:
+    falla("F15 · las teclas", f"el diccionario puede devolver {f30_sin_boca} y "
+          "`ejecutaLocal` no los atiende: promesa que acaba en «no sé hacer eso»")
+elif "'mueve'" in f30_rama:
+    falla("F15 · las teclas", "`mueve` se ejecuta sin saber hacia dónde: no se inventa "
+          "un salto")
+else:
+    dice_ok("F15 · las teclas", f"las {len(f30_teclas)} teclas nuevas están en Java y en "
+              f"la cara con guardia, y `ejecutaLocal` atiende los {len(f30_verbos) - 1} "
+              "verbos de música (el «mueve» sigue sin inventarse)")
+
+# 30.f · el diccionario dejó de abrir YouTube con «pon X»: ahora devuelve
+#        `musica` con `poner:X`. Y la sección 4d va ANTES que los cerebros de casa
+#        y DESPUÉS de la alarma: «pon una alarma a las 7:30» no puede acabar
+#        buscando una canción llamada «una alarma a las 7:30».
+f30_ids = [p.get("id") for p in F29_JSON.get("patrones", [])] if F29_JSON else []
+f30_nuevos = {"musica-playlist", "musica-listas", "musica-ecualiza",
+              "musica-ecualiza-estado", "musica-pon-nombre"}
+f30_poner = [p.get("id") for p in F29_JSON.get("patrones", []) if p.get("accion") == "poner"] \
+    if F29_JSON else []
+f30_i_alarma = F30_TEL.find("Dime la hora: «pon una alarma")
+f30_i_4d = F30_TEL.find("4d · F15")
+f30_i_4b = F30_TEL.find("4b · los cerebros de casa")
+if F30_ROTO:
+    pass
+elif not f30_nuevos <= set(f30_ids):
+    falla("F15 · el diccionario", f"faltan las intenciones {sorted(f30_nuevos - set(f30_ids))}")
+elif f30_poner:
+    falla("F15 · el diccionario", f"«pon {f30_poner}» sigue con la acción `poner`: abriría "
+          "una app o YouTube en vez de buscar en la biblioteca")
+elif min(f30_i_alarma, f30_i_4d, f30_i_4b) < 0:
+    falla("F15 · el diccionario", "no encuentro la alarma, la sección 4d o la 4b: el orden "
+          "que se comprueba ya no existe")
+elif not (f30_i_alarma < f30_i_4d < f30_i_4b):
+    falla("F15 · el diccionario", "la música por nombre no está entre la alarma y los "
+          "cerebros de casa: o se traga «pon una alarma» o no llega nunca")
+else:
+    dice_ok("F15 · el diccionario", f"las {len(f30_nuevos)} intenciones nuevas están y "
+              "«pon» ya no abre apps: 4d queda entre la alarma y los cerebros")
+
+# 30.g · y la suite que mide `Elige` está enchufada donde toca: se copia al
+#        escenario, entra en el bucle y las cuentas dicen SEIS.
+f30_suite = []
+if "Prueba6.java" not in F30_SH:
+    f30_suite.append("prueba-mente.sh no copia Prueba6.java")
+if not any("Elige.java" in l for l in F30_SH.splitlines() if l.startswith("cp ")):
+    f30_suite.append("prueba-mente.sh no copia Elige.java al escenario")
+if not re.search(r"for suite in [^\n]*Prueba6", F30_SH):
+    f30_suite.append("Prueba6 no está en el bucle de suites")
+if "de 6" not in F30_SH or "las 6 suites" not in F30_SH:
+    f30_suite.append("las cuentas de prueba-mente.sh no dicen 6")
+if not (APK / "prueba" / "Prueba6.java").exists():
+    f30_suite.append("no existe apps/apk/prueba/Prueba6.java")
+if F30_ROTO:
+    pass
+elif f30_suite:
+    falla("F15 · la suite enchufada", "; ".join(f30_suite))
+else:
+    dice_ok("F15 · la suite enchufada", "Prueba6 corre en el JDK junto a Elige y las "
+              "cuentas de la suite dicen seis")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

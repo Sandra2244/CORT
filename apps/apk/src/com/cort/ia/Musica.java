@@ -400,14 +400,21 @@ public class Musica {
         return new ArrayList<>(Arrays.asList(guardado.split(";")));
     }
 
+    static List<String> listas(Context c) {
+        List<String> nombres = new ArrayList<>();
+        for (String k : prefs(c).getAll().keySet()) {
+            if (k.startsWith("playlist|")) nombres.add(k.substring(9));
+        }
+        return nombres;
+    }
+
     static String listasJson(Context c) {
         StringBuilder s = new StringBuilder("[");
         boolean primero = true;
-        for (String k : prefs(c).getAll().keySet()) {
-            if (!k.startsWith("playlist|")) continue;
+        for (String nombre : listas(c)) {
             if (!primero) s.append(',');
             primero = false;
-            s.append('"').append(Reproductor.esc(k.substring(9))).append('"');
+            s.append('"').append(Reproductor.esc(nombre)).append('"');
         }
         return s.append(']').toString();
     }

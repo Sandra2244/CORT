@@ -1246,13 +1246,81 @@ public class CortNative {
     /** Lo mismo con una playlist guardada por nombre. */
     @JavascriptInterface
     public boolean musicaPonerLista(final String nombre, final int desde) {
+        // F15 · el nombre dicho no tiene que ser exacto: `Elige.lista` lo cruza con
+        // las listas que hay («para correr» encuentra «Para correr»). Si no hay
+        // ninguna, se sigue con el nombre tal cual y la respuesta honesta de abajo.
+        String real = nombre == null ? "" : nombre;
+        java.util.List<String> listas = Musica.listas(act);
+        int cual = Elige.lista(real, listas);
+        if (cual >= 0) real = listas.get(cual);
         java.util.List<Reproductor.Pista> pistas =
-            alReproductor(Musica.porUri(act, Musica.urisDeLista(act, nombre)));
+            alReproductor(Musica.porUri(act, Musica.urisDeLista(act, real)));
         if (pistas.isEmpty()) return false;
         salirDeJuegoPorMusica();
         Reproductor.ponerCola(act, pistas, desde);
         Reproductor.reproducir();
         return true;
+    }
+
+    /**
+     * F15 · «pon la canción X» / «cámbialo a X»: busca en la música DEL TELÉFONO y
+     * pone la que más se parece (la decisión es `Elige`, pura y probada en el JDK).
+     *
+     * Devuelve JSON siempre, con `dice` para la boca: si no hay permiso lo pide; si
+     * la biblioteca no tiene nada parecido lo dice con el nombre que buscó — así la
+     * cara puede ofrecer el camino de internet sin fingir que sonó. La cola es la
+     * lista de resultados desde la elegida, para que «siguiente» siga teniendo sentido.
+     */
+    @JavascriptInterface
+    public String musicaPonerNombre(final String nombre) {
+        String pedida = nombre == null ? "" : nombre.trim();
+        if (pedida.isEmpty()) {
+            return "{\"ok\":false,\"dice\":\"¿Qué canción te pongo?\"}";
+        }
+        if (!Musica.puedeLeer(act)) {
+            act.pidePermiso("medios");
+            return "{\"ok\":false,\"dice\":\"Para buscar en tu música necesito leerla: "
+                 + "te pido el permiso y me lo dices otra vez.\"}";
+        }
+        java.util.List<Musica.Pista> encontradas = Musica.buscar(act, pedida, false);
+        java.util.List<Elige.Candidata> candidatas = new java.util.ArrayList<>();
+        for (Musica.Pista p : encontradas) {
+            candidatas.add(new Elige.Candidata(p.titulo, p.artista, p.genero));
+        }
+        int cual = Elige.mejor(pedida, candidatas);
+        if (cual < 0) {
+            return "{\"ok\":false,\"candidatas\":" + encontradas.size()
+                 + ",\"buscado\":\"" + Reproductor.esc(pedida)
+                 + "\",\"dice\":\"" + Reproductor.esc(
+                     encontradas.isEmpty()
+                         ? "No encuentro «" + pedida + "» en la música del teléfono."
+                         : "No sé cuál de las " + encontradas.size()
+                           + " que salen es «" + pedida + "».")
+                 + "\"}";
+        }
+        salirDeJuegoPorMusica();
+        Reproductor.ponerCola(act, alReproductor(encontradas), cual);
+        Reproductor.reproducir();
+        Musica.Pista p = encontradas.get(cual);
+        String dice = "Pongo «" + p.titulo + "»"
+                + (p.artista == null || p.artista.trim().isEmpty() ? "" : " de " + p.artista) + ".";
+        return "{\"ok\":true,\"titulo\":\"" + Reproductor.esc(p.titulo)
+             + "\",\"artista\":\"" + Reproductor.esc(p.artista)
+             + "\",\"candidatas\":" + encontradas.size()
+             + ",\"dice\":\"" + Reproductor.esc(dice) + "\"}";
+    }
+
+    /** F15 · el ecualizador de verdad: preset por nombre, o el estado si viene vacío. */
+    @JavascriptInterface
+    public String ecualiza(final String preset) {
+        if (preset == null || preset.trim().isEmpty()) return Ecualizador.estadoJson();
+        return Ecualizador.aplica(preset.trim());
+    }
+
+    /** F15 · qué ecualizador hay puesto y qué presets trae este teléfono. */
+    @JavascriptInterface
+    public String ecualizaEstado() {
+        return Ecualizador.estadoJson();
     }
 
     /**

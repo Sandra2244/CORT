@@ -243,6 +243,22 @@ public class Cerebro {
         reglas.add(r("musica", "mueve", "Me muevo un poco en la cancion.",
              "muevete", "adelanta", "retrocede un poco", "adelanta un poco",
              "adelanta la cancion", "atrasa la cancion"));
+        reglas.add(r("musica", "lista:{resto}", "Pongo esa lista.",
+             "pon la playlist {resto}", "ponme la playlist {resto}",
+             "reproduce la playlist {resto}", "pon la lista {resto}", "ponme la lista {resto}",
+             "reproduce mi playlist {resto}", "quiero oir la playlist {resto}",
+             "escucha la playlist {resto}"));
+        reglas.add(r("musica", "listas", "Miro tus listas.",
+             "que playlists tengo", "que playlists hay", "mis playlists", "mis listas",
+             "que listas tengo", "que listas hay", "dime mis playlists", "listame las playlists"));
+        reglas.add(r("musica", "ecualiza:{resto}", "Cambio el ecualizador.",
+             "pon el ecualizador en {resto}", "cambia el ecualizador a {resto}",
+             "pon el ecualizador {resto}", "ecualizador {resto}", "ecualiza a {resto}",
+             "ecualiza {resto}", "cambia el sonido a {resto}", "pon el sonido en {resto}"));
+        reglas.add(r("musica", "ecualizaestado", "Miro el ecualizador.",
+             "que ecualizador tengo", "como esta el ecualizador", "en que ecualizador esta",
+             "dime el ecualizador", "que preset tengo", "que sonido tengo puesto",
+             "como suena el ecualizador", "que ecualizacion hay"));
         reglas.add(r("memoria", "listar", "Te leo lo que tengo guardado.",
              "que sabes de mi", "que recuerdas", "que tengo guardado", "dime lo que sabes",
              "que guardaste", "tus recuerdos", "mi informacion"));
@@ -291,10 +307,11 @@ public class Cerebro {
              "busca en la red {resto}", "busca en internet {resto}", "buscar {resto}",
              "busca {resto}", "googlea {resto}", "investiga {resto}",
              "quiero saber sobre {resto}"));
-        reglas.add(r("poner", "{resto}", "Pongo eso.",
+        reglas.add(r("musica", "poner:{resto}", "Busco esa cancion.",
              "pon la cancion {resto}", "pon el video {resto}", "ponme musica de {resto}",
              "reproduce {resto}", "poner {resto}", "pon {resto}", "suena {resto}",
-             "dale a {resto}", "escucha {resto}"));
+             "dale a {resto}", "escucha {resto}", "ponme {resto}", "cambialo a {resto}",
+             "cambia a {resto}", "cambia la cancion a {resto}", "ponme la cancion {resto}"));
         reglas.add(r("abrir", "ajustes", "Abro los ajustes.",
              "configuracion"));
         reglas.add(r("abrir", "{resto}", "Abro.",

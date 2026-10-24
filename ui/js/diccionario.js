@@ -388,6 +388,82 @@ export const DICCIONARIO = [
     ]
   },
   {
+    "id": "musica-playlist",
+    "capa": "mando",
+    "titulo": "musica · playlist",
+    "accion": "musica",
+    "param": "lista:{resto}",
+    "dice": "Pongo esa lista.",
+    "ejemplo": "pon la playlist {resto}",
+    "frases": [
+      "pon la playlist {resto}",
+      "ponme la playlist {resto}",
+      "reproduce la playlist {resto}",
+      "pon la lista {resto}",
+      "ponme la lista {resto}",
+      "reproduce mi playlist {resto}",
+      "quiero oir la playlist {resto}",
+      "escucha la playlist {resto}"
+    ]
+  },
+  {
+    "id": "musica-listas",
+    "capa": "mando",
+    "titulo": "musica · listas",
+    "accion": "musica",
+    "param": "listas",
+    "dice": "Miro tus listas.",
+    "ejemplo": "que playlists tengo",
+    "frases": [
+      "que playlists tengo",
+      "que playlists hay",
+      "mis playlists",
+      "mis listas",
+      "que listas tengo",
+      "que listas hay",
+      "dime mis playlists",
+      "listame las playlists"
+    ]
+  },
+  {
+    "id": "musica-ecualiza",
+    "capa": "mando",
+    "titulo": "musica · ecualiza",
+    "accion": "musica",
+    "param": "ecualiza:{resto}",
+    "dice": "Cambio el ecualizador.",
+    "ejemplo": "pon el ecualizador en {resto}",
+    "frases": [
+      "pon el ecualizador en {resto}",
+      "cambia el ecualizador a {resto}",
+      "pon el ecualizador {resto}",
+      "ecualizador {resto}",
+      "ecualiza a {resto}",
+      "ecualiza {resto}",
+      "cambia el sonido a {resto}",
+      "pon el sonido en {resto}"
+    ]
+  },
+  {
+    "id": "musica-ecualiza-estado",
+    "capa": "mando",
+    "titulo": "musica · ecualiza · estado",
+    "accion": "musica",
+    "param": "ecualizaestado",
+    "dice": "Miro el ecualizador.",
+    "ejemplo": "que ecualizador tengo",
+    "frases": [
+      "que ecualizador tengo",
+      "como esta el ecualizador",
+      "en que ecualizador esta",
+      "dime el ecualizador",
+      "que preset tengo",
+      "que sonido tengo puesto",
+      "como suena el ecualizador",
+      "que ecualizacion hay"
+    ]
+  },
+  {
     "id": "memoria-listar",
     "capa": "mando",
     "titulo": "memoria · listar",
@@ -654,12 +730,12 @@ export const DICCIONARIO = [
     ]
   },
   {
-    "id": "poner",
+    "id": "musica-pon-nombre",
     "capa": "mando",
-    "titulo": "poner",
-    "accion": "poner",
-    "param": "{resto}",
-    "dice": "Pongo eso.",
+    "titulo": "musica · pon · nombre",
+    "accion": "musica",
+    "param": "poner:{resto}",
+    "dice": "Busco esa cancion.",
     "ejemplo": "pon la cancion {resto}",
     "frases": [
       "pon la cancion {resto}",
@@ -670,7 +746,12 @@ export const DICCIONARIO = [
       "pon {resto}",
       "suena {resto}",
       "dale a {resto}",
-      "escucha {resto}"
+      "escucha {resto}",
+      "ponme {resto}",
+      "cambialo a {resto}",
+      "cambia a {resto}",
+      "cambia la cancion a {resto}",
+      "ponme la cancion {resto}"
     ]
   },
   {
@@ -1509,9 +1590,9 @@ export const DICCIONARIO = [
     ]
   }
 ];
-export const TOTALES = {"intents": 87, "frases": 699, "porCapa": {"mando": 37, "razon": 26, "casa": 13, "nube": 11}};
+export const TOTALES = {"intents": 91, "frases": 736, "porCapa": {"mando": 41, "razon": 26, "casa": 13, "nube": 11}};
 export const EJEMPLOS = ["¿qué hora es?", "¿cuánto es 7 x 8?", "¿cuánto es el 15 por ciento de 240?", "la mitad de 80", "3 km a millas", "cuánta propina dejo por 80", "pon el cronómetro", "qué apps tengo", "comprueba si 1996 es bisiesto"];
-export const AYUDA = ["  87 intenciones y 699 frases: 37 órdenes, 26 de razón, 13 de casa y 11 de nube", "  ¿qué hora es? · ¿cuánto es 7 x 8? · ¿cuánto es el 15 por ciento de 240? · la mitad de 80 · 3 km a millas", "  cuánta propina dejo por 80 · pon el cronómetro · qué apps tengo · comprueba si 1996 es bisiesto"];
+export const AYUDA = ["  91 intenciones y 736 frases: 41 órdenes, 26 de razón, 13 de casa y 11 de nube", "  ¿qué hora es? · ¿cuánto es 7 x 8? · ¿cuánto es el 15 por ciento de 240? · la mitad de 80 · 3 km a millas", "  cuánta propina dejo por 80 · pon el cronómetro · qué apps tengo · comprueba si 1996 es bisiesto"];
 
 /* La capa es la que manda: `mando` mueve el aparato, `razon` contesta sin
    red, y `casa`/`nube` necesitan un modelo. */

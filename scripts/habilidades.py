@@ -131,6 +131,29 @@ REGLAS = [
         "muevete", "adelanta", "retrocede un poco", "adelanta un poco",
         "adelanta la cancion", "atrasa la cancion",
     ]),
+    # F15 · la música por NOMBRE y las listas. Estas tres van antes de la regla
+    # general «pon {resto}» (más abajo) o se comerían sus frases.
+    ("musica-playlist", "musica", "lista:{resto}", "Pongo esa lista.", [
+        "pon la playlist {resto}", "ponme la playlist {resto}",
+        "reproduce la playlist {resto}", "pon la lista {resto}",
+        "ponme la lista {resto}", "reproduce mi playlist {resto}",
+        "quiero oir la playlist {resto}", "escucha la playlist {resto}",
+    ]),
+    ("musica-listas", "musica", "listas", "Miro tus listas.", [
+        "que playlists tengo", "que playlists hay", "mis playlists", "mis listas",
+        "que listas tengo", "que listas hay", "dime mis playlists",
+        "listame las playlists",
+    ]),
+    ("musica-ecualiza", "musica", "ecualiza:{resto}", "Cambio el ecualizador.", [
+        "pon el ecualizador en {resto}", "cambia el ecualizador a {resto}",
+        "pon el ecualizador {resto}", "ecualizador {resto}", "ecualiza a {resto}",
+        "ecualiza {resto}", "cambia el sonido a {resto}", "pon el sonido en {resto}",
+    ]),
+    ("musica-ecualiza-estado", "musica", "ecualizaestado", "Miro el ecualizador.", [
+        "que ecualizador tengo", "como esta el ecualizador", "en que ecualizador esta",
+        "dime el ecualizador", "que preset tengo", "que sonido tengo puesto",
+        "como suena el ecualizador", "que ecualizacion hay",
+    ]),
 
     # ── memoria ────────────────────────────────────────────────────────
     ("memoria-listar", "memoria", "listar", "Te leo lo que tengo guardado.", [
@@ -204,10 +227,15 @@ REGLAS = [
         "busca {resto}", "googlea {resto}", "investiga {resto}",
         "quiero saber sobre {resto}",
     ]),
-    ("poner", "poner", "{resto}", "Pongo eso.", [
+    # F15 · «pon {resto}» ya no abre YouTube a ciegas: la cara busca PRIMERO en la
+    # música del teléfono (`musicaPonerNombre`) y sólo si no hay nada cae al
+    # buscador. La acción sigue siendo `musica`; el parámetro dice qué hacer.
+    ("musica-pon-nombre", "musica", "poner:{resto}", "Busco esa cancion.", [
         "pon la cancion {resto}", "pon el video {resto}", "ponme musica de {resto}",
         "reproduce {resto}", "poner {resto}", "pon {resto}", "suena {resto}",
-        "dale a {resto}", "escucha {resto}",
+        "dale a {resto}", "escucha {resto}", "ponme {resto}",
+        "cambialo a {resto}", "cambia a {resto}", "cambia la cancion a {resto}",
+        "ponme la cancion {resto}",
     ]),
     ("abrir-ajustes", "abrir", "ajustes", "Abro los ajustes.", ["configuracion"]),
     ("abrir-app", "abrir", "{resto}", "Abro.", [
@@ -229,8 +257,8 @@ VOCABULARIO = ["volumen", "linterna", "alarma", "temporizador", "cronometro", "e
 
 # Las dos cifras de la fase F14. No son adorno: si alguien borra media tabla para
 # que el número «cuadre», el generador se para antes de escribir nada.
-MIN_INTENTS = 87
-MIN_FRASES = 699
+MIN_INTENTS = 91
+MIN_FRASES = 736
 
 
 def normaliza(t):
@@ -348,7 +376,9 @@ def main():
             "volumen": ["sube", "baja", "max", "min", "callar", "destapar"],
             "linterna": ["on", "off", "alterna"],
             "abrir": abre,
-            "musica": ["pausa", "reanuda", "siguiente", "anterior", "mueve"],
+            "musica": ["pausa", "reanuda", "siguiente", "anterior", "mueve",
+                       "poner:{resto}", "lista:{resto}", "listas",
+                       "ecualiza:{resto}", "ecualizaestado"],
             "juego": ["on", "off"],
             "memoria": ["listar", "guardar:{resto}", "buscar:{resto}"],
             "cronometro": ["mostrar"],

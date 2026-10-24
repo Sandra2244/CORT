@@ -155,6 +155,17 @@ window.CortNative = {
   // llega al reproductor que sea. La cara la pide para las acciones de música de la
   // tabla; sin ella aquí, la sonda recorrería la rama del APK viejo.
   teclaMedia: que => { mandadas.push('teclaMedia:' + que); return true; },
+  // F15 · la música por nombre y el ecualizador devuelven el JSON que la cara lee.
+  // Sin estas tres, el `puede()` de la sección 4d daría `false` y la sonda recorrería
+  // la rama del APK viejo: verde, pero mirando lo que la dueña no lleva encima.
+  musicaPonerNombre: nombre => { mandadas.push('musicaPonerNombre:' + nombre);
+    return JSON.stringify({ ok: true, titulo: 'After Dark', artista: 'Mr. Kitty',
+                            dice: 'Pongo «After Dark», de Mr. Kitty.' }); },
+  ecualiza: preset => { mandadas.push('ecualiza:' + preset);
+    return JSON.stringify({ ok: true, puesto: 'Rock', dice: 'Ecualizador en «Rock».' }); },
+  ecualizaEstado: () => { mandadas.push('ecualizaEstado');
+    return JSON.stringify({ ok: true, activo: false, puesto: '',
+                            dice: 'El ecualizador se enciende con la música.' }); },
   musicaAutomatica: () => mandadas.push('musicaAutomatica'),
   musicaSiguiente: () => mandadas.push('musicaSiguiente'),
   musicaAnterior: () => mandadas.push('musicaAnterior'),
