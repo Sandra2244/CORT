@@ -1203,6 +1203,17 @@ public class CortNative {
         act.muestraMenuPC(visible);
     }
 
+    /**
+     * Abrir el menú nativo desde la hoja Equipo. El botón flotante «CORT · PC»
+     * se ocultó porque estorbaba y parecía que CORT arrancaba en modo PC; sus
+     * dieciséis filas (asistente, avisos, música, agenda, burbuja, memoria)
+     * siguen aquí, a un toque desde Ajustes.
+     */
+    @JavascriptInterface
+    public void abreMenu() {
+        act.abreMenu();
+    }
+
     /** Las que mejor encajan con lo que ha oído, de más a menos. */
     @JavascriptInterface
     public String musicaPorGusto(final String filtro, final int cuantas) {

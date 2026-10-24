@@ -19,7 +19,8 @@
      suelto en vez de la pantalla de Lark con su historial y sus Sitios; · la
      **letra fusionada** en el reproductor (hoja escondida que sólo abre el botón ❝,
      sin orbe WebGL dibujándose encima del vídeo), y el botón nativo «CORT · PC», que
-     estaba atravesado sobre la píldora.
+     estaba atravesado sobre la píldora y ya no existe: su sitio es el bloque 9 de
+     Equipo, que conecta con el PC o el VPS sin arrancar nada solo.
 
      Lo que SÍ va al servidor de verdad: `/api/port` y `/api/history` (lecturas). No
      envía nada que cambie el estado del núcleo, y no toca el teléfono: el puente es
@@ -64,12 +65,9 @@ const dice = (bueno, texto) => lineas.push(`<div class="${bueno ? 'ok' : 'no'}">
 
    Desde F10 hay que simular también los ocho métodos nuevos del contrato, porque sin
    ellos la cara se comporta con la rama `puede()` — y lo que quiero ver es la rama
-   buena, la del APK nuevo. `menuPC` se anota APARTE (`pcVisto`): se llama en cada
-   cambio de hoja y llenar `mandadas` de `true/false` rompería las comprobaciones que
-   cuentan órdenes sueltas. */
+   buena, la del APK nuevo. */
 let estado = null;
 const mandadas = [];
-const pcVisto = [];
 let carasPedidas = [];
 const PISTAS = [
   // Java manda desde 2.7.0 estas campos más (`album`, `id`, `fecha`, `letra`, `mv`):
@@ -140,7 +138,13 @@ window.CortNative = {
   musicaMuestraTodas: () => { mandadas.push('musicaMuestraTodas'); ocultas = 0; return true; },
   musicaDuerme: m => { mandadas.push('musicaDuerme:' + m); return true; },
   abreEnlace: url => { mandadas.push('abreEnlace:' + url); return ''; },
-  menuPC: visible => { pcVisto.push(!!visible); return true; },
+  // F17 · el bloque 9 (PC o VPS). `bgStatus` es el mismo JSON que arma Java, con la
+  // dirección ya guardada; aquí contesta una para que la sonda vea que la caja se
+  // llena sola. `setPc` es el método de siempre (guardar y cargar la cara remota) y
+  // `abreMenu` el que abrió el botón nativo, ahora sólo desde esta hoja.
+  bgStatus: () => JSON.stringify({ pc: 'http://192.168.1.50:8000' }),
+  setPc: url => { mandadas.push('setPc:' + url); return true; },
+  abreMenu: () => { mandadas.push('abreMenu'); return true; },
   musicaPorGusto: () => { mandadas.push('musicaPorGusto'); return JSON.stringify(PISTAS); },
   musicaPoner: (uris, desde) => { mandadas.push('musicaPoner:' + desde); return true; },
   musicaPonerLista: () => true,
@@ -536,7 +540,8 @@ dice($$('#mu-pistas .lk-fila .lk-txt b')[0].textContent === 'Zanja', 'tocarlo do
 $('#mu-orden-btn').click();
 await espera(320);
 dice(h('.lk-flecha').length === 4, 'la flecha ↓↑ sólo está en los criterios que admiten reversa');
-dice(h('.lk-flecha').map(f => f.textContent).join() === '↓,↓,↓,↓', 'y empieza hacia adelante, como en Lark');
+dice(h('.lk-flecha').map(f => f.textContent).join() === '↑,↑,↑,↑',
+  'y la flecha dice la verdad: Título quedó al revés, no finge que sigue hacia adelante');
 tecla('Escape');
 await espera(320);
 // · VÍDEOS: rejilla de dos columnas, con su miniatura, su duración y sus pildoritas.
@@ -810,16 +815,36 @@ m.ir('musica');
 dice(getComputedStyle($('#scr-musica')).backgroundColor === 'rgb(0, 0, 0)', 'Música es negro puro, como Lark');
 m.ir('charla');
 dice(getComputedStyle($('.gm-pildora')).borderRadius.startsWith('26'), 'la Charla termina en píldora redonda');
-/* El botón «CORT · PC» es NATIVO: lo pinta `MainActivity` encima del WebView, así que
-   la cara no puede taparlo ni moverlo — y en 2.6.0 estaba «atravesado» sobre la píldora
-   de la música. Lo único que se puede comprobar desde aquí es el MENSAJE que la cara le
-   manda a Java en cada cambio de hoja: `menuPC(true)` sólo en el orbe. */
-pcVisto.length = 0;
-m.ir('musica'); m.ir('charla'); m.ir('codigo'); m.ir('equipo'); m.ir('mv');
-dice(pcVisto.length >= 5 && pcVisto.every(v => v === false),
-  `en las ${pcVisto.length} hojas de trabajo la cara manda menuPC(false): el botón se esconde`);
+/* El botón «CORT · PC» ya no existe: en 2.10.0 estaba atravesado sobre la píldora y,
+   peor, CORT arrancaba el PC solo al abrir. Su sitio es el bloque 9 de Equipo, una
+   GUÍA que no se abre sola. Aquí se comprueba lo que la cara manda al puente: la
+   dirección escrita viaja a `setPc`, volver manda la cadena vacía, y el menú nativo
+   se pide con `abreMenu`. Que el botón siga GONE lo vigila la costura de Java. */
+m.ir('equipo');
+const pcDir = $('#eq-pc-dir');
+dice(!!pcDir && pcDir.value === 'http://192.168.1.50:8000',
+  'el bloque 9 de Equipo trae la dirección que Java ya guardó (bgStatus.pc)');
+const pcBloque = $('#eq-pc-conecta')?.closest('.eq-bloque');
+dice(!!pcBloque && /PC o VPS/.test(pcBloque.querySelector('summary')?.textContent || ''),
+  'y vive dentro de la hoja, no flotando encima de la píldora');
+dice(!!$('#eq-pc-menu') && !!$('#eq-pc-telefono'), 'con sus tres salidas: conectar, volver al teléfono y menú');
+pcDir.value = 'http://192.168.1.77:8000';
+mandadas.length = 0;
+$('#eq-pc-conecta').click();
+dice(mandadas.join() === 'setPc:http://192.168.1.77:8000',
+  'conectar manda la dirección escrita a setPc (' + mandadas.join() + ')');
+mandadas.length = 0;
+$('#eq-pc-telefono').click();
+dice(mandadas.join() === 'setPc:', 'volver al teléfono manda setPc vacío: no vuelve a abrir el PC solo');
+mandadas.length = 0;
+$('#eq-pc-menu').click();
+dice(mandadas.join() === 'abreMenu', 'el menú de dieciséis filas se pide con abreMenu');
+mandadas.length = 0;
+pcDir.value = 'sin-http';
+$('#eq-pc-conecta').click();
+dice(mandadas.length === 0 && /http:\/\//.test($('#eq-pc-dice').textContent),
+  'una dirección sin http:// no se manda: avisa en su propia línea');
 m.ir('orbe');
-dice(pcVisto[pcVisto.length - 1] === true, 'y en el orbe lo manda de vuelta (es su sitio, ahí no tapa nada)');
 // En el orbe no queda UN solo botón de herramientas: el dock se fue al cajón.
 dice($$('#dock button:not([data-pc])').length > 0
      && getComputedStyle(document.getElementById('dock')).display !== 'none'

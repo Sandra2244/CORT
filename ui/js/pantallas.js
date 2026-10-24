@@ -359,12 +359,10 @@ export function ir(id) {
   raiz.classList.add('p-' + actual);
   cierraMenu();
   cierraHoja();
-  /* El botón «CORT · PC» del teléfono es nativo: lo pinta `MainActivity` ENCIMA del
-     WebView, así que la cara no puede taparlo — y en 2.6.0 se quedaba atravesado sobre
-     la píldora de la música («el botón CORT PC está atravesado, no se oculta»). Ahora
-     sólo se ve en el orbe, que es donde no estorba a ningún control. En un PC no hay
-     botón que ocultar: `menuPC` no existe y `llama` devuelve `null` en silencio. */
-  if (puede('menuPC')) llama('menuPC', id === 'orbe');
+  /* El botón nativo «CORT · PC» ya no existe: estorbaba y parecía que CORT
+     arrancaba en modo PC. Su menú de dieciséis filas se abre desde Equipo ▸
+     9 · PC (`abreMenu()`), y la conexión con el PC o el VPS también vive allí.
+     No queda nada que mostrar u ocultar hoja por hoja. */
   // El cajón es la única tira de botones que queda, así que la hoja activa se marca
   // ahí. Se repinta siempre: `visibles()` puede haber cambiado (un aviso de Java trae
   // un método que antes no estaba) y un cajón desactualizado ofrecería una hoja muerta.

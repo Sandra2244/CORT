@@ -174,22 +174,19 @@ public class MainActivity extends Activity {
             }
         });
 
+        /* El botón nativo «CORT · PC» ya no se pinta encima de la cara: la dueña
+           lo señaló como estorbo y, peor, parecía que CORT «quería arrancar en
+           modo PC» cada vez que abría. El menú de siempre (asistente, avisos,
+           música, agenda, burbuja, memoria) sigue vivo y se abre desde Equipo ▸
+           9 · PC con `abreMenu()`; aquí no ocupa ni un píxel. */
         botonMenu = new Button(this);
         botonMenu.setText("CORT · PC");
-        botonMenu.setAlpha(0.55f);
-        botonMenu.setTextSize(12f);
-        botonMenu.setOnClickListener(v -> menu());
+        botonMenu.setVisibility(View.GONE);
         usaAtuendo();
-        FrameLayout.LayoutParams botas = new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        botas.bottomMargin = dp(14);
-        botas.leftMargin = dp(10);
-        botas.gravity = android.view.Gravity.BOTTOM | android.view.Gravity.START;
 
         FrameLayout cara = new FrameLayout(this);
         cara.addView(web, new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        cara.addView(botonMenu, botas);
         setContentView(cara);
 
         mandos = new MediaSession(this, "cort-auriculares");
@@ -315,10 +312,18 @@ public class MainActivity extends Activity {
         if (web != null) web.destroy();
     }
 
+    /**
+     * Abrir CORT **siempre** en la cara del teléfono.
+     *
+     * Antes, si había una dirección de PC guardada, el arranque iba derecho a
+     * ella: con el portátil apagado la pantalla se quedaba esperando (o en un
+     * error) y parecía que CORT «intentaba modo PC y no podía». La dirección se
+     * guarda igual, pero sólo se usa cuando ella pulsa **Conectar** en
+     * Equipo ▸ 9 · PC. Así abrir CORT nunca depende de que el PC esté despierto.
+     */
     private void arranca() {
-        String guardada = prefs().getString("pc", "");
         cayoUnaSolaVez = false;
-        web.loadUrl(guardada.trim().isEmpty() ? INDICE : aseguraSlash(guardada.trim()));
+        web.loadUrl(INDICE);
     }
 
     /* ─────────────────────────── los assets ───────────────────────────── */
@@ -618,13 +623,24 @@ public class MainActivity extends Activity {
             .show();
     }
 
-    /** Guarda (o borra con cadena vacía) la dirección del PC y recarga la cara. */
+    /**
+     * Guarda (o borra con cadena vacía) la dirección del PC y conecta **sólo
+     * ahora**: vacía vuelve a la cara del teléfono; con dirección carga esa cara
+     * remota. No se llama nunca desde `onCreate`, para que abrir CORT no dependa
+     * de que el portátil o el VPS estén despiertos.
+     */
     void guardarPC(String url) {
         String limpia = url == null ? "" : url.trim();
         prefs().edit().putString("pc", limpia).apply();
         direccionPC = limpia;
         hideTeclado();
-        arranca();
+        if (limpia.isEmpty()) arranca();
+        else web.loadUrl(aseguraSlash(limpia));
+    }
+
+    /** Abrir el menú nativo de CORT desde la hoja Equipo (el botón flotante ya no existe). */
+    void abreMenu() {
+        runOnUiThread(this::menu);
     }
 
     /**

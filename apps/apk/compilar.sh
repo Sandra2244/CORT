@@ -99,7 +99,15 @@ cd "$(dirname "$0")"
 #   canción, nota y rutina (F16) y la cara vestida —orbe de 16 canales, burbuja
 #   1.1.4 arrastrable y agua con freno— (F17). Cero permisos nuevos y ningún
 #   cambio en el contrato de cinco argumentos para hablar.
-APK_VERSION="${APK_VERSION:-2.10.0}"   # desde aquí sale UN SOLO APK: este
+# · En 2.10.1 se arregla el 2.10.0, que se instalaba pero dejaba la cara muerta: ni
+#   orbe, ni botones, ni voz. `ui/js/hud.js` importa `handleTelefonoEvento` de
+#   `telefono.js` y esa función no llevaba `export`; Chromium rechaza toda la gráfica
+#   de módulos antes de ejecutar una línea. Lleva `export` y la costura [33] resuelve
+#   cada import contra su archivo. La cara ahora importa con `await import()` y pinta
+#   el fallo en pantalla si vuelve a pasar. Además, el botón nativo «CORT · PC» se
+#   oculta: CORT arranca siempre local y conectar el PC o el VPS vive en Equipo · 9,
+#   con `setPc`/`abreMenu` y cero permisos nuevos.
+APK_VERSION="${APK_VERSION:-2.10.1}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

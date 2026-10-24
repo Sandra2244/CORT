@@ -471,6 +471,77 @@ const CARA_AUTOS = `
     pantalla apagada es lo que hace Java solo (leer tus avisos en voz alta, la música,
     el oído del auricular). Ella lo dice en el contrato, no aquí de adorno.</div>`;
 
+/* ── 9 · PC / VPS: la guía y la única puerta para salir del teléfono ──
+   El botón flotante «CORT · PC» se ocultó porque estorbaba y porque, al guardar
+   una dirección, CORT intentaba abrirla al arrancar y con el PC apagado se
+   quedaba esperando. Ahora la cara abre siempre local y esta hoja es la que
+   conecta: escribe `http://IP:8000` (mismo Wi‑Fi) o un `https://…` de un VPS.
+   No hay login propio: el VPS tiene que ir detrás de HTTPS y contraseña/VPN. */
+const CARA_PC = `
+  <div class="eq-estado" id="eq-pc-est">sin PC señalado</div>
+  <div class="eq-tit">la dirección de tu PC o de tu VPS</div>
+  <input id="eq-pc-dir" class="eq-lleno" placeholder="http://192.168.1.50:8000">
+  <div class="eq-fila">
+    <button class="eq-b eq-grande" id="eq-pc-conecta">conectar y abrir</button>
+    <button class="eq-b" id="eq-pc-telefono">volver al teléfono</button>
+    <button class="eq-b" id="eq-pc-menu">menú de CORT</button>
+  </div>
+  <div class="eq-dice" id="eq-pc-dice"></div>
+  <div class="eq-nota"><b>En tu PC:</b> abre una terminal en la carpeta de CORT y ejecuta
+    <code>bash scripts/telefono.sh</code>. Te imprime una dirección como
+    <code>http://192.168.1.50:8000</code>; copia la de tu Wi‑Fi (no <code>127.0.0.1</code>)
+    y pégala arriba. Los dos tienen que estar en la misma red.
+    <br><br><b>En un VPS (24/7):</b> la dirección tiene que empezar por <code>https://</code>
+    y el servidor ir detrás de contraseña o VPN. CORT no trae login propio: no dejes el
+    puerto 8000 abierto a internet. Para volver a la cara del teléfono, cierra y abre CORT:
+    siempre arranca local, aunque el PC esté apagado.</div>`;
+
+/* Engancha la hoja 9. `setPc` es el mismo método del puente que usaba el botón
+   nativo: guarda la dirección y carga esa cara remota. Con cadena vacía vuelve
+   a la del teléfono. `abreMenu` abre las dieciséis filas del menú de siempre. */
+function enganchaPC() {
+  const conecta = el('eq-pc-conecta');
+  if (conecta) conecta.onclick = () => {
+    const caja = el('eq-pc-dir');
+    const dir = String((caja && caja.value) || '').trim().replace(/\/+$/, '');
+    if (!/^https?:\/\/[^\s/]+/i.test(dir)) {
+      avisa('pc', 'Escribe una dirección que empiece por http:// o https://, '
+        + 'como http://192.168.1.50:8000');
+      return;
+    }
+    if (!puede('setPc')) { avisa('pc', 'este APK no trae la conexión con el PC'); return; }
+    diceBien('pc', 'guardando ' + dir + ' y abriendo su cara…');
+    llama('setPc', dir);
+  };
+  const vuelve = el('eq-pc-telefono');
+  if (vuelve) vuelve.onclick = () => {
+    if (!puede('setPc')) { avisa('pc', 'este APK no trae la conexión con el PC'); return; }
+    diceBien('pc', 'volviendo a la cara del teléfono…');
+    llama('setPc', '');
+  };
+  const menu = el('eq-pc-menu');
+  if (menu) menu.onclick = () => {
+    if (!puede('abreMenu')) { avisa('pc', 'este APK no trae el menú nativo'); return; }
+    llama('abreMenu');
+  };
+}
+
+/* El estado que ya guardó Java (`bgStatus().pc`). Se pinta la dirección sin
+   pisar lo que ella esté escribiendo; si no hay puente, se dice en la línea. */
+function pintaPC(donde) {
+  if (!montada) return;
+  if (!puede('bgStatus')) {
+    linea('pc', 'este APK no trae el estado del PC');
+    if (donde) avisa('pc', 'abrir tu PC o tu VPS necesita el APK del teléfono.');
+    return;
+  }
+  const r = parsea(llama('bgStatus'), ctx) || {};
+  const dir = String(r.pc || '');
+  const caja = el('eq-pc-dir');
+  if (caja && !caja.value) caja.value = dir;
+  linea('pc', dir ? 'señalado: ' + dir : 'sin PC señalado: CORT abre siempre en el teléfono');
+}
+
 /* ─────────────────────────── montaje y pintura ─────────────────────────── */
 
 export function montaTelefono(contexto) {
@@ -482,9 +553,9 @@ export function montaTelefono(contexto) {
 
   caja = document.createElement('div');
   caja.className = 'scr-lista eq-caja';
-  caja.innerHTML = '<div class="eq-piego">lo que CORT puede hacer en tu teléfono '
-    + 'sin tu portátil delante. Cada bloque dice en su propio sitio lo que este APK '
-    + 'no dejó hacer: no hay botones que parezcan romper.</div>';
+  caja.innerHTML = '<div class="eq-piego">lo que CORT puede hacer en tu teléfono, y '
+    + 'cómo hablar con tu portátil o tu VPS cuando lo enciendes. Cada bloque dice en su '
+    + 'propio sitio lo que este APK no dejó hacer: no hay botones que parezcan romper.</div>';
   caja.appendChild(bloque('voz', '1', 'Voz', 'la que sale por el altavoz', CARA_VOZ));
   caja.appendChild(bloque('mando', '2', 'Mando', 'volumen, linterna, alarmas y apps', CARA_MANDO));
   caja.appendChild(bloque('men', '3', 'Cerebro', 'quién piensa cuando no está el PC', CARA_CEREBRO));
@@ -493,6 +564,7 @@ export function montaTelefono(contexto) {
   caja.appendChild(bloque('ago', '6', 'Agenda', 'tus citas y lo que llegó al correo', CARA_AGENDA));
   caja.appendChild(bloque('oido', '7', 'Oído', 'escuchar sin internet ni Google', CARA_OIDOS));
   caja.appendChild(bloque('autos', '8', 'Automatiza', 'cuando X, entonces Y', CARA_AUTOS));
+  caja.appendChild(bloque('pc', '9', 'PC o VPS', 'conectar con tu portátil cuando lo enciendes', CARA_PC));
   cuerpo.appendChild(caja);
 
   enganchaVoz();
@@ -503,6 +575,7 @@ export function montaTelefono(contexto) {
   enganchaAgenda();
   enganchaOido();
   enganchaAutos();
+  enganchaPC();
 
   montada = true;
   pinta();
@@ -514,12 +587,13 @@ export function montaTelefono(contexto) {
 function pinta() {
   if (!montada) return;
   pintaVoz(); pintaMando(); pintaCerebro(); pintaMemoria(); pintaAtuendo(); pintaOido();
-  pintaAutos();
+  pintaAutos(); pintaPC();
   const estadoBar = document.querySelector('#scr-equipo .scr-estado');
   if (estadoBar) {
     const cosas = [puede('accion') && 'mando', puede('ajusteVoz') && 'voz',
       puede('mente') && 'cerebro', puede('memoria') && 'memoria', puede('atuendo') && 'trajes',
-      puede('oidoEstado') && 'oído propio', autos.total() && 'automatiza']
+      puede('oidoEstado') && 'oído propio', autos.total() && 'automatiza',
+      puede('setPc') && 'PC o VPS']
       .filter(Boolean);
     /* El perfil va al principio porque es la respuesta a «¿cuál de los dos APK de
        la Release tengo instalado?». `CORTperfil()` (en `android-bridge.js`) lee el
@@ -2201,7 +2275,7 @@ function cierraAlarma() {
   if (caja) caja.classList.remove('viva');
 }
 
-function handleTelefonoEvento(ev) {
+export function handleTelefonoEvento(ev) {
   if (!ev || typeof ev.type !== 'string') return false;
 
   /* F16 · el despertador. Va lo primero: si suena a las 7, lo que importa es

@@ -2601,18 +2601,29 @@ else:
     dice_ok("letra fusionada", "la letra vive dentro de Música (hoja escondida + `abreLetra`) "
                                "y el orbe se apaga como en las demás hojas")
 
-# 20.e · El botón nativo «CORT · PC»: la cara lo esconde en las hojas que no son el
-# orbe. Un `@JavascriptInterface` que llama a un método ausente en `MainActivity` es un
-# `NoSuchMethodError` que tiraría el puente, así que se cruzan las dos mitades Java.
-if "menuPC" not in F20_JAVA:
-    falla("botón nativo", "CortNative no expone `menuPC`: el botón no se puede ocultar")
-elif "muestraMenuPC" not in F20_MAIN:
-    falla("botón nativo", "`menuPC` llama a `act.muestraMenuPC` y ese método no está en "
-                          "MainActivity: `NoSuchMethodError` en cuanto la cara cambie de hoja")
-elif "menuPC" not in F20_SIN:
-    falla("botón nativo", "la cara nunca lo oculta: sigue atravesado sobre la píldora")
+# 20.e · El botón nativo «CORT · PC» se retiró en la 2.10.1: estorbaba y parecía que
+# CORT arrancaba en modo PC. Sus dieciséis filas se abren desde Equipo ▸ 9 · PC con
+# `abreMenu()`. Se cruzan las dos mitades Java y las dos de la cara: si el puente
+# anuncia `abreMenu` y `MainActivity` no lo tiene, es `NoSuchMethodError`.
+F20_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+if "abreMenu" not in F20_JAVA:
+    falla("botón nativo", "CortNative no expone `abreMenu`: el menú no se podría abrir "
+                          "desde Equipo")
+elif "void abreMenu" not in F20_MAIN:
+    falla("botón nativo", "`abreMenu` llama a un método que no está en MainActivity: "
+                          "`NoSuchMethodError` al pulsar «menú de CORT»")
+elif "cara.addView(botonMenu" in F20_MAIN:
+    falla("botón nativo", "MainActivity sigue añadiendo el botón flotante al layout: "
+                          "volvería a estorbar sobre la píldora")
+elif "setVisibility(View.GONE)" not in F20_MAIN:
+    falla("botón nativo", "el botón quedó visible: la queja era justo que estorbaba")
+elif "menuPC'" in F20_SIN or "menuPC(" in F20_SIN:
+    falla("botón nativo", "la cara sigue mandando `menuPC`: ya no hay botón que ocultar")
+elif "'eq-pc-menu'" not in F20_TEL:
+    falla("botón nativo", "la hoja 9 · PC no tiene el botón que abre el menú nativo")
 else:
-    dice_ok("botón nativo", "`menuPC` ↔ `MainActivity.muestraMenuPC`, y la cara lo usa al cambiar de hoja")
+    dice_ok("botón nativo", "GONE y fuera del layout, la cara ya no manda `menuPC`, y el "
+              "menú de dieciséis filas se abre desde Equipo ▸ 9 · PC")
 
 # 20.f · El modo juego clavado: el negativo tiene que tener nombre en las tres capas
 # (Java lo dice, voice.js lo pasa, hud.js lo explica). Sin una de las tres, la dueña
@@ -4708,6 +4719,53 @@ elif "find assets/ui -maxdepth 1 -name 'sonda-*.html' -delete" not in F32_COMP:
 else:
     dice_ok("F17 · la sonda", "monta el orbe real, comprueba los seis contra `orb.colores()` "
               "y sigue fuera del APK")
+
+# 33 · los enlaces de los módulos. Un `import { x }` cuyo `x` no se exporta no
+#      es un aviso en consola: Chromium rechaza el grafo ENTERO antes de ejecutar
+#      una línea, así que no se monta el orbe, no se engancha ningún botón y la
+#      voz queda muerta. Pasó en la 2.10.0 con `handleTelefonoEvento`; esta
+#      comprobación existe para que no vuelva a viajar un APK así.
+RE_IMPORTA = re.compile(r"import\s*\{([^}]*)\}\s*from\s*['\"]\.{1,2}/([^'\"]+)['\"]")
+RE_EXPORTA = re.compile(
+    r"export\s+(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)")
+RE_EXPORTA_LLAVE = re.compile(r"export\s*\{([^}]*)\}")
+UI = RAIZ / "ui"
+
+def _exporta(texto: str) -> set[str]:
+    nombres = set(RE_EXPORTA.findall(texto))
+    for bloque in RE_EXPORTA_LLAVE.findall(texto):
+        for parte in bloque.split(","):
+            trozo = parte.strip()
+            if not trozo:
+                continue
+            nombres.add(trozo.split(" as ")[-1].strip())
+    return nombres
+
+textos = {p: p.read_text(encoding="utf-8") for p in UI.rglob("*") if p.suffix in (".js", ".html")}
+enlaces = 0
+roto_enlace = []
+for origen, texto in textos.items():
+    for nombres, destino in RE_IMPORTA.findall(texto):
+        objetivo = (origen.parent / destino).resolve()
+        if not objetivo.exists():
+            roto_enlace.append(f"{origen.relative_to(UI)} → {destino} (no existe)")
+            continue
+        disponibles = _exporta(textos.get(objetivo, ""))
+        for parte in nombres.split(","):
+            nombre = parte.strip().split(" as ")[0].strip()
+            if not nombre:
+                continue
+            enlaces += 1
+            if nombre not in disponibles:
+                roto_enlace.append(
+                    f"{origen.relative_to(UI)} importa {nombre} de {destino} y allí no se exporta")
+if roto_enlace:
+    falla("33 · enlaces de módulos", "; ".join(roto_enlace[:3])
+          + (" …" if len(roto_enlace) > 3 else "")
+          + ". Chromium no ejecuta NADA de la cara: ni orbe, ni botones, ni voz")
+else:
+    dice_ok("33 · enlaces de módulos", f"{enlaces} nombres importados existen como export "
+            f"en {len(textos)} archivos de la cara; ningún `import` queda colgando")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

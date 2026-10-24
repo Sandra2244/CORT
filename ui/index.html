@@ -137,11 +137,42 @@
 {"imports":{"three":"./vendor/three.module.js"}}
 </script>
 <script type="module">
-import { initORB } from './js/orb.js';
-import { wireUI } from './js/hud.js';
-const orb = initORB(document.getElementById('scene'));
+/* El arranque ya no puede morir entero por un módulo. En la 2.10.0, un `import`
+   de un nombre que no se exportaba hizo que Chromium rechazara TODO el grafo
+   antes de ejecutar una línea: ni orbe, ni botones, ni voz. Ahora se importa
+   por partes, el orbe tiene un doble que no hace nada y cualquier fallo se
+   escribe en pantalla —los registros del WebView no se pueden leer desde el
+   repo, y una frase visible es lo único que ella puede mandar. */
+const pintaFalla = (e) => {
+  if (document.getElementById('falla')) return;
+  const caja = document.createElement('div');
+  caja.id = 'falla';
+  caja.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;'
+    + 'background:#2a0b12;color:#ffd9df;border:1px solid #ff6b81;border-radius:10px;'
+    + 'padding:10px 12px;font:12px/1.35 system-ui,sans-serif;white-space:pre-wrap;'
+    + 'max-height:42vh;overflow:auto';
+  caja.textContent = 'CORT no pudo montar una parte de la cara:\n'
+    + ((e && (e.stack || e.message)) || e || 'error sin mensaje');
+  document.body.appendChild(caja);
+};
+addEventListener('error', ev => pintaFalla(ev.error || ev.message));
+addEventListener('unhandledrejection', ev => pintaFalla(ev.reason));
+
+/* El doble del orbe: la cara sigue viva aunque WebGL o Three no arranquen. */
+const orbeDePalo = {
+  speak() {}, burst() {}, activate() {}, stop() {}, listen() {}, setDisc() {},
+  setAudio() {}, pausa() {}, vestir() { return {}; }, colores() { return {}; },
+};
+let orb = orbeDePalo;
+try {
+  const { initORB } = await import('./js/orb.js');
+  orb = initORB(document.getElementById('scene')) || orbeDePalo;
+} catch (e) { pintaFalla(e); }
 window.__orb = orb;   // depuración/consola: __orb.activate(), __orb.setDisc(true)…
-wireUI(orb);
+try {
+  const { wireUI } = await import('./js/hud.js');
+  wireUI(orb);
+} catch (e) { pintaFalla(e); }
 </script>
 </body>
 </html>
