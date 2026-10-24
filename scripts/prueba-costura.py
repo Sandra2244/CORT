@@ -3540,6 +3540,194 @@ else:
     dice_ok("F13 · la dirección a la vista", "el `servidor` que dice Java se guarda y "
               "se pinta en la hoja del teléfono (con su alternativa cuando no hay PC)")
 
+# ── [27] F12 · la voz que responde: el oído con música, y el mando que llega ──
+# El diagnóstico de la dueña era «le digo *pausa* y no lo hace». Eran tres fallos
+# distintos cosidos cada uno en una capa, y los tres quedaban invisibles en el
+# portátil: el micro se cerraba mientras sonaba algo (`voice.js`), el reconocedor
+# escribe «Pausa.» con punto y la cara casaba contra `/^pausa$/` (`hud.js`), y los
+# seis mandos de transporte vivían dentro de `if (e && e.vivo)`, o sea sólo con el
+# reproductor de CORT sonando (`CortNative.java` no tenía camino para la música de
+# otra app). Aquí se comprueba que las tres costuras siguen ahí; la lógica de
+# casar se prueba de verdad en `scripts/prueba-mandos.mjs` (node, 63
+# comprobaciones) porque el módulo `ui/js/mandos.js` es puro.
+print("\n[27] F12 · el oído, el punto y las teclas")
+
+F27_OID = (APK / "src" / "com" / "cort" / "ia" / "Oido.kt").read_text(encoding="utf-8")
+F27_PUE = puente
+F27_MAN = (RAIZ / "ui" / "js" / "mandos.js").read_text(encoding="utf-8")
+F27_HUD = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+F27_VOI = (RAIZ / "ui" / "js" / "voice.js").read_text(encoding="utf-8")
+F27_YML = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+F27_NUDO = RAIZ / "scripts" / "prueba-mandos.mjs"
+
+# 27.a · el oído pide el foco CON PERMISO PARA AGACHAR, y lo devuelve.
+#        Se mira el CÓDIGO, no el comentario: la constante también aparece en la
+#        prosa que explica el ducking, y buscar en el fichero entero daba verde
+#        con el `Builder` ya roto (lo cazó la mutación nº8 del taller).
+#        No basta con que la constante esté: si `subeMusica()` no está en el
+#        `finally` de la escucha, la música se queda agachada para siempre y eso
+#        es peor que el bug que arregla.
+F27_OID_COD = sin_comentarios(F27_OID)
+if "AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK" not in F27_OID_COD:
+    falla("F12 · ducking del oído", "`Oido.kt` ya no pide AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK en "
+                                    "el `AudioFocusRequest`: el micro vuelve a cerrarse con música")
+elif "requestAudioFocus" not in F27_OID_COD:
+    falla("F12 · ducking del oído", "`Oido.kt` construye la petición y no la pide: no hay ducking")
+elif "abandonAudioFocusRequest" not in F27_OID_COD:
+    falla("F12 · ducking del oído", "`Oido.kt` pide el foco y no lo devuelve: la música "
+                                    "quedaría agachada después de escuchar")
+elif F27_OID_COD.index("bajaMusica()") > F27_OID_COD.index("AudioRecord("):
+    falla("F12 · ducking del oído", "el foco se pide DESPUÉS de abrir el micrófono: la "
+                                    "política de audio no llega a agachar la música a tiempo")
+elif "subeMusica()" not in F27_OID_COD.split("finally")[1][:600]:
+    falla("F12 · ducking del oído", "`subeMusica()` no está en el `finally` de la escucha: "
+                                    "si el hilo muere por otro camino, la música no vuelve")
+elif "puedeDuck" not in F27_OID:
+    falla("F12 · ducking del oído", "`Oido.kt` no expone `puedeDuck()`: la cara no tiene "
+                                    "cómo saber si puede abrir el micro con música")
+else:
+    dice_ok("F12 · ducking del oído", "foco transitorio con permiso para agachar, pedido antes "
+              "del micrófono y devuelto en su `finally`")
+
+# 27.b · el puente: las dos caras nuevas, y las CINCO teclas que la cara conoce.
+#        Si Java renombra `pausa` a `pause`, la cara manda una tecla que el `switch`
+#        no conoce, `teclaMedia` devuelve false y ella oye «pauso» sin que nada pare.
+f27_anot = set(re.findall(r"@JavascriptInterface\s*(?:/\*.*?\*/\s*)?public\s+[\w<>\[\], .]+\s+(\w+)\s*\(",
+                          F27_PUE, flags=re.S))
+if "duckOk" not in f27_anot:
+    falla("F12 · puente del ducking", "`CortNative.duckOk()` no existe o no lleva "
+                                     "@JavascriptInterface: la cara no puede preguntarlo")
+elif "teclaMedia" not in f27_anot:
+    falla("F12 · puente de las teclas", "`CortNative.teclaMedia()` no está anotado: los "
+                                        "mandos a otra app volverían a caer en el 501")
+elif "dispatchMediaKeyEvent" not in F27_PUE:
+    falla("F12 · puente de las teclas", "no se llama a `dispatchMediaKeyEvent`: la tecla "
+                                        "no llega al reproductor que suena")
+else:
+    f27_teclas = set(re.findall(r"case \"(\w+)\":\s*tecla = android\.view\.KeyEvent\.KEYCODE_MEDIA_",
+                                F27_PUE))
+    f27_tabla = set(re.findall(r"tecla:\s*'(\w+)'", F27_MAN))
+    if not f27_teclas:
+        falla("F12 · puente de las teclas", "el `switch` de `teclaMedia` ya no tiene sus "
+                                            "`case \"pausa\"…`: ninguna tecla sale")
+    elif f27_teclas != f27_tabla:
+        falla("F12 · puente de las teclas", "la cara manda " + ", ".join(sorted(f27_tabla)) +
+              " y Java entiende " + ", ".join(sorted(f27_teclas)) + ": sobran unas, faltan otras")
+    elif F27_PUE.count("ACTION_DOWN") < 1 or F27_PUE.count("ACTION_UP") < 1:
+        falla("F12 · puente de las teclas", "la tecla se manda sin pulsar y soltar "
+                                            "(ACTION_DOWN/ACTION_UP): Android la ignora")
+    else:
+        dice_ok("F12 · puente de las teclas", f"duckOk + teclaMedia anotados, y las "
+                  f"{len(f27_teclas)} teclas de la tabla son exactamente las del switch "
+                  f"({', '.join(sorted(f27_teclas))})")
+
+# 27.c · la cara: el freno de la música está CONDICIONADO, no suprimido. En un
+#        `ligero` sin modelo no hay ducking y el freno viejo sigue haciendo falta.
+if "hayMusica() && !puedeDuckear()" not in F27_VOI:
+    falla("F12 · el freno de la música", "`voice.js` volvió a frenar el oído por música sin "
+                                        "mirar si el aparato puede agacharla (o lo suprimió del todo)")
+elif "N.duckOk" not in F27_VOI:
+    falla("F12 · el freno de la música", "`voice.js` no pregunta `N.duckOk()`: no sabe si "
+                                        "puede abrir el micro con música puesta")
+elif "Math.max(backoff, 1200)" not in F27_VOI:
+    falla("F12 · la cadencia con música", "no sube el escalón mínimo del rearmado con audio "
+                                          "activo: los rearmas sobre música son lo que trababa el teléfono")
+else:
+    dice_ok("F12 · el freno de la música", "con ducking el oído se abre y la cadencia se "
+              "espacia a 1,2 s; sin ducking se conserva el freno de siempre")
+
+# 27.d · el punto del reconocedor: se normaliza en el embudo, y se conserva SU
+#        frase tal cual en pantalla y en el historial.
+if not re.search(r"const msg = paraCasar\(dicho\)", F27_HUD):
+    falla("F12 · el punto del reconocedor", "`send()` ya no casa contra `paraCasar(dicho)`: "
+                                            "«Pausa.» vuelve a no ser un mando")
+elif "add('u', dicho)" not in F27_HUD or "HIST.push(dicho)" not in F27_HUD:
+    falla("F12 · el punto del reconocedor", "la cara muestra lo normalizado en vez de lo que "
+                                            "ella dijo: el historial dejaría de ser su frase")
+elif "import { paraCasar, resuelve } from './mandos.js'" not in F27_HUD:
+    falla("F12 · el mando puro", "`hud.js` no importa `paraCasar`/`resuelve` de `mandos.js`: "
+                                "la lógica de casar volvió a estar enterrada en el DOM")
+elif "resuelve(msg," not in F27_HUD:
+    falla("F12 · el mando puro", "`hud.js` ya no llama a `resuelve()`: la tabla de mandos "
+                                "sería código muerto y «pausa» con otra app no iría a ninguna parte")
+else:
+    dice_ok("F12 · el punto del reconocedor", "se casa la frase limpia y se muestra la suya; "
+              "los seis mandos salen de la tabla pura")
+
+# 27.e · el módulo es PURO (es lo que hace probables sus 63 comprobaciones) y su
+#        suite va en el pipeline.
+if re.search(r"\bdocument\.|window\.|localStorage|fetch\(",
+             re.sub(r"/\*.*?\*/|//[^\n]*", "", F27_MAN, flags=re.S), flags=re.S):
+    falla("F12 · mandos puros", "`mandos.js` toca `window`/`document`/`fetch`: dejaría de "
+                                "poder probarse con node en el portátil")
+elif not F27_NUDO.exists():
+    falla("F12 · mandos puros", "no existe `scripts/prueba-mandos.mjs`: nada prueba que "
+                                "«Pausa.» casa y que «un cuadro de la casa» no")
+elif "prueba-mandos.mjs" not in F27_YML:
+    falla("F12 · mandos puros", "la suite de los mandos no está en `build.yml`: sólo se "
+                                "comprobaría en casa y el pipeline pasaría en rojo por otra cosa")
+else:
+    dice_ok("F12 · mandos puros", "mandos.js sin DOM ni puente, su suite en node escrita y "
+              "llamada desde Actions")
+
+# ── [28] El barrido de botones muertos: la cara entera ↔ el puente ↔ el backend ──
+# El sector [6] mira `pantallas.js` y `hud.js`. Éste mira TODA la cara, archivo por
+# archivo, y en las dos capas que faltaban: que el método exista **anotado** (un
+# `public` sin `@JavascriptInterface` es invisible para el WebView: botón muerto sin
+# consola donde verlo) y que la ruta `/api/...` esté declarada en el backend. Es la
+# prueba de la que salió el diagnóstico de F12: «no lo hace» casi nunca es el motor,
+# es un nombre que no está en la otra capa.
+print("\n[28] el barrido de botones muertos (toda la cara)")
+
+F28_CARAS = sorted((RAIZ / "ui" / "js").glob("*.js"))
+F28_LLAMADAS: dict[str, list[str]] = {}
+for f28_arch in F28_CARAS:
+    f28_txt = sin_comentarios_js(f28_arch.read_text(encoding="utf-8"))
+    for f28_nombre in (set(re.findall(r"CortNative\.(\w+)\s*\(", f28_txt))
+                       | set(re.findall(r"\bN\.(\w+)\s*\(", f28_txt))
+                       | set(re.findall(r"llama\(\s*'(\w+)'", f28_txt))):
+        F28_LLAMADAS.setdefault(f28_nombre, []).append(f28_arch.name)
+F28_HUERFOS = sorted(m for m in F28_LLAMADAS if m not in f27_anot)
+if F28_HUERFOS:
+    falla("F12 · botones muertos", "; ".join(
+        f"{m} (en {', '.join(sorted(set(F28_LLAMADAS[m])))})" for m in F28_HUERFOS)
+        + " — la cara lo llama y el puente no lo presta al WebView")
+else:
+    dice_ok("F12 · botones muertos", f"{len(F28_LLAMADAS)} métodos pedidos por la cara "
+              f"(9 archivos, 3 formas de llamarlos), todos con su @JavascriptInterface")
+
+F28_RUTAS: dict[str, list[str]] = {}
+for f28_arch in F28_CARAS:
+    f28_txt = sin_comentarios_js(f28_arch.read_text(encoding="utf-8"))
+    for f28_r in set(re.findall(r"['\"](/api/[A-Za-z0-9_./{}-]+)['\"]", f28_txt)):
+        F28_RUTAS.setdefault(f28_r, []).append(f28_arch.name)
+F28_DEC = set(re.findall(r'@(?:app|router)\.(?:get|post|put|delete)\(\s*"([^"]+)"', backend))
+def f28_existe(r: str) -> bool:
+    if r in F28_DEC:
+        return True
+    sin_barra = r.rstrip("/")
+    for d in F28_DEC:                     # `/api/notes/{note_id}` sirve a `/api/notes/`
+        if d == sin_barra or d.startswith(sin_barra + "/{") or d.startswith(sin_barra + "/:"):
+            return True
+    return False
+F28_FALTAN = sorted(r for r in F28_RUTAS if not f28_existe(r))
+if F28_FALTAN:
+    falla("F12 · rutas muertas", "; ".join(f"{r} (en {', '.join(sorted(set(F28_RUTAS[r])))})"
+                                           for r in F28_FALTAN)
+          + " — la cara la pide y el backend no la declara: 404 o 501 y «el núcleo no respondió»")
+else:
+    dice_ok("F12 · rutas muertas", f"{len(F28_RUTAS)} rutas pedidas por la cara, todas "
+              f"declaradas en backend/app ({len(F28_DEC)} rutas)")
+
+# 28.c · el barrido tiene que poder caer: si mañana nadie llama a nada, el conteo
+#        no puede dar verde. Con menos de treinta llamadas la cara estaría vacía.
+if len(F28_LLAMADAS) < 30 or len(F28_RUTAS) < 20:
+    falla("F12 · alcance del barrido", f"sólo se vieron {len(F28_LLAMADAS)} métodos y "
+          f"{len(F28_RUTAS)} rutas: el barrido se quedó mirando media cara y su verde no vale")
+else:
+    dice_ok("F12 · alcance del barrido", f"barre los {len(F28_CARAS)} archivos de ui/js: "
+              f"{len(F28_LLAMADAS)} métodos y {len(F28_RUTAS)} rutas en el rastrillo")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

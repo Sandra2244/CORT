@@ -809,18 +809,24 @@ public class CortNative {
     /* ─────────────────── qué está pasando en el aparato ─────────────────── */
 
     /**
-     * ¿Suena música ahora mismo? Lo pregunta `ui/js/voice.js` antes de reabrir el
-     * micrófono de «Oye CORT».
+     * ¿Suena música ahora mismo? Lo pregunta `ui/js/voice.js` para saber **cómo**
+     * abrir el oído, no para cerrarlo.
      *
-     * En Android abrir el micro **duckea** lo demás (baja el volumen de la música)
-     * y en un teléfono de gama media además lo traba: rearma tras rearma,
-     * sesión tras sesión. Con esto, mientras la dueña escucha algo, CORT cierra el
-     * oído y lo reabre cuando el audio termina.
+     * Desde la 2.4 la cara usaba esta respuesta como freno: con música sonando no
+     * se reabría el micrófono, porque abrirlo baja el volumen de lo demás y en un
+     * teléfono de gama media además lo traba. El resultado medido era el que la
+     * dueña llamaba «parece pendeja»: decir «pausa» con una canción puesta no se
+     * oía jamás, porque el oído estaba cerrado antes de escuchar nada.
+     *
+     * Ahora el oído propio pide `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` (`Oido.kt`),
+     * así que con música sonando **sí** se abre el micro y la música se agacha
+     * mientras CORT oye. Esta respuesta queda para dos cosas: decirle a la cara
+     * que tenga más calma al rearmar (los rearmas sobre audio activo son los que
+     * trababan el aparato) y pintarle el motivo en la lámpara.
      *
      * El detalle honesto: `isMusicActive()` también es `true` mientras CORT habla
-     * por `TextToSpeech` (el TTS va por el stream de multimedia). Por eso la cara
-     * ignora el freno durante el primer segundo y medio después de cada frase —
-     * sin ese margen, CORT se quedaría muda justo después de responderte.
+     * por `TextToSpeech` (el TTS va por el stream de multimedia), y por eso la
+     * cara ignora el primer segundo y medio después de cada frase.
      */
     @JavascriptInterface
     public boolean musicPlaying() {
@@ -829,6 +835,62 @@ public class CortNative {
         try {
             return ((android.media.AudioManager) servicio).isMusicActive();
         } catch (Exception elSistemaNoContesta) {
+            return false;
+        }
+    }
+
+    /**
+     * Si CORT puede escuchar **con la música puesta** sin cerrarle el audio al
+     * aparato: o sea si el ducking de `Oido.kt` está disponible aquí.
+     *
+     * Es `false` en dos casos reales y la cara tiene que decirlo distinto: un APK
+     * `ligero` sin el modelo (ahora manda el reconocedor del sistema, que no
+     * pide foco) y un teléfono cuyo sistema no armaron el `AudioFocusRequest`.
+     * Ahí la cara conserva el freno viejo en vez de fingir un ducking que no hay
+     * y de dejar el micro abierto rearmándose contra la música.
+     */
+    @JavascriptInterface
+    public boolean duckOk() {
+        Oido propio = oido;
+        return propio != null && propio.listo() && propio.puedeDuck();
+    }
+
+    /**
+     * La tecla de transporte para **el reproductor que sea** del aparato.
+     *
+     * `musicaPausa()` y sus hermanas mandan en `Reproductor`, el reproductor de
+     * CORT; si la música suena en Spotify o en YouTube, ese `isPlaying()` no es
+     * vivo y la orden se iba al backend, el backend a `main.py`, y el APK cortaba
+     * con 501. `dispatchMediaKeyEvent` es el camino que Android diseñó para esto:
+     * la tecla va al `MediaSession` que esté activo, sea de quien sea, y no pide
+     * ningún permiso nuevo —lo mismo que hacen los botones del auricular.
+     *
+     * Devuelve `false` si el sistema no la aceptó, para que la cara lo diga en
+     * vez de prometer un «pauso la canción» que no ocurrió.
+     */
+    @JavascriptInterface
+    public boolean teclaMedia(final String que) {
+        if (que == null) return false;
+        Object servicio = act.getSystemService(android.content.Context.AUDIO_SERVICE);
+        if (!(servicio instanceof android.media.AudioManager)) return false;
+        android.media.AudioManager audio = (android.media.AudioManager) servicio;
+        int tecla;
+        switch (que) {
+            case "pausa":     tecla = android.view.KeyEvent.KEYCODE_MEDIA_PAUSE; break;
+            case "play":      tecla = android.view.KeyEvent.KEYCODE_MEDIA_PLAY; break;
+            case "siguiente": tecla = android.view.KeyEvent.KEYCODE_MEDIA_NEXT; break;
+            case "anterior":  tecla = android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS; break;
+            case "parar":     tecla = android.view.KeyEvent.KEYCODE_MEDIA_STOP; break;
+            default: return false;
+        }
+        try {
+            long ahora = android.os.SystemClock.uptimeMillis();
+            audio.dispatchMediaKeyEvent(new android.view.KeyEvent(
+                ahora, ahora, android.view.KeyEvent.ACTION_DOWN, tecla, 0));
+            audio.dispatchMediaKeyEvent(new android.view.KeyEvent(
+                ahora, ahora, android.view.KeyEvent.ACTION_UP, tecla, 0));
+            return true;
+        } catch (Exception elSistemaNoObedece) {
             return false;
         }
     }

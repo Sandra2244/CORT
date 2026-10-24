@@ -45,23 +45,43 @@ export function createVoice(h = {}) {
   const waiters = new Map();
   let seq = 0;
 
-  const emitState = () => h.onState && h.onState(mode, { wakeOn, speaking, freno: motivoFreno() });
+  const emitState = () => h.onState && h.onState(mode, {
+    wakeOn, speaking, freno: motivoFreno(), aviso: motivoAviso(), duck: puedeDuckear(),
+  });
 
   function motivoFreno() {
     if (enPausa) return 'en segundo plano';
     if (frenos.size) return [...frenos][0];
     if (typeof document !== 'undefined' && document.hidden) return 'pantalla apagada';
-    if (hayMusica()) return 'música sonando';
+    /* La música ya NO es freno por sí sola. Lo era desde la 2.4, y ése es el
+       motivo exacto de que «Oye CORT, pausa» nunca se oyera con una canción
+       puesta: el micro se cerraba antes de escuchar. Con el oído propio de
+       `Oido.kt` el micro se abre y la música se agacha (foco transitorio con
+       permiso para duckear), así que la única razón para cerrar el oído por
+       audio activo es que este aparato **no** pueda agacharla: un `ligero` sin
+       modelo, o un APK anterior al ducking. Ahí se conserva el freno de siempre. */
+    if (hayMusica() && !puedeDuckear()) return 'música sonando';
     return '';
   }
 
-  /** Si suena música en el aparato, el micro NO se rearma: en Android abrir el
-      micrófono baja el volumen de lo demás (y en un teléfono de gama media lo
-      traba). Es el motivo por el que CORT se calla el oído mientras escuchas.
+  /** Si este teléfono baja la música mientras CORT oye. Lo dice el puente. */
+  function puedeDuckear() {
+    if (!N || typeof N.duckOk !== 'function') return false;      // PC / APK viejo
+    try { return !!N.duckOk(); } catch { return false; }
+  }
+
+  /** La música suena, pero con ducking el oído sigue abierto: es aviso, no freno. */
+  function motivoAviso() {
+    if (motivoFreno()) return '';
+    return (hayMusica() && puedeDuckear()) ? 'música agachada' : '';
+  }
+
+  /** Si suena música en el aparato. Desde la ronda F12 es **información**, no
+      prohibición: manda en la cadencia del rearmado y en el aviso de la lámpara.
 
       El margen de 1,5 s es lo que evita el efecto contrario: el `TextToSpeech` de
       Android también hace que `isMusicActive()` diga «sí», así que sin margen
-      CORT se quedaría sin oído justo después de contestarte. */
+      CORT creería que hay música justo después de contestarte. */
   function hayMusica() {
     if (!N || typeof N.musicPlaying !== 'function') return false;   // app vieja / PC
     if (Date.now() - ultimoHabla < 1500) return false;               // era CORT hablando
@@ -69,10 +89,16 @@ export function createVoice(h = {}) {
   }
 
   /** El micro en bucle cerrado es lo que consume un teléfono: si tras varias
-      escucha nadie ha dicho «Oye CORT», se españa mucho más. */
+      escucha nadie ha dicho «Oye CORT», se españa mucho más.
+
+      Con música sonando y ducking abierto, el escalón mínimo sube a 1.200 ms:
+      rearma tras rearma contra un audio activo es lo que trababa el aparato, y
+      ahora que el micro sí se abre, la cadencia es lo único que queda de
+      aquella cautela. */
   function retroceso() {
     const ESCALERA = [400, 1200, 2500, 5000, 10000];
     backoff = ESCALERA[Math.min(intentos, ESCALERA.length - 1)];
+    if (hayMusica() && puedeDuckear()) backoff = Math.max(backoff, 1200);
   }
 
   function scheduleWake(ms = backoff) {

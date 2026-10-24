@@ -7,6 +7,11 @@ import { initPantallas, porVoz, ir, modoJuego, fraseSinNucleo } from './pantalla
    habla a través del módulo — él es quien sabe si el puente trae `accion()`,
    `mente()` o `burbuja()`, y él es quien degrada con la frase honesta. */
 import { telefonoPorVoz, handleTelefonoEvento, estadoTelefono } from './telefono.js';
+/* Los mandos de transporte (`pausa`, `sigue`, `siguiente`…) y la normalización del
+   texto que llega de la voz. El módulo es PURO: sin DOM, sin `window.CortNative`,
+   sin `fetch`. Eso es lo que permite probarlo con node en el portátil
+   (`scripts/prueba-mandos.mjs`) en vez de descubrir el fallo en su teléfono. */
+import { paraCasar, resuelve } from './mandos.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -1603,12 +1608,20 @@ function completeCmd(v) {
   }
   return best;
 }
+/* El reconocedor cierra la frase con un punto —en el teléfono y en el navegador
+   «Pausa.»—, y los mandos de la cara están casados contra `/^pausa$/`. Con el
+   punto delante no casa NADA: el texto se iba a `post('/api/command')`, el APK
+   lo cortaba con 501 y la cara contestaba «El núcleo de CORT no respondió».
+   Ése es el «parece pendeja» que reportó la dueña. Lo arregla `paraCasar()`, que
+   vive en `mandos.js` y se prueba con node; se limpia sólo la copia que se casa
+   y en pantalla queda lo que ella dijo. */
 async function send(raw) {
   const q = document.getElementById('q');
-  const msg = (raw ?? q.value).trim(); if (!msg) return;
-  q.value = ''; add('u', msg);
+  const dicho = (raw ?? q.value).trim(); if (!dicho) return;
+  const msg = paraCasar(dicho);
+  q.value = ''; add('u', dicho);
   if (mobile() && raw === undefined) q.blur();     // cierra el teclado para ver la respuesta
-  if (HIST[HIST.length - 1] !== msg) HIST.push(msg);
+  if (HIST[HIST.length - 1] !== dicho) HIST.push(dicho);
   hIdx = HIST.length; draft = '';
   setState('pensando');
   document.getElementById('top').classList.add('glitch');
@@ -1744,39 +1757,41 @@ async function send(raw) {
     add('a', 'Estoy midiendo el equipo: memoria, procesos pesados y caché borrable.', 'optimizar');
     return;
   }
-  /* reproductor de CORT en el teléfono: MANDA si está vivo, antes que el ejecutor
-     del PC. `musicaEstado()` es el mismo JSON que pinta la pantalla Música. */
+  /* Los mandos de transporte del teléfono, con los DOS destinos que puede tener
+     la música. La tabla y la decisión viven en `ui/js/mandos.js` —puras, sin DOM
+     ni puente— y se prueban con node en `scripts/prueba-mandos.mjs`, que es como
+     se cazó el «Pausa.» con punto del reconocedor. Aquí sólo queda el cable:
+     preguntar el estado al puente y llamar a lo que la decisión diga.
+
+     Antes los seis mandos estaban dentro de `if (e && e.vivo)`, o sea sólo con el
+     reproductor de CORT sonando; con Spotify puesto la frase se iba al backend y
+     volvía con el 501 del APK. `teclaMedia()` manda la tecla al `MediaSession`
+     activo del aparato —la misma que llega del auricular— y no añade un permiso
+     nuevo al manifiesto. */
   if (IS_ANDROID && typeof (window.CortNative || {}).musicaEstado === 'function') {
     let e = null;
     try { e = JSON.parse(window.CortNative.musicaEstado()); } catch { e = null; }
-    if (e && e.vivo) {
-      if (/^(pausa|para|det[eé]n|stop)\b/i.test(msg) && /m[uú]sica|audio|sonido|eso/i.test(msg) || /^pausa$/i.test(msg)) {
-        window.CortNative.musicaPausa();
-        add('a', `Pauso «${e.pista ? e.pista.titulo : 'la canción'}». Di «sigue».`, 'música');
-        speakTTS('Pausa'); return;
+    const mio = !!(e && e.vivo);
+    /* Si suena otra app. Se descarta mientras CORT habla: el `TextToSpeech`
+       también hace `isMusicActive()` verdadero, y un «sigue» dicho justo después
+       de una respuesta no debe darle el play a otra aplicación. */
+    const ajeno = !mio && !(voice && voice.speaking) &&
+                  typeof window.CortNative.musicPlaying === 'function' &&
+                  !!window.CortNative.musicPlaying();
+    const mando = resuelve(msg, {
+      e, mio, ajeno,
+      teclas: typeof window.CortNative.teclaMedia === 'function',
+    });
+    if (mando) {
+      if (mando.a === 'propio') {
+        if (mando.id === 'cuadro') window.CortNative.musicaCuadro(/atr[aá]s|antes|retro/i.test(msg));
+        else window.CortNative[mando.met]();
+      } else if (mando.a === 'ajeno') {
+        window.CortNative.teclaMedia(mando.tecla);
       }
-      if (/^(sigue|contin[uú]a|reanuda|play)\b/i.test(msg)) {
-        window.CortNative.musicaPlay();
-        add('a', 'Sigo con la música.', 'música'); speakTTS('Continuando'); return;
-      }
-      if (/siguiente|qu[eé] sigue|otra canci[oó]n|pon otra/i.test(msg)) {
-        window.CortNative.musicaSiguiente();
-        add('a', 'Pasando a la siguiente.', 'música'); speakTTS('La siguiente'); return;
-      }
-      if (/anterior|la de antes/i.test(msg)) {
-        window.CortNative.musicaAnterior();
-        add('a', 'Voy a la anterior.', 'música'); return;
-      }
-      if (/cuadro|fotograma|frame/i.test(msg)) {
-        window.CortNative.musicaCuadro(/atr[aá]s|antes|retro/i.test(msg));
-        add('a', 'Un fotograma ' + (/atr[aá]s|antes|retro/i.test(msg) ? 'atrás' : 'adelante') + '.', 'música');
-        return;
-      }
-      if (/parar la m[uú]sica|cierra el reproductor|silencio/i.test(msg)) {
-        window.CortNative.musicaParar();
-        add('a', 'Reproductor parado. La pantalla Música sigue ahí con ☰.', 'música');
-        speakTTS('Listo, sin música'); return;
-      }
+      add('a', mando.dijo, 'música');
+      if (mando.habla) speakTTS(mando.habla); else orb.burst();
+      return;
     }
     if (/que me guste|m[uú]sica que me gusta|ponme algo|pon m[uú]sica|reproduce m[uú]sica/i.test(msg)) {
       window.CortNative.musicaAutomatica();
@@ -1865,10 +1880,12 @@ export function wireUI(orbRef) {
       mic.classList.toggle('on', mode === 'cmd');
       wake.classList.toggle('on', st.wakeOn);
       wake.classList.toggle('hearing', mode === 'wake');
-      // Si el oído está en pausa (música, optimizando, segundo plano) se ve y se
+      // Si el oído está en pausa (optimizando, segundo plano) se ve y se
       // lee: sin esto parece que CORT «no funciona», cuando es que no le toca.
+      // Con música y ducking el oído NO está en pausa: se escucha y se dice.
       wake.title = st.freno ? 'Oído en pausa: ' + st.freno
-                            : (st.wakeOn ? 'escuchando «Oye CORT»' : '«Oye CORT» apagado');
+                            : (st.aviso ? 'escuchando «Oye CORT», con la música agachada'
+                            : (st.wakeOn ? 'escuchando «Oye CORT»' : '«Oye CORT» apagado'));
       wake.style.opacity = (st.wakeOn && st.freno) ? '.45' : '';
       document.body.classList.toggle('listening', mode === 'cmd');
       if (mode === 'cmd') { orb.listen(true); setState('escucha'); }

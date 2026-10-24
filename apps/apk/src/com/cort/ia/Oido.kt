@@ -1,7 +1,9 @@
 package com.cort.ia
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.StatFs
@@ -130,6 +132,84 @@ class Oido(private val act: Context, private val salida: Oyente) {
         if (abierta.compareAndSet(true, false)) cuadro("""{"type":"stt-end"}""")
     }
     private var hilo: Thread? = null
+
+    /* ─────────────────────────── el foco: agachar la música ─────────────────────────── */
+
+    /**
+     * El auricular del aparato, pedido una sola vez y guardado: `AudioManager` es
+     * un servicio del sistema y re-buscarlo en cada escucha es basura que se repite.
+     */
+    private val audio: AudioManager? = try {
+        act.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    } catch (elSistemaNoContesta: Exception) {
+        null
+    }
+
+    /** El oyente del foco: si otra app se queda con el audio en serio, cerramos el micro. */
+    private val oyeFoco = AudioManager.OnAudioFocusChangeListener { cambio ->
+        if (cambio == AudioManager.AUDIOFOCUS_LOSS) { cancelado = true; vivo = false }
+    }
+
+    /** La petición, con su listener dentro: `AudioFocusRequest` es inmutable. */
+    private val pideFoco: AudioManager.AudioFocusRequest? = try {
+        AudioManager.AudioFocusRequest
+            .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setWillPauseWhenDucked(false)
+            .setOnAudioFocusChangeListener(oyeFoco)
+            .build()
+    } catch (elSistemaNoPuede: Exception) {
+        null
+    }
+
+    /** `true` mientras el foco es nuestro, o sea mientras la música está agachada. */
+    @Volatile private var conFoco = false
+
+    /**
+     * Si este oído puede **agachar** la música en vez de cerrar el micro.
+     *
+     * Es la respuesta a la pregunta que `ui/js/voice.js` hacía mal desde el
+     * principio: la dueña decía «pausa» y CORT no lo hacía porque, con música
+     * sonando, el oído se cerraba para no trabar el teléfono. Con
+     * `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK` el micrófono se abre **y** el sistema
+     * baja el volumen de lo demás mientras oímos; al soltar el foco la música
+     * vuelve sola. Sin esta capacidad —un APK sin el modelo, oído de sistema—
+     * la cara sigue usando el freno viejo y no finge un ducking que no hay.
+     */
+    fun puedeDuck(): Boolean = pideFoco != null && audio != null
+
+    /** Pide el foco ANTES de abrir el micro: el ducking lo hace la política de audio. */
+    private fun bajaMusica(): Boolean {
+        val a = audio ?: return false
+        val peticion = pideFoco ?: return false
+        if (conFoco) return true
+        return try {
+            conFoco = a.requestAudioFocus(peticion) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            conFoco
+        } catch (otroTieneElAudio: Exception) {
+            conFoco = false
+            false
+        }
+    }
+
+    /** Devuelve el foco: la música deja de estar agachada en cuanto cerramos el micro. */
+    private fun subeMusica() {
+        val a = audio ?: return
+        if (!conFoco) return
+        conFoco = false
+        try {
+            val peticion = pideFoco
+            if (peticion != null) a.abandonAudioFocusRequest(peticion)
+            else a.abandonAudioFocus(oyeFoco)
+        } catch (yaNoHayFoco: Exception) {
+            /* El sistema ya se lo quitó: no hay nada que devolver ni que decir. */
+        }
+    }
 
     /* ─────────────────────────── arranque ─────────────────────────── */
 
@@ -276,10 +356,18 @@ class Oido(private val act: Context, private val salida: Oyente) {
         val r = reconocedor ?: return false
         if (vivo) return false
 
+        /* Primero el foco, después el micrófono. Es el orden de siempre en Android:
+           la política de audio agacha lo que suena ANTES de que nadie capture, así
+           que la música no le gana la palabra al motor. Si el teléfono no presta
+           ducking, la escucha se abre igual —perder la orden de la dueña pesa más
+           que escucharla con la música alta. */
+        bajaMusica()
+
         val minimo = AudioRecord.getMinBufferSize(
             MUESTRA, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         if (minimo <= 0) {
+            subeMusica()
             sinOido("audio", "el teléfono no presta un micrófono de 16 kHz (código $minimo)")
             return false
         }
@@ -292,11 +380,13 @@ class Oido(private val act: Context, private val salida: Oyente) {
                 bocetoCorto * 2
             )
         } catch (rechazado: Exception) {
+            subeMusica()
             sinOido("audio", "no se pudo abrir el micrófono (${describe(rechazado)})")
             return false
         }
         if (graba.state != AudioRecord.STATE_INITIALIZED) {
             graba.release()
+            subeMusica()
             sinOido("busy", "el micrófono lo tiene otra aplicación")
             return false
         }
@@ -377,6 +467,10 @@ class Oido(private val act: Context, private val salida: Oyente) {
             graba.release()
             try { r.reset() } catch (elMotorNoQuiere: Exception) { /* nada */ }
             vivo = false
+            // El foco se devuelve AQUÍ y no en `para()`/`cancela()`: quien termina
+            // una escucha puede ser el hilo que entregó el texto, el botón o el
+            // temporizador, y los tres tienen que dejar la música como estaba.
+            subeMusica()
         }
 
         // `cancela()` ya cerró su sesión (`cierra()` es idempotente por
@@ -436,6 +530,7 @@ class Oido(private val act: Context, private val salida: Oyente) {
     /** Se llama al destruir la actividad: el `Model` es nativo y trae ~50 MB detrás. */
     fun suelta() {
         cancela()
+        subeMusica()
         try { reconocedor?.close() } catch (yaCerrado: Exception) { /* nada */ }
         reconocedor = null
         try { modelo?.close() } catch (yaCerrado: Exception) { /* nada */ }
@@ -457,6 +552,8 @@ class Oido(private val act: Context, private val salida: Oyente) {
             .append(",\"libresMB\":").append(if (libre == null) "\"?\"" else "${libre / 1048576}")
             .append(",\"motivo\":").append(comilla(motivo))
             .append(",\"escuchando\":").append(vivo)
+            .append(",\"duck\":").append(puedeDuck())
+            .append(",\"agachada\":").append(conFoco)
             .append('}')
             .toString()
     }

@@ -319,6 +319,28 @@ jobs:
             echo "::error::prueba-automatiza.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar los mandos de la voz con node (sin teléfono)
+        id: mandos
+        # `scripts/prueba-mandos.mjs` ejerce la capa que decide si «pausa» es un
+        # mando y a quién se le manda, sobre el módulo PURO `ui/js/mandos.js`: el
+        # punto que el reconocedor pega al final («Pausa.»), los acentos, las
+        # frases que NO deben casar («un cuadro de la casa»), y la tabla de verdad
+        # de los destinos —reproductor de CORT, otra app con teclas, otra app sin
+        # teclas, y nada sonando—. Son 63 comprobaciones; valen lo que vale la
+        # mitad de F12, la que antes sólo se podía descubrir en su teléfono.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-mandos.mjs > /tmp/mandos.log 2>&1
+          st=$?
+          tail -20 /tmp/mandos.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/mandos.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/mandos.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-mandos.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
         id: oido
         # `scripts/prueba-oido.sh` hace lo que `javac` no puede hacer NUNCA: carga
