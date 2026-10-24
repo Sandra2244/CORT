@@ -3940,8 +3940,8 @@ if "Prueba5.java" not in f29_sh or "casos-razon.txt" not in f29_sh \
     f29_falta.append("prueba-mente.sh no copia Prueba5 y sus dos casos")
 if not re.search(r"for suite in [^\n]*Prueba5", f29_sh):
     f29_falta.append("Prueba5 no está en el bucle de suites")
-if "de 6" not in f29_sh or "las 6 suites" not in f29_sh:
-    f29_falta.append("las cuentas de la suite siguen diciendo otra cosa que 6")
+if "de 7" not in f29_sh or "las 7 suites" not in f29_sh:
+    f29_falta.append("las cuentas de la suite no dicen 7 (Prueba5 sigue dentro)")
 if "import { AYUDA } from './diccionario.js'" not in f29_tel:
     f29_falta.append("telefono.js no importa AYUDA")
 if "import { EJEMPLOS } from './diccionario.js'" not in f29_hud:
@@ -4006,24 +4006,27 @@ else:
               "se ejecutan en Prueba6 con el JDK")
 
 # 30.b · las tres decisiones tienen dueño de producción, y sólo uno. `mejor` elige
-#        la canción en `musicaPonerNombre`; `lista` resuelve la playlist; `preset`
-#        el del ecualizador. Un dueño de más también es un fallo: significa que dos
-#        sitios deciden distinto lo mismo.
+#        la canción en `musicaPonerNombre` y, desde F16, también al poner la alarma
+#        (las dos llaman a la MISMA función: no deciden distinto); `lista` resuelve
+#        la playlist; `preset` el del ecualizador. Un dueño de más también es un
+#        fallo si decide por su cuenta: aquí se listan los que llaman a `Elige`,
+#        que es lo que garantiza que no haya dos criterios.
 f30_duenos = {}
 for f30_m in ("mejor", "lista", "preset"):
     f30_duenos[f30_m] = sorted(
         p.name for p in F30_IA.glob("*.java")
         if f"Elige.{f30_m}(" in sin_comentarios(p.read_text(encoding="utf-8")))
-f30_esperado = {"mejor": ["CortNative.java"], "lista": ["CortNative.java"],
+f30_esperado = {"mejor": ["Alarma.java", "CortNative.java"],
+                "lista": ["CortNative.java"],
                 "preset": ["Ecualizador.java"]}
 if F30_ROTO:
     pass
 elif f30_duenos != f30_esperado:
     falla("F15 · dueño de Elige", f"los dueños son {f30_duenos} y deben ser {f30_esperado}: "
-          "una decisión sin dueño no corre, y con dos cada uno decide distinto")
+          "una decisión sin dueño no corre, y con dos criterios cada uno elige distinto")
 else:
-    dice_ok("F15 · dueño de Elige", "mejor y lista deciden en el puente, preset en el "
-              "ecualizador; ninguna sin dueño ni repetida")
+    dice_ok("F15 · dueño de Elige", "mejor decide en el puente y en el despertador con la "
+              "misma función, lista en el puente, preset en el ecualizador")
 
 # 30.c · el ecualizador es Android de verdad y NO entra en la prueba de papel.
 #        Se comprueba la línea de `cp` del escenario, no el comentario de la
@@ -4141,7 +4144,8 @@ else:
               "«pon» ya no abre apps: 4d queda entre la alarma y los cerebros")
 
 # 30.g · y la suite que mide `Elige` está enchufada donde toca: se copia al
-#        escenario, entra en el bucle y las cuentas dicen SEIS.
+#        escenario, entra en el bucle y las cuentas dicen SIETE (desde F16, con
+#        `Prueba7` de `Despertar`).
 f30_suite = []
 if "Prueba6.java" not in F30_SH:
     f30_suite.append("prueba-mente.sh no copia Prueba6.java")
@@ -4149,8 +4153,8 @@ if not any("Elige.java" in l for l in F30_SH.splitlines() if l.startswith("cp ")
     f30_suite.append("prueba-mente.sh no copia Elige.java al escenario")
 if not re.search(r"for suite in [^\n]*Prueba6", F30_SH):
     f30_suite.append("Prueba6 no está en el bucle de suites")
-if "de 6" not in F30_SH or "las 6 suites" not in F30_SH:
-    f30_suite.append("las cuentas de prueba-mente.sh no dicen 6")
+if "de 7" not in F30_SH or "las 7 suites" not in F30_SH:
+    f30_suite.append("las cuentas de prueba-mente.sh no dicen 7")
 if not (APK / "prueba" / "Prueba6.java").exists():
     f30_suite.append("no existe apps/apk/prueba/Prueba6.java")
 if F30_ROTO:
@@ -4159,7 +4163,303 @@ elif f30_suite:
     falla("F15 · la suite enchufada", "; ".join(f30_suite))
 else:
     dice_ok("F15 · la suite enchufada", "Prueba6 corre en el JDK junto a Elige y las "
-              "cuentas de la suite dicen seis")
+              "cuentas de la suite dicen siete")
+
+# ── [31] F16 · «despiértame a las 7 con After Dark para el examen» ──────────
+# El despertador propio toca cinco capas y cada una tiene su trampa:
+#
+#   · `Despertar` parte la frase y decide la próxima hora. Es Java puro y `Prueba7`
+#     lo mide en el JDK, incluidos los dos cambios de hora. `Alarma` NO vuelve a
+#     partir nada: si alguien le mete un `Pattern`, habría dos horas posibles.
+#   · La exactitud se DICE. Sin `SCHEDULE_EXACT_ALARM` (que no se declara), en
+#     Android 12+ `canScheduleExactAlarms()` puede decir que no; entonces se usa
+#     `setAndAllowWhileIdle` y la respuesta lleva `exacta:false` con la frase.
+#     Prometer el minuto que el sistema no da sería el verde de cartón de siempre.
+#   · El disparo entra por un `<receiver>` propio, explícito y no exportado. Si
+#     mañana alguien le pone `<intent-filter>`, cualquier app podría despertarla.
+#   · La cara pinta su pantalla FUERA de las hojas y la atiende lo primero: a las
+#     siete de la mañana lo que importa es verla y callarla.
+#   · La frase de la tabla conserva la cola: «07:30 con after dark para el examen»
+#     no puede perder la canción por el camino (era el fallo de `Cerebro.hora`).
+print("\n[31] F16 · el despertador propio: hora, canción, nota y rutina")
+
+F31_IA = APK / "src" / "com" / "cort" / "ia"
+try:
+    F31_DESP = sin_comentarios((F31_IA / "Despertar.java").read_text(encoding="utf-8"))
+    F31_DESP_T = (F31_IA / "Despertar.java").read_text(encoding="utf-8")
+    F31_ALARMA = sin_comentarios((F31_IA / "Alarma.java").read_text(encoding="utf-8"))
+    F31_ALARMA_T = (F31_IA / "Alarma.java").read_text(encoding="utf-8")
+    F31_RECIBE = sin_comentarios((F31_IA / "AlarmaSuena.java").read_text(encoding="utf-8"))
+    F31_P7_T = (APK / "prueba" / "Prueba7.java").read_text(encoding="utf-8")
+    F31_P3_T = (APK / "prueba" / "Prueba3.java").read_text(encoding="utf-8")
+    F31_CER = sin_comentarios((F31_IA / "Cerebro.java").read_text(encoding="utf-8"))
+    F31_ACC = sin_comentarios((F31_IA / "Acciones.java").read_text(encoding="utf-8"))
+    F31_ACC_T = (F31_IA / "Acciones.java").read_text(encoding="utf-8")
+    F31_PUE_T = (F31_IA / "CortNative.java").read_text(encoding="utf-8")
+    F31_PUE = sin_comentarios(F31_PUE_T)
+    F31_CARA = sin_comentarios((F31_IA / "MainActivity.java").read_text(encoding="utf-8"))
+    F31_SH = (RAIZ / "scripts" / "prueba-mente.sh").read_text(encoding="utf-8")
+    F31_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+    F31_JS = sin_comentarios_js(F31_TEL)
+    F31_CSS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
+    F31_MAN = re.sub(r"<!--.*?-->", "", MANIFIESTO, flags=re.S)
+    F31_ROTO = ""
+except OSError as f31_falta:
+    F31_DESP = F31_DESP_T = F31_ALARMA = F31_ALARMA_T = F31_RECIBE = ""
+    F31_P7_T = F31_P3_T = F31_CER = F31_ACC = F31_ACC_T = ""
+    F31_PUE_T = F31_PUE = F31_CARA = F31_SH = F31_TEL = F31_JS = F31_CSS = F31_MAN = ""
+    F31_ROTO = str(f31_falta)
+    falla("F16 · los ficheros", f"no se pudieron leer: {f31_falta}")
+
+# 31.a · `Despertar` es puro, `Prueba7` lo mide y la corrección del hueco de
+#        primavera sólo empuja hacia ADELANTE. Aquella corrección restando una hora
+#        devolvía las 01:30 (el pasado) y `Prueba7` la caza: por eso se exige el
+#        `puesto < pedido`, no un `!=`.
+f31_android = [s for s in ("android.", "Context", "JSONObject") if s in F31_DESP]
+f31_metodos = [m for m in ("parte", "proximo", "falta")
+               if not re.search(rf"static \w+ {m}\(", F31_DESP)]
+f31_p7 = [c for c in ("Despertar.parte(", "Despertar.proximo(", "Despertar.falta(")
+          if c not in F31_P7_T]
+f31_riesgos = [t for t in ("justo ahora → mañana", "DST de marzo", "DST de octubre",
+                           "sin nombre no hay canción", "sin hora no hay plan")
+               if t not in F31_P7_T]
+f31_cp = [l for l in F31_SH.splitlines() if l.startswith("cp ")]
+f31_suite = []
+if not any("Despertar.java" in l and "$T/src/com/cort/ia/" in l for l in f31_cp):
+    f31_suite.append("prueba-mente.sh no copia Despertar.java al escenario")
+if not any("Prueba7.java" in l and "$T/src/com/cort/ia/" in l for l in f31_cp):
+    f31_suite.append("prueba-mente.sh no copia Prueba7.java")
+if not re.search(r"for suite in [^\n]*Prueba7", F31_SH):
+    f31_suite.append("Prueba7 no está en el bucle de suites")
+if any(("Alarma.java" in l or "AlarmaSuena.java" in l) for l in f31_cp):
+    f31_suite.append("`Alarma`/`AlarmaSuena` se copian a la suite de papel, donde no hay "
+                     "`AlarmManager`: ese verde sería de cartón")
+if not (APK / "prueba" / "Prueba7.java").exists():
+    f31_suite.append("no existe apps/apk/prueba/Prueba7.java")
+if F31_ROTO:
+    pass
+elif f31_suite:
+    falla("F16 · Despertar puro", "; ".join(f31_suite))
+elif f31_android:
+    falla("F16 · Despertar puro", f"nombra {f31_android}: `Prueba7` no compilaría en el JDK")
+elif f31_metodos:
+    falla("F16 · Despertar puro", f"le faltan decisiones: {f31_metodos}")
+elif f31_p7:
+    falla("F16 · Despertar puro", f"Prueba7 no llama a {f31_p7}: se mediría a ciegas")
+elif "if (puesto < pedido)" not in F31_DESP:
+    falla("F16 · Despertar puro", "la corrección del hueco de marzo ya no es sólo hacia "
+          "adelante: podría devolver una hora del pasado")
+elif f31_riesgos:
+    falla("F16 · Despertar puro", f"Prueba7 perdió las comprobaciones {f31_riesgos}: los "
+          "fallos que ya costaron una vez volverían sin que nadie se entere")
+else:
+    dice_ok("F16 · Despertar puro", "sin android ni Context; Prueba7 mide las tres "
+              "decisiones, la medianoche justa, los dos cambios de hora y la canción "
+              "vacía; corre en el bucle y `Alarma` no se cuela en el papel")
+
+# 31.b · la hora se parte en UN solo sitio. `Alarma` obedece a `Despertar` y no
+#        trae su propio `Pattern`: dos parsers son dos horas posibles para la misma
+#        frase. El dueño se busca en todo el paquete, no sólo en `Alarma`.
+f31_duenos = {}
+for f31_f in ("parte", "proximo", "falta"):
+    f31_duenos[f31_f] = sorted(
+        p.name for p in F31_IA.glob("*.java")
+        if f"Despertar.{f31_f}(" in sin_comentarios(p.read_text(encoding="utf-8")))
+f31_esperado = {"parte": ["Alarma.java"], "proximo": ["Alarma.java"],
+                "falta": ["Alarma.java"]}
+if F31_ROTO:
+    pass
+elif not (F31_DESP and "Despertar.parte(" in F31_ALARMA
+          and "Despertar.proximo(" in F31_ALARMA and "Despertar.falta(" in F31_ALARMA):
+    falla("F16 · dueño de la hora", "`Alarma` no usa parte/proximo/falta de `Despertar`: "
+          "se estaría inventando la hora por su cuenta")
+elif f31_duenos != f31_esperado:
+    falla("F16 · dueño de la hora", f"los dueños son {f31_duenos} y deben ser {f31_esperado}")
+elif "Pattern.compile(" in F31_ALARMA:
+    falla("F16 · dueño de la hora", "`Alarma` trae su propio `Pattern`: dos parsers pueden "
+          "decidir dos horas distintas para la misma frase")
+else:
+    dice_ok("F16 · dueño de la hora", "`Alarma` sólo obedece a `Despertar`, sin un segundo "
+              "parser dentro; la hora tiene un dueño y sólo uno")
+
+# 31.c · la exactitud, dicha. Se comprueban las tres cosas a la vez: que pregunta,
+#        que sabe caer a la permitida y que la respuesta lo cuenta. Y el permiso
+#        que no se declara sigue sin declararse: si alguien lo mete, cambia la
+#        superficie medida del manifiesto y tiene que decirlo.
+f31_exacta = [t for t in ("canScheduleExactAlarms()", "setExactAndAllowWhileIdle(",
+                          "setAndAllowWhileIdle(", "catch (SecurityException")
+              if t not in F31_ALARMA]
+if F31_ROTO:
+    pass
+elif f31_exacta:
+    falla("F16 · la exactitud", f"falta {f31_exacta} en `Alarma`: o promete el minuto sin "
+          "permiso o no tiene plan B cuando el fabricante lo niega")
+elif F31_ALARMA_T.count('\\"exacta\\":') != 2:
+    falla("F16 · la exactitud", "las respuestas de poner y de estado no llevan las dos "
+          "`exacta`: la cara no sabría si prometer puntualidad")
+elif "no me da el minuto exacto" not in F31_ALARMA_T:
+    falla("F16 · la exactitud", "no se dice en palabras que puede sonar tarde: el "
+          "`exacta:false` solo no lo lee nadie de madrugada")
+elif re.search(r"<uses-permission[^>]*SCHEDULE_EXACT_ALARM", F31_MAN):
+    falla("F16 · la exactitud", "aparece `SCHEDULE_EXACT_ALARM`: es un permiso nuevo y "
+          "la superficie del manifiesto cambió sin decirlo")
+else:
+    dice_ok("F16 · la exactitud", "pregunta, cae a la permitida con su `catch` y lo dice "
+              "en palabras; `SCHEDULE_EXACT_ALARM` sigue sin declararse")
+
+# 31.d · lo que despierta de verdad: canal alto con el tono de ALARMA del sistema,
+#        categoría ALARMA, insistente y con los dos botones. Sin el canal propio,
+#        en Android 8+ el aviso sale mudo y la canción depende de un servicio que
+#        el sistema puede no dejar arrancar.
+f31_aviso = [t for t in ('"cort-alarma"', "IMPORTANCE_HIGH", "CATEGORY_ALARM",
+                         "FLAG_INSISTENT", "TYPE_ALARM", "USAGE_ALARM",
+                         "setOngoing(true)", "setSound(")
+             if t not in F31_ALARMA_T]
+if F31_ROTO:
+    pass
+elif f31_aviso:
+    falla("F16 · el aviso", f"falta {f31_aviso}: el despertador no tendría su canal de "
+          "alarma ni sonaría como alarma")
+elif F31_ALARMA_T.count("addAction(") != 2:
+    falla("F16 · el aviso", "la notificación no lleva exactamente dos botones "
+          "(detener y 5 min): o no se puede callar o hay uno de más")
+elif '"Detener"' not in F31_ALARMA_T or 'POSPONE_MIN + " min"' not in F31_ALARMA_T:
+    falla("F16 · el aviso", "los dos botones no se nombran `Detener` y `5 min`")
+else:
+    dice_ok("F16 · el aviso", "canal propio IMPORTANCE_HIGH con tono y atributos de "
+              "alarma, categoría ALARMA, insistente y dos botones")
+
+# 31.e · el disparo entra por un receptor propio, explícito y cerrado. Sin
+#        `<intent-filter>` y con `exported=false`, nadie de fuera lo despierta; y
+#        sin `RECEIVE_BOOT_COMPLETED` no se promete que sobreviva a un reinicio.
+f31_recv = re.search(r'<receiver\s+android:name="\.AlarmaSuena"[^>]*/>', F31_MAN)
+f31_rutas = [r for r in ("ACCION_DETENER", "ACCION_POSPONER", "Alarma.detener(",
+                         "Alarma.posponer(", "Alarma.sono(") if r not in F31_RECIBE]
+if F31_ROTO:
+    pass
+elif not f31_recv:
+    falla("F16 · el disparo", "el manifiesto no declara el `<receiver .AlarmaSuena>`: "
+          "`AlarmManager` no tendría a quién entregar la alarma")
+elif 'exported="false"' not in f31_recv.group(0):
+    falla("F16 · el disparo", "el receptor no es `exported=\"false\"`: cualquier app "
+          "podría despertar la alarma de CORT")
+elif "<intent-filter" in f31_recv.group(0):
+    falla("F16 · el disparo", "el receptor tiene `<intent-filter>`: deja de ser explícito")
+elif f31_rutas:
+    falla("F16 · el disparo", f"`AlarmaSuena` no atiende {f31_rutas}: el botón o el "
+          "disparo acabarían en nada")
+elif "new Intent(c, AlarmaSuena.class)" not in F31_ALARMA:
+    falla("F16 · el disparo", "`Alarma` no arma el `PendingIntent` explícito hacia "
+          "`AlarmaSuena.class`")
+elif re.search(r"<uses-permission[^>]*RECEIVE_BOOT_COMPLETED", F31_MAN) \
+        or "BOOT_COMPLETED" in F31_MAN:
+    falla("F16 · el disparo", "aparece `RECEIVE_BOOT_COMPLETED`: es un permiso nuevo y "
+          "la alarma no se rearma sola de todas formas; el precio hay que decirlo")
+else:
+    dice_ok("F16 · el disparo", "receptor propio, explícito y no exportado; atiende "
+              "sonar/detener/posponer; sin BOOT_COMPLETED ni permisos nuevos")
+
+# 31.f · las teclas del puente, con guardia en la cara, y una sola boca para poner.
+#        `alarmaPoner` se quitó a propósito: poner va por `accion` (`que:"alarma"`)
+#        y `Acciones.alarma` compone la frase. Una segunda boca decidiría dos veces
+#        lo mismo, que es el fallo que la 30.b ya prohíbe con `Elige`.
+f31_teclas = ("alarmaEstado", "alarmaCancela", "alarmaDetener", "alarmaPosponer")
+f31_sin_exp = [t for t in f31_teclas if t not in metodos_javascript]
+f31_sin_guardia = [t for t in f31_teclas if f"puede('{t}')" not in F31_JS]
+f31_alarma_ini = F31_ACC.find("private String alarma(Petición p)")
+f31_alarma_fin = F31_ACC.find("private String temporizador(", f31_alarma_ini)
+f31_alarma_cuerpo = F31_ACC[f31_alarma_ini:f31_alarma_fin] if f31_alarma_ini >= 0 else ""
+if F31_ROTO:
+    pass
+elif f31_sin_exp:
+    falla("F16 · las teclas", f"la cara las pide y Java no las expone: {f31_sin_exp}")
+elif f31_sin_guardia:
+    falla("F16 · las teclas", f"la cara las llama sin `puede(...)`: {f31_sin_guardia}")
+elif "alarmaPoner" in metodos_javascript:
+    falla("F16 · las teclas", "volvió `alarmaPoner`: dos bocas para poner la alarma, y "
+          "una de ellas nadie la llama")
+elif "Alarma.ponerDesde(" not in f31_alarma_cuerpo:
+    falla("F16 · las teclas", "`Acciones.alarma` no entrega la frase a `Alarma.ponerDesde`")
+elif "SET_ALARM" in f31_alarma_cuerpo or "AlarmClock" in f31_alarma_cuerpo:
+    falla("F16 · las teclas", "`Acciones.alarma` sigue abriendo el reloj del sistema: "
+          "CORT volvería a no saber su propia alarma")
+elif '" con "' not in F31_ACC_T or '" para "' not in F31_ACC_T:
+    falla("F16 · las teclas", "`Acciones.alarma` no compone «con» canción / «para» nota: "
+          "los campos sueltos de la voz se perderían")
+elif "soloHora(hora)" not in F31_ACC:
+    falla("F16 · las teclas", "no se comprueba que `hora` sea sólo una hora: a una frase "
+          "con cola se le pegaría una segunda nota y la cortaría")
+else:
+    dice_ok("F16 · las teclas", f"las {len(f31_teclas)} teclas de consulta/control están "
+              "expuestas y con guardia; poner va por `accion` y `Acciones.alarma`")
+
+# 31.g · la pantalla del despertador y el evento hasta la cara. Se pinta fuera de
+#        las hojas (`body`), se atiende ANTES que cualquier otra cosa y no se cierra
+#        sola. Y el arranque en frío tiene cola: si la página no estaba lista, el
+#        evento espera a `onPageFinished` en vez de perderse.
+f31_pantalla = [t for t in ("'cort-alarma-pantalla'", "'#ca-hora'", "'#ca-detener'",
+                            "'#ca-posponer'", ".classList.add('viva')")
+                if t not in F31_JS]
+f31_i_alarma = F31_JS.find("ev.type === 'alarma'")
+f31_i_aviso = F31_JS.find("ev.type === 'aviso'")
+if F31_ROTO:
+    pass
+elif f31_pantalla:
+    falla("F16 · la pantalla", f"la cara no monta {f31_pantalla}")
+elif "#cort-alarma-pantalla.viva" not in F31_CSS:
+    falla("F16 · la pantalla", "el CSS no enciende `#cort-alarma-pantalla.viva`: la caja "
+          "existiría pero no se vería")
+elif min(f31_i_alarma, f31_i_aviso) < 0 or not (f31_i_alarma < f31_i_aviso):
+    falla("F16 · la pantalla", "el evento `alarma` no se atiende antes que los demás: "
+          "una regla o un aviso podrían comérselo a las siete")
+elif '{\\"type\\":\\"alarma\\"' not in F31_PUE_T:
+    falla("F16 · la pantalla", "`CortNative.alarmaEnLaCara` no emite `type:alarma`")
+elif 'startsWith("{")' not in F31_PUE_T:
+    falla("F16 · la pantalla", "`alarmaEnLaCara` pega sin comprobar que los datos sean un "
+          "objeto: un cuadro roto que la cara no lee")
+elif F31_CARA.count("puente.alarmaEnLaCara(") < 2:
+    falla("F16 · la pantalla", "`MainActivity` no suelta el evento en los dos caminos "
+          "(cara abierta y arranque en frío)")
+elif "A_ALARMA = Alarma.ACCION" not in F31_CARA \
+        or "Alarma.EXTRA_EVENTO" not in F31_CARA \
+        or "alarmaPendiente" not in F31_CARA or "paginaLista" not in F31_CARA \
+        or "onPageFinished" not in F31_CARA:
+    falla("F16 · la pantalla", "la actividad no conserva el evento pendiente ni lo "
+          "suelta en `onPageFinished`")
+else:
+    dice_ok("F16 · la pantalla", "se pinta fuera de las hojas y lo primero, no se cierra "
+              "sola, y el evento sobrevive al arranque en frío")
+
+# 31.h · la cola de la frase. `Cerebro.hora` cambia la hora por «07:30» y antes se
+#        comía lo de detrás; ahora conserva los dos lados. La tabla lo comprueba con
+#        dos frases compuestas, y la cara saca la canción ANTES que la nota para
+#        que «noche de synth» no pierda «de synth» como si fuera una nota.
+f31_cola = ("dicho.substring(0, m.start())" in F31_CER
+            and "dicho.substring(m.end())" in F31_CER)
+f31_tabla = ('"07:30 con after dark para el examen"' in F31_P3_T
+             and '"7 con la cancion noche de synth"' in F31_P3_T)
+f31_i_cancion = F31_JS.find("sacaCancion(texto)")
+f31_i_nota = F31_JS.find("sacaNota(sinCancion)")
+if F31_ROTO:
+    pass
+elif not f31_cola:
+    falla("F16 · la cola", "`Cerebro.hora` no conserva lo de delante y lo de detrás: la "
+          "canción y la nota se perderían al normalizar la hora")
+elif not f31_tabla:
+    falla("F16 · la cola", "Prueba3 no mide las dos frases compuestas: el fallo podría "
+          "volver sin que la tabla se ponga roja")
+elif min(f31_i_cancion, f31_i_nota) < 0 or not (f31_i_cancion < f31_i_nota):
+    falla("F16 · la cola", "la cara no saca la canción antes de la nota: «de synth» "
+          "acabaría siendo la nota")
+elif "function sacaCancion(" not in F31_JS:
+    falla("F16 · la cola", "falta `sacaCancion` en la cara")
+elif 'id="eq-alarma-cancion"' not in F31_TEL or 'id="eq-alarma-rutina"' not in F31_TEL \
+        or 'id="eq-alarma-quita"' not in F31_TEL:
+    falla("F16 · la cola", "al formulario del mando le faltan canción, rutina o el botón "
+          "de quitar: la alarma compuesta sólo se podría poner por voz")
+else:
+    dice_ok("F16 · la cola", "`Cerebro.hora` conserva los dos lados, la tabla mide las "
+              "frases compuestas y la cara separa canción de nota en orden")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()

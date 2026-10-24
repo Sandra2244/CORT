@@ -375,7 +375,7 @@ siempre, y que CORT conteste.
 | **F13 · modelos que se descargan** | ping antes de tirar; progreso **sumando por capa**; cancelar y reintentar en el móvil; `psutil` opcional en el backend; catálogo **único generado** (107) para PC y móvil; el requisito `OLLAMA_HOST` dicho en pantalla | prueba del parser NDJSON con dos capas y con líneas fuera de orden | peso real de un ↓ con y sin el arreglo |
 | **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | **91 intents / 736 frases** (41 mando, 26 razón, 13 casa, 11 nube); 208 frases de razón contestadas sin red |
 | **F15 · cerebro de casa con nombres** | «pon *After Dark*», «qué playlist», «cámbialo a <canción>», ecualizador real (`audiofx.Equalizer` en su propio fichero, fuera de las clases de papel), auricular con acción | `Prueba6` (18/18) sobre `Elige` puro + costura [30] (7 comprobaciones) + taller de 8 mutaciones | **41 intenciones / 736 frases** (F15 añadió 4 reglas y convirtió «pon» en búsqueda); 18 elecciones de canción/listas/preset medidas en el JDK; 336 frases de tabla en `Prueba3` |
-| **F16 · rutinas y despertar** | intent compuesto de alarma (hora + canción + nota), pantalla de alarma propia, disparador por hora exacta, rutina de buenos días | prueba de `AlarmManager` en el envase + la cara pintando la rutina | latencia del disparo y sitio ocupado |
+| **F16 · el despertador** | hora + canción + nota + rutina en una frase; alarma **propia** (`AlarmManager` + notificación de categoría ALARMA en canal alto), pantalla de despertador en la cara; sin permiso nuevo (sólo un `<receiver>` no exportado) | `Prueba7` (21/21) sobre `Despertar` puro, con los dos cambios de hora + costura [31] (8 comprobaciones) + taller de 18 mutaciones | exactitud **dicha** (`exacta:false` en Android 12+ sin `SCHEDULE_EXACT_ALARM`); canción resuelta al ponerla con `Elige.mejor`; 336 frases de tabla |
 | **F17 · cara vestida** | orbe/burbuja que leen el atuendo, burbuja estilo 1.1.4 (azul, transparente, arrastrable, no molesta), agua y vidrio con freno por RAM/juego | sonda de colores: cambiar traje ⇒ cambian **todos** los colores del orbe | nº de variables leídas por `orb.js` (hoy 0) |
 
 Cada fase termina igual: **verificar → commit → etiqueta `-demo` → pipeline verde →
@@ -590,4 +590,61 @@ comprobaciones** sobre el Vosk real.
 Lo que **no** se puede medir aquí: que el `Equalizer` de su teléfono traiga los presets
 que dice, y que el ducking se oiga. Eso es de aparato. Y **nada de esto llega a su
 teléfono hasta que salga la Release**: el pipeline no se ha corrido con F15 todavía.
+
+### F16 · «despiértame a las 7 con After Dark para el examen» (2026-10-24)
+
+Hasta aquí, «pon una alarma» abría el reloj del sistema con `SET_ALARM` y CORT se
+quedaba sin saber qué había puesto: no podía elegir la canción, no podía enseñar la
+nota y no podía callarla. Ahora la alarma es **suya**. La frase se parte en
+`Despertar` —Java puro, sin `android.*`, medido por `Prueba7` en el JDK— y `Alarma`
+sólo obedece: arma el `PendingIntent`, guarda el estado en las `SharedPreferences`
+que ya existían y, cuando suena, pone una notificación de **categoría ALARMA** en un
+canal propio de importancia alta con el tono de alarma del sistema.
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| «7:30», «a las 8», «7 y media», «7 y cuarto», con tilde o en mayúsculas | `Prueba7` (21/21): hora, minuto y las dos formas de los cuartos |
+| la canción va detrás de «con» y la nota detrás de «para»; cada una en su sitio | `Prueba7` casos 4–6; la cara saca **primero** la canción para que «noche de synth» no pierda «de synth» como nota |
+| «con la canción» sin nombre **no** inventa una canción llamada «la canción» | `Prueba7` lo exige; el taller la mete a la fuerza (`if (false)`) y la suite se pone roja |
+| «buenos días»/«rutina» enciende la rutina y no se cuela ni en la canción ni en la nota | `Prueba7` caso 7; al sonar, la rutina lee `Agenda.agenda("hoy")` en ese momento |
+| sin hora no hay alarma (mejor preguntar que despertar a las 0:00) | `Prueba7`; `Alarma.ponerDesde` devuelve `ok:false` con la frase que pide la hora |
+| el próximo disparo es **estrictamente futuro**: justo ahora → mañana, sin doble disparo | `Prueba7` caso 12 |
+| los dos cambios de hora: en octubre las 02:30 existen dos veces; en marzo no existen | `Prueba7` casos 13–14; la corrección del hueco **sólo empuja hacia adelante** (`puesto < pedido`) |
+| la hora se parte en **un solo sitio** | costura [31.b]: `Despertar.parte/proximo/falta` sólo tienen dueño en `Alarma.java`; si `Alarma` trae su propio `Pattern`, se pone roja |
+| la exactitud no se finge | `canScheduleExactAlarms()` en Android 12+, `setExactAndAllowWhileIdle` cuando sí, `setAndAllowWhileIdle` cuando no, `catch (SecurityException)` de plan B y `exacta:false` + «puede sonar unos minutos tarde» en la respuesta |
+| el aviso despierta de verdad | costura [31.d]: canal `cort-alarma` IMPORTANCE_HIGH, `CATEGORY_ALARM`, `USAGE_ALARM`/`TYPE_ALARM`, `FLAG_INSISTENT`, `setOngoing(true)` y dos botones (Detener / 5 min) |
+| el disparo es explícito y cerrado | `<receiver .AlarmaSuena exported="false">` sin `<intent-filter>`; costura [31.e]; `AlarmaSuena` atiende sonar/detener/posponer |
+| la cara enseña el despertador aunque esté en otra hoja | pantalla `#cort-alarma-pantalla` pegada al `body`, atendida **antes** que cualquier otro evento y sin cerrarse sola; no se cierra hasta pulsar detener o posponer |
+| arranque en frío: el evento no se pierde | `MainActivity` guarda `alarmaPendiente` y lo suelta en `onPageFinished`; costura [31.g], que exige los dos caminos |
+| la frase de la tabla conserva la cola | `Cerebro.hora` reconstruye con lo de delante **y** lo de detrás; `Prueba3` mide las dos frases compuestas y el taller borra una para que se caiga |
+| una sola boca para poner la alarma | la cara manda `accion` con `que:'alarma'`; `Acciones.alarma` compone la frase con los campos sueltos. `alarmaPoner` se **quitó** del puente: nadie la llamaba y habría sido una segunda forma de decidir la hora |
+
+Cifras medidas en el portátil: `Prueba7` **21/21**, las **7 suites** de
+`scripts/prueba-mente.sh` en verde sobre **336 frases de tabla**, la costura en
+**295 `ok`** (8 del sector [31]) y `scripts/taller-f16.sh` con **18 mutaciones que caen
+las 18**, cada una nombrando la comprobación que la echaba de menos; dos de ellas
+corren la suite entera (`DST de marzo`, `sin nombre no hay canción`).
+
+**Lo que NO se puede medir aquí, y se dice sin adornos:**
+
+- Que el teléfono despierte a la hora. Sin `SCHEDULE_EXACT_ALARM` —que **no** se
+  declara: sería un permiso nuevo— en Android 12+ `canScheduleExactAlarms()` suele
+  contestar que no y la alarma puede sonar unos minutos tarde. La respuesta lo dice
+  (`exacta:false` y una frase), no se promete puntualidad que no hay.
+- Que el sonido se repita. `FLAG_INSISTENT` se pide, pero varios fabricantes no lo
+  respetan con canales; el aviso de canal alto sigue siendo lo que despierta.
+- Que la canción arranque. Va por el servicio en primer plano (`Reproductor`); si el
+  sistema prohíbe arrancar servicios desde segundo plano —más probable con la alarma
+  permitida, no exacta—, el tono de la notificación no depende de eso.
+- Que la cara se asome con la app cerrada. Sólo se intenta si CORT tiene «aparecer
+  encima de otras apps»; sin esa concesión Android no deja abrir actividades desde
+  segundo plano y queda la notificación, que es la que despierta.
+- Que sobreviva a reiniciar. **No** sobrevive: no se declara `RECEIVE_BOOT_COMPLETED`
+  (otro permiso) y la alarma se pierde al apagar el teléfono.
+- Nada de esto llega a su teléfono hasta que salga la Release: **el pipeline no se ha
+  corrido con F16 todavía**.
+
+Los dos botones de la notificación van sin icono (`0`, que Android permite): los
+`android.R.drawable` que esta casa da por comprobados son cuatro y ninguno es un reloj
+de alarma; inventar uno local pasaría el `javac` de casa y reventaría en el runner.
 

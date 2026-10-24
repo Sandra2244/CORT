@@ -288,8 +288,14 @@ const CARA_MANDO = `
   <div class="eq-tit">despertar y contar</div>
   <div class="eq-fila">
     <input id="eq-alarma-hora" type="time" value="07:30">
+    <input id="eq-alarma-cancion" placeholder="con qué canción">
     <input id="eq-alarma-nota" placeholder="de qué te aviso">
     <button class="eq-b" id="eq-alarma-pon">alarma</button>
+  </div>
+  <div class="eq-fila">
+    <label class="eq-nota" for="eq-alarma-rutina">
+      <input id="eq-alarma-rutina" type="checkbox"> rutina de la mañana</label>
+    <button class="eq-b" id="eq-alarma-quita">quitar alarma</button>
   </div>
   <div class="eq-fila">
     <input id="eq-temp-min" type="number" min="0" max="600" step="1" value="10">
@@ -667,8 +673,11 @@ function enganchaMando() {
   el('eq-alarma-pon').onclick = () => {
     const hora = (el('eq-alarma-hora')?.value || '').trim();
     if (!/^\d{1,2}:\d{2}$/.test(hora)) return avisa('mando', 'Dime la hora del despertar: 7:30, 06:15…');
-    accionAlarma(hora, (el('eq-alarma-nota')?.value || '').trim(), false);
+    accionAlarma(hora, (el('eq-alarma-nota')?.value || '').trim(), false,
+                 (el('eq-alarma-cancion')?.value || '').trim(),
+                 !!el('eq-alarma-rutina')?.checked);
   };
+  el('eq-alarma-quita').onclick = () => accionAlarmaQuita(false);
   el('eq-temp-pon').onclick = () => {
     const min = +(el('eq-temp-min')?.value || 0);
     if (!min) return avisa('mando', 'Pon primero cuántos minutos quieres contar.');
@@ -698,8 +707,11 @@ function pintaMando() {
   const lin = el('eq-linterna');
   lin.classList.toggle('puesta', estado.linterna);
   lin.textContent = '🔦 linterna ' + (estado.linterna ? 'encendida' : 'apagada');
+  const av = puede('alarmaEstado') ? parsea(llama('alarmaEstado'), ctx) : null;
+  const alarma = av?.puesta ? ' · alarma ' + (av.alarma || '') + ' (' + (av.en || '') + ')' : '';
   linea('mando', 'volumen ' + (estado.nivel ?? '—') + '/' + (estado.max ?? '—')
     + ' · linterna ' + (estado.linterna ? 'encendida' : 'apagada')
+    + alarma
     + (r.sinMiedo ? ' · en modo juego' : ''));
 }
 
@@ -740,13 +752,33 @@ function accionLinterna(como, alVoz) {
   return true;
 }
 
-function accionAlarma(hora, nota, alVoz) {
+function accionAlarma(hora, nota, alVoz, cancion, rutina) {
   if (!puede('accion')) return di(sinMando, 'mando');
-  const r = envia('accion', { que: 'alarma', hora, nota: nota || '' }, 'mando', sinMando);
+  const r = envia('accion', {
+    que: 'alarma', hora, cancion: cancion || '', nota: nota || '', rutina: !!rutina,
+  }, 'mando', sinMando);
   if (!r) return false;
-  diceBien('mando', 'Despertador a las ' + (r.alarma || hora) + (nota ? ' — ' + nota : '') + '.');
-  if (alVoz) ctx?.say?.('Despertador a las ' + (r.alarma || hora) + '.');
-  ctx?.term?.('alarma ' + (r.alarma || hora), 'equipo');
+  /* F16 · la frase la compone Java (hora, canción encontrada, si el minuto será
+     exacto). La cara repite LO QUE DIJO, no una promesa propia: si el Android no
+     da alarmas exactas, `dice` ya lo cuenta. */
+  const dicho = r.dice || ('Despertador a las ' + (r.alarma || hora)
+    + (nota ? ' — ' + nota : '') + '.');
+  diceBien('mando', dicho);
+  if (alVoz) ctx?.say?.(dicho);
+  ctx?.term?.('alarma ' + (r.alarma || hora) + (r.exacta === false ? ' (sin minuto exacto)' : ''), 'equipo');
+  return true;
+}
+
+/** «quitar la alarma»: el puente de F16 sabe desarmarla, no sólo ponerla. */
+function accionAlarmaQuita(alVoz) {
+  if (!puede('alarmaCancela')) return di(
+    'Quitar la alarma lo trae el APK nuevo de la Release; este cuerpo sólo sabe ponerla.', 'mando');
+  const r = parsea(llama('alarmaCancela'), ctx);
+  if (!r) return false;
+  const dicho = r.dice || 'Alarma quitada.';
+  diceBien('mando', dicho);
+  if (alVoz) ctx?.say?.(dicho);
+  ctx?.term?.('alarma: ' + dicho, 'equipo');
   return true;
 }
 
@@ -2100,8 +2132,64 @@ function ejecutaLocal(accion, param) {
   return ACCION_DE_CARA.has(accion) ? true : null;
 }
 
+/* ─────────────────────────── la pantalla del despertador ──────────────────
+   F16. Vive en el `body`, fuera de las hojas, porque a las siete de la mañana la
+   dueña no tiene por qué estar en el Equipo: el despertador es lo que hay que
+   ver, con la hora grande y dos botones —detener y cinco minutos—. No se cierra
+   sola: una alarma que se va sin que nadie la oiga es peor que ninguna. */
+function pintaAlarma(ev) {
+  let caja = document.getElementById('cort-alarma-pantalla');
+  if (!caja) {
+    caja = document.createElement('div');
+    caja.id = 'cort-alarma-pantalla';
+    caja.setAttribute('role', 'dialog');
+    caja.setAttribute('aria-label', 'despertador de CORT');
+    caja.innerHTML = `
+      <div class="ca-sello">despertador de CORT</div>
+      <div class="ca-hora" id="ca-hora">—</div>
+      <div class="ca-nota" id="ca-nota"></div>
+      <div class="ca-rutina" id="ca-rutina"></div>
+      <div class="ca-botones">
+        <button type="button" id="ca-detener">detener</button>
+        <button type="button" id="ca-posponer">5 minutos</button>
+      </div>`;
+    document.body.appendChild(caja);
+    caja.querySelector('#ca-detener').onclick = () => {
+      const r = puede('alarmaDetener') ? parsea(llama('alarmaDetener'), ctx) : null;
+      cierraAlarma();
+      ctx?.say?.(r?.dice || 'Despertador detenido.');
+    };
+    caja.querySelector('#ca-posponer').onclick = () => {
+      const r = puede('alarmaPosponer') ? parsea(llama('alarmaPosponer'), ctx) : null;
+      cierraAlarma();
+      ctx?.say?.(r?.dice || 'Te despierto en cinco minutos.');
+    };
+  }
+  caja.querySelector('#ca-hora').textContent = ev.hora || '—';
+  const cosas = [];
+  if (ev.nota) cosas.push(ev.nota);
+  if (ev.titulo) cosas.push('canción: «' + ev.titulo + '»' + (ev.artista ? ' de ' + ev.artista : ''));
+  caja.querySelector('#ca-nota').textContent = cosas.join(' · ') || 'Buenos días.';
+  const rutina = caja.querySelector('#ca-rutina');
+  rutina.textContent = ev.rutina ? (ev.dice || 'rutina de la mañana') : '';
+  caja.classList.add('viva');
+  ctx?.term?.('despertador · ' + (ev.hora || '—') + (ev.nota ? ' · ' + ev.nota : ''), 'mando');
+  ctx?.orb?.burst?.();
+}
+
+function cierraAlarma() {
+  const caja = document.getElementById('cort-alarma-pantalla');
+  if (caja) caja.classList.remove('viva');
+}
+
 function handleTelefonoEvento(ev) {
   if (!ev || typeof ev.type !== 'string') return false;
+
+  /* F16 · el despertador. Va lo primero: si suena a las 7, lo que importa es
+     verlo y poder callarlo, no una regla de automatización. La pantalla no vive
+     dentro de la hoja del Equipo —la dueña puede tener abierta otra—: se pega al
+     `body` y se pinta con lo que Java mandó. */
+  if (ev.type === 'alarma') { pintaAlarma(ev); return true; }
 
   /* Las automatizaciones se alimentan de los eventos EN CUANTO llegan, antes de que
      la hoja los interprete para pintar. `aviso` es nuevo en la 2.4 (Java lo manda
@@ -2292,12 +2380,18 @@ export function telefonoPorVoz(texto) {
     return accionLinterna(como, true);
   }
 
-  /* 3 · alarma con hora */
+  /* 3 · alarma con hora, canción y nota */
   if (/\b(alarma|despertador|despiertame|despierta)\b/.test(b)) {
     const hora = sacaHora(texto);
     if (!hora) return di('Dime la hora: «pon una alarma a las 7:30».', 'mando');
-    const nota = sacaNota(texto);
-    return accionAlarma(hora, nota, true);
+    /* F16 · la canción va detrás de «con» y la nota detrás de «para». Se saca
+       primero la canción y se quita del texto: así «noche de synth» no pierde su
+       «de synth» como si fuera una nota. */
+    const cancion = sacaCancion(texto);
+    const sinCancion = cancion ? String(texto).replace(cancion, ' ') : texto;
+    const nota = sacaNota(sinCancion);
+    const rutina = /\b(rutina|buenos dias)\b/.test(b);
+    return accionAlarma(hora, nota, true, cancion, rutina);
   }
 
   /* 4 · temporizador */
@@ -2547,6 +2641,19 @@ function sacaHora(texto) {
 function sacaNota(texto) {
   const m = /\b(?:para|de|por|sobre)\s+([a-záéíóúñ ,._0-9]{3,40})$/i.exec(String(texto).trim());
   return m ? m[1].replace(/[.:;]\s*$/, '').trim() : '';
+}
+
+/* F16 · la canción del despertar: «a las 7 con after dark para el examen» →
+   «after dark». Se corta en «para»/«que dice» (eso ya es la nota) y se quita el
+   relleno «la canción»/«la música». Sin nombre no se inventa una. */
+function sacaCancion(texto) {
+  const m = /\b(?:con|y suena|y pon|y ponme)\s+(.+?)(?=\s+(?:para|que dice|diciendo)\b|$)/i
+    .exec(String(texto).trim());
+  if (!m) return '';
+  const cancion = m[1].replace(/^(?:la\s+|el\s+|una\s+|un\s+)?(?:cancion|canción|musica|música|tema)\s+/i, '')
+    .replace(/[.:;]\s*$/, '').trim();
+  if (/^(?:la\s+|el\s+|una\s+|un\s+)?(?:cancion|canción|musica|música|tema)$/i.test(cancion)) return '';
+  return cancion;
 }
 
 /* «temporizador de 10 minutos» → 600; también «media hora», «un cuarto de hora»,

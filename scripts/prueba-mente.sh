@@ -2,14 +2,15 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # prueba-mente.sh — el cerebro del APK, probado EN EL PORTÁTIL, sin teléfono.
 #
-# Seis clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro: `Razon`
+# Siete clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro: `Razon`
 # (cuentas, unidades, fechas), `Cerebro` (la tabla de frases), `Nube` (el
 # proveedor), `Ollama` (los cerebros del PC de casa por Wi-Fi), `Mente` (quién
-# responde cada frase) y `Elige` (qué canción, qué lista, qué preset). Lo que las
-# ata a Android son cinco tipos: `Log`, `Context`, `SharedPreferences`,
-# `AssetManager` y el `org.json` del sistema. Aquí se les pone su **gemelo de
-# papel** (`apps/apk/prueba/papeles`) y con eso el JDK de a pie compila y ejecuta
-# las seis pruebas:
+# responde cada frase), `Elige` (qué canción, qué lista, qué preset) y
+# `Despertar` (qué hora, qué canción y qué nota lleva una alarma, y cuándo
+# toca). Lo que las ata a Android son cinco tipos: `Log`, `Context`,
+# `SharedPreferences`, `AssetManager` y el `org.json` del sistema. Aquí se les
+# pone su **gemelo de papel** (`apps/apk/prueba/papeles`) y con eso el JDK de a
+# pie compila y ejecuta las siete pruebas:
 #
 #   Prueba.java   · `Razon` a pelo: 43 frases suyas y seis que no lo son.
 #   Prueba2.java  · la RUTA: acción conocida → `Cerebro`; cuenta/unidad/hora →
@@ -31,6 +32,10 @@
 #                   separa, «mr kitty» lleva a la canción del artista, lo que no
 #                   está devuelve -1, y los presets del ecualizador se traducen
 #                   de «clásica»/«graves» al nombre inglés del aparato.
+#   Prueba7.java  · `Despertar` a pelo: «a las 7:30 con after dark para el
+#                   examen» se parte en hora, canción y nota; sin hora no hay
+#                   plan; el próximo disparo es estrictamente futuro (hoy, mañana,
+#                   en los dos cambios de hora) y «falta» se dice en palabras.
 #
 # `--release 11` no se pasa: en este portátil `javac` sólo existe como módulo del
 # JDK (`java -m jdk.compiler/…`) y ese punto de entrada no acepta la bandera. El
@@ -57,9 +62,9 @@ T=/tmp/cort-mente
 
 # 1 · el escenario, siempre limpio: fuentes + gemelos de papel + pruebas
 rm -rf "$T"; mkdir -p "$T/src/com/cort/ia" "$T/papeles" "$T/assets" "$T/assets-vacias" "$T/out"
-cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$E"/Ollama.java "$E"/Elige.java "$T/src/com/cort/ia/"
+cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$E"/Ollama.java "$E"/Elige.java "$E"/Despertar.java "$T/src/com/cort/ia/"
 cp -r "$P"/papeles/* "$T/papeles/"
-cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$P"/Prueba4.java "$P"/Prueba5.java "$P"/Prueba6.java "$T/src/com/cort/ia/"
+cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$P"/Prueba4.java "$P"/Prueba5.java "$P"/Prueba6.java "$P"/Prueba7.java "$T/src/com/cort/ia/"
 cp "$RAIZ"/apps/apk/assets/habilidades.json "$T/assets/"
 cp "$P"/casos-razon.txt "$P"/casos-no-locales.txt "$T/"
 
@@ -81,7 +86,7 @@ echo "== compilando $(echo "$LISTA" | wc -l) ficheros de papel"
 # shellcheck disable=SC2086
 si_javac -encoding UTF-8 --add-modules jdk.httpserver -d "$T/out" $LISTA
 
-# 3 · las seis suites; la última manda en el código de salida
+# 3 · las siete suites; la última manda en el código de salida
 #
 # Cada salida va a su propio `.log` y se imprime entera SI ALGO FALLA. Con
 # `java … | tail -1` se perdería el detalle justo cuando hace falta: `pipefail`
@@ -91,12 +96,13 @@ si_javac -encoding UTF-8 --add-modules jdk.httpserver -d "$T/out" $LISTA
 MEM="${JAVA_MEM:-256m}"
 pasa=0
 fallan=0
-for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba6; do
+for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba6 Prueba7; do
   caso="Razon a pelo"; [ "$suite" = Prueba2 ] && caso="la ruta de Mente"
   [ "$suite" = Prueba3 ] && caso="las frases de la tabla"
   [ "$suite" = Prueba4 ] && caso="Ollama en la Wi-Fi de casa"
   [ "$suite" = Prueba5 ] && caso="el diccionario, en los dos sentidos"
   [ "$suite" = Prueba6 ] && caso="elegir la canción, la lista y el preset"
+  [ "$suite" = Prueba7 ] && caso="partir el despertar: hora, canción, nota"
   echo "== $caso"
   set +e
   java -Xmx"$MEM" --add-modules jdk.httpserver -cp "$T/out" "com.cort.ia.$suite" > "$T/$suite.log" 2>&1
@@ -110,6 +116,6 @@ for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba6; do
     echo "   (sale $st — log: $T/$suite.log)"
   fi
 done
-[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 6"; exit 1; }
+[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 7"; exit 1; }
 FRASES=$(python3 -c 'import json;d=json.load(open("apps/apk/assets/habilidades.json"));print(sum(len(p["patrones"]) for p in d["patrones"]))' 2>/dev/null || echo "?")
-echo "MENTE OK: las 6 suites pasan sobre las $FRASES frases de la tabla."
+echo "MENTE OK: las 7 suites pasan sobre las $FRASES frases de la tabla."

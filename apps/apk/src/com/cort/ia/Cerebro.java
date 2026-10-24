@@ -415,7 +415,15 @@ public class Cerebro {
         return d.isEmpty() ? dicho : d;   // app cualquiera: la cara tira de `app`
     }
 
-    /** Deja la hora como `HH:MM` cuando se puede; si no, la deja como vino. */
+    /**
+     * Deja la hora como `HH:MM` cuando se puede; si no, la deja como vino.
+     *
+     * **Y no tira el resto.** F16: «despiértame a las 7:30 con after dark para el
+     * examen» trae la canción y la nota detrás de la hora; la versión anterior
+     * devolvía sólo «07:30» y las dos se perdían antes de llegar a `Acciones`.
+     * Ahora se sustituye el trozo de la hora y se conserva la cola, que es la que
+     * `Despertar` vuelve a partir en canción y nota.
+     */
     private static String hora(String dicho) {
         java.util.regex.Matcher m =
             Pattern.compile("(\\d{1,2})[:. ]?(\\d{2})").matcher(dicho);
@@ -423,7 +431,10 @@ public class Cerebro {
             int h = entero(m.group(1), -1);
             int mi = entero(m.group(2), -1);
             if (h >= 0 && h <= 23 && mi >= 0 && mi <= 59) {
-                return String.format(java.util.Locale.ROOT, "%02d:%02d", h, mi);
+                String hhmm = String.format(java.util.Locale.ROOT, "%02d:%02d", h, mi);
+                String cola = (dicho.substring(0, m.start()) + " " + hhmm + " "
+                             + dicho.substring(m.end())).trim();
+                return cola.replaceAll("\\s+", " ");
             }
         }
         return dicho.trim();

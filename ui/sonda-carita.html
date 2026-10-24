@@ -191,6 +191,23 @@ window.CortNative = {
                                     pesoModelo: 52000000 }),
   oidoPropio: enciende => JSON.stringify({ ok: true, oido: !!enciende }),
   burbuja: visible => JSON.stringify({ ok: true, on: !!visible }),
+  // F16 · el despertador propio: consultar, quitar, detener y posponer. Sin las
+  // cuatro, el `puede()` de la alarma daría `false` y la sonda recorrería la rama
+  // del APK viejo. `alarmaEstado` contesta con una puesta para que la hoja pinte
+  // la rama buena; poner va por `accion` (`que:'alarma'`), como en Java.
+  alarmaEstado: () => { mandadas.push('alarmaEstado');
+    return JSON.stringify({ ok: true, puesta: true, alarma: '07:30', en: 'en 8 h 5 min',
+                            cuando: 0, exacta: false, cancion: 'after dark',
+                            titulo: 'After Dark', artista: 'Mr. Kitty',
+                            nota: 'el examen', rutina: true,
+                            dice: 'Despertador a las 07:30, en 8 h 5 min.' }); },
+  alarmaCancela: () => { mandadas.push('alarmaCancela');
+    return JSON.stringify({ ok: true, puesta: false, dice: 'Alarma cancelada.' }); },
+  alarmaDetener: () => { mandadas.push('alarmaDetener');
+    return JSON.stringify({ ok: true, sonando: false, dice: 'Despertador detenido.' }); },
+  alarmaPosponer: () => { mandadas.push('alarmaPosponer');
+    return JSON.stringify({ ok: true, puesta: true, cuando: 0, en: 'en 5 min',
+                            dice: 'Te despierto otra vez en 5 minutos.' }); },
   requestPermission: () => true,
   pidePermisoMedios: () => undefined,
 };

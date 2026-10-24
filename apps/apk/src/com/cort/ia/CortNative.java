@@ -1323,6 +1323,29 @@ public class CortNative {
         return Ecualizador.estadoJson();
     }
 
+    /* ─────────────────────────── F16 · el despertador ────────────────────────
+     * La cara no arma `AlarmManager` ni toca notificaciones: manda la frase y la
+     * decisión (hora, canción, nota, rutina) la toma `Despertar`/`Alarma`, que es
+     * lo que se mide en el JDK y lo que se puede leer en un solo sitio.
+     */
+
+    /* Poner la alarma NO tiene tecla propia: la cara manda la frase por `accion`
+       (`que:"alarma"`), y `Acciones.alarma` la compone con los campos sueltos y la
+       entrega a `Alarma.ponerDesde`. Una segunda boca para lo mismo sería una
+       segunda forma de decidir la hora. */
+
+    @JavascriptInterface
+    public String alarmaEstado() { return Alarma.estadoJson(act); }
+
+    @JavascriptInterface
+    public String alarmaCancela() { return Alarma.cancela(act); }
+
+    @JavascriptInterface
+    public String alarmaDetener() { return Alarma.detener(act); }
+
+    @JavascriptInterface
+    public String alarmaPosponer() { return Alarma.posponer(act); }
+
     /**
      * «Ponme algo»: la cola se arma sola con los gustos y suena.
      *
@@ -1422,6 +1445,24 @@ public class CortNative {
      */
     void atajoEnLaCara(String hoja) {
         cuadro("{\"type\":\"atajo\",\"hoja\":" + comilla(hoja) + "}");
+    }
+
+    /**
+     * F16 · el despertador está sonando: la cara enseña su pantalla de alarma con
+     * lo que trae el evento (`hora`, `nota`, `titulo`, `rutina`, `dice`).
+     *
+     * `datos` ya es un objeto JSON salido de `Alarma`; aquí sólo se le pone el
+     * `type` que escucha la página. Se comprueba que sea un objeto y se le quitan
+     * las llaves de fuera: pegar `{"type":"alarma",` delante de algo que no empieza
+     * por `{` dejaría un cuadro roto que la cara no podría leer.
+     */
+    void alarmaEnLaCara(String datos) {
+        String dentro = datos == null ? "" : datos.trim();
+        String cuerpo = "";
+        if (dentro.startsWith("{") && dentro.endsWith("}")) {
+            cuerpo = dentro.substring(1, dentro.length() - 1).trim();
+        }
+        cuadro("{\"type\":\"alarma\"" + (cuerpo.isEmpty() ? "" : "," + cuerpo) + "}");
     }
 
     /* ────────────────────────────── modo juego ────────────────────────────── */

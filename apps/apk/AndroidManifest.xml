@@ -127,8 +127,11 @@
     <uses-permission android:name="android.permission.CAMERA"
                      android:required="false" />
 
-    <!-- Alarma y temporizador, prestados del reloj del sistema. Sin este permiso
-         Android no deja lanzar `SET_ALARM` desde una app que no sea el reloj. -->
+    <!-- Alarma y temporizador. `SET_ALARM` ya no es como CORT pone el despertador:
+         desde F16 tiene el suyo (`Alarma.java`, con hora, canción y nota). Se queda
+         declarado aunque ya no haga falta —«enséñame las alarmas» usa
+         `SHOW_ALARMS` y `SET_TIMER` no pide permiso—, porque la lista de permisos
+         es superficie medida y quitarlo cambiaría el APK sin ganar nada. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM"
                      android:required="false" />
 
@@ -419,6 +422,17 @@
             android:name=".Reproductor"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- F16 · el despertador. Android le entrega el disparo de `AlarmManager`
+             con un `PendingIntent` **explícito** de esta misma app; por eso no
+             lleva `<intent-filter>` y `exported=false`: nadie de fuera puede
+             despertarla. No pide ningún permiso y suma este renglón al manifiesto,
+             que es el precio medido de tener alarma propia. Sin
+             `RECEIVE_BOOT_COMPLETED` no se rearma al reiniciar: se dice, no se
+             promete. -->
+        <receiver
+            android:name=".AlarmaSuena"
+            android:exported="false" />
 
         <!-- El **mueble de los archivos**: convierte
              `/storage/emulated/0/Descargas/tema.mp3` en un

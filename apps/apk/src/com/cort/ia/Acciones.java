@@ -76,14 +76,9 @@ public class Acciones {
 
     /* ─────────────────────── el tiempo, dicho en español ─────────────────── */
 
-    /** «7:30», «7.30», «7h30». */
-    private static final Pattern HORA = Pattern.compile("(\\d{1,2})\\s*(?::|\\.|h)\\s*(\\d{2})");
-    private static final Pattern HORA_SOLA = Pattern.compile("(\\d{1,2})");
+    /** «5 minutos», «30 segundos», «2 horas». */
     private static final Pattern DURACION = Pattern.compile(
             "(\\d+)\\s*(hora|horas|minuto|minutos|min|segundo|segundos|s)");
-    /** Empezando por «una»: a las 1 en punto nadie dice «dos menos uno». */
-    private static final String[] NUMEROS = {"una", "dos", "tres", "cuatro", "cinco", "seis",
-            "siete", "ocho", "nueve", "diez", "once", "doce"};
 
     /** Cuánto sube o baja el volumen de una vez: tres pasos, no un salto brutal. */
     private static final int PASOS = 3;
@@ -337,37 +332,55 @@ public class Acciones {
 
     /* ─────────────────────────── alarma y relojes ─────────────────────────── */
 
-    /** `AlarmClock.SET_ALARM`: la orden pública del reloj de AOSP. */
+    /**
+     * La alarma de CORT: `Alarma.ponerDesde` con la frase entera.
+     *
+     * Desde F16 no se abre el reloj de otro: se arma la alarma de CORT, que sabe la
+     * hora, la canción y la nota. La frase puede venir de tres sitios y los tres
+     * tienen que entenderse igual:
+     *
+     * · de la tabla (`args` = «07:30 con after dark para el examen»), que es la
+     *   que ya trae todo pegado;
+     * · de la voz o del formulario, con los campos sueltos (`hora`, `cancion`,
+     *   `nota`, `rutina`);
+     * · de una automatización, que manda `hora` y una nota fija.
+     *
+     * La hora se compone con «a las» delante para que `Despertar` la lea como una
+     * frase normal, pero sólo si `hora` es **sólo** una hora: si ya trae cola, se
+     * usa tal cual y no se le pega una segunda nota que la cortaría.
+     */
     private String alarma(Petición p) {
+        String texto = p.texto("texto", "suelto");
+        String hora = p.texto("hora", "a", "cuando");
+        String cancion = p.texto("cancion", "musica");
         String nota = p.texto("nota", "mensaje", "etiqueta");
-        int[] hm = hora(p.texto("hora", "a", "cuando", "suelto", "texto"));
-        if (hm == null) {
-            // Mejor preguntar que poner una alarma a las 0:00: un fallo así se
-            // paga a las siete de la mañana.
-            return error("no oí la hora. Dime «alarma a las 7:30» o «alarma dentro de "
-                    + "2 horas»" + (nota.isEmpty() ? "" : " («" + nota + "»)") + ".");
+        String rutina = p.texto("rutina");
+
+        String dicho;
+        if (!texto.isEmpty()) {
+            dicho = texto;
+        } else if (!hora.isEmpty()) {
+            dicho = hora;
+            if (soloHora(hora)) {
+                if (!cancion.isEmpty()) dicho += " con " + cancion;
+                if (!nota.isEmpty()) dicho += " para " + nota;
+            }
+        } else {
+            return error("no oí la hora. Dime «alarma a las 7:30» o «despiértame a las"
+                    + " 7 con after dark para el examen».");
         }
-        Intent intento = new Intent(AlarmClock.ACTION_SET_ALARM)
-                .putExtra(AlarmClock.EXTRA_HOUR, hm[0])
-                .putExtra(AlarmClock.EXTRA_MINUTES, hm[1])
-                .putExtra(AlarmClock.EXTRA_MESSAGE, nota.isEmpty() ? "CORT" : nota)
-                // Sin UI: la dueña no quiere que el reloj se le abra en la cara
-                // cada vez que pide una alarma.
-                .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        try {
-            act.startActivity(intento);
-            return Json.ok()
-                    .p("alarma", String.format(Locale.ROOT, "%02d:%02d", hm[0], hm[1]))
-                    .p("nota", nota.isEmpty() ? "CORT" : nota)
-                    .fin();
-        } catch (ActivityNotFoundException noHayReloj) {
-            return error("no encontré la app de reloj de este teléfono, así que no pude "
-                    + "poner la alarma.");
-        } catch (Throwable raro) {
-            Log.e(LOG, "alarma", raro);
-            return error("el reloj no me dejó poner la alarma.");
+        if ("true".equalsIgnoreCase(rutina) || "si".equalsIgnoreCase(rutina)
+                || "sí".equalsIgnoreCase(rutina) || "1".equals(rutina)) {
+            dicho += " buenos dias";
         }
+        return Alarma.ponerDesde(act, dicho);
+    }
+
+    /** «7:30», «a las 7 y media», «7» — y nada más. */
+    private static boolean soloHora(String s) {
+        return s != null && s.trim().matches(
+                "(?i)\\s*(a\\s+las\\s+|a\\s+la\\s+|las\\s+)?\\d{1,2}"
+              + "(\\s*[:.h ]\\s*\\d{2})?(\\s+y\\s+(media|cuarto))?\\s*");
     }
 
     /**
@@ -982,30 +995,6 @@ public class Acciones {
 
     /* ───────────────────────────── parseo puro ────────────────────────────── */
 
-    /** «7:30», «las 8 y media», «siete y cuarto» → {7, 30}. `null` si no hay hora. */
-    private static int[] hora(String dicho) {
-        if (dicho == null || dicho.trim().isEmpty()) {
-            return null;
-        }
-        Matcher m = HORA.matcher(dicho);
-        if (m.find()) {
-            int h = entero(m.group(1));
-            int mi = entero(m.group(2));
-            return (h > 23 || mi > 59) ? null : new int[] { h, mi };
-        }
-        Matcher suelta = HORA_SOLA.matcher(dicho);
-        if (suelta.find()) {
-            int h = entero(suelta.group(1));
-            return h > 23 ? null : new int[] { h, minutos(dicho) };
-        }
-        int h = numeroEnLetras(dicho);
-        return h > 0 ? new int[] { h, minutos(dicho) } : null;
-    }
-
-    private static int minutos(String dicho) {
-        return dicho.contains("media") ? 30 : dicho.contains("cuarto") ? 15 : 0;
-    }
-
     /** «5 minutos», «30 segundos», «2 horas» → milisegundos; 0 si no se entiende. */
     private static long duracionAMillis(String dicho) {
         Matcher m = DURACION.matcher(dicho == null ? "" : dicho);
@@ -1017,15 +1006,6 @@ public class Acciones {
         if (unidad.startsWith("h")) return n * 3600000L;
         if (unidad.startsWith("m")) return n * 60000L;
         return n * 1000L;
-    }
-
-    private static int numeroEnLetras(String dicho) {
-        for (int i = 0; i < NUMEROS.length; i++) {
-            if (dicho.contains(NUMEROS[i])) {
-                return i + 1;                     // «una» es la una, no la dos
-            }
-        }
-        return 0;
     }
 
     private static int entero(String texto) {

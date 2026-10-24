@@ -124,6 +124,28 @@ html.pantallas-montadas #pantalla-bar{display:none}
   background:rgba(20,10,2,.9);border:1px solid rgba(255,179,71,.55);color:#ffd79a;
   box-shadow:0 8px 22px rgba(0,0,0,.5)}
 #pantalla-juego.viva{display:block}
+/* F16 · la pantalla del despertador. Tapa todo a propósito: si suena a las siete,
+   lo que hay que ver es la hora y el botón de detener, no una hoja a medias. El
+   fondo es cálido (ámbar) para no encender la cara con un blanco a oscuras, y los
+   dos botones son grandes porque a esa hora la puntería no está. */
+#cort-alarma-pantalla{position:fixed;inset:0;z-index:400;display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  padding:28px;text-align:center;color:#ffe2b0;
+  background:radial-gradient(circle at 50% 32%,rgba(255,150,40,.24),rgba(8,4,0,.97) 62%)}
+#cort-alarma-pantalla.viva{display:flex}
+#cort-alarma-pantalla .ca-sello{font-size:10px;letter-spacing:.28em;text-transform:uppercase;
+  color:rgba(255,205,140,.7)}
+#cort-alarma-pantalla .ca-hora{font-size:74px;line-height:1;font-weight:300;
+  letter-spacing:.02em;text-shadow:0 0 34px rgba(255,170,60,.45)}
+#cort-alarma-pantalla .ca-nota{font-size:15px;max-width:26em;color:#ffd7a0}
+#cort-alarma-pantalla .ca-rutina:not(:empty){font-size:12.5px;max-width:28em;
+  color:rgba(255,220,170,.8);border-top:1px solid rgba(255,190,110,.25);padding-top:10px}
+#cort-alarma-pantalla .ca-botones{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
+  margin-top:10px}
+#cort-alarma-pantalla button{font:inherit;font-size:13px;letter-spacing:.08em;
+  padding:11px 24px;border-radius:24px;cursor:pointer;
+  background:rgba(255,170,60,.16);border:1px solid rgba(255,190,90,.6);color:#ffdca6}
+#cort-alarma-pantalla button:hover{background:rgba(255,180,70,.28)}
 /* Las dos hojas con barra propia (Música y Charla) no necesitan la cabecera genérica. */
 html.pantallas-montadas .scr.sin-cab .scr-top{display:none}
 html.pantallas-montadas .scr.sin-cab{padding-top:6px}

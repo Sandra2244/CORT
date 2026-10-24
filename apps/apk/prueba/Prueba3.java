@@ -75,6 +75,12 @@ public class Prueba3 {
             {"prende google maps", "abrir", "maps"},
             {"pon una alarma a las 7:30", "alarma", "07:30"},
             {"despiertame a las 8", "alarma", "8"},
+            // F16 · la hora no se come lo que va detrás: la canción y la nota
+            // llegan a `Despertar`, que es quien las vuelve a partir.
+            {"despiertame a las 7:30 con after dark para el examen", "alarma",
+             "07:30 con after dark para el examen"},
+            {"despiertame a las 7 con la cancion noche de synth", "alarma",
+             "7 con la cancion noche de synth"},
             {"temporizador de 10 minutos", "temporizador", "600"},
             {"avisame en 90 segundos", "temporizador", "90"},
             {"me avisas en 2 horas", "temporizador", "7200"},

@@ -82,6 +82,8 @@ public class MainActivity extends Activity {
     public static final String A_ESCUCHAR = "com.cort.ia.ESCUCHAR";
     public static final String A_EQUIPO = "com.cort.ia.EQUIPO";
     public static final String A_CHARLA = "com.cort.ia.CHARLA";
+    /** F16 · el despertador de CORT: abre la cara con su pantalla de alarma. */
+    public static final String A_ALARMA = Alarma.ACCION;
     private static final String A_ASISTENTE = "android.intent.action.ASSIST";
     private static final String A_VOZ = "android.intent.action.VOICE_COMMAND";
 
@@ -99,6 +101,10 @@ public class MainActivity extends Activity {
     private long ultimoToque = 0L;
     private String direccionPC = "";
     private boolean cayoUnaSolaVez = false;
+    /** F16 · la página ya cargó al menos una vez (para soltarle el despertador). */
+    private volatile boolean paginaLista = false;
+    /** F16 · el evento de alarma que llegó antes que la página; se suelta al cargar. */
+    private volatile String alarmaPendiente = null;
 
     /** El botón de la esquina, guardado porque el traje de CORT lo pinta. */
     private Button botonMenu;
@@ -229,6 +235,16 @@ public class MainActivity extends Activity {
     private void abreLoQueToque(Intent intent) {
         if (intent == null) return;
         String accion = intent.getAction() == null ? "" : intent.getAction();
+        // F16 · el despertador llega con su evento ya armado. Se le pasa a la
+        // página tal cual; el retardo es para el arranque en frío, y el puente
+        // guarda el aviso en cola si la cara aún no tiene oyente.
+        if (A_ALARMA.equals(accion)) {
+            final String evento = intent.getStringExtra(Alarma.EXTRA_EVENTO);
+            intent.removeExtra(Alarma.EXTRA_EVENTO);
+            if (paginaLista) web.postDelayed(() -> puente.alarmaEnLaCara(evento), 300);
+            else alarmaPendiente = evento;
+            return;
+        }
         String hoja = hojaDe(accion);
         boolean oir = intent.getBooleanExtra(PIDE_ESCUCHAR, false)
                    || A_ASISTENTE.equals(accion)
@@ -332,6 +348,21 @@ public class MainActivity extends Activity {
                 cayoUnaSolaVez = true;
                 avisa("Tu PC no respondió: abro la cara del teléfono");
                 web.postDelayed(() -> web.loadUrl(INDICE), 400);
+            }
+
+            /**
+             * F16 · el despertador puede llegar con la app cerrada. Cuando la
+             * página termina de montarse se le suelta el evento que quedó
+             * esperando, una sola vez. Si la alarma llegó con la cara ya abierta,
+             * `abreLoQueToque` la manda directa y aquí no hay nada pendiente.
+             */
+            @Override
+            public void onPageFinished(WebView vista, String url) {
+                paginaLista = true;
+                final String evento = alarmaPendiente;
+                if (evento == null) return;
+                alarmaPendiente = null;
+                web.postDelayed(() -> puente.alarmaEnLaCara(evento), 350);
             }
         };
     }
