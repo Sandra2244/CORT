@@ -665,16 +665,41 @@ También a mano: **Actions ▸ Construir instaladores CORT ▸ Run workflow**.
       hashearlos y medirlos entrada a entrada —la tabla de artefactos de abajo sigue con
       las cifras reales de la 2.8.0, que es lo que se midió, y no se renombra para no
       prestarle a la 2.9.0 unos números que no tiene.
-- [~] **F12 · que la voz responda (en curso)** — lo que ella pidió junto a F13: ducking en
-      el oído (`AudioManager.requestAudioFocus(... MAY_DUCK)`, sin superficie nueva de
-      manifiesto), escuchar en segundo plano, «pausa / siguiente / anterior» con
-      `dispatchMediaKeyEvent` cuando manda otro reproductor y no `e.vivo`, y el barrido
-      sistemático de botones muertos (cada `llama('x')` de la cara contra su puente en
-      `CortNative.java`, cada `post('/api/…')` contra su ruta en `main.py`) como sector
-      nuevo de la costura. Nada de esto está hecho todavía.
+- [x] **El lote 2.10.0 · F12 + F14 + F15 + F16 + F17** — las cinco fases que faltaban,
+      cerradas en secuencia y publicadas juntas para no compilar cinco veces el mismo
+      cuerpo ni repetir `versionCode`. Cada una tiene su sección de cierre en
+      [`docs/CEREBRO-MAESTRO.md`](docs/CEREBRO-MAESTRO.md) con lo que se midió y lo que
+      sólo se ve en el teléfono.
+      **F12 · que la voz responda:** el oído ya no se cierra con la música —pide el foco
+      `MAY_DUCK`, baja el volumen, escucha y lo devuelve—, la puntuación del reconocedor
+      («Pausa.») no rompe los mandos, «pausa / siguiente / anterior» viajan al sistema con
+      `dispatchMediaKeyEvent` aunque la música la ponga otra app, y una prueba recorre cada
+      botón de la cara contra su método del puente. Sin permisos nuevos.
+      **F14 · una lista, cuatro bocas:** diccionario de datos de **91 intenciones / 736
+      frases** (41 mando, 26 razón, 13 casa, 11 nube) del que salen cara, Java y pruebas;
+      escalera local → casa → nube; **208 frases de razón** contestadas sin red.
+      **F15 · música por nombre:** «pon After Dark», listas y ecualizador real del aparato;
+      la canción se elige con la misma función en el puente y en el despertador.
+      `Prueba6` 18/18 y **41 intenciones / 736 frases**.
+      **F16 · el despertador es de CORT:** hora + canción + nota + rutina en una frase,
+      alarma propia con `AlarmManager`, canal ALARMA de importancia alta y pantalla en la
+      cara. `Prueba7` **21/21**, los dos cambios de hora incluidos. **No** se declara
+      `SCHEDULE_EXACT_ALARM` (la exactitud se dice con `exacta:false`) ni
+      `BOOT_COMPLETED` (no sobrevive a reiniciar: se dice).
+      **F17 · la cara vestida:** el orbe deriva **16 canales** de `--primario` /
+      `--secundario` y cambiar de traje lo cambia entero; la burbuja recupera la 1.1.4
+      (translúcida, arrastrable, se pega al borde, opacidad de reposo); agua y vidrio se
+      apagan con `html.freno` por poca RAM o modo juego. Sin permisos nuevos y con los
+      **44 dp** y la firma `burbuja(Context, boolean)` intactos.
+      **Medido en el portátil:** costura **301 `ok`** (sectores [30]–[32] nuevos), las
+      **7 suites** Java sobre **336 frases de tabla**, `prueba-colores.mjs` **28/28**,
+      mandos **63/63**, automatizaciones **45/45**, y los talleres de F16 (**18/18**) y
+      F17 (**19/19**) con todas sus mutaciones cayendo. **Falta, dicho en vez de
+      fingido:** el pipeline compila `Flotante.java` por primera vez en esta Release —en
+      el portátil no hay `android.jar`—, y sólo su teléfono puede confirmar que el orbe y
+      el agua se ven bien, que la burbuja se arrastra con el dedo, que la alarma despierta
+      con la canción y que su Samsung trae los presets del ecualizador.
 - [ ] F7b Contestar llamadas por ti y buzón de voz: pide el rol `ROLE_CALLING` con su `InCallService` (Android no deja otra cosa); leer SMS o el contenido de WhatsApp no tiene API, así que no se finge
-- [ ] F14 Idiomas adicionales y temas visuales *(estaba numerada como F8; el plan maestro
-  ocupó ese hueco con «la cara ordenada», así que ésta se renumeró hacia adelante)*
 
 Todo el software usado es gratuito.
 

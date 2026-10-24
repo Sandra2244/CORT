@@ -389,6 +389,9 @@ llave, `nucleo` como default de ella.
 
 1. **Arranque: F13 + F12 juntas en la 2.9.0** — la descarga de modelos fiable *y* que la
    voz responda, en una sola Release. F14 (diccionario y turnos) detrás.
+   *Corrección fechada el 2026-10-24:* la 2.9.0 salió sólo con F13 (`v0.2.37-demo`); F12
+   se quedó local y se publica con F14–F17 en la **2.10.0**, la Release del lote. No se
+   reescribe la decisión: se dice lo que pasó.
 2. **Asistente: envase NUEVO, el `nucleo` no se toca.** Se añade un cuarto archivo
    `nucleo+asistencia` con la superficie mínima (servicio de voz + reconocedor + sesión)
    y su precio medido y dicho; el `nucleo` de siempre sigue siendo el recomendado y el

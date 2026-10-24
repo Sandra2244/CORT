@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.9.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.10.0"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -588,14 +588,14 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.9.0**. Esta Release trae
+            .deb) y el APK del teléfono, que sube a la **2.10.0**. Esta Release trae
             **tres APK de Android a propósito**. No son versiones distintas de CORT:
             es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
             mismo `versionCode`— con dos mandos distintos, para poder medir en el
             teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
             «Por qué hay tres envases»).
-            `CORT-IA-2.9.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
-            `CORT-IA-2.9.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
+            `CORT-IA-2.10.0.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.10.0-nucleo.apk` es **el envase recomendado**: el mismo CORT
             sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
             cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
             `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
@@ -604,7 +604,7 @@ jobs:
             notificaciones, poner baldosín en la cortina rápida ni marcar por el
             auricular. **Empieza por éste**: es el que tiene que instalarse sin el
             aviso.
-            `CORT-IA-2.9.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            `CORT-IA-2.10.0-nucleo-ligero.apk` es ese mismo núcleo quitando además el
             bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
             alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
             `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
@@ -630,9 +630,48 @@ jobs:
             el contrato y la cara (8 más). Lo que se comprueba al instalar esta Release es
             que la barra suba de verdad, que un PC apagado responda en español en pocos
             segundos y que el botón ✕ pare la bajada.
+            **Qué cambia en la 2.10.0 (el lote F12 + F14 + F15 + F16 + F17, cerrado
+            entero):** es una Release de varias fases a propósito, para no compilar cinco
+            veces el mismo cuerpo ni publicar cinco `versionCode` iguales.
+            **F12 · la voz responde:** con música sonando CORT ya no cierra el micrófono:
+            pide el foco con `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`, baja la música un
+            momento, escucha y la devuelve; la puntuación del reconocedor («Pausa.») deja
+            de romper los mandos; «pausa / siguiente / anterior» se mandan al sistema con
+            `dispatchMediaKeyEvent` aunque la música la ponga otra app; y una prueba nueva
+            recorre cada botón de la cara contra su método del puente para que no quede
+            ninguno mudo.
+            **F14 · una sola lista:** el diccionario de datos (~91 intenciones y 736
+            frases) del que salen la cara, Java y las pruebas; la escalera
+            local → casa → nube; cuentas con `x`, regla de tres, hora y porcentaje.
+            **F15 · música por nombre:** «pon After Dark», «qué playlists hay», «cámbialo a
+            tal canción» y el ecualizador real del aparato, con la canción elegida en el
+            puente y en el despertador por la misma función.
+            **F16 · el despertador es de CORT:** «despiértame a las 7:30 con After Dark
+            para el examen» se parte en hora + canción + nota + rutina; la alarma usa
+            `AlarmManager` y una notificación de categoría ALARMA en canal alto, con
+            pantalla propia en la cara. **No** se declara `SCHEDULE_EXACT_ALARM`: si
+            Android 12+ no da el minuto exacto, la respuesta lo dice con `exacta:false`.
+            Tampoco hay `BOOT_COMPLETED`: la alarma no sobrevive a apagar el teléfono, y se
+            dice.
+            **F17 · la cara vestida:** el orbe deriva sus **dieciséis** colores de
+            `--primario`/`--secundario`, así que cambiar de atuendo lo cambia entero (antes
+            tenía veinte colores fijos y se quedaba azul); la burbuja recupera la 1.1.4 que
+            te gustó (azul translúcida, se arrastra y se pega al borde, opacidad de reposo,
+            toque que sigue abriendo CORT); y el agua y el vidrio se apagan con
+            `html.freno` cuando hay poca RAM o modo juego. Sin permisos nuevos, firma
+            `burbuja(Context, boolean)` intacta y los **44 dp** de siempre.
+            **Medido en el portátil, no en tu teléfono:** costura **301 `ok`** (sector [32]
+            nuevo), las **7 suites** Java en verde sobre **336 frases de tabla**,
+            `prueba-colores.mjs` **28/28** (16 canales × 6 trajes, sin GPU), mandos
+            **63/63**, automatizaciones **45/45** y talleres de mutación de F16 (**18/18**)
+            y F17 (**19/19**). Lo que sólo puedes ver tú: que el orbe y el agua se vean
+            como esperas, que la burbuja se deje arrastrar con el dedo, que la alarma
+            despierte con la canción, y que los presets del ecualizador existan en tu
+            Samsung. El pipeline compila `Flotante.java` por primera vez en esta Release:
+            aquí no hay `android.jar`.
             **Se instala encima del 2.0.0, del 2.1.0, del 2.2.0, del 2.3.0, del
-            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0, del 2.6.0, del 2.7.0 y del
-            2.8.0 sin desinstalar y
+            2.3.1, del 2.4.0, del 2.4.1, del 2.4.2, del 2.5.0, del 2.6.0, del 2.7.0, del
+            2.8.0 y del 2.9.0 sin desinstalar y
             sin perder nada** (misma llave `fa:ab:ef:46:8f:3a…` en los tres archivos; el
             `versionCode` lo deriva `apps/apk/compilar.sh` de la versión con
             `MA*10000 + MI*100 + PA`, así que siempre sale mayor que el del envase
@@ -828,7 +867,7 @@ jobs:
             `CORT-IA-2.5.0-nucleo.apk` en su teléfono el 2026-10-22 y funcionó. Cero
             `BIND_*` entra; cuatro `BIND_*` se bloquea. Por eso el `nucleo` es desde
             aquí el envase recomendado y éste sigue siendo el archivo que hay que
-            instalar primero: `CORT-IA-2.9.0-nucleo.apk`. Si alguna vez se volviera a
+            instalar primero: `CORT-IA-2.10.0-nucleo.apk`. Si alguna vez se volviera a
             bloquear, el siguiente paso sigue escrito en
             `docs/BLOQUEO-PLAY-PROTECT.md` —probar el `‑ligero` (1,6 MB) y, si ése
             entra, sacar el modelo de 39,8 MB del APK—, y si ninguno de los tres

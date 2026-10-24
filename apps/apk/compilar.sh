@@ -93,7 +93,13 @@ cd "$(dirname "$0")"
 #   accion:'cancela'})`), y mientras baja otro modelo se rechaza la segunda orden.
 #   Cero permisos y cero métodos nuevos en el puente: la cancelación entra por la
 #   acción que ya existedía, así que el manifiesto del `nucleo` no se toca.
-APK_VERSION="${APK_VERSION:-2.9.0}"   # desde aquí sale UN SOLO APK: este
+# · En 2.10.0 se cierra el lote F12 + F14–F17: la voz responde con ducking y teclas
+#   del sistema (F12), el diccionario único de ~91 intenciones / 736 frases (F14),
+#   la música por nombre con listas y ecualizador (F15), el despertador propio con
+#   canción, nota y rutina (F16) y la cara vestida —orbe de 16 canales, burbuja
+#   1.1.4 arrastrable y agua con freno— (F17). Cero permisos nuevos y ningún
+#   cambio en el contrato de cinco argumentos para hablar.
+APK_VERSION="${APK_VERSION:-2.10.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────
