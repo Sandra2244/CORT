@@ -1524,6 +1524,11 @@ function pintaAtuendo() {
         : '<span class="eq-nota">no vine a traer ningún traje: escribe el nombre en la voz y lo intento.</span>')
         + (estado.puesto ? '<span class="eq-nota">puesto: ' + esc(estado.puesto) + '</span>' : '');
       nube.querySelectorAll('[data-t]').forEach(b => b.onclick = () => ponAtuendo(b.dataset.t, false));
+      /* Al abrir la cara se viste el traje GUARDADO, no el cian de fábrica: la
+         lista trae los colores de cada uno y el nombre del `puesto`. Antes sólo se
+         pintaba al cambiarlo, así que al volver a abrir CORT el orbe amanecía azul
+         con Matrix guardado en Java. */
+      vistePuesto();
       linea('atu', estado.atuendos.length + ' trajes · puesto: ' + (estado.puesto || 'el de siempre'));
     }
   }
@@ -1554,7 +1559,21 @@ function ponVariables(css) {
   const s = raiz.style.getPropertyValue('--secundario').trim();
   if (/^#[0-9a-f]{3,8}$/i.test(p)) { raiz.style.setProperty('--cyan', p); raiz.style.setProperty('--text', p); }
   if (/^#[0-9a-f]{3,8}$/i.test(s)) raiz.style.setProperty('--glass-hi', s);
+  /* Y el orbe: el HUD no es la única cara que viste. `vestir` deriva sus dieciséis
+     colores del mismo par y cae a fábrica si algo llega roto. */
+  if (p || s) ctx?.orb?.vestir?.(p, s);
   raiz.classList.add('con-atuendo');
+}
+
+/* El traje que Java tiene guardado, aplicado sin que nadie lo pida. `lista` no
+   devuelve el `css` de `poner`, pero sí el `primario` y el `secundario` de cada
+   atuendo: con eso se compone la misma cadena. Si el `puesto` no está en la lista
+   (una preferencia de una versión futura), no se toca nada y manda el CSS de siempre. */
+function vistePuesto() {
+  const a = estado.atuendos.find(x => x.nombre === estado.puesto);
+  if (!a) return false;
+  ponVariables('--primario:' + (a.primario || '') + ';--secundario:' + (a.secundario || ''));
+  return true;
 }
 
 function ponAtuendo(nombre, alVoz) {

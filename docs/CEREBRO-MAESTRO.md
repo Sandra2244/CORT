@@ -376,7 +376,7 @@ siempre, y que CORT conteste.
 | **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | **91 intents / 736 frases** (41 mando, 26 razón, 13 casa, 11 nube); 208 frases de razón contestadas sin red |
 | **F15 · cerebro de casa con nombres** | «pon *After Dark*», «qué playlist», «cámbialo a <canción>», ecualizador real (`audiofx.Equalizer` en su propio fichero, fuera de las clases de papel), auricular con acción | `Prueba6` (18/18) sobre `Elige` puro + costura [30] (7 comprobaciones) + taller de 8 mutaciones | **41 intenciones / 736 frases** (F15 añadió 4 reglas y convirtió «pon» en búsqueda); 18 elecciones de canción/listas/preset medidas en el JDK; 336 frases de tabla en `Prueba3` |
 | **F16 · el despertador** | hora + canción + nota + rutina en una frase; alarma **propia** (`AlarmManager` + notificación de categoría ALARMA en canal alto), pantalla de despertador en la cara; sin permiso nuevo (sólo un `<receiver>` no exportado) | `Prueba7` (21/21) sobre `Despertar` puro, con los dos cambios de hora + costura [31] (8 comprobaciones) + taller de 18 mutaciones | exactitud **dicha** (`exacta:false` en Android 12+ sin `SCHEDULE_EXACT_ALARM`); canción resuelta al ponerla con `Elige.mejor`; 336 frases de tabla |
-| **F17 · cara vestida** | orbe/burbuja que leen el atuendo, burbuja estilo 1.1.4 (azul, transparente, arrastrable, no molesta), agua y vidrio con freno por RAM/juego | sonda de colores: cambiar traje ⇒ cambian **todos** los colores del orbe | nº de variables leídas por `orb.js` (hoy 0) |
+| **F17 · cara vestida** | orbe que lee `--primario`/`--secundario` (16 canales derivados en `traje.js`), burbuja 1.1.4 (azul translúcida, arrastrable, opacidad de reposo), agua y vidrio con freno por RAM/juego; **sin permiso nuevo** y con los 44 dp intactos | `prueba-colores.mjs` (28/28): cambiar traje ⇒ cambian **los 16** colores del orbe + costura [32] (6 comprobaciones) + taller de 19 mutaciones | variables leídas por `orb.js`: **2 al montar** (antes 0); 16 canales × 6 trajes medidos sin GPU; freno con `deviceMemory <= 2` o juego |
 
 Cada fase termina igual: **verificar → commit → etiqueta `-demo` → pipeline verde →
 medir la Release → README/docs con cifras medidas → informe con lo confesado**. Y el
@@ -648,3 +648,55 @@ Los dos botones de la notificación van sin icono (`0`, que Android permite): lo
 `android.R.drawable` que esta casa da por comprobados son cuatro y ninguno es un reloj
 de alarma; inventar uno local pasaría el `javac` de casa y reventaría en el runner.
 
+
+### F17 · el orbe se viste, la burbuja se arrastra y el agua tiene freno (2026-10-24)
+
+Hasta aquí los atuendos pintaban el HUD pero **no el orbe**: `orb.js` tenía una veintena
+de colores escritos a mano, así que elegir Matrix dejaba la bola azul. Y la burbuja
+flotante era un punto opaco y quieto que no se parecía a la de la 1.1.4 que a ella le
+gustó. Las dos cosas se cierran sin tocar la superficie: **ningún permiso nuevo**, la
+firma `burbuja(Context, boolean)` intacta y los **44 dp** de siempre.
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| cambiar de traje cambia **todos** los colores del orbe | `ui/js/traje.js` deriva **16 canales** de `--primario`/`--secundario`; `prueba-colores.mjs` exige que cada uno de los otros cinco trajes difiera del de fábrica en **los 16** (28/28) |
+| un canal olvidado no pasa en verde | la prueba exige `CLAVES.length === 16`; la costura [32.a] exige que `aplica()` pinte cada `c.<canal>` y que no quede un `0x……` de seis dígitos en `orb.js` |
+| el traje llega al montar, no sólo al cambiarlo | `orb.js` lee las dos variables CSS con `getComputedStyle` al montar; `telefono.js` llama a `orb.vestir(p, s)` desde `ponVariables` y `vistePuesto()` aplica el `puesto` que trae `lista` al abrir CORT |
+| el atuendo no es decoración: hasta el shader y la rejilla | `uColor` del shader de partículas y de las chispas, los cuatro anillos del suelo, la rejilla (centro y líneas) y las ondas de choque también se tiñen; las texturas pasan a blanco con alfa para que el tinte mande |
+| la burbuja se puede **arrastrar** y no se queda en medio | `ACTION_MOVE` con `getRawX()/getRawY()`, umbral de 6 dp para no confundir toque con arrastre, `updateViewLayout` y `pegaAlBorde()` al soltar |
+| el toque sigue abriendo CORT | si no hubo arrastre, `performClick()` en `ACTION_UP`; la burbuja conserva `setOnClickListener` y el extra `PIDE_ESCUCHAR` |
+| azul translúcida, no molesta | `RadialGradient` de tres paradas con alfa (`0xE6`/`0xC8`/`0xF0`), aro y brillo; al reposo baja a `ALFA_REPOSO = .62` **una sola vez** (`setAlpha`), sin bucle de animación |
+| el modo juego sigue mandando primero | la comprobación `if (juego(app))` va **antes** de `montarYa(app)`; costura [32.d] mide el orden y prohíbe `ValueAnimator`/`requestAnimationFrame` |
+| el agua existe y se puede apagar | `#agua` en `index.html` con `@keyframes agua-ola` de `transform`; con `html.glass` se esconde y con `html.freno` se queda sin animación, sin `filter` y con opacidad `.08` |
+| el freno tiene disparador | `pantallas.js` pone `html.freno` con **poca RAM** (`navigator.deviceMemory <= 2`, que es 2 para el portátil de 1,8 GiB) **o** en modo juego; `html.freno` también quita el `backdrop-filter` de paneles, ventanas, chips y FAB |
+| la prueba visual no viaja al APK | `ui/sonda-colores.html` monta el orbe real, recorre los seis trajes y compara contra `orb.colores()`; `compilar.sh` sigue borrando `sonda-*.html` |
+
+Cifras medidas en el portátil: `prueba-colores.mjs` **28/28**, la costura en **301
+`ok`** (6 del sector [32]) y `scripts/taller-f17.sh` con **19 mutaciones que caen las
+19**, cada una nombrando la comprobación que la echaba de menos; dos de ellas corren la
+prueba de node entera (`la partícula se congela`, `el secundario se cuela`). Las seis
+paletas se midieron **sin GPU**: la derivación vive en un módulo puro y el navegador no
+hace falta para saber que Matrix no deja ni un color de Cortana.
+
+**Lo que NO se puede medir aquí, y se dice sin adornos:**
+
+- Cómo se ve. Que Three.js pinte el tinte es una línea por material y la costura la
+  vigila, pero el brillo, el contraste y si el agua emborrona la lectura **sólo se ven
+  en su teléfono** (o con la sonda en su navegador).
+- El arrastre real. El arrastre está medido en código (`ACTION_MOVE`, coordenadas
+  crudas, borde), pero que el dedo no confunda toque con arrastre en su pantalla es de
+  aparato. El umbral elegido son 6 dp.
+- La posición no se recuerda. Al apagar y volver a encender, la burbuja arranca otra vez
+  centrada a la derecha; guardarla pediría escribir en preferencias en cada arrastre y
+  no se ha hecho en esta fase.
+- La opacidad de reposo es **una sola vez**: se pone al montar y tras cada toque, no hay
+  temporizador que la repita. Menos batería, pero si el sistema la devuelve a opaco no
+  se corrige sola.
+- La 1.1.4 exacta no está en este repo (era del cuerpo Kotlin, sin `.kt` en disco): la
+  burbuja se reconstruyó por el comportamiento que ella describió —azul, transparente,
+  arrastrable, que no molesta—, no copiando su código.
+- `Flotante.java` **no se compiló en el portátil**: aquí no hay `android.jar` y
+  `compilar.sh` exige `ANDROID_HOME`. El `javac` de verdad es el del pipeline; hasta que
+  corra, el arrastre y el gradiente están revisados a mano, no compilados.
+- Nada de esto llega a su teléfono hasta que salga la Release: **el pipeline no se ha
+  corrido con F17 todavía**.

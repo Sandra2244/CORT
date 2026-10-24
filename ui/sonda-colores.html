@@ -1,0 +1,137 @@
+<!doctype html>
+<!-- Sonda de COLORES (F17) · se abre con el núcleo arrancado:
+       http://127.0.0.1:8000/sonda-colores.html
+     Para qué: la prueba decisiva de F17 es «cambiar de traje ⇒ cambian TODOS los
+     colores del orbe». `scripts/prueba-colores.mjs` mide la derivación en node,
+     pero eso no enseña el orbe. Esta hoja monta el MISMO `js/orb.js` con el MISMO
+     `js/traje.js`, cambia de traje con los botones y comprueba en vivo que los
+     dieciséis canales cambian. Sirve para verlo sin teléfono; en el APK no viaja
+     (el pipeline descarta las `sonda-*.html`).
+
+     Las cuentas se hacen contra `orb.colores()`, no contra una copia: si `aplica()`
+     olvidara un material, aquí saldría `NO` con su nombre. -->
+<meta charset="utf-8">
+<title>Sonda de colores · CORT F17</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/hud.css">
+<style>
+  body { margin: 0; background: #02040a; color: #cfe9ff; overflow: hidden; }
+  #scene { position: fixed; inset: 0; }
+  #sonda { position: fixed; left: 0; right: 0; bottom: 0; z-index: 900;
+    max-height: 46vh; overflow: auto; padding: 10px 14px 14px;
+    background: rgba(2,4,10,.94); border-top: 1px solid #1d3f5c;
+    font: 12px/1.5 Consolas, monospace; }
+  #sonda h1 { margin: 0 0 6px; font-size: 12px; letter-spacing: .18em;
+    text-transform: uppercase; color: #5fd7ff; }
+  #sonda button { margin: 0 6px 6px 0; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid #1d3f5c; background: #0d1a2a; color: #dff2ff;
+    font: inherit; cursor: pointer; }
+  #sonda button.puesta { border-color: #5fd7ff; box-shadow: 0 0 0 1px #5fd7ff inset; }
+  #tiras { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0; }
+  #tiras i { display: block; height: 22px; border-radius: 4px; border: 1px solid #0d273b; }
+  #salida .ok { color: #2bff9e; }
+  #salida .no { color: #ff6b8a; }
+  #salida .dice { color: #5e8cab; }
+</style>
+
+<div id="scene"></div>
+<div id="sonda">
+  <h1>Sonda de colores · F17 · el orbe viste el atuendo</h1>
+  <div id="botones"></div>
+  <div id="tiras"></div>
+  <div id="salida">montando…</div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three.module.js"}}
+</script>
+<script type="module">
+import { initORB } from './js/orb.js';
+import { CLAVES } from './js/traje.js';
+
+const salida = document.getElementById('salida');
+addEventListener('error', e => {
+  salida.textContent = 'CAÍ: ' + (e.message || e.type) + '\n' +
+    ((e.error && e.error.stack) || (e.filename + ':' + e.lineno));
+});
+addEventListener('unhandledrejection', e => {
+  salida.textContent = 'CAÍ (promesa): ' + ((e.reason && e.reason.stack) || e.reason);
+});
+
+/* Los seis de `Paleta.java`, en el mismo orden. Si allí cambia uno, aquí se ve
+   al instante porque el botón pide el par nuevo, no una copia de los colores. */
+const TRAJES = [
+  ['Cortana',   '#59d9ff', '#0a3d62'],
+  ['JARVIS',    '#ffc46b', '#241405'],
+  ['Siri',      '#ff5fa2', '#3d0f33'],
+  ['Matrix',    '#22ff88', '#04160c'],
+  ['Atardecer', '#ff7a45', '#3d1a4d'],
+  ['Neutron',   '#e8eef2', '#1b2226'],
+];
+
+const orb = initORB(document.getElementById('scene'));
+const tiras = document.getElementById('tiras');
+const botones = document.getElementById('botones');
+const base = orb.colores();
+let puesto = 'Cortana', lineas = [];
+
+function pintaTiras(c) {
+  tiras.innerHTML = CLAVES.map(k =>
+    `<i title="${k} ${c[k]}" style="background:${c[k]}"></i>`).join('');
+}
+
+function di(bueno, texto) {
+  lineas.push(`<div class="${bueno ? 'ok' : 'no'}">${bueno ? 'ok ' : 'NO '} ${texto}</div>`);
+  salida.innerHTML = lineas.join('');
+}
+
+function pon(nombre, primario, secundario) {
+  const antes = orb.colores();
+  orb.vestir(primario, secundario);
+  const ahora = orb.colores();
+  pintaTiras(ahora);
+  puesto = nombre;
+  botones.querySelectorAll('button').forEach(b => b.classList.toggle('puesta', b.dataset.t === nombre));
+  if (nombre === 'Cortana') {
+    di(CLAVES.every(k => ahora[k] === base[k]),
+      'Cortana vuelve a la paleta de fábrica (16/16)');
+    return;
+  }
+  const iguales = CLAVES.filter(k => ahora[k] === antes[k]);
+  di(iguales.length === 0,
+    `${nombre}: cambian los 16 colores del orbe` +
+    (iguales.length ? ' — se quedaron: ' + iguales.join(', ') : ''));
+}
+
+botones.innerHTML = TRAJES.map(([n]) =>
+  `<button data-t="${n}">${n}</button>`).join('') +
+  '<button data-t="__todos">probar los seis</button>';
+botones.querySelectorAll('button').forEach(b => {
+  b.onclick = () => {
+    if (b.dataset.t !== '__todos') {
+      const t = TRAJES.find(x => x[0] === b.dataset.t);
+      return pon(t[0], t[1], t[2]);
+    }
+    lineas = [];
+    let malos = 0;
+    for (const [n, p, s] of TRAJES) {
+      orb.vestir(p, s);
+      const c = orb.colores();
+      const iguales = n === 'Cortana'
+        ? CLAVES.filter(k => c[k] !== base[k])          // Cortana DEBE coincidir
+        : CLAVES.filter(k => c[k] === base[k]);         // los demás DEBEN cambiar
+      if (iguales.length) { malos++; di(false, n + ': ' + iguales.join(', ')); }
+      else di(true, n + ': 16/16');
+    }
+    const t = TRAJES.find(x => x[0] === puesto) || TRAJES[0];
+    orb.vestir(t[1], t[2]); pintaTiras(orb.colores());
+    salida.innerHTML = lineas.join('') +
+      `<div class="dice">${malos ? malos + ' traje(s) con colores sin cambiar' :
+        'los seis trajes cambian los 16 canales del orbe'}</div>`;
+  };
+});
+
+pintaTiras(base);
+pon(TRAJES[0][0], TRAJES[0][1], TRAJES[0][2]);
+window.__sonda = () => ({ puesto, colores: orb.colores(), lineas: lineas.slice() });
+</script>

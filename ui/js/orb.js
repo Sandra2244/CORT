@@ -6,6 +6,13 @@
    (vórtice francés), se comprime en un TORO 3D inclinado que gira
    (portal) y se recompone ejecutando la acción. */
 import * as THREE from 'three';
+import { POR_DEFECTO, deriva } from './traje.js';
+
+/* Los colores del orbe ya no están escritos aquí: salen del atuendo puesto
+   (`traje.js`, medido en `prueba-colores.mjs`). `colores` es el estado vivo; al
+   montar se lee de las variables CSS y `vestir()` lo cambia cuando la dueña se
+   pone otro traje. */
+let colores = deriva(POR_DEFECTO.primario, POR_DEFECTO.secundario);
 
 export function initORB(mount) {
   const scene = new THREE.Scene();
@@ -22,12 +29,12 @@ export function initORB(mount) {
 
   /* ---- núcleo: bola de luz aditiva (ya no una esfera plana de plástico) ---- */
   const nucleus = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeCoreTexture(), color: 0xaee2ff, transparent: true, opacity: .98,
+    map: makeCoreTexture(), color: new THREE.Color(colores.nucleo), transparent: true, opacity: .98,
     blending: THREE.AdditiveBlending, depthWrite: false }));
   nucleus.scale.setScalar(.85);
   group.add(nucleus);
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: makeGlowTexture(), color: 0x5fc8ff, transparent: true, opacity: .8,
+    map: makeGlowTexture(), color: new THREE.Color(colores.brillo), transparent: true, opacity: .8,
     blending: THREE.AdditiveBlending, depthWrite: false }));
   glow.scale.setScalar(1.6);
   group.add(glow);
@@ -53,7 +60,7 @@ export function initORB(mount) {
   const pMat = new THREE.ShaderMaterial({
     uniforms: {
       uTex: { value: makeDotTexture() }, uSize: { value: .18 },
-      uFocus: { value: 6 }, uColor: { value: new THREE.Color(0x4fc6ff) },
+      uFocus: { value: 6 }, uColor: { value: new THREE.Color(colores.particula) },
     },
     vertexShader: `
       attribute float aRand;
@@ -82,7 +89,7 @@ export function initORB(mount) {
   group.add(core);
 
   const halo = new THREE.Mesh(new THREE.SphereGeometry(1.02, 32, 32),
-    new THREE.MeshBasicMaterial({ color: 0x0a66aa, transparent: true, opacity: .14 }));
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(colores.halo), transparent: true, opacity: .14 }));
   group.add(halo);
 
   /* ---- PLEXUS 3D: solo hilos MUY cortos y tenues (si se abusaba parecía
@@ -94,7 +101,7 @@ export function initORB(mount) {
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
   const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
-    color: 0x39c2ff, transparent: true, opacity: .09,
+    color: new THREE.Color(colores.hilos), transparent: true, opacity: .09,
     blending: THREE.AdditiveBlending, depthWrite: false }));
   group.add(lines);
   function updatePlexus() {
@@ -124,30 +131,32 @@ export function initORB(mount) {
       new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .6 }));
     m.rotation.x = tilt; group.add(m); return m;
   }
-  const r1 = ring(1.75, 1.35, 0x2fb9ff), r2 = ring(2.15, 1.9, 0x7f6bff);
+  const r1 = ring(1.75, 1.35, colores.anillo1), r2 = ring(2.15, 1.9, colores.anillo2);
 
   /* ---- anillos de suelo concéntricos (el "plato" de la referencia) ---- */
   const floor = new THREE.Group();
+  const suelo = [];
   [1.3, 1.9, 2.55, 3.2].forEach((rad, i) => {
     const m = new THREE.Mesh(new THREE.TorusGeometry(rad, .006, 6, 180),
-      new THREE.MeshBasicMaterial({ color: i % 2 ? 0x1f8fd6 : 0x39c2ff,
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(i % 2 ? colores.sueloA : colores.sueloB),
         transparent: true, opacity: .34 - i * .05 }));
-    m.rotation.x = Math.PI / 2; floor.add(m);
+    m.rotation.x = Math.PI / 2; floor.add(m); suelo.push(m);
   });
   floor.position.y = -1.75;
   /* rejilla en perspectiva bajo el plato (referencia azul) */
-  const grid = new THREE.GridHelper(16, 26, 0x155a86, 0x0d3a5c);
+  const grid = new THREE.GridHelper(16, 26, colores.rejillaA, colores.rejillaB);
   grid.material.transparent = true; grid.material.opacity = .32;
   grid.position.y = -.04; floor.add(grid);
   scene.add(floor);
 
   /* ---- haces de luz cayendo (ligeros, solo 4 planos aditivos) ---- */
+  const haces = [];
   for (let i = 0; i < 4; i++) {
     const beam = new THREE.Mesh(new THREE.PlaneGeometry(.05, 3.4),
-      new THREE.MeshBasicMaterial({ color: 0x2fb9ff, transparent: true, opacity: .07,
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(colores.haz), transparent: true, opacity: .07,
         blending: THREE.AdditiveBlending, depthWrite: false }));
     beam.position.set(Math.cos(i * 1.9) * 1.1, .3, Math.sin(i * 1.9) * 1.1);
-    beam.rotation.y = i; scene.add(beam);
+    beam.rotation.y = i; scene.add(beam); haces.push(beam);
   }
 
   /* ---- estrellas de fondo ---- */
@@ -155,14 +164,17 @@ export function initORB(mount) {
   for (let i = 0; i < S * 3; i++) sp[i] = (Math.random() - .5) * 60;
   const starsG = new THREE.BufferGeometry();
   starsG.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-  scene.add(new THREE.Points(starsG, new THREE.PointsMaterial({
-    color: 0x9fd8ff, size: .05, transparent: true, opacity: .5, depthWrite: false })));
+  const estrellas = new THREE.Points(starsG, new THREE.PointsMaterial({
+    color: new THREE.Color(colores.estrella), size: .05, transparent: true, opacity: .5, depthWrite: false }));
+  scene.add(estrellas);
 
   function makeGlowTexture() {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 4, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(190,240,255,1)'); gr.addColorStop(.4, 'rgba(70,180,255,.35)');
-    gr.addColorStop(1, 'rgba(20,110,220,0)');
+    /* Blanco con alfa, no azul con alfa: el color lo pone el material desde el
+       atuendo, así que la textura no puede imponer su propio tinte. */
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.4, 'rgba(255,255,255,.35)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
@@ -170,8 +182,8 @@ export function initORB(mount) {
   function makeCoreTexture() {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 2, 64, 64, 64);
-    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(190,235,255,.95)');
-    gr.addColorStop(.45, 'rgba(80,180,255,.45)'); gr.addColorStop(1, 'rgba(20,110,220,0)');
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.18, 'rgba(255,255,255,.95)');
+    gr.addColorStop(.45, 'rgba(255,255,255,.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
@@ -179,8 +191,8 @@ export function initORB(mount) {
   function makeDotTexture() {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 1, 32, 32, 32);
-    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(160,220,255,.55)');
-    gr.addColorStop(1, 'rgba(60,160,255,0)');
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.35, 'rgba(255,255,255,.55)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
     return new THREE.CanvasTexture(c);
   }
@@ -193,7 +205,7 @@ export function initORB(mount) {
          círculo/vinilo que gira; la velocidad y el pulso los manda el audio ---- */
   let discMode = 0, discAngle = 0, audioL = 0, audioB = 0;
   const discEdge = new THREE.Mesh(new THREE.TorusGeometry(2.38, .012, 8, 200),
-    new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: 0,
+    new THREE.MeshBasicMaterial({ color: new THREE.Color(colores.disco), transparent: true, opacity: 0,
       blending: THREE.AdditiveBlending, depthWrite: false }));
   discEdge.rotation.x = Math.PI / 2; group.add(discEdge);
 
@@ -212,7 +224,8 @@ export function initORB(mount) {
   spkGeo.setAttribute('position', new THREE.BufferAttribute(spkPos, 3));
   spkGeo.setAttribute('aSeed', new THREE.BufferAttribute(spkSeed, 1));
   const spkMat = new THREE.ShaderMaterial({
-    uniforms: { uTex: { value: makeDotTexture() }, uSize: { value: .16 }, uOn: { value: 0 } },
+    uniforms: { uTex: { value: makeDotTexture() }, uSize: { value: .16 }, uOn: { value: 0 },
+      uColor: { value: new THREE.Color(colores.chispa) } },
     vertexShader: `
       attribute float aSeed; uniform float uSize; varying float vA;
       void main() {
@@ -223,10 +236,10 @@ export function initORB(mount) {
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: `
-      uniform sampler2D uTex; uniform float uOn; varying float vA;
+      uniform sampler2D uTex; uniform float uOn; uniform vec3 uColor; varying float vA;
       void main() {
         vec4 t = texture2D(uTex, gl_PointCoord);
-        gl_FragColor = vec4(vec3(.55, .85, 1.) * 1.4, t.a * vA * uOn);
+        gl_FragColor = vec4(uColor * 1.4, t.a * vA * uOn);
       }`,
     transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
   });
@@ -237,7 +250,7 @@ export function initORB(mount) {
   const waves = [];
   function shockwave() {
     const w = new THREE.Mesh(new THREE.TorusGeometry(1.2, .02, 8, 120),
-      new THREE.MeshBasicMaterial({ color: 0x8fe4ff, transparent: true, opacity: .9,
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(colores.onda), transparent: true, opacity: .9,
         blending: THREE.AdditiveBlending, depthWrite: false }));
     w.rotation.x = Math.PI / 2.4;
     group.add(w); waves.push({ m: w, t0: performance.now() });
@@ -397,6 +410,69 @@ export function initORB(mount) {
   }
   requestAnimationFrame(frame);
 
+  /* ───────────────────── el atuendo, aplicado al orbe ─────────────────────
+     Un solo sitio pinta los dieciséis canales de `traje.js`. Si mañana entra un
+     material nuevo y no pasa por aquí, se queda azul con el traje de Matrix; la
+     sonda de colores y `prueba-colores.mjs` existen justo para que eso se vea. */
+  function aplica(c) {
+    nucleus.material.color.set(c.nucleo);
+    glow.material.color.set(c.brillo);
+    pMat.uniforms.uColor.value.set(c.particula);
+    halo.material.color.set(c.halo);
+    lines.material.color.set(c.hilos);
+    r1.material.color.set(c.anillo1);
+    r2.material.color.set(c.anillo2);
+    suelo.forEach((m, i) => m.material.color.set(i % 2 ? c.sueloA : c.sueloB));
+    pintaRejilla(c);
+    haces.forEach(m => m.material.color.set(c.haz));
+    estrellas.material.color.set(c.estrella);
+    discEdge.material.color.set(c.disco);
+    spkMat.uniforms.uColor.value.set(c.chispa);
+    waves.forEach(w => w.m.material.color.set(c.onda));
+  }
+
+  /* La rejilla guarda sus dos colores en el atributo de vértices, no en el
+     material: pintarla es reescribir ese atributo. */
+  function pintaRejilla(c) {
+    const attr = grid.geometry.getAttribute('color');
+    if (!attr) return;
+    const centro = new THREE.Color(c.rejillaA), normal = new THREE.Color(c.rejillaB);
+    // `GridHelper` guarda DOS vértices por línea (54 = 27 por eje); la línea
+    // central de cada eje es la 13. Pintar por grupos de cuatro vértices teñía
+    // el borde entre ejes en vez del centro.
+    const lineas = attr.count / 2, porEje = Math.floor(lineas / 2);
+    const centroEje = Math.floor(porEje / 2);
+    for (let l = 0; l < lineas; l++) {
+      const color = (l % porEje) === centroEje ? centro : normal;
+      color.toArray(attr.array, (l * 2) * 3);
+      color.toArray(attr.array, (l * 2 + 1) * 3);
+    }
+    attr.needsUpdate = true;
+  }
+
+  /** Cambia el traje del orbe. Acepta `#rgb`/`#rrggbb`; lo roto cae a fábrica. */
+  function vestir(primario, secundario) {
+    colores = deriva(primario, secundario);
+    aplica(colores);
+    return { ...colores };
+  }
+
+  /** Las dos variables que la cara pinta desde el contrato (`--primario`/`--secundario`). */
+  function leeCSS() {
+    try {
+      const st = getComputedStyle(document.documentElement);
+      return [st.getPropertyValue('--primario').trim(),
+              st.getPropertyValue('--secundario').trim()];
+    } catch (sinEstilo) {
+      return [POR_DEFECTO.primario, POR_DEFECTO.secundario];
+    }
+  }
+
+  // Al montar ya viste lo que diga la cara: si la dueña guardó Matrix, el orbe
+  // amanece verde sin esperar a que abra el bloque de Atuendos.
+  const [cssPrimario, cssSecundario] = leeCSS();
+  vestir(cssPrimario, cssSecundario);
+
   addEventListener('resize', () => {
     cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix();
     ren.setSize(innerWidth, innerHeight);
@@ -418,5 +494,9 @@ export function initORB(mount) {
       congelado = !!on;
       if (!congelado && !enBucle) { enBucle = true; requestAnimationFrame(frame); }
     },
+    /** vestir el orbe con el atuendo puesto; lo llama `ponVariables` en la cara */
+    vestir,
+    /** los dieciséis colores vivos, para la sonda y para depurar sin adivinar */
+    colores() { return { ...colores }; },
   };
 }

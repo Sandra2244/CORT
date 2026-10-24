@@ -15,6 +15,37 @@ html.glass, html.glass body{background:transparent}
 html.glass #boot{background:rgba(2,4,10,.92)}
 #scene{position:fixed;inset:0}
 
+/* ================= AGUA Y VIDRIO CON FRENO (F17) =================
+   El agua son dos manchas del atuendo que respiran muy despacio detrás del orbe.
+   En el bucle sólo se mueve `transform`: el desenfoque es estático y la GPU lo
+   hace una vez, no por fotograma. Con poca RAM o en modo juego (`html.freno`)
+   se apagan el filtro y la animación y queda un tinte quieto. El vidrio
+   (`backdrop-filter`) es lo caro de verdad: en el freno, los paneles vuelven a
+   ser translúcidos normales. */
+#agua{position:fixed;inset:-22%;z-index:0;pointer-events:none;opacity:.18;
+  background:
+    radial-gradient(42% 36% at 28% 34%,var(--primario) 0%,transparent 70%),
+    radial-gradient(38% 42% at 74% 70%,var(--secundario) 0%,transparent 72%);
+  filter:blur(42px) saturate(1.2);
+  animation:agua-ola 24s ease-in-out infinite alternate;
+  will-change:transform}
+@keyframes agua-ola{
+  0%{transform:translate3d(-3%,-2%,0) scale(1.03) rotate(-1.5deg)}
+  50%{transform:translate3d(2%,3%,0) scale(1.09) rotate(1.5deg)}
+  100%{transform:translate3d(-1%,2%,0) scale(1.04) rotate(-1deg)}
+}
+html.glass #agua{display:none}                 /* holograma: el escritorio manda */
+html.freno #agua{filter:none;opacity:.08;animation:none;transform:none}
+html.freno .panel,
+html.freno .win,
+html.freno .chip,
+html.freno .fab,
+html.freno #camwrap,
+html.freno #pantalla-bar,
+html.freno #pantalla-menu,
+html.freno #orb-menu,
+html.freno .scr-top{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
+
 /* scanlines sutiles */
 body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:999;
   background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(120,200,255,.015) 3px 4px)}

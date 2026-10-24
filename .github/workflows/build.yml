@@ -341,6 +341,27 @@ jobs:
             echo "::error::prueba-mandos.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar los colores del orbe con node (sin WebGL)
+        id: colores
+        # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del
+        # que `orb.js` saca sus dieciséis colores. La prueba decisiva de F17 es
+        # «cambiar de traje ⇒ cambian TODOS los colores del orbe», y en un CI no
+        # hay GPU: aquí se mide la derivación de los seis trajes de `Paleta.java`,
+        # que ninguno se quede en el cian de fábrica, que dos trajes no den la
+        # misma paleta y que un color roto caiga a fábrica sin apagar la cara.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-colores.mjs > /tmp/colores.log 2>&1
+          st=$?
+          tail -20 /tmp/colores.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/colores.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/colores.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-colores.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
         id: oido
         # `scripts/prueba-oido.sh` hace lo que `javac` no puede hacer NUNCA: carga

@@ -2612,6 +2612,33 @@ function marcaLinea(posMs, forzar) {
   if (activa) caja.scrollTop = Math.max(0, activa.offsetTop - caja.clientHeight / 2 + activa.offsetHeight / 2);
 }
 
+/* ───────────────────── agua y vidrio con freno (F17) ─────────────────────
+ * La cara tiene una capa de agua (#agua) y paneles de vidrio (`backdrop-filter`).
+ * Las dos son bonitas y las dos cuestan: el desenfoque se recalcula en cada
+ * fotograma. El freno no las quita para siempre —las deja donde se notan—; las
+ * apaga donde cuestan: **poca RAM** o **modo juego**. Con `html.freno`, el CSS
+ * cambia el filtro del agua por un tinte quieto y quita el `backdrop-filter`.
+ *
+ * `navigator.deviceMemory` redondea a potencia de dos: el portátil de 1,8 GiB
+ * dice 2 y el Samsung de 4 GB dice 4. Por eso el umbral es `<= 2`, no `< 4`. */
+const POCA_RAM = (() => {
+  try {
+    const g = Number(navigator.deviceMemory);
+    return Number.isFinite(g) && g > 0 && g <= 2;
+  } catch (sinMemoria) {
+    return false;
+  }
+})();
+let juegoPuesto = false;
+
+function ponFreno() {
+  const raiz = document.documentElement;
+  if (!raiz) return;
+  raiz.classList.toggle('freno', POCA_RAM || juegoPuesto);
+  raiz.classList.toggle('freno-ram', POCA_RAM);
+  raiz.classList.toggle('freno-juego', juegoPuesto);
+}
+
 /* ─────────────────────────── el modo juego ───────────────────────────
  * «Me voy a jugar»: una página no puede hacerse sorda a sí misma en Android, así
  * que lo hace Java (`CortNative.modoJuego`): suelta el micrófono, cede el foco de
@@ -2638,6 +2665,8 @@ export function modoJuego(on) {
 
 /* El avispón vive en la barra de la pantalla activa: discreto, y no tapa el vídeo. */
 function pintaJuego(on) {
+  juegoPuesto = !!on;
+  ponFreno();                       // jugar también frena el agua y el vidrio
   const aviso = document.getElementById('pantalla-juego');
   if (!aviso) return;
   aviso.hidden = !on;
@@ -2716,6 +2745,8 @@ export function initPantallas(contexto) {
   document.documentElement.classList.add('pantallas-montadas', 'p-orbe');
   // El modo juego sobrevive a cerrar la app (lo guarda Java): si la dueña se fue a
   // jugar y vuelve, el avispón tiene que estar encendido desde el primer instante.
+  // `pintaJuego` enciende además el freno de agua y vidrio (F17).
+  ponFreno();
   pintaJuego(!!(estadoMusica() || {}).juego);
   // Y la píldora: si la dueña vuelve a la app con la pista todavía sonando, el
   // aviso de Java puede no llegar hasta que algo cambie. Se pinta una vez al

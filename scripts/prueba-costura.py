@@ -4461,6 +4461,229 @@ else:
     dice_ok("F16 · la cola", "`Cerebro.hora` conserva los dos lados, la tabla mide las "
               "frases compuestas y la cara separa canción de nota en orden")
 
+# ── [32] F17 · la cara vestida: orbe, burbuja de la 1.1.4 y agua con freno ──
+# Tres cosas que se ven en el teléfono y se pueden medir aquí:
+#
+#   · `orb.js` tenía veinte colores escritos a mano. Ahora los dieciséis canales
+#     salen de `traje.js` a partir de `--primario`/`--secundario`, y la prueba
+#     `prueba-colores.mjs` exige que cambiar de traje cambie LOS DIECISÉIS. Esta
+#     costura vigila la otra mitad: que `aplica()` toque de verdad cada material,
+#     que no quede un `0x…` fijo y que la cara llame a `vestir` al arrancar.
+#   · La burbuja vuelve a lo que a ella le gustó de la 1.1.4: azul translúcida,
+#     arrastrable y que se aparta al borde. Se comprueba el arrastre real
+#     (`ACTION_MOVE` + `updateViewLayout`), la opacidad de reposo y que el toque
+#     siga abriendo CORT; el modo juego y el permiso no se tocan.
+#   · El agua (`#agua`) y el vidrio (`backdrop-filter`) se apagan con
+#     `html.freno`, que ponen la poca RAM declarada o el modo juego. Sin el freno,
+#     la animación sería decoración cara en el teléfono de 4 GB.
+print("\n[32] F17 · el orbe viste el atuendo, la burbuja se arrastra y el agua frena")
+
+F32_IA = APK / "src" / "com" / "cort" / "ia"
+try:
+    F32_ORB_T = (RAIZ / "ui" / "js" / "orb.js").read_text(encoding="utf-8")
+    F32_ORB = sin_comentarios_js(F32_ORB_T)
+    F32_TRAJE = (RAIZ / "ui" / "js" / "traje.js").read_text(encoding="utf-8")
+    F32_TEL_T = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+    F32_TEL = sin_comentarios_js(F32_TEL_T)
+    F32_PAN_T = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+    F32_PAN = sin_comentarios_js(F32_PAN_T)
+    F32_HTML = (RAIZ / "ui" / "index.html").read_text(encoding="utf-8")
+    F32_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+    F32_FLOT_T = (F32_IA / "Flotante.java").read_text(encoding="utf-8")
+    F32_FLOT = sin_comentarios(F32_FLOT_T)
+    F32_PALETA_T = (F32_IA / "Paleta.java").read_text(encoding="utf-8")
+    F32_COL = (RAIZ / "scripts" / "prueba-colores.mjs").read_text(encoding="utf-8")
+    F32_SONDA = (RAIZ / "ui" / "sonda-colores.html").read_text(encoding="utf-8")
+    F32_YML = (RAIZ / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    F32_COMP = (APK / "compilar.sh").read_text(encoding="utf-8")
+    F32_ROTO = ""
+except OSError as f32_falta:
+    F32_ORB_T = F32_ORB = F32_TRAJE = F32_TEL_T = F32_TEL = ""
+    F32_PAN_T = F32_PAN = F32_HTML = F32_CSS = F32_FLOT_T = F32_FLOT = ""
+    F32_PALETA_T = F32_COL = F32_SONDA = F32_YML = F32_COMP = ""
+    F32_ROTO = str(f32_falta)
+    falla("F17 · el orbe vestido", f"no se pudieron leer: {f32_falta}")
+
+# 32.a · el orbe viste: dieciséis canales aplicados, sin un solo color fijo y dos
+#        variables CSS leídas al montar. `aplica()` es el único sitio que pinta:
+#        si un canal no aparece como `c.<canal>`, ese material se queda azul.
+f32_claves_m = re.search(r"CLAVES\s*=\s*Object\.freeze\(\[(.*?)\]\)", F32_TRAJE, re.S)
+f32_claves = re.findall(r"'([a-zA-Z0-9]+)'", f32_claves_m.group(1)) if f32_claves_m else []
+f32_i_aplica = F32_ORB.find("function aplica(c)")
+f32_i_vestir = F32_ORB.find("function vestir(", f32_i_aplica if f32_i_aplica >= 0 else 0)
+f32_cuerpo = F32_ORB[f32_i_aplica:f32_i_vestir] if f32_i_aplica >= 0 and f32_i_vestir > f32_i_aplica else ""
+f32_sin_canal = [k for k in f32_claves if ("c." + k) not in f32_cuerpo]
+f32_fijos = re.findall(r"0x[0-9a-fA-F]{6}", F32_ORB)
+f32_orb_piezas = [t for t in ("from './traje.js'", "getComputedStyle", "'--primario'",
+                              "'--secundario'", "pintaRejilla(c)", "vestir,",
+                              "colores()")
+                  if t not in F32_ORB + F32_TRAJE]
+if F32_ROTO:
+    pass
+elif len(f32_claves) != 16:
+    falla("F17 · el orbe vestido", f"`traje.js` declara {len(f32_claves)} canales y deben ser "
+          "dieciséis: la prueba y el orbe no estarían midiendo lo mismo")
+elif not f32_cuerpo:
+    falla("F17 · el orbe vestido", "no existe `aplica(c)` o `vestir` después: el atuendo se "
+          "derivaría y no se pintaría")
+elif f32_sin_canal:
+    falla("F17 · el orbe vestido", f"`aplica()` no pinta {f32_sin_canal}: esos materiales "
+          "se quedarían con el color de otro traje")
+elif f32_fijos:
+    falla("F17 · el orbe vestido", f"quedan colores fijos en `orb.js` ({f32_fijos[:4]}): "
+          "el traje no llegaría a esa pieza")
+elif f32_orb_piezas:
+    falla("F17 · el orbe vestido", f"falta {f32_orb_piezas} en el orbe: no leería el traje "
+          "de la cara o no se podría medir")
+elif "export function deriva(" not in F32_TRAJE:
+    falla("F17 · el orbe vestido", "`traje.js` no exporta `deriva`: la prueba de colores no "
+          "podría importarla")
+else:
+    dice_ok("F17 · el orbe vestido", f"los {len(f32_claves)} canales se aplican en un solo "
+              "sitio, sin `0x` fijos, y el orbe lee las dos variables CSS al montar")
+
+# 32.b · la tabla de colores no se copia a mano: los seis pares de `Paleta.java`
+#        están en `prueba-colores.mjs`, y el paso corre en el pipeline. Si allí
+#        cambia un color y aquí no, la derivación se mediría contra otra tabla.
+f32_pares = re.findall(r'\{"([^"]+)",\s*"(#[0-9a-fA-F]{6})",\s*"(#[0-9a-fA-F]{6})"\}',
+                       F32_PALETA_T)
+f32_pares_falta = [n for n, p, s in f32_pares
+                   if f"'{n}', '{p}', '{s}'" not in F32_COL]
+if F32_ROTO:
+    pass
+elif len(f32_pares) != 6:
+    falla("F17 · la prueba de colores", f"`Paleta.java` da {len(f32_pares)} trajes y deben "
+          "ser seis: la tabla cambió de forma")
+elif f32_pares_falta:
+    falla("F17 · la prueba de colores", f"`prueba-colores.mjs` no tiene {f32_pares_falta}: "
+          "mediría otros colores que los del teléfono")
+elif "CLAVES.length === 16" not in F32_COL:
+    falla("F17 · la prueba de colores", "la prueba no exige los dieciséis canales: un olvido "
+          "en `traje.js` pasaría en verde")
+elif "node scripts/prueba-colores.mjs" not in F32_YML:
+    falla("F17 · la prueba de colores", "el paso no está en `build.yml`: la prueba existiría "
+          "pero nadie la correría en el pipeline")
+elif not (RAIZ / "ui" / "sonda-colores.html").exists():
+    falla("F17 · la prueba de colores", "no existe la sonda para verlo en el navegador")
+else:
+    dice_ok("F17 · la prueba de colores", f"los {len(f32_pares)} pares de `Paleta.java` están "
+              "en la prueba de node, que corre en el pipeline y mide los 16 canales")
+
+# 32.c · la cara viste al arrancar. `ponVariables` es el único que llama a
+#        `vestir`, y `pintaAtuendo` aplica el `puesto` que trae `lista` sin esperar
+#        a que la dueña cambie de traje (antes sólo se pintaba al cambiarlo).
+f32_i_pon = F32_TEL.find("function ponVariables(")
+f32_i_at = F32_TEL.find("function ponAtuendo(", f32_i_pon if f32_i_pon >= 0 else 0)
+f32_pon = F32_TEL[f32_i_pon:f32_i_at] if f32_i_pon >= 0 and f32_i_at > f32_i_pon else ""
+f32_i_pinta = F32_TEL.find("function pintaAtuendo(")
+f32_i_viste = F32_TEL.find("function vistePuesto(", f32_i_pinta if f32_i_pinta >= 0 else 0)
+f32_pinta = F32_TEL[f32_i_pinta:f32_i_viste] if f32_i_pinta >= 0 and f32_i_viste > f32_i_pinta else ""
+f32_i_viste_fin = F32_TEL.find("function ponAtuendo(", f32_i_viste if f32_i_viste >= 0 else 0)
+f32_vestir_puesto = F32_TEL[f32_i_viste:f32_i_viste_fin] if f32_i_viste >= 0 and f32_i_viste_fin > f32_i_viste else ""
+if F32_ROTO:
+    pass
+elif "ctx?.orb?.vestir?.(p, s)" not in f32_pon:
+    falla("F17 · la cara viste", "`ponVariables` no llama a `orb.vestir`: el HUD cambiaría "
+          "y el orbe se quedaría con el traje anterior")
+elif "vistePuesto()" not in f32_pinta:
+    falla("F17 · la cara viste", "`pintaAtuendo` no aplica el traje guardado: al abrir CORT "
+          "el orbe amanecería azul aunque haya Matrix puesto")
+elif not re.search(r"estado\.atuendos\.find\(", f32_vestir_puesto) \
+        or not re.search(r"\.nombre === estado\.puesto", f32_vestir_puesto) \
+        or ".primario" not in f32_vestir_puesto \
+        or ".secundario" not in f32_vestir_puesto:
+    falla("F17 · la cara viste", "`vistePuesto` no busca el `puesto` en la lista ni usa sus "
+          "dos colores: el traje guardado no llegaría al CSS")
+elif "pintaAtuendo();" not in F32_TEL:
+    falla("F17 · la cara viste", "`pinta()` no llama a `pintaAtuendo()`: la lista nunca se "
+          "pediría al montar")
+else:
+    dice_ok("F17 · la cara viste", "`ponVariables` viste el orbe y `pintaAtuendo` aplica al "
+              "montar el traje que Java tiene guardado, sin esperar a un cambio")
+
+# 32.d · la burbuja de la 1.1.4: gradiente translúcido, arrastre de verdad y
+#        opacidad de reposo. El toque sigue abriendo CORT; el modo juego manda
+#        antes de montar; no se pide ningún permiso nuevo ni se anima en bucle.
+f32_flot = [t for t in ("RadialGradient", "setShader(", "ACTION_MOVE", "updateViewLayout",
+                        "getRawX()", "performClick()", "pegaAlBorde", "setAlpha(ALFA_REPOSO)",
+                        "ESPERA_OPACIDAD", "setOnTouchListener",
+                        "TYPE_APPLICATION_OVERLAY", "FLAG_NOT_FOCUSABLE",
+                        "DIAMETRO_DP = 44")
+            if t not in F32_FLOT]
+f32_i_juego = F32_FLOT.find("if (juego(app))")
+f32_i_monta = F32_FLOT.find("montarYa(app)")
+f32_firma_burbuja = "public static String burbuja(Context contexto, boolean on)" in F32_FLOT
+if F32_ROTO:
+    pass
+elif f32_flot:
+    falla("F17 · la burbuja 1.1.4", f"`Flotante` perdió {f32_flot}: volvería a ser un punto "
+          "opaco y quieto")
+elif not f32_firma_burbuja:
+    falla("F17 · la burbuja 1.1.4", "la firma de `burbuja(Context, boolean)` cambió: es la "
+          "sección 6 del contrato")
+elif min(f32_i_juego, f32_i_monta) < 0 or not (f32_i_juego < f32_i_monta):
+    falla("F17 · la burbuja 1.1.4", "el modo juego no se comprueba antes de montar: el punto "
+          "aparecería encima de una partida")
+elif re.search(r"uses-permission|SYSTEM_ALERT_WINDOW|requestPermissions", F32_FLOT):
+    falla("F17 · la burbuja 1.1.4", "`Flotante` pide permisos: la superficie no se toca sin "
+          "decir el precio")
+elif "ValueAnimator" in F32_FLOT or "requestAnimationFrame" in F32_FLOT:
+    falla("F17 · la burbuja 1.1.4", "volvió una animación por fotograma: batería en segundo "
+          "plano para un punto de 44 dp")
+else:
+    dice_ok("F17 · la burbuja 1.1.4", "gradiente translúcido con opacidad de reposo, "
+              "arrastre que se pega al borde, toque que abre CORT y modo juego primero")
+
+# 32.e · el agua y el vidrio con freno. La capa existe, el CSS la anima con
+#        `transform` y la apaga con `html.freno`; la cara pone esa clase con poca
+#        RAM o modo juego. El freno también quita el `backdrop-filter` (lo caro).
+f32_agua = [t for t in ("@keyframes agua-ola", "#agua{", "html.freno #agua",
+                        "html.freno .panel", "backdrop-filter:none !important")
+            if t not in F32_CSS]
+f32_pan = [t for t in ("navigator.deviceMemory", "<= 2", "classList.toggle('freno'",
+                       "juegoPuesto = !!on", "POCA_RAM || juegoPuesto")
+           if t not in F32_PAN]
+f32_i_pj = F32_PAN.find("function pintaJuego(on)")
+f32_i_em = F32_PAN.find("function escuchaMusica(", f32_i_pj if f32_i_pj >= 0 else 0)
+f32_pj = F32_PAN[f32_i_pj:f32_i_em] if f32_i_pj >= 0 and f32_i_em > f32_i_pj else ""
+if F32_ROTO:
+    pass
+elif 'id="agua"' not in F32_HTML:
+    falla("F17 · el agua con freno", "`index.html` no tiene la capa `#agua`: el agua no "
+          "existiría en la cara")
+elif f32_agua:
+    falla("F17 · el agua con freno", f"falta {f32_agua} en `hud.css`: o no hay ola o el "
+          "freno no apaga el filtro y el desenfoque")
+elif f32_pan:
+    falla("F17 · el agua con freno", f"`pantallas.js` no pone el freno como se espera: "
+          f"falta {f32_pan}")
+elif "ponFreno();" not in f32_pj:
+    falla("F17 · el agua con freno", "`pintaJuego` no llama a `ponFreno()`: jugar no bajaría "
+          "el agua ni el vidrio")
+elif F32_PAN.count("ponFreno();") < 2:
+    falla("F17 · el agua con freno", "el freno no se aplica al arrancar y al cambiar de modo: "
+          "con poca RAM el agua seguiría animada hasta entrar en una hoja")
+else:
+    dice_ok("F17 · el agua con freno", "capa de agua con `@keyframes` de transform, y "
+              "`html.freno` apaga ola, desenfoque y `backdrop-filter` con poca RAM o juego")
+
+# 32.f · la sonda visual existe, monta el MISMO orbe y comprueba los seis contra
+#        `orb.colores()`; y no viaja al APK (el pipeline descarta `sonda-*.html`).
+f32_sonda = [t for t in ("initORB", "orb.colores()", "orb.vestir(", "Cortana", "JARVIS",
+                         "Siri", "Matrix", "Atardecer", "Neutron")
+             if t not in F32_SONDA]
+if F32_ROTO:
+    pass
+elif f32_sonda:
+    falla("F17 · la sonda", f"la sonda de colores perdió {f32_sonda}: no podría enseñar los "
+          "seis trajes ni medir el orbe de verdad")
+elif "find assets/ui -maxdepth 1 -name 'sonda-*.html' -delete" not in F32_COMP:
+    falla("F17 · la sonda", "el pipeline dejó de descartar `sonda-*.html`: la sonda viajaría "
+          "dentro del APK y engordaría la cara sin hacer nada")
+else:
+    dice_ok("F17 · la sonda", "monta el orbe real, comprueba los seis contra `orb.colores()` "
+              "y sigue fuera del APK")
+
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
 if FALLOS:

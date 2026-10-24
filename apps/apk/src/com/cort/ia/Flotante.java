@@ -14,8 +14,8 @@ package com.cort.ia;
  *   decide la cara, no CORT.
  * · **Existir en modo juego.** Con `juego` puesto en las preferencias `cort`, la
  *   respuesta es `{"ok":false,"dice":"estoy en modo juego"}` aunque se le pida
- *   por escrito: un punto moviéndose sobre una partida es exactamente lo que
- *   ella no quiere.
+ *   por escrito: un punto encima de una partida es exactamente lo que ella no
+ *   quiere, aunque se pueda arrastrar a una esquina.
  * · **Pintar un layout XML.** No hay `R.java` para recursos nuevos (el APK se
  *   enlaza con `aapt2` sobre `res/`, y el pipeline no genera layouts): el círculo
  *   se dibuja a mano con `Paint` sobre `Canvas`, como `Orbe.java` en la línea
@@ -31,9 +31,20 @@ package com.cort.ia;
  *   con un `Handler` y espera su resultado con un `CountDownLatch` acotado: el
  *   método sigue siendo síncrono como pide el contrato, pero no se queda colgado
  *   si la interfaz está ocupada.
- * · **Animar.** El punto está quieto a propósito: un bucle de pintado en segundo
- *   plano es batería y RAM en un teléfono de dos núcleos. El latido vivo es
- *   asunto de la cara cuando ella la abre.
+ * · **Animar en bucle.** El punto no tiene bucle de pintado: se pinta al montarse
+ *   y cuando el dedo lo mueve. El único cambio de opacidad es un fundido de una
+ *   vez al reposar, que la deja translúcida para dejar ver lo de debajo —lo que
+ *   a ella le gustó de la 1.1.4—. Un latido por fotograma en segundo plano sería
+ *   batería y RAM en un teléfono de dos núcleos; el latido vivo es de la cara.
+ * · **Quedarse quieta.** Se arrastra con el dedo: `ACTION_MOVE` mueve la ventana
+ *   (`updateViewLayout`) y al soltar se pega al borde más cercano para no tapar
+ *   el centro. Un toque sin arrastre sigue siendo «abre CORT y escucha». La
+ *   posición no se guarda: al volver a montarla nace centrada a la izquierda,
+ *   que es donde el contrato la puso siempre.
+ * · **Ser una pegatina opaca.** Es azul translúcida —gradiente del traje con
+ *   alfa— y sube a opaca mientras el dedo está encima. Sin `backdrop-filter` ni
+ *   desenfoque: en una vista de 44 dp no se nota y cuesta lo mismo que el resto
+ *   de la cara en modo juego.
  * · **Pulsar nada por la dueña.** El toque lanza `MainActivity` con el extra de
  *   escuchar; quien decide si CORT escucha es Android con el permiso del micro.
  */
@@ -42,14 +53,18 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.RadialGradient;
+import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 
@@ -64,6 +79,10 @@ public class Flotante {
     private static final int DIAMETRO_DP = 44;
     /** Margen al borde de la pantalla, también en dp. */
     private static final int MARGEN_DP = 10;
+    /** Lo translúcida que queda en reposo: la transparencia de la 1.1.4. */
+    private static final float ALFA_REPOSO = .62f;
+    /** Cuánto tarda en volver a translúcida tras el último toque, en ms. */
+    private static final int ESPERA_OPACIDAD = 2600;
 
     /**
      * El `View` montado y el `WindowManager` que lo sostiene, en **estático**
@@ -72,7 +91,7 @@ public class Flotante {
      * `volatile` porque los lee el hilo del puente para contestar `montada()` y el
      * `ya`.
      */
-    private static volatile View punto;
+    private static volatile Punto punto;
     private static volatile WindowManager ventana;
 
     private Flotante() {
@@ -171,9 +190,12 @@ public class Flotante {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
                 PixelFormat.TRANSLUCENT);
-        l.gravity = Gravity.CENTER_VERTICAL | Gravity.START;
+        // `TOP|START` en vez de `CENTER_VERTICAL|START`: con coordenadas desde la
+        // esquina, el arrastre se acota contra la pantalla sin cuentas de centro.
+        l.gravity = Gravity.TOP | Gravity.START;
         l.x = margen;
-        l.y = 0;
+        l.y = Math.max(0, (alto(app) - lado) / 2);
+        vista.engancha(wm, l);
         try {
             wm.addView(vista, l);
         } catch (WindowManager.BadTokenException tokenRoto) {
@@ -273,10 +295,10 @@ public class Flotante {
     /* ─────────────────────────── la vista pintada ─────────────────────────── */
 
     /**
-     * El círculo. Se pinta aquí, en código: un relleno con el color primario del
-     * traje puesto, un aro con el secundario y un brillo dentro para que se vea
-     * redondo y no una pegatina. Los colores vienen de `Paleta`, así que el punto
-     * viste lo mismo que la cara.
+     * El círculo de la 1.1.4: azul translúcido, con gradiente del traje puesto,
+     * un aro del secundario y un brillo dentro. Se pinta a mano con `Paint` (no
+     * hay recursos que enlazar) y se arrastra con el dedo. La opacidad baja sola
+     * un rato después del último toque; mientras el dedo está encima va opaca.
      */
     private static final class Punto extends View {
         private final Paint relleno = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -284,14 +306,33 @@ public class Flotante {
         private final Paint brillo = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final int primario;
         private final int secundario;
+        private final int lado;
+        private final int tope;
+        private final int dp;
+
+        private final Runnable seApaga = new Runnable() {
+            @Override public void run() {
+                setAlpha(ALFA_REPOSO);
+            }
+        };
+
+        private WindowManager ventana;
+        private WindowManager.LayoutParams puesto;
+        private RadialGradient gradiente;
+        private float x0, y0, toqueX, toqueY;
+        private boolean arrastro;
 
         Punto(Context c) {
             super(c);
+            dp = Math.round(densidad(c));
+            lado = Math.round(DIAMETRO_DP * densidad(c));
+            tope = Math.max(6, Math.round(6 * densidad(c)));   // `ViewConfiguration` fuera: una línea
             primario = colorDe(Paleta.primario(c), 0xFF59D9FF);
             secundario = colorDe(Paleta.secundario(c), 0xFF0A3D62);
             relleno.setStyle(Paint.Style.FILL);
             aro.setStyle(Paint.Style.STROKE);
             brillo.setStyle(Paint.Style.FILL);
+            setAlpha(ALFA_REPOSO);
             setClickable(true);
             setContentDescription("CORT");
             setOnClickListener(new View.OnClickListener() {
@@ -299,23 +340,138 @@ public class Flotante {
                     abreCORT(v.getContext());
                 }
             });
+            setOnTouchListener(new View.OnTouchListener() {
+                @Override public boolean onTouch(View v, MotionEvent e) {
+                    return toca(e);
+                }
+            });
+        }
+
+        /** La ventana y sus parámetros: sin ellos no hay arrastre posible. */
+        void engancha(WindowManager wm, WindowManager.LayoutParams lp) {
+            ventana = wm;
+            puesto = lp;
+        }
+
+        /* ── el dedo: toque = abrir CORT; arrastre = mover; soltar = borde ── */
+        private boolean toca(MotionEvent e) {
+            if (puesto == null || ventana == null) return false;
+            switch (e.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    x0 = puesto.x;
+                    y0 = puesto.y;
+                    toqueX = e.getRawX();
+                    toqueY = e.getRawY();
+                    arrastro = false;
+                    setAlpha(1f);
+                    removeCallbacks(seApaga);
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    float dx = e.getRawX() - toqueX;
+                    float dy = e.getRawY() - toqueY;
+                    if (!arrastro && Math.hypot(dx, dy) > tope) arrastro = true;
+                    if (arrastro) {
+                        puesto.x = acota(Math.round(x0 + dx), 0, Math.max(0, ancho() - ladoVivo()));
+                        puesto.y = acota(Math.round(y0 + dy), 0, Math.max(0, alto() - ladoVivo()));
+                        mueve();
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                    if (!arrastro) performClick();       // el toque de siempre: abre y escucha
+                    else pegaAlBorde();
+                    postDelayed(seApaga, ESPERA_OPACIDAD);
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    postDelayed(seApaga, ESPERA_OPACIDAD);
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private void mueve() {
+            try {
+                ventana.updateViewLayout(this, puesto);
+            } catch (Throwable noMueve) {
+                Log.e(LOG, "burbuja: updateViewLayout", noMueve);
+            }
+        }
+
+        /** Al soltar, se pega al lado más cercano: el centro queda libre. */
+        private void pegaAlBorde() {
+            if (puesto == null) return;
+            int margen = Math.round(MARGEN_DP * dp);
+            puesto.x = (puesto.x + ladoVivo() / 2 < ancho() / 2)
+                    ? margen
+                    : Math.max(margen, ancho() - ladoVivo() - margen);
+            puesto.y = acota(puesto.y, 0, Math.max(0, alto() - ladoVivo()));
+            mueve();
+        }
+
+        private int ancho() {
+            try { return getResources().getDisplayMetrics().widthPixels; }
+            catch (Throwable sinPantalla) { return lado * 8; }
+        }
+
+        private int alto() {
+            try { return getResources().getDisplayMetrics().heightPixels; }
+            catch (Throwable sinPantalla) { return lado * 16; }
+        }
+
+        private int ladoVivo() {
+            return getWidth() > 0 ? getWidth() : lado;
+        }
+
+        @Override protected void onSizeChanged(int w, int h, int viejoW, int viejoH) {
+            super.onSizeChanged(w, h, viejoW, viejoH);
+            gradiente = null;                 // el gradiente depende del radio
+        }
+
+        @Override protected void onDetachedFromWindow() {
+            removeCallbacks(seApaga);
+            super.onDetachedFromWindow();
         }
 
         @Override protected void onDraw(Canvas canvas) {
             float x = getWidth() / 2f;
             float y = getHeight() / 2f;
             float radio = Math.min(x, y);
-            if (radio <= 0f) return;
+            if (radio <= 1f) return;
 
-            aro.setColor(secundario);
-            aro.setStrokeWidth(Math.max(2f, radio * 0.14f));
-            relleno.setColor(primario);
-            brillo.setColor(0x66FFFFFF);
+            if (gradiente == null) {
+                // Azul de cristal: centro claro, cuerpo del primario y borde que se
+                // hunde en el secundario. Las alfas son lo que deja ver lo de abajo.
+                gradiente = new RadialGradient(x - radio * .18f, y - radio * .24f, radio * 1.12f,
+                        new int[]{conAlfa(aclara(primario, .45f), 0xE6),
+                                  conAlfa(primario, 0xC8),
+                                  conAlfa(secundario, 0xF0)},
+                        new float[]{0f, .58f, 1f}, Shader.TileMode.CLAMP);
+                relleno.setShader(gradiente);
+            }
+            aro.setStrokeWidth(Math.max(2f, radio * .12f));
+            aro.setColor(conAlfa(aclara(secundario, .30f), 0xCC));
+            brillo.setColor(0x55FFFFFF);
 
             canvas.drawCircle(x, y, radio - aro.getStrokeWidth() / 2f, relleno);
             canvas.drawCircle(x, y, radio - aro.getStrokeWidth() / 2f, aro);
             // El brillo descentrado es lo que hace que parezca una bola de cristal.
-            canvas.drawCircle(x - radio * 0.22f, y - radio * 0.26f, radio * 0.26f, brillo);
+            canvas.drawCircle(x - radio * .24f, y - radio * .28f, radio * .22f, brillo);
+        }
+
+        private static int conAlfa(int color, int alfa) {
+            return (color & 0x00FFFFFF) | ((alfa & 0xFF) << 24);
+        }
+
+        private static int aclara(int color, float t) {
+            int r = Math.round(Color.red(color) + (255 - Color.red(color)) * t);
+            int g = Math.round(Color.green(color) + (255 - Color.green(color)) * t);
+            int b = Math.round(Color.blue(color) + (255 - Color.blue(color)) * t);
+            return Color.rgb(r, g, b);
+        }
+
+        private static int acota(int v, int min, int max) {
+            return v < min ? min : (v > max ? max : v);
         }
 
         private static int colorDe(int color, int siNegro) {
@@ -371,6 +527,15 @@ public class Flotante {
             return m == null || m.density <= 0f ? 1f : m.density;
         } catch (Throwable sinPantalla) {
             return 1f;
+        }
+    }
+
+    private static int alto(Context c) {
+        try {
+            DisplayMetrics m = c.getResources().getDisplayMetrics();
+            return m == null || m.heightPixels <= 0 ? 1920 : m.heightPixels;
+        } catch (Throwable sinPantalla) {
+            return 1920;
         }
     }
 
