@@ -743,3 +743,55 @@ el manifiesto no crece (16.208 / 12.792 B) y no hay permisos nuevos.
 botones respondan, que la voz suene, que el dedo distinga toque de arrastre en la
 burbuja y que el agua no estorbe la lectura. La sonda prueba la lógica de la cara en
 un navegador, no el WebView de su Samsung ni su GPU.
+
+## Ronda 2.10.2 · el orbe con ánimo y el Centro de mando (2026-10-24)
+
+La dueña lo pidió sin rodeos: el orbe «se ve muy genérico» y las funciones «están
+regadas, falta más orden profesional». Esta ronda ataca las dos mitades.
+
+**F18 · el orbe deja de ser una bola.** Alrededor del núcleo de partículas hay una
+cáscara de energía (Fresnel + cuatro senos de ruido + barrido vertical) y tres arcos
+de instrumento que giran a distinta velocidad. El orbe tiene cuatro ánimos visibles
+—`reposo`, `escucha`, `piensa`, `habla`— y `hud.js` los manda con la misma lámpara
+que ya cambiaba al hablar o al pensar. Todo se pinta desde los **dieciséis canales**
+de F17 (cáscara `hilos`; arcos `anillo1`/`hilos`/`anillo2`), así que cambiar de traje
+sigue cambiando **todos** los colores: no hay un decimoséptimo canal ni se toca
+`Paleta.java`. Con `html.freno` la cáscara y los arcos se apagan, igual que el agua.
+
+**F19 · el Centro de mando.** Una pantalla nueva (`⌘ · Centro`, también por voz) que
+junta las **91 intenciones / 736 frases** del diccionario generado, las hojas de este
+aparato y las herramientas del cajón: **107 filas** con búsqueda que pliega tildes y
+filtros por capa (mando 41, razón 26, casa 13, nube 11). Tocar una orden no inventa un
+camino nuevo: manda su frase de ejemplo por `cort:orden` y `hud.js` la entrega al
+**mismo `send()` que la voz**.
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| el orbe tiene cuatro ánimos y un nombre desconocido cae a reposo | costura **[34]**: exige `reposo/escucha/piensa/habla` y que `estado(nombre)` devuelva el puesto o `reposo` |
+| la cáscara y los arcos no vuelven al cian de fábrica con otro traje | costura [34]: exige que `aplica()` pinte `shellMat` con `c.hilos` y los arcos con `anillo1`/`anillo2` |
+| el freno de poca RAM también apaga la mitad nueva | costura [34]: exige `shell.visible = !frenoOn` y `a.m.visible = !frenoOn` |
+| la lámpara de la cara llega al orbe | costura [34]: `ORBE_ESTADO` traduce `pensando: 'piensa'` y `setState` llama a `orb.estado()` |
+| el Centro ejecuta lo que enseña | costura [34]: importa `DICCIONARIO`/`TOTALES`, pliega tildes con NFD, no escribe frases a mano y despacha `cort:orden` con `b.dataset.frase`; `hud.js` lo recibe en `send()` |
+| la hoja del Centro se ve, no queda negra | `hud.css` lleva su regla `display:flex` y la sonda mide `getComputedStyle(...).display === 'flex'`; el cuerpo va en `display:block` para que los chips no se compriman |
+| el Centro no ofrece lo que el aparato no tiene | `ir('centro')` lo pinta con `visibles()`, no con una lista fija; en el PC se caen Música y Equipo |
+| las quince promesas no son decoración | taller **F18**: 15 mutaciones, una por promesa; las 15 caen nombrando su comprobación |
+
+**Medido en el portátil:** costura **307 `ok`** (sector [34] nuevo), sonda de la cara
+**187/187 sin un `NO`** (incluye hoja visible, 107 filas, búsqueda, filtros y la orden
+que viaja), las **7 suites** Java sobre **336 frases**, `prueba-colores.mjs` **28/28**,
+mandos **63/63**, automatizaciones **45/45**, oído **6/6** y talleres F16 **18/18**,
+F17 **19/19** y F18 **15/15**.
+
+**Publicado:** `v0.2.41-demo` (run **40140931041**, los cuatro trabajos en verde), APK
+**2.10.2** / `versionCode` **21002**, misma llave `fa:ab:ef:46…`; descargados y
+hasheados aquí: completo **47.493.193 B** (`67515c90…`), núcleo **47.493.193 B**
+(`663679b5…`) y ligero **1.724.008 B** (`d8db709f…`). Los tres dicen `INSTALABLE`;
+núcleo y ligero, **21 permisos y cero `BIND_*`**; el completo, **28 y 4**. La cara
+embebida sube a **19 archivos** (entra `js/centro.js`, 8.620 B; `assets/ui/` queda en
+1.955.467 B sueltos y 468.786 comprimidos), **sin `sonda-*.html`**, y el manifiesto no
+crece (16.208 / 12.792 B).
+
+**Lo que sólo su teléfono puede confirmar:** que el WebGL del APK dibuje la cáscara
+con fluidez, que el freno de poca RAM la apague, que el Centro se desplace con el dedo
+y que una orden tocada responda en voz alta. La sonda mide la lógica de la cara en un
+navegador de escritorio, no la GPU ni el WebView de su Samsung.
