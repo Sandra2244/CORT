@@ -25,39 +25,10 @@ public class AudioManager {
         void onAudioFocusChange(int cambio);
     }
 
-    /** La petición inmutable, con su `Builder`, como la de Android. */
-    public static class AudioFocusRequest {
-        public final int foco;
-        public final AudioAttributes attrs;
-        public final boolean pausaAlDuckear;
-        public final OnAudioFocusChangeListener oyente;
-
-        private AudioFocusRequest(Builder b) {
-            this.foco = b.foco;
-            this.attrs = b.attrs;
-            this.pausaAlDuckear = b.pausaAlDuckear;
-            this.oyente = b.oyente;
-        }
-
-        public static class Builder {
-            private final int foco;
-            private AudioAttributes attrs = null;
-            private boolean pausaAlDuckear = true;
-            private OnAudioFocusChangeListener oyente = null;
-
-            public Builder(int foco) { this.foco = foco; }
-
-            public Builder setAudioAttributes(AudioAttributes a) { this.attrs = a; return this; }
-
-            public Builder setWillPauseWhenDucked(boolean pausa) { this.pausaAlDuckear = pausa; return this; }
-
-            public Builder setOnAudioFocusChangeListener(OnAudioFocusChangeListener o) {
-                this.oyente = o; return this;
-            }
-
-            public AudioFocusRequest build() { return new AudioFocusRequest(this); }
-        }
-    }
+    /* `AudioFocusRequest` NO es una clase anidada de `AudioManager`: vive en
+       `android.media` como clase propia (API 26). El gemelo lo copió anidado y
+       por eso el portátil compilaba un código que el SDK de verdad rechaza; el
+       pipeline lo cazó en `v0.2.38-demo`. Ahora el gemelo tiene su archivo. */
 
     public int requestAudioFocus(AudioFocusRequest peticion) {
         pedidos++;

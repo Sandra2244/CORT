@@ -2,6 +2,7 @@ package com.cort.ia
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
@@ -151,8 +152,8 @@ class Oido(private val act: Context, private val salida: Oyente) {
     }
 
     /** La petición, con su listener dentro: `AudioFocusRequest` es inmutable. */
-    private val pideFoco: AudioManager.AudioFocusRequest? = try {
-        AudioManager.AudioFocusRequest
+    private val pideFoco: AudioFocusRequest? = try {
+        AudioFocusRequest
             .Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(
                 AudioAttributes.Builder()

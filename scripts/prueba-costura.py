@@ -3671,6 +3671,31 @@ else:
     dice_ok("F12 · mandos puros", "mandos.js sin DOM ni puente, su suite en node escrita y "
               "llamada desde Actions")
 
+# 27.f · el gemelo del foco tiene que ser el de la PLATAFORMA. `v0.2.38-demo` se
+#        puso roja en el runner porque `AudioFocusRequest` es `android.media` y no
+#        una clase anidada de `AudioManager`; el gemelo de papel había copiado la
+#        anidación equivocada, así que `prueba-oido.sh` daba verde sobre un código
+#        que el SDK rechaza. Aquí se vigilan las dos mitades: el código real y el
+#        gemelo, para que no vuelvan a mentirse.
+F27_PAPEL_FOCO = APK / "prueba" / "papeles" / "android" / "media" / "AudioFocusRequest.java"
+F27_PAPEL_AM = APK / "prueba" / "papeles" / "android" / "media" / "AudioManager.java"
+F27_COD_FOCO = sin_comentarios(F27_OID)
+if not F27_PAPEL_FOCO.exists():
+    falla("F12 · gemelo del foco", "no existe `papeles/android/media/AudioFocusRequest.java`: "
+                                   "el gemelo volvería a meter la clase dentro de `AudioManager`")
+elif "class AudioFocusRequest" in F27_PAPEL_AM.read_text(encoding="utf-8"):
+    falla("F12 · gemelo del foco", "`AudioManager.java` (gemelo) vuelve a anidar "
+                                   "`AudioFocusRequest`: la prueba compilaría lo que el SDK no")
+elif "import android.media.AudioFocusRequest" not in F27_COD_FOCO:
+    falla("F12 · gemelo del foco", "`Oido.kt` no importa `android.media.AudioFocusRequest`: "
+                                   "el runner no compilaría el oído")
+elif "AudioManager.AudioFocusRequest" in F27_COD_FOCO:
+    falla("F12 · gemelo del foco", "`Oido.kt` vuelve a escribir "
+                                   "`AudioManager.AudioFocusRequest`, que no existe en Android")
+else:
+    dice_ok("F12 · gemelo del foco", "el oído usa `android.media.AudioFocusRequest` y el "
+              "gemelo de papel vive en su archivo, como la plataforma")
+
 # ── [28] El barrido de botones muertos: la cara entera ↔ el puente ↔ el backend ──
 # El sector [6] mira `pantallas.js` y `hud.js`. Éste mira TODA la cara, archivo por
 # archivo, y en las dos capas que faltaban: que el método exista **anotado** (un
