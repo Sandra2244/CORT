@@ -674,8 +674,8 @@ firma `burbuja(Context, boolean)` intacta y los **44 dp** de siempre.
 | el freno tiene disparador | `pantallas.js` pone `html.freno` con **poca RAM** (`navigator.deviceMemory <= 2`, que es 2 para el portátil de 1,8 GiB) **o** en modo juego; `html.freno` también quita el `backdrop-filter` de paneles, ventanas, chips y FAB |
 | la prueba visual no viaja al APK | `ui/sonda-colores.html` monta el orbe real, recorre los seis trajes y compara contra `orb.colores()`; `compilar.sh` sigue borrando `sonda-*.html` |
 
-Cifras medidas en el portátil: `prueba-colores.mjs` **28/28**, la costura en **301
-`ok`** (6 del sector [32]) y `scripts/taller-f17.sh` con **19 mutaciones que caen las
+Cifras medidas en el portátil: `prueba-colores.mjs` **28/28**, la costura en **302
+`ok`** (6 del sector [32] y el gemelo 27.f del foco de audio) y `scripts/taller-f17.sh` con **19 mutaciones que caen las
 19**, cada una nombrando la comprobación que la echaba de menos; dos de ellas corren la
 prueba de node entera (`la partícula se congela`, `el secundario se cuela`). Las seis
 paletas se midieron **sin GPU**: la derivación vive en un módulo puro y el navegador no
@@ -698,8 +698,12 @@ hace falta para saber que Matrix no deja ni un color de Cortana.
 - La 1.1.4 exacta no está en este repo (era del cuerpo Kotlin, sin `.kt` en disco): la
   burbuja se reconstruyó por el comportamiento que ella describió —azul, transparente,
   arrastrable, que no molesta—, no copiando su código.
-- `Flotante.java` **no se compiló en el portátil**: aquí no hay `android.jar` y
-  `compilar.sh` exige `ANDROID_HOME`. El `javac` de verdad es el del pipeline; hasta que
-  corra, el arrastre y el gradiente están revisados a mano, no compilados.
-- Nada de esto llega a su teléfono hasta que salga la Release: **el pipeline no se ha
-  corrido con F17 todavía**.
+- `Flotante.java` **ya pasó por un compilador de verdad**: el `job apk` de
+  `v0.2.39-demo` lo compiló con `javac` + `d8`, y aquí se comprobó además con el
+  `android-34.jar` bajado y un doble de `Oido` (javac salió 0). Eso prueba que compila,
+  no que el gesto se sienta bien en la pantalla.
+- **La Release ya salió:** `v0.2.39-demo` (run 40124250499, 2026-10-24), con los tres
+  APK de la 2.10.0 medidos: completo y núcleo **47.484.933 B** (`a745098b…` /
+  `aaa2225b…`), ligero **1.715.748 B** (`89106db2…`), `versionCode` **21000**, la misma
+  llave `fa:ab:ef:46…` y `assets/ui/` con **18 archivos**. Lo que falta es que ella la
+  instale y mire el orbe, el agua y la burbuja en su teléfono.
