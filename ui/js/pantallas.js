@@ -38,6 +38,7 @@
  */
 
 import { montaTelefono, terminalTelefono } from './telefono.js';
+import { montaCentro } from './centro.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -69,6 +70,10 @@ const PANTALLAS = [
   // pero no trae los métodos del contrato 2.1, y ahí la hoja entera sobra.
   { id: 'equipo', titulo: 'Equipo',   sub: 'lo que manda CORT en el teléfono',
     telefono: true, puente: 'accion', ic: '⚙' },
+  // F19 · el índice de todo: las 91 intenciones del diccionario real, las
+  // pantallas, las herramientas y los ajustes, con búsqueda. No promete nada
+  // nuevo: ordena lo que ya hay y manda la frase de verdad al tocarla.
+  { id: 'centro', titulo: 'Centro',   sub: 'todas las órdenes en un solo sitio', ic: '⌘' },
 ];
 // `montables()` es lo que se construye en el DOM (todas, escondidas o no); `visibles()`
 // es la única lista que se OFRECE (cajón, teclas, deslizar). Una hoja con `puente` solo
@@ -81,7 +86,8 @@ const visibles = () => montables().filter(p => !p.escondida);
    acento. Los valores coinciden con las variables `--app-*` de `css/apps.css`, que es
    donde se visten de verdad; aquí sólo hace falta el tinte del icono. */
 const TINTE = { orbe: '#39c2ff', musica: '#ff9a8b', mv: '#ffb27a',
-                charla: '#8ab4f8', codigo: '#2bff9e', equipo: '#7ce7c8' };
+                charla: '#8ab4f8', codigo: '#2bff9e', equipo: '#7ce7c8',
+                centro: '#c9a6ff' };
 
 const puede = nombre => {
   // Mismo `typeof` que `llama()`, pero sólo para PREGUNTAR: sirve para avisar con
@@ -374,6 +380,9 @@ export function ir(id) {
   // El Equipo se releé al entrar (voces, volumen, cerebro, recuerdos, trajes): es
   // la foto del aparato, y el aparato cambia mientras la hoja está cerrada.
   if (actual === 'equipo') telefono.pinta();
+  // El Centro se repinta al entrar: las herramientas y los ajustes pueden haber
+  // cambiado (un APK nuevo trae métodos y el cajón se repinta con ellos).
+  if (actual === 'centro') pintaCentro();
   pintaJuego((estadoMusica() || {}).juego);
   // Cambiar de hoja es justo lo que hace aparecer o desaparecer la píldora: en
   // Música y MV ya está el transporte completo, y en el Orbe o el Chat no debe
@@ -385,6 +394,15 @@ export function ir(id) {
 }
 
 export const pantallaActual = () => actual;
+
+/* El Centro de mando (F19): una sola lista con lo que CORT ya sabe hacer.
+   `apps` es `visibles()` —la misma lista que ofrece el cajón—, así que el
+   Centro nunca enseña una pantalla que este aparato no tiene. */
+function pintaCentro() {
+  const raiz = document.querySelector('#scr-centro .scr-cuerpo');
+  if (!raiz) return 0;
+  return montaCentro(raiz, { ir, apps: visibles() });
+}
 
 /* ¿Hay núcleo de PC? Se pregunta una vez y se recuerda. */
 async function hayNucleo() {
@@ -2770,6 +2788,11 @@ export function porVoz(texto) {
       || /el video\b/i.test(t)
       || /(pantalla|abre|cambia|mu[eé]strame).{0,14}(mv|video)/i.test(t))) {
     ir('mv'); return 'mv';
+  }
+  // F19 · el índice de todo. «¿qué sabes hacer?» es la pregunta más natural y
+  // antes se iba al cerebro a inventar una lista; aquí está la de verdad.
+  if (/(centro de mando|todas (las|tus) (o[ró]rdenes|funciones)|qu[eé] sabe[s]? hacer|cat[aá]logo de (o[ró]rdenes|funciones))/i.test(t)) {
+    ir('centro'); return 'centro';
   }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(m[uú]sica|reproductor)/i.test(t) && enTelefono()) { ir('musica'); return 'musica'; }
   if (/(pantalla|abre|cambia|mu[eé]strame).{0,14}(charla|chat|conversa)/i.test(t)) { ir('charla'); return 'charla'; }

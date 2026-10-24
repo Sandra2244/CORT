@@ -89,9 +89,17 @@ app.add_middleware(
 async def sin_cache_en_api(request, call_next):
     """Los sensores y el estado del equipo cambian cada segundo: si el navegador
     (o el WebView de Android, o Electron) guarda la respuesta en caché, CORT se
-    queda viendo datos viejos. La API siempre se responde sin caché."""
+    queda viendo datos viejos. La API siempre se responde sin caché.
+
+    La cara se sirve aquí sólo en el portátil (`CORT_SERVE_UI=1`): sus módulos ES
+    también van sin caché. El APK ya manda `Cache-Control: no-store` en
+    `MainActivity.sirve()`; sin esto, el navegador seguía ejecutando el `hud.js`
+    viejo después de una actualización del repo (medido el 2026-10-24: un
+    `reload` normal no invalidaba el mapa de módulos de Chromium)."""
     respuesta = await call_next(request)
-    if request.url.path.startswith("/api/"):
+    ruta = request.url.path
+    if (ruta.startswith("/api/") or ruta.startswith(("/js/", "/css/", "/vendor/"))
+            or ruta.endswith(".html")):
         respuesta.headers["cache-control"] = "no-store"
     return respuesta
 

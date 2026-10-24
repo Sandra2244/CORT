@@ -937,7 +937,18 @@ const LAMP = {
   error:    ['#ff5b5b', 'sin conexión'],
 };
 let lampTimer = 0;
+/* F18 · la lámpara y el orbe cuentan lo mismo. Antes sólo cambiaba el color de
+   `#lamp` y el orbe seguía igual mientras pensaba; ahora el estado de la cara
+   se traduce a la firma visual del orbe (`reposo/escucha/piensa/habla`). El
+   `try` es a propósito: la cara tiene un orbe de palo cuando WebGL no arranca,
+   y ese doble no sabe estados — no puede tumbar el arranque por eso. */
+const ORBE_ESTADO = { reposo: 'reposo', escucha: 'escucha', pensando: 'piensa',
+  hablando: 'habla', listo: 'reposo', oculto: 'reposo', error: 'reposo' };
 function setState(k) {
+  try {
+    if (orb && typeof orb.estado === 'function')
+      orb.estado(ORBE_ESTADO[k] || 'reposo');
+  } catch (sinEstados) { /* un orbe sin estados no es un fallo de la cara */ }
   const el = document.getElementById('lamp');
   if (!el) return;
   const [c, txt] = LAMP[k] || LAMP.reposo;
@@ -2161,6 +2172,14 @@ export function wireUI(orbRef) {
   // duplica en `pantallas.js`, se manda el aviso y se abre la que ya existe.
   window.addEventListener('cort-ventana', e => {
     if (e.detail === 'modelos' && W.modelos) W.modelos.show();
+  });
+  /* El Centro de mando (F19) no ejecuta nada por su cuenta: manda la frase real
+     del diccionario y `send()` hace exactamente lo mismo que si la dueña la
+     hubiera dicho. El catálogo no puede prometer una orden que el cerebro no
+     atienda, porque la frase que enseña es la que se ejecuta. */
+  window.addEventListener('cort:orden', e => {
+    const texto = e && e.detail && e.detail.texto;
+    if (texto) send(texto);
   });
 
   /* gestos — modo ligero */

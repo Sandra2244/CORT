@@ -732,7 +732,8 @@ html.pantallas-montadas:not(.p-orbe) body.sheet #scene{transform:none}
   background:#02040a;padding:56px 12px 12px}
 html.glass .scr{background:rgba(2,4,10,.94)}
 html.mobile .scr{padding:12px 8px calc(96px + env(safe-area-inset-bottom))}
-html.p-mv #scr-mv,html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo{display:flex}
+html.p-mv #scr-mv,html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo,
+html.pantallas-montadas.p-centro #scr-centro{display:flex}
 /* La hoja `equipo` (contrato 2.1) cuelga ADEMÁS de `.pantallas-montadas`: si el
    módulo de pantallas fallara, la cara de siempre queda intacta y no aparece una
    hoja vacía encima del orbe. El orbe aquí **se congela** como en música/charla

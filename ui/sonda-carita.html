@@ -483,6 +483,45 @@ dice(!document.documentElement.classList.contains('letra-grande'), 'y se quita')
 localStorage.removeItem('cort-letra');
 document.documentElement.classList.remove('cajon-abierto');
 
+/* ── 5b · el Centro de mando (F19): todo en un sitio, y sin inventar ─────────
+   La queja de la dueña fue «las funciones están regadas». El Centro no añade
+   funciones: junta las 91 del diccionario real, las pantallas, las herramientas
+   y los ajustes, y al tocar una orden manda SU frase de ejemplo. Lo que se mide
+   aquí es justo eso: que la lista sale del diccionario (41/26/13/11) y que tocar
+   una fila ejecuta la frase que enseña. */
+const ordenDelCentro = [];
+window.addEventListener('cort:orden', e => ordenDelCentro.push(e.detail && e.detail.texto));
+m.ir('centro');
+const filasCentro = $$('#scr-centro .cen-fila');
+dice(getComputedStyle($('#scr-centro')).display === 'flex',
+  'la hoja del Centro se ve de verdad (display:flex; sin su regla CSS sería un p-centro vacío)');
+dice(filasCentro.length > 100, `el Centro lista todo en una sola pantalla (${filasCentro.length} filas)`);
+dice(/91 intenciones/.test($('#cen-cuenta').textContent),
+  'y dice las 91 intenciones y 736 frases del diccionario, no una copia escrita a mano');
+const porMando = $$('#scr-centro .cen-fila[data-capa="mando"]').length;
+const porRazon = $$('#scr-centro .cen-fila[data-capa="razon"]').length;
+dice(porMando === 41 && porRazon === 26,
+  `las familias salen del diccionario: ${porMando} órdenes y ${porRazon} de razón`);
+$('#cen-busca').value = 'alarma';
+$('#cen-busca').dispatchEvent(new Event('input'));
+const conAlarma = $$('#scr-centro .cen-fila').length;
+dice(conAlarma > 0 && conAlarma < filasCentro.length,
+  `buscar «alarma» filtra de verdad (${conAlarma} de ${filasCentro.length})`);
+const primeraOrden = $('#scr-centro .cen-fila');
+primeraOrden.click();
+dice(ordenDelCentro.length === 1 && ordenDelCentro[0] === primeraOrden.dataset.frase,
+  'tocar una orden manda su frase de ejemplo, la misma que se diría en voz alta');
+dice(m.pantallaActual() === 'orbe', 'y vuelve al orbe para verla ejecutarse, no se queda en el índice');
+m.ir('centro');
+$$('#scr-centro .cen-chips [data-capa]').find(b => b.dataset.capa === 'casa').click();
+dice($$('#scr-centro .cen-fila').length === 13,
+  `el filtro «Tu casa y tu equipo» deja sus 13 (${$$('#scr-centro .cen-fila').length})`);
+$('#cen-busca').value = 'zzzz';
+$('#cen-busca').dispatchEvent(new Event('input'));
+dice(!$('#cen-nada').hidden && $$('#scr-centro .cen-fila').length === 0,
+  'sin resultados lo dice en vez de quedarse en blanco');
+m.ir('orbe');
+
 /* ── 6 · Música: calco de Lark Player con sus carátulas ───────────────────────
    Los cuatro puntos de su lista (Música, 22/10) se comprueban aquí uno por uno, y con
    el puente de mentira respondiendo como responde Java: carátula en `data:` para unas

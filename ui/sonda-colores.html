@@ -75,6 +75,14 @@ const botones = document.getElementById('botones');
 const base = orb.colores();
 let puesto = 'Cortana', lineas = [];
 
+/* F18 · los estados no son adorno: el orbe tiene que aceptarlos y un nombre
+   desconocido no puede dejarlo congelado. Se mide aquí, con el orbe real. */
+di(typeof orb.estado === 'function'
+   && orb.estado('piensa') === 'piensa'
+   && orb.estado('loquesea') === 'reposo'
+   && orb.estado() === 'reposo',
+   'el orbe acepta reposo/escucha/piensa/habla y cae a reposo con un nombre raro');
+
 function pintaTiras(c) {
   tiras.innerHTML = CLAVES.map(k =>
     `<i title="${k} ${c[k]}" style="background:${c[k]}"></i>`).join('');

@@ -4767,8 +4767,90 @@ else:
     dice_ok("33 · enlaces de módulos", f"{enlaces} nombres importados existen como export "
             f"en {len(textos)} archivos de la cara; ningún `import` queda colgando")
 
-# ── veredicto ───────────────────────────────────────────────────────────────
-print()
+# ── 34 · F18+F19: el orbe tiene estados y el Centro ordena lo que ya existe ──
+# Estas dos rondas no añaden permisos ni tocan Java: son cara. Lo que puede
+# romperse en silencio es justo lo que se mide aquí: que el estado del orbe
+# llegue desde la lámpara, que el Centro saque la lista del diccionario real en
+# vez de una copia, y que su hoja tenga la regla CSS que la hace visible (el
+# 2026-10-24 la pantalla se montó y se quedó en negro por esa línea).
+print("\n[34] F18 · el orbe con estados, y F19 · el Centro de mando")
+F34_ORB = (RAIZ / "ui" / "js" / "orb.js").read_text(encoding="utf-8")
+F34_TRAJE = (RAIZ / "ui" / "js" / "traje.js").read_text(encoding="utf-8")
+F34_HUD = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+F34_CENTRO = (RAIZ / "ui" / "js" / "centro.js").read_text(encoding="utf-8")
+F34_PANT = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+F34_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+F34_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
+F34_SONDA = (RAIZ / "ui" / "sonda-carita.html").read_text(encoding="utf-8")
+
+f34_claves = re.search(r"CLAVES\s*=\s*Object\.freeze\(\[(.*?)\]\)", F34_TRAJE, re.S)
+f34_estados = [e for e in ("reposo", "escucha", "piensa", "habla")
+               if f"{e}:" not in F34_ORB]
+if f34_estados:
+    falla("F18 · los cuatro estados", f"el orbe perdió {f34_estados}: volvería a tener un solo "
+          "aspecto para escuchar, pensar y hablar")
+elif "estado(nombre)" not in F34_ORB or "ponEstado(String(nombre).toLowerCase())" not in F34_ORB:
+    falla("F18 · los cuatro estados", "el orbe no expone `estado()` o no cae a reposo con un "
+          "nombre desconocido: la cara no podría cambiarle el ánimo")
+elif "shellMat.uniforms.uColor.value.set(c.hilos)" not in F34_ORB \
+        or "arcos[0].m.material.color.set(c.anillo1)" not in F34_ORB:
+    falla("F18 · los cuatro estados", "la cáscara o los arcos no pasan por `aplica()`: con el "
+          "traje Matrix se quedarían azules, que es el bug de F17 otra vez")
+elif "shell.visible = !frenoOn" not in F34_ORB or "a.m.visible = !frenoOn" not in F34_ORB:
+    falla("F18 · los cuatro estados", "la cáscara y los arcos no respetan `html.freno`: en un "
+          "teléfono con poca RAM se dibujarían igual")
+elif not f34_claves or len(re.findall(r"'([a-zA-Z0-9]+)'", f34_claves.group(1))) != 16:
+    falla("F18 · los cuatro estados", "`traje.js` ya no tiene 16 canales: la cáscara comparte "
+          "canales existentes a propósito, no se inventa un decimoséptimo")
+else:
+    dice_ok("F18 · los cuatro estados", "reposo/escucha/piensa/habla, con la cáscara y los "
+              "arcos pintados desde los 16 canales y apagados por `html.freno`")
+
+if "const ORBE_ESTADO = {" not in F34_HUD or "pensando: 'piensa'" not in F34_HUD \
+        or "orb.estado(ORBE_ESTADO[k]" not in F34_HUD:
+    falla("F18 · la lámpara manda", "`setState` no traduce la lámpara al orbe: pensar y hablar "
+          "seguirían viéndose iguales desde la cara")
+elif "addEventListener('cort:orden'" not in F34_HUD or "if (texto) send(texto)" not in F34_HUD:
+    falla("F18 · la lámpara manda", "la cara no escucha `cort:orden`: el Centro sería un "
+          "catálogo que no ejecuta nada")
+else:
+    dice_ok("F18 · la lámpara manda", "`pensando/escuchando/hablando` llegan al orbe, y una "
+              "orden del Centro entra por el mismo `send()` que la voz")
+
+if "import { DICCIONARIO, TOTALES }" not in F34_CENTRO:
+    falla("F19 · el Centro", "el Centro dejó de leer el diccionario generado: la lista se "
+          "quedaría vieja respecto a `saber.py`")
+elif "normalize('NFD')" not in F34_CENTRO:
+    falla("F19 · el Centro", "la búsqueda no pliega tildes: «razon» no encontraría «razón»")
+elif "new CustomEvent('cort:orden'" not in F34_CENTRO or "b.dataset.frase" not in F34_CENTRO:
+    falla("F19 · el Centro", "tocar una orden no manda su frase de ejemplo: el catálogo "
+          "enseñaría algo distinto de lo que ejecuta")
+elif "sube el volumen" in F34_CENTRO or "despiértame" in F34_CENTRO:
+    falla("F19 · el Centro", "el Centro volvió a escribir frases a mano en vez de sacarlas "
+          "del diccionario: dos listas que se separan a la primera ronda")
+elif "id: 'centro'" not in F34_PANT or "if (actual === 'centro') pintaCentro();" not in F34_PANT:
+    falla("F19 · el Centro", "la pantalla existe pero `ir()` no la pinta: se abriría vacía")
+elif "montaCentro(raiz, { ir, apps: visibles() })" not in F34_PANT:
+    falla("F19 · el Centro", "el Centro no recibe `visibles()`: en el PC ofrecería Música o "
+          "Equipo, que allí no existen")
+elif "html.pantallas-montadas.p-centro #scr-centro{display:flex}" not in F34_CSS:
+    falla("F19 · el Centro", "falta la regla que enciende `#scr-centro`: la pantalla se monta "
+          "y se queda en negro (pasó de verdad el 2026-10-24)")
+elif "#scr-centro .scr-cuerpo{display:block;overflow-y:auto" not in F34_APPS:
+    falla("F19 · el Centro", "el cuerpo del Centro volvió a `display:flex`: los chips se "
+          "comprimen y su texto desaparece")
+else:
+    dice_ok("F19 · el Centro", "lee el diccionario real, pliega tildes, manda la frase que "
+              "enseña, recibe las pantallas de este aparato y su hoja se ve")
+
+if "m.ir('centro')" not in F34_SONDA \
+        or "getComputedStyle($('#scr-centro')).display === 'flex'" not in F34_SONDA:
+    falla("F19 · la sonda", "la sonda no entra en el Centro o no comprueba que se ve: el "
+          "fallo de la hoja negra volvería a pasar sin que nadie lo note")
+else:
+    dice_ok("F19 · la sonda", "entra en el Centro, mide la búsqueda y exige `display:flex`")
+
+# ── veredicto ───────────────────────────────────────────────────────────────print()
 if FALLOS:
     print(f"FALTA {len(FALLOS)} COSA(S):")
     for f in FALLOS:

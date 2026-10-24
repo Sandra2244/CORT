@@ -107,7 +107,16 @@ cd "$(dirname "$0")"
 #   el fallo en pantalla si vuelve a pasar. Además, el botón nativo «CORT · PC» se
 #   oculta: CORT arranca siempre local y conectar el PC o el VPS vive en Equipo · 9,
 #   con `setPc`/`abreMenu` y cero permisos nuevos.
-APK_VERSION="${APK_VERSION:-2.10.1}"   # desde aquí sale UN SOLO APK: este
+# · En 2.10.2 el orbe deja de ser una bola genérica (F18): una cáscara de energía
+#   con Fresnel, ruido y barrido vertical, tres arcos de instrumento y cuatro
+#   ánimos (`reposo/escucha/piensa/habla`) que la lámpara de la cara manda. La
+#   cáscara y los arcos se pintan de los MISMOS dieciséis canales de F17 —no se
+#   inventa un decimoséptimo— y se apagan con `html.freno`. Encima, el Centro de
+#   mando (F19): una pantalla con las 91 intenciones / 736 frases del diccionario
+#   generado, las hojas de este aparato y las herramientas del cajón, con búsqueda
+#   que pliega tildes y ejecución por el mismo `send()` que la voz. Cero permisos
+#   nuevos y ningún cambio en el contrato de cinco argumentos para hablar.
+APK_VERSION="${APK_VERSION:-2.10.2}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

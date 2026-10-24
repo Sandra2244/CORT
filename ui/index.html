@@ -162,6 +162,7 @@ addEventListener('unhandledrejection', ev => pintaFalla(ev.reason));
 const orbeDePalo = {
   speak() {}, burst() {}, activate() {}, stop() {}, listen() {}, setDisc() {},
   setAudio() {}, pausa() {}, vestir() { return {}; }, colores() { return {}; },
+  estado() { return 'reposo'; },
 };
 let orb = orbeDePalo;
 try {

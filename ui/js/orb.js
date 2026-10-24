@@ -92,6 +92,74 @@ export function initORB(mount) {
     new THREE.MeshBasicMaterial({ color: new THREE.Color(colores.halo), transparent: true, opacity: .14 }));
   group.add(halo);
 
+  /* ---- CAMPO DE ENERGÍA (F18): la cáscara que faltaba ----
+     Hasta la 2.10.1 el orbe era un puñado de partículas con un halo plano: se
+     veía «genérico» porque no había una superficie que dijera dónde acaba.
+     Esta malla es un icosaedro de 1.280 triángulos cuyo vértice se desplaza con
+     cuatro ondas (no simplex completo: cuatro senos desfasados dan la misma
+     sensación y caben en el GPU de un gama media) y un fragmento Fresnel —el
+     borde brilla y el centro se transparente—, más una banda de barrido que
+     sube y baja, el gesto de instrumento que tiene JARVIS.
+     Se pinta desde `hilos` de `traje.js`: cambiar de atuendo la tiñe como al
+     resto, sin un canal nuevo que `prueba-colores.mjs` no conozca. */
+  const shellGeo = new THREE.IcosahedronGeometry(1.28, 3);
+  const shellMat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 }, uAmp: { value: .04 }, uFreq: { value: 1.9 },
+      uRim: { value: 1 }, uColor: { value: new THREE.Color(colores.hilos) },
+    },
+    vertexShader: `
+      uniform float uTime, uAmp, uFreq;
+      varying vec3 vN; varying vec3 vV; varying float vY;
+      float ondas(vec3 p) {
+        float a = sin(p.x * uFreq + uTime * 1.7);
+        float b = sin(p.y * uFreq * 1.3 - uTime * 1.1);
+        float c = sin(p.z * uFreq * .9 + uTime * .7);
+        float d = sin((p.x + p.y + p.z) * uFreq * .7 - uTime * 1.4);
+        return (a + b + c + d) * .25;
+      }
+      void main() {
+        vec3 pos = position + normal * ondas(position) * uAmp;
+        vY = pos.y;
+        vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+        vN = normalize(normalMatrix * normal);
+        vV = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uRim, uTime;
+      varying vec3 vN; varying vec3 vV; varying float vY;
+      void main() {
+        float f = pow(1.0 - clamp(dot(vN, vV), 0., 1.), 2.2);
+        // barrido vertical: una franja fina que recorre la esfera
+        float barrido = exp(-pow((vY - sin(uTime * .55) * 1.05) * 7.0, 2.0)) * .22;
+        float a = (f * .60 + barrido + .035) * uRim;
+        gl_FragColor = vec4(uColor * (1.0 + f * 1.7), a);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const shell = new THREE.Mesh(shellGeo, shellMat);
+  group.add(shell);
+
+  /* ---- ARCOS DE INSTRUMENTO (F18): tres segmentos de órbita que giran a
+         distinta velocidad. Son la lectura «HUD» del conjunto: marcan estado
+         (en reposo apenas se ven; pensando giran deprisa) y no cuestan más de
+         tres llamadas de dibujo. Comparten los canales de los anillos. ---- */
+  const arcos = [];
+  [
+    [1.40, .006, 1.15, 1.22, .40, colores.anillo1, 1, .55],
+    [1.58, .004, .52, -1.05, 2.10, colores.hilos, -1, .40],
+    [1.90, .008, 1.55, 1.48, 4.05, colores.anillo2, 1, .30],
+  ].forEach(([rad, tubo, largo, inclina, base, color, dir, op]) => {
+    const m = new THREE.Mesh(new THREE.TorusGeometry(rad, tubo, 5, 90, largo),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(color), transparent: true,
+        opacity: op, blending: THREE.AdditiveBlending, depthWrite: false }));
+    m.rotation.x = inclina;
+    m.rotation.z = base;
+    group.add(m);
+    arcos.push({ m, base, dir, op });
+  });
+
   /* ---- PLEXUS 3D: solo hilos MUY cortos y tenues (si se abusaba parecía
          "pantalla con líneas"; ahora insinúan la constelación sin dibujarla) ---- */
   const ANCH = 160, MAXSEG = 700, D2 = .26 * .26;
@@ -267,6 +335,7 @@ export function initORB(mount) {
   /** ACTIVACIÓN al recibir una orden (voz o chat): estallido → vórtice → portal tórico → esfera. */
   function activate() {
     shockwave(); spinBoost = 6; vortexWant = 1;
+    ponEstado('piensa');                              // F18: se le ve pensar
     scatter = 1; actT0 = performance.now();          // ¡explosión + la cámara enfoca!
     setTimeout(() => { shockwave(); }, 300);
     setTimeout(() => { vortexWant = 0; poWant = 1; }, 1700);   // del vórtice al portal 3D
@@ -278,6 +347,36 @@ export function initORB(mount) {
   if (/[?&]vortex/.test(location.search)) vortexWant = 1;
   if (/[?&]portal/.test(location.search)) { po = 1; poWant = 1; }
   if (/[?&]disc/.test(location.search)) musicOn = true;
+
+  /* ---- LOS CUATRO ESTADOS (F18) ----
+     Antes el orbe sólo sabía «más energía» o «menos energía»: escuchar y hablar
+     se parecían, y pensar no se veía. Ahora cada estado tiene su firma —la
+     amplitud de la cáscara, la velocidad de los arcos, el brillo del borde y el
+     pulso del núcleo— y se interpola, así que nunca salta de golpe.
+     `reposo` no es «apagado»: sigue respirando despacio. */
+  const ESTADOS = {
+    reposo:  { amp: .032, vel: .55, rim: 1.00, arco: .34, pulso: .08, giro: 1.0 },
+    escucha: { amp: .085, vel: 1.30, rim: 1.45, arco: .85, pulso: .22, giro: 1.9 },
+    piensa:  { amp: .150, vel: 2.20, rim: 1.75, arco: 1.00, pulso: .34, giro: 2.7 },
+    habla:   { amp: .060, vel: 1.05, rim: 1.55, arco: .95, pulso: .20, giro: 1.5 },
+  };
+  let estadoNom = 'reposo';
+  let turnoVoz = 0;                    // descarta el temporizador de una frase vieja
+  const EST = { ...ESTADOS.reposo };
+  /** Cambia el estado visual. Un nombre que no existe cae a reposo en vez de
+      dejar el orbe congelado; devuelve el que quedó puesto. */
+  function ponEstado(nombre) {
+    estadoNom = ESTADOS[nombre] ? nombre : 'reposo';
+    return estadoNom;
+  }
+  /* `html.freno` (poca RAM o modo juego) apaga la cáscara y los arcos: son lo
+     más caro de la escena y lo primero que sobra cuando el aparato va justo. */
+  let frenoOn = false, frenoTic = 0;
+  const leeFreno = () => {
+    try { return document.documentElement.classList.contains('freno'); }
+    catch { return false; }
+  };
+  frenoOn = leeFreno();
 
   let frameNo = 0;
   /* `congelado`: la dueña se fue a otra pantalla (charla, código, música) y el
@@ -298,6 +397,11 @@ export function initORB(mount) {
     po += (poWant - po) * .06;                        // esfera ⇄ portal tórico
     scatter *= .955;                                  // la explosión se apaga
     if (FREEZE.burst) scatter = .8;                   // depuración: congela el estallido
+    /* F18: los estados no saltan, se acercan. A 60 fps esto tarda ~0,4 s en
+       llegar, que es justo lo que hace que el cambio se sienta vivo. */
+    const quiero = ESTADOS[estadoNom];
+    for (const k in EST) EST[k] += (quiero[k] - EST[k]) * .055;
+    if ((frenoTic++ % 30) === 0) frenoOn = leeFreno();
     const e = energy, dm = discMode, vx = vortex, pox = po, p = geo.attributes.position.array;
     for (let i = 0; i < N; i++) {
       const bx = base[i*3], by = base[i*3+1], bz = base[i*3+2], s = seed[i];
@@ -373,6 +477,20 @@ export function initORB(mount) {
     }
     if ((frameNo++ % 3) === 0) updatePlexus();   // hilos a 20 fps: barato y fluido
     lines.material.opacity = .09 * (1 - e * .55) * (1 - vx * .8) + pox * .05;
+    /* la cáscara y los arcos se apartan cuando el vórtice o el disco son los
+       protagonistas, y se apagan enteros con `html.freno` */
+    shellMat.uniforms.uTime.value = t * .001;
+    shellMat.uniforms.uAmp.value = EST.amp * (1 + audioL * 1.6 + e * .8);
+    shellMat.uniforms.uRim.value = EST.rim * (1 - vx * .9) * (1 - pox * .9) * (1 - dm * .8);
+    shell.rotation.y = -t * .00006 * EST.giro;
+    shell.rotation.x = Math.sin(t * .00018) * .10;
+    shell.visible = !frenoOn && (vx + pox + dm) < .55;
+    for (let i = 0; i < arcos.length; i++) {
+      const a = arcos[i];
+      a.m.rotation.z = a.base + t * .00011 * a.dir * EST.giro;
+      a.m.material.opacity = a.op * EST.arco * (1 - vx) * (1 - pox * .8) * (1 - dm * .9);
+      a.m.visible = !frenoOn;
+    }
     core.rotation.y = t * .00022 + e * t * .0006 + spinBoost * .004;
     // PLANO FOCAL: respira lento; al activer barre de cerca a lejos →
     // todo el orbe se DESENFOCA y vuelve a ENFOCAR como una cámara
@@ -418,6 +536,10 @@ export function initORB(mount) {
     nucleus.material.color.set(c.nucleo);
     glow.material.color.set(c.brillo);
     pMat.uniforms.uColor.value.set(c.particula);
+    shellMat.uniforms.uColor.value.set(c.hilos);
+    arcos[0].m.material.color.set(c.anillo1);
+    arcos[1].m.material.color.set(c.hilos);
+    arcos[2].m.material.color.set(c.anillo2);
     halo.material.color.set(c.halo);
     lines.material.color.set(c.hilos);
     r1.material.color.set(c.anillo1);
@@ -479,12 +601,25 @@ export function initORB(mount) {
   });
 
   return {
-    speak(ms = 2600) { target = 1; if (ms > 0) setTimeout(() => target = 0, ms); },
+    speak(ms = 2600) {
+      const mio = ++turnoVoz;
+      target = 1; ponEstado('habla');
+      if (ms > 0) setTimeout(() => {
+        if (mio !== turnoVoz) return;      // otra frase ya tomó el turno
+        target = 0; ponEstado('reposo');
+      }, ms);
+    },
     burst,
     /** vórtice de activación: se dispersa, gira en embudo y forma un portal */
     activate,
-    stop() { target = 0; vortexWant = 0; poWant = 0; },
-    listen(on) { target = on ? .35 : 0; },
+    stop() { target = 0; vortexWant = 0; poWant = 0; ponEstado('reposo'); },
+    listen(on) { target = on ? .35 : 0; ponEstado(on ? 'escucha' : 'reposo'); },
+    /** F18 · `reposo`, `escucha`, `piensa` o `habla`. Sin argumento, dice el
+        que está puesto; con uno desconocido, cae a reposo. */
+    estado(nombre) {
+      if (nombre === undefined) return estadoNom;
+      return ponEstado(String(nombre).toLowerCase());
+    },
     /** activar/desactivar el modo vinilo del ejecutor de música */
     setDisc(on) { musicOn = !!on; if (!on) target = 0; },
     /** nivel 0..1 (volumen) y bajo 0..1 (pulso) desde el AnalyserNode */

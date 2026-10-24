@@ -166,6 +166,7 @@ html.p-mv     { --app-bg:#000;                        --app-accent:#ffb27a; --ap
 html.p-charla { --app-bg:#070711;                     --app-accent:#8ab4f8; --app-txt:#e8eaed; --app-dim:#9aa0a6; --app-sup:#17171f; --app-pastilla:#23232e }
 html.p-codigo { --app-bg:#04070a;                     --app-accent:#2bff9e; --app-txt:#c9ffdf; --app-dim:#5f8f7a; --app-sup:#0a1016; --app-pastilla:#12201a }
 html.p-equipo { --app-bg:#02060d;                     --app-accent:#39c2ff; --app-txt:#dff1ff; --app-dim:#5e8cab; --app-sup:rgba(8,20,38,.72); --app-pastilla:#0d2033 }
+html.p-centro { --app-bg:#06040e;                     --app-accent:#c9a6ff; --app-txt:#efe9ff; --app-dim:#8a7fa8; --app-sup:#120e1f; --app-pastilla:#1a142c }
 
 html.pantallas-montadas:not(.p-orbe) .scr{background:var(--app-bg);color:var(--app-txt)}
 /* La cabecera de cada hoja es la barra de SU app: nombre grande a la izquierda
@@ -180,6 +181,50 @@ html.pantallas-montadas:not(.p-orbe) .scr-cuerpo{gap:10px}
 /* El pie de página del teléfono dejaba 96 px para la tira de botones que ya no está. */
 html.pantallas-montadas:not(.p-orbe) .scr{padding-bottom:calc(18px + env(safe-area-inset-bottom))}
 html.mobile.pantallas-montadas:not(.p-orbe) .scr{padding:8px 12px calc(18px + env(safe-area-inset-bottom))}
+
+/* ─────────────────── 3b · el Centro de mando (F19) ───────────────────
+   Un índice, no otra app: la lista de todo lo que CORT ya sabe hacer, con su
+   buscador y sus filtros. Se pinta con variables del tema para que el cambio de
+   atuendo del orbe no lo deje fuera de lugar. */
+/* El cuerpo del Centro scrollea como una lista, no como una columna flex: con
+   `display:flex` los chips se comprimían a 14 px y su texto desaparecía. */
+#scr-centro .scr-cuerpo{display:block;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#cen-busca{width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;  border:1px solid color-mix(in srgb,var(--app-accent) 34%,transparent);
+  background:rgba(255,255,255,.05);color:var(--app-txt);font-size:15px;
+  font-family:inherit;line-height:1.2;outline:none;-webkit-appearance:none}
+#cen-busca:focus{border-color:var(--app-accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--app-accent) 22%,transparent)}
+#cen-busca::-webkit-search-cancel-button{filter:invert(1) opacity(.6)}
+#cen-cuenta{margin:8px 2px 10px;font-size:11.5px;line-height:1.45;color:var(--app-dim)}
+.cen-chips{display:flex;gap:6px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
+.cen-chips::-webkit-scrollbar{display:none}
+.cen-chips button{all:unset;cursor:pointer;flex:0 0 auto;height:auto;box-sizing:border-box;
+  padding:6px 10px;border-radius:999px;
+  font-size:11px;white-space:nowrap;color:var(--app-dim);
+  border:1px solid color-mix(in srgb,var(--app-accent) 22%,transparent);
+  background:rgba(255,255,255,.03)}
+.cen-chips button b{font-weight:400;opacity:.6;margin-left:2px}
+.cen-chips button.on{color:#0a0614;background:var(--app-accent);border-color:var(--app-accent)}
+.cen-chips button.on b{opacity:.75}
+#cen-lista{display:flex;flex-direction:column;gap:3px}
+.cen-grupo{display:flex;align-items:baseline;gap:8px;padding:16px 4px 6px;
+  font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--app-dim)}
+.cen-grupo:first-child{padding-top:4px}
+.cen-grupo span{font-size:10px;letter-spacing:0;opacity:.55}
+.cen-fila{all:unset;cursor:pointer;display:flex;align-items:center;gap:11px;
+  padding:9px 10px;border-radius:11px;border:1px solid transparent}
+.cen-fila:hover,.cen-fila:active{background:rgba(255,255,255,.06);
+  border-color:color-mix(in srgb,var(--app-accent) 18%,transparent)}
+.cen-fila>i{font-style:normal;width:24px;text-align:center;font-size:14px;
+  color:var(--app-accent);opacity:.85}
+.cen-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.cen-txt b{font-size:13.5px;font-weight:600;color:var(--app-txt);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cen-txt small{font-size:11px;color:var(--app-dim);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.cen-fila>em{font-style:normal;font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--app-accent);opacity:.55;flex:0 0 auto}
+#cen-nada{color:var(--app-dim);font-size:12.5px;text-align:center;padding:26px 8px}
+html.sin-movimiento .cen-fila{transition:none}
 
 /* ───────────────────────── 4 · las hojas que suben ─────────────────────────
    El panel de abajo de Lark: esquina redondeada, asidero, título y filas con

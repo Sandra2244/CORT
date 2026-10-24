@@ -70,7 +70,7 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     env:
-      APK_VERSION: "2.10.1"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
+      APK_VERSION: "2.10.2"       # UN SOLO APK: el de Java + Kotlin, con todo dentro:
                                  # cara embebida, reproductor con `MediaSession`,
                                  # avisos leídos, modo juego, MV con letra, el mando
                                  # del aparato (volumen, linterna, alarma,
@@ -588,14 +588,14 @@ jobs:
           files: artefactos/*
           body: |
             Instaladores generados por CI: Windows (.exe), Linux (.AppImage y
-            .deb) y el APK del teléfono, que sube a la **2.10.1**. Esta Release trae
+            .deb) y el APK del teléfono, que sube a la **2.10.2**. Esta Release trae
             **tres APK de Android a propósito**. No son versiones distintas de CORT:
             es el mismo cuerpo —mismas fuentes, mismo dex, misma cara, misma llave y
             mismo `versionCode`— con dos mandos distintos, para poder medir en el
             teléfono de la dueña qué es lo que está bloqueando Play Protect (párrafo
             «Por qué hay tres envases»).
-            `CORT-IA-2.10.1.apk` es el de siempre: los ~47 MB de antes, todo dentro.
-            `CORT-IA-2.10.1-nucleo.apk` es **el envase recomendado**: el mismo CORT
+            `CORT-IA-2.10.2.apk` es el de siempre: los ~47 MB de antes, todo dentro.
+            `CORT-IA-2.10.2-nucleo.apk` es **el envase recomendado**: el mismo CORT
             sin la superficie privilegiada del manifiesto —cero servicios `BIND_*`,
             cero `ACTION_ASSIST`/`ACTION_VOICE_COMMAND`, sin `CALL_PHONE` ni
             `READ_CONTACTS` ni `READ_CALENDAR`— y con el oído dentro. CORT sigue
@@ -604,13 +604,41 @@ jobs:
             notificaciones, poner baldosín en la cortina rápida ni marcar por el
             auricular. **Empieza por éste**: es el que tiene que instalarse sin el
             aviso.
-            `CORT-IA-2.10.1-nucleo-ligero.apk` es ese mismo núcleo quitando además el
+            `CORT-IA-2.10.2-nucleo-ligero.apk` es ese mismo núcleo quitando además el
             bulto del oído (las cuatro `.so` de Vosk/JNA y los 39,8 MB del modelo):
             alrededor de **1,6 MB**, y en **Equipo · 7 · Oído** lo dice con la palabra
             `sin-modelo`. El peso exacto de cada archivo, medido dentro del APK final,
             está en su `-firma.txt` de al lado, y en esa hoja va también el renglón
             `perfil:` con los permisos y los servicios `BIND_*` leídos del
             `AndroidManifest.xml` **binario** del archivo.
+            **Qué cambia en la 2.10.2 (el orbe y el orden):** la bola genérica se va.
+            **F18 · el orbe con ánimo:** alrededor del núcleo de partículas hay una
+            cáscara de energía (Fresnel + ruido + barrido vertical) y tres arcos de
+            instrumento que giran a distinta velocidad. El orbe tiene ahora cuatro
+            estados visibles —`reposo`, `escucha`, `piensa`, `habla`— y la lámpara de la
+            cara los manda: al pensar la cáscara ondula más y los arcos se abren; al
+            hablar respira corto. Todo se pinta con los **mismos dieciséis canales** de
+            la F17 —la cáscara usa `hilos`, los arcos `anillo1`/`hilos`/`anillo2`—, así
+            que cambiar de traje sigue cambiando **todos** los colores; no se inventa un
+            decimoséptimo ni se toca `Paleta.java`. Con `html.freno` (poca RAM o modo
+            juego) la cáscara y los arcos se apagan, igual que el agua.
+            **F19 · el Centro de mando:** una pantalla nueva —`⌘ · Centro`, también por
+            voz: «centro de mando»— que reúne en un solo sitio las **91 intenciones /
+            736 frases** del diccionario generado, las hojas de este aparato y las
+            herramientas del cajón, con **búsqueda que pliega tildes** («razon»
+            encuentra «razón») y filtros por capa (mando 41, razón 26, casa 13, nube 11).
+            Tocar una orden la ejecuta por el **mismo `send()` que la voz**: el catálogo
+            no promete nada que el cerebro no atienda, porque la frase que enseña es la
+            que se ejecuta. En el PC no ofrece Música ni Equipo, que allí no existen.
+            De paso se corrigió un fallo real de esta ronda: la hoja se montaba y se
+            quedaba **en negro** porque `hud.css` enciende las pantallas con una lista
+            explícita; ahora la sonda exige `display:flex` y ese fallo no puede volver
+            en silencio. **Sin permisos nuevos y sin cambios en el manifiesto**: el
+            `nucleo` sigue en 21 permisos y cero `BIND_*`; el completo, en 28 y cuatro.
+            **Todavía no lo has visto en tu teléfono**: la cáscara y los arcos se han
+            mirado en el PC (capturas de reposo y de «piensa»), y lo que sólo tu
+            teléfono decide es que el WebGL del APK dibuje la cáscara con fluidez y que
+            el freno de poca RAM la apague de verdad.
             **Qué cambia en la 2.9.0 (la descarga de modelos del teléfono):** en
             **Equipo · Cerebros de casa** la barra ahora suma las capas del modelo en vez
             de quedarse con lo que dice la última línea que llegó —ese era el «no descarga
@@ -647,13 +675,15 @@ jobs:
             escribir `http://IP:8000` en la misma Wi‑Fi o una dirección `https://` de un
             VPS 24/7. Volver al teléfono manda la dirección vacía, y el menú nativo de
             dieciséis filas se abre desde ahí. Sin permisos nuevos.
-            **Medido en el portátil para esta Release:** costura **303 `ok`** (sector
-            [33]), la sonda de la cara **178 comprobaciones, 0 en rojo** (incluye el
-            bloque 9 y la dirección que viaja a `setPc`), mandos **63/63**,
-            automatizaciones **45/45**, `prueba-colores.mjs` **28/28**, oído **6/6** y
-            talleres F16 **18/18** y F17 **19/19**. Sigue sin poder medirse aquí lo que
-            sólo tu teléfono ve: que el orbe y el agua se pinten, que el dedo arrastre
-            la burbuja y que la voz suene.
+            **Medido en el portátil para esta Release:** costura **307 `ok`** (sectores
+            [33] y [34]), la sonda de la cara **187 comprobaciones, 0 en rojo** (incluye
+            el Centro: hoja visible, búsqueda, filtros y ejecución por `cort:orden`),
+            mandos **63/63**, automatizaciones **45/45**, `prueba-colores.mjs`
+            **28/28**, oído **6/6**, mente **7 suites / 336 frases**, y talleres F16
+            **18/18**, F17 **19/19** y F18 **15/15** (cada mutación cae nombrando la
+            comprobación que faltaba). Sigue sin poder medirse aquí lo que sólo tu
+            teléfono ve: que la cáscara y el agua se pinten, que el dedo arrastre la
+            burbuja y que la voz suene.
             **Qué cambia en la 2.10.0 (el lote F12 + F14 + F15 + F16 + F17, cerrado
             entero):** es una Release de varias fases a propósito, para no compilar cinco
             veces el mismo cuerpo ni publicar cinco `versionCode` iguales.
@@ -892,7 +922,7 @@ jobs:
             `CORT-IA-2.5.0-nucleo.apk` en su teléfono el 2026-10-22 y funcionó. Cero
             `BIND_*` entra; cuatro `BIND_*` se bloquea. Por eso el `nucleo` es desde
             aquí el envase recomendado y éste sigue siendo el archivo que hay que
-            instalar primero: `CORT-IA-2.10.1-nucleo.apk`. Si alguna vez se volviera a
+            instalar primero: `CORT-IA-2.10.2-nucleo.apk`. Si alguna vez se volviera a
             bloquear, el siguiente paso sigue escrito en
             `docs/BLOQUEO-PLAY-PROTECT.md` —probar el `‑ligero` (1,6 MB) y, si ése
             entra, sacar el modelo de 39,8 MB del APK—, y si ninguno de los tres
