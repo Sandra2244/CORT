@@ -674,8 +674,8 @@ firma `burbuja(Context, boolean)` intacta y los **44 dp** de siempre.
 | el freno tiene disparador | `pantallas.js` pone `html.freno` con **poca RAM** (`navigator.deviceMemory <= 2`, que es 2 para el portátil de 1,8 GiB) **o** en modo juego; `html.freno` también quita el `backdrop-filter` de paneles, ventanas, chips y FAB |
 | la prueba visual no viaja al APK | `ui/sonda-colores.html` monta el orbe real, recorre los seis trajes y compara contra `orb.colores()`; `compilar.sh` sigue borrando `sonda-*.html` |
 
-Cifras medidas en el portátil: `prueba-colores.mjs` **28/28**, la costura en **302
-`ok`** (6 del sector [32] y el gemelo 27.f del foco de audio) y `scripts/taller-f17.sh` con **19 mutaciones que caen las
+Cifras medidas en el portátil: `prueba-colores.mjs` **28/28**, la costura en **303
+`ok`** (6 del sector [32], el gemelo 27.f del foco de audio y el [33] de los enlaces) y `scripts/taller-f17.sh` con **19 mutaciones que caen las
 19**, cada una nombrando la comprobación que la echaba de menos; dos de ellas corren la
 prueba de node entera (`la partícula se congela`, `el secundario se cuela`). Las seis
 paletas se midieron **sin GPU**: la derivación vive en un módulo puro y el navegador no
@@ -707,3 +707,39 @@ hace falta para saber que Matrix no deja ni un color de Cortana.
   `aaa2225b…`), ligero **1.715.748 B** (`89106db2…`), `versionCode` **21000**, la misma
   llave `fa:ab:ef:46…` y `assets/ui/` con **18 archivos**. Lo que falta es que ella la
   instale y mire el orbe, el agua y la burbuja en su teléfono.
+
+## Ronda 2.10.1 · el parche de la cara muerta (2026-10-24)
+
+La 2.10.0 se instaló y la dueña reportó lo que ninguna prueba de escritorio podía
+ver: el orbe no cargaba, los botones no respondían, la voz no arrancaba, la pantalla
+se veía rojiza y el botón nativo «CORT · PC» estorbaba encima de la píldora. **La
+causa era una línea:** `ui/js/hud.js` importa `handleTelefonoEvento` de
+`telefono.js` y la función estaba declarada sin `export`. Chromium rechaza **todo**
+el grafo de módulos antes de ejecutar nada, de modo que ni `initORB` ni `wireUI`
+llegaban a correr; lo rojizo era el agua pintada con su atuendo guardado, sin orbe
+delante.
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| un `import` sin su `export` no puede volver a viajar en un APK | costura **[33]**: resuelve cada `import` relativo de `ui/` contra su archivo y exige que cada nombre exista como `export` (28 nombres, 17 archivos); quitarlo pone la costura en rojo nombrando el enlace |
+| un fallo de módulo ya no deja la cara muda | `index.html` importa con `await import()` por partes, usa un orbe de respaldo y pinta el error en una franja visible (`#falla`) |
+| el botón nativo «CORT · PC» no vuelve | `MainActivity` lo deja `GONE` y **no** lo añade al layout; la costura [20.e] lo prohíbe y `pantallas.js` ya no manda `menuPC` |
+| abrir CORT no depende del PC | `arranca()` carga siempre `INDICE`; `guardarPC(dir)` sólo carga la cara remota en el momento en que ella pulsa Conectar |
+| el PC o el VPS se conectan desde Ajustes | **Equipo ▸ 9 · PC o VPS**: `setPc(dir)` para conectar, `setPc('')` para volver, `abreMenu()` para el menú nativo; la sonda comprueba los tres viajes y el rechazo de una dirección sin `http://` |
+| la conexión remota se dice con sus límites | la propia hoja avisa: LAN en la misma Wi‑Fi o VPS con `https://` detrás de contraseña/VPN; CORT no trae login propio y no se deja el 8000 abierto a internet |
+
+**Medido en el portátil:** costura **303 `ok`**, sonda de la cara **178/178 sin un
+`NO`** (montada con el núcleo de verdad y el puente de mentira), las **7 suites**
+Java sobre **336 frases**, `prueba-colores.mjs` **28/28**, mandos **63/63**,
+automatizaciones **45/45**, oído **6/6**, talleres F16 **18/18** y F17 **19/19**.
+**Publicado:** `v0.2.40-demo` (run 40132928413, los cuatro trabajos en verde), APK
+**2.10.1** / `versionCode` **21001**, misma llave `fa:ab:ef:46…`; descargados y
+hasheados aquí: completo **47.489.029 B** (`e9e529a1…`), núcleo **47.484.933 B**
+(`91859e1e…`) y ligero **1.715.748 B** (`2831d4b9…`). El `export` se comprobó
+dentro de los tres, `assets/ui/` sigue con **18 archivos** y **sin `sonda-*.html`**;
+el manifiesto no crece (16.208 / 12.792 B) y no hay permisos nuevos.
+
+**Lo que sólo su teléfono puede confirmar:** que el orbe aparezca y gire, que los
+botones respondan, que la voz suene, que el dedo distinga toque de arrastre en la
+burbuja y que el agua no estorbe la lectura. La sonda prueba la lógica de la cara en
+un navegador, no el WebView de su Samsung ni su GPU.
