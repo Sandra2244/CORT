@@ -373,7 +373,7 @@ siempre, y que CORT conteste.
 | --- | --- | --- | --- |
 | **F12 · que la voz responda** | barge-in con ducking en vez de micro cerrado; normalizar puntuación; `pausa/play/siguiente/anterior/volumen` sin `e.vivo` estricto; **barrido de botones** (elemento → método del puente que no existe) | decir «pausa» con música sonando en una prueba de cara; y la sonda con el puente falso | peso del APK y nº de botones muertos antes/después |
 | **F13 · modelos que se descargan** | ping antes de tirar; progreso **sumando por capa**; cancelar y reintentar en el móvil; `psutil` opcional en el backend; catálogo **único generado** (107) para PC y móvil; el requisito `OLLAMA_HOST` dicho en pantalla | prueba del parser NDJSON con dos capas y con líneas fuera de orden | peso real de un ↓ con y sin el arreglo |
-| **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | nº de intents cubiertos por patrones **sin red** |
+| **F14 · diccionario + turnos** | `diccionario` de datos (~90 intents / ~700 frases) del que salen cara, Java y pruebas; escalera local→casa→nube; `x` en cuentas, **regla de tres**, hora, porcentaje | generador + costura en dos sentidos (nada dicho sin dueño, nada ejecutado sin quien lo pida) | **87 intents / 699 frases** (37 mando, 26 razón, 13 casa, 11 nube); 208 frases de razón contestadas sin red |
 | **F15 · cerebro de casa con nombres** | «pon *Afterk Dark*», «qué playlist», «cámbialo a <canción>», ecualizador real (`audiofx.Equalizer` en su propio fichero, fuera de las clases de papel), auricular con acción | pruebas de lógica en el portátil con `java -m jdk.compiler` | nº de acciones de música ejecutadas por voz |
 | **F16 · rutinas y despertar** | intent compuesto de alarma (hora + canción + nota), pantalla de alarma propia, disparador por hora exacta, rutina de buenos días | prueba de `AlarmManager` en el envase + la cara pintando la rutina | latencia del disparo y sitio ocupado |
 | **F17 · cara vestida** | orbe/burbuja que leen el atuendo, burbuja estilo 1.1.4 (azul, transparente, arrastrable, no molesta), agua y vidrio con freno por RAM/juego | sonda de colores: cambiar traje ⇒ cambian **todos** los colores del orbe | nº de variables leídas por `orb.js` (hoy 0) |
@@ -531,3 +531,30 @@ en `backend/app/models.py` y 107 en `ui/js/telefono.js`, cosidos por la comproba
 [23.d], que exige que las 14 filas del PC sean un subconjunto idéntico de las 107 del
 teléfono, así que no pueden ir cada una por su lado—. Y **nada de esto llega a su
 teléfono hasta que salga la Release**: el pipeline no se ha corrido todavía con esto.
+
+### F14 · el diccionario, en los dos sentidos (2026-10-23)
+
+Una sola lista vierte cuatro bocas: el JSON del APK, `Cerebro.tablaDelCodigo()`, la ayuda
+de la cara (`ui/js/diccionario.js`) y los dos ficheros de casos de `Prueba5`. El
+generador es `scripts/habilidades.py`; la mitad que no mueve el aparato vive en
+`scripts/saber.py` y se importa desde allí (no se copia).
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| 37 órdenes + 50 saberes = **87 intenciones / 699 frases**, sin duplicados ni `{resto}` a mitad de palabra | el generador se niega a escribir si baja de `MIN_INTENTS`/`MIN_FRASES` o si una frase se repite en dos reglas |
+| las 208 frases de razón se contestan **sin red** | `Prueba5` recorre `casos-razon.txt` (una frase por línea, con prefijo esperado sólo en la frase de prueba de cada intención) contra `Razon` |
+| las 192 de casa/nube **no** se contestan en el teléfono con una respuesta floja | `Prueba5` exige que `Cerebro.procesar` devuelva `desconocido` y que `Razon.intenta` devuelva `null` |
+| `x`, `×` y las palabras «suma/resta … y …» entran en cuentas; «dime cuánto es 3 x 3» ya no se queda a medias | `Prueba` (43/43) con el caso repetido de prefijos |
+| «averigua qué día es el examen» no se lo come el calendario | `Razon.calendario` sale antes en las órdenes de investigación (`averigua`, `investiga`, `busca`, `piensa`, `explícame`) |
+| «qué apps tengo» no lo roba la agenda por el «tengo» | rama propia en `telefonoPorVoz` antes de la agenda; abre la hoja Equipo y cuenta las apps |
+| una acción de la tabla ya no se manda a `Acciones` cuando su boca es la cara | `ejecutaLocal()` reparte: 10 de aparato → `Acciones.java`, música → `teclaMedia` (o el reproductor propio) y 5 que la cara atiende antes de pensar; antes, tras «Hola, te escucho.» salía «todavía no sé hacer saludo» |
+| la sonda no se quedó mirando la rama del APK viejo | el puente de mentira de `ui/sonda-carita.html` simula `teclaMedia`, y la costura [29] exige que simule todo lo que la cara pide |
+
+Cifras medidas en el portátil: `Prueba` 43/43, `Prueba2` 45, `Prueba3` TABLA OK,
+`Prueba4` 58 y `Prueba5` DICCIONARIO OK (208 + 192 frases) — la línea final dice «las 5
+suites»; la costura sube a **280 `ok`**, de los que **12** son del sector [29]. El taller
+de mutaciones de F14 hace caer cinco comprobaciones (una frase menos en la cara, un total
+que no cuadra, una acción sin boca, un caso de razón perdido y `Prueba5` fuera del bucle)
+y el código limpio vuelve a verde. Queda por verificar **en su teléfono** que el APK real
+compila con estas tablas y que las voces nuevas (cronómetro, estado y apps) se oyen.
+

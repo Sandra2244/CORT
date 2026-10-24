@@ -151,6 +151,10 @@ window.CortNative = {
                                        artistas: [{ nombre: 'Eika', puntos: 7 }] }),
   musicaPlay: () => mandadas.push('musicaPlay'),
   musicaPausa: () => mandadas.push('musicaPausa'),
+  // F14 · la tecla de transporte del sistema (`boolean teclaMedia(String)`), la que
+  // llega al reproductor que sea. La cara la pide para las acciones de música de la
+  // tabla; sin ella aquí, la sonda recorrería la rama del APK viejo.
+  teclaMedia: que => { mandadas.push('teclaMedia:' + que); return true; },
   musicaAutomatica: () => mandadas.push('musicaAutomatica'),
   musicaSiguiente: () => mandadas.push('musicaSiguiente'),
   musicaAnterior: () => mandadas.push('musicaAnterior'),

@@ -29,6 +29,10 @@
    la consola y el DOM donde pintarse. */
 import { creaMotor, marcapasos, necesitaReloj, DISPARADORES, ACCIONES, preajustes }
   from './automatiza.js';
+/* El diccionario sale de `scripts/habilidades.py` + `scripts/saber.py`, la misma
+   lista que vierte la tabla del APK y los casos de `Prueba5`. La ayuda de aquí no
+   se escribe a mano: promete exactamente las intenciones que existen. */
+import { AYUDA } from './diccionario.js';
 
 const N = () => window.CortNative || null;const enTelefono = () => !!N();
 const esc = s => String(s ?? '').replace(/[&<>"']/g,
@@ -203,6 +207,10 @@ const CMD_TELEFONO = [
   '  automatiza cuando diga modo noche haz callar la música',
   '  ¿qué tengo hoy? · revisa el correo · apunta cena con Samuel a las 9',
   '  estado                          (qué mide el teléfono ahora)',
+  '  cronómetro · qué apps tengo      (el reloj y la rejilla de apps)',
+  /* F14 · las cifras y los ejemplos salen del diccionario generado. Si una frase
+     deja de existir, desaparece de la ayuda sola; no puede quedarse prometida. */
+  ...AYUDA,
   '  ayuda · olvida la terminal',
 ];
 
@@ -2042,7 +2050,37 @@ function reglaDeVoz(texto, b) {
   return di('Regla apuntada: cuando ' + r.cuando.replace(/^cuando\s+/i, '') + ' → ' + r.hacen.join(' + ') + '.', 'autos');
 }
 
-export function handleTelefonoEvento(ev) {
+export /* F14 · «nada ejecutado sin quien lo pida»: cada `accion` de la tabla tiene UNA
+   boca, y aquí se nombran las tres. Las de aparato van a `Acciones.java` por
+   `envia('accion')`; la música va a la tecla del sistema (`teclaMedia`, que llega
+   al reproductor que sea) y, si el APK no la trae, al reproductor propio; y
+   `saludo`, `llamar`, `avisos`, `juego` y `memoria` ya se atienden ANTES de
+   llegar al cerebro (la cara intercepta esas frases). Antes se mandaba todo a
+   `Acciones`: después de «Hola, te escucho.» salía «todavía no sé hacer saludo».
+   La costura [29] comprueba que estos dos conjuntos y los `case` de
+   `Acciones.java` cubran el vocabulario entero, sin sobras ni huecos. */
+const ACCION_DE_APARATO = new Set(['volumen', 'linterna', 'alarma', 'temporizador',
+  'cronometro', 'estado', 'lanzadores', 'abrir', 'poner', 'buscar']);
+const ACCION_DE_CARA = new Set(['saludo', 'llamar', 'avisos', 'juego', 'memoria']);
+function ejecutaLocal(accion, param) {
+  if (ACCION_DE_APARATO.has(accion)) {
+    return envia('accion', { que: accion, args: param }, 'mando',
+      'sé lo que querías hacer, pero este APK no manda sobre el aparato.');
+  }
+  if (accion === 'musica') {
+    const tecla = { pausa: 'pausa', reanuda: 'play', siguiente: 'siguiente',
+                    anterior: 'anterior' }[param];
+    if (tecla && puede('teclaMedia') && llama('teclaMedia', tecla) !== false) return true;
+    const propio = { pausa: 'musicaPausa', reanuda: 'musicaPlay',
+                     siguiente: 'musicaSiguiente', anterior: 'musicaAnterior' }[param];
+    if (propio && puede(propio)) { llama(propio); return true; }
+    // `mueve` no dice hacia dónde: no se inventa un salto.
+    return null;
+  }
+  return ACCION_DE_CARA.has(accion) ? true : null;
+}
+
+function handleTelefonoEvento(ev) {
   if (!ev || typeof ev.type !== 'string') return false;
 
   /* Las automatizaciones se alimentan de los eventos EN CUANTO llegan, antes de que
@@ -2081,9 +2119,36 @@ export function handleTelefonoEvento(ev) {
     // quien la ejecuta es `Acciones`, desde la cara. Sin este reenvío, «sube el
     // volumen» sin PC contestaba «vale» y no subía nada.
     if (ev.de === 'local' && typeof ev.accion === 'string' && ev.accion) {
-      const hecha = envia('accion', { que: ev.accion, args: ev.param || '' }, 'mando',
-        'sé lo que querías hacer, pero este APK no manda sobre el aparato.');
-      if (hecha) ctx?.term?.('acción del cerebro local: ' + ev.accion, 'equipo');
+      const hecha = ejecutaLocal(ev.accion, ev.param || '');
+      if (hecha) {
+        ctx?.term?.('acción del cerebro local: ' + ev.accion, 'equipo');
+        /* F14 · `estado` y `lanzadores` devuelven datos, no sólo `ok`. Antes la
+           frase se decía y el número se quedaba dentro del JSON: la dueña oía
+           «miro cómo va» y no veía nada. Aquí se cuenta lo que volvió, medido, y
+           el cronómetro dice su propia limitación. */
+        if (ev.accion === 'estado') {
+          const partes = [];
+          if (typeof hecha.volumen === 'number') {
+            partes.push('volumen ' + hecha.volumen + ' de ' + (hecha.max ?? '—'));
+          }
+          if (hecha.red) partes.push('red ' + hecha.red);
+          partes.push('linterna ' + (hecha.linterna ? 'encendida' : 'apagada'));
+          partes.push(hecha.sinMiedo ? 'sin permisos pendientes'
+            : 'faltan permisos' + (Array.isArray(hecha.faltan) && hecha.faltan.length
+              ? ': ' + hecha.faltan.join(', ') : ''));
+          const frase = 'El teléfono: ' + partes.join(' · ') + '.';
+          diceBien('mando', frase); ctx?.say?.(frase);
+        } else if (ev.accion === 'lanzadores') {
+          const apps = Array.isArray(hecha.apps) ? hecha.apps : [];
+          const nombres = apps.slice(0, 8).map(x => x.nombre).filter(Boolean);
+          const frase = 'Veo ' + (hecha.total ?? apps.length) + ' apps'
+            + (nombres.length ? ': ' + nombres.join(', ') + (apps.length > nombres.length ? '…' : '') : '')
+            + '.';
+          diceBien('mando', frase); ctx?.say?.(frase);
+        } else if (ev.accion === 'cronometro' && hecha.dice) {
+          diceBien('mando', hecha.dice); ctx?.say?.(hecha.dice);
+        }
+      }
     }
     return true;
   }
@@ -2216,6 +2281,17 @@ export function telefonoPorVoz(texto) {
     const seg = sacaSegundos(b);
     if (!seg) return di('Dime cuánto cuenta: «temporizador de 10 minutos».', 'mando');
     return accionTemporizador(seg, true);
+  }
+
+  /* 4c · las apps instaladas. Va ANTES que la agenda porque «qué apps tengo»
+        lleva «tengo», y la rama 12 se la llevaba a las citas. Es la intención
+        `lanzadores` del diccionario, con su misma nube de chips. */
+  if (/\b(apps|aplicaciones)\b/.test(b)
+      && /^(que|dime|lista|muestra|muestrame|ensename|cuantas|mis)\b/.test(b)) {
+    abre('mando');
+    const hechas = misApps();
+    if (hechas) ctx?.say?.('Te dejo la lista de apps en la hoja Equipo.');
+    return hechas;
   }
 
   /* 4b · los cerebros de casa (Ollama por Wi-Fi). Va ANTES que «abre una app» y

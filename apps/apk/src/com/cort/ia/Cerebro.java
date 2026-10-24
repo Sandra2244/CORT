@@ -8,8 +8,9 @@ package com.cort.ia;
  *
  * Porte de `dev.sandra.cort.Cerebro`, adaptado al contrato 2.1: la `accion` que
  * sale de aquí usa el vocabulario EXACTO del puente de la cara — `volumen`,
- * `linterna`, `alarma`, `temporizador`, `abrir`, `poner`, `llamar`, `buscar`,
- * `musica`, `avisos`, `juego`, `memoria`, `saludo` y `desconocido`. Una frase que
+ * `linterna`, `alarma`, `temporizador`, `cronometro`, `estado`, `lanzadores`,
+ * `abrir`, `poner`, `llamar`, `buscar`, `musica`, `avisos`, `juego`, `memoria`,
+ * `saludo` y `desconocido`. Una frase que
  * no casa devuelve `desconocido` con `respuesta=null`, y entonces es `Mente` (no
  * esta clase) quien pregunta a la nube.
  *
@@ -53,8 +54,9 @@ public class Cerebro {
 
     /** El vocabulario cerrado de acciones que entiende la cara. Nada fuera entra. */
     private static final Set<String> ACCIONES = new HashSet<>(Arrays.asList(
-        "volumen", "linterna", "alarma", "temporizador", "abrir", "poner", "llamar",
-        "buscar", "musica", "avisos", "juego", "memoria", "saludo", "desconocido"));
+        "volumen", "linterna", "alarma", "temporizador", "cronometro", "estado",
+        "lanzadores", "abrir", "poner", "llamar", "buscar", "musica", "avisos",
+        "juego", "memoria", "saludo", "desconocido"));
 
     /** Una regla casada: qué acción es, con qué parámetro y con qué decir. */
     public static class Resultado {
@@ -192,6 +194,17 @@ public class Cerebro {
              "silencio", "pon silencio", "callate", "calla", "sin sonido", "mudo",
              "quita el sonido", "apaga el sonido", "sin ruido", "calla la musica", "mute",
              "ponlo en mudo", "en mudo"));
+        reglas.add(r("volumen", "destapar", "Te destapo el sonido.",
+             "quita el silencio", "destapa el sonido", "quita el mudo", "vuelve el sonido"));
+        reglas.add(r("cronometro", "mostrar", "Te enseño el cronómetro; Android no me deja ponerlo en marcha.",
+             "pon el cronometro", "abre el cronometro", "muestrame el cronometro",
+             "quiero el cronometro"));
+        reglas.add(r("estado", "", "Miro cómo va el teléfono.",
+             "estado del telefono", "como esta el telefono", "dime como va el telefono",
+             "como va el aparato"));
+        reglas.add(r("lanzadores", "", "Te cuento las apps que veo.",
+             "que apps tengo", "lista mis apps", "dime que apps hay",
+             "ensename mis aplicaciones"));
         reglas.add(r("linterna", "on", "Alumbro.",
              "enciende la linterna", "prende la linterna", "pon la linterna", "dame luz",
              "enciende linterna", "necesito luz", "linterna encendida", "alumbrame",

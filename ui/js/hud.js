@@ -12,6 +12,10 @@ import { telefonoPorVoz, handleTelefonoEvento, estadoTelefono } from './telefono
    sin `fetch`. Eso es lo que permite probarlo con node en el portátil
    (`scripts/prueba-mandos.mjs`) en vez de descubrir el fallo en su teléfono. */
 import { paraCasar, resuelve } from './mandos.js';
+/* Los ejemplos de la ayuda salen del diccionario generado (`habilidades.py` +
+   `saber.py`): el Tab y la ventana 09 no prometen una frase que `Cerebro` y
+   `Razon` no sepan atender. */
+import { EJEMPLOS } from './diccionario.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -1596,6 +1600,8 @@ const CMDS = ['reproduce', 'pausa', 'reanuda', 'modo oficina', 'oculta todo', 'm
   /* las automatizaciones (ronda 2.4): las mismas palabras en el Tab y en la hoja
      8 · Automatiza del teléfono; `automatiza.js` es quien las cumple. */
   'mis automatizaciones', 'automatiza cuando diga modo noche haz callar la música',
+  /* F14 · la razón y las cuentas, sacadas del diccionario generado. */
+  ...EJEMPLOS,
   'ayuda', 'olvida la terminal'];
 function completeCmd(v) {
   const hits = CMDS.filter(c => c.startsWith(v));

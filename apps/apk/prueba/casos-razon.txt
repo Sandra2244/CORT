@@ -1,0 +1,209 @@
+# GENERADO por scripts/habilidades.py — frase|prefijo (prefijo vacío: sólo no ser null)
+qué hora es|Son las 
+dime la hora|
+me dices la hora|
+qué horas son|
+la hora por favor|
+dime qué hora es ahora|
+qué hora tienes|
+tienes hora|
+qué hora será dentro de 3 horas|Serán las 
+qué hora será en 2 horas|
+dime la hora dentro de 5 horas|
+qué hora será dentro de 1 hora|
+qué hora será dentro de 4 horas|
+qué hora será en 6 horas|
+dime qué hora será dentro de 2 horas|
+qué hora será dentro de 8 horas|
+qué hora era hace 2 horas|Eran las 
+qué hora fue hace 3 horas|
+dime la hora de hace 1 hora|
+qué hora era hace 4 horas|
+qué hora era hace 30 minutos|
+qué hora fue hace 20 minutos|
+dime qué hora era hace 5 horas|
+qué hora era hace 10 minutos|
+qué día es hoy|Hoy es 
+qué fecha es hoy|
+a qué día estamos|
+dime la fecha|
+qué día estamos|
+fecha de hoy|
+en qué día vivimos|
+qué fecha tenemos|
+qué día de la semana es|Hoy es 
+qué día de la semana es hoy|
+en qué día de la semana estamos|
+dime el día de la semana|
+qué día de la semana cae hoy|
+hoy qué día de la semana es|
+qué jornada es hoy|
+día de la semana por favor|
+cuántos días faltan para navidad|Falta
+cuánto falta para navidad|
+cuántos días faltan para los reyes|
+cuánto falta para año nuevo|
+cuántos días faltan para san valentín|
+cuánto falta para el día del trabajo|
+cuántos días quedan para navidad|
+falta mucho para navidad|
+cuántos días faltan para el 25 de diciembre|Falta
+cuánto falta para el 1 de enero|
+cuántos días quedan para el 14 de febrero|
+cuánto falta para el 12 de octubre|
+cuántos días faltan para el 16 de septiembre|
+cuánto falta para el 6 de enero|
+cuántos días faltan para el 1 de mayo|
+cuánto falta para el 2 de noviembre|
+qué día era hace 3 días|Era 
+qué fecha era hace 2 semanas|
+qué día era hace 1 mes|
+qué fecha era hace 10 días|
+qué día era hace 4 semanas|
+qué fecha era hace 6 meses|
+qué día era hace 100 días|
+qué fecha era hace 1 año|
+qué fecha será dentro de 2 semanas|Será 
+qué día será dentro de 3 días|
+qué fecha será dentro de 1 mes|
+qué día será dentro de 10 días|
+qué fecha será dentro de 4 semanas|
+qué día será dentro de 6 meses|
+qué fecha será dentro de 2 días|
+qué día será dentro de 1 semana|
+2024 es bisiesto|2024 es
+es bisiesto 2024|
+el año 2024 es bisiesto|
+2023 es bisiesto|
+dime si 2028 es bisiesto|
+es bisiesto el año 2000|
+el 2100 es bisiesto|
+comprueba si 1996 es bisiesto|
+cuántos días tiene 2028|El año 2028
+cuántos días tiene el año 2024|
+cuántos días tiene 2023|
+dime los días que tiene 2026|
+cuántos días tiene el año 2100|
+cuántos días tiene 2000|
+cuántos días tiene 1999|
+cuántos días tiene el año 2032|
+cuánto es 17 por 3|Es 51
+cuánto es 240 entre 12|
+calcula 15 más 27|
+cuánto es 9 menos 4|
+cuánto da 6 por 7|
+resultado de 100 dividido entre 4|
+suma 12 y 30|
+cuánto vale 8 por 8|
+cuánto es dos mil más quinientos|Es 2500
+cuánto es trescientos por dos|
+suma cien más cincuenta|
+cuánto es mil menos doscientos|
+cuánto da veinte por cinco|
+cuánto es cuarenta y dos más ocho|
+calcula noventa entre tres|
+cuánto es setenta y cinco menos veinticinco|
+cuánto es la raíz de 144|Es 12
+raíz cuadrada de 81|
+cuánto es la raíz cuadrada de 2|
+calcula la raíz de 169|
+raíz de 25|
+cuánto da la raíz cuadrada de 49|
+dime la raíz de 9|
+cuánto es raíz de 121|
+cuánto es 12 al cuadrado|Es 144
+cuánto es 5 al cubo|
+calcula 9 al cuadrado|
+cuánto da 7 al cuadrado|
+cuánto es 10 al cubo|
+cuánto es 6 al cuadrado|
+cuánto es 3 al cubo|
+dime 11 al cuadrado|
+cuánto es 7 x 8|Es 56
+cuánto es 9 x 9|
+calcula 12 x 3|
+cuánto da 6 x 7|
+cuánto es 15 x 4|
+dime cuánto es 3 x 3|
+cuánto es 25 x 4|
+dime 11 x 11|
+cuánto es el 15 por ciento de 240|El 15 por ciento de 240 es 36
+el 20 por ciento de 80|
+cuánto es el 25 por ciento de 400|
+calcula el 10 por ciento de 50|
+cuánto es el 5 por ciento de 200|
+el 30 por ciento de 90|
+cuánto es el 50 por ciento de 70|
+dime el 12 por ciento de 100|
+qué porcentaje es 30 de 120|Es el 25 por ciento
+qué porcentaje es 15 de 60|
+cuánto porcentaje es 5 de 20|
+qué porcentaje representa 40 de 200|
+qué porcentaje es 25 de 100|
+cuánto por ciento es 3 de 12|
+qué porcentaje es 18 de 90|
+qué porcentaje es 7 de 70|
+si 3 cuestan 9 cuánto cuestan 5|Son 15
+si 2 litros son 3 euros cuánto son 7 litros|
+si 4 kilos cuestan 12 cuánto cuestan 7 kilos|
+si 5 obreros hacen 10 metros cuánto hacen 8 obreros|
+si 3 días son 9 horas cuánto son 5 días|
+si 6 lápices cuestan 18 cuánto cuestan 4 lápices|
+si 2 horas son 120 minutos cuánto son 3 horas|
+si 10 metros cuestan 50 cuánto cuestan 3 metros|
+3 km a millas|3 km son 1,8641 millas
+5 metros a pies|
+10 millas a kilómetros|
+2 horas a minutos|
+500 gramos a libras|
+1 litro a mililitros|
+30 centímetros a pulgadas|
+4 kilos a libras|
+98.6 fahrenheit a celsius|98,6 fahrenheit son 37 celsius
+30 grados a fahrenheit|
+0 celsius a fahrenheit|
+100 grados fahrenheit a celsius|
+37 grados a fahrenheit|
+25 celsius a kelvin|
+300 kelvin a celsius|
+212 fahrenheit a celsius|
+2 gigas a megas|2 gigas son 2048 megas
+1 giga a megas|
+500 megas a gigas|
+1024 megas a gigas|
+1 tera a gigas|
+2048 megas a gigas|
+3000 megas a gigas|
+0.5 gigas a megas|
+cuánta propina dejo por 80|Deja 8
+propina del 15 por ciento de 80|
+cuánta propina dejo por 120|
+propina para 60|
+cuánta propina se deja por 100|
+propina del 20 por ciento de 50|
+cuánta propina dejo por 200|
+propina del 10 por ciento de 90|
+80 con 20 por ciento de descuento|Quedan 64
+100 con 25 por ciento de descuento|
+descuento del 30 por ciento a 200|
+50 con 10 por ciento de descuento|
+descuento del 15 por ciento a 80|
+120 con 50 por ciento de descuento|
+descuento del 5 por ciento a 100|
+90 con 33 por ciento de descuento|
+la mitad de 80|Es 40
+el doble de 35|
+el triple de 20|
+la mitad de 150|
+el doble de 48|
+el triple de 7|
+la mitad de 7|
+el doble de 12|
+el promedio de 4, 8 y 10|Es 7
+el promedio de 10 y 20|
+promedio de 2 4 y 6|
+el promedio de 7 y 9|
+promedio de 1 2 3 y 4|
+el promedio de 15 y 25|
+promedio de 100 y 200|
+el promedio de 3 3 y 3|

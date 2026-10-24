@@ -15,7 +15,15 @@ Orden = prioridad: primero las exactas, al final las de prefijo {resto}.
 import json, re, unicodedata, textwrap
 
 import os
+import saber as _saber
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# El otro medio diccionario: lo que CORT sabe CONTESTAR (la hora, las cuentas, la
+# casa, la nube). Vive en `saber.py` porque su forma es distinta —título, capa y
+# un caso de prueba— y se une aquí para que la cara, Java y las pruebas beban de
+# la misma lista. Si se duplicara en dos ficheros, la ayuda prometería una cosa y
+# `Razon` contestaría otra.
+SABER = _saber.SABER
 
 # (id, accion, param, respuesta, [patrones])
 REGLAS = [
@@ -43,6 +51,29 @@ REGLAS = [
         "silencio", "pon silencio", "callate", "calla", "sin sonido", "mudo",
         "quita el sonido", "apaga el sonido", "sin ruido", "calla la musica",
         "mute", "ponlo en mudo", "en mudo",
+    ]),
+    # `destapar` ya existe en `Acciones.volumen` desde la 2.1, pero ninguna frase
+    # lo pedía: el modo estaba escrito y mudo. Ahora tiene su intención.
+    ("volumen-destapar", "volumen", "destapar", "Te destapo el sonido.", [
+        "quita el silencio", "destapa el sonido", "quita el mudo", "vuelve el sonido",
+    ]),
+
+    # ── las tres manos que ya existían y no tenían frase ─────────────────
+    # `Acciones` sabe del cronómetro, del estado y de la rejilla de apps desde
+    # rondas anteriores, pero `Cerebro` no las nombraba: se podían tocar con el
+    # dedo y no con la voz. La F14 las mete en el diccionario y en el vocabulario.
+    ("cronometro", "cronometro", "mostrar",
+     "Te enseño el cronómetro; Android no me deja ponerlo en marcha.", [
+        "pon el cronometro", "abre el cronometro", "muestrame el cronometro",
+        "quiero el cronometro",
+    ]),
+    ("estado", "estado", "", "Miro cómo va el teléfono.", [
+        "estado del telefono", "como esta el telefono", "dime como va el telefono",
+        "como va el aparato",
+    ]),
+    ("lanzadores", "lanzadores", "", "Te cuento las apps que veo.", [
+        "que apps tengo", "lista mis apps", "dime que apps hay",
+        "ensename mis aplicaciones",
     ]),
 
     # ── linterna ───────────────────────────────────────────────────────
@@ -188,6 +219,20 @@ REGLAS = [
 ]
 
 
+# El vocabulario cerrado que `Cerebro.ACCIONES` valida y que la cara sabe ejecutar.
+# Está aquí, y no en tres sitios, para que una acción nueva no se cuele en el JSON
+# y el teléfono la ignore en silencio: el generador escribe la misma lista en el
+# asset y `prueba-costura.py` la compara con el `Set` de Java.
+VOCABULARIO = ["volumen", "linterna", "alarma", "temporizador", "cronometro", "estado",
+               "lanzadores", "abrir", "poner", "llamar", "buscar", "musica", "avisos",
+               "juego", "memoria", "saludo", "desconocido"]
+
+# Las dos cifras de la fase F14. No son adorno: si alguien borra media tabla para
+# que el número «cuadre», el generador se para antes de escribir nada.
+MIN_INTENTS = 87
+MIN_FRASES = 699
+
+
 def normaliza(t):
     """Copia de `Cerebro.normaliza`: minúsculas, sin tildes, sin signos, un espacio."""
     bajo = unicodedata.normalize("NFD", t).replace("\u0301", "").replace("\u0300", "")
@@ -226,9 +271,40 @@ def lista_json(items, sangria, ancho=96):
 
 
 def main():
+    # 0 · la otra mitad del diccionario, con su forma comprobada ANTES de escribir
+    # nada: una capa mal escrita mandaría una frase al fichero equivocado y la
+    # prueba de no-locales la daría por buena para siempre.
+    vistos_saber = set()
+    for entrada in SABER:
+        if len(entrada) != 5:
+            raise SystemExit(f"entrada de saber.py con {len(entrada)} campos: {entrada!r}")
+        ident, capa, titulo, ps, prueba = entrada
+        if ident in vistos_saber:
+            raise SystemExit(f"intención repetida en saber.py: {ident}")
+        vistos_saber.add(ident)
+        if capa not in ("razon", "casa", "nube"):
+            raise SystemExit(f"{ident}: capa desconocida {capa!r}")
+        if len(ps) != 8:
+            raise SystemExit(f"{ident}: {len(ps)} frases; el diccionario pide 8 reales")
+        if capa == "razon":
+            if not (isinstance(prueba, tuple) and len(prueba) == 2):
+                raise SystemExit(f"{ident}: una intención de razón necesita (frase, prefijo)")
+            if prueba[0] not in ps:
+                raise SystemExit(f"{ident}: la frase de prueba no está entre sus frases")
+        elif prueba is not None:
+            raise SystemExit(f"{ident}: casa/nube no llevan prueba local (su prueba es la contraria)")
+
     # 1 · la lista de frases no puede tener duplicados en toda la tabla
     todas = {}
     for (ident, acc, param, resp, ps) in REGLAS:
+        if acc not in VOCABULARIO:
+            raise SystemExit(f"{ident}: acción {acc!r} fuera del vocabulario")
+        for p in ps:
+            n = normaliza(p)
+            if n in todas:
+                raise SystemExit(f"frase duplicada: {n!r} en {ident} y en {todas[n]}")
+            todas[n] = ident
+    for ident, capa, titulo, ps, prueba in SABER:
         for p in ps:
             n = normaliza(p)
             if n in todas:
@@ -241,31 +317,43 @@ def main():
     if dudosas:
         raise SystemExit("patrones repetidos dentro de la misma regla: " + str(dudosas))
 
+    intents = len(REGLAS) + len(SABER)
+    frases = len(todas)
+    if intents < MIN_INTENTS or frases < MIN_FRASES:
+        raise SystemExit(f"el diccionario se encogió: {intents} intenciones y {frases} frases "
+                         f"(mínimo {MIN_INTENTS}/{MIN_FRASES})")
+
     # 2 · el JSON que viaja dentro del APK
     cabecera = json.load(open(f"{REPO}/apps/apk/assets/habilidades.json", encoding="utf-8"))
+    # La nota que ya está en el fichero puede traer la coletilla del generador de
+    # una pasada anterior: se corta para que correrlo dos veces no la repita.
+    nota_base = cabecera["nota"].split(" GENERADOR:")[0]
     patrones_json = []
     for (ident, acc, param, resp, ps) in REGLAS:
         patrones_json.append({"id": ident, "accion": acc, "param": param,
                               "patrones": ps, "respuesta": resp})
-    vocab = ["volumen", "linterna", "alarma", "temporizador", "abrir", "poner", "llamar",
-             "buscar", "musica", "avisos", "juego", "memoria", "saludo", "desconocido"]
     abre = ["whatsapp", "spotify", "youtube", "maps", "gmail", "calendario", "instagram",
             "facebook", "tiktok", "navegador", "ajustes", "musica", "telefono",
             "mensajes", "reloj", "wifi", "bluetooth", "teclado", "avisos", "camara",
             "galeria", "archivos", "telegram", "discord", "netflix", "calculadora"]
     salida = {
-        "version": 3,
-        "nota": cabecera["nota"] + " GENERADOR: esta tabla y la de `Cerebro.tablaDelCodigo` "
-                "se vierten de la misma lista (`scripts/habilidades.py`); `prueba-costura.py` "
-                "comprueba que sigan siendo las mismas frases.",
-        "vocabulario": cabecera["vocabulario"],
+        "version": 4,
+        "nota": nota_base + " GENERADOR: esta tabla, la de `Cerebro.tablaDelCodigo`, "
+                "`ui/js/diccionario.js` y los casos de `apps/apk/prueba/` se vierten de la "
+                "misma lista (`scripts/habilidades.py` + `scripts/saber.py`); "
+                "`prueba-costura.py` comprueba que sigan siendo la misma cosa.",
+        "vocabulario": "Las 'accion' sólo pueden ser: " + ", ".join(VOCABULARIO)
+                + ". Cualquier otra se ignora al cargar (Cerebro.ACCIONES).",
         "parametros": {
-            "volumen": ["sube", "baja", "max", "min", "callar"],
+            "volumen": ["sube", "baja", "max", "min", "callar", "destapar"],
             "linterna": ["on", "off", "alterna"],
             "abrir": abre,
             "musica": ["pausa", "reanuda", "siguiente", "anterior", "mueve"],
             "juego": ["on", "off"],
             "memoria": ["listar", "guardar:{resto}", "buscar:{resto}"],
+            "cronometro": ["mostrar"],
+            "estado": [""],
+            "lanzadores": [""],
         },
         "patrones": patrones_json,
     }
@@ -329,7 +417,75 @@ def main():
     ) + original[fin:]
     open(ruta, "w", encoding="utf-8").write(nuevo)
 
-    print(f"reglas={len(REGLAS)} frases={len(todas)}")
+    # 4 · lo que la CARA lee: el diccionario entero, con su capa y su ejemplo.
+    # `mando` son las órdenes que mueven el aparato; `razon` lo que se contesta sin
+    # red; `casa` y `nube` lo que necesita un modelo. La ayuda de la cara sale de
+    # aquí, así que no puede prometer una frase que la tabla no tenga.
+    entradas = []
+    for (ident, acc, param, resp, ps) in REGLAS:
+        entradas.append({
+            "id": ident, "capa": "mando", "titulo": ident.replace("-", " · "),
+            "accion": acc, "param": param, "dice": resp,
+            "ejemplo": ps[0], "frases": ps,
+        })
+    for ident, capa, titulo, ps, prueba in SABER:
+        entradas.append({"id": ident, "capa": capa, "titulo": titulo,
+                         "ejemplo": ps[0], "frases": ps})
+    por_capa = {capa: sum(1 for e in entradas if e["capa"] == capa)
+                for capa in ("mando", "razon", "casa", "nube")}
+    totales = {"intents": intents, "frases": frases, "porCapa": por_capa}
+    ejemplos = ["¿qué hora es?", "¿cuánto es 7 x 8?", "¿cuánto es el 15 por ciento de 240?",
+                "la mitad de 80", "3 km a millas", "cuánta propina dejo por 80",
+                "pon el cronómetro", "qué apps tengo", "comprueba si 1996 es bisiesto"]
+    faltan_ejemplos = [e for e in ejemplos if normaliza(e) not in todas]
+    if faltan_ejemplos:
+        raise SystemExit("un ejemplo de la ayuda no está en el diccionario: " + str(faltan_ejemplos))
+    ayuda = [
+        f"  {intents} intenciones y {frases} frases: {por_capa['mando']} órdenes, "
+        f"{por_capa['razon']} de razón, {por_capa['casa']} de casa y {por_capa['nube']} de nube",
+        "  " + " · ".join(ejemplos[:5]),
+        "  " + " · ".join(ejemplos[5:]),
+    ]
+    js = ["/* GENERADO por `scripts/habilidades.py` desde `saber.py` y la tabla de",
+          "   `REGLAS`. No se escribe a mano: la ayuda de la cara, el JSON del APK y",
+          "   la tabla de `Cerebro.tablaDelCodigo` son la misma lista. */",
+          "export const DICCIONARIO = " + json.dumps(entradas, ensure_ascii=False, indent=2) + ";",
+          "export const TOTALES = " + json.dumps(totales, ensure_ascii=False) + ";",
+          "export const EJEMPLOS = " + json.dumps(ejemplos, ensure_ascii=False) + ";",
+          "export const AYUDA = " + json.dumps(ayuda, ensure_ascii=False) + ";",
+          "",
+          "/* La capa es la que manda: `mando` mueve el aparato, `razon` contesta sin",
+          "   red, y `casa`/`nube` necesitan un modelo. */",
+          "export function frasesDe(capa) {",
+          "  return DICCIONARIO.filter(x => x.capa === capa).flatMap(x => x.frases);",
+          "}",
+          ""]
+    open(f"{REPO}/ui/js/diccionario.js", "w", encoding="utf-8").write("\n".join(js))
+
+    # 5 · los dos ficheros de casos que corre `Prueba5.java` en el portátil.
+    # · casos-razon: TODAS las frases de razón (208), con el prefijo esperado sólo
+    #   en la frase de prueba de cada intención. Así una frase nueva que `Razon`
+    #   deje de contestar se ve, no se queda en promesa.
+    # · casos-no-locales: TODAS las de casa y nube. Ni `Cerebro` las reclama ni
+    #   `Razon` las resuelve; si un día una se contesta localmente con una respuesta
+    #   floja, la suite se pone roja en vez de sonreír.
+    razon, ajenas = [], []
+    for ident, capa, titulo, ps, prueba in SABER:
+        if capa == "razon":
+            for p in ps:
+                razon.append(p + "|" + (prueba[1] if p == prueba[0] else ""))
+        else:
+            ajenas += ps
+    open(f"{REPO}/apps/apk/prueba/casos-razon.txt", "w", encoding="utf-8").write(
+        "# GENERADO por scripts/habilidades.py — frase|prefijo (prefijo vacío: sólo no ser null)\n"
+        + "\n".join(razon) + "\n")
+    open(f"{REPO}/apps/apk/prueba/casos-no-locales.txt", "w", encoding="utf-8").write(
+        "# GENERADO por scripts/habilidades.py — no puede contestarlas ni Cerebro ni Razon\n"
+        + "\n".join(ajenas) + "\n")
+
+    print(f"reglas={len(REGLAS)} saberes={len(SABER)} intents={intents} frases={frases} "
+          f"(mando {por_capa['mando']}, razon {por_capa['razon']}, "
+          f"casa {por_capa['casa']}, nube {por_capa['nube']})")
     print("escalón de respuestas largas:", sum(1 for r in REGLAS if len(r[3]) > 90))
 
 

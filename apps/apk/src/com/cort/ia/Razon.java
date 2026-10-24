@@ -46,10 +46,26 @@ public final class Razon {
         String dicho = parejo(frase);
         if (dicho.isEmpty()) return null;
         try {
-            // El porcentaje va PRIMERO: su firma («… por ciento de …») es también una
-            // corrida de palabras-número, y si la toma `calculo` sale «15 * 100» con
-            // un número en la boca que no es lo que ella preguntó.
-            String s = porcentaje(dicho);
+            // El orden es una escalera de firmas: cada detector exige algo que el
+            // anterior no mira. Propina y descuento van antes del porcentaje porque
+            // LLEVAN un porcentaje dentro y, si no, el genérico se los come y
+            // contesta «el 20 por ciento de 80 es 16» cuando ella preguntó cuánto
+            // queda después del descuento. Mitad/doble y promedio tampoco tienen
+            // operador, así que no los ve `calculo`.
+            String s = propina(dicho);
+            if (s != null) return s;
+            s = descuento(dicho);
+            if (s != null) return s;
+            s = mitadDoble(dicho);
+            if (s != null) return s;
+            s = promedio(dicho);
+            if (s != null) return s;
+            // El porcentaje va antes de las cuentas: su firma («… por ciento de …»)
+            // es también una corrida de palabras-número, y si la toma `calculo`
+            // sale «15 * 100» con un número en la boca que no es lo que preguntó.
+            s = porcentaje(dicho);
+            if (s != null) return s;
+            s = reglaDeTres(dicho);
             if (s != null) return s;
             s = calculo(dicho);
             if (s != null) return s;
@@ -89,7 +105,8 @@ public final class Razon {
         "(\\d+(?:[.,]\\d+)?)\\s+(?:por ciento|%)\\s*(?:de|del|sobre)\\s+(\\d+(?:[.,]\\d+)?)");
 
     private static final Pattern PCT_ES = Pattern.compile(
-        "(?:que|cuanto) porcentaje (?:es|de) (\\d+(?:[.,]\\d+)?) (?:de|sobre) (\\d+(?:[.,]\\d+)?)");
+        "(?:que|cuanto) (?:por ciento|porcentaje) (?:es|de|representa|son|supone) "
+        + "(\\d+(?:[.,]\\d+)?) (?:de|sobre) (\\d+(?:[.,]\\d+)?)");
 
     /** «cuánto es el 15 por ciento de 240», «qué porcentaje es 30 de 120». */
     static String porcentaje(String dicho) {
@@ -122,6 +139,116 @@ public final class Razon {
         catch (Exception noEsNumero) { return Double.NaN; }
     }
 
+    /* ══════════════════════════ propina y descuento ══════════════════════════ */
+
+    private static final Pattern PROPINA_PCT = Pattern.compile(
+        "propina.*?(\\d+(?:[.,]\\d+)?)\\s*(?:por ciento|porciento|%|pct)"
+        + ".*?(?:de|para|por|sobre)\\s*(\\d+(?:[.,]\\d+)?)");
+
+    private static final Pattern PROPINA_BASE = Pattern.compile(
+        "propina.*?(?:de|para|por|sobre)\\s*(\\d+(?:[.,]\\d+)?)");
+
+    private static final Pattern DESCUENTO = Pattern.compile(
+        "(\\d+(?:[.,]\\d+)?)\\s*(?:euros|pesos|dolares|\\$)?\\s*"
+        + "(?:con|menos|y)\\s*(?:el\\s*)?(\\d+(?:[.,]\\d+)?)\\s*"
+        + "(?:por ciento|porciento|%|pct)\\s*(?:de\\s*)?(?:descuento|rebaja)");
+
+    private static final Pattern DESCUENTO_AL_REVES = Pattern.compile(
+        "(?:descuento|rebaja).*?(\\d+(?:[.,]\\d+)?)\\s*(?:por ciento|porciento|%|pct)"
+        + ".*?(?:a|de|sobre)\\s*(\\d+(?:[.,]\\d+)?)");
+
+    private static final Pattern MITAD = Pattern.compile(
+        "\\b(mitad|doble|triple)\\s+de\\s+(\\d+(?:[.,]\\d+)?)");
+
+    private static final Pattern PROMEDIO = Pattern.compile(
+        "(?:el |la )?promedio de (.+)");
+
+    private static final Pattern NUMERO = Pattern.compile("\\d+(?:[.,]\\d+)?");
+
+    /** «cuánta propina dejo por 80», «propina del 15 por ciento de 80». */
+    static String propina(String dicho) {
+        if (!dicho.contains("propina")) return null;
+        Matcher m = PROPINA_PCT.matcher(dicho);
+        double pct = 10, base;
+        if (m.find()) {
+            pct = num(m.group(1));
+            base = num(m.group(2));
+        } else {
+            m = PROPINA_BASE.matcher(dicho);
+            if (!m.find()) return null;
+            base = num(m.group(1));
+        }
+        if (Double.isNaN(pct) || Double.isNaN(base)) return null;
+        return "Deja " + bonito(base * pct / 100.0) + " de propina.";
+    }
+
+    /** «80 con 20 por ciento de descuento» → lo que se paga, no lo que se rebaja. */
+    static String descuento(String dicho) {
+        if (!dicho.contains("descuento") && !dicho.contains("rebaja")) return null;
+        Matcher m = DESCUENTO.matcher(dicho);
+        boolean alReves = false;
+        if (!m.find()) {
+            m = DESCUENTO_AL_REVES.matcher(dicho);
+            if (!m.find()) return null;
+            alReves = true;
+        }
+        double a = num(m.group(1)), b = num(m.group(2));
+        if (Double.isNaN(a) || Double.isNaN(b)) return null;
+        // En «80 con 20 %» el primero es el precio; en «descuento del 20 % a 80»
+        // el primero es el tanto. Confundirlos devuelve un precio que no existe.
+        double precio = alReves ? b : a, pct = alReves ? a : b;
+        return "Quedan " + bonito(precio * (100.0 - pct) / 100.0) + ".";
+    }
+
+    /** «la mitad de 80», «el doble de 35», «el triple de 20». */
+    static String mitadDoble(String dicho) {
+        Matcher m = MITAD.matcher(dicho);
+        if (!m.find()) return null;
+        double n = num(m.group(2));
+        if (Double.isNaN(n)) return null;
+        double r = "mitad".equals(m.group(1)) ? n / 2.0
+                 : "doble".equals(m.group(1)) ? n * 2.0 : n * 3.0;
+        return "Es " + bonito(r) + ".";
+    }
+
+    /** «el promedio de 4, 8 y 10» → 7,3333. Exige dos números o no es un promedio. */
+    static String promedio(String dicho) {
+        Matcher m = PROMEDIO.matcher(dicho);
+        if (!m.find()) return null;
+        Matcher n = NUMERO.matcher(m.group(1));
+        double suma = 0;
+        int cuantos = 0;
+        while (n.find()) {
+            double v = num(n.group());
+            if (Double.isNaN(v)) continue;
+            suma += v;
+            cuantos++;
+        }
+        if (cuantos < 2) return null;
+        return "Es " + bonito(suma / cuantos) + ".";
+    }
+
+    /**
+     * «si 3 cuestan 9, cuánto cuestan 5» → 15.
+     *
+     * Es la regla de tres de la vida: el primer número es la referencia, el segundo
+     * lo que vale esa referencia y el tercero lo que se quiere saber. Se exige la
+     * palabra `si` al principio y `cuanto` en medio, y EXACTAMENTE tres números:
+     * con cuatro no se sabe cuál sobra, y adivinar es inventar.
+     */
+    static String reglaDeTres(String dicho) {
+        if (!dicho.startsWith("si ") || !dicho.contains("cuanto")) return null;
+        Matcher n = NUMERO.matcher(dicho);
+        double[] v = new double[4];
+        int cuantos = 0;
+        while (n.find()) {
+            if (cuantos >= 4) return null;
+            v[cuantos++] = num(n.group());
+        }
+        if (cuantos != 3 || v[0] == 0) return null;
+        return "Son " + bonito(v[1] * v[2] / v[0]) + ".";
+    }
+
     /* ══════════════════════════ matemáticas ══════════════════════════ */
 
     private static final Pattern FIRMA_MATH = Pattern.compile("\\d.*[+*/^%-]|[+*/^%-].*\\d");
@@ -131,7 +258,8 @@ public final class Razon {
         boolean pideCuenta = dicho.contains("cuanto es") || dicho.contains("cuanto vale")
             || dicho.contains("cuanto da") || dicho.contains("calcula")
             || dicho.contains("resultado de") || dicho.contains("suma de")
-            || dicho.contains("producto de");
+            || dicho.contains("producto de") || dicho.startsWith("suma ")
+            || dicho.startsWith("resta ");
         // La firma de una cuenta: un operador CON un número al lado. `FIRMA_MATH` sólo
         // ve operadores escritos con signos, y «raíz de 144», «12 al cuadrado» o
         // «dos mil más quinientos» no tienen ni uno: se miden por su palabra. Medido
@@ -141,14 +269,19 @@ public final class Razon {
             || dicho.contains(" mas ") || dicho.contains(" menos ") || dicho.contains(" por ")
             || dicho.contains(" entre ") || dicho.contains(" veces ")
             || dicho.contains("dividido") || dicho.contains("al cuadrado")
-            || dicho.contains("al cubo") || dicho.contains("raiz");
+            || dicho.contains("al cubo") || dicho.contains("raiz")
+            // «dime 11 x 11»: la equis no está en `FIRMA_MATH` porque suelta sería una
+            // letra, y aquí sólo cuenta pegada a dos números (`equis()` hace el resto).
+            || Pattern.compile("\\d\\s*[x×]\\s*\\d").matcher(dicho).find();
         boolean tieneNumero = dicho.matches(".*\\d.*") || tienePalabraNumero(dicho);
         if (!pideCuenta && !(tieneOperador && tieneNumero)) return null;
         String s = sinRelleno(dicho);
         s = raiz(s);
         s = potencias(s);
         s = palabrasANumeros(s);
+        s = sumaDicha(s);
         s = operadoresEnPalabras(s);
+        s = equis(s);
         if (!s.matches(".*\\d.*")) return null;
         Parser p = new Parser(s);
         double r = p.suma();
@@ -167,8 +300,11 @@ public final class Razon {
 
     /** Quita el hablar que rodea la cuenta: «a ver», «por favor», «oye CORT». */
     private static String sinRelleno(String s) {
-        return s.replaceAll("^(cuanto (es|vale|da)|calcula(r)?(me)?|resultado de|hazme el favor de"
-                 + "|a ver|oye cort|cort|dime|por favor)\\s*", " ")
+        // El `(?:…)+` es la mitad del arreglo: «dime cuánto es 3 x 3» lleva DOS
+        // muletillas seguidas («dime» y «cuánto es»), y con una sola pasada se
+        // quedaba «cuanto es 3 * 3» delante del parser, que no sabe leer palabras.
+        return s.replaceAll("^(?:(?:cuanto (?:es|vale|da)|calcula(?:r|me)?|resultado de"
+                 + "|hazme el favor de|a ver|oye cort|cort|dime|por favor)\\s*)+", " ")
                 .replaceAll("\\s+", " ").trim();
     }
 
@@ -181,6 +317,23 @@ public final class Razon {
     private static String potencias(String s) {
         return s.replaceAll("al cuadrado", "^ 2").replaceAll("al cubo", "^ 3")
                 .replaceAll("\\^\\s*$", "");
+    }
+
+    /** «7 x 8», «7×8» → `7 * 8`: la equis que se escribe en el móvil, no una letra. */
+    static String equis(String s) {
+        return s.replaceAll("(?<=\\d)\\s*[x×]\\s*(?=\\d)", "*");
+    }
+
+    /**
+     * «suma 12 y 30» / «resta 9 y 4»: cuando la frase EMPIEZA por suma o resta, la
+     * «y» es el operador. En cualquier otro sitio la «y» es una conjunción («4, 8 y
+     * 10» no es una cuenta), y por eso sólo se toca aquí y con la orden delante.
+     */
+    static String sumaDicha(String s) {
+        boolean resta = s.startsWith("resta ");
+        if (!resta && !s.startsWith("suma ")) return s;
+        String cuerpo = s.substring(resta ? 6 : 5).replaceFirst("^de ", "");
+        return cuerpo.replaceAll("\\by\\b", resta ? "-" : "+");
     }
 
     /** Las cuentas dichas con palabras, en español. */
@@ -403,8 +556,8 @@ public final class Razon {
         anade("datos", "b", 1, "byte", "bytes");
         anade("datos", "kb", 1024, "kilobyte", "kilobytes", "kb");
         anade("datos", "mb", 1048576, "megabyte", "megabytes", "mb", "mega", "megas");
-        anade("datos", "gb", 1073741824.0, "gigabyte", "gigabytes", "gb", "giga");
-        anade("datos", "tb", 1.0995116e12, "terabyte", "terabytes", "tb");
+        anade("datos", "gb", 1073741824.0, "gigabyte", "gigabytes", "gb", "giga", "gigas");
+        anade("datos", "tb", 1.0995116e12, "terabyte", "terabytes", "tb", "tera", "teras");
 
         // ── tiempo (base: el segundo) ──
         anade("tiempo", "s", 1, "segundo", "segundos", "s", "seg");
@@ -529,7 +682,11 @@ public final class Razon {
         { 25, 12 }, { 6, 1 }, { 1, 1 }, { 14, 2 }, { 1, 5 }, { 16, 9 }, { 12, 10 }, { 1, 11 } };
 
     private static final Pattern HACE_DENTRO = Pattern.compile(
-        "(dentro de|hace) (\\d+) ?(segundos?|minutos?|horas?|dias?|semanas?|meses?|anios?|anos?)?");
+        "(dentro de|en|hace) (\\d+) ?(segundos?|minutos?|horas?|dias?|semanas?|meses?|anios?|anos?)?");
+
+    /** «dentro de 3 horas», «en 2 horas», «hace 20 minutos»: la hora que será o la que era. */
+    private static final Pattern HORA_DENTRO = Pattern.compile(
+        "(dentro de|en|hace) (\\d+) ?(horas?|minutos?)");
 
     private static final Pattern DIA_MES = Pattern.compile(
         "(\\d{1,2})\\s+de\\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre"
@@ -538,21 +695,30 @@ public final class Razon {
     /** La hora y la fecha reales del teléfono: lo que `Cerebro` no podía prometer. */
     static String calendario(String dicho) {
         String s = dicho;
-        if (s.contains("que hora") || s.contains("hora es") || s.contains("que horas son")) {
-            LocalDateTime ahora = LocalDateTime.now();
-            return "Son las " + ahora.getHour() + ":"
-                 + String.format(Locale.US, "%02d", ahora.getMinute())
-                 + ", " + parteDelDia(ahora.getHour()) + ".";
-        }
-        if (s.contains("que dia es") || s.contains("que fecha") || s.contains("fecha de hoy")
-            || s.contains("dia es hoy")) {
-            return "Hoy es " + nombreDe(LocalDate.now()) + ".";
-        }
-        if (s.contains("cuantos dias faltan") || s.contains("cuanto falta")
-            || s.contains("faltan para") || s.contains("cuantas semanas faltan")
-            || s.contains("a quanto") || s.contains("quanto falta")) {
-            String r = faltanPara(s, LocalDate.now());
-            if (r != null) return r;
+        // «averigua qué día es el examen» lleva las palabras de una fecha dentro,
+        // pero no pide la fecha de hoy: pide que se lo pregunten a la nube. Sin esta
+        // guarda, el genérico de abajo contestaba «Hoy es viernes…» con toda la
+        // seguridad. Lo destapó `Prueba5` con las frases de casa y nube.
+        if (s.startsWith("averigua ") || s.startsWith("investiga ") || s.startsWith("busca ")
+                || s.startsWith("piensa ") || s.startsWith("explícame ")
+                || s.startsWith("explicame ")) return null;
+        // El ORDEN es la mitad del trabajo, y la prueba del diccionario lo destapó:
+        // «qué fecha será dentro de 2 semanas» contiene «qué fecha», así que el
+        // genérico de hoy contestaba la fecha de hoy como si el desplazamiento no
+        // existiera. Primero lo que lleva cuenta, después lo que no.
+        //  1) la hora con desplazamiento («dentro de/en/hace N horas|minutos»)
+        //  2) la fecha con desplazamiento («hace/dentro de/en N días|semanas|…»)
+        //  3) el día de la semana · 4) la hora de ahora · 5) lo que falta para una fecha
+        //  6) la fecha de hoy · 7) bisiesto · 8) los días de un año
+        Matcher h = HORA_DENTRO.matcher(s);
+        if (h.find() && s.contains("hora")) {
+            boolean atras = "hace".equals(h.group(1));
+            int n = (int) num(h.group(2));
+            LocalDateTime t = LocalDateTime.now();
+            t = h.group(3).startsWith("hora") ? (atras ? t.minusHours(n) : t.plusHours(n))
+                                             : (atras ? t.minusMinutes(n) : t.plusMinutes(n));
+            return (atras ? "Eran las " : "Serán las ") + t.getHour() + ":"
+                 + String.format(Locale.US, "%02d", t.getMinute()) + ".";
         }
         Matcher m = HACE_DENTRO.matcher(s);
         if (m.find() && (s.contains("que dia") || s.contains("fecha") || s.contains("era")
@@ -563,13 +729,39 @@ public final class Razon {
             LocalDate destino = suma(LocalDate.now(), n, unidad, atras);
             return (atras ? "Era " : "Será ") + nombreDe(destino) + ".";
         }
+        if (s.contains("dia de la semana") || s.contains("jornada")) {
+            DayOfWeek dow = LocalDate.now().getDayOfWeek();
+            return "Hoy es " + DIAS[dow.getValue() - 1] + ".";
+        }
+        if (s.contains("que hora") || s.contains("hora es") || s.contains("que horas son")
+            || s.contains("la hora") || s.contains("hora tienes") || s.contains("tienes hora")) {
+            LocalDateTime ahora = LocalDateTime.now();
+            return "Son las " + ahora.getHour() + ":"
+                 + String.format(Locale.US, "%02d", ahora.getMinute())
+                 + ", " + parteDelDia(ahora.getHour()) + ".";
+        }
+        // «cuánto falta para…», y sus formas de la calle: «cuántos días quedan para…»,
+        // «falta mucho para…». Sin las tres, la mitad del diccionario se iba a la nube.
+        boolean pideFalta = s.contains("falta") || s.contains("faltan")
+            || s.contains("queda") || s.contains("quedan");
+        if (pideFalta && s.contains(" para ")) {
+            String r = faltanPara(s, LocalDate.now());
+            if (r != null) return r;
+        }
+        if (s.contains("que dia es") || s.contains("dia es hoy") || s.contains("que dia estamos")
+            || s.contains("dia estamos") || s.contains("dia vivimos") || s.contains("que fecha")
+            || s.contains("la fecha") || s.contains("fecha de hoy")
+            || s.contains("fecha tenemos")) {
+            return "Hoy es " + nombreDe(LocalDate.now()) + ".";
+        }
         if (s.contains("bisiesto")) {
             Matcher a = Pattern.compile("(\\d{4})").matcher(s);
             int anio = a.find() ? Integer.parseInt(a.group(1)) : LocalDate.now().getYear();
             boolean b = anio % 4 == 0 && (anio % 100 != 0 || anio % 400 == 0);
             return anio + (b ? " es" : " no es") + " bisiesto.";
         }
-        if (s.contains("cuantos dias tiene") || s.contains("cuantos dias faltan para terminar")) {
+        if (s.contains("cuantos dias tiene") || s.contains("dias que tiene")
+            || s.contains("cuantos dias faltan para terminar")) {
             Matcher a = Pattern.compile("(\\d{4})").matcher(s);
             int anio = a.find() ? Integer.parseInt(a.group(1)) : LocalDate.now().getYear();
             LocalDate inicio = LocalDate.of(anio, 1, 1);

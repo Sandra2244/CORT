@@ -1,0 +1,193 @@
+# GENERADO por scripts/habilidades.py — no puede contestarlas ni Cerebro ni Razon
+piensa qué es la fotosíntesis
+piensa por qué está lloviendo
+piensa cómo se hace una paella
+piensa cuál es la capital de Australia
+piensa qué significa sostenible
+piensa quién fue Nikola Tesla
+piensa cómo funciona un reloj
+piensa qué puedo cenar hoy
+explícame la gravedad
+explícame la fotosíntesis
+explícame qué es el ADN
+explícame cómo funciona internet
+explícame la teoría del color
+explícame qué es la inflación
+explícame la guerra fría
+explícame cómo aprende una IA
+resume este texto
+resume lo que te acabo de decir
+hazme un resumen de esto
+resume las ideas principales
+resume en tres frases
+resume el artículo
+dame un resumen corto
+resume la conversación
+traduce al inglés buenos días
+traduce al español good morning
+traduce esta frase al francés
+cómo se dice gracias en alemán
+traduce al inglés te quiero
+traduce al portugués hasta luego
+dime cómo se dice agua en italiano
+traduce al inglés buenas noches
+escribe un correo para mi jefa
+escribe una nota de voz
+escribe una lista de la compra
+escribe un mensaje de cumpleaños
+escribe un correo formal
+escribe una invitación
+escribe un mensaje para disculparme
+escribe un texto corto sobre el mar
+compara python y javascript
+compara android y iphone
+compara un coche eléctrico y uno de gasolina
+compara linux y windows
+compara café y té
+compara dos portátiles
+compara el mar y la montaña
+compara cantar y bailar
+dame una idea para una cena
+dame una idea para un regalo
+dame ideas para el fin de semana
+dame una idea de negocio
+dame una idea para decorar
+dame ideas para un cumpleaños
+dame una idea para un juego
+dame una idea para ahorrar
+ayúdame con código en python
+ayúdame con este error de java
+explícame este código
+cómo hago un bucle en python
+ayúdame con html y css
+revisa esta función de javascript
+cómo se hace una consulta en sql
+ayúdame con un script en bash
+redacta una carta de reclamo
+redacta un currículum corto
+redacta una disculpa formal
+redacta un mensaje para el banco
+redacta una solicitud de vacaciones
+redacta una queja por un producto
+redacta una respuesta educada
+redacta un anuncio corto
+corrige esta frase
+corrige mi ortografía
+revisa este texto
+corrige la gramática de esto
+mejora esta redacción
+corrige las tildes
+revisa este correo antes de enviarlo
+corrige el estilo de este párrafo
+organiza mi día
+hazme un plan para la semana
+planifica un viaje a Gijón
+planifica una cena para cuatro
+organiza mi estudio para el examen
+hazme un plan de entrenamiento
+planifica mi mudanza
+organiza las tareas de la casa
+decide entre pizza y sushi
+ayúdame a elegir un portátil
+qué me conviene estudiar
+decide entre playa y montaña
+ayúdame a elegir un regalo
+qué elijo para cenar
+decide entre android y iphone
+ayúdame a decidir un destino
+enséñame a programar en python
+enséñame a usar Excel
+enséñame inglés desde cero
+enséñame a hacer pan
+enséñame a cambiar una rueda
+enséñame a estudiar mejor
+enséñame a usar git
+enséñame a cocinar arroz
+qué noticias hay
+dime las noticias de hoy
+qué pasó en el mundo
+las últimas noticias
+qué noticias hay de tecnología
+resume las noticias de hoy
+qué ha pasado esta semana
+dime algo de actualidad
+quién es Ada Lovelace
+quién es el presidente de España
+quién inventó la bombilla
+quién fue Marie Curie
+quién es el dueño de Tesla
+quién escribió el Quijote
+quién descubrió América
+quién canta esa canción
+qué es la computación cuántica
+qué es el blockchain
+qué es la inteligencia artificial
+qué es un agujero negro
+qué es la energía solar
+qué es el cambio climático
+qué es una API
+qué es la realidad virtual
+cómo funciona un motor de combustión
+cómo funciona una nevera
+cómo funciona el wifi
+cómo funciona un panel solar
+cómo funciona un microondas
+cómo funciona la gravedad
+cómo funciona un GPS
+cómo funciona una impresora 3D
+historia de Roma
+historia de España
+historia de la imprenta
+historia de internet
+historia de la aviación
+historia del café
+historia de los aztecas
+historia de la electricidad
+receta de tortilla de patatas
+receta de paella
+receta de arroz con pollo
+receta de bizcocho
+receta de gazpacho
+receta de pasta carbonara
+receta de lentejas
+receta de tarta de queso
+cuéntame un chiste
+dime algo gracioso
+sabes un chiste
+cuéntame otro chiste
+hazme reír
+dime un chiste corto
+cuéntame un chiste de programadores
+tienes algún chiste
+escríbeme un poema corto
+recítame un poema
+hazme un poema de amor
+escribe un poema sobre el mar
+dime un verso
+inventa un poema
+escríbeme una poesía
+hazme una rima
+qué opinas de la inteligencia artificial
+qué piensas de las redes sociales
+qué opinas de los coches eléctricos
+qué te parece el veganismo
+qué opinas de trabajar desde casa
+qué piensas del espacio
+qué opinas de la música actual
+qué te parece aprender idiomas
+recomiéndame una película
+recomiéndame un libro
+recomiéndame una serie
+recomiéndame música
+recomiéndame un restaurante
+recomiéndame un juego
+recomiéndame un destino
+recomiéndame un curso
+averigua en la red el precio del bitcoin
+averigua quién ganó el partido
+averigua el tiempo de mañana
+averigua cuánto cuesta un vuelo
+averigua la capital de Canadá
+averigua los resultados de la lotería
+averigua qué día es el examen
+averigua cuántos habitantes tiene Gijón

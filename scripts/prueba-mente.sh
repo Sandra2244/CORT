@@ -2,13 +2,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # prueba-mente.sh — el cerebro del APK, probado EN EL PORTÁTIL, sin teléfono.
 #
-# Cuatro clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro: `Razon`
+# Cinco clases de `apps/apk/src/com/cort/ia` son Java puro o casi puro: `Razon`
 # (cuentas, unidades, fechas), `Cerebro` (la tabla de frases), `Nube` (el
 # proveedor), `Ollama` (los cerebros del PC de casa por Wi-Fi) y `Mente` (quién
 # responde cada frase). Lo que las ata a Android son cinco tipos: `Log`, `Context`,
 # `SharedPreferences`, `AssetManager` y el `org.json` del sistema. Aquí se les pone
 # su **gemelo de papel** (`apps/apk/prueba/papeles`) y con eso el JDK de a pie
-# compila y ejecuta las cuatro pruebas:
+# compila y ejecuta las cinco pruebas:
 #
 #   Prueba.java   · `Razon` a pelo: 43 frases suyas y seis que no lo son.
 #   Prueba2.java  · la RUTA: acción conocida → `Cerebro`; cuenta/unidad/hora →
@@ -21,6 +21,11 @@
 #                   avisar una vez por final (el aviso bueno, y el de la cortada),
 #                   borrar en las dos formas de la API, descubrir y que la pregunta
 #                   se conteste con el modelo de casa. Todo por `127.0.0.1`.
+#   Prueba5.java  · el diccionario en LOS DOS SENTIDOS: las 208 frases de razón
+#                   (`casos-razon.txt`, salidas de saber.py) tienen que contestarse,
+#                   y las 192 de casa/nube (`casos-no-locales.txt`) no pueden
+#                   contestarlas ni Cerebro ni Razon. Un verde que no puede caerse
+#                   no es prueba: si una frase de casa se contesta en local, rojo.
 #
 # `--release 11` no se pasa: en este portátil `javac` sólo existe como módulo del
 # JDK (`java -m jdk.compiler/…`) y ese punto de entrada no acepta la bandera. El
@@ -49,8 +54,9 @@ T=/tmp/cort-mente
 rm -rf "$T"; mkdir -p "$T/src/com/cort/ia" "$T/papeles" "$T/assets" "$T/assets-vacias" "$T/out"
 cp "$E"/Cerebro.java "$E"/Nube.java "$E"/Mente.java "$E"/Razon.java "$E"/Ollama.java "$T/src/com/cort/ia/"
 cp -r "$P"/papeles/* "$T/papeles/"
-cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$P"/Prueba4.java "$T/src/com/cort/ia/"
+cp "$P"/Prueba.java "$P"/Prueba2.java "$P"/Prueba3.java "$P"/Prueba4.java "$P"/Prueba5.java "$T/src/com/cort/ia/"
 cp "$RAIZ"/apps/apk/assets/habilidades.json "$T/assets/"
+cp "$P"/casos-razon.txt "$P"/casos-no-locales.txt "$T/"
 
 # 2 · `javac` como orden o como módulo del JDK, según el portátil
 si_javac() {
@@ -70,7 +76,7 @@ echo "== compilando $(echo "$LISTA" | wc -l) ficheros de papel"
 # shellcheck disable=SC2086
 si_javac -encoding UTF-8 --add-modules jdk.httpserver -d "$T/out" $LISTA
 
-# 3 · las cuatro suites; la última manda en el código de salida
+# 3 · las cinco suites; la última manda en el código de salida
 #
 # Cada salida va a su propio `.log` y se imprime entera SI ALGO FALLA. Con
 # `java … | tail -1` se perdería el detalle justo cuando hace falta: `pipefail`
@@ -80,10 +86,11 @@ si_javac -encoding UTF-8 --add-modules jdk.httpserver -d "$T/out" $LISTA
 MEM="${JAVA_MEM:-256m}"
 pasa=0
 fallan=0
-for suite in Prueba Prueba2 Prueba3 Prueba4; do
+for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5; do
   caso="Razon a pelo"; [ "$suite" = Prueba2 ] && caso="la ruta de Mente"
   [ "$suite" = Prueba3 ] && caso="las frases de la tabla"
   [ "$suite" = Prueba4 ] && caso="Ollama en la Wi-Fi de casa"
+  [ "$suite" = Prueba5 ] && caso="el diccionario, en los dos sentidos"
   echo "== $caso"
   set +e
   java -Xmx"$MEM" --add-modules jdk.httpserver -cp "$T/out" "com.cort.ia.$suite" > "$T/$suite.log" 2>&1
@@ -97,6 +104,6 @@ for suite in Prueba Prueba2 Prueba3 Prueba4; do
     echo "   (sale $st — log: $T/$suite.log)"
   fi
 done
-[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 4"; exit 1; }
+[ $fallan -eq 0 ] || { echo "FALLEN $fallan suite(s) de 5"; exit 1; }
 FRASES=$(python3 -c 'import json;d=json.load(open("apps/apk/assets/habilidades.json"));print(sum(len(p["patrones"]) for p in d["patrones"]))' 2>/dev/null || echo "?")
-echo "MENTE OK: las 4 suites pasan sobre las $FRASES frases de la tabla."
+echo "MENTE OK: las 5 suites pasan sobre las $FRASES frases de la tabla."

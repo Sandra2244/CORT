@@ -92,7 +92,10 @@ public class Prueba2 {
                 || desdeCodigo.avisoDeCarga().contains("tabla del código"),
             desdeCodigo.avisoDeCarga());
         int porAsset = reglasDe(desdeAsset), porCodigo = reglasDe(desdeCodigo);
-        check("las dos tablas traen las mismas 33 reglas", porAsset == 33 && porCodigo == 33,
+        // El número sube con el diccionario (33 → 37 en la F14), así que no se
+        // clava aquí: lo que importa es que las DOS tablas traigan las mismas. El
+        // recuento absoluto y cada frase los vigilan `Prueba3` y la costura.
+        check("las dos tablas traen las mismas reglas", porAsset > 0 && porAsset == porCodigo,
             "asset=" + porAsset + " codigo=" + porCodigo);
         check("el código responde sin asset",
             "volumen".equals(desdeCodigo.procesar("sube el volumen").accion),

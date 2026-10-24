@@ -53,6 +53,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import unicodedata
 import xml.etree.ElementTree as ET
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
@@ -3727,6 +3728,231 @@ if len(F28_LLAMADAS) < 30 or len(F28_RUTAS) < 20:
 else:
     dice_ok("F12 · alcance del barrido", f"barre los {len(F28_CARAS)} archivos de ui/js: "
               f"{len(F28_LLAMADAS)} métodos y {len(F28_RUTAS)} rutas en el rastrillo")
+
+# ── [29] F14 · el diccionario, en los dos sentidos: una lista, cuatro bocas ──
+# La tabla del APK, la de `Cerebro.tablaDelCodigo`, la ayuda de la cara y los dos
+# ficheros de casos salen de `scripts/habilidades.py` + `scripts/saber.py`. Este
+# sector comprueba que sigan siendo LA MISMA COSA: no que se parezcan. Y la otra
+# mitad del título: cada `accion` de la tabla tiene un dueño — los `case` de
+# `Acciones.java`, la tecla de música o una frase que la cara atiende antes de
+# pensar. Una acción sin boca es una promesa que acaba en «no sé hacer eso».
+print("\n[29] F14 · una lista, cuatro bocas y un dueño por acción")
+
+sys.path.insert(0, str(RAIZ / "scripts"))
+import saber as f29_saber                                    # noqa: E402 — datos puros
+
+try:
+    F29_JSON = json.loads((APK / "assets" / "habilidades.json").read_text(encoding="utf-8"))
+    F29_JS = (RAIZ / "ui" / "js" / "diccionario.js").read_text(encoding="utf-8")
+    F29_DIC = json.loads(re.search(r"export const DICCIONARIO = (\[.*?\n\]);", F29_JS, re.S).group(1))
+    F29_TOT = json.loads(re.search(r"export const TOTALES = (\{.*?\});", F29_JS).group(1))
+    F29_EJ = json.loads(re.search(r"export const EJEMPLOS = (\[.*?\]);", F29_JS).group(1))
+    F29_AYUDA = json.loads(re.search(r"export const AYUDA = (\[.*?\]);", F29_JS).group(1))
+except Exception as f29_roto:
+    falla("F14 · las cuatro bocas", f"no se pudo leer una de las cuatro: {f29_roto}")
+    F29_DIC = []
+
+if F29_DIC:
+    F29_MANDO = [e for e in F29_DIC if e.get("capa") == "mando"]
+    F29_SABER_JS = [e for e in F29_DIC if e.get("capa") != "mando"]
+    F29_JSON_PAT = F29_JSON["patrones"]
+
+    # 29.a · el JSON del APK y la cara dicen lo mismo, campo por campo y EN ORDEN
+    #        (el orden de la tabla es la prioridad: cambiar dos de sitio ya es otro
+    #        cerebro, aunque las frases sean las mismas).
+    f29_dif = [j["id"] for j, e in zip(F29_JSON_PAT, F29_MANDO)
+               if (j["id"], j["accion"], j["param"], j["respuesta"], j["patrones"])
+               != (e["id"], e.get("accion"), e.get("param"), e.get("dice"), e["frases"])]
+    if len(F29_JSON_PAT) != len(F29_MANDO) or f29_dif:
+        falla("F14 · JSON ↔ cara", f"{len(F29_JSON_PAT)} reglas en el asset y "
+              f"{len(F29_MANDO)} en diccionario.js; divergen: {', '.join(f29_dif[:6]) or '—'}")
+    else:
+        dice_ok("F14 · JSON ↔ cara", f"las {len(F29_MANDO)} órdenes con su acción, su "
+                  f"parámetro, su respuesta y sus frases, en el mismo orden")
+
+    # 29.b · saber.py ↔ cara, también en orden y con la capa de cada una
+    f29_esperado = [(i, c, t, ps) for i, c, t, ps, _ in f29_saber.SABER]
+    f29_visto = [(e["id"], e["capa"], e["titulo"], e["frases"]) for e in F29_SABER_JS]
+    if f29_esperado != f29_visto:
+        f29_cuales = [a[0] for a, b in zip(f29_esperado, f29_visto) if a != b][:6]
+        falla("F14 · saber.py ↔ cara", f"{len(f29_esperado)} saberes frente a "
+              f"{len(f29_visto)}; divergen: {', '.join(f29_cuales) or '—'}")
+    else:
+        dice_ok("F14 · saber.py ↔ cara", f"las {len(f29_esperado)} intenciones de saber "
+                  f"con su capa y sus 8 frases")
+
+    # 29.c · las cuentas que la cara publica son las que hay de verdad
+    f29_frases = sum(len(e["frases"]) for e in F29_DIC)
+    f29_por_capa = {c: sum(1 for e in F29_DIC if e["capa"] == c)
+                    for c in ("mando", "razon", "casa", "nube")}
+    f29_real = {"intents": len(F29_DIC), "frases": f29_frases, "porCapa": f29_por_capa}
+    if F29_TOT != f29_real:
+        falla("F14 · los totales", f"la cara dice {F29_TOT} y tiene {f29_real}")
+    elif len(F29_JSON_PAT) + len(f29_saber.SABER) != F29_TOT["intents"]:
+        falla("F14 · los totales", "las intenciones del asset + saber.py no suman las de la cara")
+    else:
+        dice_ok("F14 · los totales", f"{F29_TOT['intents']} intenciones y {F29_TOT['frases']} "
+                  f"frases ({f29_por_capa['mando']} de mando, {f29_por_capa['razon']} de razón, "
+                  f"{f29_por_capa['casa']} de casa, {f29_por_capa['nube']} de nube)")
+
+    # 29.d · el diccionario no puede encogerse: los mínimos del generador son el
+    #        trinquete. Si una intención se cae, hay que bajarlos a mano y se ve.
+    f29_py = (RAIZ / "scripts" / "habilidades.py").read_text(encoding="utf-8")
+    f29_min_i = int(re.search(r"MIN_INTENTS = (\d+)", f29_py).group(1))
+    f29_min_f = int(re.search(r"MIN_FRASES = (\d+)", f29_py).group(1))
+    if F29_TOT["intents"] < f29_min_i or F29_TOT["frases"] < f29_min_f:
+        falla("F14 · el trinquete", f"{F29_TOT['intents']}/{F29_TOT['frases']} por debajo "
+              f"de los mínimos {f29_min_i}/{f29_min_f}")
+    else:
+        dice_ok("F14 · el trinquete", f"los mínimos del generador ({f29_min_i} intenciones, "
+                  f"{f29_min_f} frases) no dejan que el diccionario se encoja")
+
+    # 29.e · la ayuda no promete una frase que la tabla no tenga
+    def f29_norm(s: str) -> str:
+        """Las mismas reglas que `Cerebro.normaliza`: NFD, sin tildes ni signos."""
+        s = unicodedata.normalize("NFD", s.lower())
+        s = re.sub(r"[\u0300-\u036f]", "", s)
+        return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9 ]+", " ", s)).strip()
+    f29_todas = {f29_norm(p) for e in F29_DIC for p in e["frases"]}
+    f29_mentiras = [e for e in F29_EJ if f29_norm(e) not in f29_todas]
+    f29_cuenta = re.match(r"\s*(\d+) intenciones y (\d+) frases", F29_AYUDA[0]) if F29_AYUDA else None
+    if f29_mentiras:
+        falla("F14 · la ayuda", f"ejemplos que no están en la tabla: {f29_mentiras}")
+    elif not f29_cuenta or (int(f29_cuenta.group(1)), int(f29_cuenta.group(2))) \
+            != (F29_TOT["intents"], F29_TOT["frases"]):
+        falla("F14 · la ayuda", f"el primer renglón no repite los totales: {F29_AYUDA[:1]}")
+    else:
+        dice_ok("F14 · la ayuda", f"{len(F29_EJ)} ejemplos reales y las cuentas en la boca")
+
+    # 29.f · la tabla de Java es la misma lista, no una copia parecida. Se leen las
+    #        llamadas `r("accion", "param", "respuesta", "frase"...));` del método.
+    f29_cerebro = (APK / "src" / "com" / "cort" / "ia" / "Cerebro.java").read_text(encoding="utf-8")
+    f29_cuerpo = f29_cerebro[f29_cerebro.index("private void tablaDelCodigo()"):
+                             f29_cerebro.index("    }\n", f29_cerebro.index("private void tablaDelCodigo()"))]
+    f29_java = []
+    for f29_llamada in re.findall(r"reglas\.add\(r\((.*?)\)\);", f29_cuerpo, re.S):
+        f29_lit = [json.loads('"' + x + '"') for x in
+                   re.findall(r'"((?:[^"\\]|\\.)*)"', f29_llamada)]
+        f29_java.append((f29_lit[0], f29_lit[1], f29_lit[2], f29_lit[3:]))
+    f29_js_mando = [(e["accion"], e["param"], e["dice"], e["frases"]) for e in F29_MANDO]
+    if f29_java != f29_js_mando:
+        f29_cual = [a[0] for a, b in zip(f29_java, f29_js_mando) if a != b][:6]
+        falla("F14 · tablaDelCodigo", f"{len(f29_java)} reglas contra {len(f29_js_mando)} de la "
+              f"cara; divergen: {', '.join(f29_cual) or '—'}")
+    else:
+        dice_ok("F14 · tablaDelCodigo", f"las {len(f29_java)} reglas del código, literal a "
+                  f"literal, iguales a la cara")
+
+    # 29.g · el vocabulario cerrado: `Cerebro.ACCIONES` es la puerta; una acción
+    #        fuera de esa lista se ignora al cargar y la frase se queda sin hacer.
+    f29_acciones = set(re.findall(r'"([a-z]+)"', re.search(
+        r"ACCIONES = new HashSet<>\(Arrays\.asList\((.*?)\)\);", f29_cerebro, re.S).group(1)))
+    f29_vocab = re.search(r"VOCABULARIO = \[(.*?)\]", f29_py, re.S).group(1)
+    f29_vocab = set(re.findall(r'"([a-z]+)"', f29_vocab))
+    if f29_acciones != f29_vocab:
+        falla("F14 · vocabulario", f"Cerebro.ACCIONES {sorted(f29_acciones)} ≠ "
+              f"VOCABULARIO {sorted(f29_vocab)}")
+    else:
+        dice_ok("F14 · vocabulario", f"{len(f29_acciones)} acciones cerradas, las mismas en "
+                  f"el generador y en Cerebro")
+
+    # 29.h · y cada acción de la tabla tiene UNA boca. Las de aparato, los `case`
+    #        de Acciones.java; la música, la tecla; las de cara, la frase que se
+    #        atiende antes de pensar. Sin sobras y sin huecos.
+    f29_acciones_java = (APK / "src" / "com" / "cort" / "ia" / "Acciones.java").read_text(encoding="utf-8")
+    f29_despacho = f29_acciones_java[f29_acciones_java.index("public String accion("):
+                                     f29_acciones_java.index("private String volumen(")]
+    f29_casos = set(re.findall(r'case "([a-z]+)":', f29_despacho))
+    f29_tel = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+    f29_aparato = set(re.findall(r"'([a-z]+)'", re.search(
+        r"const ACCION_DE_APARATO = new Set\(\[(.*?)\]\);", f29_tel, re.S).group(1)))
+    f29_cara = set(re.findall(r"'([a-z]+)'", re.search(
+        r"const ACCION_DE_CARA = new Set\(\[(.*?)\]\);", f29_tel, re.S).group(1)))
+    f29_tabla = {r["accion"] for r in F29_JSON_PAT} | {"desconocido"}
+    if f29_casos - {"app"} != f29_aparato:
+        falla("F14 · dueño de aparato", f"Acciones.java atiende {sorted(f29_casos - {'app'})} y "
+              f"la cara manda {sorted(f29_aparato)}")
+    elif not f29_tabla <= f29_acciones:
+        falla("F14 · dueño de aparato", f"la tabla usa acciones fuera de Cerebro.ACCIONES: "
+              f"{sorted(f29_tabla - f29_acciones)}")
+    elif (f29_acciones - {"desconocido"}) != (f29_aparato | f29_cara | {"musica"}):
+        falla("F14 · reparto de bocas", f"el vocabulario no está repartido: sin boca "
+              f"{sorted((f29_acciones - {'desconocido'}) - (f29_aparato | f29_cara | {'musica'}))}, "
+              f"con dos {sorted((f29_aparato & f29_cara) | (f29_aparato & {'musica'}) | (f29_cara & {'musica'}))}")
+    elif not {"teclaMedia", "musicaPausa"} <= set(re.findall(r"'(\w+)'", f29_tel)):
+        falla("F14 · dueño de música", "la cara no tiene ni `teclaMedia` ni el reproductor propio")
+    else:
+        dice_ok("F14 · dueño de cada acción", f"{len(f29_aparato)} de aparato, la música por "
+                  f"tecla y {len(f29_cara)} que la cara atiende antes de pensar")
+
+    # Y las de cara, de verdad, se atienden antes: cada una se nombra fuera del
+    # diccionario. `saludo` no: no hay aparato que mover, se contesta y ya.
+    f29_caras_txt = "\n".join(p.read_text(encoding="utf-8")
+                              for p in sorted((RAIZ / "ui" / "js").glob("*.js"))
+                              if p.name != "diccionario.js")
+    f29_huerfanas = sorted(a for a in f29_cara - {"saludo"}
+                           if f"'{a}'" not in f29_caras_txt and f'"{a}"' not in f29_caras_txt)
+    if f29_huerfanas:
+        falla("F14 · acciones de cara", f"nadie las atiende en ui/js: {f29_huerfanas}")
+    else:
+        dice_ok("F14 · acciones de cara", "llamar, avisos, juego y memoria se atienden antes "
+                  "de llegar al cerebro; saludo sólo se contesta")
+
+# 29.i · los dos ficheros de casos: TODAS las frases de saber.py, ni una menos.
+#        Sin ellos, `Prueba5` no tendría qué mirar y su verde sería de papel.
+try:
+    f29_razon = [l for l in (APK / "prueba" / "casos-razon.txt").read_text(
+        encoding="utf-8").splitlines() if l and not l.startswith("#")]
+    f29_ajenas = [l for l in (APK / "prueba" / "casos-no-locales.txt").read_text(
+        encoding="utf-8").splitlines() if l and not l.startswith("#")]
+    f29_espera_razon = [(p, (pr[1] if p == pr[0] else "")) for i, c, t, ps, pr in f29_saber.SABER
+                        if c == "razon" for p in ps]
+    f29_espera_ajenas = [p for i, c, t, ps, pr in f29_saber.SABER if c != "razon" for p in ps]
+    f29_leido_razon = [tuple(l.split("|", 1)) for l in f29_razon]
+    f29_prefijos = sum(1 for l in f29_razon if l.endswith("|") is False)
+    f29_intentos_razon = sum(1 for i, c, t, ps, pr in f29_saber.SABER if c == "razon")
+    if f29_leido_razon != f29_espera_razon:
+        falla("F14 · casos de razón", f"{len(f29_leido_razon)} líneas frente a "
+              f"{len(f29_espera_razon)} frases de saber.py (o cambió el orden)")
+    elif f29_prefijos != f29_intentos_razon:
+        falla("F14 · casos de razón", f"{f29_prefijos} frases con prefijo para "
+              f"{f29_intentos_razon} intenciones: una prueba por intención")
+    elif f29_ajenas != f29_espera_ajenas:
+        falla("F14 · casos no locales", f"{len(f29_ajenas)} frases frente a "
+              f"{len(f29_espera_ajenas)} de casa/nube")
+    elif {p for p, _ in f29_espera_razon} & set(f29_espera_ajenas):
+        falla("F14 · casos", "una frase está en los dos ficheros: Cerebro y Razon se la rifan")
+    else:
+        dice_ok("F14 · casos de Prueba5", f"{len(f29_razon)} frases de razón ({f29_prefijos} "
+                  f"con prefijo, {f29_intentos_razon} intenciones) y {len(f29_ajenas)} que "
+                  f"NO se contestan en el teléfono")
+except Exception as f29_mal:
+    falla("F14 · casos de Prueba5", f"no se pudieron leer: {f29_mal}")
+
+# 29.j · y la suite que los corre está enchufada donde toca: Prueba5 se copia al
+#        escenario y entra en el bucle; la cara importa la ayuda y los ejemplos.
+f29_sh = (RAIZ / "scripts" / "prueba-mente.sh").read_text(encoding="utf-8")
+f29_hud = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+f29_tel = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
+f29_falta = []
+if "Prueba5.java" not in f29_sh or "casos-razon.txt" not in f29_sh \
+        or "casos-no-locales.txt" not in f29_sh:
+    f29_falta.append("prueba-mente.sh no copia Prueba5 y sus dos casos")
+if not re.search(r"for suite in [^\n]*Prueba5", f29_sh):
+    f29_falta.append("Prueba5 no está en el bucle de suites")
+if "de 5" not in f29_sh or "las 5 suites" not in f29_sh:
+    f29_falta.append("las cuentas de la suite siguen diciendo otra cosa que 5")
+if "import { AYUDA } from './diccionario.js'" not in f29_tel:
+    f29_falta.append("telefono.js no importa AYUDA")
+if "import { EJEMPLOS } from './diccionario.js'" not in f29_hud:
+    f29_falta.append("hud.js no importa EJEMPLOS")
+if not (APK / "prueba" / "Prueba5.java").exists():
+    f29_falta.append("no existe apps/apk/prueba/Prueba5.java")
+if f29_falta:
+    falla("F14 · la suite enchufada", "; ".join(f29_falta))
+else:
+    dice_ok("F14 · la suite enchufada", "Prueba5 corre con sus dos casos y la cara importa "
+              "la ayuda del diccionario")
 
 # ── veredicto ───────────────────────────────────────────────────────────────
 print()
