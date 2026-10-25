@@ -950,3 +950,57 @@ cerrar la puerta de la Fase 0.
 **Lo que sigue sin comprobar:** no se ejecutó la app; los `.deb` y `.AppImage` de
 `~/Descargas` no se abrieron, y el `JARVIS-HRZ-3.1.0.exe` es otro proyecto. Nada de su
 código ni de sus recursos pasó a CORT: es Apache-2.0 y aquí quedó sólo el análisis.
+
+## Fase 0 · paso 0.2 · mapa del repo en `docs/mapa-del-repo.md` (2026-10-25)
+
+Segundo paso de la fase de sólo lectura. Se midió el repo sobre el disco —`git ls-files`,
+`wc -l`, `du -sh`, `grep -c` y lectura de cada línea citada— y salió
+**`docs/mapa-del-repo.md`**, once secciones con sus `archivo:línea`. **Otro paso sin tocar
+código**, así que sigue la 2.11.0 / `versionCode` 21100 sin subir.
+
+**Tres cifras que estaban mal y aquí quedan corregidas.**
+
+| lo publicado / lo que parecía | lo medido |
+| --- | --- |
+| «85 métodos del puente» (lo que sale de `grep -c`) | **83**: dos están dentro de comentarios de javadoc (`CortNative.java:52` y `:1632`) |
+| «28 permisos y 4 servicios `BIND_*`» | **24 `<uses-permission>`** (`AndroidManifest.xml:110-210`) + **5 servicios** protegidos por **4 cadenas `BIND_*` distintas** (`.Asistente` `:372` y `.Sesiones` `:385` comparten `BIND_VOICE_INTERACTION`). El auditor (`audita-apk.sh:244-259`) cuenta cadenas del `strings` binario, así que **el número cuadra y la palabra «servicios» no** |
+| «T3 (íconos) está por empezar» | Está **a medias**: `ui/js/icons.js` ya trae **24 íconos SVG de línea**, pero sólo lo consumen `index.html` (11 `data-ic=`) y `hud.js` (21 `ic(`). Quedan **135 glifos a color en 9 archivos** (39 distintos) |
+
+**Dos cosas que no son bugs sino decisiones pendientes de la dueña.** `v0.2-demo` y
+`origin/main` **no tienen ancestro común** (`git merge-base` vacío): 100 commits la nuestra
+frente a 143 de `main`, parada el 2026-10-17 y con otra arquitectura (`AGENTS.md`,
+`services/`, `packaging/`, etiquetas `v0.15.1`…`v0.17.0`, **sin `apps/apk/src/com/cort/ia/`**).
+`main` es la rama por defecto de GitHub, así que quien entra al repo ve otra README. Y
+**no existe un script que corra las 21 suites en fila**: lo más cerca es el job `apk` del
+workflow (`build.yml:152-399`), que no corre en este portátil porque exige SDK de Android.
+
+**Y un choque entre la ficha T1 y lo que ya está escrito a propósito.** La burbuja que ella
+eligió (58 dp, sin icono) contradice dos cosas de `Flotante.java`: el icono que la 2.11.0
+metió dentro del cristal (`:468-487`) y el **latido apagado deliberadamente** para no gastar
+batería en un teléfono de dos núcleos (`:37-38`). Se documenta aquí en vez de improvisarlo
+en el paso 1.1.
+
+**Para qué sirve, en concreto.** La sección 10 del mapa deja cada ficha con su dirección:
+T1 → `Flotante.java:89/91/93/95/332/351/401-404/456/468-487`; T2 → el `v0.2` fijo de
+`ui/index.html:42` que sólo se corrige si el backend responde (`hud.js:93-96`) —casi
+seguro lo que ella ve como «versiones raras»; T3 → la trampa de `fill()` (`icons.js:36-37`,
+sólo rellena al cargar, no el HTML generado después); T15/T16 → la cifra 91/736 escrita a
+mano en cuatro sitios fuera de `TOTALES` (`diccionario.js:1593`); Fase 2 → **las siete rutas
+`/api/models*` ya existen** (`main.py:395-432`), así que 2.2 es terminar, no empezar;
+Fase 5 → los 24 permisos y las tres regiones recortables (`perfil.py:90-93`), donde pedir
+un permiso nuevo obliga a decidir **en qué envase** vive.
+
+**Qué se hizo además de escribir:** se pasó un validador propio que resuelve cada
+`archivo:línea` —y cada atajo `:NN` dentro de la misma línea— contra `git ls-files` y
+comprueba que la línea exista en ese archivo: **53 citas explícitas, 108 contando los
+atajos, 0 inexistentes y 0 fuera de rango**. El paso dejó **cinco correcciones propias**
+sobre lo que yo mismo había escrito: una cita que apuntaba a un `import` en vez de al
+`new Handler(…)` de `Flotante.java:270`; una ruta `/api/ollama` que no existe y es
+`/api/models/ollama` (`main.py:432`); cinco rutas (`support:167`, `weather:291` y las tres
+de `copiloto`) que faltaban para que mis agrupaciones sumaran las 45; las 14.310 líneas del
+aparato, que eran **sólo los `.java`** y se quedan en **14.926** con `Oido.kt`; y las 14.040
+de la cara, que son **las que viajan** —con las tres sondas son 15.533.
+
+**Lo que este paso no hizo:** no ejecutó ninguna suite salvo la costura (para confirmar que
+el repo estaba intacto), no compiló, no cambió código, no tocó `main` ni las otras ramas, y
+**no arregló** ninguna de las once deudas que describe —eso sería saltarse el método.
