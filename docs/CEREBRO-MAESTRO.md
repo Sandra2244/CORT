@@ -1029,3 +1029,62 @@ las pruebas necesiten —lo único que añade es el binario `javac` y banderas c
 `zipalign`, `apksigner`; `compilar.sh:162` muere sin `ANDROID_HOME`), varios cientos de MB.
 O sea: probar Java en local ya se puede sin instalar nada; compilar el APK en casa es una
 decisión distinta y más cara.
+
+## Paso 0.3 · la línea base, medida en su portátil y no en el pipeline (2026-10-25)
+
+Salió **`docs/linea-base.md`**, y es el primer documento del proyecto escrito con números
+obtenidos **aquí**. La máquina condiciona la lectura: 2 núcleos, 1.851 MB, **entre 312 y
+363 MB libres** durante la tanda, Qoder abierto (7 procesos, ~700 MB), sin Ollama y sin
+navegador de desarrollo. El propio sensor de CORT lo dijo en la respuesta real de
+`/api/status`: `CPU 95 % · RAM 83 % (1.6 de 1.9 GB) · Disco 22 % usado.` **Las cifras de
+tiempo son de una máquina saturada: son techo, no suelo.**
+
+**Lo que se midió.** Las 12 suites que caben en casa dieron **`rc=0` en 108 s**, con **810
+comprobaciones que llevan número**: 482 de python, 136 de node, 7 de `prueba-llave.sh` y 185
+de `prueba-mente.sh` (43+45+58+18+21), que pasó **aquí** en 60 s sin `javac` en el `PATH`.
+Los 8 talleres, **de uno en uno** porque comparten `/tmp/cort-mente`: **112 mutaciones, 110
+caen nombrando la comprobación que faltaba, 2 están muertas**, 1.867 s. El backend: **11,94 s
+hasta el primer `200`** en frío, **62 MB de RSS** a los 3 min y latencias templadas de
+**0,010 a 0,019 s**. Tanda del paso: **≈33 minutos** de dos núcleos.
+
+**El rojo, con nombre y línea.** `taller-f15.sh` devuelve `rc=1` y **no** significa que el
+código aguante: sus dos mutaciones `???` buscan texto que ya no existe.
+`taller-f15.sh:107-110` espera la orden que copia `"$E"/Elige.java` al árbol de la prueba,
+pero `prueba-mente.sh:67` copia **siete** archivos y `Elige.java` es el sexto;
+`taller-f15.sh:158-161` espera la lista `Prueba … Prueba6`, y el bucle de
+`prueba-mente.sh:100` llega hasta `Prueba7`. La guardia que deberían tumbar **sigue escrita y correcta**
+(`prueba-costura.py:4084`, sector `[30]`), simplemente es inalcanzable desde el taller. Esto
+corrige una afirmación mía de rondas anteriores: las notas hablaban del F15 en verde, y hoy
+**no lo está**. El arreglo son dos líneas (`:108` y `:159`) más re-ejecutar el taller (~2 min);
+**no lo hice en este paso**, porque este paso vino a medir y tocar un script era saltarse el
+método. Queda como micro-paso propuesto.
+
+**Lo publicado, confrontado con lo medido hoy.** Coinciden al dígito: costura **314 `ok`**,
+mente **7 suites / 336 frases**, F16 **18**, F23 **12**, colores **28**, mandos **63**,
+automatiza **45**. No se pudo verificar la sonda de la cara (**213** comprobaciones publicadas)
+porque el navegador del entorno no montó la página —dos `Browser operation timed out after
+250ms` y tres `The selected in-app browser page is blank`, con el backend sirviéndola bien:
+`200`, 78.151 B en 0,22 s—; el fallo es de esta máquina, no de la cara. Tampoco la fluidez con
+y sin música, que depende de esa misma página. `prueba-oido.sh` no se lanzó: no es la red (el
+`kotlinc` y el Vosk ya están en `~/.cache`), es la RAM que pide su `KOTLIN_MEM=320m`
+(`prueba-oido.sh:36`) contra los 312 MB que quedaban.
+
+**Cuatro agujeros de prueba que sólo aparecen midiendo.** `prueba-lectura.py` es 63 líneas de
+`print()` sin un solo `assert`: su verde es decorativo. **Ninguna suite mide rendimiento**, así
+que la regla de «va fluida» de la A3 no tiene prueba alguna. El pipeline invoca **9 de las 21**
+comprobaciones y **ningún taller**: las «12/12 mutaciones» de las notas de la Release salen de
+tandas manuales como esta. Y `/tmp/cort-mente` se comparte sin bloqueo —`prueba-mente.sh:62`
+fija `T`, `:65` lo borra y lo recrea al arrancar, y no hay `trap`—, que es la razón de correr
+los talleres en fila.
+
+**La quinta deuda es suya y ya la había dicho.** `/api/status` devuelve
+`"version":"0.2.0"` (`backend/app/main.py:74`, usado en `:139` y `:163`) y la cara lo pinta
+tal cual: `'v' + s.version` en `ui/js/hud.js:93-96`, encima del `v0.2` fijo de
+`ui/index.html:42`. Con el APK 2.11.0 instalado se lee **`v0.2.0`**. Es la prueba medida de
+que el paso **T2** es honestidad de estado, no estética.
+
+**Qué este paso no hizo:** no tocó ni un `.java`, ni un `.js`, ni el manifiesto, ni `scripts/`;
+no subió `versionCode`, no etiquetó, no publicó nada y no tocó `main`. Apagó el backend al
+terminar (`puerto 8000: 000`) para no dejarle consuming los 300 MB que quedan. Sigue la
+**2.11.0**. Con 0.1, 0.2 y 0.3 los tres documentos están entregados; **la puerta de la Fase 0
+la cierra ella aprobándolos**, y hasta entonces no se abre la Fase 1.

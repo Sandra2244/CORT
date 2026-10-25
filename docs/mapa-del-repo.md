@@ -123,16 +123,18 @@ duplicados). No hay un `switch` global: cada método se llama por su nombre desd
 `"pausa"/"play"/"siguiente"/"anterior"/"parar"` (`:879-883`). Los eventos vuelven a la cara
 por `window.__cortNative.emit(...)` desde `cuadro()` (`:2070-2074`).
 
-Por familias: escucha (`listen:264`, `stopListening:366`, `cancelListening:377`,
+Por familias (todos los números de línea de este párrafo son de `CortNative.java`): escucha
+(`listen:264`, `stopListening:366`, `cancelListening:377`,
 `oidoEstado:602`, `oidoPropio:623`), voz (`speak:459`, `stopSpeaking:514`, `voices:560`,
 `ajusteVoz:1665`), permisos (`hasPermission:643`, `requestPermission:648`, 4
 `abreAjustes*`), fondo y nodo (`bgStatus:750`, `setBackground:790`, `keepAwake:796`,
 `setPc:805`, `menuPC:1202`, `abreMenu:1213`), capacidades (`capacidades:948`,
 `disponible:589`, `avisos:982`), música (28 métodos entre `musicaPuedeLeer:1069` y
-`musicaEstado:1448`, más `ecualiza:1326`), sistema (`accion:1638`, `accion` de linterna y
-apps en `Acciones.java`, `alarma*:1349-1358`, `modoJuego:1539`, `contactos:1600`,
-`llamar:1610`), memoria y cabeza (`memoria:1695`, `mente:1705`, `atuendo:1715`,
-`agenda:1728`, `burbuja:1758`, `comparte:1797`, `sensores:1912`, `aparato:1922`).
+`musicaEstado:1448`, más `ecualiza:1326`), sistema (`accion:1638`, `alarma*:1349-1358`,
+`modoJuego:1539`, `contactos:1600`, `llamar:1610`), memoria y cabeza (`memoria:1695`,
+`mente:1705`, `atuendo:1715`, `agenda:1728`, `burbuja:1758`, `comparte:1797`,
+`sensores:1912`, `aparato:1922`). Y un detalle: `accion` delega la linterna y
+las apps en `apps/apk/src/com/cort/ia/Acciones.java`.
 
 **Seis métodos que la cara no menciona nunca** (medido: cero coincidencias en `ui/` para
 cada nombre): `abreAjustesArchivos` (`:1092`), `abreAjustesAvisos` (`:1004`),
