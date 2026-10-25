@@ -198,11 +198,12 @@ devuelve `RECORD_AUDIO` (el botón «Dar» de una carpeta abre el cuadro del
 micrófono). Pasó dos veces y las dos fueron silenciosas, sin un solo error en
 pantalla: `notif` (la rama ponía `notific`) y `files` (la rama ponía `archiv`).
 
-Las seis claves literales que usa hoy la cara, y a dónde van:
+Las claves literales que usa hoy la cara —siete desde la 2.11.0—, y a dónde van:
 
 | clave | la pregunta | qué abre |
 |---|---|---|
 | `mic` | `hasPermission('mic')` | `RECORD_AUDIO` (y es la reserva de `grupoDe`, así que sólo llega por su nombre) |
+| `camara` / `camera` | `perms.has('camera')` y `perms.ask('camera')` en la hoja de gestos; `hasPermission('camara')` en el ⌬ Arnés | `CAMERA`, que CORT **ya declaraba**. Es la clave de la F22: sin ella el `getUserMedia` del WebView devuelve `NotAllowedError` **sin decir nada en pantalla**, y eso era exactamente el «los sensores de la cámara no funcionan». Java acepta las dos grafías (`startsWith("camara") \|\| startsWith("camera")`) para que la cara pueda preguntar con la una o con la otra |
 | `notif` | fila del panel | `POST_NOTIFICATIONS` (Android 13+; antes no hay cuadro) |
 | `overlay` | fila del panel, `burbuja` y `requestPermission('burbuja')` | pantalla de «aparecer encima de otras apps» — **no** es un cuadro: `requestPermissions` tiraría `RuntimeException` |
 | `battery` | fila del panel | lista de excepciones de batería |

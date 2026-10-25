@@ -795,3 +795,114 @@ crece (16.208 / 12.792 B).
 con fluidez, que el freno de poca RAM la apague, que el Centro se desplace con el dedo
 y que una orden tocada responda en voz alta. La sonda mide la lógica de la cara en un
 navegador de escritorio, no la GPU ni el WebView de su Samsung.
+
+## Ronda 2.11.0 · la música obedece, la charla se viste, la cámara abre y el Arnés se ve (2026-10-25)
+
+La dueña trajo la lista sin adornos: «en el reproductor le doy los botones de la
+flecha y sigue a múltiples canciones y nunca se para», «que reproduzca música
+directo del reproductor predeterminado del teléfono o PC —VLC, Lark Player—», «la
+burbuja de chat no se ve como la de la 1.1.4… no se oculta ni se pone transparente
+cuando anda inactiva», «necesito agregarle arneses… rediseñar la arquitectura y
+visión de CORT», «ni siquiera los sensores de la cámara funcionan». Esta ronda
+cierra las cuatro, en el orden en que duelen.
+
+**F20 · el reproductor deja de irse solo.** Estaba medido en el código, no en la
+queja: `siguiente()` se llamaba desde dos caminos casi a la vez (el toque y la
+terminación de la pista anterior) y `onError` encadenaba saltos hasta vaciar la
+cola. Ahora `Reproductor.mueve(paso, manual)` sella el toque manual durante
+`PASO_MIN_MS = 420` y la terminación automática llama con `manual=false` y no
+lleva sello; una pista que ya no es la actual no puede mover nada (`preparando`);
+y `saltaPorFallo` permite **dos** intentos y luego se para con el motivo escrito
+(`aviso`). Aleatorio y repetir son estado, no decoración: `colaOriginal` guarda
+el orden de llegada para poder deshacer el barullo, `modoAleatorio` conserva
+delante la pista que suena y `modoRepetir` cyclea `0 se para / 1 cola / 2 esta
+pista`, todo guardado en `SharedPreferences` (`musica_aleatorio`,
+`musica_repetir`). Y para «reproduce con tu reproductor» existe
+`Reproductor.abrirFuera`, que entrega el `content://` de la pista con
+`ACTION_VIEW` y `FLAG_GRANT_READ_URI_PERMISSION`: lo abre VLC, Lark o el de
+Samsung; si no hay predeterminado, sale el cuadro del sistema. No se copia
+ningún archivo y no se pide ningún permiso. El puente expone `musicaExterna()`,
+`musicaAleatorio()` y `musicaRepetir()`.
+
+**F21 · la charla con cara y la burbuja de la 1.1.4.** `burbujaCharla` copia la
+*estructura* de OpenJarvis —avatar, cabecera, acciones por mensaje (copiar, leer
+en voz alta, guardar), `burbujaPensando` con los tres puntos mientras contesta el
+modelo y `md()` con Markdown corto y escapado— sin arrastrar sus dependencias. La
+burbuja flotante vuelve a ser el círculo azul translúcido que a ella le gustaba:
+`ALFA_REPOSO = .28f`, el icono de la app **dentro** del cristal (leído de `mipmap`
+por nombre, porque el pipeline sin Gradle no genera `R.java`; si faltara queda el
+cristal y nunca un cuadro negro), y al soltar el arrastre **no salta al borde**: se
+queda donde ella la dejó.
+
+**F22 · la cámara, que no era un problema de sensores.** El WebView negaba
+`getUserMedia` porque la cara lo llamaba **antes** de que Android concediera
+`CAMERA`; el `NotAllowedError` no se enseñaba en ningún sitio. Y había un segundo
+medio del fallo: `onPermissionRequest` del `WebChromeClient` concedía
+`peticion.getResources()` **a ciegas** —la página pedía `VIDEO_CAPTURE`, el WebView
+decía «sí», y como el sistema nunca había dado `CAMERA` el vídeo reventaba igual—.
+Ahora sólo se concede lo que el aparato ya tiene concedido, lo que falta se pide en
+ese instante con `pidePermiso("camara")` (y `CortNative.permiso` lo sabe medir en
+las dos grafías, `camara` y `camera`), y si no hay nada que conceder se
+`deny()` en vez de prometer. La vista real se pinta en el lienzo con `drawImage` y
+MediaPipe pasa a ser **opcional**, desde el CDN, con `selfieMode:false` para que
+las coordenadas cuadren con el espejo del CSS. Si el CDN no carga, la hoja dice
+`cámara sí · gestos no` en vez de prometer dedos. Un `turno` corta los bucles
+duplicados —era lo que dejaba la cámara encendida—.
+
+**F23 · el Arnés.** Es lo que ella pidió como «arnés» mirando Open Claw y Hermes
+Agent, pero con una regla: **el Arnés no ejecuta nada**. `ui/js/arnes.js` es un
+módulo puro que lee cinco voces del puente (`capacidades`, `memoria`, `bgStatus`,
+`musicaEstado`, `hasPermission`) y cuatro endpoints del núcleo (`/api/port`,
+`/api/status`, `/api/history?n=40`, `/api/memories`), y pinta seis cajas —Nodos,
+Herramientas, Sesiones, Memoria, Salud, Puerta—. Las cuentas (91 intenciones, 736
+frases, 41/26/13/11 por capa) salen de `TOTALES` del diccionario generado, no
+escritas a mano. Pinta lo local **antes** de esperar al portátil, con tope de
+1800 ms, y si el núcleo calla lo dice con esas palabras: «no entregó su estado del
+cerebro» en vez de «Ollama no». Los ejemplos que enseña se mandan con
+`cort:orden` al mismo `send()` de la voz, y nada más. La arquitectura completa,
+con lo que **no** promete (varias sesiones, agentes autónomos, nodos remotos,
+Ollama dentro del APK), está escrita en [`ARNES-CORT.md`](ARNES-CORT.md).
+
+| lo que se cerró | cómo se prueba ahora |
+| --- | --- |
+| un toque de flecha mueve **una** pista | sonda de la cara (apartado de Música: «un toque, un paso», con un puente de mentira que cuenta las órdenes mandadas); en Java `mueve(1, true)` lleva el sello de 420 ms y la terminación llama con `false` |
+| una pista ilegible no barre la cola | `saltaPorFallo` con tope de dos intentos y `aviso` escrito, que la sonda lee en `musicaEstado()` y lo enseña |
+| aleatorio y repetir son estado, no dibujo | sonda: `musicaAleatorio()` y `musicaRepetir()` devuelven la frase del aparato y la caja cambia; en Java `colaOriginal`, `modoAleatorio` y `modoRepetir` (0/1/2) persisten en `SharedPreferences` |
+| «que suene en tu reproductor» existe y no miente | costura **[28]** (ningún botón de la cara puede llamar a un método que Java no tenga: `musicaExterna`, `musicaAleatorio` y `musicaRepetir` están en `CortNative.java`) + sonda; en Java `abrirFuera` usa `ACTION_VIEW` con chooser de regalo, y el `-firma.txt` del envase **confirma por medida** que el manifiesto sigue en 21 permisos y cero `BIND_*` |
+| la cámara pide permiso antes de abrirse | costura **[35]**: orden permiso → `getUserMedia` → `drawImage` → modelo, medido con dobles, y `ui/sonda-camara.html` (13 comprobaciones) lo recorre en el navegador |
+| si MediaPipe no carga la hoja lo dice | costura **[35]**: exige la frase `cámara sí · gestos no` y que `selfieMode` vaya en `false` |
+| la burbuja es la de la 1.1.4 | costura **[32]** (renglón «F17/F21 · la burbuja»): icono dentro del cristal, `ALFA_REPOSO = .28f` y arrastre que **no** salta al borde |
+| el Arnés lee, no inventa | costura **[36]**: las cinco voces y los cuatro `/api` presentes, `TOTALES` importado, cero cuentas a mano, pinta antes de esperar al PC y **no** llama a `requestPermission` |
+| el Arnés no manda órdenes raras | costura [36]: sólo `cort:orden` con la frase que enseña y `ir?.('centro')`; su hoja tiene regla de visibilidad propia y luces verde/ámbar/apagada |
+| la hoja del Arnés se ve y se desplaza | sonda 5d: seis cajas, 91/736, 41/26/13/11, sesión de 3 mensajes, memoria del puente, Salud con sus siete filas y Puerta con las siete hojas; cuerpo en `display:block` con scroll |
+| el documento no vende humo | costura [36]: `docs/ARNES-CORT.md` tiene que decir qué **NO** promete y nombrar las 91 intenciones y las «varias sesiones» como pendiente |
+
+**Medido en el portátil:** costura **314 `ok`** con **0 `NO`** (sectores [35] F22
+y [36] F23 nuevos), sonda de la cara **213 comprobaciones sin un rojo** (entra la
+sección 5d del Arnés), sonda de la cámara **13/13**, taller F23 **12 mutaciones y
+las 12 caen** nombrando la comprobación que falta, `prueba-colores.mjs` **28/28**,
+mandos **63/63**, automatizaciones **45/45** y los `.java` del APK parsean con
+**0 errores**.
+
+**Publicado:** `v0.2.42-demo` (run **40161626985**, los cuatro trabajos en verde:
+`apk`, `build windows`, `build ubuntu`, `release`), APK **2.11.0** /
+`versionCode` **21100**, misma llave `fa:ab:ef:46…`. Descargados y hasheados aquí,
+exactos a su `-firma.txt` y con el CRC íntegro: completo **47.509.644 B**
+(`4d392040…`, 55 entradas, 62.268.978 B sueltos), núcleo **47.509.644 B**
+(`87b1642e…`, mismo peso comprimido por el relleno de alineación, 62.265.562 B
+sueltos) y ligero **1.740.459 B** (`4fc7f8dc…`, 50 entradas, 4.834.619 B sueltos,
+cero `.so` y cero modelo). Los tres con veredicto `INSTALABLE`; el núcleo y el
+ligero, **21 permisos y cero `BIND_*`**; el completo, **28 y 4**. La cara embebida
+sube de **19 a 20 archivos** (entra `js/arnes.js`, 14.481 B) y es **byte a byte**
+la del commit `97441d8`; sigue **sin `sonda-*.html`**. El crecimiento sobre la
+2.10.2 es de **16.451 B de archivo** en los tres envases: 37.224 B de cara nueva,
+5.380 B de dex (las clases de F20/F22) y 186 B de las dos entradas de `META-INF`
+que enumeran la entrada extra. **El manifiesto no crece** (16.208 / 12.792 B) y no
+hay permisos nuevos: la cámara usa el `CAMERA` que CORT ya declaraba.
+
+**Lo que sólo su teléfono puede confirmar:** que el WebView abra la cámara de
+verdad y se vea el movimiento, que la flecha salte una sola canción y se pare, que
+VLC o Lark Player acepten la pista entregada, que la burbuja se vea como la de la
+1.1.4 con el dedo arrastrándola, y que el Arnés pinte sus seis cajas con el
+portátil encendido y conectado a la misma Wi‑Fi. La sonda mide la lógica en un
+navegador de escritorio, no el WebView ni la GPU de su Samsung.
