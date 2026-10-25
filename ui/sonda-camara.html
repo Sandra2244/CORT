@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sonda de cámara · CORT F22</title>
+<style>
+  body { background:#05070d; color:#b9e8ff; font:13px/1.5 Consolas, monospace; padding:14px; }
+  h1 { font-size:15px; color:#fff; }
+  #camwrap { border:1px solid #1d5f86; padding:8px; margin:8px 0; width:200px; }
+  #gest { width:160px; height:120px; background:#000; }
+  #salida div { padding:2px 0; }
+  .ok { color:#8fe6b0 } .no { color:#ff8f8f; font-weight:bold }
+  #hand { margin-top:8px; padding:8px 14px; }
+</style>
+</head>
+<body>
+<h1>Sonda de cámara y gestos (F22)</h1>
+<p>Sin teléfono: se finge el puente, el vídeo y MediaPipe. Lo que se mide es el
+   orden y lo que ve la dueña: permiso → cámara → vista, y el modelo sólo después.</p>
+<div id="camwrap"><div id="gestlabel">apagada</div>
+  <canvas id="gest" width="160" height="120"></canvas></div>
+<button id="hand">mano</button>
+<div id="salida">midiendo…</div>
+
+<script>
+/* El puente de mentira tiene que existir ANTES de importar `gestures.js`:
+   `voice.js` lee `window.CortNative` al cargarse para su objeto `perms`. */
+window.__cortNative = (() => {
+  const oyentes = [];
+  return {
+    on(f) { oyentes.push(f); },
+    emit(ev) { oyentes.slice().forEach(f => { try { f(ev); } catch {} }); },
+  };
+})();
+window.CortNative = { hasPermission: () => true, requestPermission: () => true,
+                      openAppSettings: () => {} };
+</script>
+
+<script type="module">
+import { initGestures } from './js/gestures.js';
+
+const $ = s => document.querySelector(s);
+const salida = $('#salida');
+const lineas = [];
+let fallos = 0;
+const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function dice(bien, texto) {
+  if (!bien) fallos++;
+  lineas.push(`<div class="${bien ? 'ok' : 'no'}">${bien ? 'ok' : 'NO'}  ${esc(texto)}</div>`);
+  salida.innerHTML = lineas.join('');
+}
+const espera = ms => new Promise(r => setTimeout(r, ms));
+window.__sonda = () => lineas.map(s => s.replace(/<[^>]+>/g, ''));
+addEventListener('error', e => {
+  salida.innerHTML += `<div class="no">CAÍ: ${esc(e.message || e)}</div>`;
+});
+addEventListener('unhandledrejection', e => {
+  salida.innerHTML += `<div class="no">CAÍ (promesa): ${esc(e.reason && e.reason.message || e.reason)}</div>`;
+});
+
+/* ── el puente: permiso concedido o denegado, y aviso `perm` como Java ────── */
+let permiso = false, permitir = false, pedidos = 0, ajustes = 0;
+window.CortNative.hasPermission = k => /cam/i.test(k) ? permiso : true;
+window.CortNative.requestPermission = k => {
+  pedidos++;
+  setTimeout(() => {
+    permiso = permitir;
+    window.__cortNative.emit({ type: 'perm', kind: 'camara', granted: permitir });
+  }, 20);
+  return true;
+};
+window.CortNative.openAppSettings = () => { ajustes++; };
+
+/* ── la cámara: un lienzo rojo hace de fuente; el arroyo finge ser MediaStream ─ */
+const fuente = document.createElement('canvas');
+fuente.width = 160; fuente.height = 120;
+const fctx = fuente.getContext('2d');
+fctx.fillStyle = '#ff0000'; fctx.fillRect(0, 0, 160, 120);
+Object.defineProperty(fuente, 'readyState', { get: () => 4 });
+Object.defineProperty(fuente, 'videoWidth', { get: () => 160 });
+fuente.play = () => Promise.resolve();
+
+let llamadasGUM = 0, ultimaRestriccion = null, ultimaPista = null;
+navigator.mediaDevices.getUserMedia = async restriccion => {
+  llamadasGUM++; ultimaRestriccion = restriccion;
+  ultimaPista = { stopped: false, stop() { this.stopped = true; } };
+  return { active: true, getTracks: () => [ultimaPista] };
+};
+
+/* ── el CDN: se intercepta el <script> para no depender de la red ─────────── */
+let modoCDN = 'error';
+const registro = { hands: null, opciones: null, envios: 0 };
+class ManosFalsas {
+  constructor(opciones) { registro.hands = this; registro.opciones = opciones; }
+  setOptions(o) { registro.opciones = o; }
+  onResults(fn) { this.fn = fn; }
+  send() { registro.envios++; return Promise.resolve(); }
+}
+const meterNodo = document.head.appendChild.bind(document.head);
+document.head.appendChild = nodo => {
+  if (nodo.tagName === 'SCRIPT') {
+    setTimeout(() => {
+      if (modoCDN === 'error') nodo.onerror && nodo.onerror(new Event('error'));
+      else { window.Hands = ManosFalsas; nodo.onload && nodo.onload(); }
+    }, 10);
+    return nodo;
+  }
+  return meterNodo(nodo);
+};
+
+const canvas = $('#gest');
+const boton = $('#hand');
+const panel = $('#camwrap');
+const etiqueta = $('#gestlabel');
+const errores = [];
+let palmas = 0, pinzas = 0, puños = 0;
+
+initGestures({
+  video: fuente, canvas, button: boton, label: etiqueta,
+  onPalm: () => palmas++, onPinch: () => pinzas++, onFist: () => puños++,
+  onError: (porque, e) => errores.push({ ...porque, crudo: String(e && (e.message || e)) }),
+});
+
+/* ── 1 · sin permiso: no se toca la cámara y se ve dónde darlo ────────────── */
+permitir = false;
+boton.click();
+await espera(320);
+dice(pedidos === 1 && llamadasGUM === 0,
+  'el permiso se pide ANTES de getUserMedia: negado, la cámara ni se toca '
+  + '(permisos ' + pedidos + ', cámara ' + llamadasGUM + ')');
+dice(/permiso denegado/.test(etiqueta.textContent) && errores.at(-1)?.clase === 'camera',
+  'la negativa se traduce («' + etiqueta.textContent + '»), no un «sin cámara» mudo');
+dice(panel.classList.contains('show'),
+  'el panel se abre al fallar: la fila «dar permiso» no queda escondida');
+
+/* ── 2 · con permiso y sin CDN: cámara y vista SÍ, gestos no ──────────────── */
+permiso = true; permitir = true; modoCDN = 'error';
+boton.click();
+await espera(420);
+dice(llamadasGUM === 1 && ultimaRestriccion?.video?.width?.ideal === 320
+  && ultimaRestriccion?.audio === false,
+  'getUserMedia pide 320×240 delantera y nada de audio (privacidad)');
+dice(/cámara sí · gestos no/.test(etiqueta.textContent) && errores.at(-1)?.clase === 'modelo',
+  'sin modelo la cámara sigue y lo dice: «' + etiqueta.textContent + '»');
+dice(boton.classList.contains('on') && panel.classList.contains('show'),
+  'el botón queda encendido y la vista a la vista (no se apaga lo que sí funciona)');
+const px = canvas.getContext('2d').getImageData(80, 60, 1, 1).data;
+dice(px[0] > 200 && px[1] < 60,
+  'el lienzo pinta la IMAGEN de la cámara, no un fondo negro (rojo ' + px[0] + ')');
+
+/* ── 3 · apagar suelta la cámara y limpia la vista ────────────────────────── */
+boton.click();
+await espera(140);
+const vacio = canvas.getContext('2d').getImageData(80, 60, 1, 1).data;
+dice(ultimaPista?.stopped && !panel.classList.contains('show')
+  && !boton.classList.contains('on') && etiqueta.textContent === 'apagada',
+  'el segundo toque para la pista, cierra el panel y deja «apagada»');
+dice(vacio[3] === 0, 'y borra el lienzo: no queda el último cuadro congelado');
+
+/* ── 4 · con CDN: el modelo llega y la palma dispara de verdad ────────────── */
+modoCDN = 'ok';
+boton.click();
+await espera(260);
+dice(/buscando mano/.test(etiqueta.textContent)
+  && registro.opciones?.selfieMode === false && registro.opciones?.modelComplexity === 0,
+  'el modelo usa coordenadas del vídeo crudo (selfieMode false) y el modo ligero');
+dice(registro.envios > 0, 'envía cuadros al modelo (' + registro.envios + ')');
+const palma = Array.from({ length: 21 }, () => ({ x: .5, y: .9 }));
+palma[6] = { x: .3, y: .6 }; palma[8] = { x: .2, y: .2 };
+palma[10] = { x: .45, y: .6 }; palma[12] = { x: .45, y: .15 };
+palma[14] = { x: .6, y: .6 }; palma[16] = { x: .65, y: .15 };
+palma[18] = { x: .7, y: .6 }; palma[20] = { x: .8, y: .2 };
+palma[4] = { x: .2, y: .7 };
+registro.hands.fn({ multiHandLandmarks: [palma] });
+await espera(90);
+dice(palmas === 1 && /PALMA/.test(etiqueta.textContent),
+  'una mano abierta dispara la palma UNA vez («' + etiqueta.textContent + '»)');
+boton.click();
+await espera(100);
+
+/* ── 5 · el panel es de la cara, no de la sonda ──────────────────────────── */
+dice(ajustes === 0, 'la sonda no abrió Ajustes sola: sólo el botón que pone hud.js');
+
+salida.innerHTML = lineas.join('') + `<div style="margin-top:8px;color:#5e8cab">`
+  + `Sonda de cámara: ${lineas.length} comprobaciones, ${fallos} fallo(s).</div>`;
+document.title = (fallos ? 'FALLA · ' : 'OK · ') + 'sonda de cámara (' + lineas.length + ')';
+</script>
+</body>
+</html>

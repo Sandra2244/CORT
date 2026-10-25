@@ -225,8 +225,8 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
 #camwrap .winbar{padding:7px 0 6px;font-size:10px;letter-spacing:.2em}
 #camwrap .winbar .ttl{flex:1}
 #camwrap .winbar .ico{filter:drop-shadow(0 0 6px var(--cyan))}
-#gest{width:160px;height:120px;border-radius:10px;border:1px solid var(--cyan-dim);
-  background:rgba(0,0,0,.5);transform:scaleX(-1)}
+#gest{width:100%;height:auto;aspect-ratio:4/3;border-radius:10px;
+  border:1px solid var(--cyan-dim);background:rgba(0,0,0,.5);transform:scaleX(-1)}
 #gestlabel{text-align:center;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
   color:#7fd0ff;padding:3px 0}
 
@@ -734,6 +734,9 @@ html.glass .scr{background:rgba(2,4,10,.94)}
 html.mobile .scr{padding:12px 8px calc(96px + env(safe-area-inset-bottom))}
 html.p-mv #scr-mv,html.p-musica #scr-musica,html.p-charla #scr-charla,html.p-codigo #scr-codigo,
 html.pantallas-montadas.p-centro #scr-centro{display:flex}
+/* F23 · el Arnés, con la misma guarda: si `pantallas.js` no llegara a montar, la
+   cara de siempre queda intacta en vez de enseñar una hoja vacía. */
+html.pantallas-montadas.p-arnes #scr-arnes{display:flex}
 /* La hoja `equipo` (contrato 2.1) cuelga ADEMÁS de `.pantallas-montadas`: si el
    módulo de pantallas fallara, la cara de siempre queda intacta y no aparece una
    hoja vacía encima del orbe. El orbe aquí **se congela** como en música/charla
@@ -962,7 +965,6 @@ html.pantallas-montadas.p-orbe #repro-pildora{bottom:calc(86px + env(safe-area-i
    de «sin PC» en vez de dejar una lista vacía que parece un fallo de CORT. */
 .ch-bajar{border-color:rgba(43,255,158,.4);color:#b9ffd8;background:rgba(6,40,26,.35)}
 .ch-sinpc{flex:1 1 100%;color:#ffcf6b;line-height:1.5}
-.ch-nota{text-transform:none;letter-spacing:0;font-style:italic}
 
 /* ================= EQUIPO: lo que CORT manda en el teléfono (contrato 2.1) =====
    Los cinco bloques los monta `js/telefono.js` dentro de `#scr-equipo`. Nada de

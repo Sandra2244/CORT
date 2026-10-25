@@ -37,14 +37,20 @@ package com.cort.ia;
  *   a ella le gustó de la 1.1.4—. Un latido por fotograma en segundo plano sería
  *   batería y RAM en un teléfono de dos núcleos; el latido vivo es de la cara.
  * · **Quedarse quieta.** Se arrastra con el dedo: `ACTION_MOVE` mueve la ventana
- *   (`updateViewLayout`) y al soltar se pega al borde más cercano para no tapar
- *   el centro. Un toque sin arrastre sigue siendo «abre CORT y escucha». La
- *   posición no se guarda: al volver a montarla nace centrada a la izquierda,
- *   que es donde el contrato la puso siempre.
- * · **Ser una pegatina opaca.** Es azul translúcida —gradiente del traje con
- *   alfa— y sube a opaca mientras el dedo está encima. Sin `backdrop-filter` ni
- *   desenfoque: en una vista de 44 dp no se nota y cuesta lo mismo que el resto
- *   de la cara en modo juego.
+ *   (`updateViewLayout`), pero al soltar **no salta al borde**: se queda donde la
+ *   dejó. Ese salto automático era la «movilidad» que no le gustó; ahora el único
+ *   movimiento es el de su propio dedo. Un toque sin arrastre sigue siendo «abre
+ *   CORT y escucha». La posición no se guarda: al volver a montarla nace centrada a
+ *   la izquierda, que es donde el contrato la puso siempre.
+ * · **Ser una pegatina opaca.** Es azul translúcida —el cian de CORT, no el color
+ *   del traje— y sube a opaca mientras el dedo está encima. En reposo queda al 28 %
+ *   para dejar ver lo de debajo, que es la transparencia que pidió. Sin
+ *   `backdrop-filter` ni desenfoque: en una vista de 44 dp no se nota y cuesta lo
+ *   mismo que el resto de la cara en modo juego.
+ * · **Ser un círculo vacío.** Lleva dentro el icono redondo de la app (el de la
+ *   1.1.4 que sí le gustaba), leído de `mipmap` por nombre porque el pipeline no
+ *   genera `R.java`. Si el recurso no estuviera, queda el cristal cian y nunca un
+ *   hueco negro.
  * · **Pulsar nada por la dueña.** El toque lanza `MainActivity` con el extra de
  *   escuchar; quien decide si CORT escucha es Android con el permiso del micro.
  */
@@ -52,11 +58,15 @@ package com.cort.ia;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.RadialGradient;
+import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
@@ -79,10 +89,13 @@ public class Flotante {
     private static final int DIAMETRO_DP = 44;
     /** Margen al borde de la pantalla, también en dp. */
     private static final int MARGEN_DP = 10;
-    /** Lo translúcida que queda en reposo: la transparencia de la 1.1.4. */
-    private static final float ALFA_REPOSO = .62f;
+    /** Lo translúcida que queda en reposo: la transparencia que pidió. */
+    private static final float ALFA_REPOSO = .28f;
     /** Cuánto tarda en volver a translúcida tras el último toque, en ms. */
-    private static final int ESPERA_OPACIDAD = 2600;
+    private static final int ESPERA_OPACIDAD = 1800;
+    /** El cian de CORT, fijo: la burbuja no cambia con el traje (la roja no le gustó). */
+    private static final int CIAN = 0xFF59D9FF;
+    private static final int AZUL = 0xFF0A3D62;
 
     /**
      * El `View` montado y el `WindowManager` que lo sostiene, en **estático**
@@ -304,8 +317,12 @@ public class Flotante {
         private final Paint relleno = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint aro = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint brillo = new Paint(Paint.ANTI_ALIAS_FLAG);
-        private final int primario;
-        private final int secundario;
+        private final Paint tintaIcono = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final RectF cajaIcono = new RectF();
+        private final Path recorte = new Path();
+        private final Bitmap icono;
+        private final int primario = CIAN;
+        private final int secundario = AZUL;
         private final int lado;
         private final int tope;
         private final int dp;
@@ -327,8 +344,7 @@ public class Flotante {
             dp = Math.round(densidad(c));
             lado = Math.round(DIAMETRO_DP * densidad(c));
             tope = Math.max(6, Math.round(6 * densidad(c)));   // `ViewConfiguration` fuera: una línea
-            primario = colorDe(Paleta.primario(c), 0xFF59D9FF);
-            secundario = colorDe(Paleta.secundario(c), 0xFF0A3D62);
+            icono = cargaIcono(c);
             relleno.setStyle(Paint.Style.FILL);
             aro.setStyle(Paint.Style.STROKE);
             brillo.setStyle(Paint.Style.FILL);
@@ -378,8 +394,10 @@ public class Flotante {
                     return true;
                 }
                 case MotionEvent.ACTION_UP:
+                    setAlpha(1f);
                     if (!arrastro) performClick();       // el toque de siempre: abre y escucha
-                    else pegaAlBorde();
+                    // Sin `pegaAlBorde`: se queda donde la soltó. El salto automático
+                    // era el movimiento que no le gustaba de la burbuja roja.
                     postDelayed(seApaga, ESPERA_OPACIDAD);
                     return true;
                 case MotionEvent.ACTION_CANCEL:
@@ -396,17 +414,6 @@ public class Flotante {
             } catch (Throwable noMueve) {
                 Log.e(LOG, "burbuja: updateViewLayout", noMueve);
             }
-        }
-
-        /** Al soltar, se pega al lado más cercano: el centro queda libre. */
-        private void pegaAlBorde() {
-            if (puesto == null) return;
-            int margen = Math.round(MARGEN_DP * dp);
-            puesto.x = (puesto.x + ladoVivo() / 2 < ancho() / 2)
-                    ? margen
-                    : Math.max(margen, ancho() - ladoVivo() - margen);
-            puesto.y = acota(puesto.y, 0, Math.max(0, alto() - ladoVivo()));
-            mueve();
         }
 
         private int ancho() {
@@ -454,9 +461,35 @@ public class Flotante {
             brillo.setColor(0x55FFFFFF);
 
             canvas.drawCircle(x, y, radio - aro.getStrokeWidth() / 2f, relleno);
+            // La imagen de la 1.1.4, dentro del cristal: icono redondo de la app,
+            // recortado al círculo de la burbuja. Si faltara, queda el cristal cian.
+            if (icono != null && !icono.isRecycled()) {
+                float d = radio * 1.34f;
+                cajaIcono.set(x - d / 2f, y - d / 2f, x + d / 2f, y + d / 2f);
+                recorte.reset();
+                recorte.addCircle(x, y, d / 2f, Path.Direction.CW);
+                canvas.save();
+                canvas.clipPath(recorte);
+                canvas.drawBitmap(icono, null, cajaIcono, tintaIcono);
+                canvas.restore();
+            }
             canvas.drawCircle(x, y, radio - aro.getStrokeWidth() / 2f, aro);
             // El brillo descentrado es lo que hace que parezca una bola de cristal.
             canvas.drawCircle(x - radio * .24f, y - radio * .28f, radio * .22f, brillo);
+        }
+
+        /** El icono redondo de la app, por nombre: el pipeline no genera `R.java`. */
+        private static Bitmap cargaIcono(Context c) {
+            try {
+                int id = c.getResources().getIdentifier(
+                        "ic_launcher_round", "mipmap", c.getPackageName());
+                if (id == 0) id = c.getResources().getIdentifier(
+                        "ic_launcher", "mipmap", c.getPackageName());
+                return id == 0 ? null : BitmapFactory.decodeResource(c.getResources(), id);
+            } catch (Throwable sinIcono) {
+                Log.w(LOG, "burbuja: sin icono, queda el cristal");
+                return null;
+            }
         }
 
         private static int conAlfa(int color, int alfa) {
@@ -472,12 +505,6 @@ public class Flotante {
 
         private static int acota(int v, int min, int max) {
             return v < min ? min : (v > max ? max : v);
-        }
-
-        private static int colorDe(int color, int siNegro) {
-            // Un traje con alfa cero o un `Color.parseColor` raro no pueden dejar
-            // la burbuja invisible: se cae al cian de siempre.
-            return (color >>> 24) == 0 ? siNegro : color;
         }
     }
 

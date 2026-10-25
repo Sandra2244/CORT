@@ -116,7 +116,19 @@ cd "$(dirname "$0")"
 #   generado, las hojas de este aparato y las herramientas del cajón, con búsqueda
 #   que pliega tildes y ejecución por el mismo `send()` que la voz. Cero permisos
 #   nuevos y ningún cambio en el contrato de cinco argumentos para hablar.
-APK_VERSION="${APK_VERSION:-2.10.2}"   # desde aquí sale UN SOLO APK: este
+# · En 2.11.0 se cierran las cuatro quejas que quedaban del uso diario (F20–F23):
+#   la música deja de saltar sola (un solo `mueve()` con sello de 420 ms, tope de
+#   fallos y modos aleatorio/repetir que se ven), «reproduce música en tu
+#   reproductor» abre VLC/Lark con `ACTION_VIEW` y un chooser en vez de fingir que
+#   suena dentro; la Charla se rehace con la estructura de OpenJarvis (avatar,
+#   cabecera, acciones por mensaje, puntos de espera, Markdown seguro) y la
+#   burbuja vuelve al cristal cian de la 1.1.4 con su icono dentro, alfa 0.28 en
+#   reposo y sin salto al borde; la cámara pide permiso al puente ANTES de
+#   `getUserMedia`, pinta la imagen real en el lienzo y deja MediaPipe como
+#   opcional («cámara sí · gestos no»); y el Arnés (`⌬`) enseña la arquitectura
+#   —puerta, puente, razón, herramientas, memoria y salud— leída del aparato y
+#   del núcleo. Cero permisos nuevos y ningún cambio en la firma de `speak`.
+APK_VERSION="${APK_VERSION:-2.11.0}"   # desde aquí sale UN SOLO APK: este
 VERSION="${1:-$APK_VERSION}"
 
 # ── LA VARIEDAD LIGERA (`APK_SIN_OIDO=1`) ────────────────────────────────────

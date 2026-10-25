@@ -39,6 +39,7 @@
 
 import { montaTelefono, terminalTelefono } from './telefono.js';
 import { montaCentro } from './centro.js';
+import { montaArnes } from './arnes.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -74,6 +75,10 @@ const PANTALLAS = [
   // pantallas, las herramientas y los ajustes, con búsqueda. No promete nada
   // nuevo: ordena lo que ya hay y manda la frase de verdad al tocarla.
   { id: 'centro', titulo: 'Centro',   sub: 'todas las órdenes en un solo sitio', ic: '⌘' },
+  // F23 · el arnés: qué sostiene a CORT por dentro (puente, núcleo, memoria,
+  // sesiones, herramientas) y si cada pieza está sana. Es un tablero de lo que
+  // ESTE aparato ya hace; no promete agentes autónomos ni sesiones paralelas.
+  { id: 'arnes',  titulo: 'Arnés',    sub: 'lo que sostiene a CORT', ic: '⌬' },
 ];
 // `montables()` es lo que se construye en el DOM (todas, escondidas o no); `visibles()`
 // es la única lista que se OFRECE (cajón, teclas, deslizar). Una hoja con `puente` solo
@@ -87,7 +92,7 @@ const visibles = () => montables().filter(p => !p.escondida);
    donde se visten de verdad; aquí sólo hace falta el tinte del icono. */
 const TINTE = { orbe: '#39c2ff', musica: '#ff9a8b', mv: '#ffb27a',
                 charla: '#8ab4f8', codigo: '#2bff9e', equipo: '#7ce7c8',
-                centro: '#c9a6ff' };
+                centro: '#c9a6ff', arnes: '#9ad7ff' };
 
 const puede = nombre => {
   // Mismo `typeof` que `llama()`, pero sólo para PREGUNTAR: sirve para avisar con
@@ -383,6 +388,9 @@ export function ir(id) {
   // El Centro se repinta al entrar: las herramientas y los ajustes pueden haber
   // cambiado (un APK nuevo trae métodos y el cajón se repinta con ellos).
   if (actual === 'centro') pintaCentro();
+  // El Arnés también: lee el puente, la Charla y el núcleo en el momento de entrar,
+  // que es cuando el estado del aparato importa.
+  if (actual === 'arnes') pintaArnes();
   pintaJuego((estadoMusica() || {}).juego);
   // Cambiar de hoja es justo lo que hace aparecer o desaparecer la píldora: en
   // Música y MV ya está el transporte completo, y en el Orbe o el Chat no debe
@@ -402,6 +410,21 @@ function pintaCentro() {
   const raiz = document.querySelector('#scr-centro .scr-cuerpo');
   if (!raiz) return 0;
   return montaCentro(raiz, { ir, apps: visibles() });
+}
+
+/* El Arnés (F23): no es una app nueva ni un chat; es el tablero de lo que ya
+   sostiene a CORT —el puente de Java, el núcleo del portátil, la memoria, la
+   conversación local y las 91 herramientas del diccionario—. Se le pasa `api`
+   como función, no como texto: la dirección puede cambiar mientras la hoja está
+   cerrada (Equipo ▸ 9 · PC), y el arnés la pide al entrar. */
+function pintaArnes() {
+  const raiz = document.querySelector('#scr-arnes .scr-cuerpo');
+  if (!raiz) return null;
+  return montaArnes(raiz, {
+    ir,
+    api: () => (ctx?.api ? ctx.api() : ''),
+    pantallas: visibles(),
+  });
 }
 
 /* ¿Hay núcleo de PC? Se pregunta una vez y se recuerda. */
@@ -499,6 +522,8 @@ const CH_SUGERENCIAS = [
 let chModo = 'normal';
 let chAdj = null;                 // {nombre, ruta, texto} lo que va pegado a la próxima pregunta
 let chModelo = '';                // el nombre del modelo activo, para el rótulo de la barra
+let chPensando = false;           // burbuja de puntos mientras se espera la respuesta
+let chForzarFondo = false;        // al enviar, sí se baja aunque estuviera leyendo arriba
 
 function montaCharla() {
   const cuerpo = document.querySelector('#scr-charla .scr-cuerpo');
@@ -528,10 +553,6 @@ function montaCharla() {
       <textarea id="ch-entrada" rows="1" placeholder="Pregunta a CORT…"></textarea>
       <button class="gm-redondo" id="gm-mic" title="Dictar con el micrófono">🎙</button>
       <button class="gm-redondo enviar" id="ch-enviar" title="Enviar">▲</button>
-    </div>
-    <div class="gm-pie-gm">
-      <button class="mu-chip" id="ch-copiar-ultimo" title="Copiar la última respuesta">copiar respuesta</button>
-      <button class="mu-chip" id="ch-nota" title="Guardar la última respuesta como nota">guardar en Notas</button>
     </div>`;
 
   const entrada = cuerpo.querySelector('#ch-entrada');
@@ -565,7 +586,7 @@ function montaCharla() {
     if (m) m.click(); else ctx?.say?.('Toca el micrófono flotante para dictar.');
   };
   cuerpo.querySelector('#gm-nueva').onclick = () => {
-    mensajes = []; chAdj = null; guardaMensajes(); pintaCharla(); pintaAdjunto();
+    mensajes = []; chAdj = null; chPensando = false; guardaMensajes(); pintaCharla(); pintaAdjunto();
     ctx?.say?.('Conversación nueva. Lo que CORT recuerda del núcleo sigue ahí: pulsa ⟳ para traerlo.');
   };
   cuerpo.querySelector('#gm-recuerda').onclick = () => {
@@ -576,22 +597,6 @@ function montaCharla() {
     entrada.value = CH_SUGERENCIAS[+b.dataset.s];
     charla(entrada.value);
   });
-  cuerpo.querySelector('#ch-copiar-ultimo').onclick = () => {
-    const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
-    if (!ultimo) return ctx?.say?.('Aún no hay respuesta que copiar.');
-    copia(ultimo.texto, 'Respuesta copiada.');
-  };
-  cuerpo.querySelector('#ch-nota').onclick = async () => {
-    const ultimo = [...mensajes].reverse().find(m => m.de === 'cort');
-    if (!ultimo) return ctx?.say?.('Aún no hay nada que guardar.');
-    try {
-      const r = await fetch(ctx.api() + '/api/notes', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ texto: '[charla] ' + ultimo.texto }),
-      });
-      ctx?.say?.(r.ok ? 'Anotado en 04 · Notas.' : 'El núcleo no dejó guardar la nota.');
-    } catch { ctx?.say?.('El núcleo no respondió.') }
-  };
   cargaMensajes();
 }
 
@@ -751,9 +756,12 @@ async function charla(texto) {
   const envio = [modo.pide, chAdj
       ? '[Adjunto: ' + (chAdj.ruta || chAdj.nombre) + ']\n' + chAdj.texto : '', pregunta]
     .filter(Boolean).join('\n\n');
-  mensajes.push({ de: 'tu', texto: pregunta, modo: modo.id, adj: chAdj ? chAdj.nombre : '' });
+  mensajes.push({ de: 'tu', texto: pregunta, modo: modo.id, adj: chAdj ? chAdj.nombre : '',
+                  hora: Date.now() });
   const adjUntado = chAdj; chAdj = null;
   pintaAdjunto();
+  chPensando = true;
+  chForzarFondo = true;
   pintaCharla();
   const estado = document.querySelector('#scr-charla .scr-estado');
   const usando = document.getElementById('gm-usando');
@@ -784,7 +792,8 @@ async function charla(texto) {
         return;
       }
     }
-    mensajes.push({ de: 'cort', texto: sinNucleoFrase() });
+    mensajes.push({ de: 'cort', texto: sinNucleoFrase(), hora: Date.now() });
+    chPensando = false;
     estado.textContent = 'sin núcleo';
     if (usando) usando.innerHTML = '<b>sin núcleo</b> · ' + esc(sinNucleoFrase());
     guardaMensajes(); pintaCharla(); return;
@@ -796,13 +805,16 @@ async function charla(texto) {
     });
     const j = await r.json();
     const dicho = j.reply || j.error || 'No supe qué contestar.';
-    mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '' });
+    mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '', hora: Date.now() });
+    chPensando = false;
     estado.textContent = 'cerebro: ' + (j.source || 'local');
     if (usando) usando.innerHTML = '<b>' + esc(chModelo || 'el modelo del núcleo') + '</b> · cerebro '
       + esc(j.source || 'local') + ' · modo ' + esc(modo.txt);
     ctx?.orb?.burst?.();
   } catch (e) {
-    mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e });
+    mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e,
+                    hora: Date.now() });
+    chPensando = false;
     estado.textContent = 'sin núcleo';
     if (usando) usando.innerHTML = '<b>sin núcleo</b>';
     // El portátil dejó de responder: el «sí hay» que estaba guardado es mentira. Se
@@ -831,7 +843,8 @@ function reciboMente(ev) {
     ? (ev.dice || 'El cerebro del teléfono no supo contestar.')
     : (ev.responde || ev.texto || 'Ya pensé lo mío, pero no volvió texto.');
   const de = ev.de === 'local' || ev.de === 'nube' ? ev.de : '';
-  mensajes.push({ de: 'cort', texto: String(dicho), fuente: de });
+  chPensando = false;
+  mensajes.push({ de: 'cort', texto: String(dicho), fuente: de, hora: Date.now() });
   const estado = document.querySelector('#scr-charla .scr-estado');
   if (estado) estado.textContent = 'cerebro del teléfono' + (de ? ': ' + de : '');
   const usando = document.getElementById('gm-usando');
@@ -875,8 +888,10 @@ async function traeHistorial(forzar) {
     }
     mensajes = filas.filter(x => x && (x.rol === 'user' || x.rol === 'assistant'))
       .map(x => ({ de: x.rol === 'user' ? 'tu' : 'cort',
-                   texto: String(x.texto || ''), fuente: x.fuente || '' }));
+                   texto: String(x.texto || ''), fuente: x.fuente || '',
+                   hora: x.fecha ? (Date.parse(x.fecha) || 0) : 0 }));
     if (!mensajes.length) return;
+    chPensando = false;
     guardaMensajes(); pintaCharla();
   } catch { /* sin núcleo o sin respuesta: la hoja queda como estaba */ }
 }
@@ -888,27 +903,105 @@ function pintaCharla() {
   // cuanto se pregunta, la pantalla es para las respuestas.
   const saludo = document.getElementById('gm-saludo');
   if (saludo) saludo.hidden = mensajes.length > 0;
+  // Como OpenJarvis: si la dueña está leyendo más arriba, una respuesta nueva no le
+  // arranca la lectura. Sólo se baja si ya estaba abajo, o si acaba de enviar ella.
+  const cerca = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 90;
   caja.innerHTML = '';
-  mensajes.forEach(m => {
-    const b = document.createElement('div');
-    b.className = 'burbuja ' + (m.de === 'tu' ? 'de-tu' : 'de-cort');
-    const pies = [];
-    if (m.de === 'tu') pies.push('tú');
-    else pies.push('CORT');
-    if (m.fuente) pies.push(`<span class="bur-fuente">${esc(m.fuente)}</span>`);
-    if (m.modo && m.modo !== 'normal') {
-      const mo = CH_MODOS.find(x => x.id === m.modo);
-      pies.push(`<span class="bur-modo">${mo ? esc(mo.ic + ' ' + mo.txt) : esc(m.modo)}</span>`);
-    }
-    if (m.adj) pies.push(`<span class="bur-adj">📎 ${esc(m.adj)}</span>`);
-    b.innerHTML = `<div class="bur-texto">${esc(m.texto).replace(/\n/g, '<br>')}</div>
-      <div class="bur-pie"><span>${pies.join(' · ')}</span>
-      <button class="bur-copiar" title="Copiar este texto">copiar</button></div>`;
-    b.querySelector('.bur-copiar').onclick = () => copia(m.texto, 'Copiado.');
-    caja.appendChild(b);
-  });
-  caja.scrollTop = caja.scrollHeight;
+  mensajes.forEach((m, i) => caja.appendChild(burbujaCharla(m, i)));
+  if (chPensando) caja.appendChild(burbujaPensando());
+  if (chForzarFondo || cerca) caja.scrollTop = caja.scrollHeight;
+  chForzarFondo = false;
   pintaUsandoCharla();
+}
+
+/* Una burbuja con su cara, su nombre y —en las de CORT— copiar, leer y guardar.
+   El dibujo sigue la estructura de OpenJarvis (avatar, cabecera, acciones por
+   mensaje), pero sin dependencias ni Markdown completo: `md()` sólo reconoce lo que
+   un cerebro suele devolver —código, negritas, enlaces— y escapa TODO lo demás. */
+function burbujaCharla(m, i) {
+  const b = document.createElement('div');
+  const mio = m.de === 'tu';
+  b.className = 'burbuja ' + (mio ? 'de-tu' : 'de-cort');
+  b.dataset.i = i;
+  const pies = [];
+  if (m.fuente) pies.push(`<span class="bur-fuente">${esc(m.fuente)}</span>`);
+  if (m.modo && m.modo !== 'normal') {
+    const mo = CH_MODOS.find(x => x.id === m.modo);
+    pies.push(`<span class="bur-modo">${mo ? esc(mo.ic + ' ' + mo.txt) : esc(m.modo)}</span>`);
+  }
+  if (m.adj) pies.push(`<span class="bur-adj">📎 ${esc(m.adj)}</span>`);
+  const cuando = horaDe(m.hora);
+  const acciones = mio
+    ? '<button class="bur-accion" data-a="copiar" title="Copiar mi pregunta">copiar</button>'
+    : `<button class="bur-accion" data-a="copiar" title="Copiar esta respuesta">copiar</button>
+       <button class="bur-accion" data-a="leer" title="Leerla en voz alta">leer</button>
+       <button class="bur-accion" data-a="nota" title="Guardarla en 04 · Notas">nota</button>`;
+  const avatar = mio ? '<span class="bur-avatar tu" aria-hidden="true">T</span>' : '';
+  const avatarCort = mio ? '' : '<span class="bur-avatar" aria-hidden="true">C</span>';
+  b.innerHTML = `${mio ? '' : avatarCort}
+    <div class="bur-cuerpo">
+      <div class="bur-cab"><b>${mio ? 'Tú' : 'CORT'}</b>${cuando ? `<span>${cuando}</span>` : ''}${pies.join('')}</div>
+      <div class="bur-texto">${md(m.texto)}</div>
+      <div class="bur-acciones">${acciones}</div>
+    </div>${avatar}`;
+  b.querySelectorAll('.bur-accion').forEach(x => x.onclick = () => {
+    if (x.dataset.a === 'copiar') return copia(m.texto, 'Copiado.');
+    if (x.dataset.a === 'leer') {
+      if (typeof ctx?.speak !== 'function') return ctx?.say?.('La voz no está disponible aquí.');
+      ctx.speak(m.texto);
+      return;
+    }
+    if (x.dataset.a === 'nota') guardaNota(m.texto);
+  });
+  return b;
+}
+
+/* Los tres puntos de OpenJarvis: la espera se VE, en vez de dejar la pantalla muda. */
+function burbujaPensando() {
+  const b = document.createElement('div');
+  b.className = 'burbuja de-cort gm-pensando';
+  b.innerHTML = `<span class="bur-avatar" aria-hidden="true">C</span>
+    <div class="bur-cuerpo">
+      <div class="bur-cab"><b>CORT</b><span>pensando</span></div>
+      <div class="gm-puntos" role="status" aria-label="pensando"><i></i><i></i><i></i></div>
+    </div>`;
+  return b;
+}
+
+function horaDe(ms) {
+  const n = Number(ms);
+  if (!Number.isFinite(n) || n <= 0) return '';
+  try { return new Date(n).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+/* Markdown mínimo y seguro: primero se escapa TODO, después se reconocen los bloques
+   de código, el código en línea, las negritas y los enlaces. Así una respuesta con
+   `<script>` se lee como texto y nunca se ejecuta. */
+function md(texto) {
+  const trozos = [];
+  let s = esc(String(texto == null ? '' : texto));
+  s = s.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_, lengua, codigo) => {
+    trozos.push('<pre class="bur-pre"><code>' + codigo.replace(/\n+$/, '') + '</code></pre>');
+    return '\u0001' + (trozos.length - 1) + '\u0001';
+  });
+  s = s.replace(/`([^`\n]+)`/g, '<code class="bur-code">$1</code>');
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,
+    '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  s = s.replace(/\n/g, '<br>');
+  return s.replace(/\u0001(\d+)\u0001/g, (_, i) => trozos[+i] || '');
+}
+
+async function guardaNota(texto) {
+  if (!ctx?.api) return ctx?.say?.('Sin núcleo no hay dónde guardar la nota.');
+  try {
+    const r = await fetch(ctx.api() + '/api/notes', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ texto: '[charla] ' + texto }),
+    });
+    ctx?.say?.(r.ok ? 'Anotado en 04 · Notas.' : 'El núcleo no dejó guardar la nota.');
+  } catch { ctx?.say?.('El núcleo no respondió.'); }
 }
 
 /* El desplegable del modelo, calco del de Gemini: nombre arriba con ▾, filas con su
@@ -1444,6 +1537,12 @@ const transporteHTML = p => `
     </div>
     <div class="mu-volumen"><span>volumen</span>
       <input id="${p}-vol" type="range" min="0" max="1" step=".05" value=".8"></div>
+    <div class="lk-pastillas lk-modos-musica">
+      <button id="${p}-aleatorio" class="mu-chip" title="barajar el resto de la cola sin perder la que suena">⇄ aleatorio</button>
+      <button id="${p}-repetir" class="mu-chip" title="sin repetir · repetir la cola · repetir esta pista">↻ repetir todo</button>
+      <button id="${p}-fuera" class="mu-chip" title="abrir esta pista en VLC, Lark o el reproductor de tu teléfono">▶ en mi reproductor</button>
+    </div>
+    <div class="lk-aviso" id="${p}-nota" role="status"></div>
     <div class="mu-fila2 lk-pastillas">
       <button id="${p}-gusta" class="mu-chip">👍 me gusta</button>
       <button id="${p}-no" class="mu-chip">👎 quítala</button>
@@ -1502,6 +1601,26 @@ function enganchaTransporte(donde, p) {
   $('cuadro-a').onclick = () => { llama('musicaCuadro', true); mueveVideoLocal(-1 / 30); };
   $('cuadro-b').onclick = () => { llama('musicaCuadro', false); mueveVideoLocal(1 / 30); };
   $('auto').onclick = () => llama('musicaAutomatica');
+  // F20 · los tres modos que antes no existían: se dicen en voz alta y se pintan
+  // desde el estado real de Java, no desde un interruptor de la cara que se separa.
+  $('aleatorio').onclick = () => {
+    if (!puede('musicaAleatorio')) return ctx?.say?.('El aleatorio nuevo lo trae el APK de la Release.');
+    const r = llama('musicaAleatorio');
+    ctx?.say?.(r || 'aleatorio cambiado');
+    pintaProgreso(estadoMusica());
+  };
+  $('repetir').onclick = () => {
+    if (!puede('musicaRepetir')) return ctx?.say?.('Los modos de repetir los trae el APK de la Release.');
+    const r = llama('musicaRepetir');
+    ctx?.say?.(r || 'repetición cambiada');
+    pintaProgreso(estadoMusica());
+  };
+  $('fuera').onclick = () => {
+    if (!puede('musicaExterna')) return ctx?.say?.('Abrir en tu reproductor lo trae el APK de la Release.');
+    const crudo = llama('musicaExterna');
+    let j = null; try { j = crudo ? JSON.parse(crudo) : null; } catch { j = null; }
+    ctx?.say?.(j?.dice || 'El teléfono no respondió a lo de abrir tu reproductor.');
+  };
   // «Letra» es el botón `❝` de Lark, que en su reproductor sube el panel del karaoke:
   // aquí es la hoja fusionada, y volver de ella es volver al reproductor.
   $('letras').onclick = () => {
@@ -2300,6 +2419,7 @@ function pintaProgreso(e) {
   if (!e) return;
   pintaPildora(e);
   pintaMini(e);            // el mini anclado de Lark y la fila teñida van con el mismo aviso
+  pintaModosMusica(e);     // aleatorio, repetir y el último aviso del servicio
   ['mu', 'mv'].forEach(p => {
     const barra = document.getElementById(p + '-prog');
     if (!barra) return;
@@ -2343,6 +2463,27 @@ function ponRotulos(e) {
     ['mu', 'mv'].forEach(p => document.getElementById(p + '-player')
       ?.style.setProperty('--tinte', t));
     document.getElementById('mus-mini')?.style.setProperty('--tinte', t);
+  });
+}
+
+/* F20 · el estado de los dos modos, sacado de `musicaEstado()` y no de un booleano
+   de la cara. Si el servicio se reinicia, lo que se pinta sigue siendo la verdad. */
+function pintaModosMusica(e) {
+  ['mu', 'mv'].forEach(p => {
+    const al = document.getElementById(p + '-aleatorio');
+    const rep = document.getElementById(p + '-repetir');
+    const av = document.getElementById(p + '-nota');
+    if (al) {
+      const on = !!e?.aleatorio;
+      al.classList.toggle('on', on);
+      al.textContent = on ? '⇄ aleatorio sí' : '⇄ aleatorio';
+    }
+    if (rep) {
+      const m = typeof e?.repetir === 'number' ? e.repetir : 1;
+      rep.classList.toggle('on', m !== 0);
+      rep.textContent = m === 0 ? '↻ sin repetir' : (m === 1 ? '↻ repetir cola' : '↻ repetir esta');
+    }
+    if (av) { av.textContent = e?.aviso || ''; av.hidden = !e?.aviso; }
   });
 }
 

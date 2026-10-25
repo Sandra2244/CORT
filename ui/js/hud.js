@@ -1402,6 +1402,7 @@ function onPermission(kind, granted) {
   term(`permiso ${kind}: ${granted ? 'concedido' : 'denegado'}`, 'sistema');
   if (granted) { permRetry[kind] && permRetry[kind](); if (kind === 'files') refreshTree(); if (kind === 'music') loadMusic(); }
   else if (kind === 'mic') add('a', 'Sin permiso de micrófono no puedo escucharte. Puedes darlo en Ajustes → Apps → CORT IA → Permisos.', 'error');
+  else if (kind === 'camara' || kind === 'camera') add('a', 'Sin cámara no hay gestos ni vista. Si Android ya no te pregunta, el interruptor está en Ajustes → Apps → CORT IA → Permisos → Cámara.', 'error');
 }
 async function openFile(rel, name) {
   term('abrir: ' + rel, 'archivos');
@@ -1810,6 +1811,21 @@ async function send(raw) {
       if (mando.habla) speakTTS(mando.habla); else orb.burst();
       return;
     }
+    /* F20 · «…pero con mi reproductor»: la pista que ya está puesta se abre en
+       VLC, Lark o el reproductor predeterminado del teléfono. CORT no secuestra
+       esa decisión; si no hay nada puesto, se dice en vez de abrir una pantalla
+       vacía. */
+    if (/con mi reproductor|en mi reproductor|reproductor predeterminado|abre (en|con) (vlc|lark)/i.test(msg)) {
+      if (typeof window.CortNative.musicaExterna !== 'function') {
+        add('a', 'Abrir en tu reproductor lo trae el APK de la Release.', 'música');
+        speakTTS('Eso lo trae la versión nueva'); return;
+      }
+      let j = null;
+      try { j = JSON.parse(window.CortNative.musicaExterna()); } catch { j = null; }
+      add('a', j?.dice || 'El teléfono no respondió a lo de abrir tu reproductor.', 'música');
+      speakTTS(j?.ok ? 'Te la abro en tu reproductor' : (j?.dice || 'No pude abrirla'));
+      return;
+    }
     if (/que me guste|m[uú]sica que me gusta|ponme algo|pon m[uú]sica|reproduce m[uú]sica/i.test(msg)) {
       window.CortNative.musicaAutomatica();
       ir('musica');
@@ -2146,6 +2162,7 @@ export function wireUI(orbRef) {
      nueva tapa ni estorba la cara de CORT, y al revés. */
   initPantallas({
     orb, term, say: sayLine,
+    speak: speakTTS,                             // leer una respuesta de la Charla
     api: () => API,                              // el núcleo localizado por discoverApi()
   });
   /* Qué familia del puente 2.1 trae este APK, dicho una vez y en la consola: si
@@ -2206,11 +2223,19 @@ export function wireUI(orbRef) {
       term('cámara de gestos: ' + p.corto, 'gestos');
       const panel = document.getElementById('camwrap');
       if (!panel) return;
-      const vieja = panel.querySelector('.perm');
-      if (vieja) vieja.remove();
+      panel.querySelectorAll('.perm').forEach(fila => fila.remove());
       if (p.clase !== 'camera') return;
       panel.appendChild(permRow('camera', 'Sin cámara: dame el permiso',
         () => document.getElementById('hand').click()));
+      // Si la dueña ya dijo «Denegar» dos veces, Android no vuelve a preguntar y
+      // el botón de arriba no abriría nada. El interruptor de verdad está en los
+      // ajustes de la app; se deja a un toque en vez de mandarla a buscarlo.
+      const ir = document.createElement('div');
+      ir.className = 'row perm';
+      ir.innerHTML = `<span>${ic('lock')} ¿Android ya no pregunta? El interruptor está en Ajustes → CORT IA → Permisos → Cámara.</span>`
+        + '<button class="pf-btn">Ajustes</button>';
+      ir.querySelector('button').onclick = ev => { ev.stopPropagation(); perms.settings(); };
+      panel.appendChild(ir);
     },
   }));
 }

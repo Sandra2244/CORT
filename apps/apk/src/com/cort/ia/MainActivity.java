@@ -156,21 +156,29 @@ public class MainActivity extends Activity {
                 // cara traducía por «sin cámara» sin decir por qué. Aquí se concede
                 // sólo lo que el aparato ya tiene concedido, y lo que falta se pide
                 // en el mismo instante: a la segunda pulsación la mano funciona.
-                boolean faltaCamara = false;
+                boolean faltaCamara = false, faltaMicro = false;
                 java.util.List<String> deja = new java.util.ArrayList<>();
                 for (String recurso : peticion.getResources()) {
                     boolean esVideo = recurso != null &&
                         recurso.equals(android.webkit.PermissionRequest.RESOURCE_VIDEO_CAPTURE);
+                    boolean esAudio = recurso != null &&
+                        recurso.equals(android.webkit.PermissionRequest.RESOURCE_AUDIO_CAPTURE);
                     if (esVideo && checkSelfPermission(android.Manifest.permission.CAMERA)
                             != android.content.pm.PackageManager.PERMISSION_GRANTED) {
                         faltaCamara = true;
                         continue;                       // sin `CAMERA` concedería humo
+                    }
+                    if (esAudio && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                            != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        faltaMicro = true;
+                        continue;                       // misma regla para el oído
                     }
                     deja.add(recurso);
                 }
                 if (deja.isEmpty()) peticion.deny();
                 else peticion.grant(deja.toArray(new String[0]));
                 if (faltaCamara) pidePermiso("camara");
+                if (faltaMicro) pidePermiso("mic");
             }
         });
 

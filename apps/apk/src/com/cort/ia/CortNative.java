@@ -1397,6 +1397,33 @@ public class CortNative {
     @JavascriptInterface
     public void musicaAnterior() { Reproductor.anterior(); }
 
+    /**
+     * F20 · abrir la pista actual en VLC, Lark o el reproductor que ella tenga puesto.
+     *
+     * Si no hay nada en la cola —la frase «reproduce música en mi reproductor» dicha
+     * desde cero— se coge la primera de sus gustos y se abre ésa. No se arranca el
+     * servicio de CORT a la vez: sonarían dos reproductores con la misma canción.
+     */
+    @JavascriptInterface
+    public String musicaExterna() {
+        Reproductor.Pista actual = Reproductor.en(Reproductor.indice());
+        if (actual == null) {
+            java.util.List<Reproductor.Pista> gusto =
+                alReproductor(Musica.porGusto(act, "", 1));
+            if (!gusto.isEmpty()) return Reproductor.abrirFuera(act, gusto.get(0));
+            return "{\"ok\":false,\"dice\":\"no encuentro música tuya que abrir\"}";
+        }
+        return Reproductor.abrirFuera(act, actual);
+    }
+
+    /** F20 · aleatorio explícito: la cola se reordena y se dice cuál es el modo. */
+    @JavascriptInterface
+    public String musicaAleatorio() { return Reproductor.alternaAleatorio(); }
+
+    /** F20 · sin repetir / repetir cola / repetir esta pista. */
+    @JavascriptInterface
+    public String musicaRepetir() { return Reproductor.alternaRepetir(); }
+
     /** Saltar a un segundo concreto (la barra de progreso de la cara). */
     @JavascriptInterface
     public void musicaSalto(final int ms) { Reproductor.salto(Math.max(0, ms)); }

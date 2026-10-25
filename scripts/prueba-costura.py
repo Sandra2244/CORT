@@ -4640,12 +4640,22 @@ else:
 # 32.d · la burbuja de la 1.1.4: gradiente translúcido, arrastre de verdad y
 #        opacidad de reposo. El toque sigue abriendo CORT; el modo juego manda
 #        antes de montar; no se pide ningún permiso nuevo ni se anima en bucle.
+#        F21 · además lleva DENTRO el icono redondo de la 1.1.4 (`mipmap`), usa el
+#        cian fijo de CORT —no el color del traje, que la teñía de rojo— y al
+#        soltarla se queda donde está: el salto al borde era la «movilidad» que
+#        no le gustó. El 28 % de reposo es la transparencia que pidió.
 f32_flot = [t for t in ("RadialGradient", "setShader(", "ACTION_MOVE", "updateViewLayout",
-                        "getRawX()", "performClick()", "pegaAlBorde", "setAlpha(ALFA_REPOSO)",
+                        "getRawX()", "performClick()", "setAlpha(ALFA_REPOSO)",
+                        "ALFA_REPOSO = .28f",
                         "ESPERA_OPACIDAD", "setOnTouchListener",
                         "TYPE_APPLICATION_OVERLAY", "FLAG_NOT_FOCUSABLE",
-                        "DIAMETRO_DP = 44")
+                        "DIAMETRO_DP = 44", "BitmapFactory")
             if t not in F32_FLOT]
+# `sin_comentarios` también borra los literales de texto: el nombre del recurso
+# (`"ic_launcher_round"`) sólo se puede buscar en el archivo crudo. El método que
+# lo pide sí queda en `F32_FLOT`, y las dos mitades juntas son el icono de la 1.1.4.
+if "ic_launcher_round" not in F32_FLOT_T or "cargaIcono" not in F32_FLOT:
+    f32_flot.append("ic_launcher_round")
 f32_i_juego = F32_FLOT.find("if (juego(app))")
 f32_i_monta = F32_FLOT.find("montarYa(app)")
 f32_firma_burbuja = "public static String burbuja(Context contexto, boolean on)" in F32_FLOT
@@ -4660,6 +4670,12 @@ elif not f32_firma_burbuja:
 elif min(f32_i_juego, f32_i_monta) < 0 or not (f32_i_juego < f32_i_monta):
     falla("F17 · la burbuja 1.1.4", "el modo juego no se comprueba antes de montar: el punto "
           "aparecería encima de una partida")
+elif "pegaAlBorde" in F32_FLOT:
+    falla("F21 · la burbuja quieta", "volvió el salto al borde al soltar: es la «movilidad» "
+          "que la dueña pidió quitar; se queda donde la deja")
+elif "Paleta.primario" in F32_FLOT or "Paleta.secundario" in F32_FLOT:
+    falla("F21 · la burbuja cian", "la burbuja vuelve a vestirse con el traje y sale roja: "
+          "su color es el cian fijo de CORT (CIAN = 0xFF59D9FF)")
 elif re.search(r"uses-permission|SYSTEM_ALERT_WINDOW|requestPermissions", F32_FLOT):
     falla("F17 · la burbuja 1.1.4", "`Flotante` pide permisos: la superficie no se toca sin "
           "decir el precio")
@@ -4667,8 +4683,8 @@ elif "ValueAnimator" in F32_FLOT or "requestAnimationFrame" in F32_FLOT:
     falla("F17 · la burbuja 1.1.4", "volvió una animación por fotograma: batería en segundo "
           "plano para un punto de 44 dp")
 else:
-    dice_ok("F17 · la burbuja 1.1.4", "gradiente translúcido con opacidad de reposo, "
-              "arrastre que se pega al borde, toque que abre CORT y modo juego primero")
+    dice_ok("F17/F21 · la burbuja", "el icono de la 1.1.4 dentro del cristal cian fijo, al "
+              "28 % en reposo, sin salto al borde, con toque que abre CORT y modo juego primero")
 
 # 32.e · el agua y el vidrio con freno. La capa existe, el CSS la anima con
 #        `transform` y la apaga con `html.freno`; la cara pone esa clase con poca
@@ -4849,6 +4865,188 @@ if "m.ir('centro')" not in F34_SONDA \
           "fallo de la hoja negra volvería a pasar sin que nadie lo note")
 else:
     dice_ok("F19 · la sonda", "entra en el Centro, mide la búsqueda y exige `display:flex`")
+
+print("\n[35] F22 · la cámara y los gestos: la vista primero y el modelo después")
+# La queja era «ni siquiera los sensores de la cámara funcionan». Lo que se
+# comprueba aquí es el orden que lo causaba: antes se bajaba MediaPipe del CDN
+# ANTES de abrir la cámara; sin datos no había ni imagen. Ahora el permiso va
+# primero, la cámara y la vista después, y el modelo es lo último y opcional.
+try:
+    F35_GEST_T = (RAIZ / "ui" / "js" / "gestures.js").read_text(encoding="utf-8")
+    F35_GEST = sin_comentarios_js(F35_GEST_T)
+    F35_HTML = (RAIZ / "ui" / "index.html").read_text(encoding="utf-8")
+    F35_HUD_T = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
+    F35_HUD = sin_comentarios_js(F35_HUD_T)
+    F35_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
+    F35_HUDCSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+    F35_MAIN_T = (APK / "src" / "com" / "cort" / "ia" / "MainActivity.java").read_text(encoding="utf-8")
+    F35_MAN = (APK / "AndroidManifest.xml").read_text(encoding="utf-8")
+    F35_SONDA = (RAIZ / "ui" / "sonda-camara.html").read_text(encoding="utf-8")
+    F35_ROTO = ""
+except OSError as f35_falta:
+    F35_GEST_T = F35_GEST = F35_HTML = F35_HUD_T = F35_HUD = ""
+    F35_APPS = F35_HUDCSS = F35_MAIN_T = F35_MAN = F35_SONDA = ""
+    F35_ROTO = str(f35_falta)
+    falla("F22 · la cámara", f"no se pudieron leer: {f35_falta}")
+
+F35_INICIO = F35_GEST.find("async function start()")
+F35_FIN = F35_GEST.find("function stop()", F35_INICIO if F35_INICIO >= 0 else 0)
+F35_START = F35_GEST[F35_INICIO:F35_FIN] if F35_INICIO >= 0 and F35_FIN > F35_INICIO else ""
+F35_GUM = F35_START.find("getUserMedia(")
+F35_MODELO = F35_START.find("preparaModelo();", F35_GUM if F35_GUM >= 0 else 0)
+f35_falta_vista = [tok for tok in ("drawImage(video", "readyState >= 2", "videoWidth > 0",
+                                   "getTracks().forEach", "pinta()", "TOPE_FALLOS",
+                                   "selfieMode: false", "modelComplexity: 0",
+                                   "esperaRespuestaDePermiso", "aspect-ratio")
+                   if tok not in F35_GEST + F35_HUDCSS]
+if F35_ROTO:
+    pass
+elif not F35_START:
+    falla("F22 · la cámara", "no encuentro `start()` en `gestures.js`: la comprobación del "
+          "orden no puede medir nada")
+elif F35_GUM < 0 or F35_MODELO < F35_GUM:
+    falla("F22 · la cámara", "el modelo se prepara antes de abrir la cámara: sin CDN no hay "
+          "imagen, que es justo el fallo de «no funcionan los sensores»")
+elif "loadScript" in F35_START:
+    falla("F22 · la cámara", "`start()` vuelve a esperar el CDN antes de la vista: el vídeo "
+          "no puede depender de jsDelivr")
+elif f35_falta_vista:
+    falla("F22 · la cámara", "perdió " + ", ".join(f"`{x}`" for x in f35_falta_vista)
+          + ": volvería el lienzo negro sin imagen o sin vista que enseñar")
+elif "cámara sí · gestos no" not in F35_GEST_T:
+    falla("F22 · la cámara", "sin CDN ya no avisa «cámara sí · gestos no»: apagaría la vista "
+          "que sí funcionaba")
+else:
+    dice_ok("F22 · la vista", "permiso → cámara y `drawImage` de la imagen → modelo opcional; "
+              "si el CDN falla queda la vista y se dice «cámara sí · gestos no»")
+
+F35_VIDEO = re.search(r'<video id="camv".*?</video>', F35_HTML, re.S)
+if F35_ROTO:
+    pass
+elif not F35_VIDEO:
+    falla("F22 · el vídeo", "`#camv` desapareció de la cara: sin fuente no hay vista")
+elif "display:none" in F35_VIDEO.group(0):
+    falla("F22 · el vídeo", "`#camv` volvió a `display:none`: varios WebView no decodifican "
+          "cuadros de un vídeo sin caja y el lienzo se queda negro")
+elif "html.pantallas-montadas:not(.p-orbe) #camwrap.show{display:block!important}" not in F35_APPS:
+    falla("F22 · la vista", "falta la regla que deja ver `#camwrap.show` fuera del orbe: la "
+          "cámara se enciende y el panel sigue escondido")
+elif "Ajustes → CORT IA → Permisos → Cámara" not in F35_HUD_T or "perms.settings()" not in F35_HUD:
+    falla("F22 · el permiso", "si Android ya no pregunta, la cara no ofrece Ajustes: el botón "
+          "«dar acceso» no abriría ningún cuadro")
+else:
+    dice_ok("F22 · el permiso", "el vídeo se decodifica aunque no se enseñe, el panel se ve "
+              "desde cualquier hoja y una negativa permanente tiene su atajo a Ajustes")
+
+if F35_ROTO:
+    pass
+elif "RESOURCE_AUDIO_CAPTURE" not in F35_MAIN_T or "faltaMicro" not in F35_MAIN_T \
+        or 'pidePermiso("mic")' not in F35_MAIN_T:
+    falla("F22 · el WebView", "el `onPermissionRequest` no aplica al audio la misma regla que "
+          "a la cámara: concedería micrófono sin `RECORD_AUDIO`")
+elif 'android.permission.CAMERA' not in F35_MAN \
+        or 'android.hardware.camera" android:required="false"' not in F35_MAN:
+    falla("F22 · el manifiesto", "la cámara dejó de estar declarada como opcional: el APK no "
+          "instalaría en teléfonos sin cámara o el WebView no tendría el permiso")
+elif "initGestures" not in F35_SONDA or "cámara sí · gestos no" not in F35_SONDA \
+        or "navigator.mediaDevices.getUserMedia =" not in F35_SONDA:
+    falla("F22 · la sonda", "`ui/sonda-camara.html` no mide el orden y la vista con dobles: "
+          "el fallo de la cámara volvería a pasar sin que nadie lo note")
+else:
+    dice_ok("F22 · el puente", "el WebView no concede humo (cámara y micro con su permiso), "
+              "la cámara sigue siendo opcional y la sonda mide el orden con dobles")
+
+# ── 36 · F23: el Arnés enseña las capas y no inventa ninguna ────────────────
+# La petición fue «arneses basados en OpenClaw y Hermes Agent» y «rediseñar la
+# arquitectura de CORT». El Arnés no añade funciones: junta en una hoja lo que ya
+# existe —puerta, puente, razón, herramientas, memoria y salud— y lo lee del
+# aparato. Lo que puede romperse en silencio es peligroso: una lista de 91
+# intenciones copiada a mano se queda vieja, un puente que no contesta pintado de
+# verde es una mentira, y una hoja sin su regla CSS se monta y se queda negra.
+print("\n[36] F23 · el Arnés: la arquitectura visible, leída del aparato")
+try:
+    F36_ARNES_T = (RAIZ / "ui" / "js" / "arnes.js").read_text(encoding="utf-8")
+    F36_ARNES = sin_comentarios_js(F36_ARNES_T)
+    F36_PANT = sin_comentarios_js((RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8"))
+    F36_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
+    F36_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+    F36_SONDA = (RAIZ / "ui" / "sonda-carita.html").read_text(encoding="utf-8")
+    F36_DOC = (RAIZ / "docs" / "ARNES-CORT.md").read_text(encoding="utf-8")
+    F36_ROTO = ""
+except OSError as f36_falta:
+    F36_ARNES_T = F36_ARNES = F36_PANT = ""
+    F36_APPS = F36_CSS = F36_SONDA = F36_DOC = ""
+    F36_ROTO = str(f36_falta)
+    falla("F23 · el Arnés", f"no se pudieron leer: {f36_falta}")
+
+f36_fuentes = [t for t in ("capacidades()", "memoria('{\"que\":\"estado\"}')",
+                           "bgStatus()", "musicaEstado()", "hasPermission('camara')",
+                           "/api/port", "/api/status", "/api/history?n=40", "/api/memories",
+                           "no entregó su estado del cerebro")
+               if t not in F36_ARNES]
+if F36_ROTO:
+    pass
+elif "import { DICCIONARIO, TOTALES }" not in F36_ARNES_T:
+    falla("F23 · las herramientas", "el Arnés no lee el diccionario generado: las 91 "
+          "intenciones serían una segunda lista que se queda vieja")
+elif any(re.search(r"\b" + n + r"\b", F36_ARNES) for n in ("91", "736", "41", "26", "13", "11")):
+    falla("F23 · las herramientas", "el Arnés escribe a mano una cuenta del diccionario: "
+          "`TOTALES` ya las da y una copia se separa a la primera ronda")
+elif f36_fuentes:
+    falla("F23 · las fuentes", "el Arnés perdió " + ", ".join(f"`{x}`" for x in f36_fuentes)
+          + ": la hoja enseñaría un estado que no leyó de nadie")
+elif F36_ARNES.find("pinta();") < 0 or F36_ARNES.find("pinta();") > F36_ARNES.find("await miraNucleo"):
+    falla("F23 · el orden", "el Arnés espera al portátil antes de pintar el aparato: con el "
+          "PC dormido la hoja se queda en blanco 1,8 s")
+elif "requestPermission" in F36_ARNES:
+    falla("F23 · los permisos", "el Arnés pide permisos: es un tablero, no una función nueva")
+else:
+    dice_ok("F23 · las fuentes", "lee las cinco voces del puente y los cuatro `/api` del "
+              "núcleo, saca las cuentas de `TOTALES` y pinta el aparato antes de esperar al PC")
+
+if F36_ROTO:
+    pass
+elif "new CustomEvent('cort:orden'" not in F36_ARNES \
+        or "frase.dataset.frase" not in F36_ARNES \
+        or "ir?.('orbe')" not in F36_ARNES:
+    falla("F23 · los ejemplos", "tocar un ejemplo no manda su frase por `cort:orden` y no "
+          "vuelve al orbe: sería un catálogo que no ejecuta nada")
+elif "data-centro" not in F36_ARNES or "ir?.('centro')" not in F36_ARNES:
+    falla("F23 · los ejemplos", "«Abrir el Centro» no cambia de hoja")
+elif "import { montaArnes }" not in F36_PANT or "id: 'arnes'" not in F36_PANT \
+        or "if (actual === 'arnes') pintaArnes();" not in F36_PANT:
+    falla("F23 · la hoja", "el Arnés no está en `PANTALLAS` o `ir()` no lo pinta: se "
+          "montaría la sección y se quedaría vacía")
+elif "api: () => (ctx?.api ? ctx.api() : '')" not in F36_PANT:
+    falla("F23 · la hoja", "la dirección del núcleo se pasa como texto y no como función: "
+          "si se cambia en Equipo ▸ 9 · PC, el Arnés seguiría mirando la vieja")
+elif "arnes: '#9ad7ff'" not in F36_PANT:
+    falla("F23 · la hoja", "el Arnés se quedó sin tinte en el cajón")
+elif "html.pantallas-montadas.p-arnes #scr-arnes{display:flex}" not in F36_CSS \
+        or "#scr-arnes .scr-cuerpo{display:block;overflow-y:auto" not in F36_APPS:
+    falla("F23 · la hoja", "falta la regla que enciende `#scr-arnes` o su cuerpo flexible: "
+          "la pantalla se monta y se queda negra (ya pasó con el Centro el 2026-10-24)")
+elif ".arn-luz.ok" not in F36_APPS or ".arn-luz.warn" not in F36_APPS \
+        or ".arn-caja" not in F36_APPS:
+    falla("F23 · el CSS", "las cajas o las luces del Arnés perdieron su estilo")
+else:
+    dice_ok("F23 · la hoja", "entra por el cajón, manda los ejemplos como la voz, abre el "
+              "Centro y tiene su regla de visibilidad y sus luces verde/ámbar/apagada")
+
+if F36_ROTO:
+    pass
+elif F36_SONDA.count("m.ir('arnes')") < 2 or "arn-caja" not in F36_SONDA \
+        or "/CPU/" not in F36_SONDA or "3 mensajes" not in F36_SONDA:
+    falla("F23 · la sonda", "la sonda no entra (dos veces: a medir y a abrir el Centro) en "
+          "el Arnés, o no mide sus cajas, su sesión local y el núcleo: el tablero podría "
+          "estar vacío y seguir verde")
+elif "NO promete" not in F36_DOC or "91 intenciones" not in F36_DOC \
+        or "varias sesiones" not in F36_DOC:
+    falla("F23 · el documento", "`docs/ARNES-CORT.md` no cuenta las capas o no escribe lo "
+          "que CORT NO hace: la arquitectura volvería a ser una promesa suelta")
+else:
+    dice_ok("F23 · la sonda y el documento", "la sonda mide las seis cajas, la sesión y el "
+              "núcleo; y el documento deja por escrito lo que el Arnés no promete")
 
 # ── veredicto ───────────────────────────────────────────────────────────────print()
 if FALLOS:

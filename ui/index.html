@@ -128,7 +128,11 @@
 <div id="camwrap">
   <div class="winbar"><span class="ico" data-ic="hand"></span><span class="ttl">09 · Gestos</span></div>
   <div id="gesthelp">palma = ventanas · pinza = canal · puño = ocultar</div>
-  <video id="camv" playsinline muted style="display:none"></video>
+  <!-- El vídeo es la FUENTE del lienzo: no se enseña él, se copia a #gest. No
+       puede ir en `display:none` porque algunos WebView no decodifican cuadros
+       de un vídeo sin caja; se deja en 2×2 px invisibles y sin tocar el layout. -->
+  <video id="camv" playsinline muted autoplay
+         style="position:fixed;left:-4px;top:-4px;width:2px;height:2px;opacity:0;pointer-events:none"></video>
   <canvas id="gest" width="160" height="120"></canvas>
   <div id="gestlabel">apagada</div>
 </div>

@@ -70,8 +70,29 @@ public class Reproductor extends Service {
     }
 
     private static final List<Pista> cola = new ArrayList<>();
+    /** La cola tal como llegó, para poder deshacer «aleatorio» sin inventar un orden. */
+    private static final List<Pista> colaOriginal = new ArrayList<>();
     private static volatile int idx = -1;
     private static volatile Reproductor vivo;      // null = el servicio no está
+
+    /* F20 · un toque, un paso.
+     *
+     * La dueña lo dijo así: «le doy a la flecha y sigue a múltiples canciones y
+     * nunca se para». Había dos caminos que podían disparar `siguiente()` casi a la
+     * vez (la terminación de la pista anterior y el toque nuevo) y, cuando una URI
+     * del índice no se podía abrir, `onError` encadenaba saltos hasta quedarse sin
+     * cola. Aquí el toque manual se sella durante `PASO_MIN_MS`, las terminaciones
+     * de una pista que ya no está se ignoran (`preparando`) y un fallo salta como
+     * mucho dos pistas antes de pararse y contarlo. */
+    private static final long PASO_MIN_MS = 420L;
+    private static volatile long ultimoPaso = 0L;
+    private static volatile boolean modoAleatorio = false;
+    /** 0 = se para al final · 1 = repite la cola · 2 = repite esta pista. */
+    private static volatile int modoRepetir = 1;
+    private static volatile String aviso = "";
+
+    private boolean preparando = false;
+    private int fallosSeguidos = 0;
 
     static synchronized int tamanyo() { return cola.size(); }
     static synchronized Pista en(int i) {
@@ -100,13 +121,30 @@ public class Reproductor extends Service {
                 .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build());
+        try {
+            android.content.SharedPreferences p = getSharedPreferences("cort", MODE_PRIVATE);
+            modoAleatorio = p.getBoolean("musica_aleatorio", false);
+            modoRepetir = p.getInt("musica_repetir", 1);
+        } catch (Throwable sinPreferencias) {
+            modoAleatorio = false;
+            modoRepetir = 1;
+        }
         mp.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
-            @Override public void onCompletion(MediaPlayer p) { siguiente(); }
+            @Override public void onCompletion(MediaPlayer p) {
+                if (p != mp || preparando) return;   // la pista que terminó ya no es la actual
+                if (modoRepetir == 2) { pon(idx); return; }
+                int n = tamanyo();
+                if (n == 0) return;
+                if (idx + 1 >= n && modoRepetir == 0) { pausar(); return; }
+                mueve(1, false);
+            }
         });
         mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
             @Override public boolean onError(MediaPlayer p, int que, int extra) {
-                Log.w(TAG, "fallo el MediaPlayer (" + que + "/" + extra + "), sigo con la otra");
-                siguiente();
+                Log.w(TAG, "fallo el MediaPlayer (" + que + "/" + extra + ")");
+                if (p != mp) return true;
+                preparando = false;
+                saltaPorFallo("no pude abrir «" + tituloDe(idx) + "»");
                 return true;
             }
         });
@@ -339,11 +377,16 @@ public class Reproductor extends Service {
         Pista p = en(i);
         if (p == null) return;
         idx = i;
+        r.preparando = true;             // callbacks de la pista anterior: se ignoran
+        aviso = "";
         try {
             r.mp.reset();
             r.mp.setDataSource(r, Uri.parse(p.uri));
             r.mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
                 @Override public void onPrepared(MediaPlayer m) {
+                    if (m != r.mp) return;
+                    r.preparando = false;
+                    r.fallosSeguidos = 0;
                     // F15 · la sesión de audio ya existe: aquí se engancha el
                     // ecualizador de verdad, y si había un preset puesto se
                     // vuelve a poner para esta canción.
@@ -357,6 +400,8 @@ public class Reproductor extends Service {
             r.mp.prepareAsync();
         } catch (Exception e) {
             Log.w(TAG, "no se pudo poner " + p.uri + ": " + e);
+            r.preparando = false;
+            r.saltaPorFallo("no pude abrir «" + p.titulo + "»");
         }
         r.estadoSesion();
     }
@@ -410,31 +455,173 @@ public class Reproductor extends Service {
         avisa();
     }
 
-    public static void siguiente() { mueve(1); }
-    public static void anterior() { mueve(-1); }
+    public static void siguiente() { mueve(1, true); }
+    public static void anterior() { mueve(-1, true); }
 
-    private static void mueve(int paso) {
+    /**
+     * Un paso. `manual` es el toque de la dueña: se sella durante 420 ms para que
+     * dos eventos del mismo gesto (el botón y la sesión del sistema) no salten dos
+     * canciones. La terminación automática llama con `false` y no lleva sello.
+     */
+    private static void mueve(int paso, boolean manual) {
         Reproductor r = vivo;
         if (r == null) return;
         int n = tamanyo();
         if (n == 0) return;
+        if (manual) {
+            long ahora = SystemClock.elapsedRealtime();
+            if (ahora - ultimoPaso < PASO_MIN_MS) return;
+            ultimoPaso = ahora;
+        }
         int i = idx + paso;
-        if (i < 0) i = n - 1;
-        if (i >= n) i = 0;
+        if (i < 0) i = (modoRepetir == 0) ? 0 : n - 1;
+        if (i >= n) i = (modoRepetir == 0) ? n - 1 : 0;
+        if (i == idx && n > 1) return;        // ya estamos en el extremo: ni un salto de más
         r.pon(i);
         r.refresca();
         avisa();
+    }
+
+    /** Un fallo no puede arrastrar la cola entera: dos intentos y se para, diciendo por qué. */
+    private void saltaPorFallo(String motivo) {
+        fallosSeguidos++;
+        aviso = motivo;
+        int n = tamanyo();
+        boolean haySiguiente = n > 1 && !(modoRepetir == 0 && idx + 1 >= n);
+        if (fallosSeguidos <= 2 && haySiguiente) {
+            mueve(1, false);
+            return;
+        }
+        aviso = motivo + " · me paro aquí para no saltarme tu música";
+        try { if (mp != null && mp.isPlaying()) mp.pause(); } catch (Exception yaNo) { }
+        refresca();
+        avisa();
+    }
+
+    private static String tituloDe(int i) {
+        Pista p = en(i);
+        return p == null ? "esta pista" : p.titulo;
+    }
+
+    /**
+     * «Que suene en mi reproductor»: la pista actual se abre con `ACTION_VIEW` en
+     * el reproductor que la dueña tenga puesto (VLC, Lark, el de Samsung…). No se
+     * copia el archivo ni se pide un permiso nuevo: se entrega el `content://` del
+     * índice con lectura temporal, y Android enseña su propio cuadro de apps si no
+     * hay uno predeterminado. CORT no decide por ella.
+     */
+    public static String abrirFuera(Context c) {
+        return abrirFuera(c, en(idx >= 0 ? idx : 0));
+    }
+
+    /** La misma apertura, con la pista ya elegida (por si la cola está vacía). */
+    public static String abrirFuera(Context c, Pista p) {
+        if (p == null || p.uri == null) {
+            return "{\"ok\":false,\"dice\":\"no hay nada puesto que abrir\"}";
+        }
+        final Pista cual = p;
+        final Intent ver = new Intent(Intent.ACTION_VIEW);
+        try {
+            ver.setDataAndType(Uri.parse(p.uri), p.video ? "video/*" : "audio/*");
+            ver.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                       | Intent.FLAG_ACTIVITY_NEW_TASK);
+        } catch (Exception uriRara) {
+            return "{\"ok\":false,\"dice\":\"esta pista no se puede abrir fuera\"}";
+        }
+        // `startActivity` se hace en el hilo de la cara, como el «comparte»: el
+        // puente de JavaScript no es el hilo de interfaz. El JSON se contesta ya
+        // (la elección de app es del sistema y no bloquea a CORT); si al final no
+        // hubiera con qué, el aviso sale por `Log` y no se finge que sonó.
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                c.startActivity(ver);
+            } catch (Exception sinPredeterminado) {
+                try {
+                    Intent elegir = Intent.createChooser(ver, "Reproducir con");
+                    elegir.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    c.startActivity(elegir);
+                } catch (Throwable noHayNinguno) {
+                    Log.w(TAG, "ningún reproductor quiso abrir " + cual.uri);
+                }
+            }
+        });
+        return "{\"ok\":true,\"pista\":\"" + esc(p.titulo)
+             + "\",\"dice\":\"abriendo «" + esc(p.titulo) + "» en tu reproductor\"}";
+    }
+
+    /** Aleatorio sí / no. Reordena la cola y conserva la pista que está sonando. */
+    public static String alternaAleatorio() {
+        Reproductor r = vivo;
+        modoAleatorio = !modoAleatorio;
+        if (r != null) {
+            try {
+                r.getSharedPreferences("cort", MODE_PRIVATE).edit()
+                 .putBoolean("musica_aleatorio", modoAleatorio).apply();
+            } catch (Throwable sinPreferencias) { }
+            r.reordena();
+            r.refresca();
+            avisa();
+        }
+        return modoAleatorio ? "aleatorio encendido" : "música en orden";
+    }
+
+    /** 0 se para al final · 1 repite la cola · 2 repite esta pista. */
+    public static String alternaRepetir() {
+        Reproductor r = vivo;
+        modoRepetir = (modoRepetir + 1) % 3;
+        if (r != null) {
+            try {
+                r.getSharedPreferences("cort", MODE_PRIVATE).edit()
+                 .putInt("musica_repetir", modoRepetir).apply();
+            } catch (Throwable sinPreferencias) { }
+            r.refresca();
+            avisa();
+        }
+        return modoRepetir == 0 ? "sin repetir" : (modoRepetir == 1 ? "repetir la cola" : "repetir esta pista");
+    }
+
+    /** Rehace la cola desde la copia original y vuelve a dejar delante la pista actual. */
+    private void reordena() {
+        synchronized (cola) {
+            if (colaOriginal.isEmpty() && !cola.isEmpty()) colaOriginal.addAll(cola);
+            String suena = idx >= 0 && idx < cola.size() ? cola.get(idx).uri : null;
+            cola.clear();
+            cola.addAll(colaOriginal);
+            if (cola.isEmpty()) { idx = -1; return; }
+            if (modoAleatorio) {
+                Pista primera = null;
+                for (Pista p : cola) if (p.uri != null && p.uri.equals(suena)) { primera = p; break; }
+                if (primera != null) cola.remove(primera);
+                java.util.Collections.shuffle(cola, new java.util.Random(System.nanoTime()));
+                if (primera != null) cola.add(0, primera);
+                idx = 0;
+            } else {
+                idx = 0;
+                if (suena != null) {
+                    for (int i = 0; i < cola.size(); i++) {
+                        if (suena.equals(cola.get(i).uri)) { idx = i; break; }
+                    }
+                }
+            }
+        }
     }
 
     /** Poner la cola entera y arrancar por la canción que se diga. */
     public static void ponerCola(Context c, List<Pista> pistas, int desde) {
         synchronized (cola) {
             cola.clear();
-            if (pistas != null) cola.addAll(pistas);
+            colaOriginal.clear();
+            if (pistas != null) {
+                cola.addAll(pistas);
+                colaOriginal.addAll(pistas);
+            }
             idx = (desde >= 0 && desde < cola.size()) ? desde : (cola.isEmpty() ? -1 : 0);
         }
         arrancar(c);
         Reproductor r = vivo;
+        if (r != null && idx >= 0 && modoAleatorio) {
+            r.reordena();
+        }
         if (r != null && idx >= 0) r.pon(idx);
         if (r != null) r.refresca();
     }
@@ -668,6 +855,9 @@ public class Reproductor extends Service {
          .append(",\"uri\":").append(p == null || p.uri == null
                  ? "null" : "\"" + esc(p.uri) + "\"")
          .append(",\"video\":").append(p != null && p.video)
+         .append(",\"aleatorio\":").append(modoAleatorio)
+         .append(",\"repetir\":").append(modoRepetir)
+         .append(",\"aviso\":\"").append(esc(aviso)).append('"')
          .append(",\"juego\":").append(CortNative.enJuego());
         s.append(",\"pista\":");
         if (p == null) s.append("null");

@@ -56,7 +56,9 @@ addEventListener('error', e => { salida.textContent = 'CAÍ: ' + (e.message || e
   '\n' + ((e.error && e.error.stack) || (e.filename + ':' + e.lineno)); });
 addEventListener('unhandledrejection', e => { salida.textContent = 'CAÍ (promesa): ' +
   ((e.reason && e.reason.stack) || e.reason); });
-const dice = (bueno, texto) => lineas.push(`<div class="${bueno ? 'ok' : 'no'}">${bueno ? 'ok ' : 'NO '} ${texto}</div>`);
+const escSonda = s => String(s == null ? '' : s).replace(/[&<>]/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const dice = (bueno, texto) => lineas.push(`<div class="${bueno ? 'ok' : 'no'}">${bueno ? 'ok ' : 'NO '} ${escSonda(texto)}</div>`);
 
 /* ── el puente de mentirijilla ───────────────────────────────────────────────
    Sólo los métodos que la cara de estas rondas necesita. `musicaEstado` devuelve lo
@@ -100,10 +102,27 @@ let ocultas = 0;
 window.CortNative = {
   avisos: () => '[]',
   accion: () => 'null',
-  capacidades: () => 'nucleo',
+  // F23 · el Arnés lee `capacidades()` de verdad: antes esta línea devolvía la
+  // palabra «nucleo» (no era JSON) y la sonda caminaba por la rama «APK sin
+  // capacidades». Con el JSON completo se prueban los chips de servicio y el
+  // perfil, que es lo que el arnés pinta.
+  capacidades: () => JSON.stringify({ perfil: 'completo', nucleo: false, asistente: true,
+    avisos: true, cortina: true, reconocedor: true, llamadas: true, agenda: true }),
   aparato: () => '{}',
   sensores: () => '{}',
-  memoria: () => 'null',
+  // F23 · el estado de la memoria del teléfono, con la forma de `Recuerdos.estado`.
+  // `lista` contesta lo último apuntado; `estado` las cuentas. Antes era `'null'`,
+  // que dejaba al Arnés sin una sola fila de memoria que medir.
+  memoria: pedido => {
+    let que = 'estado';
+    try { que = String(JSON.parse(pedido || '{}').que || 'estado'); } catch { que = 'estado'; }
+    if (que === 'lista') return JSON.stringify({ ok: true, recuerdos: [
+      { texto: 'el wifi de casa', tipo: 'hecho', fecha: '2026-10-01' }] });
+    return JSON.stringify({ ok: true, hechos: 12, recuerdos: 7, habilidades: 3,
+      conPortatil: true, direccion: 'http://192.168.1.50:8000', sincronizando: false });
+  },
+  // F22/F23 · los permisos que el Arnés enciende en «Salud» y la Puerta.
+  hasPermission: kind => /^(camara|camera|mic|micro|audio)/i.test(String(kind || '')),
   // `String mente(String)` en Java: con `que:'preguntar'` contesta `{"ok":true,
   // "pendiente":true}` al instante y la respuesta llega DESPUÉS por `__cortNative`.
   // Se anota el `que` para poder comprobar que la Charla, sin portátil, le pregunta
@@ -140,9 +159,10 @@ window.CortNative = {
   abreEnlace: url => { mandadas.push('abreEnlace:' + url); return ''; },
   // F17 · el bloque 9 (PC o VPS). `bgStatus` es el mismo JSON que arma Java, con la
   // dirección ya guardada; aquí contesta una para que la sonda vea que la caja se
-  // llena sola. `setPc` es el método de siempre (guardar y cargar la cara remota) y
-  // `abreMenu` el que abrió el botón nativo, ahora sólo desde esta hoja.
-  bgStatus: () => JSON.stringify({ pc: 'http://192.168.1.50:8000' }),
+  // llena sola. Desde F23 trae también el fondo, el micrófono, la burbuja y el
+  // fabricante, que es lo que el Arnés enciende en «Salud» y «Puerta».
+  bgStatus: () => JSON.stringify({ pc: 'http://192.168.1.50:8000', bg: true, running: true,
+    mic: true, overlay: false, battery: true, maker: 'Samsung samsung' }),
   setPc: url => { mandadas.push('setPc:' + url); return true; },
   abreMenu: () => { mandadas.push('abreMenu'); return true; },
   musicaPorGusto: () => { mandadas.push('musicaPorGusto'); return JSON.stringify(PISTAS); },
@@ -173,6 +193,20 @@ window.CortNative = {
   musicaAutomatica: () => mandadas.push('musicaAutomatica'),
   musicaSiguiente: () => mandadas.push('musicaSiguiente'),
   musicaAnterior: () => mandadas.push('musicaAnterior'),
+  // F20 · los tres del APK nuevo. `alternaAleatorio`/`alternaRepetir` devuelven el
+  // texto que la cara dice y dejan el cambio en el estado, igual que el servicio de
+  // Java: si aquí sólo se apuntara la llamada, el botón se pintaría de un deseo y no
+  // de lo que el aparato contesta. `musicaExterna` entrega el JSON de `abrirFuera`.
+  musicaAleatorio: () => { mandadas.push('musicaAleatorio');
+    estado = { ...(estado || {}), aleatorio: !(estado && estado.aleatorio) };
+    return estado.aleatorio ? 'aleatorio encendido' : 'música en orden'; },
+  musicaRepetir: () => { mandadas.push('musicaRepetir');
+    const m = ((estado && typeof estado.repetir === 'number' ? estado.repetir : 1) + 1) % 3;
+    estado = { ...(estado || {}), repetir: m };
+    return m === 0 ? 'sin repetir' : (m === 1 ? 'repetir la cola' : 'repetir esta pista'); },
+  musicaExterna: () => { mandadas.push('musicaExterna');
+    return JSON.stringify({ ok: true, pista: 'Still Falling',
+                            dice: 'abriendo «Still Falling» en tu reproductor' }); },
   musicaParar: () => mandadas.push('musicaParar'),
   musicaSalto: () => true,
   musicaCuadro: () => true,
@@ -233,7 +267,9 @@ window.fetch = (u, opts) => {
   const url = String(u);
   if (sinPc && (url.includes('/api/port') || url.includes('/api/chat')))
     return Promise.reject(new TypeError('Failed to fetch (la sonda apagó el portátil)'));
-  if (url.includes('/api/port') || url.includes('/api/history')) return real(u, opts);
+  if (url.includes('/api/port') || url.includes('/api/history')
+      || url.includes('/api/status') || url.includes('/api/memories'))
+    return real(u, opts);
   let cuerpo = null;
   try { cuerpo = opts && opts.body ? JSON.parse(opts.body) : null; } catch { cuerpo = null; }
   peticiones.push({ url, cuerpo });
@@ -302,10 +338,14 @@ const m = await import('/js/pantallas.js');
    a mano, para poder soltar un aviso del cerebro cuando toque. */
 const oidores = [];
 window.__cortNative = { on: cb => oidores.push(cb), emit: ev => oidores.forEach(cb => cb(ev)) };
+// F21 · la Charla nueva ofrece «leer» en cada respuesta; aquí se apunta lo que se
+// manda a la voz para poder comprobar que el botón habla ESE texto.
+const dichos = [];
 // `api()` tiene que devolver una dirección de verdad: la cara guarda el resultado de
 // `hayNucleo()` y un `''` (la raíz relativa) se lee como «no hay portátil», así que
 // con `''` esta sonda nunca llegaría a la lista de modelos.
-m.initPantallas({ api: () => location.origin, term: () => {}, say: () => {}, orb: { burst: () => {}, pausa: () => {} }, voice: {} });
+m.initPantallas({ api: () => location.origin, term: () => {}, say: () => {}, speak: t => dichos.push(String(t)),
+                  orb: { burst: () => {}, pausa: () => {} }, voice: {} });
 document.documentElement.classList.add('mobile');   // la cara del teléfono, en el navegador
 
 /* ── ayuda: un deslizamiento de dedo, con su recorrido horizontal ───────────*/
@@ -334,9 +374,12 @@ const espera = ms => new Promise(r => setTimeout(r, ms));
    los selectors que la sonda usa contra la cara real: lo que no esté en la cara y no
    esté listado aquí es una errata, y una errata en `$('#mu-busca-limpia')` da
    `null`/`0` y pone verde una prueba que no ha mirado nada. */
-const NEGATIVOS = ['#mu-ecualizador', '#mu-cola', '#mu-carpetas', '.lk-ecualizador'];
+const NEGATIVOS = ['#mu-ecualizador', '#mu-cola', '#mu-carpetas', '.lk-ecualizador',
+                   // F21 · ya no existen: las acciones viven en cada mensaje.
+                   '#ch-copiar-ultimo', '#ch-nota'];
 
 ponEstado({ vivo: true, suena: true, pos: 42000, dur: 191000, juego: false,
+            aleatorio: false, repetir: 1, aviso: '',
             pista: { titulo: 'Still Falling', artista: 'Aiko', genero: 'pop', uri: 'content://c', video: 1 } });
 function ponEstado(e) { estado = e; }
 
@@ -483,6 +526,28 @@ dice(!document.documentElement.classList.contains('letra-grande'), 'y se quita')
 localStorage.removeItem('cort-letra');
 document.documentElement.classList.remove('cajon-abierto');
 
+/* ── 5c · el cajón abierto desde una hoja que NO es el orbe ────────────────
+   `hud.css` esconde `#dock`, `#wake`, `#hand` y la cámara fuera del orbe para que
+   no floten encima de una app; el cajón se abre DESDE esas hojas y tiene que
+   devolverlas. Además, dentro del cajón el dock es hijo de una columna: si
+   conserva el `overflow` de la tira móvil, su altura mínima se vuelve 0 y
+   «Herramientas» sale vacío aunque `display` diga `flex`. Se miden los píxeles,
+   no la propiedad: era justo el fallo que se colaba verde. */
+document.documentElement.classList.remove('cajon-abierto');
+m.ir('codigo');
+const menuHoja = document.querySelector('#scr-codigo .scr-menu');
+dice(!!menuHoja, 'la cabecera de Código trae su ☰ (la puerta al cajón fuera del orbe)');
+menuHoja.click();
+const piezasCajon = ['dock', 'wake', 'hand'].map(id => {
+  const e = document.getElementById(id), r = e.getBoundingClientRect();
+  return { id, alto: Math.round(r.height), d: getComputedStyle(e).display };
+});
+dice(document.documentElement.classList.contains('cajon-abierto')
+  && piezasCajon.every(p => p.d !== 'none' && p.alto > 20),
+  'el ☰ de Código abre el cajón con el dock y los dos conmutadores enteros ('
+  + piezasCajon.map(p => p.id + ' ' + p.alto + 'px').join(', ') + ')');
+document.documentElement.classList.remove('cajon-abierto');
+
 /* ── 5b · el Centro de mando (F19): todo en un sitio, y sin inventar ─────────
    La queja de la dueña fue «las funciones están regadas». El Centro no añade
    funciones: junta las 91 del diccionario real, las pantallas, las herramientas
@@ -520,6 +585,75 @@ $('#cen-busca').value = 'zzzz';
 $('#cen-busca').dispatchEvent(new Event('input'));
 dice(!$('#cen-nada').hidden && $$('#scr-centro .cen-fila').length === 0,
   'sin resultados lo dice en vez de quedarse en blanco');
+m.ir('orbe');
+
+/* ── 5d · el Arnés (F23): lo que sostiene a CORT, sin adornos ────────────────
+   La dueña pidió «arneses basados en OpenClaw y Hermes Agent» y una arquitectura
+   que se pueda mirar. El Arnés no ejecuta nada: lee el puente (`capacidades`,
+   `memoria`, `bgStatus`, `musicaEstado`, `hasPermission`), la conversación local
+   y el núcleo (`/api/port`, `/api/status`, `/api/history`, `/api/memories`), y
+   pinta el estado REAL de cada pieza. Aquí se mide eso: las 91 herramientas del
+   diccionario, las cuentas de memoria, la sesión local, las 7 hojas y que tocar
+   un ejemplo mande su frase de verdad. */
+const charlaAntes = localStorage.getItem('cort-charla');
+localStorage.setItem('cort-charla', JSON.stringify([
+  { de: 'tu', texto: 'hola', hora: 1_760_000_000_000 },
+  { de: 'cort', texto: 'aquí estoy', hora: 1_760_000_060_000 },
+  { de: 'tu', texto: 'qué ves', hora: 1_760_000_120_000 },
+]));
+m.ir('arnes');
+// El núcleo contesta en paralelo: se espera a que la segunda pintura llegue, con
+// tope, en vez de dormir un rato fijo y medir una foto que puede estar a medias.
+for (let n = 0; n < 30 && !/CPU/.test($('#scr-arnes')?.textContent || ''); n++) await espera(100);
+const cajasArnes = $$('#scr-arnes .arn-caja');
+dice(getComputedStyle($('#scr-arnes')).display === 'flex' && cajasArnes.length === 6,
+  `el Arnés se ve y trae sus 6 cajas (${cajasArnes.length}: nodos, herramientas, sesiones, memoria, salud, puerta)`);
+const textoArnes = $('#scr-arnes').textContent;
+dice(/91 intenciones y 736 frases/.test(textoArnes),
+  'las herramientas son las 91/736 del diccionario real, no una lista paralela');
+const cajaHerramientas = cajasArnes.find(c => /Herramientas/.test(c.querySelector('h3')?.textContent || ''));
+const cuentasCapa = cajaHerramientas ? [...cajaHerramientas.querySelectorAll('.arn-chip b')]
+  .map(b => b.textContent).join('|') : '';
+dice(cuentasCapa === '41|26|13|11',
+  'y sus cuatro capas cuadran con el diccionario: ' + (cuentasCapa || 'sin chips'));
+const cajaSesiones = cajasArnes.find(c => /Sesiones/.test(c.querySelector('h3')?.textContent || ''));
+dice(!!cajaSesiones && /3 mensajes/.test(cajaSesiones.textContent)
+  && /No hay varias sesiones/.test(cajaSesiones.textContent),
+  'la sesión local cuenta los 3 mensajes de `cort-charla` y dice que NO hay varias a la vez');
+const cajaMemoria = cajasArnes.find(c => /Memoria/.test(c.querySelector('h3')?.textContent || ''));
+dice(!!cajaMemoria && /Hechos\s*12/.test(cajaMemoria.textContent)
+  && /Recuerdos\s*7/.test(cajaMemoria.textContent)
+  && /192\.168\.1\.50/.test(cajaMemoria.textContent),
+  'la memoria viene de `memoria(\'estado\')`: sus cuentas y su portátil, medidos, no heredados');
+const cajaSalud = cajasArnes.find(c => /Salud/.test(c.querySelector('h3')?.textContent || ''));
+dice(!!cajaSalud && cajaSalud.querySelectorAll('.arn-fila').length === 7
+  && cajaSalud.querySelectorAll('.arn-luz.ok').length >= 5,
+  'Salud enciende sus 7 filas y al menos 5 verdes con este puente de mentira');
+const cajaNodos = cajasArnes[0];
+dice(/completo/.test(cajaNodos.textContent) && cajaNodos.querySelectorAll('.arn-chip.on').length === 6,
+  'los 6 servicios del APK y el perfil «completo» salen de `capacidades()`');
+dice(/CPU/.test(textoArnes) && /Ollama/.test(textoArnes),
+  'el portátil y su cerebro se leyeron de `/api/status` de verdad');
+const cajaPuerta = cajasArnes.find(c => /Puerta/.test(c.querySelector('h3')?.textContent || ''));
+dice(!!cajaPuerta && /7 hojas/.test(cajaPuerta.textContent) && /Samsung/.test(cajaPuerta.textContent),
+  'la Puerta cuenta las 7 hojas de este aparato y su fabricante');
+const ejemplosArnes = $$('#scr-arnes [data-frase]');
+dice(ejemplosArnes.length === 4, `el Arnés ofrece 4 ejemplos, uno por capa (${ejemplosArnes.length})`);
+const ordenesArnes = [];
+const oyeArnes = e => ordenesArnes.push(e.detail && e.detail.texto);
+window.addEventListener('cort:orden', oyeArnes);
+ejemplosArnes[0].click();
+await espera(120);
+dice(ordenesArnes.length === 1 && ordenesArnes[0] === ejemplosArnes[0].dataset.frase
+  && m.pantallaActual() === 'orbe',
+  'tocar un ejemplo lo manda por `cort:orden` y vuelve al orbe a oírlo, como el Centro');
+window.removeEventListener('cort:orden', oyeArnes);
+m.ir('arnes');
+await espera(120);
+$('#scr-arnes [data-centro]').click();
+dice(m.pantallaActual() === 'centro', 'y «Abrir el Centro» lleva al índice de las 91 órdenes');
+if (charlaAntes === null) localStorage.removeItem('cort-charla');
+else localStorage.setItem('cort-charla', charlaAntes);
 m.ir('orbe');
 
 /* ── 6 · Música: calco de Lark Player con sus carátulas ───────────────────────
@@ -634,6 +768,27 @@ dice($('#mu-ahora').textContent === 'Still Falling' && $('#mu-t1').textContent =
   'el transporte pinta título y tiempo (' + $('#mu-t1').textContent + ')');
 dice(!!$('#mu-letras') && !!$('#mu-barra') && !!$('#mu-vol') && !!$('#mu-juego'),
   'el reproductor tiene letra, barra, volumen y modo juego');
+// F20 · un toque, un paso: el transporte manda UNA orden por pulsación. El sello de
+// 420 ms y el tope de fallos viven en Java (`Reproductor.mueve`), que aquí no corre;
+// lo que esta hoja sí demuestra es que la cara no dispara dos veces el mismo botón.
+mandadas.length = 0;
+$('#mu-next').click(); $('#mu-prev').click();
+dice(mandadas.join() === 'musicaSiguiente,musicaAnterior',
+  'cada flecha manda SU paso, una vez: ' + mandadas.join(' · '));
+// F20 · aleatorio, repetir y «en mi reproductor» dicen lo que el aparato contesta y
+// se pintan con el estado que devuelve el puente, no con un interruptor de la cara.
+mandadas.length = 0;
+$('#mu-aleatorio').click();
+dice(mandadas.includes('musicaAleatorio') && $('#mu-aleatorio').textContent.includes('sí'),
+  'el botón ⇄ enciende el aleatorio y se pinta encendido');
+mandadas.length = 0;
+$('#mu-repetir').click();
+dice(mandadas.includes('musicaRepetir') && $('#mu-repetir').textContent.includes('esta'),
+  '↻ recorre sin repetir → cola → esta: ' + $('#mu-repetir').textContent);
+mandadas.length = 0;
+$('#mu-fuera').click();
+dice(mandadas.includes('musicaExterna'), '«en mi reproductor» pide abrir la pista fuera');
+dice(!!$('#mu-nota'), 'el aviso de los modos vive en `#mu-nota`, sin chocar con el `#mv-aviso` de la letra');
 // El tinte de Lark: el fondo se pinta con el color medio de la portada (lienzo 8×8).
 await espera(300);          // la imagen del `data:` se decodifica asíncrona
 dice($('#mu-caratula').classList.contains('con-foto'), 'la portada grande del reproductor lleva la carátula de verdad');
@@ -804,13 +959,29 @@ dice(!!chat && chat.cuerpo.message.includes('CONTENIDO_DEL_DOCUMENTO')
 dice($('#ch-msgs .burbuja.de-tu .bur-adj')?.textContent.includes('nota.txt'), 'la burbuja dice qué llevabas adjunto');
 dice($('#gm-adj-chip') === null, 'y el adjunto se suelta solo tras enviar (no se repite en la siguiente)');
 dice($('#gm-saludo').hidden, 'con conversación delante, el saludo de Gemini se aparta');
+// F21 · la respuesta ya no es un bloque mudo: lleva avatar, hora y sus tres acciones
+// EN CADA MENSAJE (copiar/leer/nota), no dos botones al pie que sólo tocaban la última.
+const ultimaCort = $$('#ch-msgs .burbuja.de-cort').at(-1);
+dice(!!ultimaCort.querySelector('.bur-avatar') && !!ultimaCort.querySelector('.bur-cab b'),
+  'cada respuesta lleva avatar y nombre, como OpenJarvis');
+dice(ultimaCort.querySelectorAll('.bur-accion').length === 3,
+  'y sus tres acciones propias: copiar, leer y nota');
+dichos.length = 0;
+ultimaCort.querySelector('.bur-accion[data-a="leer"]').click();
+dice(dichos.at(-1) === ultimaCort.querySelector('.bur-texto').textContent,
+  '「leer」 manda a la voz ESE texto, no otro');
+peticiones.length = 0;
+ultimaCort.querySelector('.bur-accion[data-a="nota"]').click();
+await espera(120);
+dice(peticiones.some(x => x.url.includes('/api/notes') && /^\[charla\] /.test(x.cuerpo?.texto || '')),
+  '「nota」 guarda esa respuesta con el prefijo [charla]');
 // El botón nuevo NO borra la memoria del núcleo: sólo la hoja local.
 localStorage.setItem('cort-charla', JSON.stringify([{ de: 'tu', texto: 'borrable' }]));
 m.ir('musica'); m.ir('charla');
 $('#gm-nueva').click();
 dice($$('#ch-msgs .burbuja').length === 0, '「✚」 empieza de cero en esta hoja');
-dice(peticiones.every(x => !/api\/notes/.test(x.url) || x.cuerpo?.texto),
-  'guardar una nota manda {texto}, el campo que de verdad pide el backend');
+dice(!$('#ch-copiar-ultimo') && !$('#ch-nota'),
+  'sin los dos botones sueltos al pie: copiar/leer/nota viven en cada mensaje');
 
 /* ── 7b · la Charla sin portátil: piensa el teléfono ───────────────────────
    La queja: «charla con IA le faltan muchas cosas… chat tampoco [funciona]». En
@@ -836,12 +1007,20 @@ dice(mandadas.includes('mente:preguntar'),
   'y sin núcleo, la Charla le pregunta al cerebro del teléfono por el puente');
 dice(/pensando en el teléfono/.test($('#scr-charla .scr-estado').textContent),
   'mientras tanto dice DÓNDE lo está pensando, no «sin núcleo»');
+dice(!!$('#ch-msgs .gm-pensando') && $$('#ch-msgs .gm-pensando .gm-puntos i').length === 3,
+  'y la espera se VE: burbuja de CORT con sus tres puntos');
 window.__cortNative.emit({ type: 'mente', de: 'ollama', accion: 'lista' });
 dice(/pensando en el teléfono/.test($('#scr-charla .scr-estado').textContent),
   'un aviso de Ollama, que usa el mismo `type`, no se toma por respuesta');
-window.__cortNative.emit({ type: 'mente', de: 'nube', responde: 'Que te gusta Eika y el city pop.' });
-dice($('#ch-msgs .burbuja:last-child .bur-texto').textContent === 'Que te gusta Eika y el city pop.',
-  'la respuesta del teléfono llega a la Charla (' + $('#ch-msgs .burbuja:last-child .bur-texto').textContent + ')');
+window.__cortNative.emit({ type: 'mente', de: 'nube',
+  responde: 'Que te gusta **Eika** y el `city pop` <img src=x onerror=alert(1)>' });
+const mdUlt = $('#ch-msgs .burbuja:last-child');
+dice(mdUlt.querySelector('.bur-texto').textContent.includes('Que te gusta Eika y el city pop'),
+  'la respuesta del teléfono llega a la Charla (' + mdUlt.querySelector('.bur-texto').textContent + ')');
+dice(!!mdUlt.querySelector('.bur-texto b') && !!mdUlt.querySelector('.bur-texto code')
+     && !mdUlt.querySelector('.bur-texto img'),
+  'el Markdown mínimo pinta negrita y código, y NO ejecuta un <img> inyectado');
+dice(!$('#ch-msgs .gm-pensando'), 'al llegar la respuesta, los puntos se van');
 dice(/cerebro del teléfono: nube/.test($('#scr-charla .scr-estado').textContent),
   'y el pie dice de dónde salió: nube, o local, según Java lo diga');
 sinPc = false;
