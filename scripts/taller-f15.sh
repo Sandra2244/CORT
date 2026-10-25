@@ -105,8 +105,8 @@ muta "dos dueños para el preset" "$PUENTE" \
 # 3 · el ecualizador se cuela en la suite de papel, donde no existe el Android
 #     Equalizer: el verde de `prueba-mente.sh` sería de cartón.
 muta "el ecualizador entra en la suite de papel" "$SH" \
-  '"$E"/Elige.java "$T/src/com/cort/ia/"' \
-  '"$E"/Elige.java "$E"/Ecualizador.java "$T/src/com/cort/ia/"' \
+  '"$E"/Despertar.java "$T/src/com/cort/ia/"' \
+  '"$E"/Despertar.java "$E"/Ecualizador.java "$T/src/com/cort/ia/"' \
   "F15 · ecualizador"
 
 # 4 · se engancha a una sesión que no es la del reproductor. El código compila y
@@ -156,8 +156,8 @@ fi
 # 7 · `Prueba6` fuera del bucle: la suite daría verde sin haber mirado una sola
 #     elección de canción.
 muta "Prueba6 fuera del bucle" "$SH" \
-  'for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba6; do' \
-  'for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5; do' \
+  'for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba6 Prueba7; do' \
+  'for suite in Prueba Prueba2 Prueba3 Prueba4 Prueba5 Prueba7; do' \
   "F15 · la suite enchufada"
 
 # 8 · y la única que corre la suite de verdad: con el umbral a cero, `Elige`

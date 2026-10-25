@@ -1085,6 +1085,27 @@ que el paso **T2** es honestidad de estado, no estética.
 
 **Qué este paso no hizo:** no tocó ni un `.java`, ni un `.js`, ni el manifiesto, ni `scripts/`;
 no subió `versionCode`, no etiquetó, no publicó nada y no tocó `main`. Apagó el backend al
-terminar (`puerto 8000: 000`) para no dejarle consuming los 300 MB que quedan. Sigue la
+terminar (`puerto 8000: 000`) para no dejar consumiendo los 300 MB que quedan. Sigue la
 **2.11.0**. Con 0.1, 0.2 y 0.3 los tres documentos están entregados; **la puerta de la Fase 0
 la cierra ella aprobándolos**, y hasta entonces no se abre la Fase 1.
+
+## Micro-paso · el taller F15 vuelve a caer de las ocho (2026-10-25)
+
+Ella dijo «siguiente», y lo siguiente era cerrar la Fase 0 sin un rojo escrito. **Qué se
+tocó:** sólo las dos anclas de `scripts/taller-f15.sh`. La mutación 3 (`:107-110`) buscaba
+`"$E"/Elige.java "$T/src/com/cort/ia/"`, texto que `prueba-mente.sh:67` ya no contiene porque
+detrás de `Elige.java` entraron `Despertar.java` y la séptima suite; ahora busca
+`"$E"/Despertar.java "$T/src/com/cort/ia/"` y mete `Ecualizador.java` en la copia de papel,
+que es justo lo que castiga `prueba-costura.py:4075`. La mutación 7 (`:158-161`) buscaba el
+bucle de seis; ahora busca el de siete y **quita `Prueba6` dejando `Prueba7`**, porque la
+guardia que tiene que saltar es `prueba-costura.py:4194` («Prueba6 no está en el bucle de
+suites») y el nombre que exige el taller es `F15 · la suite enchufada`.
+
+**Prueba:** `bash scripts/taller-f15.sh` → **`rc=0`**, `TALLER F15 OK: 8 mutaciones, las 8
+caen nombrando lo que faltaba`, **cero `???` y cero `AGUANTA`** (log guardado en
+`/tmp/base03/taller-f15-verde.log`). Antes: 6 caen y 2 `???` con `rc=1`.
+
+**La lección, escrita para no repetirla:** un taller puede morir en silencio **sin que el
+producto cambie**, y su `rc` es la única señal. Es el mismo modo de fallo que el 0.3 destapó
+en los comentarios del JDK: el repo contando cosas que ya no son. Antes de abrir la Fase 1,
+los ocho talleres están corridos y los ocho dicen la verdad.

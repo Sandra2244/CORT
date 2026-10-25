@@ -122,6 +122,9 @@ ese verde sería de cartón»); simplemente hoy es inalcanzable desde el taller.
 **Arreglo propuesto (2 líneas, `scripts/taller-f15.sh:108` y `:159`):** re-anclar la primera a
 `"$E"/Despertar.java "$T/src/com/cort/ia/"` y la segunda a la lista de siete. **No lo hice en
 este paso** porque es tocar un script, y aquí vinimos a medir. Es un paso aparte de un minuto.
+**Hecho en el siguiente:** `taller-f15.sh:107-110` y `:158-161` re-anclados (la segunda mutación
+quita `Prueba6` y deja `Prueba7`, que es lo que vigila la guardia `prueba-costura.py:4194`), y
+el taller vuelve a **`rc=0` con las 8 cayendo y cero `???`**.
 
 ## 6. Arranque y latencias del núcleo de casa (esto sí se pudo medir)
 
