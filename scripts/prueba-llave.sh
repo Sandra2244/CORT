@@ -3,12 +3,13 @@
 #
 # Es la prueba barata de que el APK se puede actualizar sin desinstalar: si la
 # ruta de la llave se equivoca, cada Release firma con una llave distinta y la
-# dueña pierde los permisos concedidos y la dirección del PC al instalar. Aquí no
-# hay `keytool` en esta máquina (medido: no trae JDK), así que se prueba la
-# **decisión** —qué llave se elige y qué va a escribir `firma.txt`— con un
-# keystore de relleno, no con una firma de verdad.
+# dueña pierde los permisos concedidos y la dirección del PC al instalar. Aquí sí
+# hay `keytool` (medido 2026-10-25: `/usr/bin/keytool`, lo trae el paquete
+# `openjdk-21-jre-headless`), pero **no se invoca**: se prueba la **decisión**
+# —qué llave se elige y qué va a escribir `firma.txt`— con un keystore de relleno,
+# para no tocar la llave real de la dueña ni firmar nada de mentira.
 #
-# Uso:  bash scripts/prueba-llave.sh      (una fracción de segundo)
+# Uso:  bash scripts/prueba-llave.sh      (medido: ~12 s en el portátil de 2 núcleos)
 set -euo pipefail
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$RAIZ"
@@ -60,13 +61,14 @@ else
     ok "secreto sin pass: falla con mensaje en vez de medias firmas"
 fi
 
-# 4 · sin secreto y sin caché hay que GENERAR una (aquí no se puede: falta
-#     `keytool` en esta máquina) y dejarla en la carpeta cacheada.
+# 4 · sin secreto y sin caché hay que GENERAR una, y eso sólo se puede si el
+#     equipo tiene `keytool` (en este portátil lo trae `openjdk-21-jre-headless`,
+#     medido 2026-10-25; el `else` de abajo es para máquinas sin JRE).
 rm -f "$KS/cort.keystore" "$KS/pass.txt"
 if CORT_KEYSTORE_DIR="$KS" bash -c "source '$LLAVE_SH'; preparar_llave" >/dev/null 2>&1; then
     ok "generación: este equipo sí tiene keytool, la llave nueva quedó en la caché"
 else
-    ok "generación: pide keytool (aquí no hay JDK) y escribe en la carpeta de la caché"
+    ok "generación: sin keytool no firma con una llave de mentira: avisa y para"
     grep -q 'CORT_KEYSTORE_DIR' "$LLAVE_SH" || no "generación: la carpeta cacheable no está definida"
     [ -d "$KS" ] || no "generación: no crea la carpeta antes de fallar"
 fi

@@ -1,7 +1,10 @@
 """La costura del APK: manifiesto ↔ Java ↔ interfaz, comprobada sin teléfono.
 
-Aquí no hay `javac` (medido: el único compilador real del proyecto es el del
-runner de GitHub Actions), así que lo que se puede comprobar en esta máquina es
+Aquí no hay `javac` **como orden** (medido 2026-10-25: sólo `openjdk-21-jre-headless`),
+aunque el JRE trae el módulo `jdk.compiler` y con él `scripts/prueba-mente.sh` **sí
+compila y pasa en esta máquina**. Lo que aquí no se puede compilar es **el APK**: faltan
+`aapt2`, `d8`, `zipalign` y `apksigner` del SDK de Android, y ése es el compilador que
+importa para publicar. Así que lo que esta suite comprueba en esta máquina es
 **que las tres capas se nombran lo mismo**. Cada error de estos es un run rojo o,
 peor, un botón que no hace nada en el teléfono de la dueña:
 
@@ -475,8 +478,9 @@ else:
     falla("evento music en la cara", "la pantalla de música no escucha `music`: la barra no avanzaría")
 
 # ── 7 · el SDK de verdad: nada oculto, nada de AndroidX ─────────────────────
-# Aquí no hay `javac` (el portátil de la dueña lo comprobó: no está) y el APK se
-# compila en Actions. El precio de no poder compilar es escribir un símbolo que
+# Aquí no hay SDK de Android (`aapt2`, `d8`, `zipalign`, `apksigner`), así que el APK se
+# compila en Actions —`compilar.sh:162` muere sin `ANDROID_HOME`—. El precio de no poder
+# compilar es escribir un símbolo que
 # el `android.jar` del runner rechaza. `v0.2.11-demo` cayó así, con 14 errores y
 # todos en `Reproductor.java`: `android.media.MediaSession` existe pero es
 # `@hide` (el público es `android.media.session.MediaSession`),

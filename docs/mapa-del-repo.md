@@ -259,12 +259,12 @@ explícitos (`:499-512`), `verify` (`:521`) y la auditoría que escribe `firma.t
 
 | suite | qué mira | necesita | comando |
 | --- | --- | --- | --- |
-| `prueba-costura.py` (5.057 líneas) | la costura manifiesto↔Java↔cara por sectores | nada | `python3 scripts/prueba-costura.py` |
+| `prueba-costura.py` (5.061 líneas) | la costura manifiesto↔Java↔cara por sectores | nada | `python3 scripts/prueba-costura.py` |
 | `prueba-clima.py` · `prueba-datos.py` · `prueba-lectura.py` · `prueba-modelos.py` · `prueba-organiza.py` · `prueba-voz.py` | módulos del backend con gemelos de papel y `mktemp` | nada (el de modelos finge el servidor) | `python3 scripts/<x>.py` |
 | `prueba-automatiza.mjs` · `prueba-colores.mjs` · `prueba-mandos.mjs` | reglas «cuando X», 16 canales × 6 trajes, mandos de voz | node | `node scripts/<x>.mjs` |
-| `prueba-mente.sh` | las 7 suites Java sobre las clases de papel | JDK | `bash scripts/prueba-mente.sh` |
-| `prueba-oido.sh` | `PruebaOido.kt` con Vosk real | descarga el motor (caché) | `bash scripts/prueba-oido.sh` |
-| `prueba-llave.sh` | resolución de la llave de firma | nada (`keytool` no se invoca) | `bash scripts/prueba-llave.sh` |
+| `prueba-mente.sh` | las 7 suites Java sobre las clases de papel | el **módulo `jdk.compiler`** del JRE (sí está: pasa aquí, 60 s medidos) | `bash scripts/prueba-mente.sh` |
+| `prueba-oido.sh` | `PruebaOido.kt` con Vosk real | nada que bajar: `~/.cache/cort-kotlin` (96 MB) y `~/.cache/cort-motor` (77 MB, con `vosk-0.3.45.jar`, `jna-5.13.0.jar` y el modelo en español) ya están; **lo que le falta es RAM** (`KOTLIN_MEM=320m`) | `bash scripts/prueba-oido.sh` |
+| `prueba-llave.sh` | resolución de la llave de firma | nada (tarda **12 s**, medidos; toma la rama de `keytool` porque el JRE lo trae) | `bash scripts/prueba-llave.sh` |
 | `taller-f15/f16/f17/f18/f23.sh` y `taller-mandos/modelos/ollama.sh` | **mutaciones**: el verde debe caerse nombrando la comprobación | la suite que tallerea | `bash scripts/taller-<x>.sh` (de uno en uno: comparten `/tmp/cort-mente`) |
 | `ui/sonda-carita.html` (1.158 líneas) | la cara con puente falso | **navegador y servidor** | `bash scripts/run.sh` y abrir `/sonda-carita.html` |
 | `ui/sonda-camara.html` · `ui/sonda-colores.html` · `scripts/sonda-voz.html` | orden del permiso de cámara / colores / `getVoices()` | navegador (la cámara exige HTTPS o localhost) | abrir el archivo |
@@ -296,10 +296,15 @@ sin el SDK de Android. Eso es deuda (punto 9, fila 4) y lo resuelve la línea ba
    (fastapi, uvicorn[standard], psutil, requests, python-dotenv); no hay `requirements.lock`
    ni `uv.lock`. Un día `fastapi` cambia y el instalador se arma distinto sin que nadie lo
    haya tocado. (`desktop/package-lock.json` sí existe.)
-6. **Piezas del build que no se pueden reproducir en este portátil**: `compilar.sh:162` exige
-   `ANDROID_HOME` o muere, `kotlinc` se descarga en el pipeline (`:397-406`) y `keytool` no
-   está en esta máquina (por eso `prueba-llave.sh:5-8` lo simula). La cara sí se puede correr
-   local; el APK no.
+6. **Lo que no se puede reproducir en este portátil es el APK, no las pruebas.** Medido el
+   2026-10-25: `compilar.sh:162` muere sin `ANDROID_HOME` porque hacen falta `aapt2`, `d8`,
+   `zipalign` y `apksigner` del SDK de Android, y el SDK no está instalado. Todo lo demás sí
+   funciona aquí: el JRE (`openjdk-21-jre-headless`) trae **`keytool`** y el módulo
+   **`jdk.compiler`**, así que `prueba-mente.sh` compila y pasa en 60 s; `kotlinc` y el modelo
+   de Vosk ya están en `~/.cache`; y la cara se puede correr con `scripts/run.sh`. Quedan
+   cuatro comentarios del repo que decían lo contrario y están corregidos en este mismo
+   commit (`prueba-llave.sh:6-9`, `prueba-costura.py:3-6` y `:481`, `prueba-mente.sh:54`). La
+   cara sí se puede correr local; el APK no, y **no es por falta de Java**.
 7. **Etiquetas del manifiesto mal nombradas en el README** (punto 5): «4 servicios `BIND_*`»
    son 4 cadenas que protegen 5 servicios; «28 permisos» son 24 + 4. El número que publica el
    auditor es correcto; la palabra no.

@@ -1004,3 +1004,28 @@ de la cara, que son **las que viajan** —con las tres sondas son 15.533.
 **Lo que este paso no hizo:** no ejecutó ninguna suite salvo la costura (para confirmar que
 el repo estaba intacto), no compiló, no cambió código, no tocó `main` ni las otras ramas, y
 **no arregló** ninguna de las once deudas que describe —eso sería saltarse el método.
+
+## Paso aparte · los comentarios del JDK decían que no había Java, y sí lo hay (2026-10-25)
+
+Salió al medir la línea base: cuatro comentarios del repo afirmaban que este portátil no
+traía JDK. **No es cierto.** `keytool` está (`/usr/bin/keytool`, y `dpkg -S` del binario
+real lo apunta a `openjdk-21-jre-headless`), y el mismo paquete trae el módulo
+`jdk.compiler@21.0.12.1` (`java --list-modules`), que es a lo que cae el `si_javac` de
+`prueba-mente.sh:72-76`. La consecuencia práctica es la que importa: **las 7 suites Java
+corren en casa** —`MENTE OK: las 7 suites pasan sobre las 336 frases de la tabla`, 60 s—.
+`kotlinc` tampoco se baja (`~/.cache/cort-kotlin`, 96 MB) ni el Vosk (`~/.cache/cort-motor`,
+77 MB con `vosk-0.3.45.jar`, `jna-5.13.0.jar` y el modelo en español): a `prueba-oido.sh` no
+le falta red, le falta RAM.
+
+**Qué se cambió:** sólo comentarios y textos de `ok` —`prueba-llave.sh:6-9`, `:64-65` y su
+rama `else` en `:69`, `prueba-costura.py:3-6` y `:481`, `prueba-mente.sh:54`— y cuatro filas
+de `docs/mapa-del-repo.md`. **Prueba de que no se tocó lógica:** tras el cambio, costura
+**314 `ok` / rc=0**, llave **rc=0**, mente **rc=0**, y `taller-f15.sh` imprime **exactamente
+la misma salida** que antes (diff vacío).
+
+**Y el matiz que cambia su `[DECISIÓN]`:** instalar `openjdk-21-jdk` no desbloquea nada que
+las pruebas necesiten —lo único que añade es el binario `javac` y banderas como
+`--release 11`—. Lo que impide compilar el APK aquí es el **SDK de Android** (`aapt2`, `d8`,
+`zipalign`, `apksigner`; `compilar.sh:162` muere sin `ANDROID_HOME`), varios cientos de MB.
+O sea: probar Java en local ya se puede sin instalar nada; compilar el APK en casa es una
+decisión distinta y más cara.

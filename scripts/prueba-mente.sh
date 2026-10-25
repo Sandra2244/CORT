@@ -51,7 +51,8 @@
 #
 # Uso:  bash scripts/prueba-mente.sh
 #       JAVA_MEM=192m bash scripts/prueba-mente.sh   (si el portátil va justo)
-# Tarda ~25 s. No toca el teléfono ni la red: sólo JDK.
+# Tarda ~25 s en el pipeline; **60 s medidos** el 2026-10-25 en el portátil de 2 núcleos
+# y 1,8 GiB. No toca el teléfono ni la red: sólo el compilador del JRE.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 cd "$(dirname "$0")/.."
