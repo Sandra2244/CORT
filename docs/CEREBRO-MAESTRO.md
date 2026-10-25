@@ -906,3 +906,47 @@ VLC o Lark Player acepten la pista entregada, que la burbuja se vea como la de l
 1.1.4 con el dedo arrastrándola, y que el Arnés pinte sus seis cajas con el
 portátil encendido y conectado a la misma Wi‑Fi. La sonda mide la lógica en un
 navegador de escritorio, no el WebView ni la GPU de su Samsung.
+
+## Fase 0 · paso 0.1 · leer OpenJarvis antes de tocar nada (2026-10-25)
+
+La dueña entregó el **mega prompt v2** con el método nuevo: una fase por sesión, un paso
+por sesión, plan y OK antes de implementar, informe al cerrar, y **fase 0 de sólo lectura**
+antes de tocar el código. Este es el paso 0.1. **No se cambió ni una línea de `apps/apk`,
+`ui/` o `backend/`** — por eso no sube el `versionCode` ni hay nada nuevo que instalar:
+sigue la 2.11.0.
+
+Se leyó el clon local (`/home/Sandra/OpenJarvis`, commit `a6dcf84`) en sus cuatro sitios:
+la cara (`frontend/src/`), el arrancador Rust (`frontend/src-tauri/src/lib.rs`), el paquete
+Python (`src/openjarvis/`) y las páginas de `docs/architecture/*`. El resultado es
+**`docs/referencia-openjarvis.md`**, con cada afirmación suya en `archivo:línea`.
+
+**Lo más valioso del paso no es lo que se toma, es lo que se cae.** El mega prompt daba
+por tomado de OpenJarvis cuatro cosas que **él no tiene**:
+
+| lo que se esperaba de la referencia | lo que hay en su código |
+| --- | --- |
+| barra de progreso al descargar un modelo | sólo spinner con «Downloading...» (`CommandPalette.tsx:428-430`); el progreso real (`pct = done/total`) vive en la **CLI** (`cli/model.py:169-186`) |
+| pausar / reanudar / cancelar una descarga | no existe en el repo; el escritorio llama a Ollama con `stream: false` y 600 s de timeout (`lib.rs:2429-2436`) |
+| comprobar espacio libre antes de bajar | no se hace; sólo umbrales de RAM (`lib.rs:22-30`, `min_vram_gb`) |
+| pool de proveedores con cuotas | una clave por proveedor (`engine.md:165-168`); sin cuotas ni recambio |
+
+Y tres cosas **sí** aprovechables, medidas: las **fórmulas de hardware**
+(`core/config.py:288-308`: GPU `vram×unidades×0,9`, sin GPU `(ram−4)×0,8`, niveles
+2B/4B/9B/27B, peso estimado `param_b×0,5×1,1` GB), la **transparencia por mensaje**
+(`Chat/XRayFooter.tsx:28-49` dice motor, `model_id`, tiempo y tokens) y el ciclo
+**proponer → aprobar → ejecutar** con caja aislada `--network none`
+(`tools/proactive_tools.py:5-20,119`). La Charla que le gustó a la dueña persiste en
+`localStorage` (`lib/store.ts:37,57-92`) con el título en los primeros 50 caracteres
+(`:420-424`) y **sin renombrar, sin buscar por contenido y sin exportar un chat suelto**:
+eso de T6 lo tendremos que inventar nosotros.
+
+**Cómo afecta al plan.** La pantalla «Cerebro» (Fase 2, T7) se dibuja sobre estas
+conclusiones: catálogo fusionado (lo instalado en el motor + lo descargable), progreso **por
+capas desde el NDJSON de Ollama** —que ya sabemos sumar desde la 2.9.0—, y pausar /
+cancelar / espacio libre como **aportes nuestros**, no como copia. El pool de T20 se
+diseña desde cero. Quedan **0.2** (mapa del repo) y **0.3** (línea base medida) para
+cerrar la puerta de la Fase 0.
+
+**Lo que sigue sin comprobar:** no se ejecutó la app; los `.deb` y `.AppImage` de
+`~/Descargas` no se abrieron, y el `JARVIS-HRZ-3.1.0.exe` es otro proyecto. Nada de su
+código ni de sus recursos pasó a CORT: es Apache-2.0 y aquí quedó sólo el análisis.
