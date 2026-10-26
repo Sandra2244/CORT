@@ -113,6 +113,9 @@ Estados `reposo / escucha / piensa / habla` con su color, nivel de audio que lo 
 `pause()` y freno. *Aceptación:* 30 fps estables en el portátil de 2 núcleos, <15 % de
 un núcleo, geometría precalculada **una** vez, cero recálculos por frame, prueba en
 verde. **No toca `orb.js` ni `hud.css`.**
+**Integrado en la cara real el 2026-10-26, ronda 2.16.0**, con la aprobación de la dueña
+(«me gusta más, tiene mejor animación»): ver §4.8. Sigue sin tocarse `orb.js`, que queda
+como salida elegible con la tecla `cort-orbe`.
 
 **1.2 · Color por estado y trajes** → la tabla de estados del prototipo, atada a los
 canales de `traje.js` para que un atuendo siga pintando todo el orbe. *Aceptación:*
@@ -414,6 +417,113 @@ permiso ni servicio nuevo en el manifiesto, no saca nada a la nube, y no tocó `
 `pool.py` ni los `.java` de Android. `prueba-costura.py` sigue con **una sola roja y es
 suya**: la burbuja 1.1.4 de `Flotante.java`, sin commitear. Las otras suites de la cara:
 colores **51**, orbe **67**, manto **35**, descargas en verde.
+
+## 4.8 · El orbe del video montado en la cara real (2026-10-26, ronda 2.16.0)
+
+La dueña lo dijo con una frase y la cumplimentó con tres videos más: «**agregues el orbe que
+hiciste basándote en el video, me gusta más, tiene mejor animación**». El orbe del paso 1.1
+(`ui/js/orbe-plexo.js`) llevaba desde la 2.12.0 viviendo **aparte** de la cara: medido en
+`ui/sonda-orbe.html`, probado en `prueba-orbe.mjs` (67) y sin tocar `ui/index.html`. Esta
+ronda es **la integración de ese paso 1.1**, no el paso 1.5 —el 1.5 («la forma de ejecutar y
+confirmar», con su chip de «qué hizo») y el 1.3 (el panel de arriba) siguen abiertos—.
+
+**La decisión que manda: ADAPTADOR, no reescritura.** `ui/js/orbe-cara.js` (217 líneas) no
+dibuja nada nuevo: mete el orbe medido detrás de los **once métodos** con los que la cara
+ya hablaba con `orb.js` (`speak`, `burst`, `activate`, `stop`, `listen`, `setDisc`,
+`setAudio`, `pausa`, `vestir`, `colores`, `estado`). Geometría y colores siguen viviendo en
+`orbe-plexo.js` y `traje.js`, que son los que miden las otras dos suites; el adaptador no
+copia ni un `#hex` —y la prueba lo exige, porque un literal suelto rompe los seis atuendos
+de `Paleta.java`.
+
+**Los dos orbes conviven.** `localStorage['cort-orbe']` decide cuál se importa
+(`plexo` por defecto, `viejo` para volver atrás), la fila está en el cajón de Ajustes y
+cambiar de orbe **recarga** la cara: ninguno de los dos se desmonta del todo —el viejo no
+expone `dispose`—, así que un intercambio en caliente dejaría un WebGL zombi pintando
+debajo. Mientras se compara una cara nueva con la de siempre no se borra la de siempre.
+`ui/index.html` importa sólo el elegido y, si WebGL o Three caen, intenta el otro antes de
+rendirse al doble de palo; el primer fallo **no** pinta la caja roja, porque no es noticia
+si el otro orbe responde.
+
+**El presupuesto de 2 núcleos y 1,8 GiB, en el adaptador:** `antialias: false`,
+`powerPreference: 'low-power'`, pixel ratio cortado en **1,5**, cámara a **7,2**, punto a
+2,8 px **del aparato** (`gl_PointSize` no conoce el ratio), techo de **30 fps** y **15** con
+«sin animaciones», y `pausa(true)` vaciando la cola del `requestAnimationFrame`.
+
+**Las tres manos del nivel.** El orbe viejo tenía un solo `target`, y por eso se pisaban:
+`stopMeter()` mandaba `setAudio(0, 0)` y apagaba el nivel que acababa de poner
+`listen(true)`. Aquí son tres variables que no se estorban —`suelo` (lo que pide el estado),
+`audio` (micrófono o música) y `chispa` (el empujón de un `burst`)— y gana la mayor, con la
+chispa apagándose sola a 2,2 por segundo.
+
+### Lo que sólo la pantalla podía ver
+
+La suite salió verde **y la cara estaba rota**. Dos fallos los encontró el navegador, no el
+arnés, y los dos son del mismo tipo —«el método existe» no es «el método funciona»:
+
+| lo que se veía | la causa |
+|---|---|
+| `TypeError: orbe.vistir is not a function` al cambiar de atuendo | el adaptador llamaba a `orbe.vistir` (con `i`) y el módulo exporta `vestir` |
+| `vestir()` devolvía `{}` | `vestir` de `orbe-plexo.js` regresa el booleano de `setEstado`; envolverlo con `{…tabla}` da un objeto vacío |
+
+Añadido el sector **[5b]**, que **llama** a `vestir` y mira lo que vuelve y cómo se mueve el
+`uColorA` vivo, las dos trampas tienen ahora su rojo (mutaciones 15 y 16 de la tabla).
+
+### Comprobado en la cara de verdad (navegador, 2026-10-26)
+
+Servidor estático en `127.0.0.1:8777` (apagado al terminar) y la cara abierta en Chromium:
+
+| lo que se midió | el número |
+|---|---|
+| cuál orbe monta la cara | `window.__orbe === 'plexo'`, `__orbeFalla` ausente |
+| lo que cuesta | `cifras()` = 220 puntos, 700 líneas, 3 dibujos, 30 fps, `canvas` de 536×521 |
+| que gire de verdad | 0,152 rad en 1 s con `listen(true)`; `uTiempo` avanza 0,58 s por cada 0,6 s reales |
+| el nivel con micrófono | `setAudio(.9,.9)` sobre `escucha` → `uNivel` 0,792; `stop()` → `reposo` |
+| el freno de pantalla | en la cara avanza 0,583 s; fuera (`cort-pantalla: 'ayuda'`) **0**; al volver 0,608 s |
+| volver al orbe viejo | `localStorage['cort-orbe']='viejo'` + recarga → `__orbe === 'viejo'`, sus once métodos, sin `cifras` |
+| vestir en caliente | del azul de la cara al verde pedido: `#e3e8ed → #d3e7df` en ~500 ms, sin salto |
+| el atuendo de la cara | el orbe nació con el color del traje puesto y con `error` rojo cuando el núcleo no contestó (`#ff95a3`) |
+
+**Pruebas.** `scripts/prueba-orbe-cara.mjs`, nueve sectores y **43 comprobaciones en
+verde**, montada en `build.yml` (paso `id: orbe-cara`, anotación `::error::` si falla). La
+prueba **ejecuta** el adaptador: copia el texto del repo a `/tmp` con sus tres `import`
+reescritos —y comprueba que sólo cambiaron esas tres líneas— sobre un `three` de pega
+(`scripts/fake-three.mjs`) y un reloj, temporizadores y pantalla de pega. Las catorce
+mutaciones de la primera tanda más las dos del `vestir`, **16 de 16 mordieron**, con la
+base verde y el restaurado verificado byte a byte:
+
+| mutación | rojos |
+|---|---|
+| `pausa(true)` ya no corta el bucle | **3** |
+| techo de 30 fps subido a 60 | **2** |
+| «sin animaciones» deja de recortar a 15 | 1 |
+| el pixelRatio se queda sin tope | **2** |
+| la chispa del `burst` no se apaga nunca | 1 |
+| el suelo del estado desaparece del nivel | **2** |
+| `setAudio(0,0)` pisa el suelo (el bug del orbe viejo) | 1 |
+| la cámara se acerca a 5,5 | 1 |
+| `activate()` no pone la cara a pensar | 1 |
+| `speak()` no devuelve la cara a reposo | **2** |
+| la cara pierde el método `setDisc` | **2** |
+| el traje copiado a mano en vez de leído de la cara | 1 |
+| `index.html` no prueba el orbe de respaldo | 1 |
+| el primer fallo pinta la caja roja | 1 |
+| `vestir` llama a `orbe.vistir` (el bug real) | roja por choque |
+| `vestir` devuelve el booleano envuelto, no la tabla | 1 |
+
+**Un incidente, dicho antes que lo descubra otro.** La batería de mutaciones escribía el
+`sed` **directamente sobre el archivo** del repo. Una expresión inválida (llaves sin
+escapar) dejó `ui/js/orbe-cara.js` a **cero bytes**. El respaldo de `/tmp` lo devolvió byte
+a byte y el `md5sum` de comprobación del final del script fue lo que lo confirmó; la función
+ahora escribe en un temporal y **restaura también cuando el `sed` falla**. Ningún archivo
+del repo quedó tocado.
+
+**Lo que NO hace esta ronda.** No tocó `orb.js` (el orbe viejo sigue intacto y es la salida
+del cajón), no metió permiso ni servicio nuevo, no construyó APK, no saca nada a la nube y
+no tocó `brain.py`, `pool.py` ni los `.java` de Android. Queda **pendiente de su ojo**: la
+captura es prueba de que se pinta, no de que «se parece al video», y esa la decide ella.
+Las suites de la cara: orbe-cara **43**, orbe **67**, colores **51**, manto **35**
+(196 en total), todas verdes; `prueba-costura.py` sigue con **una sola roja y es suya**: la
+burbuja 1.1.4 de `Flotante.java`, sin commitear.
 
 ## 5 · Fuera de esta fase, con su sitio
 

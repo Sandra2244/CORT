@@ -220,6 +220,27 @@ function montaAjustesCajon() {
   caja.querySelectorAll('.cj-fila').forEach(b => b.remove());
   caja.appendChild(fila('letra', 'A', 'Letra más grande', 'letra-grande'));
   caja.appendChild(fila('movimiento', '≈', 'Sin animaciones', 'sin-movimiento'));
+  /* El orbe: dos caras y una tecla. El de la referencia (la geometría medida en el paso
+     1.1, montada en la cara por `orbe-cara.js`) es el que ella eligió el 26/10 — «me
+     gusta más, tiene mejor animación» —; el de siempre sigue vivo y se vuelve con esta
+     misma fila. Se guarda y SE RECARGA la cara en vez de cambiarlo sobre la marcha:
+     ninguno de los dos orbes se desmonta entero a sí mismo (el viejo no expone cómo se
+     borran sus mallas), y un WebGL zombi comiéndose memoria en 1,8 GiB es peor que un
+     parpadeo al reiniciar la interfaz. La clave `cort-orbe` es la misma que leen
+     `ui/index.html` y `CLAVE_ORBE` de `orbe-cara.js`: tres sitios, una cadena, y esa
+     coincidencia la vigila `scripts/prueba-orbe-cara.mjs`. */
+  let orbeNuevo = true;
+  try { orbeNuevo = localStorage.getItem('cort-orbe') !== 'viejo'; } catch { /* modo privado */ }
+  const bOrbe = document.createElement('button');
+  bOrbe.className = 'cj-fila' + (orbeNuevo ? ' on' : '');
+  bOrbe.dataset.aj = 'orbe';
+  const txtOrbe = orbeNuevo ? 'Orbe del video (nuevo)' : 'Orbe de siempre';
+  bOrbe.innerHTML = `<i>◉</i>${esc(txtOrbe)}`;
+  bOrbe.onclick = () => {
+    try { localStorage.setItem('cort-orbe', orbeNuevo ? 'viejo' : 'plexo'); } catch { /* sin almacén */ }
+    location.reload();
+  };
+  caja.appendChild(bOrbe);
 }
 
 /* Los dos trajes de accesibilidad sobreviven al arranque: se leen del almacén local

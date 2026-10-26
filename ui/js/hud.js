@@ -961,8 +961,12 @@ let lampTimer = 0;
    se traduce a la firma visual del orbe (`reposo/escucha/piensa/habla`). El
    `try` es a propósito: la cara tiene un orbe de palo cuando WebGL no arranca,
    y ese doble no sabe estados — no puede tumbar el arranque por eso. */
+/* El estado del orbe, traducido del estado de la cara. `error` ahora SÍ es rojo en el
+   orbe nuevo (`orbe-plexo.js` tiene su estado, medido en `prueba-colores.mjs`: rojo fijo
+   con los seis atuendos); con el orbe de siempre cae a `reposo`, que es lo que hacía
+   antes. La lámpara ya decía «sin conexión» en rojo: era el orbe el que no lo contaba. */
 const ORBE_ESTADO = { reposo: 'reposo', escucha: 'escucha', pensando: 'piensa',
-  hablando: 'habla', listo: 'reposo', oculto: 'reposo', error: 'reposo' };
+  hablando: 'habla', listo: 'reposo', oculto: 'reposo', error: 'error' };
 function setState(k) {
   try {
     if (orb && typeof orb.estado === 'function')

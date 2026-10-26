@@ -172,11 +172,31 @@ const orbeDePalo = {
   setAudio() {}, pausa() {}, vestir() { return {}; }, colores() { return {}; },
   estado() { return 'reposo'; },
 };
+/* Dos orbes y una tecla. El de la referencia (`orbe-cara.js`, que monta la geometría
+   medida en `orbe-plexo.js`) es el que la dueña eligió el 26/10: «me gusta más, tiene
+   mejor animación». El viejo (`orb.js`) sigue vivo y se vuelve a él con
+   `localStorage['cort-orbe'] = 'viejo'` desde el cajón de Ajustes, porque mientras se
+   compara una cara nueva con la de siempre no se puede borrar la de siempre.
+   Se importa SÓLO el elegido: si WebGL se cae, se intenta el otro antes de rendirse, y
+   si los dos fallan queda el doble de palo y la cara sigue funcionando. */
+const escenaOrbe = () => document.getElementById('scene');
+const FÁBRICAS = {
+  plexo: async () => (await import('./js/orbe-cara.js')).initOrbeCara(escenaOrbe()),
+  viejo: async () => (await import('./js/orb.js')).initORB(escenaOrbe()),
+};
 let orb = orbeDePalo;
-try {
-  const { initORB } = await import('./js/orb.js');
-  orb = initORB(document.getElementById('scene')) || orbeDePalo;
-} catch (e) { pintaFalla(e); }
+let elegido = 'plexo';
+try { elegido = (await import('./js/orbe-cara.js')).orbeElegido(); } catch (e) { pintaFalla(e); }
+for (const nombre of [elegido, elegido === 'plexo' ? 'viejo' : 'plexo']) {
+  try {
+    orb = (await FÁBRICAS[nombre]()) || orbeDePalo;
+    window.__orbe = nombre;
+    break;
+  } catch (e) {
+    // El primer fallo NO es noticia: queda el otro orbe. Sólo si fallan los dos.
+    window.__orbeFalla = String((e && (e.message || e)) || e);
+  }
+}
 window.__orb = orb;   // depuración/consola: __orb.activate(), __orb.setDisc(true)…
 try {
   const { wireUI } = await import('./js/hud.js');

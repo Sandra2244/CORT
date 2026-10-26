@@ -431,6 +431,46 @@ jobs:
             echo "::error::prueba-manto.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el orbe del video montado en la cara (paso 1.1 integrado)
+        id: orbe-cara
+        # `scripts/prueba-orbe-cara.mjs` no lee el adaptador y lo aprueba por la palabra:
+        # ejecuta `ui/js/orbe-cara.js` contra un `three` de pega (`scripts/fake-three.mjs`)
+        # y una pantalla de pega, con el TEXTO del repo y sólo sus tres `import` reescritos
+        # (y eso se comprueba, porque un arnés que ejecuta otra cosa prueba su propia
+        # mentira). Lo que se mide es lo que la dueña pidió —«me gusta más, tiene mejor
+        # animación»— sin que el cambio de orbe rompa la cara: que los ONCE métodos con los
+        # que la cara habla con el orbe sigan estando (la lista se lee del doble de palo de
+        # `ui/index.html`, no la inventa la prueba), que el presupuesto de 2 núcleos y
+        # 1,8 GiB se respete (pixelRatio cortado en 1,5, `antialias` apagado, `low-power`,
+        # cámara a 7,2, punto en píxeles del aparato), que la máquina de estados se apague
+        # sola (`speak` vuelve a reposo a sus 2200 ms, `activate` a los 1600 ms, una frase
+        # larga cortada por otra no deja la cara hablando media hora), que las tres manos
+        # del nivel no se pisen —el bug viejo: `stopMeter()` mandaba `setAudio(0,0)` y
+        # apagaba el nivel que había puesto `listen(true)`—, que `pausa(true)` deje la cola
+        # del `requestAnimationFrame` vacía y sin un dibujo más (batería), que el techo de
+        # 30 fps baje a 15 con «sin animaciones», y que la tecla `cort-orbe` sea la misma
+        # cadena en el adaptador, en `index.html` y en el cajón de Ajustes.
+        # Se mutó catorce veces sobre los archivos reales, con respaldo y restauración
+        # verificada byte a byte: `pausa` sin corte, el techo subido a 60, «sin animaciones»
+        # sin recortar, el pixelRatio sin tope, la chispa que no se apaga, el suelo del
+        # estado fuera del nivel, `setAudio(0,0)` pisando el suelo (el bug viejo), la cámara
+        # a 5,5, `activate` sin ponerse a pensar, `speak` que no vuelve a reposo, la cara
+        # perdiendo `setDisc`, el traje copiado a mano en vez de leído de la cara, el orbe
+        # de respaldo sin probarse y el primer fallo pintando la caja roja. Las catorce
+        # salieron rojas y la base, sin tocar nada, verde en 39 comprobaciones.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-orbe-cara.mjs > /tmp/orbe-cara.log 2>&1
+          st=$?
+          tail -20 /tmp/orbe-cara.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/orbe-cara.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/orbe-cara.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-orbe-cara.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar la bajada de modelos (reintentos, silencio y contexto)
         id: descargas
         # `scripts/prueba-descargas.py` ejerce `backend/app/models.py`, el camino por el
