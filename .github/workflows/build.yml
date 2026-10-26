@@ -390,6 +390,47 @@ jobs:
             echo "::error::prueba-orbe.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el manto JARVIS de la Charla (paso 1.4)
+        id: manto
+        # `scripts/prueba-manto.mjs` ejerce la capa `ui/css/jarvis.css` y su interruptor
+        # en `ui/js/pantallas.js`/`hud.js`. No puede probar «cómo se ve» —eso lo mira la
+        # dueña en el navegador—, pero prueba lo que decide que sea una CAPA y no un
+        # destrozo: que las 40 reglas cuelguen todas de `manto-jarvis` (una suelta tiñe
+        # otra hoja), que ningún color de traje esté escrito a mano en ella —si el acento
+        # fuera literal, los seis atuendos de `Paleta.java` dejarían de gobernar y el
+        # manto se quedaría coral para siempre—, que la regla del orbe detrás le gane al
+        # apagón de `hud.css` con `!important` Y con más especificidad (contada como la
+        # cuenta el navegador: `:not()` suma lo de adentro, no a sí mismo), que siga
+        # congelando el WebGL fuera de la charla (un orbe que nadie ve es CPU, RAM y
+        # batería en un teléfono de gama media), que la frase de «responde corto» sólo se
+        # cuele con el manto puesto y el modo Normal —el `POST /api/chat` del núcleo no
+        # acepta más que `{message}`—, y que el botón «parar» no prometa apagar al modelo
+        # cuando sólo corta la espera —y que la línea de «con qué se piensa» la escriba
+        # UN solo sitio: las cinco veces que se escribió a mano perdía la carrera contra
+        # `pintaCharla`, que se llamaba justo después, y dejaba «usando el modelo del
+        # núcleo» pintado encima de un «el núcleo de CORT no responde».
+        # Se mutó catorce veces sobre los archivos reales, con respaldo y restauración
+        # verificada byte a byte: regla sin su clase, el coral de la referencia copiado,
+        # el orbe levantado en todas las hojas, el orbe sin más especificidad que el
+        # apagón, un `!important` de más, la frase de medida sin el manto puesto, la
+        # frase encima del modo elegido, el WebGL vivo fuera de la charla, una píldora
+        # escrita a mano, una burbuja de CORT sin su `nota`, la pintora sin leerla, la
+        # espera cortada atada sólo a la bandera, rehacer la charla entera por mensaje y
+        # un `push` sin su repaint. Las catorce salieron rojas y la base, sin tocar nada,
+        # verde en 35 comprobaciones.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-manto.mjs > /tmp/manto.log 2>&1
+          st=$?
+          tail -20 /tmp/manto.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/manto.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/manto.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-manto.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar la bajada de modelos (reintentos, silencio y contexto)
         id: descargas
         # `scripts/prueba-descargas.py` ejerce `backend/app/models.py`, el camino por el

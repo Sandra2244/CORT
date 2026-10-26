@@ -1,0 +1,124 @@
+/* ═════════════════════════ EL MANTO JARVIS · paso 1.4 de la Fase 1 ═════════════════════════
+ *
+ * La dueña (26/10): «empiezas por el chat, se tiene que parecer al del video… la pantalla
+ * será semi negra transparente estilo la interfaz del JARVIS que usamos de referencia».
+ *
+ * Este archivo es ESE manto: una capa que se pone y se quita con una clase en `<html>`
+ * (`manto-jarvis`) y que **no reescribe la Charla**, sólo la viste. Si mañana se quita la
+ * clase, la cara vuelve a ser la de siempre sin tocar una coma de `apps.css` ni de
+ * `pantallas.js`. Por eso TODAS las reglas cuelgan de `html.manto-jarvis`: una regla
+ * suelta aquí podría teñir otra pantalla, y eso es exactamente lo que no se puede permitir
+ * en una cara que ya tiene ocho hojas con su propia ropa (`css/apps.css`).
+ *
+ * ─── Lo que se copió, medido sobre fotogramas del video (no recordado) ───
+ * `VID-20261024-WA0034.mp4`, 360×640, 4:15. Fotogramas leídos con el navegador a 96 s,
+ * 112 s y 165 s, recortados y ampliados 3× sobre el teléfono de la referencia:
+ *
+ *  · El orbe está DETRÁS de la conversación y se ve **nítido**: no hay desenfoque detras
+ *    de las letras. Por eso aquí NO hay `backdrop-filter`: en un teléfono de gama media
+ *    es lo primero que se come los cuadros por segundo, y en la referencia no existe.
+ *  · Arriba: el **nombre** a la izquierda y, a la derecha, el **estado** («connecté» con
+ *    su punto) y los iconos. No hay barra de ventana ni título de app.
+ *  · El mensaje **tuyo** es una pastilla de color de acento, pegada a la derecha.
+ *  · El mensaje **de CORT no tiene caja**: es texto blanco suelto sobre el orbe, a la
+ *    izquierda, en letra pequeña. Ni avatar, ni nombre, ni borde, ni fondo.
+ *  · Abajo, una fila con el botón de **parar** y el del **micrófono**, en el color de
+ *    acento; la entrada es una píldora oscura.
+ *
+ * El color de acento del video es coral porque ése es su traje. Aquí el acento es
+ * `--primario` (contrato 2.1, el que escribe `traje.js`), o sea: con JARVIS la pastilla
+ * sale ámbar y con Matrix verde, sin que nadie haya escrito un color en este archivo.
+ */
+
+/* ─── 1 · el orbe vuelve a estar detrás de la charla ───
+   `hud.css:730-737` apaga `#scene` y el agua con `!important` en cuanto la pantalla no
+   es `orbe`. Aquí se gana con la MISMA arma y más especificidad (cuatro clases frente a
+   dos), y sólo para la charla con el manto puesto: en las demás hojas el apagón sigue
+   mandando, que es lo que ahorra CPU, RAM y batería en el teléfono. */
+html.pantallas-montadas.p-charla.manto-jarvis #scene,
+html.pantallas-montadas.p-charla.manto-jarvis #agua{display:block!important}
+
+/* Y el agua de la F17 se ve menos: debajo del texto sobra saturación. */
+html.manto-jarvis #agua{opacity:.55}
+
+/* ─── 2 · la hoja deja de ser una caja opaca ───
+   `.scr` es `#02040a` a pelo (hud.css:755). Un velo semi-negro, no transparente del
+   todo: con el orbe detrás, el texto blanco de tres líneas se pierde en los puntos
+   brillantes. Medido en la referencia: el fondo del chat es negro con el orbe
+   atravesándolo, y las letras se leen porque el orbe ocupa el centro y el texto abajo. */
+html.pantallas-montadas.p-charla.manto-jarvis #scr-charla{background:rgba(2,4,10,.42)}
+html.pantallas-montadas.p-charla.manto-jarvis #scr-charla .scr-cab,
+html.pantallas-montadas.p-charla.manto-jarvis #scr-charla .scr-cuerpo{background:none}
+
+/* ─── 3 · la cabecera: nombre a la izquierda, estado a la derecha ───
+   Se esconde el saludo grande de Gemini (`Hola. ¿Qué hacemos?`) y su degradado: en la
+   referencia la pantalla no te saluda, está ahí. */
+html.manto-jarvis .gm-cab{padding:0 0 4px}
+html.manto-jarvis .jm-titulo{font-size:17px;font-weight:700;letter-spacing:.02em;
+  color:#f2f6fb;text-shadow:0 0 12px rgba(0,0,0,.65)}
+html.manto-jarvis .jm-estado{font-family:Consolas,monospace;font-size:10.5px;
+  color:var(--primario);display:inline-flex;align-items:center;gap:5px}
+html.manto-jarvis .jm-estado::before{content:"";width:6px;height:6px;border-radius:50%;
+  background:var(--primario);box-shadow:0 0 8px var(--primario)}
+html.manto-jarvis .jm-estado.aviso{color:#ffcf6b}
+html.manto-jarvis .jm-estado.aviso::before{background:#ffcf6b;box-shadow:0 0 8px #ffcf6b}
+html.manto-jarvis .gm-saludo{flex:0 1 auto;padding:10px 0 2px}
+html.manto-jarvis .gm-saludo::before{display:none}
+html.manto-jarvis .gm-saludo b{font-size:15px;font-weight:500;color:#cfe0f2}
+html.manto-jarvis .gm-saludo span{display:none}
+
+/* ─── 4 · las burbujas, como en la referencia ───
+   La de CORT pierde TODO el envoltorio: sin caja, sin avatar, sin su nombre repetido.
+   Sus acciones (copiar / leer / nota) no se borran, se esconden: un toque sobre el
+   mensaje las trae. Esconderlas sin más sería quitarle funciones que ya tiene. */
+html.manto-jarvis .gm-msgs{gap:12px}
+html.manto-jarvis .gm-msgs .bur-avatar{display:none}
+html.manto-jarvis .gm-msgs .de-cort .bur-cuerpo{background:none;border:0;box-shadow:none;
+  padding:0;max-width:none}
+html.manto-jarvis .gm-msgs .de-cort .bur-cab{display:none}
+html.manto-jarvis .gm-msgs .de-cort .bur-acciones{opacity:0;transition:opacity .15s}
+html.manto-jarvis .gm-msgs .de-cort.tocada .bur-acciones{opacity:1}
+html.manto-jarvis .gm-msgs .de-cort .bur-texto{font-size:14.5px;line-height:1.5;
+  color:#eef4fb;text-shadow:0 1px 10px rgba(0,0,0,.85), 0 0 22px rgba(0,0,0,.55)}
+/* La tuya: pastilla de acento, tinta oscura para que se lea con cualquier traje
+   (los seis `--primario` de casa son claros: ámbar, verde, azul, lima, rosa, cian). */
+html.manto-jarvis .gm-msgs .de-tu .bur-cuerpo{background:var(--primario);color:#05131d;
+  border:0;border-radius:20px;padding:8px 14px;box-shadow:0 2px 14px rgba(0,0,0,.45)}
+html.manto-jarvis .gm-msgs .de-tu .bur-cab{display:none}
+html.manto-jarvis .gm-msgs .de-tu .bur-texto{color:#05131d}
+html.manto-jarvis .gm-msgs .de-tu .bur-acciones{opacity:0;transition:opacity .15s}
+html.manto-jarvis .gm-msgs .de-tu.tocada .bur-acciones{opacity:1}
+html.manto-jarvis .gm-msgs .de-tu .bur-accion{color:rgba(5,19,29,.72)}
+/* Los tres puntos de «pensando» también van sin caja. */
+html.manto-jarvis .gm-msgs .gm-pensando .bur-cab{display:flex;opacity:.75}
+html.manto-jarvis .gm-msgs .gm-pensando .bur-cab b{font-size:11px;color:#cfe0f2}
+
+/* ─── 5 · la barra de abajo: parar, hablar, y la píldora ───
+   El STOP del video no es un adorno: corta la espera de la respuesta en la pantalla.
+   Aquí manda `charlaPara()` (pantallas.js), que dice lo que hace de verdad: deja de
+   esperar y lo escribe; si la respuesta llega después, se pinta igual. */
+html.manto-jarvis .jm-barra{display:flex;align-items:center;gap:8px;padding:2px 0 6px}
+html.manto-jarvis .jm-alto{display:inline-flex;align-items:center;gap:6px;
+  font:600 11px/1 Consolas,monospace;letter-spacing:.08em;color:var(--primario);
+  background:rgba(4,10,18,.55);border:1px solid var(--primario);border-radius:20px;
+  padding:7px 12px;cursor:pointer}
+html.manto-jarvis .jm-alto[hidden]{display:none}
+html.manto-jarvis .gm-pildora{background:rgba(4,8,14,.62);border:1px solid rgba(255,255,255,.10)}
+html.manto-jarvis .gm-redondo{color:var(--primario)}
+html.manto-jarvis .gm-redondo.enviar{background:var(--primario);color:#05131d}
+
+/* Los modos (Normal / Explícame / Resume…) siguen existiendo con el manto, pero dejan
+   de ocupar una fila: en la referencia no hay chips. Se pliegan en un botón que abre lo
+   mismo. Quitarlos sería quitarle a la dueña seis maneras de pedir las cosas. */
+html.manto-jarvis .gm-modos{position:absolute;right:10px;top:44px;z-index:5;
+  flex-direction:column;align-items:flex-start;background:rgba(4,10,18,.92);
+  border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:8px;
+  max-height:0;overflow:hidden;opacity:0;transition:max-height .18s ease,opacity .18s}
+html.manto-jarvis .gm-modos.abierto{max-height:320px;opacity:1}
+html.manto-jarvis .jm-modos{display:inline-flex}
+html:not(.manto-jarvis) .jm-modos,html:not(.manto-jarvis) .jm-titulo,
+html:not(.manto-jarvis) .jm-estado,html:not(.manto-jarvis) .jm-barra{display:none}
+
+/* La línea «usando <modelo> · cerebro <fuente> · modo <x>» es honestidad, no decoración:
+   con el manto se queda, pero discreta y encima de la píldora. */
+html.manto-jarvis .gm-usando{font-size:10.5px;color:#9fb4c8;opacity:.85;padding:2px 2px 4px}

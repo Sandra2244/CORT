@@ -2199,9 +2199,19 @@ export function wireUI(orbRef) {
   // que estar el vídeo y nada más (la dueña: «no me gusta que el orbe aparezca en
   // MV»). `#scene` ya estaba oculto por el apagón de `css/hud.css`; lo que quedaba
   // aquí era el bucle despierto, y eso también se apaga.
+  /* El manto JARVIS (paso 1.4): con él puesto, la charla se pinta SOBRE el orbe, así
+     que el bucle WebGL no debe congelarse ahí. Es el único caso en que una hoja que no
+     es `orbe` lo deja encendido, y se apaga en cuanto se quita el manto: en un teléfono
+     de gama media un WebGL que nadie ve es CPU, RAM y batería. */
+  const orbeDetras = pantalla => pantalla === 'orbe'
+    || (pantalla === 'charla'
+        && document.documentElement.classList.contains('manto-jarvis'));
   window.addEventListener('cort-pantalla', e => {
     orb.setDisc(false);
-    orb.pausa(e.detail !== 'orbe');
+    orb.pausa(!orbeDetras(e.detail));
+  });
+  window.addEventListener('cort-manto', e => {
+    orb.pausa(!orbeDetras(e.detail ? 'charla' : 'otra'));
   });
   // Las pantallas piden ventanas que viven aquí: el botón «↓ bajar modelos» de la
   // Charla abre 10 · Modelos, que es donde está el descargador de verdad — no se

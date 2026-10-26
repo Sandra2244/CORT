@@ -130,6 +130,12 @@ dos: la vieja `.u/.a` de `hud.css:201-208` y la `.gm-msgs` de `apps.css:501-503`
 caja, con hora corta, indicador de espera y acciones por mensaje. *Aceptación:* el
 fondo se ve a través de la charla, el texto se puede seleccionar, y la hoja no
 re-renderiza todo el historial por mensaje.
+**HECHO el 2026-10-26, ronda 2.15.0** — pero con dos decisiones que cambiaron el
+enunciado y que hay que leer antes de tocar `jarvis.css`: **no se unificaron las dos
+pieles**, se cubrió la de siempre con una capa reversible (`ui/css/jarvis.css`, atada a
+`html.manto-jarvis`), y **el orbe sí vuelve a estar detrás de la charla**, que es lo que
+sale en el video de referencia y lo contrario de lo que estaba vigente desde el 22/10.
+Ver §4.7.
 
 **1.5 · La forma de ejecutar y confirmar** → el flujo visible: petición → orbe en
 escucha → piensa → **qué hizo** (chip con la acción real y su resultado) → habla →
@@ -266,6 +272,148 @@ del par de módulos:**
 **Lo que NO hace esta ronda:** no toca `orb.js`, `hud.css` ni `apps.css`, y no integra
 nada en `ui/index.html`. Falta su aprobación a ojo (`ui/sonda-orbe.html`, que ahora tiene
 los seis atuendos tocables con su chip de color) antes de mover un píxel de la cara real.
+
+## 4.7 · El paso 1.4: el manto JARVIS, y por qué es una CAPA (2026-10-26, ronda 2.15.0)
+
+**Lo que se pidió.** «empiezas por el chat se tiene que parecer al del video», dicho el
+26/10 junto a los tres videos nuevos (la lectura está en `docs/REFERENCIAS-VIDEOS-JARVIS.md`).
+El enunciado del plan decía otra cosa: *una sola piel de burbuja*, unificando la vieja
+`.u/.a` (`hud.css:201-208`) con la `.gm-msgs` (`apps.css:501-503`). **No se hizo así**, y
+hay que leer el porqué antes de tocar `jarvis.css`.
+
+**La referencia, leída del fotograma y no de la memoria.** `docs/referencias/v1-charla-096.jpg`
+(marco 96 s del video 1) enseña: nombre arriba con su «connecté» y su punto verde; dos
+iconos redondos a la derecha; **lo tuyo en una pastilla de color** (coral en el video);
+**lo del asistente como texto suelto, sin caja, alineado a la izquierda**; y STOP + micrófono
+abajo. Copiamos la estructura (jerarquía, pastilla propia, respuesta desnuda, barra abajo)
+y **no copiamos el coral**: el acento de CORT lo manda `apps/apk/src/com/cort/ia/Paleta.java`,
+que son los seis atuendos. Un coral literal en la capa dejaría el manto fijo para siempre
+y mataría el trabajo del paso 1.2. La cuenta de la capa, medida: `ui/css/jarvis.css` tiene
+**124 líneas y 40 reglas**, y las cuarenta cuelgan de `html.manto-jarvis`; el único color
+fijo que se permite es la tinta (`#02040a`, `#05131d`, `#9fb4c8`, `#cfe0f2`, `#eef4fb`,
+`#f2f6fb`) y el ámbar de aviso `#ffcf6b`.
+
+**Decisión 1 · una capa reversible encima de la Charla de siempre.** `ponManto()`
+(`pantallas.js:658`) pone o quita la clase, se guarda en `localStorage` bajo
+`cort-manto` (`'jarvis'` / `'viejo'`, y por defecto el manto puesto) y avisa a `hud.js`
+con el evento `cort-manto`. `apps.css` no se tocó —y `prueba-manto.mjs` [7] lo vigila:
+«`apps.css` no sabe nada del manto (es una capa, no una remodelación)». El motivo no es
+estético: ella va a estar **días comparando las dos caras**, y si la nueva se hiciera
+borrando la vieja, no habría vuelta atrás con un toque ni comparación posible.
+
+**Decisión 2 · el orbe SÍ vuelve a estar detrás de la charla**, que es lo que sale en el
+video y lo contrario de lo vigente desde el 22/10. No se quitó el apagón de
+`hud.css:730-737` (ese regla protege las otras siete hojas); se le **ganó en rango**, y eso
+se puede medir:
+
+| regla | selectores | especificidad |
+|---|---|---|
+| el apagón | `html.pantallas-montadas:not(.p-orbe) #scene` | (1,2,1) = **121** |
+| el manto | `html.pantallas-montadas.p-charla.manto-jarvis #scene` | (1,3,1) = **131** |
+
+Con `:not()` contado **como lo cuenta el navegador** —suma lo de adentro, no se suma a sí
+misma—, y con `display:block!important` en las dos. Hace falta el `!important` **y** la
+especificidad: con los dos `!important` empatados gana el orden del archivo, y el manto va
+el último a propósito (`index.html` enlaza `jarvis.css` después de `hud.css` y `apps.css`),
+pero esa baza no se puede jugar dos veces: la regla del apagón (`hud.css:730-737`) apaga el
+orbe **y trece cosas más del HUD** en las otras siete hojas, así que quitarla o
+estrecharla era tocar las siete pantallas por arreglar una. Se ganó por rango, que es lo
+que se puede comprobar con una cuenta, y no por orden de llegada.
+
+Y el orbe detras de la charla cuesta: `hud.js:2206-2208` decide con `orbeDetras(pantalla)`,
+que sólo enciende el bucle WebGL en `orbe` y en `charla` **con el manto puesto**; al quitarlo
+se congela otra vez. En un teléfono de gama media un WebGL que nadie ve es CPU, RAM y batería.
+
+**La respuesta «semi corta pero medida».** `FRASE_JARVIS` (`pantallas.js:651`) va
+**DENTRO del mensaje** porque `POST /api/chat` (`backend/app/main.py:116`) sólo acepta
+`{message}`: no hay campo de instrucciones. Y sólo se cuela con el manto puesto **y** el
+modo `Normal`: si ella eligió un modo (Explícame, Resume…), manda el modo. Las dos
+condiciones están candadas en el sector [5] de la prueba.
+
+**Lo que hubo que arreglar en la cara real para cumplir las aceptaciones.** Cuatro cosas,
+y ninguna se veía leyendo el CSS:
+
+1. **«la hoja no re-renderiza todo el historial por mensaje»** — no se cumplía. Ahora
+   `pintaCharla(nuevo)` lleva la cuenta `chPintadas` y una guarda doble (que el contador
+   bata con la lista **y** que el DOM tenga exactamente las burbujas esperadas, excluida la
+   de «pensando»); si algo no cuadra, se rehace entera, que es lo seguro. Entre cada
+   `mensajes.push` y su pintura hay de **80 a 803 caracteres** (un `try`, un `fetch` y
+   seis líneas de estado), dato que sirve más abajo.
+2. **la burbuja de «pensando» es una señal, no un mensaje**: se pone y se quita sin entrar
+   en la lista. Si hubiera entrado, dos respuestas seguidas dejarían dos indicadores colgados.
+3. **«el texto se puede seleccionar»** — no se cumplía en el teléfono: `html.mobile …
+   user-select:none` (`hud.css:411-417`) se comía la charla. La regla que devuelve la
+   selección ya existía para `.scr-lista` (`hud.css:417`); lo que faltaba era **la clase**
+   en la caja, y se puso en el marcado de `pantallas.js:552`. `hud.css` no se tocó.
+4. **la píldora de «con qué se piensa» mentía en tres sitios**, y eso es lo que la casa
+   prohíbe de forma expresa. Había **cinco escrituras a mano** de `#gm-usando` (en el envío,
+   en el «sin núcleo», en la caída del núcleo, en la respuesta del teléfono y en `reciboMente`)
+   compitiendo con `pintaUsandoCharla()`, que se llamaba justo después desde `pintaCharla`:
+
+   | lo que pasaba | lo que se leía |
+   |---|---|
+   | respuesta de un núcleo apagado | burbuja «El núcleo de CORT no responde…» y píldora **«usando el modelo del núcleo»** |
+   | ella pulsó parar | **«usando el modelo del núcleo»**, cuando nadie usó nada |
+   | la respuesta llegó DESPUÉS de parar (lo que la píldora promete) | «nadie contestó a esa pregunta» pintado **encima de una respuesta que sí estaba en la pantalla** |
+
+   El arreglo es una **fuente única de verdad**: la píldora la escribe un solo sitio, y
+   sale del final de la conversación —`chPensando`, `chCortada`, y la `nota` que lleva
+   puesta cada burbuja de CORT desde que se creó (`sin núcleo`, `el núcleo se cayó`,
+   `llama-3.1 · cerebro local`, `cerebro del teléfono · local`). Los dos primeros estados
+   se cazaron en el navegador con captura de pantalla; el tercero salió al leer el camino
+   del teléfono.
+
+**Las diez lecturas de la píldora, ejecutadas sobre la función real del archivo** (recortada
+de `pantallas.js` y llamada con un `document` de pega; en esta sesión la herramienta de
+navegador no estaba disponible, así que **no hay captura nueva** — la aprobación a ojo
+sigue pendiente):
+
+| estado de la charla | lo que dice `#gm-usando` |
+|---|---|
+| nada dicho todavía | **usando el modelo del núcleo** · modo Normal |
+| esperando al núcleo | **pensando…** · modo Normal |
+| esperando al teléfono | **el cerebro del teléfono** · modo Normal |
+| respondió sin núcleo | **sin núcleo** · modo Normal |
+| el núcleo se cayó a media respuesta | **el núcleo se cayó** · modo Normal |
+| respuesta normal | **llama-3.1 · cerebro local** · modo Normal |
+| cortó la espera y nadie contestó | **espera cortada** · nadie contestó a esa pregunta |
+| cortó, pero la respuesta llegó tarde | **cerebro del teléfono · local** · modo Normal |
+| pregunta nueva después de una cortada | **pensando…** · modo Normal |
+
+**Pruebas.** `scripts/prueba-manto.mjs`, ocho sectores y **35 comprobaciones en verde**,
+montada en `build.yml` (paso `id: manto`, con anotación `::error::` si falla). Para que no
+sea decorativa se rompieron los archivos reales **catorce veces** —cinco de `jarvis.css`,
+una de `hud.js` y ocho del camino de la charla en `pantallas.js`—, con respaldo y
+restauración verificada byte a byte; la base daba 0 rojos y cada mutación sacó su rojo:
+
+| mutación | rojos |
+|---|---|
+| una regla del manto sin su clase (tiñe todas las hojas) | 1 |
+| copiado el coral de la referencia | 1 |
+| el orbe levantado en todas las pantallas | **2** |
+| el orbe levantado sin más especificidad que el apagón | 1 |
+| un `!important` de más, fuera del orbe | 1 |
+| la frase de medida mandada sin el manto | 1 |
+| la frase de medida encima del modo elegido | 1 |
+| el orbe vivo en todas las pantallas (`hud.js`) | 1 |
+| una píldora escrita a mano de nuevo | 1 |
+| una burbuja de CORT sin su `nota` | 1 |
+| la pintora que deja de leer la `nota` | 1 |
+| la espera cortada atada sólo a la bandera | **2** |
+| rehacer la charla entera por mensaje | 1 |
+| un `mensajes.push` sin su repaint | 1 |
+
+La última no mordía al primer intento, y es la lección del sector [8]: buscar «la siguiente
+`pintaCharla(`» hacia adelante en el archivo hacía que un `push` **sin** pintura encontrara
+la de la función de enfrente (la distancia real llega a 803 caracteres) y diera por buena la
+callejón sin salida. La comprobación ahora corta por el inicio de la siguiente función.
+
+**Lo que NO hace esta ronda.** No unificó las dos pieles de burbuja (decisión arriba), no
+tocó `orb.js` ni `apps.css` ni `hud.css` más que en una línea de `user-select`, no metió
+permiso ni servicio nuevo en el manifiesto, no saca nada a la nube, y no tocó `brain.py`,
+`pool.py` ni los `.java` de Android. `prueba-costura.py` sigue con **una sola roja y es
+suya**: la burbuja 1.1.4 de `Flotante.java`, sin commitear. Las otras suites de la cara:
+colores **51**, orbe **67**, manto **35**, descargas en verde.
 
 ## 5 · Fuera de esta fase, con su sitio
 

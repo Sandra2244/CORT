@@ -329,14 +329,28 @@ Una vez cerradas C1–C6, la Fase 1 se etiqueta. Este plan **no** toca `orb.js`,
 
 ## 11. Lo que necesito que decida ella (cinco cosas, y cierro)
 
-1. ¿La barra de tres es **Historial · Modo · Ajustes**, o prefiere **Historial ·
-   Ajustes · Copiloto** con el copiloto como símbolo propio?
-2. ¿Los cinco modos (charla, código, música, archivos, equipo) caben en el símbolo 2, o
-   quiere que **música** siga teniendo su pantalla aparte (es la única con barra propia
-   hoy, `pantallas.js:137`)?
-3. ¿El fondo semi-negro va **sobre el orbe** (el orbe siempre detrás) o sobre negro
-   liso con el orbe en una esquina, que es como sale en el video?
-4. ¿«Modelos en el móvil» se queda en **descargar en casa y pensar en la nube** (que es
-   lo que hay y funciona), o abrimos una fase aparte para un motor dentro del APK?
-5. ¿Empiezo por **C0** (la barra y la placa sin mover nada) o prefiere ver antes
-   **C2** (ajustes con el atuendo), que es donde se ve el orbe nuevo?
+**Actualizado el 26/10 con su mensaje de los tres videos.** Tres de las cinco ya
+tienen respuesta, y la 5 cambia de raíz:
+
+1. La barra de tres símbolos — **sin responder todavía**, y deja de ser urgente: el paso
+   1.4 puso arriba lo que el video de referencia enseña (nombre, estado, y a la derecha
+   los dos botones que sí hacen falta: modos ✦ y el interruptor del manto ◐).
+2. Los cinco modos en el símbolo 2 — **sin responder**, misma razón.
+3. ¿El fondo semi-negro va **sobre el orbe** o sobre negro liso? → **Sobre el orbe.**
+   Ella dijo «el chat se tiene que parecer al del video», y en el video el chat va
+   encima del fondo animado. Así está hecho: `ui/css/jarvis.css` levanta `#scene` sólo
+   en la charla con el manto puesto, y `hud.js` deja el WebGL vivo ahí y lo sigue
+   congelando en las demás hojas.
+4. «Modelos en el móvil» → **descargar en casa y pensar en la nube sigue siendo el
+   camino** (funciona y está probado). Lo nuevo que ella pidió —motor dentro del
+   cerebro que ejecuta en terminal y manda mensajes— no es un motor en el APK: es la
+   ampliación del backend, y vive en `docs/PLAN-FASE-2-JARVIS.md` §4.
+5. «¿Empiezo por C0 o por C2?» → **ninguna de las dos: «empiezas por el chat».** Y ése
+   fue el paso 1.4. El orden C0→C6 de §9 queda subordinado a la Fase 2 del plan nuevo,
+   que es la que ya dice qué superficie se monta en cada paso.
+
+Lo que su mensaje **añade** y no estaba en este plan: una **segunda** superficie de
+trabajo con código (réplica de Qoder, escritorio y teléfono), respuestas semi-cortas y
+medidas en la de conversación, múltiples voces en Ajustes y el aviso por llamada. Eso
+está en `docs/PLAN-FASE-2-JARVIS.md`, no aquí; este documento sigue siendo sólo la
+superficie de conversación.

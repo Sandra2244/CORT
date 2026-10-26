@@ -531,9 +531,13 @@ function montaCharla() {
   cuerpo.innerHTML = `
     <div class="gm-cab">
       <button class="lk-btn" id="gm-menu" title="Menú de CORT">☰</button>
+      <b class="jm-titulo">CORT</b>
       <button class="gm-modelo" id="gm-modelo" title="Elegir modelo">
         <span id="gm-modelo-n">leyendo…</span><em>▾</em></button>
+      <span class="jm-estado" id="jm-estado">conectando…</span>
       <span class="lk-espacio"></span>
+      <button class="lk-btn jm-modos" id="jm-modos" title="Cómo responde">✦</button>
+      <button class="lk-btn" id="gm-manto" title="El manto JARVIS: la charla sobre el orbe, como en la referencia">◐</button>
       <button class="lk-btn" id="gm-nueva" title="Empezar de cero">✚</button>
       <button class="lk-btn" id="gm-recuerda" title="Traer lo que CORT recuerda del núcleo">⟳</button>
     </div>
@@ -548,6 +552,7 @@ function montaCharla() {
     <div class="scr-lista gm-msgs" id="ch-msgs"></div>
     <div class="gm-usando" id="gm-usando"></div>
     <div class="gm-modos" id="gm-modos"></div>
+    <div class="jm-barra"><button class="jm-alto" id="jm-alto" hidden>■ parar</button></div>
     <div class="gm-pildora">
       <button class="gm-redondo" id="gm-adj" title="Adjuntar un documento o una nota">+</button>
       <textarea id="ch-entrada" rows="1" placeholder="Pregunta a CORT…"></textarea>
@@ -593,6 +598,20 @@ function montaCharla() {
     traeHistorial(true);
     ctx?.say?.('Traigo lo que recuerda el núcleo.');
   };
+  /* El manto JARVIS (paso 1.4): una capa de CSS sobre la charla de siempre. Se guarda
+     en `localStorage` porque la dueña va a estar unos días comparando las dos caras, y
+     lo que elija tiene que seguir ahí cuando cierre la app. */
+  cuerpo.querySelector('#gm-manto').onclick = () => ponManto(!chManto);
+  cuerpo.querySelector('#jm-modos').onclick = () =>
+    document.getElementById('gm-modos').classList.toggle('abierto');
+  // El «parar» del video: corta la ESPERA, no el pensamiento del modelo. Dice lo uno,
+  // no lo otro, porque prometer un botón que apaga al cerebro sería mentir.
+  cuerpo.querySelector('#jm-alto').onclick = charlaPara;
+  aplicaManto();
+  /* El punto de la cabecera dice lo que el aparato confirma, no lo que a una le
+     gustaría ver: se pregunta una vez al montar (`hayNucleo` recuerda el resultado y
+     `charla()` lo vuelve a comprobar si se cae el portátil a media respuesta). */
+  hayNucleo().then(ok => jmEstado(ok ? 'conectado' : 'sin núcleo', !ok));
   cuerpo.querySelectorAll('#gm-saludo [data-s]').forEach(b => b.onclick = () => {
     entrada.value = CH_SUGERENCIAS[+b.dataset.s];
     charla(entrada.value);
@@ -600,9 +619,87 @@ function montaCharla() {
   cargaMensajes();
 }
 
+/* ───────────────────  EL MANTO JARVIS (paso 1.4 de la Fase 1) ───────────────────
+ *
+ * La dueña, 26/10: «empiezas por el chat, se tiene que parecer al del video… la
+ * pantalla será semi negra transparente estilo la interfaz del JARVIS».
+ *
+ * Lo que hace esto, y lo que NO hace:
+ *  · Es una **clase en `<html>`** (`manto-jarvis`) y un archivo de CSS
+ *    (`css/jarvis.css`). No se reescribió la Charla: la misma hoja, los mismos
+ *    botones, el mismo `/api/chat`, el mismo puente `mente()` del teléfono. Se quita
+ *    la clase y la cara vuelve a ser la de siempre.
+ *  · NO es la «superficie chat única» del plan (`docs/PLAN-CHAT-UNICO.md`): ésa
+ *    todavía no se monta porque hay cinco decisiones suyas sin responder (la barra de
+ *    tres, si Música sigue aparte, el fondo, el motor en el APK y por dónde empezar).
+ *  · El orbe de atrás cuesta: `hud.js` congela el WebGL fuera de su pantalla para no
+ *    comerse los 1,8 GiB ni la batería del teléfono. Con el manto puesto se le dice
+ *    que lo deje vivo en la charla, y con el manto quitado vuelve a congelarse.
+ *
+ * Se guarda en `localStorage` porque la dueña va a estar días comparando las dos
+ * caras; lo que elija tiene que seguir ahí cuando cierre la app.
+ */
+const CLAVE_MANTO = 'cort-manto';
+let chManto = true;
+try { chManto = localStorage.getItem(CLAVE_MANTO) !== 'viejo'; } catch { chManto = true; }
+
+/* «Respuestas semi cortas pero medidas», dicho por ella el 26/10 sobre la charla de
+   conversación. Va DELANTE de la pregunta porque `POST /api/chat` sólo acepta
+   `{message}`: no hay campo de instrucciones en el backend (lo dice el comentario de
+   `CH_MODOS`). Con un modo elegido (Explícame, Resume…) manda el modo: no se
+   pisan. Y el candado de «no inventes» está dentro de la propia frase. */
+const FRASE_JARVIS = 'Responde en dos frases, tres como mucho, sin preámbulos y sin '
+  + 'repetirme la pregunta. Si te falta un dato para responder bien, di en una frase '
+  + 'qué te falta en vez de inventarlo.';
+
+const mantoActivo = () => chManto;
+
+/** Pone o quita el manto, y se lo dice a `hud.js` para que sepa si el orbe va detrás. */
+function ponManto(on) {
+  chManto = !!on;
+  try { localStorage.setItem(CLAVE_MANTO, chManto ? 'jarvis' : 'viejo'); } catch { /* sin almacenamiento */ }
+  aplicaManto();
+  window.dispatchEvent(new CustomEvent('cort-manto', { detail: chManto }));
+}
+
+function aplicaManto() {
+  document.documentElement.classList.toggle('manto-jarvis', chManto);
+  const b = document.getElementById('gm-manto');
+  if (b) {
+    b.setAttribute('aria-pressed', String(chManto));
+    b.title = chManto ? 'Manto JARVIS puesto · quítalo para volver a la cara de siempre'
+                      : 'Manto JARVIS quitado · póntelo para charlar sobre el orbe';
+  }
+  // Con el manto quitado los chips de modo vuelven a su fila: si estaba abierto, se cierra.
+  const m = document.getElementById('gm-modos');
+  if (m && !chManto) m.classList.remove('abierto');
+}
+
+/** El estado de la cabecera. Escribe las DOS barras: la genérica (`.scr-estado`, que
+ *  `apps.css` esconde en esta hoja) y la del manto, para que el texto no dependa de
+ *  qué cara esté puesta. */
+function jmEstado(texto, aviso) {
+  const g = document.querySelector('#scr-charla .scr-estado');
+  if (g) { g.textContent = texto; g.classList.toggle('aviso', !!aviso); }
+  const j = document.getElementById('jm-estado');
+  if (j) { j.textContent = texto; j.classList.toggle('aviso', !!aviso); }
+}
+
+/** El botón «parar» de la referencia: corta la ESPERA de la pantalla, no el pensamiento
+ *  del modelo (eso no se puede, y decirlo cuesta menos que fingir un botón que manda).
+ *  Si la respuesta llega después, llega y se pinta: no se tira a la basura. */
+function charlaPara() {
+  if (!chPensando) return;
+  chPensando = false;
+  chCortada = true;
+  jmEstado('espera cortada', true);
+  // La píldora la escribe `pintaUsandoCharla`, que ya sabe que se cortó: escrita a
+  // mano aquí, la pintura de abajo la volvería a su texto de siempre (y así pasaba).
+  guardaMensajes(); pintaCharla();
+}
+
 /* Los chips de modo, con el activo teñido del acento de la app. */
-function pintaModosCharla() {
-  const caja = document.getElementById('gm-modos');
+function pintaModosCharla() {  const caja = document.getElementById('gm-modos');
   if (!caja) return;
   caja.innerHTML = CH_MODOS.map(m => `<button class="gm-modo${m.id === chModo ? ' activa' : ''}"
     data-m="${m.id}" title="${esc(m.pide || 'sin instrucción añadida')}">
@@ -611,18 +708,44 @@ function pintaModosCharla() {
     chModo = b.dataset.m;
     pintaModosCharla();
     pintaUsandoCharla();
+    if (chManto) caja.classList.remove('abierto');   // con el manto los chips son un desplegable
   });
 }
 
 /* La línea de abajo: modelo, modo y adjunto. Se dice aquí en vez de esconderse en
    un menú porque la dueña tiene que saber QUÉ se le está mandando al modelo. */
+/* La píldora de abajo dice con qué se está pensando, y se lee SIEMPRE aquí. Es el único
+   sitio del archivo que escribe `#gm-usando`: cada vez que hubo una segunda escritura a
+   mano —en el envío, en el «sin núcleo», en la respuesta del teléfono— hubo una carrera
+   contra `pintaCharla`, que llamaba a esta función justo después y dejaba pintado
+   «usando el modelo del núcleo» encima de una burbuja que decía «el núcleo de CORT no
+   responde». Dos fuentes de verdad para una sola línea. Ahora la línea sale del final de
+   la conversación: `chPensando`, `chCortada`, y la `nota` que cada respuesta de CORT
+   lleva encima desde que se escribió. */
+let chCortada = false;
+
 function pintaUsandoCharla() {
   const linea = document.getElementById('gm-usando');
   if (!linea) return;
   const modo = CH_MODOS.find(m => m.id === chModo) || CH_MODOS[0];
-  const partes = ['usando ' + (chModelo || 'el modelo del núcleo'), 'modo ' + modo.txt];
+  const ultimo = mensajes[mensajes.length - 1];
+  const partes = [];
+  /* Mientras se espera no se dice un modelo: se dice que se espera. La respuesta que
+     entra por `charla()` o por el puente es la que trae la verdad, y al llegar pinta su
+     propia `nota`. El adjunto se lee del mensaje enviado, no de `chAdj`, que ya está
+     vacío desde que la pregunta salió. */
+  if (chPensando) partes.push(ultimo?.nota || 'pensando…', 'modo ' + modo.txt, ultimo?.adj && '📎 ' + ultimo.adj);
+  /* La cortada se apaga sola cuando el cerebro termina contestando: basta con mirar el
+     final de la conversación. Si lo último es una pregunta, nadie respondió y hay que
+     decirlo; si ya entró la respuesta —aunque llegara DESPUÉS de que ella parara, que es
+     justo lo que la píldora promete—, la línea vuelve a decir con qué se pensó. Atarlo
+     sólo a la bandera fue el fallo: pintaba «nadie contestó» encima de una respuesta que
+     estaba ahí abajo, en la pantalla (cazado con captura, no leyendo el código). */
+  else if (chCortada && ultimo && ultimo.de === 'tu') partes.push('espera cortada', 'nadie contestó a esa pregunta');
+  else if (ultimo?.de === 'cort' && ultimo.nota) partes.push(ultimo.nota, 'modo ' + modo.txt);
+  else partes.push('usando ' + (chModelo || 'el modelo del núcleo'), 'modo ' + modo.txt);
   if (chAdj) partes.push('adjunto ' + chAdj.nombre);
-  linea.innerHTML = partes.map((p, i) => i === 0 ? `<b>${esc(p)}</b>` : esc(p)).join(' · ');
+  linea.innerHTML = partes.filter(Boolean).map((p, i) => i === 0 ? `<b>${esc(p)}</b>` : esc(p)).join(' · ');
 }
 
 function pintaAdjunto() {
@@ -751,24 +874,31 @@ async function charla(texto) {
   const entrada = document.getElementById('ch-entrada');
   if (entrada) { entrada.value = ''; entrada.style.height = 'auto'; }
   const modo = CH_MODOS.find(m => m.id === chModo) || CH_MODOS[0];
+  // Con el manto JARVIS puesto y sin modo elegido, la respuesta sale semi-corta y
+  // medida (lo que ella pidió para la charla de conversación). Si ella eligió un modo,
+  // manda su instrucción: las dos no se pisan.
+  const jarvis = chManto && modo.id === 'normal' ? FRASE_JARVIS : '';
   // El adjunto va DENTRO del mensaje: `POST /api/chat` sólo acepta `{message}`, así
   // que no hay campo donde poner un archivo. Se manda el texto leído y se dice cuál.
-  const envio = [modo.pide, chAdj
+  const envio = [jarvis, modo.pide, chAdj
       ? '[Adjunto: ' + (chAdj.ruta || chAdj.nombre) + ']\n' + chAdj.texto : '', pregunta]
     .filter(Boolean).join('\n\n');
   mensajes.push({ de: 'tu', texto: pregunta, modo: modo.id, adj: chAdj ? chAdj.nombre : '',
                   hora: Date.now() });
-  const adjUntado = chAdj; chAdj = null;
+  chAdj = null;
   pintaAdjunto();
   chPensando = true;
+  chCortada = false;          // pregunta nueva: lo cortado antes ya no cuenta
   chForzarFondo = true;
-  pintaCharla();
+  pintaCharla(true);          // `true`: lo único nuevo es la burbuja que acaba de entrar
   const estado = document.querySelector('#scr-charla .scr-estado');
-  const usando = document.getElementById('gm-usando');
-  if (usando) usando.innerHTML = '<b>pensando…</b> · modo ' + esc(modo.txt)
-    + (adjUntado ? ' · 📎 ' + esc(adjUntado.nombre) : '');
-  estado.textContent = 'pensando…';
-  if (!await avisaSinNucleo(estado)) {
+  jmEstado('pensando…');
+  const hay = await avisaSinNucleo(estado);
+  /* `avisaSinNucleo` escribe en la barra genérica; con el manto la barra visible es
+     otra, así que se copia lo que escribió en vez de decir un estado distinto en cada
+     cara. Dos maneras de decir lo mismo confunden más que una sola. */
+  jmEstado(String(estado?.textContent || ''), estado?.classList.contains('aviso'));
+  if (!hay) {
     /* «Charla con IA… microfono no funciona chat tampoco», dicho el 22/10 con el
        2.6.0-nucleo delante. Aquí se acababa la conversación: la hoja pedía
        `/api/chat` y sin portátil contestaba con una frase de disculpa. Pero el
@@ -785,18 +915,21 @@ async function charla(texto) {
       try { j = typeof bruto === 'string' ? JSON.parse(bruto) : bruto; } catch { j = null; }
       if (j && j.ok !== false) {
         charlaPendiente = true;
-        estado.textContent = 'pensando en el teléfono…';
-        if (usando) usando.innerHTML = '<b>el cerebro del teléfono</b> · modo ' + esc(modo.txt)
-          + (adjUntado ? ' · 📎 ' + esc(adjUntado.nombre) : '');
+        /* Se le pone la nota a la PREGUNTA: mientras se espera, la píldora dice dónde se
+           está pensando, y la dice desde el mismo sitio que pinta la burbuja. `usando`
+           ya no se escribe a mano en ningún camino. */
+        const preguntaDicha = mensajes[mensajes.length - 1];
+        preguntaDicha.nota = 'el cerebro del teléfono';
+        pintaUsandoCharla();
+        jmEstado('pensando en el teléfono…');
         if (j && !j.pendiente) reciboMente(j);      // contestó en el sitio: nada que esperar
         return;
       }
     }
-    mensajes.push({ de: 'cort', texto: sinNucleoFrase(), hora: Date.now() });
+    mensajes.push({ de: 'cort', texto: sinNucleoFrase(), nota: 'sin núcleo', hora: Date.now() });
     chPensando = false;
-    estado.textContent = 'sin núcleo';
-    if (usando) usando.innerHTML = '<b>sin núcleo</b> · ' + esc(sinNucleoFrase());
-    guardaMensajes(); pintaCharla(); return;
+    jmEstado('sin núcleo', true);
+    guardaMensajes(); pintaCharla(true); return;
   }
   try {
     const r = await fetch(ctx.api() + '/api/chat', {
@@ -805,24 +938,25 @@ async function charla(texto) {
     });
     const j = await r.json();
     const dicho = j.reply || j.error || 'No supe qué contestar.';
-    mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '', hora: Date.now() });
+    /* La nota dice lo que el aparato confirmó: con qué modelo y desde dónde. Si el
+       núcleo no devolvió `source`, se dice `local` en vez de inventarse la nube. */
+    mensajes.push({ de: 'cort', texto: dicho, fuente: j.source || '',
+                    nota: (chModelo || 'el modelo del núcleo') + ' · cerebro ' + (j.source || 'local'),
+                    hora: Date.now() });
     chPensando = false;
-    estado.textContent = 'cerebro: ' + (j.source || 'local');
-    if (usando) usando.innerHTML = '<b>' + esc(chModelo || 'el modelo del núcleo') + '</b> · cerebro '
-      + esc(j.source || 'local') + ' · modo ' + esc(modo.txt);
+    jmEstado('cerebro: ' + (j.source || 'local'));
     ctx?.orb?.burst?.();
   } catch (e) {
     mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e,
-                    hora: Date.now() });
+                    nota: 'el núcleo se cayó', hora: Date.now() });
     chPensando = false;
-    estado.textContent = 'sin núcleo';
-    if (usando) usando.innerHTML = '<b>sin núcleo</b>';
+    jmEstado('sin núcleo', true);
     // El portátil dejó de responder: el «sí hay» que estaba guardado es mentira. Se
     // borra para que la siguiente pregunta se vuelva a comprobar, y si el PC no
     // vuelve, esa pregunta ya se piensa en el teléfono.
     nucleo = null;
   }
-  guardaMensajes(); pintaCharla();
+  guardaMensajes(); pintaCharla(true);
 }
 
 /* ── la Charla sin portátil: la respuesta llega por el puente ────────────────
@@ -844,13 +978,14 @@ function reciboMente(ev) {
     : (ev.responde || ev.texto || 'Ya pensé lo mío, pero no volvió texto.');
   const de = ev.de === 'local' || ev.de === 'nube' ? ev.de : '';
   chPensando = false;
-  mensajes.push({ de: 'cort', texto: String(dicho), fuente: de, hora: Date.now() });
+  chCortada = false;          // contestó: la píldora vuelve a decir con qué se pensó
+  mensajes.push({ de: 'cort', texto: String(dicho), fuente: de,
+                  nota: 'cerebro del teléfono' + (de ? ' · ' + de : ''), hora: Date.now() });
   const estado = document.querySelector('#scr-charla .scr-estado');
   if (estado) estado.textContent = 'cerebro del teléfono' + (de ? ': ' + de : '');
-  const usando = document.getElementById('gm-usando');
-  if (usando) usando.innerHTML = '<b>el cerebro del teléfono</b>' + (de ? ' · ' + esc(de) : '');
+  jmEstado('cerebro del teléfono' + (de ? ': ' + de : ''));
   ctx?.orb?.burst?.();
-  guardaMensajes(); pintaCharla();
+  guardaMensajes(); pintaCharla(true);
 }
 
 let menteViva = false;
@@ -896,7 +1031,12 @@ async function traeHistorial(forzar) {
   } catch { /* sin núcleo o sin respuesta: la hoja queda como estaba */ }
 }
 
-function pintaCharla() {
+/* Cuántas burbujas de `mensajes` hay colgadas ahora mismo. Con este número se decide
+   si la charla se puede **añadir** o hay que rehacerla (aceptación del paso 1.4: «la
+   hoja no re-renderiza todo el historial por mensaje»). */
+let chPintadas = 0;
+
+function pintaCharla(nuevo) {
   const caja = document.getElementById('ch-msgs');
   if (!caja) return;
   // El saludo de Gemini con sus sugerencias sólo mientras no hay conversación: en
@@ -906,12 +1046,30 @@ function pintaCharla() {
   // Como OpenJarvis: si la dueña está leyendo más arriba, una respuesta nueva no le
   // arranca la lectura. Sólo se baja si ya estaba abajo, o si acaba de enviar ella.
   const cerca = caja.scrollHeight - caja.scrollTop - caja.clientHeight < 90;
-  caja.innerHTML = '';
-  mensajes.forEach((m, i) => caja.appendChild(burbujaCharla(m, i)));
-  if (chPensando) caja.appendChild(burbujaPensando());
+  /* Se añade la burbuja nueva y se deja el resto en su sitio SÓLO si es verdad que lo
+     único que cambió fue el final: quien llama pasa `nuevo` justo después de su
+     `mensajes.push`, y aquí se comprueba que la caja tiene exactamente las de antes.
+     Cualquier otra cosa —borrar, traer el historial del núcleo, cambiar un modo— cae al
+     reconstruido completo, que es más caro pero nunca se queda enseñando una mezcla. */
+  const colgadas = caja.querySelectorAll('.burbuja:not(.gm-pensando)').length;
+  if (!(nuevo && chPintadas === mensajes.length - 1 && colgadas === chPintadas)) {
+    caja.innerHTML = '';
+    mensajes.forEach((m, i) => caja.appendChild(burbujaCharla(m, i)));
+  } else {
+    caja.appendChild(burbujaCharla(mensajes[mensajes.length - 1], mensajes.length - 1));
+  }
+  chPintadas = mensajes.length;
+  // La de «pensando» es una señal, no un mensaje: se pone y se quita sin tocar las demás.
+  const pensando = caja.querySelector('.gm-pensando');
+  if (chPensando && !pensando) caja.appendChild(burbujaPensando());
+  if (!chPensando && pensando) pensando.remove();
   if (chForzarFondo || cerca) caja.scrollTop = caja.scrollHeight;
   chForzarFondo = false;
   pintaUsandoCharla();
+  // El «parar» del manto sólo existe mientras se espera: un botón que no tiene nada
+  // que cortar es ruido (y la dueña lo tocaría para averiguarlo).
+  const alto = document.getElementById('jm-alto');
+  if (alto) alto.hidden = !chPensando;
 }
 
 /* Una burbuja con su cara, su nombre y —en las de CORT— copiar, leer y guardar.
@@ -938,14 +1096,17 @@ function burbujaCharla(m, i) {
        <button class="bur-accion" data-a="nota" title="Guardarla en 04 · Notas">nota</button>`;
   const avatar = mio ? '<span class="bur-avatar tu" aria-hidden="true">T</span>' : '';
   const avatarCort = mio ? '' : '<span class="bur-avatar" aria-hidden="true">C</span>';
-  b.innerHTML = `${mio ? '' : avatarCort}
+  /* Con el manto JARVIS la respuesta va SIN caja y sin sus botones a la vista (así se
+     ve en la referencia). Un toque sobre el mensaje los trae: esconderlos sin más sería
+     quitarle a la dueña el copiar / leer / nota que ya tenía. Vale para las dos caras:
+     la pastilla tuya también llevaba su «copiar» escrito. */
+  b.onclick = () => b.classList.toggle('tocada');  b.innerHTML = `${mio ? '' : avatarCort}
     <div class="bur-cuerpo">
       <div class="bur-cab"><b>${mio ? 'Tú' : 'CORT'}</b>${cuando ? `<span>${cuando}</span>` : ''}${pies.join('')}</div>
       <div class="bur-texto">${md(m.texto)}</div>
       <div class="bur-acciones">${acciones}</div>
     </div>${avatar}`;
-  b.querySelectorAll('.bur-accion').forEach(x => x.onclick = () => {
-    if (x.dataset.a === 'copiar') return copia(m.texto, 'Copiado.');
+  b.querySelectorAll('.bur-accion').forEach(x => x.onclick = () => {    if (x.dataset.a === 'copiar') return copia(m.texto, 'Copiado.');
     if (x.dataset.a === 'leer') {
       if (typeof ctx?.speak !== 'function') return ctx?.say?.('La voz no está disponible aquí.');
       ctx.speak(m.texto);
