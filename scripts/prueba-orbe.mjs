@@ -22,6 +22,7 @@ import {
   N_PUNTOS, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
   puntosFibonacci, aristasCercanas, creaOrbe, SHADERS,
 } from '../ui/js/orbe-plexo.js';
+import { estados as coloresDelTraje, POR_DEFECTO } from '../ui/js/traje.js';
 
 let fallos = 0, hechos = 0;
 const ok = (etiqueta, condicionado, detalle = '') => {
@@ -253,6 +254,68 @@ ok('el bucle sólo escribe uniforms y rotación',
    /comp\.uTiempo\.value|objeto\.rotation/.test(cuerpo));
 ok('no hay Fresnel ni cáscara de 1280 triángulos de vuelta',
    !/Icosahedron|Fresnel|GridHelper/.test(codigo));
+
+/* ---------- [7] vestir el orbe (paso 1.2) ----------
+   El color del orbe ya no está escrito aquí: lo da `traje.js`. Lo que se vigila es el
+   reparto y el precio: que el traje cambie los cinco estados, que NO reconstruya la
+   geometría (cuesta lo que cuesta escribir el destino), y que el color no salte —un
+   orbe que hace un bote al mudar de atuendo se ve roto aunque el color sea correcto. */
+console.log('\n[7] vestir el orbe, sin reconstruirlo');
+const FABRICA = coloresDelTraje(POR_DEFECTO.primario, POR_DEFECTO.secundario);
+ok('la tabla de fábrica del orbe ES la de `traje.js`, estado por estado',
+   CLAVE.every(k => ESTADOS[k].a === FABRICA[k].a && ESTADOS[k].b === FABRICA[k].b));
+/* El candado del paso: si alguien vuelve a escribir un `#hex` de estado en el módulo,
+   el orbe dejará de vestirse y la prueba [1] de la Fase 1 («cambiar traje ⇒ cambia
+   TODO el orbe») volverá a mentir. */
+ok('en el código del orbe no queda ni un color de estado escrito a mano',
+   !/['"]#[0-9a-f]{3,6}['"]/i.test(codigo),
+   (codigo.match(/['"]#[0-9a-f]{3,6}['"]/gi) || []).slice(0, 3).join(' '));
+
+const hexDel = c => '#' + [c.r, c.g, c.b].map(v =>
+  Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0')).join('');
+const JARVIS = ['#ffc46b', '#241405'];
+const MATRIX = ['#22ff88', '#04160c'];
+const vestido = creaOrbe(THREE, { traje: JARVIS });
+ok('`creaOrbe` con traje monta la tabla de ESE traje',
+   vestido.estados().escucha.b === coloresDelTraje(...JARVIS).escucha.b &&
+   vestido.estados().escucha.b !== FABRICA.escucha.b);
+ok('y los uniforms nacen con su color, no con el de fábrica',
+   hexDel(vestido.objeto.children[0].material.uniforms.uColorB.value) === coloresDelTraje(...JARVIS).reposo.b,
+   hexDel(vestido.objeto.children[0].material.uniforms.uColorB.value));
+
+vestido.setEstado('escucha');
+for (let i = 0; i < 60; i++) vestido.pinta(1 / 30, 0.3);      // se asienta en el cian
+const uniformEscucha = vestido.objeto.children[0].material.uniforms;
+const colorAntes = hexDel(uniformEscucha.uColorB.value);
+ok('asentado, el uniform coincide con el estado puesto',
+   colorAntes === hexDel(new Color(coloresDelTraje(...JARVIS).escucha.b)), `${colorAntes}`);
+const geoAntes = vestido.objeto.children[0].geometry;
+const cifrasAntes = JSON.stringify(vestido.cifras());
+vestido.vestir(...MATRIX);
+ok('vestir deja puesto el MISMO estado (no vuelve a reposo)', vestido.estado() === 'escucha');
+ok('vestir cambia la tabla entera, incluida la de hablar',
+   vestido.estados().habla.b === coloresDelTraje(...MATRIX).habla.b);
+ok('vestir NO reconstruye la geometría: es el mismo objeto y las mismas cifras',
+   vestido.objeto.children[0].geometry === geoAntes &&
+   JSON.stringify(vestido.cifras()) === cifrasAntes, cifrasAntes);
+/* El candado del «no salta»: con un solo frame el color tiene que haberse MOVIDO pero
+   tiene que seguir más cerca del anterior que del destino. `pinta` interpola ~20 % por
+   frame a 30 fps, así que el bote sólo se daría si alguien pusiera el color a mano. */
+vestido.pinta(1 / 30, 0.3);
+const movido = hexDel(uniformEscucha.uColorB.value);
+const d = (x, y) => Math.hypot(...[1, 3, 5].map(i =>
+  parseInt(x.slice(i, i + 2), 16) - parseInt(y.slice(i, i + 2), 16)));
+ok('y el color se ACERCA al nuevo traje, no salta',
+   movido !== colorAntes && d(movido, colorAntes) < d(movido, coloresDelTraje(...MATRIX).escucha.b),
+   `${colorAntes} → ${movido}, destino ${coloresDelTraje(...MATRIX).escucha.b}`);
+for (let i = 0; i < 90; i++) vestido.pinta(1 / 30, 0.3);
+ok('tras dos segundos de interpolación el orbe ya va vestido',
+   d(hexDel(uniformEscucha.uColorB.value), coloresDelTraje(...MATRIX).escucha.b) < 3,
+   hexDel(uniformEscucha.uColorB.value));
+ok('un traje roto no tumba el orbe: cae al de fábrica y sigue animando',
+   vestido.vestir('#zzzzzz', null) === true &&
+   vestido.estados().escucha.b === FABRICA.escucha.b);
+vestido.borrar();
 
 console.log(`\n${fallos ? 'ROJO' : 'verde'} · ${hechos} hechos, ${fallos} fallos · ` +
             `${N_PUNTOS} puntos, ${n} líneas\n`);

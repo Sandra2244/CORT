@@ -100,6 +100,12 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
   border-radius:9px;padding:5px 9px;font:400 11px/1 var(--mono);cursor:pointer}
 .fila button[aria-pressed=true]{background:rgba(57,194,255,.18);color:var(--texto-hi);
   border-color:var(--cyan)}
+/* Perlita con el color que el ORBE está usando para ese botón. En los estados es el
+   color de las líneas del atuendo puesto; en los trajes, su color primario. Sin esto
+   hay que mirar la esfera para saber si el traje cambió de verdad. */
+.fila button::before{content:'';display:inline-block;width:8px;height:8px;margin-right:6px;
+  border-radius:50%;background:var(--chip,transparent);box-shadow:0 0 7px var(--chip,none);
+  vertical-align:middle}
 #medida{font:400 10px/1.5 var(--mono);color:var(--tenue);letter-spacing:.04em}
 #medida b{color:var(--texto-hi)}
 #nivel{width:100%;accent-color:var(--cyan)}
@@ -123,6 +129,7 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
   <div id="datos">
     <span><i>nodo</i><b id="d-nodo">—</b></span>
     <span><i>estado</i><b id="d-estado">—</b></span>
+    <span><i>atuendo</i><b id="d-traje">Cortana</b></span>
     <span><i>cerebro</i><b id="d-cerebro">sin preguntar</b></span>
   </div>
 </header>
@@ -143,6 +150,8 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
 <aside id="mandos" class="placa">
   <h2>estados (tócalos)</h2>
   <div class="fila" id="estados"></div>
+  <h2>atuendo — los seis de <code>Paleta.java</code></h2>
+  <div class="fila" id="trajes"></div>
   <h2>nivel de voz <span id="nv">0,00</span></h2>
   <input id="nivel" type="range" min="0" max="100" value="0">
   <div class="fila">
@@ -165,6 +174,18 @@ import { ESTADOS, N_PUNTOS, VECINOS, creaOrbe } from './js/orbe-plexo.js';
 const $ = (id) => document.getElementById(id);
 const avisa = (texto) => { const a = $('aviso'); a.style.display = 'block'; a.textContent = texto; };
 
+/* ---------- el atuendo (paso 1.2) ---------- */
+/* Los seis de `Paleta.java` (sección 5 del contrato 2.1), copiados aquí sólo para
+   poder tocarlos. Lo que pinta NO está escrito aquí: sale de `js/traje.js`, que es
+   lo que mide `scripts/prueba-colores.mjs`. Si un día `Paleta.java` añade un traje,
+   la sonda lo enseña en cuanto se añada a esta lista. */
+const TRAJES = [
+  ['Cortana', '#59d9ff', '#0a3d62'], ['JARVIS', '#ffc46b', '#241405'],
+  ['Siri', '#ff5fa2', '#3d0f33'],    ['Matrix', '#22ff88', '#04160c'],
+  ['Atardecer', '#ff7a45', '#3d1a4d'], ['Neutron', '#e8eef2', '#1b2226'],
+];
+let traje = 0;
+
 /* ---------- el orbe ---------- */
 /* Declarado ANTES de montar: `montar()` pide el estado de arranque y si la variable
    vive más abajo, la página entera cae con "Cannot access before initialization". */
@@ -178,10 +199,60 @@ function montar() {
   /* El tamaño de punto se pasa en píxeles del aparato: `gl_PointSize` no conoce el
      pixel ratio y en una pantalla a 2x saldrían de la mitad de lo pedido. */
   orbe = creaOrbe(THREE, { modo, puntos: N_PUNTOS, vecinos: VECINOS,
-                           tamano: 2.8 * renderer.getPixelRatio() });
+                           tamano: 2.8 * renderer.getPixelRatio(),
+                           traje: [TRAJES[traje][1], TRAJES[traje][2]] });
   orbe.setEstado(estado);
   escena.add(orbe.objeto);
+  pintaChip();
 }
+/* ---------- estados, nivel y bucle ---------- */
+const botones = $('estados');
+for (const k of Object.keys(ESTADOS)) {
+  const b = document.createElement('button');
+  b.textContent = k; b.dataset.e = k;
+  b.onclick = () => poner(k);
+  botones.appendChild(b);
+}
+function poner(k) {
+  if (!orbe || !orbe.setEstado(k)) return;
+  estado = k;
+  $('d-estado').textContent = k;
+  for (const b of botones.children) b.setAttribute('aria-pressed', String(b.dataset.e === k));
+  pintaChip();
+}
+
+/* ---------- el atuendo: seis botones y `vestir` ---------- */
+/* Tocar un traje NO reconstruye el orbe: llama a `vestir`, que reescribe el destino y
+   deja que `pinta` interpole el color. Es la única manera de ver si el cambio es un
+   salto (feo) o una transición, y es lo que hará la cara real con `Paleta.java`. */
+const botonesTraje = $('trajes');
+for (let i = 0; i < TRAJES.length; i++) {
+  const [nombre, primario] = TRAJES[i];
+  const b = document.createElement('button');
+  b.textContent = nombre; b.dataset.t = String(i);
+  b.style.setProperty('--chip', primario);
+  b.onclick = () => {
+    traje = i;
+    if (orbe) orbe.vestir(primario, TRAJES[i][2]);
+    for (const x of botonesTraje.children) x.setAttribute('aria-pressed', String(x.dataset.t === String(i)));
+    $('d-traje').textContent = nombre;
+    pintaChip();                       // los puntos de los estados cambian con el traje
+  };
+  botonesTraje.appendChild(b);
+}
+botonesTraje.children[0].setAttribute('aria-pressed', 'true');
+
+/** El puntito de cada botón de estado: su color de LÍNEAS con el traje puesto. Así se
+ *  ve, sin mirar el orbe, si los cinco se distinguen de verdad entre sí. */
+function pintaChip() {
+  if (!orbe) return;
+  const tabla = orbe.estados();
+  for (const b of botones.children) {
+    const e = tabla[b.dataset.e];
+    if (e) b.style.setProperty('--chip', e.b);
+  }
+}
+
 try {
   renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true,
                                        powerPreference: 'low-power' });
@@ -206,20 +277,6 @@ try {
         '. En la cara real esto lo cubre el orbe de palo (orbeDePalo en index.html).');
 }
 
-/* ---------- estados, nivel y bucle ---------- */
-const botones = $('estados');
-for (const k of Object.keys(ESTADOS)) {
-  const b = document.createElement('button');
-  b.textContent = k; b.dataset.e = k;
-  b.onclick = () => poner(k);
-  botones.appendChild(b);
-}
-function poner(k) {
-  if (!orbe || !orbe.setEstado(k)) return;
-  estado = k;
-  $('d-estado').textContent = k;
-  for (const b of botones.children) b.setAttribute('aria-pressed', String(b.dataset.e === k));
-}
 $('nivel').oninput = (ev) => {
   objetivo = ev.target.value / 100;
   $('nv').textContent = objetivo.toFixed(2).replace('.', ',');

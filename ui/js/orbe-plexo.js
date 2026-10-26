@@ -128,24 +128,39 @@ export function aristasCercanas(pos, n = N_PUNTOS, k = VECINOS) {
 
 /* ---------------- los estados, que son el color ---------------- */
 
+import { estados as coloresDelTraje, POR_DEFECTO } from './traje.js';
+
 /**
- * Los cuatro estados de la cara, con los colores leídos en los fotogramas del video:
- * blanco-frío en reposo, cian al oír, y verde lima cuando trabaja o habla. `a` es el
- * color de los puntos y `b` el de las líneas; `empuje` cuánto agranda la onda el nivel
- * de audio; `giro` es radianes por segundo.
- *
- * En la integración (paso 1.2) `a` y `b` NO se quedan aquí escritos a mano: se piden
- * a `traje.js` (los canales `particula` y `hilos`) para que un atuendo siga pintando
- * todo el orbe, que es lo que vigila `prueba-colores.mjs`. Mientras el prototipo viva
- * aparte, la tabla propia es honesta.
+ * Lo que cada estado aporta ADEMÁS del color: `empuje` cuánto agranda la onda el
+ * nivel de audio y `giro` radianes por segundo. Los colores NO están aquí — se
+ * piden a `traje.js` (paso 1.2 de `docs/PLAN-FASE-1.md`), porque un color escrito a
+ * mano en este archivo sería un orbe que no se viste con el atuendo de la dueña.
  */
-export const ESTADOS = Object.freeze({
-  reposo:  { a: '#f6fbff', b: '#a9c9dd', opacidad: 0.82, empuje: 0.030, giro: 0.055 },
-  escucha: { a: '#eafcff', b: '#39c2ff', opacidad: 0.92, empuje: 0.075, giro: 0.160 },
-  piensa:  { a: '#c8fff0', b: '#25e0b8', opacidad: 0.88, empuje: 0.055, giro: 0.620 },
-  habla:   { a: '#eaffd4', b: '#7dff3f', opacidad: 0.98, empuje: 0.130, giro: 0.230 },
-  error:   { a: '#ffe0e6', b: '#ff5b6e', opacidad: 0.88, empuje: 0.040, giro: 0.090 },
+const MOVIMIENTO = Object.freeze({
+  reposo:  { opacidad: 0.82, empuje: 0.030, giro: 0.055 },
+  escucha: { opacidad: 0.92, empuje: 0.075, giro: 0.160 },
+  piensa:  { opacidad: 0.88, empuje: 0.055, giro: 0.620 },
+  habla:   { opacidad: 0.98, empuje: 0.130, giro: 0.230 },
+  error:   { opacidad: 0.88, empuje: 0.040, giro: 0.090 },
 });
+
+/** La tabla de un atuendo: el color de `traje.js` + el movimiento de arriba. */
+export function estadosDelTraje(primario, secundario) {
+  const c = coloresDelTraje(primario, secundario);
+  const salida = {};
+  for (const k of Object.keys(MOVIMIENTO)) {
+    salida[k] = Object.freeze({ a: c[k].a, b: c[k].b, ...MOVIMIENTO[k] });
+  }
+  return Object.freeze(salida);
+}
+
+/**
+ * Los cinco estados con el atuendo de fábrica (`Cortana` en `Paleta.java`). Con
+ * éstos el orbe se ve como en los fotogramas de la referencia: blanco-frío en
+ * reposo, cian al oír, turquesa al pensar, lima al hablar y rojo al fallar.
+ * `creaOrbe(..., {traje})` y `vestir()` usan la misma función con otros colores.
+ */
+export const ESTADOS = estadosDelTraje(POR_DEFECTO.primario, POR_DEFECTO.secundario);
 
 /** El estado con el que se enciende la cara: no llama la atención. */
 export const ESTADO_INICIAL = 'reposo';
@@ -244,16 +259,19 @@ export function creaOrbe(THREE, opciones = {}) {
   const n = opciones.puntos || N_PUNTOS;
   const k = opciones.vecinos || VECINOS;
   const modo = opciones.modo || 'pleno';           // 'pleno' | 'bajo' (sin líneas)
+  // El atuendo con el que nace. Sin `traje`, el de fábrica: la tabla de `ESTADOS`.
+  let tabla = opciones.traje && opciones.traje.length === 2
+    ? estadosDelTraje(opciones.traje[0], opciones.traje[1]) : ESTADOS;
   const geo = puntosFibonacci(n, RADIOS.esfera, opciones.semilla || 7);
   const aristas = aristasCercanas(geo.pos, n, k);
 
-  const colorA = new THREE.Color(ESTADOS[ESTADO_INICIAL].a);
-  const colorB = new THREE.Color(ESTADOS[ESTADO_INICIAL].b);
+  const colorA = new THREE.Color(tabla[ESTADO_INICIAL].a);
+  const colorB = new THREE.Color(tabla[ESTADO_INICIAL].b);
   const comp = {
     uTiempo: { value: 0 },
     uNivel: { value: 0 },
-    uEmpuje: { value: ESTADOS[ESTADO_INICIAL].empuje },
-    uOpacidad: { value: ESTADOS[ESTADO_INICIAL].opacidad },
+    uEmpuje: { value: tabla[ESTADO_INICIAL].empuje },
+    uOpacidad: { value: tabla[ESTADO_INICIAL].opacidad },
     uColorA: { value: colorA },
     uColorB: { value: colorB },
     uTamano: { value: opciones.tamano || 2.8 },   // píxeles lógicos a 7,2 de cámara
@@ -305,16 +323,26 @@ export function creaOrbe(THREE, opciones = {}) {
   let estado = ESTADO_INICIAL;
   let giro = 0;
   const destino = { a: colorA.clone(), b: colorB.clone(), op: comp.uOpacidad.value,
-                    empuje: comp.uEmpuje.value, vel: ESTADOS[estado].giro };
+                    empuje: comp.uEmpuje.value, vel: tabla[estado].giro };
 
   /** Pide un estado: el color NO salta, se interpola en `pinta`. */
   function setEstado(nombre) {
-    const e = ESTADOS[nombre];
+    const e = tabla[nombre];
     if (!e) return false;                    // un estado inventado no tumba la cara
     estado = nombre;
     destino.a.set(e.a); destino.b.set(e.b);
     destino.op = e.opacidad; destino.empuje = e.empuje; destino.vel = e.giro;
     return true;
+  }
+
+  /**
+   * Cambio de atuendo en caliente, con los dos colores del contrato 2.1
+   * (`--primario` / `--secundario`). No salta: reescribe el destino y `pinta` se
+   * acerca en los siguientes frames, igual que cuando cambia el estado.
+   */
+  function vestir(primario, secundario) {
+    tabla = estadosDelTraje(primario, secundario);
+    return setEstado(estado);
   }
 
   /** `dt` en segundos, `nivel` de 0 a 1 (micrófono o simulación). */
@@ -345,8 +373,10 @@ export function creaOrbe(THREE, opciones = {}) {
   }
 
   return {
-    objeto, setEstado, pinta, borrar,
+    objeto, setEstado, pinta, borrar, vestir,
     estado: () => estado,
+    /** La tabla viva: lo que la sonda pinta en sus botones de estado. */
+    estados: () => tabla,
     /** Lo que la sonda enseña para que el coste no sea una promesa. */
     cifras: () => ({ puntos: n, lineas: aristas.length / 2,
                      dibujos: 2 + (lineas ? 1 : 0) }),

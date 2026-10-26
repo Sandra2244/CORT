@@ -117,6 +117,9 @@ verde. **No toca `orb.js` ni `hud.css`.**
 **1.2 · Color por estado y trajes** → la tabla de estados del prototipo, atada a los
 canales de `traje.js` para que un atuendo siga pintando todo el orbe. *Aceptación:*
 `prueba-colores.mjs` en verde y los cuatro estados distinguibles con el brillo bajo.
+**HECHO el 2026-10-26** — con una decisión que no estaba en el plan y que hay que leer
+antes de tocar nada: el matiz del estado es fijo y el atuendo sólo modula saturación,
+luz y el reposo. Ver §4.6.
 
 **1.3 · El panel de arriba** (reloj y cuadro de datos de la referencia) → placa
 monoespaciada con hora, fecha, nodo (PC/teléfono), modelo que respondió y estado.
@@ -198,8 +201,82 @@ momento. El único momento en que el cerebro local respondió es con 213 MB libr
 modelo ya cargado. **Ningún modelo grande va a responder aquí mientras haya que
 competir por la RAM**: eso es lo que justifica los guardas de la Fase de acciones.
 
+## 4.6 · El paso 1.2: el atuendo pinta los cinco estados (2026-10-26, ronda 2.14.0)
+
+**Lo que se pidió.** Que el orbe del prototipo no llevara sus colores escritos a mano:
+los cinco estados tienen que salir de `ui/js/traje.js`, que es el módulo que mide
+`scripts/prueba-colores.mjs`. Y que al cambiar de atuendo cambie el orbe **entero**, que
+es la prueba decisiva de F17.
+
+**La tensión, que es lo único interesante del paso.** El color ES el estado (cian al
+oír, turquesa al pensar, lima al hablar, rojo al fallar: eso lo dice el video), pero el
+atuendo también tiene que pintar el orbe. Si las dos cosas se dejan en la misma mano, la
+segunda le roba a la primera.
+
+**Primer borrador, y lo que midió.** El estado bebía su saturación y su luz del traje.
+`prueba-colores.mjs` [6] —que exige que los cinco estados se distingan entre sí, no sólo
+del de fábrica— lo reventó con **6 rojos**: con `Neutron` (un gris casi blanco,
+`#e8eef2`) el par `escucha/piensa` medía **2,8** de distancia en el cubo RGB. Cinco
+estados que se leían como uno solo. Sin la prueba, esto habría salido «bonito» en la
+sonda y roto en el teléfono.
+
+**Segundo borrador, el reparto que quedó.**
+
+| parte del color | de quién es | por qué |
+|---|---|---|
+| el **matiz** (197° / 164° / 100° / rojo) | del **estado**, fijo | es el idioma; con JARVIS «hablar» sigue siendo lima |
+| la **saturación y la luz** | del estado, **moduladas** hasta un 38 % por el traje | un traje apagado tiene que notarse, pero nunca apagar el indicador |
+| el **reposo** | entero del traje (matiz y saturación de la mezcla de los dos colores, luz del primario) | en reposo no hay mensaje que dar |
+| el **error** | rojo fijo `#ff5b6e` en los seis atuendos | una alarma que cambia con el fondo deja de ser alarma |
+
+Con eso, y con el `sube` de cada estado (cada uno sube o baja su luz respecto a la del
+atuendo: `escucha +.08`, `piensa −.07`, `habla +.02`), el peor par de los seis trajes
+pasa de **2,8 a 65,3**. Los números, medidos:
+
+| traje | peor par (distancia RGB) |
+|---|---|
+| Cortana | 105,1 (`reposo/escucha`) |
+| JARVIS | 105,1 · Siri 107,0 · Matrix 91,3 · Atardecer 105,5 |
+| Neutron | **65,3** (`escucha/piensa`) ← el que mandaba |
+
+Y el ancla con el video sigue viva con el traje de fábrica: `escucha.b = #59cffe` a
+**34,6** del `#39c2ff` leído en los fotogramas, `habla.b = #83fd46` a **9,4** del
+`#7dff3f`. El umbral de la prueba son 60.
+
+**Lo que hace el orbe con esa tabla.** `creaOrbe(THREE, {traje:[p,s]})` nace vestido y
+`vestir(p, s)` cambia el atuendo **en caliente**: reescribe la tabla, vuelve a pedir el
+estado puesto y deja que `pinta` interpole el color (≈20 % por frame a 30 fps). No
+reconstruye la geometría, no salta a `reposo` y no da un bote de color. Un color roto
+que llega del traje cae al de fábrica en vez de apagar la cara.
+
+**Pruebas.** `prueba-colores.mjs` pasó de 28 a **51 comprobaciones** (sector [6] nuevo)
+y `prueba-orbe.mjs` de 55 a **67** (sector [7] nuevo: vestir sin reconstruir). Las dos
+en verde. **Y se comprobaron que no son de adorno, con seis mutaciones sobre una copia
+del par de módulos:**
+
+| mutación | rojos que saca |
+|---|---|
+| el matiz de `habla` sigue al traje (h=0) | **5** en `prueba-colores` (`habla/error` a 34-43 en cuatro trajes + el ancla del video a 225) |
+| quitar la separación de luz (`sube` a 0) | **1**: Neutron `escucha/piensa` a 40,9 |
+| el color salta al vestir (`mez = 1`) | **1**: «se ACERCA, no salta» |
+| `vestir` olvida reescribir el destino | **2** |
+| el error se pinta con el traje | **1**: «el error sigue siendo rojo con Matrix» |
+| un `#hex` de estado escrito a mano en `orbe-plexo.js` | **1**: el candado del sector [7] |
+
+**Lo que NO hace esta ronda:** no toca `orb.js`, `hud.css` ni `apps.css`, y no integra
+nada en `ui/index.html`. Falta su aprobación a ojo (`ui/sonda-orbe.html`, que ahora tiene
+los seis atuendos tocables con su chip de color) antes de mover un píxel de la cara real.
+
 ## 5 · Fuera de esta fase, con su sitio
 
+- **La superficie `chat` única** — pedida por la dueña el 2026-10-26 en el mismo mensaje
+  que arrancó esta ronda: quitar los apartados y dejar **una** pantalla que se llame
+  `chat`, semi-negra transparente estilo JARVIS, con la barra de tres símbolos pegados
+  (historial · modo · ajustes), modelos locales y en línea con sus claves API, y las
+  funciones de copiloto. Está **planificado aparte y sin código**, en
+  `docs/PLAN-CHAT-UNICO.md`, con las cinco preguntas que tiene que cerrar ella antes de
+  que se desmonte ninguna ventana. Lo que sí toca de esta fase: el paso 1.2 (el atuendo)
+  entra por ahí, y el paso 1.4 (el chat transparente) es un trozo de C1/C2 de ese plan.
 - **Modelos** — adelantado a esta ronda (2026-10-26) porque la dueña lo pidió como lo
   primordial: «que CORT tenga ya cerebros y responda; luego se amplían capacidades».
   Hecho y **medido de verdad**: ver §4.5. Lo que queda de Fase 2: catálogo con

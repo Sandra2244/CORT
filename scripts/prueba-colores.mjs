@@ -17,7 +17,7 @@
  *
  * Uso:  node scripts/prueba-colores.mjs     (una fracción de segundo)
  */
-import { CLAVES, POR_DEFECTO, deriva } from '../ui/js/traje.js';
+import { CLAVES, POR_DEFECTO, deriva, ESTADOS_CLAVES, estados } from '../ui/js/traje.js';
 
 let fallos = 0, hechos = 0;
 const ok = (etiqueta, condicionado, detalle = '') => {
@@ -102,6 +102,75 @@ ok('cada traje tiene nombre y dos colores válidos',
    TRAJES.every(([n, p, s]) => n && HEX.test(p) && HEX.test(s)));
 ok('los nombres de la tabla están en el orden de Paleta.java',
    TRAJES.map(t => t[0]).join(',') === 'Cortana,JARVIS,Siri,Matrix,Atardecer,Neutron');
+
+/* ---------- [6] los cinco ESTADOS del orbe nuevo (paso 1.2) ---------- */
+/* `orbe-plexo.js` ya no escribe sus colores: los pide aquí. El reparto que se vigila
+   es el que está escrito en `traje.js`: el MATIZ del estado es fijo (es el idioma:
+   cian oír, turquesa pensar, lima hablar, rojo fallar) y lo que sigue al atuendo son
+   la saturación, la luz y el reposo entero. Si alguien mueve un matiz para que
+   «el orbe se vista más», esta prueba lo nota: los estados dejan de distinguirse. */
+console.log('\n[6] los cinco estados, con el traje puesto');
+ok('son cinco y en el orden de la cara',
+   ESTADOS_CLAVES.join(',') === 'reposo,escucha,piensa,habla,error');
+
+/** Los tres canales de un `#hex` ya largo (`#rrggbb` → [r, g, b]). */
+const hx = x => [1, 3, 5].map(i => parseInt(x.slice(i, i + 2), 16));
+/** Distancia entre dos `#hex`: basta para saber si dos estados se confunden. */
+function dist(x, y) {
+  const a = hx(x), b = hx(y);
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+for (const [nombre, primario, secundario] of TRAJES) {
+  const e = estados(primario, secundario);
+  ok(`${nombre}: los cinco estados traen sus dos colores válidos`,
+     ESTADOS_CLAVES.every(k => HEX.test(e[k].a) && HEX.test(e[k].b)),
+     ESTADOS_CLAVES.filter(k => !HEX.test(e[k].a) || !HEX.test(e[k].b)).join(', '));
+  /* El umbral (45) no es redondo: es la mitad de la distancia que hay entre el cian y
+     el turquesa del video. Por debajo de eso, dos estados se leen como el mismo. */
+  let peor = 999, par = '';
+  for (let i = 0; i < ESTADOS_CLAVES.length; i++)
+    for (let j = i + 1; j < ESTADOS_CLAVES.length; j++) {
+      const d = Math.min(dist(e[ESTADOS_CLAVES[i]].b, e[ESTADOS_CLAVES[j]].b),
+                         dist(e[ESTADOS_CLAVES[i]].a, e[ESTADOS_CLAVES[j]].a));
+      if (d < peor) { peor = d; par = ESTADOS_CLAVES[i] + '/' + ESTADOS_CLAVES[j]; }
+    }
+  ok(`${nombre}: los cinco estados se distinguen (peor par ${par} a ${peor.toFixed(0)})`,
+     peor >= 45, `peor par ${par} a ${peor.toFixed(1)}`);
+  if (nombre !== 'Cortana') {
+    const f = estados(TRAJES[0][1], TRAJES[0][2]);
+    const quietos = ESTADOS_CLAVES.filter(k => k !== 'error')
+      .filter(k => e[k].a === f[k].a && e[k].b === f[k].b);
+    ok(`${nombre}: los cuatro estados no de fábrica cambian con el traje`,
+       quietos.length === 0, quietos.length ? 'sin cambiar: ' + quietos.join(', ') : '');
+  }
+}
+const cortana = estados(TRAJES[0][1], TRAJES[0][2]);
+ok('con el traje de fábrica el estado de hablar cae en el lima del video',
+   dist(cortana.habla.b, '#7dff3f') < 60, `a ${dist(cortana.habla.b, '#7dff3f').toFixed(1)} de la lectura a ojo`);
+ok('y el de escuchar en su cian',
+   dist(cortana.escucha.b, '#39c2ff') < 60, `a ${dist(cortana.escucha.b, '#39c2ff').toFixed(1)}`);
+ok('el error sigue siendo rojo con el traje verde de Matrix',
+   estados('#22ff88', '#04160c').error.b === '#ff5b6e');
+ok('un color roto no apaga los estados: caen a fábrica',
+   JSON.stringify(estados('#zz', null)) === JSON.stringify(cortana));
+/* La otra cara del reparto: si el traje no moviera NADA, «vestir CORT» no pintaría el
+   orbe. Con un traje saturado y uno apagado, el cian del «escucha» tiene que notarse.
+
+   Antes esta comprobación pedía `dist > 40`, y con el reparto nuevo NO puede pedirlo:
+   el 40 venía de que el estado bebía entero su saturación del atuendo, que es justo lo
+   que [6] cazó como fallo (con `Neutron`, un gris casi blanco, los cinco estados
+   quedaban a 2,8 de distancia: cinco estados que se leían como uno). Ahora el estado
+   conserva al menos el 62 % de su propia saturación, así que lo que se exige es la
+   DIRECCIÓN, que es la invariant real: un traje apagado da un cian MÁS apagado, y la
+   diferencia se ve (25 en un cubo de 255 ya se nota a simple vista). */
+const vivo = estados('#59d9ff', '#0a3d62').escucha.b;
+const palido = estados('#9fb4c2', '#20262b').escucha.b;
+/** Croma de un `#hex`: cuánto color queda, de 0 (gris) a 255. */
+const croma = x => { const v = hx(x); return Math.max(...v) - Math.min(...v); };
+ok('un traje apagado pinta un cian MÁS apagado (el atuendo modula, no manda)',
+   vivo !== palido && dist(vivo, palido) >= 25 && croma(vivo) > croma(palido) + 20,
+   `${vivo} (croma ${croma(vivo)}) contra ${palido} (croma ${croma(palido)})`);
 
 console.log('\n' + (fallos ? 'FALTA ' + fallos + ' COSA(S) en los colores del orbe.'
                            : 'colores del orbe: ' + hechos + ' comprobaciones, todas en verde.'));
