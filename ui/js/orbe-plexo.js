@@ -24,12 +24,20 @@
  * `creaOrbe` por el mismo motivo: sin WebGL no hay forma de probar el resto.
  */
 
-/** Puntos sobre la esfera. 120 se lee como el video; 2600 era el orbe viejo. */
-export const N_PUNTOS = 120;
+/** Puntos sobre la esfera. 220 es lo que mide la bola de hilo del video (fotogramas
+ *  vid-03/05/07: se ve como madeja, no como retícula); 2600 era el orbe viejo, y con
+ *  120 —la primera medida de esta ronda— aún se leía como poliedro. */
+export const N_PUNTOS = 220;
 
-/** Vecinos más cercanos enlazados por punto. Con 5 salen ~300 líneas (cada una cuenta
- *  por dos mitades); más de 7 empieza a parecer una bola opaca y pierde el "aire". */
-export const VECINOS = 5;
+/** Vecinos más cercanos enlazados por punto. Con 6 salen ~640 líneas: el video tiene
+ *  las vetas muy cruzadas. Pasando de 7 el brillo se suma tanto que el centro deja de
+ *  tener aire y vuelve a parecer un disco (medido en la 2.12.0). */
+export const VECINOS = 6;
+
+/** Cuánto se sale cada punto del radio perfecto, de -GRANO/2 a +GRANO/2. El orbe del
+ *  video NO es una esfera limpia: es un bulto. Sin este grano, por mucho que la onda
+ *  empuje con el audio, en reposo se ve geométrico. */
+export const GRANO = 0.14;
 
 /** Radios de las cuatro piezas, en unidades del orbe. */
 /** Radios de las cuatro piezas, en unidades del orbe. El halo va tan grande porque es
@@ -59,9 +67,12 @@ export function puntosFibonacci(n = N_PUNTOS, radio = RADIOS.esfera, semilla = 7
     const y = 1 - (i / (n - 1)) * 2;           // de +1 a -1
     const r = Math.sqrt(Math.max(0, 1 - y * y));
     const t = paso * i;
-    pos[i * 3] = Math.cos(t) * r * radio;
-    pos[i * 3 + 1] = y * radio;
-    pos[i * 3 + 2] = Math.sin(t) * r * radio;
+    // Un número por punto, sacado del MISMO xorshift sembrado: así la prueba puede
+    // exigir que el bulto sea idéntico entre ejecuciones y que cambie con la semilla.
+    const g = 1 + (rnd() - 0.5) * GRANO;
+    pos[i * 3] = Math.cos(t) * r * radio * g;
+    pos[i * 3 + 1] = y * radio * g;
+    pos[i * 3 + 2] = Math.sin(t) * r * radio * g;
     fase[i] = rnd();
   }
   return { pos, fase };
@@ -129,10 +140,10 @@ export function aristasCercanas(pos, n = N_PUNTOS, k = VECINOS) {
  * aparte, la tabla propia es honesta.
  */
 export const ESTADOS = Object.freeze({
-  reposo:  { a: '#dff6ff', b: '#4a7f9e', opacidad: 0.62, empuje: 0.030, giro: 0.055 },
-  escucha: { a: '#eafcff', b: '#39c2ff', opacidad: 0.90, empuje: 0.075, giro: 0.160 },
-  piensa:  { a: '#c8fff0', b: '#25e0b8', opacidad: 0.86, empuje: 0.055, giro: 0.620 },
-  habla:   { a: '#e8ffcf', b: '#8dff4a', opacidad: 0.96, empuje: 0.130, giro: 0.230 },
+  reposo:  { a: '#f6fbff', b: '#a9c9dd', opacidad: 0.82, empuje: 0.030, giro: 0.055 },
+  escucha: { a: '#eafcff', b: '#39c2ff', opacidad: 0.92, empuje: 0.075, giro: 0.160 },
+  piensa:  { a: '#c8fff0', b: '#25e0b8', opacidad: 0.88, empuje: 0.055, giro: 0.620 },
+  habla:   { a: '#eaffd4', b: '#7dff3f', opacidad: 0.98, empuje: 0.130, giro: 0.230 },
   error:   { a: '#ffe0e6', b: '#ff5b6e', opacidad: 0.88, empuje: 0.040, giro: 0.090 },
 });
 

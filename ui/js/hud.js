@@ -753,6 +753,31 @@ function moBadge(m) {
   return `<span class="mo-tag t-${(m.estado || '').replace(/ /g, '')}">${txt}</span>`;
 }
 
+/* La lista es del video (fotograma vid-09): UNA línea por modelo, el nombre a la
+   izquierda, el peso en gris, la etiqueta de RAM a la derecha y la acción al final.
+   Antes cada ficha ocupaba tres renglones y había que leer una tarjeta para saber
+   qué hacer; aquí pulsar la fila ENTERA es la acción (usar si está bajado,
+   descargar si no), que es el gesto del video. El ✕ de borrar va aparte y pequeño:
+   es lo único que no debe salir al primer toque. */
+function moFila(m) {
+  const acc = m.descargado ? 'usar' : 'pull';
+  const etiqueta = m.descargado
+    ? (m.activo ? '<span class="mo-tag t-usar">EN USO</span>' : '<span class="mo-tag t-no">tuyo</span>')
+    : moBadge(m);
+  return `
+    <div class="mo-row${m.descargado ? ' bajado' : ''}${m.activo ? ' activo' : ''}" data-m="${esc(m.modelo)}">
+      <button class="mo-fila" data-a="${acc}" data-fit="${esc(m.estado || '')}"
+              title="${esc((m.para || '') + (m.nota ? ' · ' + m.nota : ''))}">
+        <span class="mo-n">${esc(m.modelo)}${m.descargado ? ' <em class="mo-local">(Local)</em>' : ''}</span>
+        <span class="mo-w">${m.peso_real_gb ? m.peso_real_gb + ' GB' : '≈' + m.gb + ' GB'}</span>
+        ${etiqueta}
+        <span class="mo-go">${m.descargado ? 'usar' : '↓'}</span>
+      </button>
+      <button class="mo-x" data-a="rm" title="Borrar ${esc(m.modelo)} del disco">✕</button>
+      <div class="mo-prog"></div>
+    </div>`;
+}
+
 async function refreshModels() {
   const box = document.getElementById('molist'), head = document.getElementById('mohead'),
         st = document.getElementById('molstate');
@@ -762,35 +787,29 @@ async function refreshModels() {
   const bajados = MO.modelos.filter(m => m.descargado).length;
   if (st) st.textContent = MO.instalado ? (MO.corriendo ? 'Ollama encendido' : 'Ollama apagado') : 'sin Ollama';
   head.innerHTML =
-    `<div class="mo-sum">RAM de este equipo <b>${MO.ram_equipo} GB</b> · libre <b>${MO.ram_libre_gb} GB</b>` +
-    ` · <b>${bajados}</b> modelo(s) en el disco (<b>${MO.disco_gb ?? '—'} GB</b>)</div>` +
-    `<div class="mo-btns"><button class="mo-b" data-mo="ollama">⏻ ${MO.corriendo ? 'Apagar Ollama' : 'Encender Ollama'}</button>` +
-    `<button class="mo-b" data-mo="refrescar">↻ Actualizar</button></div>` +
+    `<div class="mo-cab"><span class="mo-lbl">Modelo:</span>` +
+    `<b class="mo-act">${esc(MO.activo || 'ninguno fijado')}</b>` +
+    `<button class="mo-b" data-mo="ollama">⏻ ${MO.corriendo ? 'apagar' : 'encender'}</button>` +
+    `<button class="mo-b" data-mo="refrescar">↻</button></div>` +
+    `<div class="mo-sum">RAM <b>${MO.ram_equipo} GB</b> · libre <b>${MO.ram_libre_gb} GB</b>` +
+    ` · <b>${bajados}</b> en el disco (<b>${MO.disco_gb ?? '—'} GB</b>) · quedan <b>${MO.disco_libre_gb ?? '—'} GB</b>` +
+    ` · ${MO.instalado ? (MO.corriendo ? 'Ollama despierto' : 'Ollama apagado: el ↓ lo enciende') : 'sin Ollama'}</div>` +
     (MO.aviso ? `<div class="mo-warn">${esc(MO.aviso)}</div>` : '');
   head.querySelectorAll('.mo-b').forEach(b => b.onclick = () =>
     b.dataset.mo === 'ollama' ? moverOllama(MO.corriendo) : refreshModels());
-  box.innerHTML = MO.modelos.map(m => `
-    <div class="mo-row${m.descargado ? ' bajado' : ''}${m.activo ? ' activo' : ''}" data-m="${esc(m.modelo)}">
-      <div class="mo-top"><span class="mo-n">${esc(m.modelo)}</span>${moBadge(m)}
-        ${m.activo ? '<span class="mo-tag t-usar">EN USO</span>' : ''}</div>
-      <div class="mo-meta">${m.peso_real_gb ? 'ocupa ' + m.peso_real_gb + ' GB' : '≈' + m.gb + ' GB'} ·
-        pide ~${m.ram ?? '—'} GB de RAM · ${esc(m.para || '')}${m.nota ? ' · ' + esc(m.nota) : ''}</div>
-      <div class="mo-acc">${m.descargado
-        ? `<button class="mo-b" data-a="usar">usar</button><button class="mo-b x" data-a="rm">✕ borrar</button>`
-        : `<button class="mo-b d" data-a="pull" data-fit="${esc(m.estado || '')}">↓ descargar</button>`}</div>
-      <div class="mo-prog"></div>
-    </div>`).join('');
+  box.innerHTML = MO.modelos.map(moFila).join('');
   box.querySelectorAll('.mo-row').forEach(r =>
-    r.querySelectorAll('.mo-b').forEach(b => b.onclick = () => {
+    r.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      const acc = b.dataset.a;
       // segunda advertencia: si no cabe en la RAM, hay que confirmarlo
-      if (b.dataset.a === 'pull' && b.dataset.fit === 'no cabe' && b.dataset.ok !== '1') {
-        b.dataset.ok = '1'; b.classList.remove('d'); b.classList.add('x');
-        b.textContent = '↓ NO CABE · descargar igual';
+      if (acc === 'pull' && b.dataset.fit === 'no cabe' && b.dataset.ok !== '1') {
+        b.dataset.ok = '1'; b.classList.add('confirma');
+        b.querySelector('.mo-go').textContent = '↓ igual';
         sayLine('Ese modelo pide más RAM de la que tiene este equipo: va a ir lentísimo o no abrirá. ' +
                 'Púlsalo otra vez si lo quieres bajar de todos modos.');
         return;
       }
-      modelAcc(r.dataset.m, b.dataset.a);
+      modelAcc(r.dataset.m, acc);
     }));
   pintarProgresos();
   clearInterval(MOtimer);
@@ -817,7 +836,7 @@ async function modelAcc(nombre, acc) {
   } catch { sayLine('El núcleo no respondió.'); }
 }
 
-const ACTIVOS = ['descargando', 'en cola', 'encendiendo', 'cancelando'];
+const ACTIVOS = ['descargando', 'en cola', 'encendiendo', 'reintentando', 'cancelando'];
 
 async function pintarProgresos() {
   const lista = document.getElementById('molist');

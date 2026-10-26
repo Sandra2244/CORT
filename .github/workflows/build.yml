@@ -367,8 +367,8 @@ jobs:
         # `scripts/prueba-orbe.mjs` ejerce `ui/js/orbe-plexo.js`, el orbe del paso 1.1
         # (`docs/PLAN-FASE-1.md`), que todavía vive APARTE de la cara: se mide en
         # `ui/sonda-orbe.html` y sólo se integra cuando la dueña lo apruebe. En un CI no
-        # hay GPU, así que se prueba lo que no depende de ella: que los 120 puntos caigan
-        # repartidos y sin grumos, que las 322 líneas no tengan duplicados ni bucles y
+        # hay GPU, así que se prueba lo que no depende de ella: que los 220 puntos caigan
+        # repartidos y sin grumos, que las ~700 líneas no tengan duplicados ni bucles y
         # sean `Uint16Array` (con `Int32Array` OpenGL dice `GL_INVALID_ENUM` y las líneas
         # no se dibujan — medido en el navegador), que los cinco estados traigan colores
         # válidos y distinguibles, que el GLSL no esconda un cierre de literal (pasó: un
@@ -388,6 +388,39 @@ jobs:
                   | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
             [ -n "$msg" ] || msg=$(tail -10 /tmp/orbe.log | tr '\n\r' '  ' | sed 's/%/%25/g')
             echo "::error::prueba-orbe.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
+      - name: Probar la bajada de modelos (reintentos, silencio y contexto)
+        id: descargas
+        # `scripts/prueba-descargas.py` ejerce `backend/app/models.py`, el camino por el
+        # que CORT baja sus cerebros. Lo que se prueba es lo que rompió la bajada real de
+        # la dueña: el «problema muy común» de que se corte a mitad y no vuelva. Aquí se
+        # comprueba, sin red de verdad (`_jala` está sustituida por un muñeco), que una
+        # caída reintenta y termina, que tras cuatro cortes se rinde nombrando el motivo,
+        # que la cancelación aborta también DURANTE la espera (no hasta el siguiente
+        # intento), que el segundo intento conserva el porcentaje ya bajado —Ollama
+        # reanuda por HTTP `Range` sobre el `.part`, medido en este repo: 74,5 %, 193 MB
+        # parciales y llegada al 100 %—, que ningún `timeout` queda sin el segundo
+        # número (el de lectura: sin él una conexión muda cuelga el hilo y la cola
+        # entera, porque `_FILA_PULL` es de un solo puesto), y que el techo de contexto
+        # sale de la RAM del equipo: `OLLAMA_CONTEXT_LENGTH=512` en un equipo de 1,8 GB
+        # porque con 4096 la KV-cache no cabe y la generación se pasa del `timeout` de
+        # `brain.py`. Es stdlib puro: no necesita `.venv` ni Ollama instalado.
+        # No es una prueba decorativa: se comprobó con dos mutaciones sobre una copia.
+        # Quitar el `SILENCIO` del `timeout` deja **2** comprobaciones en rojo, y hacer
+        # que el bucle se rinda a la primera excepción deja **7**. Con la copia limpia,
+        # rc=0 y las 22 en verde.
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/prueba-descargas.py > /tmp/descargas.log 2>&1
+          st=$?
+          tail -20 /tmp/descargas.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Traceback|Error' /tmp/descargas.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/descargas.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-descargas.py salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)

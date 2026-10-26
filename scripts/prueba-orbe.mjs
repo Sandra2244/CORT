@@ -19,7 +19,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import {
-  N_PUNTOS, VECINOS, RADIOS, ESTADOS, ESTADO_INICIAL,
+  N_PUNTOS, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
   puntosFibonacci, aristasCercanas, creaOrbe, SHADERS,
 } from '../ui/js/orbe-plexo.js';
 
@@ -40,8 +40,12 @@ for (let i = 0; i < N_PUNTOS; i++) {
   const r = Math.hypot(g.pos[i * 3], g.pos[i * 3 + 1], g.pos[i * 3 + 2]);
   radioMin = Math.min(radioMin, r); radioMax = Math.max(radioMax, r);
 }
-ok('todos a un radio de la esfera', radioMax - radioMin < 1e-5,
-   `mín ${radioMin.toFixed(6)} máx ${radioMax.toFixed(6)}`);
+// El orbe del video NO es una esfera perfecta: es un bulto. `GRANO` desplaza cada
+// punto dentro y fuera, y esta comprobación vigila que se quede en la banda prometida
+// (ni una esfera, ni una explosión).
+ok('dentro de la banda de grano prometida',
+   radioMin >= 1 - GRANO / 2 - 1e-5 && radioMax <= 1 + GRANO / 2 + 1e-5,
+   `mín ${radioMin.toFixed(4)} máx ${radioMax.toFixed(4)} · grano ±${(GRANO / 2).toFixed(3)}`);
 let masCercanas = Infinity;
 for (let i = 0; i < N_PUNTOS; i++) {
   for (let j = i + 1; j < N_PUNTOS; j++) {
@@ -51,12 +55,14 @@ for (let i = 0; i < N_PUNTOS; i++) {
   }
 }
 // Con un `Math.random()` dos puntos caerían casi encima; la retícula de Fibonacci no.
-ok('sin grumos: el vecino más cercano no se pega', masCercanas > 0.10,
+// El listón (0.07) sale de la cuenta: 220 puntos sobre la esfera dan un vecino medio a
+// ~0,13, y el grano puede recortar eso a la mitad en el peor par.
+ok('sin grumos: el vecino más cercano no se pega', masCercanas > 0.07,
    `distancia mínima ${masCercanas.toFixed(3)}`);
 const mismo = puntosFibonacci(), otraSemilla = puntosFibonacci(N_PUNTOS, RADIOS.esfera, 11);
 ok('la misma semilla da el mismo orbe', g.pos.join() === mismo.pos.join() && g.fase.join() === mismo.fase.join());
-ok('cambiar de semilla cambia sólo las fases, no los sitios',
-   otraSemilla.pos.join() === g.pos.join() && otraSemilla.fase.join() !== g.fase.join());
+ok('cambiar de semilla cambia el orbe entero (sitio y fase) sin romper la banda',
+   otraSemilla.pos.join() !== g.pos.join() && otraSemilla.fase.join() !== g.fase.join());
 
 /* ---------- [2] las aristas ---------- */
 console.log('\n[2] las líneas entre vecinos');
@@ -89,7 +95,14 @@ const n = aristas.length / 2;
    `GL_INVALID_ENUM: glDrawElements`. En node no hay GL, así que se prueba el tipo. */
 ok('los índices son Uint16Array (WebGL no sabe qué hacer con Int32)',
    aristas instanceof Uint16Array, aristas.constructor.name);
-ok('presupuesto: menos de 600 líneas', n > 0 && n < 600, `${n} líneas`);
+/* Presupuesto de líneas. Subió de 600 a 900 cuando el orbe pasó de 120 a 220 puntos:
+   la bola de hilo del video está muy cruzada y con 322 líneas se leía como poliedro.
+   Lo que sigue siendo barato no es el número en sí, que TODAS quepan en UN solo
+   `LineSegments` (900 líneas = 1.800 vértices, frente a los 2.600 puntos + 1.280
+   triángulos + rejilla + estrellas del orbe viejo). */
+ok('presupuesto: menos de 900 líneas', n > 0 && n < 900, `${n} líneas`);
+ok('y ninguna de más: ninguna pasa de los ' + VECINOS + ' vecinos pedidos',
+   n <= N_PUNTOS * VECINOS, `${n} ≤ ${N_PUNTOS * VECINOS}`);
 let malas = 0, bucles = 0;
 const vistas = new Set();
 let duplicadas = 0;

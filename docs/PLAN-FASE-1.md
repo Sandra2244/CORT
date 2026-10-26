@@ -45,6 +45,26 @@ miraron. Lo que hay, literalmente:
 - En `a074ef6a…mp4` (43 s): un Windows con una ventanita **«Models»** — «+ Load a model»
   y la lista con tamaños. Eso es el «otro apartado» que ella menciona; **es Fase 2**.
 
+**Segunda mirada, con el prototipo ya pintado (2026-10-26).** La primera versión del
+orbe se probó contra el código, no contra el video, y el código estaba conforme consigo
+mismo: **120 puntos y 322 líneas salieron leyendo como un poliedro**, una bola de aristas
+duras, sin el pelo ni el aire de la referencia. Se volvieron a montar los fotogramas
+lado a lado con capturas reales del navegador (`vid-01/03/05` frente a `reposo`,
+`escucha` y `habla`) y el diagnóstico fue de **densidad y brillo**, no de forma:
+
+| lo que se veía en el video | lo que hacía el prototipo | qué se cambió |
+|---|---|---|
+| un bulto de puntos, con relieve y thickness | puntos exactos sobre el radio 1,000 | `GRANO = 0.14`: cada punto se sale ±7 % del radio con la misma semilla |
+| una maraña: se cuentan decenas de líneas por palmo | 2,7 líneas por punto | `N_PUNTOS` 120→**220**, `VECINOS` 5→**6** (≈700 líneas, 3 dibujos igual) |
+| blanco-frío que **ocupa** la pantalla | `#dff6ff`→`#4a7f9e` con alfa **0,62**: se leía gris | `reposo` a `#f6fbff`/`#a9c9dd` con alfa **0,82** |
+
+La prueba (`scripts/prueba-orbe.mjs`) se reescribió a la vez: la comprobación «todos a un
+radio exacto» pasó a ser «todos dentro de la banda `1 ± GRANO/2`», el umbral de vecino más
+cercano bajó de 0,10 a **0,07** (con el cálculo hecho: 220 puntos con grano siguen sin
+tocarse), y el tope de líneas subió de 600 a **900** con un candado nuevo
+`n ≤ N_PUNTOS · VECINOS`. Resultado medido: **56 hechos, 0 fallos · 220 puntos, 700 líneas**,
+y el coste por frame sigue en **0,03–0,06 ms** de JavaScript.
+
 De GitHub, verificado (26/10/2026, con licencia):
 
 | referencia | licencia | qué tomamos | qué NO |
@@ -119,12 +139,72 @@ Fase 2 (modelos).
 
 ---
 
+## 4.5 · La pantalla de modelos, copiada del video y probada de verdad (2026-10-26)
+
+**El calco.** En `vid-09` del video de referencia hay un desplegable titulado
+**`Modèle:`**: una fila por modelo, el nombre a la izquierda, el actual resaltado con su
+caja, y los que viven en la máquina marcados **`(Local)`** (`Ollma-1.0 (Local)`,
+`Qwen2.5-Coder (Local)`…). No hay tarjetas ni párrafos: una línea, un toque. Eso es lo
+que se copió en la ventana **10 · Modelos** de `ui/js/hud.js` (`moFila`) y su CSS en
+`ui/css/hud.css` (`.mo-cab`, `.mo-fila`, `.mo-local`, `.mo-w`, `.mo-go`, `.mo-x`):
+cabecera `MODELO: [qwen2.5:0.5b]` + ⏻ + ↻, y filas de una línea con peso, etiqueta de
+RAM y la acción al final. **Pulsar la fila entera es la acción** (usar si está bajado,
+↓ si no); el ✕ de borrar va aparte y pequeño, porque es lo único que no debe salir al
+primer toque.
+
+**La bajada, medida en esta máquina (no en el papel).** Se añadió `smollm2:135m` al
+catálogo con su peso real, **medido con `scripts/mede-catalogo.py`: 270.898.111 B**. Bajado
+desde la interfaz, pulsando su fila:
+
+| lo que pasó | número |
+|---|---|
+| cortado con el ✕ de la propia fila | a **74,5 %** (201,9 de 270,9 MB), quedó un blob `-partial` de 193 MB |
+| vuelto a pulsar ↓ | la barra siguió en ~74 % y terminó: **Ollama reanuda, no recomienza** |
+| estado final | `listo · en el disco`, y `ollama list` lo enseña (270 MB, «18 seconds ago») |
+| velocidad vista | ~3,2 MB/s sostenidos |
+
+**Lo que se arregló para que «no se rompa a pesar de todo problema muy común»**
+(`backend/app/models.py`, con su prueba en `scripts/prueba-descargas.py`):
+
+1. **Reintento con espera creciente** (`REINTENTOS = 4`, `ESPERAS = (2,5,12,25)`). Antes
+   la primera excepción marcaba `error` y moría. Como Ollama reanuda, el reintento
+   continúa donde estaba; la barra no vuelve a cero.
+2. **Tope de lectura** (`SILENCIO = 90`). El `timeout` viejo no tenía tope de lectura: una
+   conexión muda dejaba el hilo colgado **para siempre** y bloqueaba la fila de los
+   demás modelos.
+3. **Cancelar manda también durante la espera**: se duerme en trocitos de 0,4 s.
+4. **Techo de contexto al encender Ollama** (`OLLAMA_CONTEXT_LENGTH` con `setdefault`,
+   512 en equipos de < 4 GB). MEDIDO con `smollm2:135m` y la misma frase: con los 4096
+   por defecto de Ollama, **110 s y sin respuesta** (116 MB libres al final); con
+   `num_ctx` 512, **respondió en 14,6 s**.
+
+**La prueba, y que no está de adorno.** `scripts/prueba-descargas.py`: **22 comprobaciones
+en 8 sectores**, stdlib puro, sin red y sin tocar `~/.ollama` (`_jala` sustituida por un
+muñeco, el reloj de espera a cero). Verde. Sobre una **copia** del módulo se lanzaron dos
+mutaciones para ver si muerde de verdad: quitar `SILENCIO` del `timeout` → **2** en rojo;
+hacer que el bucle se rinda a la primera excepción → **7** en rojo. En el pipeline es el
+paso `descargas` del trabajo `apk`.
+
+**Lo que TODAVÍA no hace que CORT responda en local, dicho con su línea:**
+`backend/app/brain.py:247-251` (`_ollama_chat`) manda la petición **sin `options`**: sin
+tope de salida, el modelo escribe hasta llenar el contexto, y en 2 núcleos eso son
+minutos. Con eso sin cambiar, `/api/chat` siguió cayendo a `offline` (`tardó demasiado`).
+El arreglo es una línea en `brain.py`, y **no se tocó** porque la dueña lo tiene con
+cambios sin commitear: se deja aquí escrito para cuando quede limpio.
+
+**Y la condición de fondo, que no es un bug:** en este portátil, con Qoder abierto
+(~800 MB), la memoria libre para cargar un modelo anda entre 100 y 500 MB según el
+momento. El único momento en que el cerebro local respondió es con 213 MB libres y el
+modelo ya cargado. **Ningún modelo grande va a responder aquí mientras haya que
+competir por la RAM**: eso es lo que justifica los guardas de la Fase de acciones.
+
 ## 5 · Fuera de esta fase, con su sitio
 
-- **Modelos** (Fase 2): hoy la bajada **no reintenta ni reanuda** —
-  `backend/app/models.py:547-553` marca `error` a la primera excepción y un solo pull a
-  la vez (`Semaphore(1)`). Eso es «el problema muy común» que ella describe y se arregla
-  allí, con reanudación por partes, verificación, espacio por delante y cola.
+- **Modelos** — adelantado a esta ronda (2026-10-26) porque la dueña lo pidió como lo
+  primordial: «que CORT tenga ya cerebros y responda; luego se amplían capacidades».
+  Hecho y **medido de verdad**: ver §4.5. Lo que queda de Fase 2: catálogo con
+  verificación de suma (`md5`/digest), espacio por delante y cola con prioridades, y la
+  hoja interactiva en el teléfono.
 - **Gestos con la mano para mover ventanas**: posible en el PC (Electron + `SetWindowPos`
   / `wmctrl`); en Android sólo para ventanas **propias** vía overlay. Mover ventanas de
   otras apps cuesta `AccessibilityService` = superficie que delata el envase ante Play

@@ -41,6 +41,16 @@ _CANDADO = threading.Lock()
 # llega a la vez que el primero y Ollama se queda sin memoria a media bajada.
 _FILA_PULL = threading.Semaphore(1)
 
+# ── lo que hace que una bajada SOBREVIVA, no que arranque bonito ──────────────
+# Medido en esta ronda: `requests.post(..., timeout=(10, None))` no tiene tope de
+# LECTURA, así que una conexión que se queda muda (el típico wifi que se va sin
+# cortar) deja el hilo colgado PARA SIEMPRE: la fila no se libera y ningún otro
+# modelo se baja ya. `SILENCIO` corta ese hilo muerto y deja que el reintento lo
+# levante con la bajada reanudada.
+SILENCIO = 90          # segundos sin un solo byte = conexión muerta
+REINTENTOS = 4         # relanzamientos antes de decir «no pude»
+ESPERAS = (2, 5, 12, 25)   # segundos entre intentos, crecientes
+
 # `gb` son los bytes que baja `ollama pull`, MEDIDOS: la suma de las capas del
 # manifiesto que sirve `registry.ollama.ai/v2/library/<modelo>/manifests/<tag>`
 # (2026-10-23 desde este portátil, con `scripts/mede-catalogo.py`). `b` guarda el
@@ -49,6 +59,10 @@ _FILA_PULL = threading.Semaphore(1)
 # CORRERLO (eso no lo dice el registro), y por eso el veredicto llama «justo» al
 # que queda entre 0,6 y 0,95 de la RAM del equipo en vez de prometerlo.
 CATALOGO = [
+    {"modelo": "smollm2:135m",   "gb": 0.3, "b": 270898111, "ram": 0.8, "nivel": "ligero",
+     "para": "el cerebro más ligero que hay: cabe en cualquier parte, pero escribe "
+             "regular en español",
+     "nota": "peso medido con scripts/mede-catalogo.py el 2026-10-26"},
     {"modelo": "qwen2.5:0.5b",   "gb": 0.4, "b": 397820829, "ram": 1.0, "nivel": "ligero",
      "para": "frases cortas, órdenes y resúmenes rápidos"},
     {"modelo": "qwen3:0.6b",     "gb": 0.5, "b": 522653277, "ram": 1.3, "nivel": "ligero",
@@ -371,6 +385,27 @@ def _coincide(nombre_catalogo: str, dic: dict) -> str | None:
 
 
 # ───────────────────────────── acciones del equipo ─────────────────────────────
+# El techo de contexto que CORT le pone a Ollama cuando lo enciende ÉL.
+# MEDIDO en esta ronda (2026-10-26) en el portátil de la dueña, 2 núcleos y 1,8 GB,
+# con `smollm2:135m` ya cargado y la misma frase de 12 palabras:
+#   · sin tope (los 4096 por defecto de Ollama): 110 s esperando y SIN respuesta,
+#     con 116 MB de memoria libre al final.
+#   · con `num_ctx` 512: respondió en 14,6 s.
+# La KV cache de 4096 tokens no cabe en este equipo, así que el modelo se pasa la vida
+# moviendo páginas en vez de escribir. Es la causa de que «el cerebro local no
+# responda» aunque el modelo esté descargado y sano.
+CONTEXTO_PEQUEÑO = 512
+CONTEXTO_NORMAL = 2048
+EQUIPO_PEQUEÑO_GB = 4.0
+
+
+def contexto_sugerido() -> int:
+    """512 en un equipo de menos de 4 GB; 2048 por encima. Con la RAM de ESTE
+    equipo, no con la que le gustaría tener a nadie."""
+    total = ram_total_gb()
+    return CONTEXTO_PEQUEÑO if (total or 0) < EQUIPO_PEQUEÑO_GB else CONTEXTO_NORMAL
+
+
 def arrancar_servidor() -> dict:
     if not binario():
         return {"ok": False, "error": "no hay ollama instalado"}
@@ -381,6 +416,8 @@ def arrancar_servidor() -> dict:
     # `setdefault`, no `=`: si la dueña ya puso su `OLLAMA_HOST` (en systemd, en el
     # perfil de Windows o a mano), Mandamos su decisión y no la pisamos.
     entorno.setdefault("OLLAMA_HOST", host_sirve())
+    # Lo mismo con el contexto: sólo lo limitamos si ella no lo eligió ya.
+    entorno.setdefault("OLLAMA_CONTEXT_LENGTH", str(contexto_sugerido()))
     subprocess.Popen([binario(), "serve"], env=entorno,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
@@ -481,7 +518,8 @@ def descargar(nombre: str) -> dict:
                 "detalle": "borra modelos con 🗑 o libera sitio; la descarga no se lanzó"}
     with _CANDADO:
         previo = PULLS.get(nombre)
-        if previo and previo.get("estado") in ("descargando", "en cola", "encendiendo"):
+        if previo and previo.get("estado") in ("descargando", "en cola", "encendiendo",
+                                               "reintentando"):
             return {"ok": True, "detalle": "ya estaba en la fila", "modelo": nombre,
                     "estado": previo["estado"]}
         _CANCELADOS.discard(nombre)
@@ -492,7 +530,8 @@ def descargar(nombre: str) -> dict:
         # esté bajando y de quien esté esperando como él.
         puesto = 1 + sum(1 for k, v in PULLS.items()
                          if k != nombre
-                         and v.get("estado") in ("descargando", "encendiendo", "en cola"))
+                         and v.get("estado") in ("descargando", "encendiendo", "en cola",
+                                                 "reintentando"))
         if puesto > 1:
             PULLS[nombre]["detalle"] = f"en la fila, detrás de {puesto - 1}"
     threading.Thread(target=_jalar, args=(nombre,), daemon=True).start()
@@ -544,55 +583,100 @@ def _jalar(nombre: str) -> None:
         _FILA_PULL.release()
 
 
+class _Corte(Exception):
+    """La dueña pulsó ✕ a media bajada. No es un fallo: no se vuelve a intentar."""
+
+
 def _bajar(nombre: str) -> None:
+    """Baja el modelo y, si se corta, lo relanza hasta `REINTENTOS` veces.
+
+    Aquí está el arreglo del «no me deja descargar modelos a pesar de todo problema
+    muy común». Antes la primera excepción marcaba `error` y moría: con wifi inestable
+    eso significaba empezar la bajada DESDE CERO a pulso, y con un hilo mudo (conexión
+    que no cae pero no trae bytes) la lectura SIN TOPE dejaba el hilo colgado
+    para siempre y la fila bloqueada para los demás.
+
+    El relanzamiento NO recomienza: Ollama guarda lo bajado en un blob `.part` y al
+    recibir otro `/api/pull` sigue con una petición `Range` desde el byte que llevaba
+    (`server/download.go`, con su espera creciente). **MEDIDO en este equipo el
+    2026-10-26** (`docs/PLAN-FASE-1.md` §4.5): `smollm2:135m` cortado con la ✕ a
+    **201,9 MB de 270,9 (74,5 %)**, quedó el blob `-partial` de 193 MB, y al volver a
+    pulsar la fila la barra siguió en ~74 % y llegó al 100 % — no recomenzó.
+    `scripts/prueba-descargas.py` prueba el MECANISMO del reintento sin red (que se
+    reintenta, que se rinde nombrando cuántas veces, que la ✕ manda también durante la
+    espera y que el `pct` ya conseguido no se pierde, porque `_marca` sólo pisa `pct`
+    cuando le llega uno nuevo). Y la lectura sin tope que colgaba el hilo para siempre
+    sustituyó por `timeout` de `(conexión, SILENCIO)`.
+    """
+    for intento in range(REINTENTOS + 1):
+        try:
+            _jala(nombre)
+            return
+        except _Corte:
+            return
+        except Exception as e:
+            motivo = f"{type(e).__name__}: {e}"
+            if _cortada(nombre):
+                return
+            if intento >= REINTENTOS:
+                _marca(nombre, "error",
+                       error=f"se cortó {REINTENTOS + 1} veces · {motivo[:150]}")
+                return
+            espera = ESPERAS[min(intento, len(ESPERAS) - 1)]
+            _marca(nombre, "reintentando",
+                   detalle=f"se cortó · reintento {intento + 1} de {REINTENTOS} en "
+                           f"{espera}s, siguiendo donde iba")
+            # Se duerme en trocitos para que el ✕ siga mandando mientras espera.
+            hasta = time.time() + espera
+            while time.time() < hasta:
+                if _cortada(nombre):
+                    return
+                time.sleep(0.4)
+
+
+def _jala(nombre: str) -> None:
+    """Un intento de bajada, con su tope de silencio. Lanza si algo se tuerce."""
     import requests
     if not corriendo():
         _marca(nombre, "encendiendo", detalle="despertando Ollama…")
         r = arrancar_servidor()
         if not r.get("ok"):
-            _marca(nombre, "error",
-                   error="Ollama no arrancó: " + (r.get("error") or "sin respuesta"))
-            return
+            raise RuntimeError("Ollama no arrancó: " + (r.get("error") or "sin respuesta"))
     # En cuanto tiene el turno deja de estar «en cola», aunque tarden los
     # primeros bytes: si no, el puesto de los siguientes se calcula mal.
     _marca(nombre, "descargando", detalle="conectando con Ollama…")
     capas: dict[str, list[float]] = {}
-    try:
-        with requests.post(f"{OLLAMA_URL}/api/pull", json={"model": nombre, "stream": True},
-                           stream=True, timeout=(10, None)) as r:
-            if r.status_code != 200:
-                _marca(nombre, "error", error=f"Ollama respondió {r.status_code}")
+    with requests.post(f"{OLLAMA_URL}/api/pull", json={"model": nombre, "stream": True},
+                       stream=True, timeout=(10, SILENCIO)) as r:
+        if r.status_code != 200:
+            raise RuntimeError(f"Ollama respondió {r.status_code}")
+        for linea in r.iter_lines():
+            if nombre in _CANCELADOS:
+                _CANCELADOS.discard(nombre)
+                _marca(nombre, "cancelado", detalle="cancelada por ti")
                 return
-            for linea in r.iter_lines():
-                if nombre in _CANCELADOS:
-                    _CANCELADOS.discard(nombre)
-                    _marca(nombre, "cancelado", detalle="cancelada por ti")
-                    return
-                if not linea:
-                    continue
-                try:
-                    d = json.loads(linea)
-                except Exception:
-                    continue
-                est = (d.get("status") or "").lower()
-                if "error" in d:
-                    _marca(nombre, "error", error=str(d["error"])[:180])
-                    return
-                dig, tot, done = d.get("digest"), d.get("total"), d.get("completed")
-                if dig and tot:
-                    capas[dig] = [float(done or 0), float(tot)]
-                hecha = sum(v[0] for v in capas.values())
-                total = sum(v[1] for v in capas.values())
-                if total:
-                    mb, mbt, pct = hecha / 1e6, total / 1e6, round(hecha / total * 100, 1)
-                    _marca(nombre, "descargando", pct=pct, mb=round(mb, 1),
-                           mb_total=round(mbt, 1),
-                           detalle=f"{est or 'bajando'} · {mb:.0f} de {mbt:.0f} MB")
-                else:
-                    _marca(nombre, "descargando", detalle=est or "…")
-        _marca(nombre, "listo", pct=100, detalle="en el disco")
-    except Exception as e:
-        _marca(nombre, "error", error=f"{type(e).__name__}: {e}")
+            if not linea:
+                continue
+            try:
+                d = json.loads(linea)
+            except Exception:
+                continue
+            est = (d.get("status") or "").lower()
+            if "error" in d:
+                raise RuntimeError(str(d["error"])[:180])
+            dig, tot, done = d.get("digest"), d.get("total"), d.get("completed")
+            if dig and tot:
+                capas[dig] = [float(done or 0), float(tot)]
+            hecha = sum(v[0] for v in capas.values())
+            total = sum(v[1] for v in capas.values())
+            if total:
+                mb, mbt, pct = hecha / 1e6, total / 1e6, round(hecha / total * 100, 1)
+                _marca(nombre, "descargando", pct=pct, mb=round(mb, 1),
+                       mb_total=round(mbt, 1),
+                       detalle=f"{est or 'bajando'} · {mb:.0f} de {mbt:.0f} MB")
+            else:
+                _marca(nombre, "descargando", detalle=est or "…")
+    _marca(nombre, "listo", pct=100, detalle="en el disco")
 
 
 def _marca(nombre: str, estado: str, pct: float | None = None, detalle: str = "",
