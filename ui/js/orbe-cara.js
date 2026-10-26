@@ -90,23 +90,35 @@ export function initOrbeCara(mount, opciones = {}) {
 
   function burst() { chispa = .9; }
 
-  /* El vórtice de activación del orbe viejo (estalla, gira y forma un portal) aquí no
-     cabe: la geometría es una esfera de puntos, no un embudo. Lo que se traduce es el
-     GESTO —empujón y ponerse a pensar—, no el truco de cámara. `piensa` es el estado que
-     dura hasta que la cara dice otra cosa, y cede el turno como la voz. */
+  /* El vórtice de activación del orbe viejo SÍ cabe ahora, y con el nombre que usa la
+     cara: `dispara`. El orbe viejo lo hacía reescribiendo los vértices en la CPU; el
+     plexo lo mezcla en el vertex shader con tres uniforms (`orbe-plexo.js`, MORFO), así
+     que el gesto —estalla, se abre en anillo, se mantiene mientras ejecuta y se cierra—
+     está en la referencia y no cuesta un bucle más. `piensa` sigue siendo el estado que
+     dura hasta que la cara dice otra cosa: la animación y el color son dos cosas
+     distintas y las dos mandan por su cuenta. */
   function activate() {
     const mio = ++turnoAct;
     burst();
     ponEstado('piensa');
+    orbe.dispara('activa');
     setTimeout(() => {
       if (mio !== turnoAct) return;               // la voz o un estado nuevo ya mandaron
       if (orbe.estado() === 'piensa') ponEstado('reposo');
     }, 1600);
   }
 
+  /* Al responder se dispara la versión CORTA (`responde`: 4,6 s en vez de 8). Es la
+     animación que ella pidió «cuando responde CORT o ejecuta una respuesta», y si fuera
+     la larga taparía la charla media frase.
+     El `ms > 100` no es un adorno: `hud.js:1963` usa `speak(1)` para avisar de que la
+     voz TERMINÓ (`onSpeak(false)`). Sin esa guarda, cada frase de CORT acabaría con una
+     explosión nueva de 4,6 s encima de la pantalla —justo al revés de lo que significa.
+     Un `ms` de 1 es una señal de apagado, no una duración. */
   function speak(ms = 2600) {
     const mio = ++turnoVoz;
     ponEstado('habla');
+    if (ms > 100) orbe.dispara('responde');
     if (ms > 0) setTimeout(() => {
       if (mio !== turnoVoz) return;               // otra frase ya tomó el turno
       ponEstado('reposo');
@@ -118,6 +130,7 @@ export function initOrbeCara(mount, opciones = {}) {
   function stop() {
     turnoVoz++; turnoAct++;                      // corta la voz y la activación en vuelo
     chispa = 0; audio = 0;
+    orbe.corta();                                // «para» también vale para el vórtice
     ponEstado('reposo');
   }
 
@@ -210,6 +223,8 @@ export function initOrbeCara(mount, opciones = {}) {
     colores: () => ({ ...orbe.estados() }),
     /** Lo que cuesta: puntos, líneas y dibujos por frame. No es una promesa, es cuenta. */
     cifras: () => ({ ...orbe.cifras(), fps: FPS, pixelRatio: dpr, radio: RADIOS.esfera }),
+    /** En qué punto del baile está la animación dispersiva (`null` si no hay). */
+    vortice: () => orbe.vortice(),
     /** El objeto vivo, para `ui/sonda-orbe.html` y para depurar sin adivinar. */
     orbe: () => orbe,
     destruir,

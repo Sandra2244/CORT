@@ -42,8 +42,15 @@ export const GRANO = 0.14;
 /** Radios de las cuatro piezas, en unidades del orbe. */
 /** Radios de las cuatro piezas, en unidades del orbe. El halo va tan grande porque es
  *  un degradado casi transparente: con `RADIOS.halo` de 2,9 y su alfa viejo tapaba los
- *  puntos y la esfera se veía como un disco blanco (medido en el navegador). */
-export const RADIOS = Object.freeze({ esfera: 1, halo: 2.2, anillo: 1.62 });
+ *  puntos y la esfera se veía como un disco blanco (medido en el navegador).
+ *
+ *  `anillo` es el radio mayor del toro del vórtice, y se midió sobre el video
+ *  `f7d16b9e…`: el anillo ocupa el 52 % del ancho de la pantalla y el agujero central
+ *  es el 68 % de su diámetro exterior (§5.2 de REFERENCIAS-VIDEOS-JARVIS). Con el orbe
+ *  en reposo ocupando ~22 %, el toro tiene que valer ~2,4 veces su diámetro. A 1,62
+ *  se veía como un collar apretado alrededor de la esfera; a 1,95 el agujero queda
+ *  limpio y el proporción se parece a la del video (re-medido en el navegador). */
+export const RADIOS = Object.freeze({ esfera: 1, halo: 2.2, anillo: 1.95 });
 
 /* ---------------- la geometría, en arrays planos (sin THREE) ---------------- */
 
@@ -168,16 +175,29 @@ export const ESTADO_INICIAL = 'reposo';
 /* ---------------- los shaders ---------------- */
 
 /* Una sola onda por vértice, a lo largo del radio. Se calcula en la GPU para todos los
-   puntos y todas las líneas a la vez: el coste por frame es escribir 4 uniforms.
+   puntos y todas las líneas a la vez: el coste por frame es escribir los uniforms, no
+   tocar vértices (regla 1 del archivo).
    Hay DOS vertex shader a propósito, no uno retocado con `replace()`: el de los puntos
    necesita el tamaño en pantalla y el de las líneas no, y una cadena que se parchea a
-   mano es exactamente como se cayó la cara en la 2.10.0. */
+   mano es exactamente como se cayó la cara en la 2.10.0. El trozo común (`ONDA` +
+   `MORFO`) se concatena en las DOS cadenas, que es lo que comprueba
+   `scripts/prueba-orbe.mjs` [4]: si un día el de las líneas deja de llevar el vórtice,
+   la explosión partiría los hilos en dos mundos distintos.
+   `uTamano` se declara en la cabecera común y sólo lo lee el shader de los puntos: un
+   uniform declarado y no usado es legal en GLSL (Three ni le busca ubicación), mientras
+   que declararlo dos veces —como hacía la versión anterior— es lo que deja el parcheo
+   de texto como único modo de mantener las dos copias sincronizadas. */
 const ONDA = /* glsl */`
 uniform float uTiempo;
 uniform float uNivel;
 uniform float uEmpuje;
+uniform float uDispersa;
+uniform float uVortice;
+uniform float uPortal;
+uniform float uTamano;
 attribute float aFase;
 varying float vBrillo;
+varying float vCalor;
 void main() {
   float f = aFase * 6.2831853;
   float onda = sin(uTiempo * 1.7 + f + position.y * 3.1);
@@ -185,8 +205,100 @@ void main() {
   vBrillo = clamp(0.45 + 0.55 * onda * (0.35 + uNivel), 0.0, 1.0);
   vec3 p = position * respira;`;
 
-const VERT_LINEAS = ONDA + /* glsl */`
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+/* La ANIMACIÓN DISPERSIVA, que es lo que ella pidió del video `f7d16b9e…`: «cuando
+   responde CORT o ejecuta una respuesta forma esa clase de vórtice, hazlo igual que en
+   el video». Las medidas que están aquí dentro no se inventaron: son los píxeles del
+   fotograma de 6,5 s y los segundos de cada fase, en
+   `docs/REFERENCIAS-VIDEOS-JARVIS.md` §5.2.
+     - `uDispersa`: cada punto sale disparado hacia fuera a SU distancia (depende de
+       `aFase`, como en el video, donde la explosión no es una esfera que crece sino un
+       abanico de estelas desiguales).
+     - `uVortice`: torsión alrededor del eje Y, mayor en el ecuador que en los polos.
+     - `uPortal`: mezcla esfera -> TORO. Radio mayor `RADIOS.anillo` (1,95) y tubo la
+       quinta parte de ese radio (0,18 R, o sea 0,35), que deja el agujero central al
+       0,70 del diámetro exterior; en el video medido es 0,68 (§5.2). El tubo va ATADO
+       al radio en vez de ser un número suelto: si algún día se mueve `RADIOS.anillo`,
+       la proporción del agujero se conserva sola. La INCLINACIÓN del anillo no está
+       aquí: vive en `INCLINA`, al final del vertex shader, y el porqué está explicado
+       allí (no es un detalle: la primera versión la puso en el espacio del objeto y el
+       anillo se veía de canto).
+   Por qué el `ph` del tubo depende de `position.y` y no sólo de `aFase`: los vecinos
+   enlazados por una línea tienen fases aleatorias distintas, y con `ph` al azar cada
+   hilo del plexo cruzaría el tubo de lado a lado. Atando `ph` a la latitud, los vecinos
+   siguen siendo vecinos al formar el anillo y la corona se lee como madeja, no como
+   telaraña.
+   Y NADA de acentos graves dentro de estas cadenas: un acento grave cierra el literal,
+   el módulo deja de parsear y la cara se queda en blanco sin decir nada. Pasó, y el
+   `node --check` de la prueba no lo cazó porque el archivo seguía siendo JS válido.
+   (Escribir aquí un cierre de comentario de bloque también rompe el archivo: es la misma
+   familia de error, y por eso el candado está en `scripts/prueba-orbe.mjs` [4].) */
+const MORFO = /* glsl */`
+  float th = atan(position.z, position.x);
+  if (uDispersa > 0.001) {
+    vec3 dir = normalize(position);
+    p += dir * uDispersa * (0.55 + 1.45 * aFase);
+    float tor = uVortice * (1.2 - abs(dir.y)) * 1.9;
+    float cs = cos(tor), sn = sin(tor);
+    p = vec3(p.x * cs - p.z * sn, p.y, p.x * sn + p.z * cs);
+  }
+  if (uPortal > 0.001) {
+    float R = ${RADIOS.anillo};
+    float rt = R * 0.18;
+    float ph = position.y * 3.1 + f * 0.9 + uTiempo * 0.9;
+    vec3 t = vec3((R + rt * cos(ph)) * cos(th), rt * sin(ph), (R + rt * cos(ph)) * sin(th));
+    p = mix(p, t, clamp(uPortal, 0.0, 1.0));
+  }
+  // Los puntos calientes que recorren la corona (en el video hay dos o tres, no un aro
+  // uniforme) y el fogonazo de la explosion. vCalor es 0 en reposo: la cara se ve igual
+  // que antes de esta ronda cuando no esta ejecutando nada.
+  float viajero = 0.5 + 0.5 * cos(th - uTiempo * 1.6);
+  vCalor = clamp(uDispersa * 0.8 + viajero * viajero * uPortal, 0.0, 1.0);`;
+
+/* La inclinación del anillo se aplica en ESPACIO DE CÁMARA, no dentro del toro.
+   Costó tres pantallazos y los tres están medidos:
+
+   1) El toro nace en el plano XZ del objeto (su eje es Y) y la cámara está en +Z
+      mirando al origen: SIN inclinar nada se ve EXACTAMENTE DE CANTO, una raya, y el
+      agujero no existe. En el video el aro se ve casi de frente: medido sobre
+      docs/referencias/f7-anillo-065.jpg (sección 5.2 de REFERENCIAS-VIDEOS-JARVIS) son
+      215 x 206 px, una elipse de 0,96, o sea unos 16 grados de apertura. Se ha puesto
+      20 (70 grados de giro = 1,2217 rad), que es el mismo aspecto con un dedo más de
+      profundidad: proyecta 0,94 medido en el navegador.
+   2) Ese giro NO puede hacerse en el espacio del objeto, porque el orbe entero rota
+      en Y (el `giro` de la respiración). Rotar en Y no toca el eje Y, así que el
+      plano del anillo parece a salvo... pero si lo inclinas ANTES de esa rotación,
+      lo que inclinas es el eje sobre el que después gira la matriz: el aro barría la
+      cámara y a los pocos segundos volvía a verse de canto. Medido en el navegador
+      con la primera versión: caja proyectada 272 x 315 px, más ALTO que ancho.
+      Aplicando el giro DESPUES de modelViewMatrix la inclinación es de pantalla y al
+      spin del orbe le deja de importar: el anillo mira a la cámara siempre.
+   3) Y el giro tiene que pivotar ALREDEDOR DEL CENTRO DEL OBJETO, no del origen del
+      espacio de cámara. El origen de ese espacio es la LENTE, así que girar ahí barre
+      la trayectoria: con el anillo a 7,2 de la cámara, inclinar 70 grados mandaba el
+      orbe 6,8 unidades hacia arriba y la caja proyectada se quedaba en 93 x 93 px en
+      una esquina (medido en el navegador, segunda versión). Se suma y se resta la
+      columna de traslación de `modelViewMatrix`, que es lo mismo que pivotar sobre el
+      propio orbe.
+
+   El angulo va MULTIPLICADO por uPortal: con el portal apagado el orbe está donde
+   siempre (reposo idéntico al de la 2.16.0), y al montarse el anillo todo el conjunto
+   se gira hacia la cara, que es el gesto de "volverse a mirar" del video. */
+/* Se exporta por el mismo motivo que `RADIOS`: es un número MEDIDO en el video, y la
+   prueba tiene que poder exigir que el shader lo lleva dentro. Sin esto, cambiar el
+   ángulo a 0 (que es quitar el anillo de la cara y dejarlo de canto) pasaba verde. */
+export const GIRO = 1.2217;
+const INCLINA = /* glsl */`
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vec3 centro = modelViewMatrix[3].xyz;
+  vec3 r = mv.xyz - centro;
+  float ang = uPortal * ${GIRO};
+  float ci = cos(ang), si = sin(ang);
+  vec4 vis = vec4(r.x + centro.x,
+                  r.y * ci - r.z * si + centro.y,
+                  r.y * si + r.z * ci + centro.z, mv.w);
+  gl_Position = projectionMatrix * vis;`;
+
+const VERT_LINEAS = ONDA + MORFO + INCLINA + /* glsl */`
 }`;
 
 /* Por qué el tamaño del punto está topeado y lleva 7,2 dentro.
@@ -196,48 +308,49 @@ const VERT_LINEAS = ONDA + /* glsl */`
    Ahora: el tamaño que pide el anfitrión, medido a la distancia de cámara de 7,2,
    corregido por la distancia real de cada punto y topeado entre 1 y 9 px. El pixel
    ratio ya viene dentro de `uTamano` porque GL no lo sabe.
-   Y NADA de acentos graves dentro de estas cadenas: un acento grave cierra el literal,
-   el módulo deja de parsear y la cara se queda en blanco sin decir nada. Pasó, y el
-   `node --check` de la prueba no lo cazó porque el archivo seguía siendo JS válido.
-   (Escribir aquí un cierre de comentario de bloque también rompe el archivo: es la misma
-   familia de error, y por eso el candado está en `scripts/prueba-orbe.mjs` [4].) */
-const VERT_PUNTOS = /* glsl */`
-uniform float uTiempo;
-uniform float uNivel;
-uniform float uEmpuje;
-uniform float uTamano;
-attribute float aFase;
-varying float vBrillo;
-void main() {
-  float f = aFase * 6.2831853;
-  float onda = sin(uTiempo * 1.7 + f + position.y * 3.1);
-  float respira = 1.0 + (uEmpuje + uNivel * 0.16) * onda;
-  vBrillo = clamp(0.45 + 0.55 * onda * (0.35 + uNivel), 0.0, 1.0);
-  vec3 p = position * respira;
-  vec4 mv = modelViewMatrix * vec4(p, 1.0);
-  // gl_PointSize son píxeles del aparato: ver el comentario sobre VERT_PUNTOS
-  gl_PointSize = clamp(uTamano * (7.2 / max(0.5, -mv.z)), 1.0, 9.0);
-  gl_Position = projectionMatrix * mv;
+   El `1.0 + vCalor * 0.5` de dentro: al dispersarse, los puntos del video se ven más
+   gordos (son estelas quemadas por el obturador de la cámara). Medio punto de tamaño es
+   lo que hay; el tope de 9 px sigue ahí para que la explosión no tape la cara. */
+const VERT_PUNTOS = ONDA + MORFO + INCLINA + /* glsl */`
+  // gl_PointSize son píxeles del aparato: ver el comentario de VERT_PUNTOS. Se mide
+  // sobre vis.z, la profundidad YA inclinada, para que el tamaño acompañe al anillo.
+  gl_PointSize = clamp(uTamano * (7.2 / max(0.5, -vis.z)) * (1.0 + vCalor * 0.5), 1.0, 9.0);
 }`;
 
-/* Los puntos se dibujan como redondos suaves: `gl_PointCoord` evita una textura. */
+/* Los puntos se dibujan como redondos suaves: `gl_PointCoord` evita una textura.
+   El `mix` hacia `vec3(0.85, 0.97, 1.0)` es el núcleo blanco-cian de las estelas del
+   video (`#90EFFF` medido sobre el fotograma de 1000 px): el color del traje manda en
+   reposo, y el vórtice lo aclara sin pintarlo de un color propio. */
 const FRAG_PUNTOS = /* glsl */`
 uniform vec3 uColorA;
 uniform float uOpacidad;
 varying float vBrillo;
+varying float vCalor;
 void main() {
   float d = length(gl_PointCoord - vec2(0.5));
   float a = smoothstep(0.5, 0.06, d);
   if (a < 0.02) discard;
-  gl_FragColor = vec4(uColorA * (0.65 + 0.7 * vBrillo), a * uOpacidad);
+  vec3 c = mix(uColorA, vec3(0.85, 0.97, 1.0), 0.75 * vCalor);
+  gl_FragColor = vec4(c * (0.65 + 0.7 * vBrillo + 0.55 * vCalor), a * uOpacidad);
 }`;
 
+/* El alfa de las líneas se apaga durante el morfeado. Con 700 aristas vivas la explosión
+   y el anillo se tapaban con una tela blanca y el agujero del vórtice desaparecía; en el
+   video la dispersión se hace con ESTRELLAS de partículas, no con una malla. El morfeado
+   sigue dibujando líneas (el `modo bajo` no es la única excepción), pero al 15 % de su
+   opacidad, que es lo que queda de 1 − 0,85·máx(dispersa, portal) con ambos a tope. */
 const FRAG_LINEAS = /* glsl */`
 uniform vec3 uColorB;
 uniform float uOpacidad;
+uniform float uDispersa;
+uniform float uPortal;
 varying float vBrillo;
+varying float vCalor;
 void main() {
-  gl_FragColor = vec4(uColorB * (0.5 + 0.9 * vBrillo), uOpacidad * (0.42 + 0.55 * vBrillo));
+  float tela = 1.0 - 0.85 * max(uDispersa, uPortal);
+  vec3 c = mix(uColorB, vec3(0.85, 0.97, 1.0), 0.6 * vCalor);
+  gl_FragColor = vec4(c * (0.5 + 0.9 * vBrillo + 0.5 * vCalor),
+                      uOpacidad * (0.42 + 0.55 * vBrillo + 0.3 * vCalor) * tela);
 }`;
 
 /** Los cuatro textos GLSL, exportados sólo para que `prueba-orbe.mjs` los lea: en node
@@ -246,6 +359,44 @@ export const SHADERS = Object.freeze({
   puntos: VERT_PUNTOS, lineas: VERT_LINEAS,
   fragPuntos: FRAG_PUNTOS, fragLineas: FRAG_LINEAS,
 });
+
+/* ---------------- el ritmo de la animación dispersiva ---------------- */
+
+/* Los cuatro tramos, en SEGUNDOS contados sobre el video `f7d16b9e…` (explosión 0,5 s,
+   el anillo se establece en 2,0 s, se mantiene 4,0 s mientras ejecuta, y se cierra en
+   1,5 s). Coinciden con lo que ya había calculado a ojo el orbe viejo en
+   `orb.js:341-342` (1700 ms de vórtice, 3200 ms de portal), así que el tempo no se
+   toca: lo que cambia es que aquí la forma la mezcla la GPU.
+   `responde` es más corto a propósito: al contestar no hay ventana que enmarcar, y un
+   anillo de 8 segundos taparía la charla. */
+export const RITMOS = Object.freeze({
+  activa:   Object.freeze({ estalla: 0.5, monta: 2.0, mantiene: 4.0, cierra: 1.5 }),
+  responde: Object.freeze({ estalla: 0.4, monta: 1.2, mantiene: 1.8, cierra: 1.2 }),
+});
+
+const recorta = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const tramo = (t, a, b) => recorta((t - a) / Math.max(1e-6, b - a));
+const suave = (x) => x * x * (3 - 2 * x);        // smoothstep, sin costuras en los bordes
+
+/**
+ * La forma de la explosión a los `t` segundos de haberla disparado: los tres valores que
+ * quieren los uniforms. Es una FUNCIÓN PURA por el mismo motivo que `puntosFibonacci`:
+ * en node no hay GPU, pero sí se puede exigir que a los 0,5 s esté toda dispersa, que a
+ * los 2,5 s el portal esté al máximo y que al terminar vuelva a 0 sin saltos.
+ * Devuelve `null` antes de empezar y pasados `total` segundos: el orbe vuelve solo.
+ */
+export function formaDelVortice(t, rit = RITMOS.activa) {
+  const e = rit.estalla, m = e + rit.monta, k = m + rit.mantiene, f = k + rit.cierra;
+  if (t < 0 || t >= f) return null;
+  let d, p;
+  if (t < e) { d = suave(tramo(t, 0, e)); p = 0; }
+  else if (t < m) { const x = suave(tramo(t, e, m)); d = 1 - 0.75 * x; p = x; }
+  else if (t < k) { d = 0.25; p = 1; }
+  else { const x = suave(tramo(t, k, f)); d = 0.25 * (1 - x); p = 1 - x; }
+  /* El vórtice (la torsión en espiral) manda mientras hay dispersión y deja de mandar
+     cuando el anillo ya está montado: en el video la corona gira, pero no se retuerce. */
+  return { dispersa: d, portal: p, vortice: Math.max(d, p * 0.35), total: f };
+}
 
 /* ---------------- el orbe ---------------- */
 
@@ -275,6 +426,11 @@ export function creaOrbe(THREE, opciones = {}) {
     uColorA: { value: colorA },
     uColorB: { value: colorB },
     uTamano: { value: opciones.tamano || 2.8 },   // píxeles lógicos a 7,2 de cámara
+    /* Los tres mandos de la animación dispersiva. Nacen en 0: sin `dispara()`, el orbe
+       se comporta exactamente como en la 2.16.0. */
+    uDispersa: { value: 0 },
+    uVortice: { value: 0 },
+    uPortal: { value: 0 },
   };
 
   const objeto = new THREE.Group();
@@ -345,6 +501,24 @@ export function creaOrbe(THREE, opciones = {}) {
     return setEstado(estado);
   }
 
+  /**
+   * Dispara la animación dispersiva. No hace NADA con la geometría: guarda el reloj de
+   * la coreografía y `pinta` escribe los tres uniforms en cada frame. `clase` es
+   * `'activa'` (ejecuta algo: anillo largo, que enmarque la ventana) o `'responde'`
+   * (contesta: explosión corta). Volver a disparar reinicia el baile, que es lo que
+   * pasa cuando CORT ejecuta dos cosas seguidas.
+   */
+  let vort = null;
+  function dispara(clase = 'activa') {
+    vort = { t: 0, rit: RITMOS[clase] || RITMOS.activa };
+  }
+
+  /** Corta la explosión de golpe (la usa `stop()` de la cara: «para» es «para»). */
+  function corta() {
+    vort = null;
+    comp.uDispersa.value = 0; comp.uVortice.value = 0; comp.uPortal.value = 0;
+  }
+
   /** `dt` en segundos, `nivel` de 0 a 1 (micrófono o simulación). */
   function pinta(dt, nivel = 0) {
     const paso = Math.max(0, Math.min(0.1, dt));   // si el hilo estuvo dormido, no salta
@@ -359,9 +533,22 @@ export function creaOrbe(THREE, opciones = {}) {
     comp.uOpacidad.value += (destino.op - comp.uOpacidad.value) * mez;
     comp.uEmpuje.value += (destino.empuje - comp.uEmpuje.value) * mez;
     comp.uNivel.value += (Math.min(1, Math.max(0, nivel)) - comp.uNivel.value) * mez;
+    /* La coreografía, si está sonando. Se escribe DIRECTO y no interpolado: la curva ya
+       es suave (nace en 0 y muere en 0), y añadirle un `lerp` encima le robaría los
+       0,5 s de la explosión, que son justo lo que la hace parecer una explosión. */
+    let portal = comp.uPortal.value;
+    if (vort) {
+      vort.t += paso;
+      const f = formaDelVortice(vort.t, vort.rit);
+      if (!f) { vort = null; }
+      comp.uDispersa.value = f ? f.dispersa : 0;
+      comp.uVortice.value = f ? f.vortice : 0;
+      comp.uPortal.value = f ? f.portal : 0;
+      portal = comp.uPortal.value;
+    }
     halo.material.color.copy(colorB);
-    halo.material.opacity = 0.10 + 0.26 * comp.uNivel.value;
-    const s = RADIOS.halo * (1 + 0.10 * comp.uNivel.value);
+    halo.material.opacity = 0.10 + 0.26 * comp.uNivel.value + 0.22 * portal;
+    const s = RADIOS.halo * (1 + 0.10 * comp.uNivel.value + 0.75 * portal);
     halo.scale.set(s, s, 1);
   }
 
@@ -374,7 +561,10 @@ export function creaOrbe(THREE, opciones = {}) {
 
   return {
     objeto, setEstado, pinta, borrar, vestir,
+    dispara, corta,
     estado: () => estado,
+    /** En qué punto del baile está: `null` si no hay ninguno. Para la sonda y la prueba. */
+    vortice: () => (vort ? formaDelVortice(vort.t, vort.rit) : null),
     /** La tabla viva: lo que la sonda pinta en sus botones de estado. */
     estados: () => tabla,
     /** Lo que la sonda enseña para que el coste no sea una promesa. */

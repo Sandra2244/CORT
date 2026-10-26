@@ -268,6 +268,61 @@ orbe.vestir('#2bd4ff', '#8f6bff');
 ok('y se puede volver al de antes: el cambio no es irreversible',
    JSON.stringify(orbe.colores()) === JSON.stringify(antesTraje));
 
+/* ─── [5c] la animación dispersiva, disparada desde la cara ─── */
+console.log('\n[5c] `activate()` y `speak()` forman el vórtice del video');
+/* Es la prueba de lo que ella pidió («cuando responde CORT o ejecuta una respuesta forma
+   esa clase de vórtice»). Lo que se comprueba aquí es la MANIOBRA: que el método de la
+   cara deja su huella en los uniforms del orbe vivo y de que se apaga solo. La curva la
+   mide `prueba-orbe.mjs` [8]; aquí no se repite esa medición, se comprueba el cable. */
+orbe.estado('reposo'); orbe.setAudio(0, 0); reloj.correr(60, 16.7);
+ok('sin que nadie la pida, la cara no dispersa nada',
+   uniformes.uDispersa.value === 0 && uniformes.uPortal.value === 0 && orbe.vortice() === null);
+let picoD = 0, picoP = 0;
+const avanza = (ms) => {
+  for (let i = 0; i < Math.round(ms / 16.7); i++) {
+    reloj.paso(16.7);
+    picoD = Math.max(picoD, uniformes.uDispersa.value);
+    picoP = Math.max(picoP, uniformes.uPortal.value);
+  }
+};
+orbe.activate();
+avanza(600);                                            // 0,6 s: la explosión
+ok('`activate()` estalla antes de formar el anillo (el orden del video)',
+   picoD > 0.6 && picoP < 0.25, `dispersa ${picoD.toFixed(2)}, portal ${picoP.toFixed(2)}`);
+avanza(2600);                                           // hasta ~3,2 s
+ok('y a los tres segundos el anillo está montado, con la dispersión recogida',
+   picoP > 0.95 && uniformes.uDispersa.value < 0.3,
+   `portal ${picoP.toFixed(2)}, dispersa ${uniformes.uDispersa.value.toFixed(2)}`);
+avanza(5500);                                           // 8,7 s en total: se cerró
+ok('el vórtice de `activa` se apaga SOLO: ni un uniform quedado a medias',
+   uniformes.uDispersa.value === 0 && uniformes.uVortice.value === 0 &&
+   uniformes.uPortal.value === 0 && orbe.vortice() === null);
+picoD = 0; picoP = 0;
+orbe.speak(2200);                                       // el `sayLine` de `hud.js:1446`
+avanza(600);
+ok('`speak(ms)` también forma el vórtice (es lo que ella llamó «cuando responde»)',
+   picoD > 0.5, `dispersa ${picoD.toFixed(2)}`);
+avanza(4400);                                           // 5 s: la versión corta ya terminó
+ok('y la versión de responder es CORTA: a los 5 s ya no queda anillo que tape la charla',
+   uniformes.uPortal.value === 0 && orbe.vortice() === null);
+/* Y su revés: `hud.js:1963` avisa del FINAL de la voz con `speak(1)`. Si «la voz terminó»
+   disparara otra explosión, cada respuesta de CORT se acabaría con 4,6 s de anillo
+   encima de la pantalla —justo lo contrario de lo que significa ese aviso—. Sin la
+   guarda `ms > 100` del adaptador, esta comprobación pone dos rojos. */
+picoD = 0; picoP = 0;
+orbe.speak(1);
+avanza(600);
+ok('`speak(1)` (el «se acabó la voz») NO vuelve a dispersar el orbe',
+   picoD === 0 && picoP === 0, `dispersa ${picoD}, portal ${picoP}`);
+orbe.speak(2600);
+avanza(700);                                            // en mitad del baile
+const enPleno = uniformes.uPortal.value + uniformes.uDispersa.value;
+orbe.stop();
+ok('`stop()` puede con él: «para» deja el orbe en su forma de siempre de una vez',
+   enPleno > 0.2 && uniformes.uPortal.value === 0 && uniformes.uDispersa.value === 0 &&
+   uniformes.uVortice.value === 0, `antes ${enPleno.toFixed(2)}`);
+orbe.estado('reposo');
+
 /* ─── [6] pausa ─── */
 console.log('\n[6] `pausa` congela el WebGL de verdad (la batería del teléfono)');
 orbe.pausa(true);

@@ -152,6 +152,15 @@ body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
   <div class="fila" id="estados"></div>
   <h2>atuendo — los seis de <code>Paleta.java</code></h2>
   <div class="fila" id="trajes"></div>
+  <!-- La animación dispersiva del video `f7d16b9e…`: dos botones porque son dos bailes
+       distintos (ejecutar = anillo largo que enmarca la ventana; responder = corto), y
+       una lectura viva para no tener que adivinar en qué tramo va. -->
+  <h2>animación dispersiva <span id="d-vortice">quieto</span></h2>
+  <div class="fila" id="vortices">
+    <button data-v="activa">ejecuta (8 s)</button>
+    <button data-v="responde">responde (4,6 s)</button>
+    <button id="b-corta">cortar</button>
+  </div>
   <h2>nivel de voz <span id="nv">0,00</span></h2>
   <input id="nivel" type="range" min="0" max="100" value="0">
   <div class="fila">
@@ -203,6 +212,7 @@ function montar() {
                            traje: [TRAJES[traje][1], TRAJES[traje][2]] });
   orbe.setEstado(estado);
   escena.add(orbe.objeto);
+  window.orbe = orbe;   // para poderlo manejar desde la consola del navegador y medirlo
   pintaChip();
 }
 /* ---------- estados, nivel y bucle ---------- */
@@ -253,6 +263,22 @@ function pintaChip() {
   }
 }
 
+/* ---------- la animación dispersiva ---------- */
+/* Dos botones porque son dos coreografías distintas y hay que poder compararlas en la
+   misma pantalla: `activa` es la del video (anillo largo que enmarca lo que se ejecuta),
+   `responde` es la corta. Y una lectura viva de los dos uniforms que mandan, refrescada
+   EN EL BUCLE: si se refrescara al pulsar, diría 0,00 mientras el orbe está en el aire,
+   que es justo el «texto a medias» que la cara no puede decir. */
+for (const b of $('vortices').querySelectorAll('button[data-v]')) {
+  b.onclick = () => { if (!orbe) return; orbe.dispara(b.dataset.v); bit(`dispersiva <b>${b.dataset.v}</b>`); };
+}
+$('b-corta').onclick = () => { if (orbe) orbe.corta(); };
+const coma = (x) => x.toFixed(2).replace('.', ',');
+function leeVortice() {
+  const v = orbe ? orbe.vortice() : null;
+  $('d-vortice').textContent = v ? `dispersa ${coma(v.dispersa)} · anillo ${coma(v.portal)}` : 'quieto';
+}
+
 try {
   renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true,
                                        powerPreference: 'low-power' });
@@ -292,9 +318,9 @@ $('b-bajo').onclick = (ev) => {
   bit(modo === 'bajo' ? 'modo <b>bajo</b> · sin líneas' : 'modo <b>pleno</b> · puntos y líneas');
 };
 
-/* El bucle: `pinta` cuesta lo que cuesta escribir cuatro uniforms; el resto del
-   presupuesto es del navegador. Con freno (el modo juego de la cara real) se recorta a
-   15 fps y el nivel se queda quieto. */
+/* El bucle: `pinta` cuesta lo que cuesta escribir los uniforms (siete desde la animación
+   dispersiva); el resto del presupuesto es del navegador. Con freno (el modo juego de la
+   cara real) se recorta a 15 fps y el nivel se queda quieto. */
 let antes = performance.now(), acum = 0, cuadros = 0, msOrbe = 0, fps = 0;
 let auto = true, tAuto = 0;
 $('b-auto').onclick = (ev) => { auto = !auto; ev.target.setAttribute('aria-pressed', String(auto)); };
@@ -311,6 +337,7 @@ function bucle(ahora) {
   nivel += (objetivo - nivel) * Math.min(1, dt * 9);
   const t0 = performance.now();
   if (orbe) orbe.pinta(dt, nivel);
+  leeVortice();
   msOrbe += performance.now() - t0;
   if (renderer && escena) renderer.render(escena, camara);
   acum += dt; cuadros++;

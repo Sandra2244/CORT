@@ -20,6 +20,7 @@
 import { readFile } from 'node:fs/promises';
 import {
   N_PUNTOS, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
+  RITMOS, formaDelVortice, GIRO,
   puntosFibonacci, aristasCercanas, creaOrbe, SHADERS,
 } from '../ui/js/orbe-plexo.js';
 import { estados as coloresDelTraje, POR_DEFECTO } from '../ui/js/traje.js';
@@ -316,6 +317,151 @@ ok('un traje roto no tumba el orbe: cae al de fábrica y sigue animando',
    vestido.vestir('#zzzzzz', null) === true &&
    vestido.estados().escucha.b === FABRICA.escucha.b);
 vestido.borrar();
+
+/* ---------- [8] la animación dispersiva (video f7d16b9e…) ---------- */
+/* Lo que ella pidió: «cuando responde CORT o ejecuta una respuesta forma esa clase de
+   vórtice, hazlo igual que en el video». «Igual que en el video» sólo se puede exigir en
+   dos sitios desde node: en la CURVA (los segundos de cada fase, medidos fotograma a
+   fotograma en `docs/REFERENCIAS-VIDEOS-JARVIS.md` §5.2) y en el HECHO de que la forma
+   nueva no toque ni un vértice. Lo que se ve lo mira la dueña en la sonda. */
+console.log('\n[8] la animación dispersiva: su curva y su presupuesto');
+const T = 1 / 30;
+ok('el ritmo del video: 0,5 de explosión, 2,0 de montaje, 4,0 de anillo, 1,5 de cierre',
+   RITMOS.activa.estalla === 0.5 && RITMOS.activa.monta === 2.0 &&
+   RITMOS.activa.mantiene === 4.0 && RITMOS.activa.cierra === 1.5, JSON.stringify(RITMOS.activa));
+ok('y al responder es MÁS corto que al ejecutar (no puede tapar la charla)',
+   RITMOS.responde.estalla + RITMOS.responde.monta + RITMOS.responde.mantiene + RITMOS.responde.cierra
+   < RITMOS.activa.estalla + RITMOS.activa.monta + RITMOS.activa.mantiene + RITMOS.activa.cierra);
+const total = RITMOS.activa.estalla + RITMOS.activa.monta + RITMOS.activa.mantiene + RITMOS.activa.cierra;
+ok('fuera del rango no hay baile: antes de empezar y al terminar, null',
+   formaDelVortice(-0.1) === null && formaDelVortice(total) === null && formaDelVortice(0) !== null);
+/* Los tres tramos, en los segundos que marca el video. */
+const en = (t) => formaDelVortice(t);
+ok('a los 0,5 s está TODA dispersa y el portal aún apagado',
+   en(0.5).dispersa > 0.99 && en(0.5).portal === 0, JSON.stringify(en(0.5)));
+ok('a los 2,5 s el anillo ya está montado y la dispersión casi recogida',
+   en(2.5).portal > 0.99 && en(2.5).dispersa < 0.3, JSON.stringify(en(2.5)));
+ok('a mitad del anillo (5 s) se MANTIENE: portal al máximo y vórtice flojo',
+   en(5).portal === 1 && en(5).vortice < 0.4, JSON.stringify(en(5)));
+ok('y al cerrar (7,9 s) ya casi no queda nada',
+   en(total - 0.1).portal < 0.05 && en(total - 0.1).dispersa < 0.02, JSON.stringify(en(total - 0.1)));
+/* El candado del «sin costuras»: si alguien cambia un tramo y olvida el siguiente, la
+   curva salta. Se mide frame a frame, que es como la va a ver la cara. El tope de 0,11
+   no es un número redondo: la pendiente más fuerte de la curva es la explosión
+   (smoothstep de 0 a 1 en 0,5 s → 3 unidades por segundo → 0,1 por frame a 30 fps), y
+   deja margen justo para que un salto de tramo —que sería de ~0,2 o más— no pase. */
+let salto = 0;
+for (let t = 0; t < total; t += T) {
+  const a = formaDelVortice(t - T / 2), b = formaDelVortice(t + T / 2);
+  if (a && b) for (const k of ['dispersa', 'portal', 'vortice'])
+    salto = Math.max(salto, Math.abs(b[k] - a[k]));
+}
+ok('ningún frame salta de golpe (el mayor bote por frame, en 8 s de baile)',
+   salto < 0.11, `mayor salto ${salto.toFixed(4)} por frame`);
+ok('la curva nace en 0 y muere en 0: el orbe vuelve solo a su forma de siempre',
+   en(0).dispersa < 1e-6 && en(0).portal < 1e-6);
+
+/* Y montado: los uniforms, y que la geometría NO se toca. */
+const v = creaOrbe(THREE);
+const u = v.objeto.children[0].material.uniforms;
+ok('los tres mandos del vórtice nacen en 0 (sin `dispara`, el orbe es el de la 2.16.0)',
+   u.uDispersa.value === 0 && u.uVortice.value === 0 && u.uPortal.value === 0);
+ok('y `vortice()` dice que no hay baile', v.vortice() === null);
+const posAntes = v.objeto.children[0].geometry.attrs.position.array;
+const sumaAntes = Array.from(posAntes).reduce((a, x) => a + x, 0);
+v.dispara('activa');
+let picoD = 0, picoP = 0, frames = 0;
+for (let t = 0; t < total + 0.5; t += T) {
+  v.pinta(T, 0.2); frames++;
+  picoD = Math.max(picoD, u.uDispersa.value);
+  picoP = Math.max(picoP, u.uPortal.value);
+}
+ok('el anillo se forma de verdad en los uniforms: dispersa llega a ~1 y portal también',
+   picoD > 0.95 && picoP > 0.95, `dispersa ${picoD.toFixed(2)}, portal ${picoP.toFixed(2)}`);
+ok('y se apaga solo: terminada la coreografía, los tres vuelven a 0',
+   u.uDispersa.value === 0 && u.uVortice.value === 0 && u.uPortal.value === 0 && v.vortice() === null);
+ok('DISPARAR DE NUEVO reinicia el baile (ejecuta dos cosas seguidas)',
+   (v.dispara('responde'), v.pinta(T, 0), v.vortice() !== null));
+const posDespues = v.objeto.children[0].geometry.attrs.position.array;
+ok('LA GEOMETRÍA INTACTA: el vórtice es el MISMO array y con la MISMA suma de vértices',
+   posAntes === posDespues && Math.abs(Array.from(posDespues).reduce((a, x) => a + x, 0) - sumaAntes) < 1e-9,
+   `${posDespues.length} floats`);
+v.dispara('activa'); v.pinta(0.3, 0);
+const aMitad = u.uPortal.value + u.uDispersa.value;
+v.corta();
+ok('`corta()` para en seco (el «para» de la cara sí puede con el vórtice)',
+   aMitad > 0 && u.uPortal.value === 0 && u.uDispersa.value === 0 && u.uVortice.value === 0,
+   `antes ${aMitad.toFixed(2)}`);
+v.borrar();
+
+/* Los textos GLSL: que los dos vertex shader lleven el morph y los dos fragmento sepan
+   leer el calor. Si el de las líneas se queda fuera, los hilos no siguen a los puntos. */
+ok('ambos vertex shader declaran y usan los tres mandos',
+   ['uDispersa', 'uVortice', 'uPortal'].every(k =>
+     SHADERS.puntos.includes(`uniform float ${k};`) && SHADERS.lineas.includes(`uniform float ${k};`)));
+/* Declarar el uniform no basta: si el CUERPO del morph se va del shader de las líneas,
+   los hilos se quedan en la esfera mientras los puntos salen disparados, y eso se vería
+   como una cara rota. Se exige el `if` de cada tramo en las DOS cadenas. */
+ok('y los dos llevan el CUERPO del morph, no sólo la declaración',
+   ['if (uDispersa > 0.001)', 'if (uPortal > 0.001)', 'vCalor = clamp('].every(k =>
+     SHADERS.puntos.includes(k) && SHADERS.lineas.includes(k)));
+ok('el toro usa el radio medido del video, no un número suelto',
+   SHADERS.puntos.includes(`float R = ${RADIOS.anillo};`), RADIOS.anillo);
+ok('los dos fragmento declaran `vCalor` y lo mezclan hacia el blanco-cian de la estela',
+   SHADERS.fragPuntos.includes('varying float vCalor;') &&
+   SHADERS.fragLineas.includes('varying float vCalor;') &&
+   /mix\(uColor[AB], vec3\(0\.85, 0\.97, 1\.0\)/.test(SHADERS.fragPuntos) &&
+   /mix\(uColor[AB], vec3\(0\.85, 0\.97, 1\.0\)/.test(SHADERS.fragLineas));
+ok('y el varying del calor está declarado una sola vez en cada vertex',
+   (SHADERS.puntos.match(/varying float vCalor;/g) || []).length === 1 &&
+   (SHADERS.lineas.match(/varying float vCalor;/g) || []).length === 1);
+
+/* ─── los candados que dejó la pasada en el navegador ───
+   Ninguno se puede comprobar midiendo píxeles en node (no hay GPU), pero todos son de
+   texto o de número y cada uno corresponde a un fallo que SÍ se vio en pantalla:
+     · el anillo inclinado en el espacio del OBJETO barría la cámara con el `giro` del
+       orbe y volvía a verse de canto (caja proyectada 272x315: más ALTO que ancho);
+     · el mismo giro pivotando sobre la LENTE mandaba el orbe fuera de la pantalla
+       (caja de 93x93 px en una esquina);
+     · las 700 líneas vivas durante el morfeado tapaban el agujero (una tela blanca);
+     · el tubo suelto (0,29) cambiaba la proporción del agujero en cuanto se movía el
+       radio del anillo.
+   La primera versión de estos candados buscaba `float ang = uPortal *` A SECAS, y la
+   batería de mutaciones lo cazó: poniendo el ángulo en 0 (o sea, quitando el anillo de
+   la cara y dejándolo de canto) la suite seguía verde. Por eso `GIRO` se exporta y se
+   exige su valor, no su sombra. */
+ok('la inclinación del anillo se aplica EN ESPACIO DE CÁMARA, con el ángulo medido, en los dos vertex',
+   ['puntos', 'lineas'].every(k =>
+     SHADERS[k].includes('vec4 mv = modelViewMatrix * vec4(p, 1.0);') &&
+     SHADERS[k].includes('gl_Position = projectionMatrix * vis;') &&
+     SHADERS[k].includes(`float ang = uPortal * ${GIRO};`)) &&
+   !SHADERS.puntos.includes('t = vec3(t.x,') && !SHADERS.lineas.includes('t = vec3(t.x,'),
+   'GIRO = ' + GIRO + ' rad (' + (GIRO * 180 / Math.PI).toFixed(0) + '°)');
+/* El número detrás de la cadena: con el portal a tope la elipse proyectada mide
+   `sin(GIRO)` de alto por 1 de ancho, y el video (215 x 206 px) es 0,958. Se exige
+   entre 0,90 y 0,97: por debajo de 0,90 el anillo se está viendo de canto (el fallo de
+   la primera versión), y clavarse en 1,0 sería un aro perfectamente de frente, sin la
+   profundidad del video. El tope «sin < 1» a secas NO valía: con GIRO = 1,5708 (90°, el
+   anillo plano del todo) el seno da 0,99999999 y la mutación M17 pasó verde. La ventana
+   tiene que cerrarse por arriba con un número, no con 1. */
+ok('y el ángulo deja el anillo casi de frente, como el video (relación 0,96)',
+   Math.sin(GIRO) >= 0.90 && Math.sin(GIRO) <= 0.97, 'sin(GIRO) = ' + Math.sin(GIRO).toFixed(3));
+ok('y el giro pivota sobre el CENTRO del orbe, no sobre la lente',
+   ['puntos', 'lineas'].every(k =>
+     SHADERS[k].includes('vec3 centro = modelViewMatrix[3].xyz;') &&
+     SHADERS[k].includes('vec3 r = mv.xyz - centro;') &&
+     SHADERS[k].includes('r.x + centro.x')));
+/* Sin portal no hay giro: con los tres mandos a 0 el orbe tiene que proyectarse EXACTO
+   como en la 2.16.0, y eso sólo se cumple si el ángulo se MULTIPLICA por uPortal. */
+ok('el giro vale 0 con el portal apagado (reposo idéntico a la 2.16.0)',
+   ['puntos', 'lineas'].every(k => SHADERS[k].includes(`float ang = uPortal * ${GIRO};`)));
+ok('las líneas se APAGAN durante el morfeado (la tela tapaba el agujero)',
+   SHADERS.fragLineas.includes('float tela = 1.0 - 0.85 * max(uDispersa, uPortal);') &&
+   SHADERS.fragLineas.includes('* tela);') &&
+   !SHADERS.fragPuntos.includes('tela'),
+   'los puntos siguen a tope: son las estelas del video');
+ok('el tubo del toro va ATADO al radio, no es un número suelto',
+   /float R = [\d.]+;\s*float rt = R \* [\d.]+;/.test(SHADERS.puntos));
 
 console.log(`\n${fallos ? 'ROJO' : 'verde'} · ${hechos} hechos, ${fallos} fallos · ` +
             `${N_PUNTOS} puntos, ${n} líneas\n`);

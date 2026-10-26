@@ -525,6 +525,91 @@ Las suites de la cara: orbe-cara **43**, orbe **67**, colores **51**, manto **35
 (196 en total), todas verdes; `prueba-costura.py` sigue con **una sola roja y es suya**: la
 burbuja 1.1.4 de `Flotante.java`, sin commitear.
 
+## 4.9 · La animación dispersiva del video `f7d16b9e…`, en la GPU (2026-10-26, ronda 2.17.0)
+
+El encargo, con su ortografía original: «**del segundo copiaras la animación dispersiva
+en la que cuando responde CORT o ejecuta una respuesta forma esa clase de vórtice, hazlo
+igual que en el video**». Antes de tocar código, el video se midió y se transcribió
+(§5 de `docs/REFERENCIAS-VIDEOS-JARVIS.md`, con diez fotogramas de evidencia en
+`docs/referencias/f7-*.jpg`): leídos con `cvlc --video-filter=scene` y perfil de
+luminancia sobre el cuadro de 6,5 s.
+
+**Lo que dice la medida, y lo que manda en el código.** El anillo hace el **52 % del ancho**
+de la pantalla, su agujero es el **0,68** del diámetro exterior y la banda el 16 %; los
+colores van de `#90EFFF` en el núcleo de las estelas a `#1D4E76` en el halo, **sin rojo ni
+verde**; y el reloj es explosión **0,5 s** → montaje **2,0 s** → anillo mantenido **4,0 s**
+→ cierre **1,5 s**. Coincide con lo que el orbe viejo ya calculaba a ojo
+(`orb.js:341-342`: 1700 ms de vórtice, 3200 ms de portal), así que el tempo no se inventó
+dos veces.
+
+**Morph en la GPU, geometría intocada.** `ui/js/orbe-plexo.js` gana tres uniforms
+(`uDispersa`, `uVortice`, `uPortal`) y un `varying float vCalor`, y un trozo de GLSL
+compartido (`MORFO`) que se concatena en **los dos** vertex shader —el de los puntos y el de
+las líneas— porque una cadena parcheada a mano es exactamente como se cayó la cara en la
+2.10.0. El anillo se construye como **toro** a partir del ángulo mayor que ya trae cada
+punto (`th = atan(z, x)`) y con el ángulo menor atado a su **latitud**, no al azar: los
+vecinos enlazados por una línea siguen siendo vecinos al formar la corona, y si `ph` fuera
+aleatorio cada hilo cruzaría el tubo de lado a lado. **No se reescribe un vértice en la
+CPU**, que es la regla 1 del archivo y lo comprueba la suite comparando la suma de los 220
+puntos antes y después del baile.
+
+**La coreografía es una función pura.** `formaDelVortice(t, rit)` devuelve los tres valores
+de un instante dado, o `null` fuera del rango; `RITMOS.activa` dura **8 s** (ejecuta algo) y
+`RITMOS.responde` **4,6 s** (contesta: si fuera la larga taparía la charla a media frase).
+Se prueban solas en node, sin GPU. El cable de la cara está en `orbe-cara.js`:
+`activate()` → `dispara('activa')`, `speak(ms)` → `dispara('responde')`, `stop()` →
+`corta()`.
+
+### Lo que sólo el navegador podía ver (y volvió a poderlo)
+
+Como en la 2.16.0, la suite salió verde y la animación estaba mal. Tres fallos, los tres
+medidos en píxeles sobre `ui/sonda-orbe.html` (pestaña de 536×521, congelando el cuadro con
+`pinta` parcheado y leyendo el lienzo con `drawImage`):
+
+| lo que se veía | la causa | el arreglo |
+|---|---|---|
+| el anillo como una **raya verde** cruzando la pantalla (caja proyectada 272×315: más **alto** que ancho) | la inclinación se aplicaba en el **espacio del objeto**, y el orbe rota en Y respirando: el plano del aro barría la cámara | el giro pasa a **después** de `modelViewMatrix` (`INCLINA`) |
+| el orbe **fuera de la pantalla**, 93×93 px en una esquina | el giro pivotaba sobre el **origen del espacio de cámara**, que es la lente: a 7,2 de distancia, inclinar 70° lo desplazaba 6,8 unidades arriba | pivotar sobre el centro: sumar y restar `modelViewMatrix[3].xyz` |
+| una **tela blanca** tapando el agujero durante la explosión y la corona | las 700 líneas del plexo seguían a su alfa de siempre | el fragmento de las líneas multiplica por `1 − 0,85·máx(uDispersa, uPortal)`: quedan al 15 % y los puntos siguen a tope |
+
+Y un cuarto que no se veía porque **no llegó a pasar**: `hud.js:1963` avisa del final de la
+voz con `speak(1)`. Sin la guarda, cada respuesta de CORT habría terminado con una
+explosión nueva de 4,6 s encima —el aviso de «se calló» disparando el gesto de «está
+hablando»—. Se encontró leyendo quién llama a `speak`, no esperando a que saltara.
+
+**El resultado, medido.** Caja del anillo **325×308 px → relación 0,95**, contra el 0,96 del
+video (215×206). Coste del orbe: **0,20 ms** por frame en reposo y **0,25 ms** con el anillo
+montado, o sea +0,05 ms; 3 dibujos, 220 puntos, 700 líneas, sin tocar la geometría. Los fps
+de la pestaña automatizada (17-21) **no son comparables** con los 60 medidos en la 2.12.0:
+la pestaña de captura va limitada por su propio lazo de screenshots, y eso se dice en el
+doc en vez de apuntar un número bonito.
+
+### Pruebas: 94 + 51, y la lección de la mutación M17
+
+`scripts/prueba-orbe.mjs` sube de 67 a **94** comprobaciones (sector [8] entero: la curva,
+su continuidad frame a frame, los uniforms, la geometría intacta, `corta()`, y los candados
+de los shaders) y `scripts/prueba-orbe-cara.mjs` de 43 a **51** (sector [5c]: la maniobra
+desde la cara). Alrededor, sin tocar: colores **51**, manto **35**, mandos **63**,
+automatiza **45**. Todas en verde.
+
+La batería de mutaciones sobre los candados nuevos son **ocho (M11-M18) y mordieron las
+ocho**, con la base restaurada byte a byte. Pero **M17 se escapó a la primera**, y vale la
+pena contarlo porque cambia cómo se escribe un candado: la comprobación miraba que el shader
+llevara la cadena `float ang = uPortal *`, sin valor. Poner el ángulo a 0 —es decir, quitar
+el anillo de la cara y dejarlo de canto otra vez— **seguía verde**, porque la cadena estaba.
+Arreglado: `GIRO` se exporta como `RADIOS`, la prueba exige su valor y el ángulo se comprueba
+**de número** (`0,90 ≤ sin(GIRO) ≤ 0,97`, la ventana que deja la elipse medida del video). El
+tope «< 1» a secas tampoco valía: con `GIRO = 1,5708` el seno da 0,99999999 y M17 volvía a
+escapar. **Un candado de texto sin su candado numérico no es un candado.**
+
+**Lo que NO hace esta ronda.** No copió las estelas con rabo ni el bloom óptico del video
+(exigen post-proceso y en 2 núcleos no se pagan: aquí son 220 puntos aclarados hacia
+`#90EFFF` con `vCalor`), no tocó `orb.js` ni ningún `.java`, no metió permiso ni servicio, no
+construyó APK, no saca nada a la nube y no tocó `brain.py`, `pool.py` ni `Flotante.java`.
+Sigue pendiente su ojo —que el anillo se parezca al del video lo decide ella a pantalla— y
+sigue abierto el paso **1.3** (la placa de arriba) y la verificación de la bajada de modelos
+en el teléfono. `prueba-costura.py` conserva **una sola roja y es suya**.
+
 ## 5 · Fuera de esta fase, con su sitio
 
 - **La superficie `chat` única** — pedida por la dueña el 2026-10-26 en el mismo mensaje
