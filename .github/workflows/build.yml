@@ -362,6 +362,34 @@ jobs:
             echo "::error::prueba-colores.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el orbe nuevo de la Fase 1 con node (sin WebGL)
+        id: orbe
+        # `scripts/prueba-orbe.mjs` ejerce `ui/js/orbe-plexo.js`, el orbe del paso 1.1
+        # (`docs/PLAN-FASE-1.md`), que todavía vive APARTE de la cara: se mide en
+        # `ui/sonda-orbe.html` y sólo se integra cuando la dueña lo apruebe. En un CI no
+        # hay GPU, así que se prueba lo que no depende de ella: que los 120 puntos caigan
+        # repartidos y sin grumos, que las 322 líneas no tengan duplicados ni bucles y
+        # sean `Uint16Array` (con `Int32Array` OpenGL dice `GL_INVALID_ENUM` y las líneas
+        # no se dibujan — medido en el navegador), que los cinco estados traigan colores
+        # válidos y distinguibles, que el GLSL no esconda un cierre de literal (pasó: un
+        # acento grave dentro de la cadena dejaba la cara en blanco y `node --check` lo
+        # daba por bueno) y que el bucle `pinta` NO toque la geometría.
+        # El tiempo de pared se reporta pero no se prueba: en el portátil de la dueña un
+        # `requestAnimationFrame` vacío rinde 16 fps con el equipo cargado, y una prueba
+        # que depende de la carga se pone roja sola y deja de merecerse.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-orbe.mjs > /tmp/orbe.log 2>&1
+          st=$?
+          tail -20 /tmp/orbe.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/orbe.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/orbe.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-orbe.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
         id: oido
         # `scripts/prueba-oido.sh` hace lo que `javac` no puede hacer NUNCA: carga

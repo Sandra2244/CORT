@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>CORT · sonda del orbe nuevo (paso 1.1)</title>
+<!-- ============================================================
+     PASO 1.1 DE LA FASE 1 NUEVA — `docs/PLAN-FASE-1.md`
+     Página APARTE: no la abre `index.html`, no toca `js/orb.js` ni `css/hud.css`.
+     Está aquí para que la dueña vea el orbe de la referencia, lo pruebe con sus
+     propios ojos y lo apruebe ANTES de integrar. Si esto le gusta, el paso 1.2 lo
+     lleva a la cara real; si no, se cambia aquí y no se ha roto nada.
+
+     Cómo verla, con el portátil despejado (sin Ollama y sin el backend, para no
+     gastar los 1,8 GiB):
+         cd ~/Documentos/CORT && python3 -m http.server 8000 --directory ui
+     y abrir  http://127.0.0.1:8000/sonda-orbe.html
+
+     Lo que se mide aquí, en números y a la vista: fps, milisegundos por frame,
+     dibujos, puntos y líneas. Nada de "se ve fluido": se lee.
+     ============================================================ -->
+<style>
+:root{
+  --cyan:#39c2ff; --texto:#9fdcff; --texto-hi:#e8f6ff; --tenue:#4b7f9e;
+  --fondo:#02040a; --placa:rgba(8,20,38,.42); --linea:rgba(110,210,255,.28);
+  --mono:'Consolas','DejaVu Sans Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--fondo);color:var(--texto);overflow:hidden;
+  font-family:'Segoe UI Variable Display','Segoe UI',system-ui,sans-serif}
+#scene{position:fixed;inset:0;z-index:0}
+/* el fondo de la referencia no es negro plano: tiene un degradado frío muy suave */
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(120% 90% at 50% 42%,rgba(14,42,72,.55),rgba(2,4,10,0) 62%)}
+.placa{border:1px solid var(--linea);border-radius:12px;background:var(--placa);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+
+/* ---------- 1.3 · el panel de arriba, rediseñado ----------
+   En el video es un recuadro pequeño arriba al centro: la hora grande en
+   monoespaciada y debajo una fila de datos. Se quitan el rótulo largo
+   «C.O.R.T. · Cognitive Orchestrator / Real-Time» y el «a sus órdenes»: la hora
+   manda y el resto son cuatro datos que se pueden leer de reojo. */
+#cab{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:3;
+  padding:7px 22px 8px;text-align:center;min-width:270px}
+#hora{font:600 30px/1 var(--mono);letter-spacing:.14em;color:var(--texto-hi);
+  text-shadow:0 0 14px rgba(0,190,255,.55)}
+#hora .seg{opacity:.55;font-size:22px}
+#fecha{font:400 10px/1.5 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--tenue)}
+#datos{display:flex;gap:14px;justify-content:center;margin-top:6px;
+  font:400 10px/1 var(--mono);letter-spacing:.1em;color:var(--texto)}
+#datos b{color:var(--texto-hi);font-weight:600}
+#datos i{font-style:normal;color:var(--tenue);margin-right:4px}
+
+/* ---------- la consola de la izquierda (lo que CORT hizo) ---------- */
+#bitacora{position:fixed;left:14px;top:120px;width:236px;max-height:calc(100% - 260px);
+  z-index:3;padding:9px 11px;overflow:hidden;display:flex;flex-direction:column;gap:5px}
+#bitacora h2{margin:0 0 3px;font:600 9px/1 var(--mono);letter-spacing:.24em;
+  text-transform:uppercase;color:var(--tenue)}
+.bit{font:400 11px/1.35 var(--mono);color:var(--texto);border-left:2px solid var(--linea);
+  padding-left:8px;opacity:0;transform:translateX(-6px);transition:opacity .3s,transform .3s}
+.bit.pintada{opacity:1;transform:none}
+.bit b{color:var(--texto-hi);font-weight:600}
+.bit span{color:var(--tenue)}
+
+/* ---------- 1.4 · la charla transparente ----------
+   Sin caja por mensaje: en el video el texto flota sobre el fondo. Aquí la burbuja
+   NO tiene fondo ni borde; sólo el nombre, la hora y el texto. Una sola piel para
+   los dos lados (hoy en la cara real hay dos distintas). */
+#charla{position:fixed;right:14px;bottom:14px;width:min(340px,44vw);z-index:3;
+  display:flex;flex-direction:column;gap:0}
+#mensajes{max-height:46vh;overflow-y:auto;padding:4px 6px;display:flex;flex-direction:column;gap:9px}
+#mensajes::-webkit-scrollbar{width:3px}
+#mensajes::-webkit-scrollbar-thumb{background:var(--linea)}
+.msg{display:flex;flex-direction:column;gap:1px;user-select:text}
+.msg .cabe{display:flex;align-items:center;gap:6px;font:600 9px/1 var(--mono);
+  letter-spacing:.16em;text-transform:uppercase;color:var(--tenue)}
+.msg .cabe .punto{width:6px;height:6px;border-radius:50%;background:var(--cyan);
+  box-shadow:0 0 7px var(--cyan)}
+.msg .texto{font-size:14px;line-height:1.45;color:var(--texto-hi);text-shadow:0 1px 6px rgba(0,0,0,.8)}
+.msg.tu{align-items:flex-end}
+.msg.tu .texto{color:var(--texto);font-style:italic}
+.msg.tu .cabe .punto{background:var(--tenue);box-shadow:none}
+/* los tres puntos de "está pensando", en el propio color del estado */
+.esperando .texto::after{content:'•••';letter-spacing:.18em;color:var(--cyan)}
+#escribir{display:flex;gap:8px;align-items:center;margin-top:8px;padding:7px 8px 7px 12px;
+  border:1px solid var(--linea);border-radius:22px;background:rgba(8,20,38,.5)}
+#escribir input{flex:1;background:none;border:0;outline:0;color:var(--texto-hi);font-size:13px}
+#escribir button{border:1px solid var(--linea);background:rgba(57,194,255,.12);
+  color:var(--texto-hi);border-radius:50%;width:30px;height:30px;cursor:pointer;
+  display:grid;place-items:center;padding:0}
+#escribir button svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.6}
+
+/* ---------- los mandos de la prueba ---------- */
+#mandos{position:fixed;left:14px;bottom:14px;width:236px;z-index:4;padding:10px 11px;
+  display:flex;flex-direction:column;gap:8px}
+#mandos h2{margin:0;font:600 9px/1 var(--mono);letter-spacing:.24em;text-transform:uppercase;color:var(--tenue)}
+.fila{display:flex;flex-wrap:wrap;gap:5px}
+.fila button{border:1px solid var(--linea);background:rgba(8,20,38,.5);color:var(--texto);
+  border-radius:9px;padding:5px 9px;font:400 11px/1 var(--mono);cursor:pointer}
+.fila button[aria-pressed=true]{background:rgba(57,194,255,.18);color:var(--texto-hi);
+  border-color:var(--cyan)}
+#medida{font:400 10px/1.5 var(--mono);color:var(--tenue);letter-spacing:.04em}
+#medida b{color:var(--texto-hi)}
+#nivel{width:100%;accent-color:var(--cyan)}
+#aviso{position:fixed;inset:auto 14px 14px auto;max-width:340px;z-index:9;display:none;
+  padding:10px 12px;border:1px solid #ff6b81;border-radius:10px;background:#2a0b12;
+  color:#ffd9df;font:12px/1.4 var(--mono)}
+@media (max-width:900px){
+  #bitacora{display:none}
+  #charla{width:auto;left:10px;right:10px;bottom:186px}
+  #mensajes{max-height:32vh}
+  #mandos{width:auto;left:10px;right:10px}
+}
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<header id="cab" class="placa">
+  <div id="hora">--:--<span class="seg">:--</span></div>
+  <div id="fecha">cargando…</div>
+  <div id="datos">
+    <span><i>nodo</i><b id="d-nodo">—</b></span>
+    <span><i>estado</i><b id="d-estado">—</b></span>
+    <span><i>cerebro</i><b id="d-cerebro">sin preguntar</b></span>
+  </div>
+</header>
+
+<aside id="bitacora" class="placa">
+  <h2>lo que hizo</h2>
+  <div id="bits"></div>
+</aside>
+
+<section id="charla">
+  <div id="mensajes"></div>
+  <form id="escribir">
+    <input id="entrada" type="text" placeholder="pide algo: «qué hora hace», «pon música»" autocomplete="off">
+    <button type="submit" title="Enviar"><svg viewBox="0 0 16 16"><path d="M3 8h9M8 4l4 4-4 4"/></svg></button>
+  </form>
+</section>
+
+<aside id="mandos" class="placa">
+  <h2>estados (tócalos)</h2>
+  <div class="fila" id="estados"></div>
+  <h2>nivel de voz <span id="nv">0,00</span></h2>
+  <input id="nivel" type="range" min="0" max="100" value="0">
+  <div class="fila">
+    <button id="b-freno" aria-pressed="false">freno</button>
+    <button id="b-bajo" aria-pressed="false">modo bajo</button>
+    <button id="b-auto" aria-pressed="true">simular una tarea</button>
+  </div>
+  <div id="medida">midiendo…</div>
+</aside>
+
+<div id="aviso"></div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three.module.js"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { ESTADOS, N_PUNTOS, VECINOS, creaOrbe } from './js/orbe-plexo.js';
+
+const $ = (id) => document.getElementById(id);
+const avisa = (texto) => { const a = $('aviso'); a.style.display = 'block'; a.textContent = texto; };
+
+/* ---------- el orbe ---------- */
+/* Declarado ANTES de montar: `montar()` pide el estado de arranque y si la variable
+   vive más abajo, la página entera cae con "Cannot access before initialization". */
+let estado = 'reposo', nivel = 0, objetivo = 0;
+let renderer, camara, escena, orbe, modo = 'pleno', freno = false;
+/* `montar` vive fuera del `try` porque el botón «modo bajo» la llama mucho después:
+   si se declara dentro de una llave, fuera no existe. */
+function montar() {
+  if (!escena) return;
+  if (orbe) { escena.remove(orbe.objeto); orbe.borrar(); }
+  /* El tamaño de punto se pasa en píxeles del aparato: `gl_PointSize` no conoce el
+     pixel ratio y en una pantalla a 2x saldrían de la mitad de lo pedido. */
+  orbe = creaOrbe(THREE, { modo, puntos: N_PUNTOS, vecinos: VECINOS,
+                           tamano: 2.8 * renderer.getPixelRatio() });
+  orbe.setEstado(estado);
+  escena.add(orbe.objeto);
+}
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true,
+                                       powerPreference: 'low-power' });
+  /* El pixelRatio es el grifo del coste: 2 en una pantalla buena multiplica por 4 los
+     píxeles del shader. En la referencia el orbe no necesita más de 1,5. */
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.5));
+  renderer.setSize(innerWidth, innerHeight);
+  $('scene').appendChild(renderer.domElement);
+  camara = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 100);
+  /* 7,2 de cámara con una esfera de radio 1 y un objetivo de 55°: la esfera ocupa ~una
+     cuarta del alto, que es el tamaño del orbe en el video. A 4,4 se comía la pantalla. */
+  camara.position.set(0, 0.25, 7.2);
+  escena = new THREE.Scene();
+  addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    camara.aspect = innerWidth / innerHeight;
+    camara.updateProjectionMatrix();
+  });
+  montar();
+} catch (e) {
+  avisa('WebGL no arrancó en este equipo: ' + (e.message || e) +
+        '. En la cara real esto lo cubre el orbe de palo (orbeDePalo en index.html).');
+}
+
+/* ---------- estados, nivel y bucle ---------- */
+const botones = $('estados');
+for (const k of Object.keys(ESTADOS)) {
+  const b = document.createElement('button');
+  b.textContent = k; b.dataset.e = k;
+  b.onclick = () => poner(k);
+  botones.appendChild(b);
+}
+function poner(k) {
+  if (!orbe || !orbe.setEstado(k)) return;
+  estado = k;
+  $('d-estado').textContent = k;
+  for (const b of botones.children) b.setAttribute('aria-pressed', String(b.dataset.e === k));
+}
+$('nivel').oninput = (ev) => {
+  objetivo = ev.target.value / 100;
+  $('nv').textContent = objetivo.toFixed(2).replace('.', ',');
+  /* Al mover la raya a mano se apaga la simulación: si no, el bucle la pisa en el
+     siguiente cuadro y la sensación es que la raya «no hace nada». */
+  if (auto) { auto = false; $('b-auto').setAttribute('aria-pressed', 'false'); }
+};
+$('b-freno').onclick = (ev) => { freno = !freno; ev.target.setAttribute('aria-pressed', String(freno)); };
+$('b-bajo').onclick = (ev) => {
+  modo = modo === 'pleno' ? 'bajo' : 'pleno';
+  ev.target.setAttribute('aria-pressed', String(modo === 'bajo'));
+  montar();
+  bit(modo === 'bajo' ? 'modo <b>bajo</b> · sin líneas' : 'modo <b>pleno</b> · puntos y líneas');
+};
+
+/* El bucle: `pinta` cuesta lo que cuesta escribir cuatro uniforms; el resto del
+   presupuesto es del navegador. Con freno (el modo juego de la cara real) se recorta a
+   15 fps y el nivel se queda quieto. */
+let antes = performance.now(), acum = 0, cuadros = 0, msOrbe = 0, fps = 0;
+let auto = true, tAuto = 0;
+$('b-auto').onclick = (ev) => { auto = !auto; ev.target.setAttribute('aria-pressed', String(auto)); };
+function bucle(ahora) {
+  requestAnimationFrame(bucle);
+  const dt = (ahora - antes) / 1000; antes = ahora;
+  if (freno && cuadros % 4) { cuadros++; return; }        // ~15 fps con freno
+  if (auto) {                                            // la simulación del micrófono
+    tAuto += dt;
+    objetivo = Math.max(0, Math.sin(tAuto * 2.1) * 0.75 * (estado === 'escucha' || estado === 'habla' ? 1 : 0.35));
+    $('nivel').value = Math.round(objetivo * 100);
+    $('nv').textContent = objetivo.toFixed(2).replace('.', ',');
+  }
+  nivel += (objetivo - nivel) * Math.min(1, dt * 9);
+  const t0 = performance.now();
+  if (orbe) orbe.pinta(dt, nivel);
+  msOrbe += performance.now() - t0;
+  if (renderer && escena) renderer.render(escena, camara);
+  acum += dt; cuadros++;
+  if (acum >= 1) {
+    fps = cuadros / acum;
+    const cifras = orbe ? orbe.cifras() : { puntos: 0, lineas: 0, dibujos: 0 };
+    $('medida').innerHTML =
+      `<b>${fps.toFixed(1)}</b> fps · <b>${(msOrbe / cuadros).toFixed(2)}</b> ms en el orbe<br>` +
+      `<b>${cifras.puntos}</b> puntos · <b>${cifras.lineas}</b> líneas · <b>${cifras.dibujos}</b> dibujos<br>` +
+      `pixel ratio <b>${renderer ? renderer.getPixelRatio().toFixed(1) : '—'}</b> · ${modo === 'bajo' ? 'sin líneas' : 'puntos y líneas'}`;
+    acum = 0; cuadros = 0; msOrbe = 0;
+  }
+}
+requestAnimationFrame(bucle);
+
+/* ---------- 1.3 · la placa de arriba ---------- */
+/* La hora con dos dígitos por campo y los segundos en tenue: es lo que se lee del
+   video. Nada de «undefined» ni de guiones eternos: el primer cuadro pinta la hora ya. */
+function reloj() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  $('hora').innerHTML = `${p(d.getHours())}:${p(d.getMinutes())}<span class="seg">:${p(d.getSeconds())}</span>`;
+  $('fecha').textContent = d.toLocaleDateString('es-MX',
+    { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase();
+}
+reloj(); setInterval(reloj, 1000);
+$('d-nodo').textContent = /Android/i.test(navigator.userAgent) ? 'teléfono' : 'este PC';
+
+/* ---------- 1.4 · la charla y 1.5 · la forma de trabajar ---------- */
+const mensajes = $('mensajes'), bits = $('bits');
+function burbuja(lado, texto, quien) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + lado;
+  const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+  d.innerHTML = `<div class="cabe"><span class="punto"></span>${quien}<span>${hora}</span></div>` +
+                `<div class="texto"></div>`;
+  d.querySelector('.texto').textContent = texto;
+  mensajes.appendChild(d);
+  mensajes.scrollTop = mensajes.scrollHeight;
+  return d;
+}
+function bit(html) {
+  const b = document.createElement('div');
+  b.className = 'bit'; b.innerHTML = html;
+  bits.prepend(b);
+  requestAnimationFrame(() => b.classList.add('pintada'));
+  while (bits.children.length > 7) bits.lastChild.remove();
+}
+/* Un guión de verdad, no una IA: lo que se prueba aquí es la SECUENCIA visible
+   (escucha → piensa → qué hizo → habla → reposo), que es el paso 1.5. */
+const GUION = [
+  { pide: 'qué hora hace',   hace: 'leo el reloj del aparato',        dice: 'Las ' + new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) + ', hora de tu equipo.', cerebro: 'Razón (sin modelo)' },
+  { pide: 'cómo va el día',  hace: 'pregunto el clima en segundo plano', dice: 'Nube por la tarde, 22° de máxima. Si sales a las 5, paraguas.', cerebro: 'liviano' },
+  { pide: 'pon música',      hace: 'abro tu reproductor predeterminado', dice: 'Abriendo la lista «looksmaxing» en el reproductor del sistema.', cerebro: 'reglas' },
+  { pide: 'me duele la cabeza', hace: 'busco la dosis de la fórmula',  dice: 'No te la invento: para el acetaminofén pediátrico hace falta el peso y la concentración del frasco. Dime ambos y calculo la regla de tres.', cerebro: 'Razón (sin modelo)' },
+];
+let ocupado = false;
+async function trabajar(frase) {
+  if (ocupado) return;
+  ocupado = true;
+  burbuja('tu', frase, 'tú');
+  poner('escucha');
+  const guion = GUION.find(g => frase.toLowerCase().includes(g.pide.slice(0, 8))) || GUION[1];
+  await esperar(650);
+  poner('piensa');
+  const espera = burbuja('cort', '', 'CORT'); espera.classList.add('esperando');
+  await esperar(900);
+  espera.classList.remove('esperando');
+  espera.querySelector('.texto').textContent = guion.dice;
+  $('d-cerebro').textContent = guion.cerebro;
+  bit(`<b>${guion.hace}</b> · <span>${guion.cerebro}</span>`);
+  poner('habla');
+  await esperar(Math.min(2600, 700 + guion.dice.length * 34));
+  poner('reposo');
+  ocupado = false;
+}
+const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+$('escribir').onsubmit = (ev) => {
+  ev.preventDefault();
+  const v = $('entrada').value.trim();
+  $('entrada').value = '';
+  if (v) trabajar(v);
+};
+burbuja('cort', 'Buenas. Esta hoja es el orbe nuevo, aparte de tu cara: tócalos estados de abajo, mándame una frase y mira la placa de la izquierda para ver qué hago.', 'CORT');
+bit('cara de prueba · <b>paso 1.1</b>');
+poner('reposo');
+</script>
+</body>
+</html>
