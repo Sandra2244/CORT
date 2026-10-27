@@ -78,6 +78,16 @@ jobs:
   # `apps/apk/compilar.sh` usa `aapt2` + `javac` + `d8` + `zipalign` +
   # `apksigner`, sin Gradle ni AndroidX. La interfaz que viaja dentro del APK es
   # `ui/` de este mismo commit, copiada a `assets/ui/` por el propio script.
+  #
+  # Cada paso de suite lleva `if: ${{ !cancelled() }}`. Es intencional y llega de
+  # una tarde concreta: con el disparador nuevo (push a la rama, no sólo etiqueta)
+  # `prueba-enruta.mjs` falló por el `actions.py` que la dueña tiene sin commitear,
+  # y GitHub se saltó los ONCE pasos siguientes —placa, pasos, texto, colores, orbe,
+  # manto, descargas, oído y las tres compilaciones— así que el run no decía nada
+  # de lo demás. Con `!cancelled()` cada suite sube su propia anotación `::error::`
+  # y el rojo de arriba no esconde el de abajo. La puerta sigue siendo puerta: los
+  # pasos de compilación NO llevan el `if:`, así que con cualquier suite roja el APK
+  # no se compila ni se sube.
   apk:
     runs-on: ubuntu-latest
     env:
@@ -162,6 +172,7 @@ jobs:
           restore-keys: cort-kotlin-
       - name: Comprobar la costura (manifiesto ↔ Java ↔ cara)
         id: costura
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-costura.py` es lo único que puede decir si las tres capas
         # se nombran lo mismo, y `javac` NO lo ve nunca: un `@JavascriptInterface`
         # que la cara llama con otro nombre, una pantalla que Java nombra `equipo`
@@ -186,6 +197,7 @@ jobs:
           fi
       - name: Probar el clima y el registro de código (sin red)
         id: clima
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-clima.py` ejerce la parte del cerebro que NO necesita
         # teléfono ni nube: qué ciudad se entendió de la frase («el tiempo en Gijón
         # ahora mismo» tiene que dar Gijón, y «el clima de la semana» no puede dar
@@ -230,6 +242,7 @@ jobs:
           fi
       - name: Probar el gestor de modelos de Ollama (sin Ollama, sin red)
         id: modelos
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-modelos.py` es la red que falta para que «no descarga los
         # modelos» deje de ser un misterio. Vigila cuatro cosas, todas con gemelos
         # del taller y `CORT_HOME` en `mktemp` (no enciende nada, no le baja nada a
@@ -260,6 +273,7 @@ jobs:
           fi
       - name: Probar la boca del escritorio (sin sonido, sin red)
         id: boca
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-voz.py` ejerce la voz del PC, que en Linux NO puede ir por
         # el navegador: medido el 2026-10-22 con `scripts/sonda-voz.html`, este
         # Chromium da `speechSynthesis` con CERO voces y `voiceschanged` vacío, así
@@ -288,6 +302,7 @@ jobs:
           fi
       - name: Probar el cerebro en el JDK (lógica, sin teléfono)
         id: mente
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-mente.sh` compila `Cerebro`, `Razon`, `Nube` y `Mente`
         # contra los gemelos de papel de `apps/apk/prueba/papeles` y ejecuta las
         # tres suites: las cuentas a pelo, la ruta de quién responde, y las 283
@@ -310,6 +325,7 @@ jobs:
           fi
       - name: Probar el motor de automatizaciones con node (sin teléfono)
         id: autos
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-automatiza.mjs` ejerce las reglas «cuando X, entonces Y»
         # sobre el módulo PURO (`ui/js/automatiza.js`): los acentos de la frase, el
         # freno de un minuto, «a las 7:30 una vez al día», la señal del aviso que
@@ -332,6 +348,7 @@ jobs:
           fi
       - name: Probar los mandos de la voz con node (sin teléfono)
         id: mandos
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-mandos.mjs` ejerce la capa que decide si «pausa» es un
         # mando y a quién se le manda, sobre el módulo PURO `ui/js/mandos.js`: el
         # punto que el reconocedor pega al final («Pausa.»), los acentos, las
@@ -354,6 +371,7 @@ jobs:
           fi
       - name: Probar el enrutado hablar/ejecutar con node (sin teléfono)
         id: enruta
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-enruta.mjs` ejerce el paso J2.1 sobre el módulo PURO
         # `ui/js/ordenes.js`: las 23 órdenes del ejecutor tienen que ir a
         # `POST /api/command` y NO regalarse al cerebro; la conversación («cuéntame
@@ -379,6 +397,7 @@ jobs:
           fi
       - name: Probar la placa de arriba con node (sin navegador)
         id: placa
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-placa.mjs` ejerce el paso 1.3 de la Fase 1 sobre el módulo
         # PURO `ui/js/placa.js`. Lo que se persigue es lo de MÁS: que la placa nunca
         # pinte un dato que no se midió. Con 16 valores rotos (`undefined`, `null`,
@@ -403,6 +422,7 @@ jobs:
           fi
       - name: Probar los estados del hilo del copiloto con node (sin teléfono)
         id: pasos
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-pasos.mjs` ejerce el paso J2.3 sobre el módulo PURO
         # `ui/js/pasos.js`, la máquina de estados del hilo de pasos (pendiente →
         # corriendo → ok / falló / rechazado / enseñado). Se prueban las cuatro cosas
@@ -427,6 +447,7 @@ jobs:
           fi
       - name: Probar los pliegues de texto y su cadena anti-copias (sin navegador)
         id: texto
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-texto.mjs` vigila el primer paso de la refactorización que
         # pide la dueña («la interfaz mil líneas máximo, divides y conectas»). En la
         # cara `esc` estaba definido CINCO veces (hud, pantallas, telefono, arnes,
@@ -455,6 +476,7 @@ jobs:
           fi
       - name: Probar el índice de conocimiento con node/python (sin red, en arena)
         id: conocimiento
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-conocimiento.py` ejerce el hueco 2.2 de
         # `docs/ANALISIS-PROMPT-Y-VIDEOS.md`: el «conocimiento.py» + «carpeta de
         # conocimiento» que el prompt de la dueña prometía y que en el repo no existía
@@ -484,6 +506,7 @@ jobs:
           fi
       - name: Probar los colores del orbe con node (sin WebGL)
         id: colores
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del
         # que `orb.js` saca sus dieciséis colores. La prueba decisiva de F17 es
         # «cambiar de traje ⇒ cambian TODOS los colores del orbe», y en un CI no
@@ -505,6 +528,7 @@ jobs:
           fi
       - name: Probar el orbe nuevo de la Fase 1 con node (sin WebGL)
         id: orbe
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-orbe.mjs` ejerce `ui/js/orbe-plexo.js`, el orbe del paso 1.1
         # (`docs/PLAN-FASE-1.md`), que todavía vive APARTE de la cara: se mide en
         # `ui/sonda-orbe.html` y sólo se integra cuando la dueña lo apruebe. En un CI no
@@ -533,6 +557,7 @@ jobs:
           fi
       - name: Probar el manto JARVIS de la Charla (paso 1.4)
         id: manto
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-manto.mjs` ejerce la capa `ui/css/jarvis.css` y su interruptor
         # en `ui/js/pantallas.js`/`hud.js`. No puede probar «cómo se ve» —eso lo mira la
         # dueña en el navegador—, pero prueba lo que decide que sea una CAPA y no un
@@ -574,6 +599,7 @@ jobs:
           fi
       - name: Probar el orbe del video montado en la cara (paso 1.1 integrado)
         id: orbe-cara
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-orbe-cara.mjs` no lee el adaptador y lo aprueba por la palabra:
         # ejecuta `ui/js/orbe-cara.js` contra un `three` de pega (`scripts/fake-three.mjs`)
         # y una pantalla de pega, con el TEXTO del repo y sólo sus tres `import` reescritos
@@ -614,6 +640,7 @@ jobs:
           fi
       - name: Probar la bajada de modelos (reintentos, silencio y contexto)
         id: descargas
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-descargas.py` ejerce `backend/app/models.py`, el camino por el
         # que CORT baja sus cerebros. Lo que se prueba es lo que rompió la bajada real de
         # la dueña: el «problema muy común» de que se corte a mitad y no vuelva. Aquí se
@@ -647,6 +674,7 @@ jobs:
           fi
       - name: Probar el oído propio con Vosk de verdad (sin teléfono)
         id: oido
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # `scripts/prueba-oido.sh` hace lo que `javac` no puede hacer NUNCA: carga
         # el modelo de español de verdad (`vosk.jar` de escritorio lleva el mismo
         # `libvosk.so` de linux que el AAR de Android), le mete muestras de audio a
