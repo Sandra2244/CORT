@@ -45,6 +45,12 @@ import { clasificarOrden } from './ordenes.js';
    rojo que rechaza un paso. Módulo puro por lo mismo que los dos de arriba. */
 import { ESTADOS_PASO, puedeAceptar, puedeRechazar, arranca, rechaza, cierra } from './pasos.js';
 import { esc } from './texto.js';
+/* El markdown de la Charla, su hora y el parser de la letra con marcas de tiempo
+   viven en hojas propias desde el primer corte de la refactorización por tamaño:
+   son texto que entra y texto que sale, y así se comprueban con node sin pantalla
+   (`scripts/prueba-md.mjs`). */
+import { md, horaDe } from './md.js';
+import { parseaLetra } from './letra.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -1208,31 +1214,6 @@ function burbujaPensando() {
       <div class="gm-puntos" role="status" aria-label="pensando"><i></i><i></i><i></i></div>
     </div>`;
   return b;
-}
-
-function horaDe(ms) {
-  const n = Number(ms);
-  if (!Number.isFinite(n) || n <= 0) return '';
-  try { return new Date(n).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }); }
-  catch { return ''; }
-}
-
-/* Markdown mínimo y seguro: primero se escapa TODO, después se reconocen los bloques
-   de código, el código en línea, las negritas y los enlaces. Así una respuesta con
-   `<script>` se lee como texto y nunca se ejecuta. */
-function md(texto) {
-  const trozos = [];
-  let s = esc(String(texto == null ? '' : texto));
-  s = s.replace(/```([^\n`]*)\n?([\s\S]*?)```/g, (_, lengua, codigo) => {
-    trozos.push('<pre class="bur-pre"><code>' + codigo.replace(/\n+$/, '') + '</code></pre>');
-    return '\u0001' + (trozos.length - 1) + '\u0001';
-  });
-  s = s.replace(/`([^`\n]+)`/g, '<code class="bur-code">$1</code>');
-  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
-  s = s.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g,
-    '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
-  s = s.replace(/\n/g, '<br>');
-  return s.replace(/\u0001(\d+)\u0001/g, (_, i) => trozos[+i] || '');
 }
 
 async function guardaNota(texto) {
@@ -2916,23 +2897,6 @@ function mueveVideoLocal(dS) {
   if (!v) return;
   const dur = isFinite(v.duration) ? v.duration : 0;
   v.currentTime = Math.max(0, Math.min(dur ? dur - .05 : 0, v.currentTime + dS));
-}
-
-/* ── la letra: `/api/letras` y sus marcadores [mm:ss.xx] ── */
-function parseaLetra(texto) {
-  const sale = [];
-  String(texto || '').split('\n').forEach(linea => {
-    // LRCLIB escribe `[00:13.42]`; también cabe `[0:07.5]` (un dígito de centésimas)
-    // y el punto o los dos puntos como separador. Sin marca de tiempo → no es línea.
-    const m = linea.match(/^\s*\[(\d{1,3}):(\d{2})(?:[.:](\d{1,2}))?\](.*)$/);
-    if (!m) return;
-    const textoLinea = (m[4] || '').trim();
-    if (!textoLinea) return;
-    // «.5» son 50 centésimas, no 5: se rellena a la derecha antes de dividir.
-    const cent = (m[3] || '').padEnd(2, '0');
-    sale.push({ s: (+m[1]) * 60 + (+m[2]) + (+cent) / 100, texto: textoLinea });
-  });
-  return sale;
 }
 
 async function pideLetra(forzada) {

@@ -474,6 +474,34 @@ jobs:
             echo "::error::prueba-texto.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el markdown de la Charla y la letra del karaoke (sin navegador)
+        id: md
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
+        # Segundo corte de la refactorización por tamaño: `md`, `horaDe` y
+        # `parseaLetra` salieron de `pantallas.js` (3.182 líneas) a `ui/js/md.js` y
+        # `ui/js/letra.js`. Las 28 comprobaciones no van del adorno sino de las dos
+        # cosas que se pagan caro: que una respuesta del modelo con `<script>` se lea
+        # como texto (la hoja escapa ANTES de reconocer bloques, y si ese orden se
+        # invierte el navegador de la dueña ejecuta lo que escribió otro), y que el
+        # karaoke interprete bien las marcas de LRCLIB — `[0:07.5]` son 7,50 s y no
+        # 7,05 ni 7 minutos, una línea sin marca no es letra, y una marca sin texto
+        # corta el canto. El sector [4] es la cadena: si `md`/`horaDe`/`parseaLetra`
+        # vuelven a definirse dentro de una pantalla, o `md.js` deja de llamar a
+        # `esc` primero, corta la compilación. Verificado con una mutación
+        # (`function md(` de vuelta en `pantallas.js`): muerde.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-md.mjs > /tmp/md.log 2>&1
+          st=$?
+          tail -20 /tmp/md.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/md.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/md.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-md.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el índice de conocimiento con node/python (sin red, en arena)
         id: conocimiento
         if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
