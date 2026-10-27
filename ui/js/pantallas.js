@@ -981,6 +981,9 @@ async function charla(texto) {
          una orden que volvió `done:['carpeta']` pero cuyo texto dice «No pude»
          también pinta el estado en ámbar. Lo que falló se dice fallando. */
       const falló = /no pude|no hay|no encontr|fallo|error/i.test(String(dicho));
+      /* Misma regla que la charla: una orden cumplida por el ejecutor no la pensó
+         ningún modelo, así que la placa tiene que dejar de nombrarlo. */
+      ctx?.placa?.({ modelo: /casa|nube|local/i.test(String(j.source || '')) ? (chModelo || '') : '' });
       jmEstado(hecho.length ? (falló ? 'intentó: ' + hecho.join(' · ')
                                      : 'hizo: ' + hecho.join(' · '))
                             : 'cerebro ' + (j.source || 'local'), falló);
@@ -1008,11 +1011,15 @@ async function charla(texto) {
                     hora: Date.now() });
     chPensando = false;
     jmEstado('cerebro: ' + (j.source || 'local'));
-    /* La placa de arriba (1.3) dice con qué se contestó. Se pinta SOLO si hay nombre
-       de modelo: `/api/chat` devuelve `{reply, source}` y nada más, así que sin
-       elección de ella no hay un modelo que nombrar — inventarlo sería justo lo que
-       el paso 1.3 prohibe. */
-    if (chModelo) ctx?.placa?.({ modelo: chModelo });
+    /* La placa de arriba (1.3) dice con qué se contestó, y aquí está la trampa que
+       cazó la vista previa: `chModelo` trae el modelo SELECCIONADO (qwen2.5:0.5b), no
+       el que habló. Si la respuesta salió `offline` o del `ejecutor`, ningún modelo
+       pensó —poner el elegido era inventarse una respuesta, lo mismo que el paso 1.3
+       prohibe—. Se pinta el nombre SÓLO cuando la fuente es de modelo (casa / nube /
+       local), y se LIMPIA con un '' en cualquier otro caso para que la placa deje de
+       reclamar un modelo que ya no contestó. */
+    const fuente = String(j.source || '');
+    ctx?.placa?.({ modelo: (chModelo && /casa|nube|local/i.test(fuente)) ? chModelo : '' });
     ctx?.orb?.burst?.();
   } catch (e) {
     mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e,

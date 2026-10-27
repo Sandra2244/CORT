@@ -80,7 +80,16 @@ ok('la placa se pinta en el arranque, no cuando toque el intervalo',
 ok('el nodo se mide en el arranque con IS_ANDROID', /nodo: nombreNodo\(IS_ANDROID\)/.test(hud));
 ok('las pantallas reciben `placa` en su contexto', /placa: datosPlaca,/.test(hud));
 const js = readFileSync(join(raiz, 'ui/js/pantallas.js'), 'utf8');
-ok('el modelo sólo se nombra si ella lo eligió', /if \(chModelo\) ctx\?\.placa\?\.\(\{ modelo: chModelo \}\)/.test(js));
+/* La trampa que cazó la vista previa del 2026-10-27: `chModelo` trae el modelo
+   ELEGIDO en la cabecera de la charla, no el que habló. Con Ollama apagado la
+   respuesta salía `offline` y la placa seguía diciendo `qwen2.5:0.5b` — un modelo que
+   no pensó. Las dos reglas de abajo son las que impiden que eso vuelva a pasar. */
+ok('el modelo sólo se nombra si la FUENTE es de modelo (casa/nube/local)',
+   /modelo: \(chModelo && \/casa\|nube\|local\/i\.test\(fuente\)\) \? chModelo : ''/.test(js));
+ok('y la orden del ejecutor LO BORRA de la placa',
+   /ctx\?\.placa\?\.\(\{ modelo: \/casa\|nube\|local\/i\.test\(String\(j\.source \|\| ''\)\) \? \(chModelo \|\| ''\) : '' \}\)/.test(js));
+ok('ninguna de las dos pinta ya el modelo elegido a ciegas',
+   !/if \(chModelo\) ctx\?\.placa\?\.\(\{ modelo: chModelo \}\)/.test(js));
 const html = readFileSync(join(raiz, 'ui/index.html'), 'utf8');
 ok('el HTML conserva el panel de la placa', /<div class="panel" id="clock">/.test(html));
 const css = readFileSync(join(raiz, 'ui/css/hud.css'), 'utf8');
