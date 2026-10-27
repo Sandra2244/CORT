@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { ESTADOS_PASO, puedeAceptar, puedeRechazar, puedeCopiar, arranca, rechaza, cierra,
          resumenPasos } from '../ui/js/pasos.js';
+import { cara } from './lib-cara.mjs';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
 let fallos = 0, hechos = 0;
@@ -72,7 +73,11 @@ ok('un lote vacío no rompe', Object.keys(resumenPasos([])).length === 0);
 ok('copiar siempre se puede si hay comando', puedeCopiar(paso()) && !puedeCopiar(paso({ orden: '' })));
 
 console.log('\n[6] la costura en la cara');
-const js = readFileSync(join(raiz, 'ui/js/pantallas.js'), 'utf8');
+/* Desde el corte 4 la máquina de estados la usa `codigo.js`, no la carcasa. Se lee la
+   cara entera —la MISMA lista que lee `prueba-costura.py`— para que la comprobación
+   signifique «el hilo del copiloto está cosido a la cara» y no «en qué archivo vive
+   hoy». Las cadenas exigidas no cambian ni una. */
+const js = cara(join(raiz, 'ui/js'));
 ok('la cara importa la máquina de estados', /from '\.\/pasos\.js'/.test(js));
 ok('el plan nace con su estado (seguro→pendiente, no seguro→enseñado)',
    /estado: p\.seguro \? 'pendiente' : 'enseñado'/.test(js));

@@ -5,14 +5,18 @@
 de código; esto describe, no arregla.
 
 **Vuelto a medir el 2026-10-27**, después de la limpieza (commit `b4e6e09`, el APK base ya
-no viaja versionado) y del **corte 3** de la refactorización (`marco.js` + `charla.js`). Los
+no viaja versionado) y de los **cortes 3 y 4** de la refactorización (`marco.js` +
+`charla.js`, y luego `codigo.js`). Los
 números de los apartados 1 y 2 son de hoy; lo que se escribió el 25 y no ha cambiado se
 queda como estaba.
 
 **Cómo se midió, para que se pueda repetir.** Todo lo que sigue sale de comandos sobre
-este disco, no de memoria ni del README: `git ls-files` (**235 archivos rastreados**,
-**8.458.306 B de contenido versionado**), `wc -l`, `du -sh`, `grep -c` y lectura de las
-líneas citadas.
+este disco, no de memoria ni del README: `git ls-files` (**243 archivos rastreados** y
+**8.506.535 B** en `HEAD`; el conteo estaba en 235 cuando se escribió la primera medición
+del día, y los 8 archivos que sacó el corte 3 —`marco.js`, `charla.js`, `lib-cara.mjs`,
+`tope-lineas.json`, `prueba-marco.mjs`, `prueba-tope.mjs`, `mutaciones-marco.py`,
+`muta-costura-corte3.sh`— no estaban aún dentro del commit; con `codigo.js` del corte 4 son
+**244**), `wc -l`, `du -sh`, `grep -c` y lectura de las líneas citadas.
 Cada dato lleva `archivo:línea`. Las cuentas de pruebas (314 `ok`, 213 de la sonda, etc.)
 **no** van aquí: esas son la línea base del paso 0.3, y ponerlas ahora sería heredarlas.
 
@@ -25,11 +29,11 @@ empaqueta:
 
 | cuerpo | dónde | tamaño medido | qué es |
 | --- | --- | --- | --- |
-| **La cara** | `ui/` | 1,0 MB sin `vendor` · **16.462 líneas** de la cara que viaja (14.257 en 25 módulos JS + 1.994 de CSS en tres hojas + 211 de `index.html`); las cuatro sondas suman 1.925 más, hasta 18.387 | HTML, CSS y módulos ES + Three.js; viaja **dentro del APK** como `assets/ui/` y también la sirve el backend en el PC |
+| **La cara** | `ui/` | 1,0 MB sin `vendor` · **16.504 líneas** de la cara que viaja (14.299 en 26 módulos JS + 1.994 de CSS en tres hojas + 211 de `index.html`); las cuatro sondas suman 1.925 más, hasta 18.429 | HTML, CSS y módulos ES + Three.js; viaja **dentro del APK** como `assets/ui/` y también la sirve el backend en el PC |
 | **El aparato** | `apps/apk/` | 57 MB en disco (17 MB son `build/`, sin versionar) | **32 `.java` = 14.501 líneas**, más `Oido.kt` con 616 (**15.117 entre los dos**) en `src/com/cort/ia/`, el manifiesto, los recursos y el `compilar.sh` sin Gradle |
 | **El núcleo de casa** | `backend/app/` | 808 KB · **17 módulos `.py` versionados = 5.925 líneas** (19 archivos y 6.823 líneas en el disco de hoy: `pool.py` y `reproductor.py` están sin commitear) | FastAPI que ve Ollama, los modelos, la voz, los archivos y la memoria del portátil |
 | **El puente de escritorio** | `desktop/` | 268 MB en disco, casi todo `node_modules` | Electron (`main.cjs`, 151 líneas) que levanta el backend si no está y mete la cara |
-| **La fábrica** | `.github/workflows/build.yml` | 111.250 B · **1.578 líneas versionadas** (1.634 con los dos pasos que añadió el corte 3) | Compila los tres envases del APK y los instaladores, y publica la Release |
+| **La fábrica** | `.github/workflows/build.yml` | 111.438 B en disco · **1.634 líneas versionadas** (1.578 antes del corte 3, que añadió los pasos `marco` y `tope`; 1.636 con el comentario que reteachea el paso `pasos` hacia `codigo.js`) | Compila los tres envases del APK y los instaladores, y publica la Release |
 
 Fuera del versionado, en el disco: `.venv` (136 MB), `desktop/node_modules` (268 MB),
 `apps/apk/build` (17 MB), `apps/apk/assets/motor` (38 MB, el modelo Vosk) y
@@ -49,9 +53,10 @@ del repo.
 Por tamaño (medido con `wc -l`, y vigilado archivo por archivo por
 `scripts/prueba-tope.mjs` contra `scripts/tope-lineas.json` — la regla de la dueña: mil
 líneas máximo por archivo de interfaz, y la deuda sólo se admite mientras baje):
-`js/telefono.js` 2.769 · `js/hud.js` 2.571 · `js/pantallas.js` 2.184 ·
+`js/telefono.js` 2.769 · `js/hud.js` 2.571 · `js/pantallas.js` 1.799 ·
 `js/diccionario.js` 1.601 · `css/hud.css` 1.183 · `js/charla.js` 899 ·
-`js/orbe-plexo.js` 757 · `css/apps.css` 687 · `js/orb.js` 637 · `js/voice.js` 399 ·
+`js/orbe-plexo.js` 757 · `css/apps.css` 687 · `js/orb.js` 637 · `js/codigo.js` 427 ·
+`js/voice.js` 399 ·
 `js/gestures.js` 302 · `js/arnes.js` 285 · `js/marco.js` 275 · `js/automatiza.js` 267 ·
 `js/traje.js` 242 · `js/orbe-cara.js` 233 · `index.html` 211 · `js/centro.js` 191 ·
 `js/mandos.js` 143 · `css/jarvis.css` 124 · `js/windows.js` 91 · `js/placa.js` 88 ·
@@ -60,19 +65,31 @@ líneas máximo por archivo de interfaz, y la deuda sólo se admite mientras baj
 
 **La deuda que queda visible.** Cuatro archivos pasan del millar y los cuatro están
 registrados en `tope-lineas.json` con su techo de hoy: `telefono.js` 2.770, `hud.js` 2.572,
-`pantallas.js` 2.185, `diccionario.js` 1.602. El techo sólo puede bajar; subirlo o borrar la
-fila pone la compilación en rojo, así que la deuda no se esconde. En `pantallas.js` los
-siguientes cortes están marcados por los rótulos de sector y medidos sobre el archivo de
-hoy: «02 · CÓDIGO» (`:331-719`, 389 líneas) sale primero, luego «03 · MÚSICA» con su
-transporte (`:720-1725`, 1.006) y «04 · MV» con el agua y el modo juego (`:1726-2184`,
-459). Los tres fuera dejan la hoja en ~330 líneas y el millar se cumple sin apretar nada.
+`pantallas.js` 1.800, `diccionario.js` 1.602. El techo sólo puede bajar; subirlo, borrar la
+fila o pasarse del millar sin fila puesta la compilación en rojo, así que la deuda no se
+esconde. En `pantallas.js` los siguientes cortes están marcados por los rótulos de sector y
+medidos sobre el archivo de hoy: «03 · MÚSICA» (`:335-1340`, 1.006 líneas —dentro van el
+transporte común, la píldora de la esquina, la hoja calco de Lark y las carátulas) y
+«04 · MV» (`:1341-1704`, 364 —con el agua de F17 y el modo juego). El resto de la hoja son
+la carcasa (`:1-334`) y el registro de las hojas con el puente hacia `hud.js`
+(`:1705-1799`), 429 líneas: si salen los dos sectores, `pantallas.js` se queda por debajo
+del millar sin apretar nada. `codigo.js`, la hoja nueva del corte 4, mide 427 y entra en el
+libro con techo de 1.000, no como deuda.
 
 **Los cortes de la refactorización.** Paso 1 (`texto.js`): los tres pliegues que estaban
 copiados cinco veces. Paso 2 (`md.js`, `letra.js`): el markdown, la hora de la burbuja y el
-parser de la letra. Paso 3 (esta ronda): `marco.js` —el `ctx` vivo, el puente de Java, la
+parser de la letra. Paso 3: `marco.js` —el `ctx` vivo, el puente de Java, la
 tabla de hojas, las bottom sheets, el cajón, la pregunta «¿hay núcleo?» y el router `ir()`
 con registro de ganchos— y `charla.js`, que se llevó los 856 líneas del sector «01 · CHARLA»
-de `pantallas.js` (3.035 → 2.184). El orden de carga es marco → carcasa → hojas, y el import
+de `pantallas.js` (3.035 → 2.184). Paso 4 (esta ronda): `codigo.js`, que se lleva el sector
+«02 · CÓDIGO» tal cual, byte a byte (389 líneas de `pantallas.js:331-719` → 2.184 → 1.799),
+con sus cuatro capas del copiloto, el hilo de pasos y la terminal del teléfono; la hoja
+exporta `montaCodigo` y `pintaCodigo`, y `pantallas.js` los recibe para registrarlos en el
+marco. Con el sector se fueron los tres nombres que sólo él usaba, y la carcasa dejó de
+importarlos: el `import` completo de `pasos.js` (`ESTADOS_PASO`, `puedeAceptar`,
+`puedeRechazar`, `arranca`, `rechaza`, `cierra`), `terminalTelefono` dentro del de
+`telefono.js` y `avisaSinNucleo` dentro del del marco.
+El orden de carga sigue siendo marco → carcasa → hojas, y el import
 sólo va hacia arriba: ninguna hoja importa `pantallas.js`, así que no hay círculo.
 `scripts/lib-cara.mjs` declara qué archivos son «la cara» y es la MISMA lista que lee
 `prueba-costura.py`, para que una hoja nueva no pueda quedarse sin medir en silencio.
@@ -82,8 +99,9 @@ Quién importa a quién (medido sobre los `import` reales):
 ```
 index.html ──> hud.js
 hud.js ──> windows.js, voice.js, pantallas.js, telefono.js, mandos.js, diccionario.js
-pantallas.js ──> marco.js, charla.js, telefono.js, centro.js, arnes.js, pasos.js, letra.js, texto.js
+pantallas.js ──> marco.js, charla.js, codigo.js, telefono.js, centro.js, arnes.js, letra.js, texto.js
 charla.js ──> marco.js, md.js, ordenes.js, texto.js
+codigo.js ──> marco.js, pasos.js, telefono.js, texto.js   (el hilo del copiloto y sus cuatro capas)
 marco.js ──> texto.js                    (y nada más: el marco no sabe qué hojas existen)
 centro.js ─┐
 arnes.js ──┴──> diccionario.js          (DICCIONARIO y TOTALES: 91 intenciones / 736 frases,
@@ -99,17 +117,21 @@ orb.js ──> ../vendor/three.module.js, traje.js
 leen de ahí, y `TOTALES` (`:1593`) es la única cifra de órdenes que existe. Que un `import`
 punte a algo inexistente mata la cara entera (pasó en la 2.10.0 con `handleTelefonoEvento`
 sin `export`); por eso la costura tiene un sector que resuelve cada import contra el
-archivo de destino (`33 · enlaces de módulos`, 113 nombres) y otro que exige que toda hoja
-que importe el marco esté en la lista de `lib-cara.mjs` (`33 · la lista de la cara`).
+archivo de destino (`33 · enlaces de módulos`, 122 nombres sobre 32 archivos) y otro que exige que toda hoja
+que importe el marco esté en la lista de `lib-cara.mjs` (`33 · la lista de la cara`) y que
+toda hoja de la tabla tenga su `alEntrar` (`33 · toda hoja tiene su entrada`).
 
 **Media adopción de los íconos (importante para el paso 1.3).** `ui/js/icons.js` ya existe
 y **es un set SVG de línea con un solo grosor** (`icons.js:1-2`, «sustituyen a los emojis,
 que Android pinta a color»). Pero sólo lo consumen `index.html` (11 `data-ic=`) y `hud.js`
-(21 llamadas a `ic(`). **`pantallas.js`, `charla.js`, `marco.js`, `telefono.js`, `centro.js`
+(21 llamadas a `ic(`). **`pantallas.js`, `charla.js`, `codigo.js`, `marco.js`, `telefono.js`,
+`centro.js`
 y `arnes.js` no lo usan nada**: ahí siguen los glifos, y desde el corte 3 las fichas de pantalla están en
 `marco.js` (`✦` en `marco.js:75`, `⌘` en `:87`, `⌬` en `:91`), con los modos de la Charla en
-`charla.js:78` y `charla.js:117`, la sugerencia de `charla.js:352` y los títulos de
-`arnes.js:163` y `arnes.js:198`. O sea: T3 no está por empezar, está a medias.
+`charla.js:78` y `charla.js:117`, la sugerencia de `charla.js:352`, los títulos de
+`arnes.js:163` y `arnes.js:198`, y el ▶ y el ✕ del hilo del copiloto en `codigo.js:197`,
+`codigo.js:208` y `codigo.js:213` — antes en `pantallas.js`, adonde ya no se puede mirar
+porque el sector cambió de hoja. O sea: T3 no está por empezar, está a medias.
 
 ## 3. El aparato (`apps/apk/`)
 
@@ -306,19 +328,19 @@ explícitos (`:499-512`), `verify` (`:521`) y la auditoría que escribe `firma.t
 
 ## 8. Pruebas: las 28 suites y cómo se corren
 
-**28 `scripts/prueba-*` + 5 baterías de mutación (`mutaciones-*.py` y
-`muta-costura-corte3.sh`) + 8 `scripts/taller-*` + 7 `Prueba*.java` + 4 sondas en `ui/` + 1
+**28 `scripts/prueba-*` + 6 baterías de mutación (`mutaciones-*.py`,
+`muta-costura-corte3.sh` y `muta-costura-corte4.sh`) + 8 `scripts/taller-*` + 7 `Prueba*.java` + 4 sondas en `ui/` + 1
 `scripts/sonda-voz.html`.** Ninguna necesita teléfono.
 
 | suite | qué mira | necesita | comando |
 | --- | --- | --- | --- |
-| `prueba-costura.py` (5.282 líneas) | la costura manifiesto↔Java↔cara por sectores; lee la lista de la cara en `scripts/lib-cara.mjs` (41) en vez de copiarla | nada | `python3 scripts/prueba-costura.py` |
+| `prueba-costura.py` (5.316 líneas) | la costura manifiesto↔Java↔cara por sectores; lee la lista de la cara en `scripts/lib-cara.mjs` (41) en vez de copiarla. Desde el corte 4 tiene dos guardas nuevas en el sector 33: **33.b** comprueba que ninguna hoja que importa `marco.js` se queda fuera de `ARCHIVOS_CARA` (estaba escrita `p.parent == UI` y no filtraba ningún archivo: la mutación M1 del corte 4 la dejó al aire, y ahora mira `ui/js`), y **33.c** exige que toda hoja de la tabla `PANTALLAS` del marco tenga su `alEntrar` registrado en la cara —ocho hojas: siete con gancho y el orbe, que se pinta solo | nada | `python3 scripts/prueba-costura.py` |
 | `prueba-musica.py` (530) | la discoteca leída de verdad: ID3v2, `TLEN` en ms, `.m3u`/`.pls`, `/api/audio` y el reproductor del sistema | nada: monte de mentiras en `mktemp` y `reproductor.abrir` sustituido para **no salir al bus de sesión** | `python3 scripts/prueba-musica.py` |
 | `prueba-reproductor.py` (682) | **MPRIS hablado**: firmas (`x`, `ox`, `s`), microsegundos, interfaces, el `None` que no es 0, el segundo plano sin ventana, la ventana con `CanRaise`, y las frases de voz/bandeja que se vuelven orden | nada: un módulo `dbus` falso graba cada `call_blocking`, y `subprocess`/`shutil`/`time` están sustituidos —**ningún reproductor real arranca**— | `python3 scripts/prueba-reproductor.py` |
 | `mutaciones-reproductor.py` (202) · `mutaciones-musica.py` (114) | **las baterías de mutaciones**: 33 y 11 errores sembrados de uno en uno; el verde tiene que caerse | copian `backend/app` a `/tmp` y corren la suite con `CORT_CODIGO`; **el repo no se muta** y al final se imprimen los `md5` | `python3 scripts/mutaciones-<x>.py` (~2 min cada una) |
 | `prueba-marco.mjs` (300) | **el marco ejecutado**: 11 sectores contra un DOM y un puente escritos a mano, con el orden de los ganchos (`cerrar → repintar → entrar → pintar`), la hoja escondida `mv`, el `llama` que calla sin puente y el `hayNucleo` que cachea el éxito pero reintenta el fallo. 45 hechos | node | `node scripts/prueba-marco.mjs` |
 | `prueba-tope.mjs` (109) + `tope-lineas.json` | **la regla de los mil**: cada archivo de la cara contra su techo registrado; sube el techo, borra la fila o falta el libro → rojo. Se baja con `--baja` al cortar un archivo | node y `git show HEAD:` (lee el libro versionado) | `node scripts/prueba-tope.mjs` |
-| `mutaciones-marco.py` (130) · `muta-costura-corte3.sh` (37) | 12 errores sembrados en una **copia en `/tmp`** del marco + 7 en la costura: el verde tiene que caerse nombrando la comprobación | lo mismo que sus suites; **el repo no se muta** (compara `md5` al final) | `python3 scripts/mutaciones-marco.py` |
+| `mutaciones-marco.py` (130) · `muta-costura-corte3.sh` (37) · `muta-costura-corte4.sh` (69) | 12 errores sembrados en una **copia en `/tmp`** del marco + 7 en la costura del corte 3 + **7 del corte 4**: que `codigo.js` salga de `ARCHIVOS_CARA`, que pierda su `alEntrar`, que el sector no exporte, que el ▶ se pinte fuera de la rama segura, que desaparezca la hoja `cort-copiloto` o su ruta `/api/copiloto/plan`, y que el paso corra sin pasar por `arranca`. El verde tiene que caerse nombrando la comprobación | lo mismo que sus suites; **el repo no se muta** en las de python (copia `ui/js` o `backend/app` a `/tmp`), y las dos de la costura **sí mutan el archivo del repo**, así que se tocan su propio respaldo al empezar y se certifican con `md5sum -c` al final: la del corte 3 usaba una `/tmp/respaldo-mut` heredada de otra sesión y llegó a restaurar un `pantallas.js` de 3.035 líneas (el de antes del corte 3) encima del trabajo hecho. Hoy el respaldo se toma en el mismo proceso, y por eso las 14 mutaciones muerden sin dejar polvo | `python3 scripts/mutaciones-marco.py` · `bash scripts/muta-costura-corte3.sh` · `bash scripts/muta-costura-corte4.sh` |
 | `prueba-clima.py` · `prueba-datos.py` · `prueba-lectura.py` · `prueba-modelos.py` · `prueba-organiza.py` · `prueba-voz.py` | módulos del backend con gemelos de papel y `mktemp` | nada (el de modelos finge el servidor) | `python3 scripts/<x>.py` |
 | `prueba-automatiza.mjs` · `prueba-colores.mjs` · `prueba-mandos.mjs` | reglas «cuando X», 16 canales × 6 trajes, mandos de voz | node | `node scripts/<x>.mjs` |
 | `prueba-mente.sh` | las 7 suites Java sobre las clases de papel | el **módulo `jdk.compiler`** del JRE (sí está: pasa aquí, 60 s medidos) | `bash scripts/prueba-mente.sh` |
@@ -390,9 +412,9 @@ dónde toca y qué se va a encontrar. Nada de lo de abajo está cambiado todaví
 | --- | --- | --- |
 | **T1 · burbuja** (decidido: 58 dp **sin** icono) | `apps/apk/src/com/cort/ia/Flotante.java` (629 líneas): `DIAMETRO_DP = 44` (`:89`), `MARGEN_DP = 10` (`:91`), `ALFA_REPOSO = .28f` (`:93`, aplicado en `:332` y `:351`), `ESPERA_OPACIDAD = 1800` (`:95`, usado en `postDelayed(seApaga, …)` `:401` y `:404`), degradado del cristal `new float[]{0f, .58f, 1f}` (`:456`) y **el icono dibujado dentro** (`cajaIcono` `:468`, `ic_launcher_round` por `getIdentifier` `:485-487`) | Hay que tocar **dos cosas y son contrarias**: subir `:89` de 44 a 58 y **quitar** lo que la 2.11.0 añadió (`:468-487`). Y el latido **está apagado a propósito**, lo dice el comentario `:37-38`: «un latido por fotograma en segundo plano sería batería y RAM en un teléfono de dos núcleos; el latido vivo es de la cara». Si T1 pide latido en la burbuja, eso choca con la decisión ya tomada y hay que preguntarle a ella antes de escribirlo. |
 | **T2 · arranque y versión honesta** | `ui/index.html:42` deja escrito `v0.2` y `ui/js/hud.js:93-96` lo sustituye por `'v' + s.version` **sólo si el backend contesta**; en Android `API = ''` (`hud.js:26-29`) y `discoverApi()` corre en paralelo (`:34-56`, `:75`) | Con el backend apagado la cara muestra `v0.2` aunque el APK sea 2.11.0. Es justo lo que prohíbe A3 (honestidad de estado), así que T2 no es un pulido estético: es cambiar el texto de fallback por algo que admita «sin confirmar». |
-| **T3 · íconos SVG de línea** | `ui/js/icons.js` (38 líneas) tiene **24 íconos** ya dibujados con un solo grosor (`:1` lo explica, `window.ic` en `:30-31`, `fill()` en `:32-34`). Lo consumen **sólo** `ui/index.html` (11 `data-ic=`) y `ui/js/hud.js` (21 llamadas a `ic('`): con el corte 3 son **2 archivos de los 26** de la cara. Medido con `python3` sobre los bloques U+1F000–1FAFF, U+2190–2BFF y U+FE0F, quedan **86 glifos distintos repartidos en 23 archivos**; los que se ven son los de las fichas (`marco.js`: 13 distintos), la Charla (`charla.js`: 25) y `pantallas.js` (40) — en `hud.js` (36) y `automatiza.js` hay cientos de ocurrencias que son arte de comentario (`─`, `═`) y no cara, por eso la cifra que importa es *distintos*, no ocurrencias | T3 está **a medias, no sin empezar**, y el mapa de a dónde ir cambió con el corte 3: los glifos de las pantallas ya no están en `pantallas.js` sino en `marco.js`. Y hay una trampa: `fill()` sólo corre al cargar el documento (`icons.js:36-37`), así que sustituir un glifo dentro de HTML generado después no lo pinta; hay que llamar `ic()` en el string o rellenar tras el `innerHTML`. |
-| **T4/T5/T6 · menú y pantallas** | Las fichas **ya no viven en `pantallas.js`**: son la tabla `PANTALLAS` de `ui/js/marco.js` (275 líneas), `:64-92`, con `✦` en `:75` (`charla`), `⌘` en `:87` (`centro`) y `⌬` en `:91` (`arnes`). El cambio de pantalla es `ir()` (`:221-244`) sobre cuatro registros (`alEntrar` `:213`, `alCerrar` `:215`, `alRepintar` `:217`, `alPintar` `:219`). Las hojas siguen en `pantallas.js` (2.184) + `charla.js` (899) | El menú ya existe, está en su propia hoja y cada pantalla se registra a sí misma: T4/T5/T6 se pueden tocar ahí sin abrir `pantallas.js`. Conviene arreglarlo en la misma tanda que T3 para no pintar dos veces el mismo glifo, y ojo: `prueba-costura.py` 34 y `prueba-marco.mjs` vigilan tanto la tabla como el registro, así que mover una ficha sin su `alEntrar` corta la compilación. |
-| **T15/T16 · textos y cuentas** | `diccionario.js:1593` es `TOTALES` (91 intenciones / 736 frases) y es **la única cifra real**; pero el número está escrito a mano, otra vez, en `diccionario.js:1595` (`AYUDA`), `arnes.js:14`, `centro.js:4`, `marco.js:84` (el comentario de la ficha del Centro; estaba en `pantallas.js:83` y se fue con el corte 3) y `pantallas.js:318` («las 91 herramientas») | Cinco sitios repiten lo que ya se puede leer de `TOTALES`. Si el diccionario crece, esos cinco se quedan mentirosos. T15/T16 deben leer de `TOTALES`, no reescribirlo. |
+| **T3 · íconos SVG de línea** | `ui/js/icons.js` (38 líneas) tiene **24 íconos** ya dibujados con un solo grosor (`:1` lo explica, `window.ic` en `:30-31`, `fill()` en `:32-34`). Lo consumen **sólo** `ui/index.html` (11 `data-ic=`) y `ui/js/hud.js` (21 llamadas a `ic('`): con el corte 3 son **2 archivos de los 26** de la cara. Medido con `python3` sobre **todos los `.js`, `.html` y `.css` de `ui/` menos `vendor/`, contando glifos distintos por archivo** en los bloques U+1F000–1FAFF, U+2190–2BFF y U+FE0F: **88 glifos distintos repartidos en 31 archivos**; los que se ven son los de las fichas (`marco.js`: 13 distintos), la Charla (`charla.js`: 25), `pantallas.js` (39, antes 40: cinco se fueron con el Código a `codigo.js`) y `telefono.js` (18) — en `hud.js` (36) y `automatiza.js` hay cientos de ocurrencias que son arte de comentario (`─`, `═`) y no cara, por eso la cifra que importa es *distintos*, no ocurrencias | T3 está **a medias, no sin empezar**, y el mapa de a dónde ir cambió con los cortes 3 y 4: los glifos de las pantallas ya no están en `pantallas.js` sino en `marco.js`, y los del copiloto en `codigo.js`. Y hay una trampa: `fill()` sólo corre al cargar el documento (`icons.js:36-37`), así que sustituir un glifo dentro de HTML generado después no lo pinta; hay que llamar `ic()` en el string o rellenar tras el `innerHTML`. |
+| **T4/T5/T6 · menú y pantallas** | Las fichas **ya no viven en `pantallas.js`**: son la tabla `PANTALLAS` de `ui/js/marco.js` (275 líneas), `:64-92`, con `✦` en `:75` (`charla`), `⌘` en `:87` (`centro`) y `⌬` en `:91` (`arnes`). El cambio de pantalla es `ir()` (`:221-244`) sobre cuatro registros (`alEntrar` `:213`, `alCerrar` `:215`, `alRepintar` `:217`, `alPintar` `:219`). Las hojas siguen en `pantallas.js` (1.799) + `charla.js` (899) + `codigo.js` (427), y las siete entradas que hacen falta están registradas en `pantallas.js:1715-1723` | El menú ya existe, está en su propia hoja y cada pantalla se registra a sí misma: T4/T5/T6 se pueden tocar ahí sin abrir `pantallas.js`. Conviene arreglarlo en la misma tanda que T3 para no pintar dos veces el mismo glifo, y ojo: `prueba-costura.py` 34, su guarda nueva `33 · toda hoja tiene su entrada` y `prueba-marco.mjs` vigilan tanto la tabla como el registro, así que mover una ficha sin su `alEntrar` corta la compilación. |
+| **T15/T16 · textos y cuentas** | `diccionario.js:1593` es `TOTALES` (91 intenciones / 736 frases) y es **la única cifra real**; pero el número está escrito a mano, otra vez, en `diccionario.js:1595` (`AYUDA`), `arnes.js:14`, `centro.js:4`, `marco.js:84` (el comentario de la ficha del Centro; estaba en `pantallas.js:83` y se fue con el corte 3) y `pantallas.js:322` («las 91 herramientas»; era `:318` y se desplazó con el `import` del corte 4) | Cinco sitios repiten lo que ya se puede leer de `TOTALES`. Si el diccionario crece, esos cinco se quedan mentirosos. T15/T16 deben leer de `TOTALES`, no reescribirlo. |
 | **Fase 2 · modelos locales** | El backend **ya tiene las siete rutas**: `/api/models` (`backend/app/main.py:395`), `/api/models/progreso` (`:402`), `pull` (`:408`), `cancel` (`:415`), `rm` (`:421`), `use` (`:426`), `ollama` (`:432`) | 2.2 no es «crear la descarga», es revisar lo que hay contra la referencia (`docs/referencia-openjarvis.md`): lo que falta es barra de progreso real, pausa/reanudar y control de espacio en disco, que en OpenJarvis **tampoco existen**. |
 | **Fase 4 · música / Lark** | `Reproductor.java` (897) ya es servicio en primer plano con MediaPlayer+MediaSession, `Musica.java` (559) indexa el teléfono, `Ecualizador.java` (151), `Paleta.java` (356) | El reproductor propio ya existe; lo que ella pide («que suene en VLC/Lark») es otro camino: intent explícito a la app del sistema, y ahí entran las 7 intents y 12 paquetes de `<queries>` (`AndroidManifest.xml:227-270`). |
 | **Fase 5 · acciones y permisos** | **24 `<uses-permission>`** en el manifiesto, repartidos en tres regiones recortables (`:177`/`:197`, `:308`/`:329`, `:349`/`:412`) que corta `apps/apk/perfil.py:90-93` | Añadir un permiso es cambiar el manifiesto y con él los tres envases y el contrato del auditor. A3 lo bloquea sin autorización explícita, y las regiones obligan a decidir **en qué envase** vive el permiso nuevo, no sólo si va. |
@@ -414,13 +436,23 @@ estático y los módulos ejecutados con gemelos de papel.
 
 **Y lo que cambió el mapa desde el 25:** la limpieza `b4e6e09` sacó del versionado el APK base
 y la segunda `_suena` de `voz.py`; después llegaron J2.1, J4 y la refactorización por tamaño,
-cuyo **corte 3** (`marco.js` + `charla.js`) es lo que mueve las líneas citadas de los
-apartados 2 y 10. Los apartados 1, 2, 8 y 10 están vueltos a medir el 2026-10-27; de las
+cuyos **cortes 3 y 4** (`marco.js` + `charla.js`, y luego `codigo.js`) son lo que mueve las
+líneas citadas de los apartados 2 y 10. Los apartados 1, 2, 8 y 10 están vueltos a medir el
+2026-10-27; de las
 secciones 3 a 9, las líneas citadas siguen siendo las del 25 en los archivos que no se tocaron
 (`CortNative.java`, el manifiesto, `Reproductor.java`) y están desactualizadas en los que sí:
 `backend/app/` pasó de 15 módulos y 4.422 líneas a 17 versionados y 5.925 (19 y 6.823 en el
 disco de hoy con `pool.py` y `reproductor.py` sin commitear).
 
-**Lo que este paso no hizo, dicho en vez de fingido:** no se ejecutó ninguna suite salvo la
-costura (para confirmar que el repo estaba intacto antes de describirlo), no se compiló nada, no
-se cambió una línea de código, y no se tocó `main` ni las otras ramas.
+**Lo que este paso hizo y lo que no, dicho en vez de fingido.** La primera redacción (25/10)
+era un paso de sólo lectura y lo decía. Hoy ya no: tras los cortes se corrieron **27 de las 28
+suites** (las 13 de node, 12 de python y `prueba-llave.sh` + `prueba-mente.sh`), y faltó
+`prueba-oido.sh`, que necesita ~320 MB para el `kotlinc` de Vosk en un portátil de 1,8 GB;
+tampoco se compuso el APK aquí —eso lo hace Actions— ni se corrió ninguna de las 8
+`scripts/taller-*`. Todo salió verde menos el rojo conocido de `F17 · la burbuja`, que es
+`Flotante.java` sin commitear de la dueña y no se toca. Las tres baterías de mutación que
+vigilan los cortes (12 + 7 + 7) muerden las veintiséis, y la cara se abrió de verdad en el
+navegador sobre un servidor estático: la hoja del Código monta su `cp-cab`, sus `cp-chips` y su
+`.cp-plan`, se puede saltar a la Charla y volver, y en la consola no apareció ni un error de
+módulos —sólo los `ERR_CONNECTION_REFUSED` de `/api/port`, `/api/music` y `/api/status`, que es
+lo que se espera cuando el núcleo está apagado y la cara lo dice con la frase de sin-núcleo.

@@ -431,7 +431,9 @@ jobs:
         # `copiloto.py`), que el doble toque no corra el comando dos veces, que el
         # rojo sea terminal (después de «no» ya no hay verde), y que lo que el núcleo
         # dice que NO ejecutó se cuente `enseñado` y nunca `hizo`. Son 34
-        # comprobaciones, más la costura con `pantallas.js` y su CSS.
+        # comprobaciones, más la costura con la cara (desde el corte 4 el hilo del
+        # copiloto lo monta `codigo.js`, y la suite lee la lista de `lib-cara.mjs` en vez
+        # de un archivo a mano, para no volver a mirar donde ya no vive el código).
         shell: bash
         run: |
           set +e

@@ -27,7 +27,7 @@ import { join } from 'node:path';
    cuanto sale a su archivo entra en esta lista, y `scripts/prueba-costura.py` lee la
    MISMA lista de este archivo (no la copia), así que las dos mitades —node y python— no
    pueden separarse sin que la suite lo grite. */
-export const ARCHIVOS_CARA = ['marco.js', 'pantallas.js', 'charla.js'];
+export const ARCHIVOS_CARA = ['marco.js', 'pantallas.js', 'charla.js', 'codigo.js'];
 
 export function cara(dirJs, extras = []) {
   return ARCHIVOS_CARA.concat(extras)

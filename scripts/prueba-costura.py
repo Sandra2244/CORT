@@ -2940,7 +2940,13 @@ print("\n[23] F11 · el copiloto (tres capas) y el catálogo medido")
 
 F23_CP = (RAIZ / "backend" / "app" / "copiloto.py").read_text(encoding="utf-8")
 F23_MAIN = (RAIZ / "backend" / "app" / "main.py").read_text(encoding="utf-8")
-F23_JS = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+# Desde el corte 4 el copiloto tiene su hoja: `codigo.js`. Se NOMBRA el archivo a
+# propósito, en vez de leer la cara entera: las comprobaciones de abajo miden dónde
+# vive la plantilla (un `data-ejecuta=` contado, unos `id` que tienen estar escritos en
+# la misma hoja que los consulta, unas clases `cp-*` que tienen estar pintadas). Leídas
+# de la cara junta, el conteo seguiría cuadrando pero la comprobación perdería su
+# sentido: «exactamente un botón de ejecutar EN ESTA HOJA».
+F23_JS = (RAIZ / "ui" / "js" / "codigo.js").read_text(encoding="utf-8")
 F23_TEL = (RAIZ / "ui" / "js" / "telefono.js").read_text(encoding="utf-8")
 F23_MOD = (RAIZ / "backend" / "app" / "models.py").read_text(encoding="utf-8")
 F23_MEDE = (RAIZ / "scripts" / "mede-catalogo.py").read_text(encoding="utf-8")
@@ -2953,7 +2959,7 @@ for f23_r in f23_rutas:
             if f23_l.strip().startswith("@app.") and f23_l.rstrip().endswith('("' + f23_r + '")')]:
         f23_huecos.append(f23_r + " no está montado en `main.py`")
     if f23_r not in F23_JS:
-        f23_huecos.append(f23_r + " no la pide `pantallas.js`")
+        f23_huecos.append(f23_r + " no la pide `codigo.js`")
 if "import copiloto" not in F23_MAIN:
     f23_huecos.append("`main.py` no importa el módulo `copiloto`")
 for f23_fn in ("copiloto.plan", "copiloto.ejecutar", "copiloto.estado"):
@@ -2968,7 +2974,7 @@ if f23_huecos:
     falla("copiloto · rutas", "; ".join(f23_huecos))
 else:
     dice_ok("copiloto · rutas", "las tres rutas están en `main.py` y las pide "
-            "`pantallas.js` con el mismo nombre, y ninguna se inventa una cuarta")
+            "`codigo.js` con el mismo nombre, y ninguna se inventa una cuarta")
 
 # 23.b · el filtro, EJECUTADO: se importa el módulo y se le preguntan comandos reales
 try:
@@ -4838,8 +4844,11 @@ if "marco.js" not in ARCHIVOS_CARA or "pantallas.js" not in ARCHIVOS_CARA:
     falla("33 · la lista de la cara", f"`ARCHIVOS_CARA` dice {list(ARCHIVOS_CARA)}: el marco o "
           "la carcasa se han quedado fuera, y las costuras no leerían su código")
 else:
+    # `UI` es `ui/`, y los módulos están en `ui/js`: comparar contra la carpeta de arriba
+    # dejaba el filtro vacío y la comprobación verde por nada (lo cazó la batería de
+    # mutaciones del corte 4, que es justo para lo que existen).
     fuera_de_lista = sorted(p.name for p, texto in textos.items()
-                            if p.suffix == ".js" and p.parent == UI
+                            if p.suffix == ".js" and p.parent == UI / "js"
                             and p.name not in ARCHIVOS_CARA
                             and "from './marco.js'" in texto)
     if fuera_de_lista:
@@ -4851,6 +4860,31 @@ else:
         dice_ok("33 · la lista de la cara", f"{len(ARCHIVOS_CARA)} archivos ("
                 + ", ".join(ARCHIVOS_CARA) + ") son toda la cara que leen las suites; "
                 "ninguna hoja que importe el marco se queda sin nombrar")
+
+# 33.c · cada hoja que se OFRECE tiene que saber pintarse. Desde el corte 3 el router no
+# conoce los nombres: si al partir una pantalla (`codigo.js` en el 4, `musica.js` y
+# `mv.js` en los que siguen) se pierde su `alEntrar`, la hoja se monta en negro y la cara
+# no da un error — pasó el 2026-10-24 con el Centro, por eso esta línea existe. Se leen
+# los `id` de la tabla del marco (la lista de lo que existe) y se exige el registro en la
+# cara entera, no en un archivo: da igual DÓNDE se registre, pero que se registre.
+F33C_MARCO = (UI / "js" / "marco.js").read_text(encoding="utf-8")
+F33C_TABLA_BLOQUE = re.search(r"const PANTALLAS = \[(.*?)\n\];", F33C_MARCO, re.S)
+F33C_TABLA = (sorted(set(re.findall(r"\{ id: '(\w+)'", F33C_TABLA_BLOQUE.group(1)))
+                     if F33C_TABLA_BLOQUE else []))
+F33C_SIN_ENTRADA = [h for h in F33C_TABLA if h != 'orbe'
+                    and f"alEntrar('{h}'" not in cara_js()]
+if not F33C_TABLA:
+    falla("33 · toda hoja tiene su entrada",
+          "la tabla `PANTALLAS` de `marco.js` no se puede leer: no hay `id` que comprobar")
+elif F33C_SIN_ENTRADA:
+    falla("33 · toda hoja tiene su entrada",
+          ", ".join(f"`{h}`" for h in F33C_SIN_ENTRADA)
+          + " está en la tabla de hojas y no registra su `alEntrar`: al entrar se "
+            "quedaría en negro sin lanzar un error")
+else:
+    dice_ok("33 · toda hoja tiene su entrada",
+            f"{len(F33C_TABLA)} hojas de la tabla ({', '.join(F33C_TABLA)}); todas menos el "
+            "orbe, que no necesita entrada, tienen su `alEntrar` registrado en la cara")
 
 # ── 34 · F18+F19: el orbe tiene estados y el Centro ordena lo que ya existe ──
 # Estas dos rondas no añaden permisos ni tocan Java: son cara. Lo que puede
