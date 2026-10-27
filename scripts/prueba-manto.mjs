@@ -28,6 +28,8 @@
  * Uso:  node scripts/prueba-manto.mjs     (una fracción de segundo)
  */
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { caraAsync } from './lib-cara.mjs';
 
 let fallos = 0, hechos = 0;
 const ok = (etiqueta, condicionado, detalle = '') => {
@@ -38,7 +40,9 @@ const lee = ruta => readFile(new URL(ruta, import.meta.url), 'utf8');
 
 const css = await lee('../ui/css/jarvis.css');
 const html = await lee('../ui/index.html');
-const pant = await lee('../ui/js/pantallas.js');
+// El manto lo pone y lo quita la Charla, y la Charla es `charla.js` desde el corte 3: se
+// lee la cara entera, no un archivo, para no ver un hueco donde no lo hay.
+const pant = await caraAsync(fileURLToPath(new URL('../ui/js', import.meta.url)));
 const hudj = await lee('../ui/js/hud.js');
 const hud = await lee('../ui/css/hud.css');
 const apps = await lee('../ui/css/apps.css');

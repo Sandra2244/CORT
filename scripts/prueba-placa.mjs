@@ -20,6 +20,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { cara } from './lib-cara.mjs';   // la cara son varios archivos desde el corte 3
 import { ESTADOS_PLACA, nombreNodo, horaPlaca, fechaPlaca, medible, camposPlaca, textoPlaca }
   from '../ui/js/placa.js';
 
@@ -79,7 +80,7 @@ ok('la placa se pinta en el arranque, no cuando toque el intervalo',
    /datosPlaca\(\{ hora: horaPlaca\(new Date\(\)\), fecha: fechaPlaca\(new Date\(\)\)/.test(hud));
 ok('el nodo se mide en el arranque con IS_ANDROID', /nodo: nombreNodo\(IS_ANDROID\)/.test(hud));
 ok('las pantallas reciben `placa` en su contexto', /placa: datosPlaca,/.test(hud));
-const js = readFileSync(join(raiz, 'ui/js/pantallas.js'), 'utf8');
+const js = cara(join(raiz, 'ui', 'js'));   // marco + pantallas + charla: el `chModelo` vive en la Charla
 /* La trampa que cazó la vista previa del 2026-10-27: `chModelo` trae el modelo
    ELEGIDO en la cabecera de la charla, no el que habló. Con Ollama apagado la
    respuesta salía `offline` y la placa seguía diciendo `qwen2.5:0.5b` — un modelo que

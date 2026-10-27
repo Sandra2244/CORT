@@ -1,0 +1,37 @@
+{
+  "tope": 1000,
+  "nota": "La regla de la dueña: mil líneas máximo por archivo de interfaz. Los techos sólo bajan; al llegar a 1000 el archivo queda cumplido. Subir uno es aflojar la prueba.",
+  "deudas": [
+    "diccionario.js",
+    "hud.js",
+    "pantallas.js",
+    "telefono.js"
+  ],
+  "archivos": {
+    "android-bridge.js": 1000,
+    "arnes.js": 1000,
+    "automatiza.js": 1000,
+    "centro.js": 1000,
+    "charla.js": 1000,
+    "diccionario.js": 1602,
+    "gestures.js": 1000,
+    "hud.js": 2572,
+    "icons.js": 1000,
+    "letra.js": 1000,
+    "mandos.js": 1000,
+    "marco.js": 1000,
+    "md.js": 1000,
+    "orb.js": 1000,
+    "orbe-cara.js": 1000,
+    "orbe-plexo.js": 1000,
+    "ordenes.js": 1000,
+    "pantallas.js": 2185,
+    "pasos.js": 1000,
+    "placa.js": 1000,
+    "telefono.js": 2770,
+    "texto.js": 1000,
+    "traje.js": 1000,
+    "voice.js": 1000,
+    "windows.js": 1000
+  }
+}

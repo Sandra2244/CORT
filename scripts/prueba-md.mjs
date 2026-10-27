@@ -99,11 +99,18 @@ for (const f of readdirSync(carpeta).filter(f => f.endsWith('.js'))) {
 }
 ok('cada uno está definido una sola vez, en su hoja', fuera.length === 0, fuera.join(', '));
 const pant = readFileSync(join(carpeta, 'pantallas.js'), 'utf8');
-ok('`pantallas.js` los importa de su hoja en vez de tenerlos dentro',
-   /import \{ md, horaDe \} from '\.\/md\.js'/.test(pant)
+const charlaJs = readFileSync(join(carpeta, 'charla.js'), 'utf8');
+/* Desde el corte 3 la Charla es su propio archivo, así que «dónde se usa cada cosa» se
+   comprueba **nombrando el archivo** en vez de leer un solo fichero y alegrarse de que
+   aparezca por ahí: el markdown y la hora de la burbuja viven en `charla.js`, el parser
+   de la letra sigue en `pantallas.js` (lo necesita MV). */
+ok('`charla.js` importa el markdown y la hora; `pantallas.js` importa el parser de la letra',
+   /import \{ md, horaDe \} from '\.\/md\.js'/.test(charlaJs)
    && /import \{ parseaLetra \} from '\.\/letra\.js'/.test(pant));
-ok('y los sigue usando donde toca: la burbuja con su hora, el markdown, la letra',
-   /const cuando = horaDe\(m\.hora\)/.test(pant) && /\bmd\(/.test(pant)
+ok('y `pantallas.js` no sigue importando lo que ya no usa: la Charla se lo llevó',
+   !/from '\.\/md\.js'/.test(pant));
+ok('cada uno se usa donde toca: la burbuja con su hora y su markdown en la Charla, la letra en MV',
+   /const cuando = horaDe\(m\.hora\)/.test(charlaJs) && /\bmd\(/.test(charlaJs)
    && /letraLineas = parseaLetra\(/.test(pant));
 const mdjs = readFileSync(join(carpeta, 'md.js'), 'utf8');
 ok('`md.js` escapa antes de adornar —es la única línea que lo garantiza—',

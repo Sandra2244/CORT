@@ -22,6 +22,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { cara } from './lib-cara.mjs';   // la cara son varios archivos desde el corte 3
 import { clasificarOrden, VOCABULARIO_ORDENES } from '../ui/js/ordenes.js';
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -103,7 +104,7 @@ for (const verbo of ['apunta', 'abre', 'reproduce', 'pausa', 'lee', 'limpia', 'o
 ok('y un verbo que el núcleo no tiene NO pasa', !pyPlano.includes('zarandajas'));
 
 console.log('\n[5] la costura en la cara (`pantallas.js`)');
-const js = readFileSync(join(raiz, 'ui/js/pantallas.js'), 'utf8');
+const js = cara(join(raiz, 'ui', 'js'));   // el POST y el chip los escribe la Charla
 ok('la cara importa la regla', /import \{ clasificarOrden \} from '\.\/ordenes\.js'/.test(js));
 ok('la orden viaja a /api/command', /await fetch\(ctx\.api\(\) \+ '\/api\/command'/.test(js));
 ok('el payload es {message}, como exige la ruta', /body: JSON\.stringify\(\{ message: pregunta \}\)/.test(js));

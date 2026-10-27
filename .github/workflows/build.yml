@@ -479,7 +479,7 @@ jobs:
         if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
         # Segundo corte de la refactorización por tamaño: `md`, `horaDe` y
         # `parseaLetra` salieron de `pantallas.js` (3.182 líneas) a `ui/js/md.js` y
-        # `ui/js/letra.js`. Las 28 comprobaciones no van del adorno sino de las dos
+        # `ui/js/letra.js`. Las 29 comprobaciones no van del adorno sino de las dos
         # cosas que se pagan caro: que una respuesta del modelo con `<script>` se lea
         # como texto (la hoja escapa ANTES de reconocer bloques, y si ese orden se
         # invierte el navegador de la dueña ejecuta lo que escribió otro), y que el
@@ -500,6 +500,62 @@ jobs:
                   | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
             [ -n "$msg" ] || msg=$(tail -10 /tmp/md.log | tr '\n\r' '  ' | sed 's/%/%25/g')
             echo "::error::prueba-md.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
+      - name: Probar el marco de las pantallas con node (sin navegador)
+        id: marco
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
+        # Tercer corte de la refactorización por tamaño. `ui/js/marco.js` es lo que todas
+        # las hojas miraban (`ctx` vivo, puente de Java, tabla de hojas, bottom sheets,
+        # cajón, «¿hay núcleo?» y el router `ir()`), y desde aquí la Charla salió de
+        # `pantallas.js` (3.035 líneas) a `ui/js/charla.js` (899). La suite EJECUTA el
+        # marco contra una pantalla y un puente de pega y mira qué pasa: el orden real de
+        # los cuatro ganchos, que una hoja registrada dos veces se arranque una, que el
+        # cajón no ofrezca la hoja escondida pero `ir()` sí entre en ella, que un APK viejo
+        # sin el método reciba `null` en silencio, y que `ctx` no se pueda asignar de
+        # fuera. 45 hechos. La costura de texto no podía ver nada de esto: `ir()` ya no
+        # lleva los nombres de las funciones dentro.
+        # Se comprobó con `scripts/mutaciones-marco.py`: doce errores sembrados de uno en
+        # uno en una COPIA del marco en /tmp (el repo no se abre a escribir) y doce
+        # mordidas, contando el orden cambiado, el `typeof` del puente y el cache del
+        # núcleo.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-marco.mjs > /tmp/marco.log 2>&1
+          st=$?
+          tail -20 /tmp/marco.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |ROJO|Error|error:' /tmp/marco.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/marco.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-marco.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
+      - name: Medir el tope de líneas de la interfaz (la regla de los mil)
+        id: tope
+        if: ${{ !cancelled() }}   # que un rojo no tape los demás (ver el cabecero del job)
+        # La regla dicha por la dueña: «la interfaz debe ser mil líneas máximo y si
+        # necesitas crear otros de otras líneas más conectas y divides entre si pero que
+        # funcione correctamente». `scripts/prueba-tope.mjs` mide TODOS los módulos de
+        # `ui/js` (descubiertos leyendo la carpeta, no una lista a mano) contra
+        # `scripts/tope-lineas.json`. Los que ya cumplieron quedan a 1000; los cuatro que
+        # siguen por encima (`telefono.js` 2.770, `hud.js` 2.572, `pantallas.js` 2.185,
+        # `diccionario.js` 1.602) aparecen como DEUDA, y la deuda sólo se admite mientras
+        # baje: un archivo que crece sobre su techo, un techo subido o una fila borrada
+        # salen en rojo comparados contra el registro de `HEAD`.
+        # Así la regla no se puede cumplir «a medias y en silencio».
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-tope.mjs > /tmp/tope.log 2>&1
+          st=$?
+          tail -20 /tmp/tope.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |que subieron|Error' /tmp/tope.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/tope.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-tope.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
       - name: Probar el índice de conocimiento con node/python (sin red, en arena)

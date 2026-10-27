@@ -78,6 +78,46 @@ def puente_texto() -> str:
     return (APK / "src" / "com" / "cort" / "ia" / "CortNative.java").read_text(encoding="utf-8")
 
 
+# Desde el **corte 3** la cara son varios archivos de JS, no uno: `marco.js` lleva el marco
+# (la tabla `PANTALLAS`, `montables`/`visibles`, el router `ir`, el portapapeles, el cajón y
+# las frases sin núcleo) y cada hoja que se separa va en su propio archivo (`charla.js`).
+# Hay comprobaciones que miden «esta pantalla existe y se pinta al entrar» o «tal `/api/*`
+# está cosida», y ésas no viven en un solo archivo: si se leyera sólo `pantallas.js` verían
+# un hueco donde no lo hay —la Charla sigue existiendo, lo que cambió de casa es su código—.
+# Así que esas comprobaciones leen **la cara entera**. La lista no se escribe a mano aquí:
+# se lee de `scripts/lib-cara.mjs`, que es la misma que usan las suites de node, para que
+# las dos mitades no puedan separarse. Y cada comprobación sigue exigiendo la cadena exacta
+# de siempre: borrada la fila de la tabla o borrado el `fetch`, esto vuelve a caer.
+def _lista_cara() -> tuple[str, ...]:
+    txt = (RAIZ / "scripts" / "lib-cara.mjs").read_text(encoding="utf-8")
+    nombres = re.findall(r"export const ARCHIVOS_CARA = \[([^\]]*)\]", txt)
+    if not nombres:
+        raise RuntimeError("lib-cara.mjs no declara ARCHIVOS_CARA: la cara no se sabe leer")
+    return tuple(re.findall(r"'([^']+)'", nombres[0]))
+
+
+ARCHIVOS_CARA = _lista_cara()
+
+
+def cara_js() -> str:
+    """La cara entera, en el orden en que la carga Chromium."""
+    return "\n".join((RAIZ / "ui" / "js" / n).read_text(encoding="utf-8")
+                     for n in ARCHIVOS_CARA)
+
+
+# Antes `ir()` tenía un `if (actual === 'centro') pintaCentro();` por pantalla, y alcanzar
+# esa línea bastaba para probar que la hoja se pintaba. Desde el corte 3 el router no
+# conoce a ninguna: cada hoja se REGISTRA (`alEntrar('centro', pintaCentro)`) y `ir()`
+# despacha el registro. Se comprueban las tres piezas juntas, que es una red MÁS APRETADA
+# que la anterior —antes bastaba con que el `if` existiera aunque la función no estuviera
+# montada—: borrada la fila de la tabla, borrado el registro, o borrada la línea de `ir()`
+# que lo ejecuta, la pantalla vuelve a abrirse vacía y esto vuelve a caer.
+def hoja_se_pinta(texto: str, nombre: str, fn: str) -> bool:
+    return (f"id: '{nombre}'" in texto
+            and f"alEntrar('{nombre}', {fn})" in texto
+            and "ENTRADAS.get(actual)?.()" in texto)
+
+
 # ── 1 · el manifiesto ────────────────────────────────────────────────────────
 print("\n[1] AndroidManifest.xml")
 XML = (APK / "AndroidManifest.xml").read_text(encoding="utf-8")
@@ -414,13 +454,15 @@ else:
     dice_ok("un solo APK", "no hay paso de rempaquetar: sale uno, el de Java")
 
 # ── 6 · las pantallas nuevas: que la cara no llame a lo que no existe ────────
-# `ui/js/pantallas.js` es capa nueva encima de las tres de antes: habla con el
-# puente de Java (`llama('musicaPoner', …)`), con el núcleo de PC
-# (`fetch(ctx.api() + '/api/chat')`) y con `hud.js` (que tiene que montarla y
-# escuchar su voz). Cada nombre mal escrito es un botón que no hace nada, y en el
-# teléfono no hay consola donde verlo: se comprueba aquí.
+# La cara (`marco.js` + `pantallas.js` + las hojas que se vayan separando) es capa nueva
+# encima de las tres de antes: habla con el puente de Java (`llama('musicaPoner', …)`), con
+# el núcleo de PC (`fetch(ctx.api() + '/api/chat')`) y con `hud.js` (que tiene que montarla
+# y escuchar su voz). Cada nombre mal escrito es un botón que no hace nada, y en el
+# teléfono no hay consola donde verlo: se comprueba aquí. Se lee la cara **entera** porque
+# desde el corte 3 una hoja puede estar en su propio archivo, y una ruta `/api/*` escrita
+# en `charla.js` cuenta igual que si estuviera en `pantallas.js`.
 print("\n[6] las pantallas (cara ↔ puente ↔ núcleo)")
-scr_txt = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+scr_txt = cara_js()
 hud_txt = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
 
 # 6.a · los métodos del puente que usan las pantallas tienen que estar en CortNative
@@ -624,7 +666,7 @@ elif "ACTION_PLAY" in rep:
 print("\n[8] la ronda 2.0.0 (MV · modo juego · organizador · letras)")
 
 lectura = lambda *p: (RAIZ.joinpath(*p)).read_text(encoding="utf-8")
-cara = lectura("ui", "js", "pantallas.js")
+cara = cara_js()
 hud = lectura("ui", "js", "hud.js")
 css = lectura("ui", "css", "hud.css")
 
@@ -1658,13 +1700,13 @@ if sin_accion:
     falla("2.4.1 · cara abre", f"`abreLoQueToque` no conoce {', '.join(sin_accion)}: Android llama y CORT no hace nada")
 else:
     hojas = sorted(set(re.findall(r'return "(equipo|charla|orbe|musica|mv|codigo)"', main_plano)))
-    pantallas_js = lectura("ui", "js", "pantallas.js")
+    pantallas_js = cara_js()
     ids = set(re.findall(r"\{ id: '(\w+)'", pantallas_js))
     fuera = [h for h in hojas if h not in ids]
     if not hojas:
         falla("2.4.1 · cara abre", "`hojaDe` no devuelve ninguna hoja: los atajos de hoja no abren nada")
     elif fuera:
-        falla("2.4.1 · cara abre", f"Java pide {', '.join(fuera)} y `pantallas.js` no tiene esa pantalla")
+        falla("2.4.1 · cara abre", f"Java pide {', '.join(fuera)} y la cara no tiene esa pantalla")
     else:
         dice_ok("2.4.1 · cara abre", f"las cinco vías se reconocen y sus hojas ({', '.join(hojas)}) existen")
 
@@ -2095,7 +2137,7 @@ else:
 # comprueba aquí es la COSTURA: el JS crea unos ids y el CSS los viste; la cara pide
 # `/api/history` y el núcleo lo sirve. Si un nombre se cambia en una capa sin cambiarlo
 # en la otra, el botón aparece sin forma o el historial se queda vacío sin decir por qué.
-f8_js = scr_txt if 'scr_txt' in dir() else (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+f8_js = scr_txt if 'scr_txt' in dir() else cara_js()
 f8_css = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
 if "NO_ES_GESTO" not in f8_js or "button" not in f8_js:
     falla("F8 · gesto", "`montaGesto()` no excluye los controles: deslizar el pulgar sobre el play "
@@ -2206,7 +2248,7 @@ else:
 # `innerHTML` y lo VISTE `css/apps.css`; y el adjunto cruza cara → `main.py` →
 # `sensors.py`. Cada nombre que cambia en una capa sin cambiar en la otra es un botón
 # mudo —que es, palabra por palabra, el bug del sector [17]—.
-f9_js = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+f9_js = cara_js()
 f9_css = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
 f9_ropa_ruta = RAIZ / "ui" / "css" / "apps.css"
 f9_ropa = f9_ropa_ruta.read_text(encoding="utf-8") if f9_ropa_ruta.exists() else ""
@@ -2530,7 +2572,7 @@ else:
 print("\n[20] F10 · carátulas, vídeos, buscador y la letra fusionada")
 
 F20_JAVA = puente_texto()
-F20_CARA = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+F20_CARA = cara_js()
 F20_SIN = sin_comentarios_js(F20_CARA)
 F20_MAIN = (APK / "src" / "com" / "cort" / "ia" / "MainActivity.java").read_text(encoding="utf-8")
 F20_MUS = (APK / "src" / "com" / "cort" / "ia" / "Musica.java").read_text(encoding="utf-8")
@@ -4787,6 +4829,29 @@ else:
     dice_ok("33 · enlaces de módulos", f"{enlaces} nombres importados existen como export "
             f"en {len(textos)} archivos de la cara; ningún `import` queda colgando")
 
+# 33.b · y la lista de la cara no se queda corta. `cara_js()` lee lo que declara
+# `lib-cara.mjs`; si mañana sale `musica.js` y nadie lo añade allí, las comprobaciones de
+# costura dejarían de ver su código sin decir nada —un rojo silencioso, que es peor que el
+# ruidoso—. La señal de que un archivo ES una hoja es que importa el marco: `hud.js` también
+# importa `pantallas.js`, pero es la anfitriona, no una pantalla, y no debe entrar.
+if "marco.js" not in ARCHIVOS_CARA or "pantallas.js" not in ARCHIVOS_CARA:
+    falla("33 · la lista de la cara", f"`ARCHIVOS_CARA` dice {list(ARCHIVOS_CARA)}: el marco o "
+          "la carcasa se han quedado fuera, y las costuras no leerían su código")
+else:
+    fuera_de_lista = sorted(p.name for p, texto in textos.items()
+                            if p.suffix == ".js" and p.parent == UI
+                            and p.name not in ARCHIVOS_CARA
+                            and "from './marco.js'" in texto)
+    if fuera_de_lista:
+        falla("33 · la lista de la cara",
+              ", ".join(fuera_de_lista) + " importan `marco.js` y no están en `ARCHIVOS_CARA` "
+              "de `scripts/lib-cara.mjs`: las suites de costura dejarían de ver su código en "
+              "silencio")
+    else:
+        dice_ok("33 · la lista de la cara", f"{len(ARCHIVOS_CARA)} archivos ("
+                + ", ".join(ARCHIVOS_CARA) + ") son toda la cara que leen las suites; "
+                "ninguna hoja que importe el marco se queda sin nombrar")
+
 # ── 34 · F18+F19: el orbe tiene estados y el Centro ordena lo que ya existe ──
 # Estas dos rondas no añaden permisos ni tocan Java: son cara. Lo que puede
 # romperse en silencio es justo lo que se mide aquí: que el estado del orbe
@@ -4799,7 +4864,7 @@ F34_TRAJE = (RAIZ / "ui" / "js" / "traje.js").read_text(encoding="utf-8")
 F34_HUD = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
 F34_CENTRO = (RAIZ / "ui" / "js" / "centro.js").read_text(encoding="utf-8")
 F34_TEXTO = (RAIZ / "ui" / "js" / "texto.js").read_text(encoding="utf-8")
-F34_PANT = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
+F34_PANT = cara_js()
 F34_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
 F34_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
 F34_SONDA = (RAIZ / "ui" / "sonda-carita.html").read_text(encoding="utf-8")
@@ -4858,8 +4923,8 @@ elif "new CustomEvent('cort:orden'" not in F34_CENTRO or "b.dataset.frase" not i
 elif "sube el volumen" in F34_CENTRO or "despiértame" in F34_CENTRO:
     falla("F19 · el Centro", "el Centro volvió a escribir frases a mano en vez de sacarlas "
           "del diccionario: dos listas que se separan a la primera ronda")
-elif "id: 'centro'" not in F34_PANT or "if (actual === 'centro') pintaCentro();" not in F34_PANT:
-    falla("F19 · el Centro", "la pantalla existe pero `ir()` no la pinta: se abriría vacía")
+elif not hoja_se_pinta(F34_PANT, 'centro', 'pintaCentro'):
+    falla("F19 · el Centro", "la pantalla existe pero no se pinta al entrar: se abriría vacía")
 elif "montaCentro(raiz, { ir, apps: visibles() })" not in F34_PANT:
     falla("F19 · el Centro", "el Centro no recibe `visibles()`: en el PC ofrecería Música o "
           "Equipo, que allí no existen")
@@ -4981,7 +5046,7 @@ print("\n[36] F23 · el Arnés: la arquitectura visible, leída del aparato")
 try:
     F36_ARNES_T = (RAIZ / "ui" / "js" / "arnes.js").read_text(encoding="utf-8")
     F36_ARNES = sin_comentarios_js(F36_ARNES_T)
-    F36_PANT = sin_comentarios_js((RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8"))
+    F36_PANT = sin_comentarios_js(cara_js())
     F36_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
     F36_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
     F36_SONDA = (RAIZ / "ui" / "sonda-carita.html").read_text(encoding="utf-8")
@@ -5027,9 +5092,9 @@ elif "new CustomEvent('cort:orden'" not in F36_ARNES \
           "vuelve al orbe: sería un catálogo que no ejecuta nada")
 elif "data-centro" not in F36_ARNES or "ir?.('centro')" not in F36_ARNES:
     falla("F23 · los ejemplos", "«Abrir el Centro» no cambia de hoja")
-elif "import { montaArnes }" not in F36_PANT or "id: 'arnes'" not in F36_PANT \
-        or "if (actual === 'arnes') pintaArnes();" not in F36_PANT:
-    falla("F23 · la hoja", "el Arnés no está en `PANTALLAS` o `ir()` no lo pinta: se "
+elif "import { montaArnes }" not in F36_PANT \
+        or not hoja_se_pinta(F36_PANT, 'arnes', 'pintaArnes'):
+    falla("F23 · la hoja", "el Arnés no está en `PANTALLAS` o no se pinta al entrar: se "
           "montaría la sección y se quedaría vacía")
 elif "api: () => (ctx?.api ? ctx.api() : '')" not in F36_PANT:
     falla("F23 · la hoja", "la dirección del núcleo se pasa como texto y no como función: "
