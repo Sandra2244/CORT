@@ -31,6 +31,22 @@ RE_CARPETA = re.compile(r"^(?:abre|muestra|mu[eé]strame|abre\s+la\s+carpeta)\s+
 RE_ARCHIVO = re.compile(r"^(?:abre|abrir|muestra|mu[eé]strame)\s+(?:el\s+archivo\s+|la\s+)?(\S+\.\w{2,5})\b", re.I)
 RE_MUSICA = re.compile(r"^(?:reproduce|pon|ponme|toca)\s+(?:m[uú]sica|la\sm[uú]sica|unapo|una\s+canci[oó]n)"
                         r"[\s\.\!]*$|^(?:reproduce|pon|ponme|toca)\s+m[uú]sica", re.I)
+# ── música en el reproductor del sistema, pero ya no a ciegas. La dueña lo pidió el
+#    2026-10-26 («sepa como buscar las carpetas los estilos las playlist»): `RE_MUSICA`
+#    ponía UNA canción al azar para cualquier frase, y decir «pon música de tinashe»
+#    salía por los mismos disparos que decir «pon música». Estas cuatro piden que se
+#    busque de verdad en el disco (`musica.py`), y si no aparece nada CORT lo dice con
+#    las palabras del barrido en vez de inventar una coincidencia.
+RE_MUSICA_DE = re.compile(r"^(?:reproduce|pon|ponme|toca|escucha)\s+"
+                          r"(?:m[uú]sica|una\s+canci[oó]n|un\s+tema|algo)\s+(?:de|del|por)\s+(.+)", re.I)
+RE_MUSICA_LISTA = re.compile(r"^(?:reproduce|pon|ponme|toca)\s+"
+                             r"(?:la|el|mi)?\s*(?:playlist|lista)\s+(?:llamada|de)?\s*(.+)", re.I)
+RE_MUSICA_ESTILO = re.compile(r"^(?:reproduce|pon|ponme|toca)\s+"
+                              r"(?:m[uú]sica\s+)?(?:del|el|la)\s+"
+                              r"(?:estilo|g[eé]nero|carpeta)\s+(.+)", re.I)
+RE_MUSICA_TITULO = re.compile(r"^(?:reproduce|pon|ponme|toca)\s+"
+                              r"(?:la\s+)?(?:canci[oó]n|pista|tema)\s+"
+                              r"(?:llamada|titulada)?\s*(.+)", re.I)
 RE_YOUTUBE = re.compile(r"youtube", re.I)
 
 # ── leer en voz alta: la petición de la dueña («que me lea las notas, el WhatsApp,
@@ -238,12 +254,75 @@ def _one(c: str) -> tuple[str, str] | None:
                     if r.get("ok") else f"No pude abrir {root}: {r.get('error')}")
         return None
 
+    m = RE_MUSICA_ESTILO.match(c)
+    if m:
+        return _musica(m.group(1), "estilo")
+
+    m = RE_MUSICA_LISTA.match(c)
+    if m:
+        return _musica(m.group(1), "lista")
+
+    # `DE` y `TITULO` van al final: son los que aceptan cualquier palabra después de
+    # «de», así que «pon música del estilo X» se los come enteros si se prueban antes.
+    m = RE_MUSICA_DE.match(c) or RE_MUSICA_TITULO.match(c)
+    if m:
+        return _musica(m.group(1), "buscada")
+
     if RE_MUSICA.match(c):
-        r = sensors.play_external()
-        return ("musica", f"Poniendo {r['cancion']} en tu reproductor."
-                if r.get("ok") else f"Sin música: {r.get('error')}")
+        return _musica("", "azar")
 
     return None
+
+
+def _musica(que: str, como: str) -> tuple[str, str] | None:
+    """Pone música en el reproductor **del sistema**, buscando de verdad en el disco.
+
+    `como` dice dónde se miró (`buscada` en todo, `lista` en las playlists, `estilo`
+    en las carpetas/géneros, `azar` sin pedir nada), porque la respuesta honesta
+    cuando no hay nada tiene que nombrar lo que sí hay: «no encontré X; las listas
+    que veo son A y B» sirve, «no puedo» no. La canción se entrega a
+    `musica.suena()`, que es quien averigua qué programa responde por el audio en
+    este equipo; y si el aparato no confirma que suena, se dice entre paréntesis.
+    """
+    import random as _r
+    import musica
+
+    que = (que or "").strip(" .,¡!")
+    if como == "azar":
+        r = musica.suena("")
+        if not r.get("ok"):
+            return ("musica", f"Sin música: {r.get('error')}")
+        return ("musica", f"Poniendo {r['cancion']} en {r['reproductor']}"
+                          + ("" if r.get("estado") == "reproduciendo"
+                             else " (no puedo confirmar que suene)."))
+
+    filtro = {"buscada": {"q": que}, "lista": {"lista": que},
+              "estilo": {"genero": que}}[como]
+    found = musica.busca(**filtro)
+    if not found:
+        donde = {"buscada": "por ese nombre", "lista": "entre las playlists",
+                 "estilo": "en ese estilo"}[como]
+        if como == "lista":
+            nombres = [L["nombre"] for L in musica.listas()]
+            listo = (" Las que hay: " + ", ".join(nombres[:6]) + ".") if nombres else \
+                    " Todavía no hay ninguna playlist en Música."
+        elif como == "estilo":
+            nombres = [E["nombre"] for E in musica.estilos()]
+            listo = (" Los que hay: " + ", ".join(nombres[:6]) + ".") if nombres else ""
+        else:
+            n = len(musica.pistas())
+            listo = f" (hay {n} canciones en el disco)." if n \
+                else " No encuentro la carpeta de Música."
+        return ("musica", f"No encontré {que} {donde}.{listo}")
+
+    t = found[0] if len(found) == 1 else _r.choice(found[:5])
+    r = musica.suena(t["ruta"])
+    if not r.get("ok"):
+        return ("musica", f"No pude poner {t['nombre']}: {r.get('error')}")
+    duo = f" — {t['artista']}" if t.get("artista") else ""
+    return ("musica", f"Poniendo {t['nombre']}{duo} en {r['reproductor']}"
+                      + ("" if r.get("estado") == "reproduciendo"
+                         else " (no puedo confirmar que suene)."))
 
 
 def _leer(objetivo: str) -> tuple[str, str] | None:

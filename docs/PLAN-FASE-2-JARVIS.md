@@ -274,3 +274,62 @@ paran antes de tocar el manifiesto.
    install`) o empiezo sólo con los de archivos (`mkdir`, `touch`, `cp`)?
 4. La llamada del video 3: ¿su número, o también el de otra persona de confianza para
    avisos cuando ella no conteste?
+
+
+## 9 · La música del PC quedó HECHA, y con el reproductor del sistema (ronda 2.18.0)
+
+La decisión 1 de la §3 de la Fase 1 («¿el reproductor de CORT o el del aparato?») **la cerró
+ella el 2026-10-27, con su mensaje**: en el PC **nada de reproductores internos** de CORT —
+los dos que tenía la cara se comen RAM que ella necesita para pensar—, sino entregar la
+pista **al reproductor predeterminado del sistema** (VLC u otro), en primero o en segundo
+plano. Así quedó construido, y está sin commitear todavía en esta tanda:
+
+- `backend/app/musica.py` lee la discoteca de verdad: ID3v2 (`TIT2`/`TPE1`/`TALB`), **`TLEN`
+  en milisegundos**, estilo de `TCON` **o de la primera carpeta** cuando la etiqueta no lo
+  dice, `.m3u`/`.m3u8`/`.pls`, y los avisos de «tiene vídeo» y «tiene letra» cruzados contra
+  el árbol.
+- `/api/play` resuelve el **programa real** con `xdg-mime query default audio/mpeg` y entrega
+  con `xdg-open` / `gio open`; `playerctl` es el único que puede decir `reproduciendo`, y si
+  no hay sesión el estado es **`desconocido`** y la cara lo muestra así. Si no hay nadie para
+  `audio/*`, responde `no hay reproductor predeterminado para audio en este equipo`.
+- La ventana 05 de la cara busca, filtra por estilo y por carpeta, pide listas al backend y
+  tiene el botón 「▶ en mi reproductor」. El recorte se hace **en el núcleo**, con guarda de
+  carreras en la cara.
+- Pruebas: `scripts/prueba-musica.py` (**102**) y el sector **[37] · F24** de
+  `prueba-costura.py`.
+
+**Lo que esto NO resuelve todavía, y es el resto de su encargo:** el **teléfono** sigue con su
+`.Reproductor` interno de Java. Sacarlo significa tocar `Reproductor.java` y
+`MainActivity.java`, que están **sin commitear y son suyos**, así que el movimiento es:
+primero ella commitea o me dice que los toque, después `musicaPoner` puede delegar en
+`ACTION_VIEW` (la vía que ya existe desde la 2.11.0 con 「que suene en tu reproductor」) y el
+reproductor propio queda sólo como respaldo cuando no hay app instalada.
+
+## 10 · La tanda que ella abrió el 2026-10-27, con lo que hace falta de su parte
+
+Resumen mío de su mensaje (no cita textual), en el orden en que lo pidió, con su estado real
+medido en el repo:
+
+| qué pidió | estado de hoy | qué hace falta |
+|---|---|---|
+| **partículas / estrellas / plasma en el orbe** | **HECHO en la 2.19.0**: 340 nudos, 1.057 hilos, 160 estrellas de polvo, tres puntos calientes que corren y núcleo con seis púas | **su ojo**: que se parezca al video lo decide ella a pantalla, no la medida |
+| **que la charla se parezca a la del video** | el manto JARVIS está montado (2.15.0, `prueba-manto` 35) y la burbuja 1.1.4 vive en `Flotante.java` **sin commitear** | cerrar el paso **1.3** (reloj y placa de datos de arriba) y que ella apruebe la charla a ojo |
+| **que las dos animaciones vayan bien con la voz** | el orbe reacciona con `listen`/`setAudio`/`speak`/`burst`, y el vórtice se dispara con `activate()` y `speak(ms)`; la guarda `ms > 100` evita la explosión falsa del aviso de fin de voz | **medirlo con voz de verdad**: falta la pasada con micrófono real y un `habla` largo, en su cara, no en la sonda |
+| **música en el reproductor del sistema, en primero o segundo plano** | **HECHO en el PC** (2.18.0, arriba) | en el **teléfono** queda el reproductor interno; toca Java, que es suyo |
+| **automatizar mover archivos de A a B, con pantalla de progreso y aviso de CORT** | el núcleo ya **planea y aplica** (`organiza.py`: `plan` → token → `aplicar`, y `prueba-organiza.py` verde); las automatizaciones tienen 5 disparadores y 8 acciones (`prueba-automatiza` 45); **no hay pantalla de progreso ni aviso al terminar** | paso nuevo, **J2.9**: `progreso` en la cara + la notificación de CORT al cerrar, con su prueba |
+| **que el cerebro local ejecute de verdad y así aprenda** | el copiloto existe y está medido (`copiloto.py`: `LEE_SOLO`, `SUB_LECTURA`, `NUNCA`, `TIMEOUT_S 25`, `SALIDA_MAX 8000`) y `/api/copiloto/plan` responde, **pero no tiene sitio visible en la cara**; y `/api/chat` sigue cayendo en `offline` por las tres líneas de `brain.py:247-251` | J2.1 (enrutar órdenes y contar qué hizo) y J2.5 (el escalón de escritura con permiso). Requiere que `brain.py` quede limpio |
+| **la lista de modelos como en el video, en el teléfono y en el PC** | la pantalla **`Cerebro` del PC** ya es del video (2.13.0: una fila por modelo, `(Local)`, pulsar = acción) y se probó bajando `smollm2:135m` de verdad | **verificar la bajada en el teléfono** (tarea abierta): `Ollama.java` es el cliente del PC por Wi-Fi y necesita el servidor encendido |
+| **compararse con los tres videos y añadir «Arneses» / habilidades para los pasos que vienen** | los tres videos están leídos y medidos (`docs/REFERENCIAS-VIDEOS-JARVIS.md`, fotogramas en `docs/referencias/`); **⌬ Arnés** existe en la cara desde la 2.11.0 con seis cajas de datos reales y su arquitectura en `docs/ARNES-CORT.md` | decir **qué arnés nuevo** quiere para cada paso (los seis de hoy salen del aparato y del núcleo; un arnés de «tarea en segundo plano» o de «descarga de modelo» sería lo natural con J2.2 y la verificación del teléfono) |
+
+**Tres cosas le tocan decidir antes de J2.9**, porque cambian el orden del trabajo:
+
+1. ¿**Java** del teléfono: lo toco yo (con su `nucleo` recompilado en Actions) o espera a que
+   ella commitee `Flotante.java`/`MainActivity.java`/`CortNative.java`? Mientras estén
+   sucios, ni el reproductor interno fuera ni la burbuja 1.1.4 probada por costura.
+2. El **movimiento de archivos con progreso**: ¿es una **acción** más de las automatizaciones
+   (disparador: frase/aviso/hora → acción: `mueve`), o una pantalla propia de «tarea en
+   segundo plano» con la cola de J2.2? (Recomendado: J2.2 primero, porque el progreso y el
+   aviso sirven igual a las dos cosas y no se escribe dos veces.)
+3. De los **Arneses**: ¿los seis de hoy se quedan como están y se añade uno por paso nuevo, o
+   quiere un arnés maestro que resuma «qué está haciendo CORT ahora mismo» (cola + cerebro +
+   música + red) en una sola caja?

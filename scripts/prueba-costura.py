@@ -5052,6 +5052,152 @@ else:
     dice_ok("F23 · la sonda y el documento", "la sonda mide las seis cajas, la sesión y el "
               "núcleo; y el documento deja por escrito lo que el Arnés no promete")
 
+# ── 37 · F24: la ventana 05 con la discoteca de verdad detrás ────────────────
+# Desde `musica.py` (ronda 2.17) el núcleo del PC sabe leer etiquetas ID3, carpetas,
+# duraciones, playlists y qué reproductor responde por el audio. La cara tiene que
+# estar cosida a eso, y estas comprobaciones están escritas para MORDER: cada una
+# describe el fallo concreto que evitaría.
+#   · Si el filtro se recorta aquí en vez de pedirse con `?q=`, la búsqueda sólo ve
+#     las pistas ya listadas (y el disco de la dueña tiene más de las que caben).
+#   · Si el botón «en mi reproductor» se pinta en Android, `/api/play` abriría la
+#     canción en el ORDENADOR mientras ella mira el teléfono.
+#   · Si la cara dice «reproduciendo» sin que `playerctl` lo confirme, miente.
+#   · Si un `artista` vacío se imprime sin cuidado, la fila sale con `undefined`.
+print("\n[37] F24 · la ventana 05: buscador, estilos, playlists y el reproductor del sistema")
+
+F37_HUD = sin_comentarios_js((RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8"))
+F37_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
+F37_MUS = (RAIZ / "backend" / "app" / "musica.py").read_text(encoding="utf-8")
+
+# 37.a · los ids que la cara enlaza existen en el marcado (o los crea el JS) y el CSS
+#        los viste: un `getElementById` que devuelve `null` tumba el montaje entero.
+#        La lista se DERIVA del propio JS (`getElementById('x')`, `id = 'x'`,
+#        `id="x"`): así no hay que acordarse de añadirla cuando la ventana crece.
+f37_ids = sorted(set(re.findall(r"getElementById\('([a-z0-9-]+)'\)", F37_HUD))
+                 & set(re.findall(r"""id=["']?([a-z0-9-]+)['"]?""", F37_HUD)))
+f37_creados = [i for i in f37_ids
+               if f'id="{i}"' not in F37_HUD and f".id = '{i}'" not in F37_HUD]
+f37_sin_css = [s for s in ("#mbusca", "#mchips", "#mpie", "#mestado", "#mguarda-nombre",
+                           "#mpie .m-b", ".mchip", ".mtag", ".m-ext", ".mt-n") if s not in F37_CSS]
+if not f37_ids:
+    falla("F24 · la ventana", "la cara ya no enlaza ningún id con `getElementById`: "
+          "el barrido no tiene nada que cruzar y el sector se volvería verde solo")
+elif f37_creados:
+    falla("F24 · la ventana", "la cara habla con " + ", ".join("#" + i for i in f37_creados) +
+          " y nadie lo crea: `getElementById` devuelve `null` y el montaje se cae")
+elif f37_sin_css:
+    falla("F24 · la ventana", "sin vestir en `hud.css`: " + ", ".join(f37_sin_css) +
+          " saldría como texto suelto, sin forma ni lugar (la fila de chips se convertiría "
+          "en un muro ilegible)")
+else:
+    dice_ok("F24 · la ventana", f"los {len(f37_ids)} ids que `hud.js` enlaza se crean y los "
+              "diez selectores nuevos de la ventana 05 tienen su CSS en `hud.css`")
+
+# 37.b · el filtro VIAJA al backend. `musica.busca` es la única que pliega acentos
+#        como el APK y la única que mira álbum, carpeta y lista a la vez.
+f37_param = [p for p in ("'q'", "'genero'", "'lista'", "'refrescar'")
+             if f"searchParams.set({p}" not in F37_HUD]
+if f37_param:
+    falla("F24 · el filtro", "no se manda al backend: " + ", ".join(f37_param) +
+          " · recortando aquí la búsqueda sólo vería las pistas ya listadas")
+elif "tracks.filter(" in F37_HUD:
+    falla("F24 · el filtro", "hay un `tracks.filter(` en la cara: volvió el recorte local "
+          "que deja fuera todo lo que no estaba en la primera página")
+elif "enlazaBuscador()" not in F37_HUD:
+    falla("F24 · el filtro", "`enlazaBuscador()` no se llama: el buscador se pinta y no hace nada")
+elif "() => loadMusic(true)" not in F37_HUD:
+    falla("F24 · el filtro", "el botón de recargar no pasa `refrescar`: sin él la caché de "
+          "20 s enseña el disco de hace media minuto y «no hay canciones» cuando sí las hay")
+else:
+    dice_ok("F24 · el filtro", "los cuatro parámetros viajan a `/api/music`, el buscador "
+              "está enlazado y recargar barre el disco otra vez")
+
+# 37.c · la carrera de las pulsaciones rápidas: la respuesta vieja no puede pintar
+#        encima de la nueva (con el debounce de 320 ms pasaba en cuanto se borraba
+#        una letra a mano).
+if F37_HUD.count("if (mi !== mPending) return;") < 2:
+    falla("F24 · la carrera", f"el número de petición se comprueba {F37_HUD.count('if (mi !== mPending) return;')} "
+          "vez/veces y hacen falta 2 (la respuesta buena y el fallo): la última en llegar "
+          "gana, y sin esto una búsqueda lenta pinta encima de la que ya se veía")
+else:
+    dice_ok("F24 · la carrera", "cada respuesta se descarta si ya hay una petición más nueva")
+
+# 37.d · «en mi reproductor» es de PC. En el teléfono el que abre la canción es el
+#        puente `CortNative.musicaExterna`, y el `/api/play` del PC sonaría en el
+#        ordenador de al lado.
+f37_pc = ("if (!IS_ANDROID) d.appendChild(botonExterno(t));" in F37_HUD
+          and "if (!IS_ANDROID) {" in F37_HUD)
+if not f37_pc:
+    falla("F24 · el reproductor", "el botón de abrir en el sistema se pinta también en el "
+          "teléfono: allí `/api/play` ejecuta en el PC y la cara dice «sonando» sin que "
+          "el teléfono haya sonado nada")
+elif "musicaExterna" not in F37_HUD:
+    falla("F24 · el reproductor", "`suenaAqui()` no tiene la rama de Android: en el teléfono "
+          "el botón se quedaría mudo en vez de hablar con el puente")
+else:
+    dice_ok("F24 · el reproductor", "el botón sólo existe en PC, y en el teléfono manda al "
+              "puente `musicaExterna` (con su frase honesta si el APK no lo trae)")
+
+# 37.e · honestidad de estado: nada de `undefined` en la fila y nada de «reproduciendo»
+#        que el aparato no haya confirmado.
+f37_undefined = re.findall(r"\bt\.(artista|nombre|album|carpeta|dur)\.to", F37_HUD)
+if "no puedo confirmar que suene" not in F37_HUD:
+    falla("F24 · honestidad", "la cara no distingue `reproduciendo` de `desconocido`: "
+          "`estado_real()` sólo afirma lo que `playerctl` vio, y enseñar más es mentir")
+elif "r.vacio || ''" not in F37_HUD:
+    falla("F24 · honestidad", "la lista vacía no usa el `vacio` del backend: «no hay música "
+          "en las carpetas» y «nada encaja con tu filtro» son dos cosas distintas para ella")
+elif f37_undefined:
+    falla("F24 · honestidad", "se lee un campo sin respaldo: " + ", ".join(f37_undefined) +
+          " · sin etiqueta, `artista` viene vacío y la fila saldría con `undefined`")
+else:
+    dice_ok("F24 · honestidad", "`sonando` sólo cuando el sistema lo confirma, el motivo de "
+              "vacío viene del backend y ningún campo se imprime sin respaldo")
+
+# 37.f · «pon X» en el PC la contesta el NÚCLEO (`/api/command` → `actions._musica`),
+#        no el matcher local de la cara: el local sólo miraba las pistas cargadas y
+#        comparaba `artista`, que casi siempre está vacío. Se exige el `if (` pegado:
+#        buscar la subcadena a secas daba verde con la condición NEGADA (`!IS_ANDROID`
+#        contiene `IS_ANDROID`), medido con una mutación que se escapó.
+if "if (IS_ANDROID && single && tracks.length && /^(reproduce|pon" not in F37_HUD:
+    falla("F24 · la orden de voz", "el ejecutor de la cara vuelve a interceptar «pon X» en el "
+          "PC: la orden se queda en las pistas ya listadas y no llega a `musica.busca`, que "
+          "es la única que barre el disco y abre el reproductor predeterminado")
+else:
+    dice_ok("F24 · la orden de voz", "en el PC «pon X» se manda al núcleo; el ejecutor local "
+              "se queda sólo para el teléfono")
+
+# 37.g · la costura con el núcleo: las seis llaves que la cara lee las emite
+#        `musica.informe`. Si una cambia de nombre, la ventana se queda vacía sin error.
+f37_llaves = [k for k in ("canciones", "estilos", "listas", "total", "raices", "reproductor",
+                          "vacio") if f'"{k}":' not in F37_MUS]
+f37_lee = [k for k in ("canciones", "estilos", "listas", "total", "reproductor", "vacio")
+           if f"r.{k}" not in F37_HUD]
+if f37_llaves:
+    falla("F24 · el contrato", "`musica.informe` ya no emite " + ", ".join(f37_llaves))
+elif f37_lee:
+    falla("F24 · el contrato", "la cara no lee " + ", ".join(f37_lee) +
+          ": el backend lo manda y en la ventana no se ve (el vacío silencioso)")
+else:
+    dice_ok("F24 · el contrato", "las siete llaves que arma `musica.informe` se leen en la "
+              "cara: canciones, estilos, listas, total, raíces, reproductor y el porqué del vacío")
+
+# 37.h · «guardar filtro» habla con `pon_lista`, que es el único sitio que sabe que
+#        NUNCA sobrescribe una lista de la dueña. Si la cara deja de decirlo, el 409
+#        se convierte en «no pasó nada» y ella vuelve a pulsar dos veces.
+f37_guarda = [k for k in ("/api/music/lista", "no sobrescribe", "r.pistas", "r.donde", "r.existe")
+              if k not in F37_HUD]
+f37_emite = [k for k in ('"pistas":', '"donde":', '"existe":') if k not in F37_MUS]
+if f37_guarda:
+    falla("F24 · guardar lista", "a la cara le falta " + ", ".join(f37_guarda) +
+          ": el backend responde con eso y en la ventana se queda mudo")
+elif f37_emite:
+    falla("F24 · guardar lista", "`musica.pon_lista` ya no emite " + ", ".join(f37_emite) +
+          " y la cara los lee: diría `undefined` en el pie de la ventana")
+else:
+    dice_ok("F24 · guardar lista", "la playlist se pide al backend, se anuncia con sus "
+              "pistas y su sitio, y el nombre repetido se dice sin sobrescribir nada")
+
 # ── veredicto ───────────────────────────────────────────────────────────────print()
 if FALLOS:
     print(f"FALTA {len(FALLOS)} COSA(S):")

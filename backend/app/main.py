@@ -25,6 +25,12 @@ Endpoints:
   GET  /api/optimize                     -> quién come RAM y cuánta caché hay que borrar
   POST /api/optimize/clean|kill          -> vaciar cachés seguras / cerrar un proceso
   GET  /api/letras?artista=&titulo=&duracion= -> letra (LRCLIB) sincronizada o plana
+  GET  /api/music?q=&genero=&carpeta=&lista=  -> discoteca del PC: etiquetas ID3,
+                                  carpetas como estilo, playlists y reproductor real
+  GET  /api/audio?ruta=                        -> el archivo de música (sólo Música/)
+  POST /api/play          {ruta}               -> abre el REPRODUCTOR DEL SISTEMA
+  GET  /api/play/estado                        -> ¿suena de verdad? (playerctl o nada)
+  POST /api/music/lista   {nombre, rutas}      -> guarda una playlist (409 si existe)
   POST /api/organizar    {raiz, criterio}          -> PLAN de orden (no toca nada)
   POST /api/organizar/aplicar {raiz, criterio, token} -> ejecutar el plan confirmado
   GET  /api/copiloto                    -> qué comandos puede ejecutar solo CORT
@@ -58,6 +64,7 @@ import config_store                             # noqa: E402
 import copiloto                                 # noqa: E402  (copiloto de terminal: sólo lectura)
 import letras                                   # noqa: E402  (LRCLIB, sin clave)
 import memory                                   # noqa: E402
+import musica                                   # noqa: E402  (discoteca del PC: carpetas, etiquetas, listas)
 import local_commands                           # noqa: E402
 import models                                   # noqa: E402  (Ollama: catálogo y descargas)
 import organiza                                 # noqa: E402  (plan de orden, sin borrar)
@@ -336,8 +343,19 @@ def voice_say(d: Decir):
 
 
 @app.get("/api/music")
-def music():
-    return {"canciones": sensors.music_list()}
+def music(q: str = "", genero: str = "", carpeta: str = "", lista: str = "",
+          limite: int = 400, refrescar: bool = False):
+    """La discoteca del PC entera, o filtrada, con lo que de verdad se pudo leer.
+
+    El cuerpo lo arma `musica.informe` (fuera de FastAPI, para que las pruebas de
+    Actions puedan comprobar el contrato sin instalar el framework). `canciones`
+    conserva los campos de siempre — `nombre`, `artista`, `ruta`, `dur` — para que
+    la cara vieja siga valiendo, y añade `album`, `genero`, `carpeta`, `seg`,
+    `video` y `letra`. `vacio` dice por qué no hay nada: no es lo mismo «no tienes
+    carpeta de Música» que «nada encaja con tu filtro».
+    """
+    return musica.informe(q=q, genero=genero, carpeta=carpeta, lista=lista,
+                          limite=limite, refrescar=refrescar)
 
 
 @app.get("/api/audio")
@@ -356,8 +374,33 @@ class Play(BaseModel):
 @app.post("/api/play")
 def play(p: Play):
     """Ejecutor de música en el SISTEMA: abre el reproductor predeterminado
-    (VLC u otro) con una canción; sin ruta, elige una al azar de ~/Música."""
-    return sensors.play_external(p.ruta)
+    (VLC u otro) con una canción; sin ruta, elige una al azar de ~/Música.
+
+    Devuelve el programa que respondió por el archivo (`reproductor`, consultado
+    con `xdg-mime` en este equipo) y `estado`, que sólo dice `reproduciendo` si
+    `playerctl` lo confirmó; si no, dice `desconocido` y la cara lo enseña así.
+    """
+    return musica.suena(p.ruta)
+
+
+@app.get("/api/play/estado")
+def play_estado():
+    """Si de verdad está sonando algo, según el propio sistema."""
+    return {"estado": musica.estado_real(),
+            "reproductor": musica.reproductor_predeterminado()}
+
+
+class Lista(BaseModel):
+    nombre: str = ""
+    rutas: list[str] = []
+
+
+@app.post("/api/music/lista")
+def music_lista(L: Lista):
+    """Guarda una playlist de CORT en `~/.cort/listas/`. Nunca sobrescribe: si el
+    nombre ya existe, devuelve el error y la cara lo dice con esas palabras."""
+    r = musica.pon_lista(L.nombre, L.rutas)
+    return JSONResponse(r, status_code=409 if r.get("existe") else 200)
 
 
 class Launch(BaseModel):

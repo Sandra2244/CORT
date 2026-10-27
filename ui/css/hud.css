@@ -322,6 +322,60 @@ label.pf{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5e8
   border-color:var(--cyan);border-left:3px solid var(--cyan);
   transform:scale(1.02);box-shadow:0 0 14px rgba(0,190,255,.35);animation:pulse 1.6s infinite}
 
+/* ---- la ventana 05 con la discoteca detrás (ronda 2.18) ----
+   `#mchips` lleva scroll propio y `#plist` lo de siempre: en el disco de la dueña
+   hay 9 carpetas-estilo y cualquier búsqueda puede devolver cientos de pistas.
+   `.mtag`/`.m-ext` son de fila: el píldora de vídeo o letra y el botón que abre la
+   canción en el reproductor del SISTEMA (sólo se pinta en PC). */
+#mtools{display:flex;gap:5px;margin:0 0 6px}
+#mbusca{flex:1;min-width:0;background:rgba(4,14,28,.55);border:1px solid var(--cyan-dim);
+  border-radius:6px;padding:5px 8px;color:var(--text-hi);
+  font-family:Consolas,'Courier New',monospace;font-size:11.5px}
+#mbusca::placeholder{color:#4b7f9e;font-size:10.5px}
+#mbusca:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 12px rgba(0,180,255,.35)}
+#mborrar{all:unset;cursor:pointer;padding:0 9px;border:1px solid var(--cyan-dim);border-radius:6px;
+  color:#9fdcff;font-size:11px;background:rgba(6,18,34,.5);line-height:24px}
+#mborrar:hover{border-color:var(--cyan);color:#fff}
+/* Una sola línea deslizable, como las pestañas de la referencia: con `flex-wrap` los
+   estilos y las playlists se comían la ventana en tres renglones y en el teléfono no
+   quedaba sitio para las canciones. El scroll fino, sin barra. */
+#mchips{display:flex;flex-wrap:nowrap;gap:5px;overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;margin:0 0 7px;padding-bottom:3px}
+#mchips::-webkit-scrollbar{display:none}
+.mchip{all:unset;cursor:pointer;flex:0 0 auto;padding:3px 9px;border-radius:12px;font-size:10.5px;
+  font-family:Consolas,'Courier New',monospace;color:#9fdcff;background:rgba(6,18,34,.55);
+  border:1px solid rgba(80,190,255,.22);white-space:nowrap;transition:.15s}
+.mchip:hover{border-color:var(--cyan);color:#fff;background:rgba(0,160,255,.2);
+  box-shadow:0 0 10px rgba(0,180,255,.3)}
+.mchip.on{background:var(--cyan);color:#04121f;border-color:var(--cyan);font-weight:700}
+#plist .track .mt-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#plist .track .mtag{flex:0 0 auto;font-size:8.5px;letter-spacing:.1em;color:#8fd3ff;
+  border:1px solid rgba(120,210,255,.32);border-radius:4px;padding:1px 5px;background:rgba(10,30,55,.5)}
+#plist .track .fecha{flex:0 0 auto}
+#plist .track .m-ext{all:unset;cursor:pointer;flex:0 0 auto;width:20px;height:20px;border-radius:5px;
+  display:grid;place-items:center;border:1px solid rgba(80,190,255,.3);color:#9fdcff;font-size:11px;
+  background:rgba(6,18,34,.5);transition:.15s}
+#plist .track .m-ext:hover{border-color:var(--cyan);color:#fff;background:rgba(0,160,255,.24)}
+#plist .track .m-ext:disabled{opacity:.45;cursor:progress}
+#mpie{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap}
+/* Los dos botones del pie: `▶ en mi reproductor` (el del sistema) y `≡ guardar
+   filtro` (playlist de CORT en ~/.cort/listas). Son `.m-b` porque comparten forma;
+   los ids `#mext` / `#mguarda` los pone la cara para poder enlazarlos. */
+#mpie .m-b{all:unset;cursor:pointer;flex:0 0 auto;padding:5px 11px;border-radius:14px;font-size:11px;
+  font-family:Consolas,'Courier New',monospace;color:#bfe8ff;white-space:nowrap;
+  border:1px solid rgba(80,190,255,.35);background:rgba(6,18,34,.5);transition:.15s}
+#mpie .m-b:hover{border-color:var(--cyan);color:#fff;background:rgba(0,160,255,.22);box-shadow:0 0 14px rgba(0,180,255,.4)}
+#mpie .m-b:disabled{opacity:.5;cursor:progress}
+#mguarda-nombre{flex:1 1 100%;min-width:0;background:rgba(4,14,28,.55);border:1px solid var(--cyan-dim);
+  border-radius:6px;padding:4px 8px;color:var(--text-hi);
+  font-family:Consolas,'Courier New',monospace;font-size:11.5px}
+#mguarda-nombre:focus{outline:none;border-color:var(--cyan)}
+#mestado{flex:1 1 100%;min-width:0;font-size:10px;line-height:1.35;color:#5e8cab;
+  font-family:Consolas,'Courier New',monospace;overflow-wrap:anywhere}
+#mestado.malo{color:#ff9f9f}
+html.mobile .mchip{padding:7px 12px;font-size:12.5px}
+html.mobile #mbusca{font-size:14px;padding:9px 10px}
+
 /* ================= mosaico de archivos (vista DOSSIER) ================= */
 #ftools{display:flex;gap:6px;justify-content:flex-end;margin-bottom:4px}
 #ftools button{all:unset;padding:2px 8px;border:1px solid var(--cyan-dim);border-radius:6px;

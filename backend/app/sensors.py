@@ -153,25 +153,29 @@ AUDIO_EXT = {".mp3", ".ogg", ".wav", ".m4a", ".flac", ".opus"}
 
 
 def music_list(limit: int = 200) -> list[dict]:
-    """Canciones dentro de las raíces Música/Music (recursivo, sin salir de ellas)."""
-    out: list[dict] = []
-    for root_name in ("Música", "Music"):
-        root = ROOTS.get(root_name)
-        if not root or not root.exists():
-            continue
-        for f in sorted(root.rglob("*")):
-            if f.suffix.lower() in AUDIO_EXT and f.is_file():
-                try:
-                    rel = f.relative_to(root)
-                    out.append({"nombre": f.stem, "artista": rel.parent.name
-                                if str(rel.parent) != "." else "—",
-                                "ruta": f"{root_name}/{rel}".replace("\\", "/"),
-                                "dur": ""})
-                except ValueError:
-                    continue
-            if len(out) >= limit:
-                return out
-    return out
+    """Discoteca, ya en `musica.pistas()`. Se deja el nombre porque `/api/music` lo
+    tenía como única ventana y cualquier llamador viejo sigue funcionando.
+
+    Este listado era el problema que abrió `musica.py`: `artista` salía del nombre
+    de la carpeta (`sensors.py:166`) y `dur` estaba **siempre vacío** (`:169`), así
+    que la cara no podía filtrar por estilo ni abrir una playlist. Ahora los
+    campos reales (etiqueta ID3, carpeta, duración, letra, vídeo) los da el
+    barrido de `musica.py`; aquí sólo se recorta a `limit`.
+    """
+    import musica
+    return musica.pistas()[:limit]
+
+
+def play_external(rel: str = "") -> dict:
+    """Abre una canción con el reproductor predeterminado del sistema.
+
+    Delegación en `musica.suena`, que es la versión que sabe **qué programa**
+    responde por el audio en este equipo y si el aparato confirma que suena; la
+    anterior devolvía `"reproductor": "predeterminado"` sin haberlo preguntado.
+    """
+    import musica
+    return musica.suena(rel)
+
 
 
 def music_path(rel: str) -> Path | None:
@@ -191,34 +195,11 @@ def music_path(rel: str) -> Path | None:
     return target if target.is_file() and target.suffix.lower() in AUDIO_EXT else None
 
 
-def play_external(rel: str = "") -> dict:
-    """Abre una canción con el reproductor PREDETERMINADO del sistema
-    (VLC, etc.). Sin `rel` elige una al azar de tu carpeta Música.
-    Seguridad: solo archivos ya validados por music_path()."""
-    import platform
-    import random
-    import subprocess
-
-    if rel:
-        f = music_path(rel)
-        if not f:
-            return {"ok": False, "error": "canción no encontrada en Música"}
-    else:
-        songs = music_list()
-        if not songs:
-            return {"ok": False, "error": "no hay música en ~/Música"}
-        f = music_path(random.choice(songs)["ruta"])
-    try:
-        if platform.system() == "Windows":
-            import os
-            os.startfile(str(f))  # noqa: S606 — ruta validada
-        elif platform.system() == "Darwin":
-            subprocess.Popen(["open", str(f)])
-        else:
-            subprocess.Popen(["xdg-open", str(f)])
-        return {"ok": True, "cancion": f.stem, "reproductor": "predeterminado"}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+# `play_external` está más arriba, junto a `music_list`: las dos son delegaciones de
+# `musica.py`. Aquí estaba la versión que abría `xdg-open` y devolvía
+# `"reproductor": "predeterminado"` sin haber preguntado nunca qué programa responde
+# por el audio — y un duplicado de esa función en dos sitios del mismo archivo es
+# justo la dejadez que se está barruyendo (README §voz.py tiene la misma historia).
 
 
 # Lanzador de aplicaciones (video f7d16b9e: "APPLICATION LANCÉE"):

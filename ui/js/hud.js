@@ -151,14 +151,28 @@ function buildWindows() {
     html: `<div id="notelist"></div>
       <div id="inputrow"><input id="nota" placeholder="Nueva nota…" autocomplete="off">
       <button id="notago" aria-label="Agregar nota">${ic('plus')}</button></div>` });
-  W.music = createWin({ id: 'music', onShow: () => { if (!tracks.length) loadMusic(); }, icon: '♪', title: '05 · Música',
-    x: clamp(vw - 530, 14, vw - 240), y: clamp(vh - 406, 112, 348), w: Math.min(302, vw - 28), h: clamp(vh * .5, 220, 392),
+  /* Ventana 05 · la cara de la discoteca (ronda 2.18). El filtro NO se recorta
+     aquí: se manda al backend (`?q=&genero=&lista=`), que es donde vive
+     `musica.busca` y su `plegar()` —el mismo plegado de acentos que el APK en
+     `Musica.java:203`. Dos listas de botones: los `estilos` (cada uno dice si
+     salió de la etiqueta o de la carpeta) y las `listas` con `resueltas/pistas`,
+     porque una playlist puede tener 40 líneas y ninguna canción en el disco.
+     El botón «en mi reproductor» es de PC: en el teléfono `/api/play` abriría la
+     canción en el ordenador, así que ahí manda el puente `CortNative.musicaExterna`. */
+  W.music = createWin({ id: 'music', onShow: () => { if (!tracks.length) loadMusic(); }, icon: '♪',
+    title: '05 · Música · <span id="mtotal">…</span>',
+    x: clamp(vw - 540, 14, vw - 240), y: clamp(vh - 432, 112, 348), w: Math.min(312, vw - 28), h: clamp(vh * .56, 240, 432),
     html: `<div id="nowplay">— sin reproducción —</div>
       <div id="mbar"><i id="mprog"></i></div>
       <div id="mrow"><button id="mprev">${ic('prev')}</button><button id="mplay">${ic('play')}</button>
         <button id="mnext">${ic('next')}</button><input id="mvol" type="range" min="0" max="1" step=".02" value=".8">
-        <span id="mtime"></span><button id="mref" title="recargar lista">${ic('refresh')}</button></div>
+        <span id="mtime"></span><button id="mref" title="volver a barrer el disco">${ic('refresh')}</button></div>
+      <div id="mtools"><input id="mbusca" placeholder="buscar título, artista, álbum o carpeta…"
+        autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <button id="mborrar" title="quitar la búsqueda">✕</button></div>
+      <div id="mchips"></div>
       <div id="plist"></div>
+      <div id="mpie"><span id="mestado"></span></div>
       <audio id="aud" crossorigin="anonymous"></audio>` });
   W.term = createWin({ id: 'term', icon: '▤', title: '06 · Consola del sistema',
     x: 14, y: Math.max(140, vh - 268), w: Math.min(340, vw - 28), h: 240,
@@ -284,22 +298,262 @@ function buildWindows() {
 
 /* ---------- ejecutor de música (orbe → disco giratorio) ---------- */
 let tracks = [], tIdx = -1, AC = null, AN = null, freqData = null, mAnim = 0;
-async function loadMusic() {
+/* Estado del filtro de la ventana 05. `mPending` es el número de petición: si se
+   escribe rápido, la respuesta vieja no puede pintar encima de la nueva. */
+let mQ = '', mEstilo = '', mLista = '', mTotal = 0, mRep = '', mPending = 0, mTimer = 0, mNota = '';
+async function loadMusic(refrescar = false, nota = '') {
   const el = document.getElementById('plist');
+  if (!el) return;
+  /* `nota` es lo que la cara quería decir la última vez (p. ej. «guardada: 16
+     canciones en …»). Sin este cable, el repintado del pie al volver a listar
+     borraba el aviso en el mismo instante en que se daba. */
+  mNota = nota;
+  const mi = ++mPending;
+  let url;
   try {
-    const r = await (await fetch(API + '/api/music')).json();
+    url = new URL(API + '/api/music', location.href);
+    if (mQ) url.searchParams.set('q', mQ);
+    if (mEstilo) url.searchParams.set('genero', mEstilo);
+    if (mLista) url.searchParams.set('lista', mLista);
+    if (refrescar) url.searchParams.set('refrescar', '1');
+  } catch { url = { href: API + '/api/music' }; }
+  try {
+    const r = await (await fetch(url.href || url)).json();
+    if (mi !== mPending) return;                    // ya vino una petición más nueva
     tracks = r.canciones || [];
-    if (r.needPermission) { el.innerHTML = ''; el.appendChild(permRow('music', 'CORT necesita permiso para ver tu música', loadMusic)); return; }
-    el.innerHTML = tracks.length ? '' :
-      '<div class="row">no encontré canciones en el teléfono · pulsa recargar</div>';
-    tracks.forEach((t, i) => {
-      const d = document.createElement('div'); d.className = 'row track';
-      d.innerHTML = `<span>♪ ${esc(t.nombre)}</span><span class="fecha">${esc(t.artista)}${t.dur ? ' · ' + esc(t.dur) : ''}</span>`;
-      d.onclick = () => playTrack(i);
-      el.appendChild(d);
-    });
-  } catch { el.innerHTML = '<div class="row">backend no disponible</div>'; }
+    mTotal = typeof r.total === 'number' ? r.total : tracks.length;
+    mRep = r.reproductor || '';
+    const rot = document.getElementById('mtotal');
+    if (rot) rot.textContent = tracks.length === mTotal ? `${mTotal} ♪` : `${tracks.length}/${mTotal} ♪`;
+    if (r.needPermission) {
+      el.innerHTML = ''; document.getElementById('mchips').innerHTML = '';
+      el.appendChild(permRow('music', 'CORT necesita permiso para ver tu música', () => loadMusic(true)));
+      return;
+    }
+    pintaChips(r);
+    pintaFilas(r.vacio || '');
+    pintaPie();
+  } catch {
+    if (mi !== mPending) return;
+    tracks = [];
+    el.innerHTML = '<div class="row">backend no disponible</div>';
+    const rot = document.getElementById('mtotal'); if (rot) rot.textContent = 'sin backend';
+    document.getElementById('mchips').innerHTML = '';
+    pintaPie();
+  }
 }
+
+/* Chips: «todas», los estilos y las playlists. Cada botón lleva en el `title` de
+   dónde salió el dato, que es la parte honesta: en esta discoteca ningún mp3 trae
+   etiqueta de género, así que «Dark Rose» es una CARPETA que hace de estilo. */
+function pintaChips(r) {
+  const caja = document.getElementById('mchips');
+  if (!caja) return;
+  caja.innerHTML = '';
+  const chip = (txt, activo, alPulsar, titulo) => {
+    const b = document.createElement('button');
+    b.className = 'mchip' + (activo ? ' on' : '');
+    b.textContent = txt;
+    if (titulo) b.title = titulo;
+    b.onclick = alPulsar;
+    caja.appendChild(b);
+  };
+  chip(`todas ${mTotal}`, !mEstilo && !mLista, () => { mEstilo = ''; mLista = ''; loadMusic(); },
+    'la discoteca entera, sin filtro');
+  (r.estilos || []).forEach(e => chip(`${e.nombre} ${e.pistas}`, mEstilo === e.nombre && !mLista,
+    () => { mEstilo = e.nombre; mLista = ''; loadMusic(); },
+    e.fuente === 'etiqueta'
+      ? `género leído de la etiqueta de ${e.pistas} canción${e.pistas === 1 ? '' : 'es'}`
+      : `carpeta «${e.nombre}» dentro de Música, usada como estilo (${e.pistas})`));
+  (r.listas || []).forEach(L => chip(`≡ ${L.nombre} ${L.resueltas}/${L.pistas}`, mLista === L.nombre,
+    () => { mLista = mLista === L.nombre ? '' : L.nombre; mEstilo = ''; loadMusic(); },
+    `playlist con ${L.pistas} línea${L.pistas === 1 ? '' : 's'}; ${L.resueltas} de esas canciones están en este disco`
+    + (L.origen === 'cort' ? ' · guardada por CORT' : '')));
+}
+
+function pintaFilas(motivo) {
+  const el = document.getElementById('plist');
+  el.innerHTML = '';
+  if (!tracks.length) {
+    const d = document.createElement('div'); d.className = 'row';
+    d.textContent = motivo || (IS_ANDROID ? 'no encontré canciones en el teléfono · pulsa recargar'
+                                          : 'no hay canciones · pulsa recargar');
+    el.appendChild(d);
+    return;
+  }
+  tracks.forEach((t, i) => {
+    const d = document.createElement('div'); d.className = 'row track';
+    const n = document.createElement('span'); n.className = 'mt-n';
+    const nombre = t.nombre || (t.ruta || '').split('/').pop() || 'pista sin nombre';
+    n.textContent = '♪ ' + nombre;
+    /* el nombre se recorta en la fila: el `title` es lo que hace que poder leerlo
+       entero sin agrandar la ventana */
+    n.title = nombre + (t.album && t.album !== nombre ? ' · álbum: ' + t.album : '');
+    d.appendChild(n);
+    if (t.video) d.appendChild(mtag('▸ vídeo', `hay un vídeo con el mismo nombre: ${t.video}`));
+    if (t.letra) d.appendChild(mtag('✎ letra', `letra junto a la canción: ${t.letra}`));
+    const sub = document.createElement('span'); sub.className = 'fecha';
+    sub.textContent = [t.artista || t.carpeta, t.dur].filter(Boolean).join(' · ');
+    /* si no hay artista, lo que se enseña es la CARPETA: decirlo en el `title`
+       evita que la dueña lea «Newsinko» y crea que viene de una etiqueta */
+    sub.title = t.artista ? 'artista leído de la etiqueta de la canción'
+      : (t.carpeta ? 'carpeta del disco: la canción no trae etiqueta de artista' : '');
+    d.appendChild(sub);
+    d.onclick = () => playTrack(i);
+    if (!IS_ANDROID) d.appendChild(botonExterno(t));
+    el.appendChild(d);
+  });
+  /* el botón de la fila es hijo del `div`: sin cortar la propagación, pulsarlo
+     también pondría la canción en el `<audio>` de la cara */
+  el.querySelectorAll('.m-ext').forEach(b => { b.onclick = e => { e.stopPropagation(); suenaAqui(b.dataset.r, b); }; });
+}
+
+function mtag(txt, titulo) {
+  const s = document.createElement('span');
+  s.className = 'mtag'; s.textContent = txt; s.title = titulo;
+  return s;
+}
+
+function botonExterno(t) {
+  const b = document.createElement('button');
+  b.className = 'm-ext'; b.dataset.r = t.ruta || '';
+  b.textContent = '⇱';
+  b.title = 'abrir en el reproductor del sistema' + (mRep ? ` (${mRep})` : '');
+  return b;
+}
+
+/* El pie de la ventana: qué reproductor respondió por el audio en ESTE equipo y,
+   después de pedirlo, si de verdad está sonando. Nunca se inventa un «reproduciendo»:
+   `estado_real()` sólo lo afirma cuando `playerctl` lo vio. */
+function pintaPie() {
+  const pie = document.getElementById('mpie');
+  if (!pie) return;
+  pie.innerHTML = '';
+  if (!IS_ANDROID) {
+    const b = document.createElement('button');
+    b.id = 'mext'; b.className = 'm-b';
+    b.textContent = '▶ en mi reproductor';
+    b.title = mRep ? `lo abre ${mRep}` : 'el sistema no tiene un reproductor asociado al audio';
+    b.onclick = () => suenaAqui(tIdx >= 0 && tracks[tIdx] ? tracks[tIdx].ruta : '', b);
+    pie.appendChild(b);
+    const g = document.createElement('button');
+    g.id = 'mguarda'; g.className = 'm-b';
+    g.textContent = '≡ guardar filtro';
+    g.title = 'guarda las canciones que se están viendo como playlist de CORT, en ~/.cort/listas';
+    g.onclick = guardaLista;
+    pie.appendChild(g);
+  }
+  const est = document.createElement('span');
+  est.id = 'mestado';
+  est.textContent = mNota || (mRep ? `tu reproductor: ${mRep}`
+                                   : 'sin reproductor asociado al audio en este equipo');
+  pie.appendChild(est);
+}
+
+async function suenaAqui(ruta, boton) {
+  const est = document.getElementById('mestado');
+  if (!est) return;
+  if (IS_ANDROID) {
+    /* en el teléfono la pantalla la sirve el mismo origen, pero `/api/play` corre en
+       el ordenador: ahí quien manda es el puente `CortNative.musicaExterna`. */
+    if (typeof (window.CortNative || {}).musicaExterna !== 'function') {
+      est.textContent = 'Abrir en tu reproductor lo trae el APK de la Release.'; return;
+    }
+    let j = null;
+    try { j = JSON.parse(window.CortNative.musicaExterna()); } catch { j = null; }
+    est.textContent = (j && j.dice) || 'El teléfono no respondió a lo de abrir tu reproductor.';
+    return;
+  }
+  if (boton) boton.disabled = true;
+  est.classList.remove('malo');
+  /* Si el `<audio>` de la cara está sonando, se calla: dos fuentes de la misma
+     canción encima una al lado de la otra suenan como un defecto, no como una demo. */
+  pauseMusic();
+  est.textContent = 'abriendo en tu reproductor…';
+  try {
+    const r = await (await fetch(API + '/api/play', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ruta: ruta || '' }),
+    })).json();
+    if (boton) boton.disabled = false;
+    if (!r.ok) {
+      est.textContent = r.error + (r.sugerencia ? ' · ' + r.sugerencia : '');
+      est.classList.add('malo');
+      term('no pude abrir el reproductor: ' + (r.error || 'sin respuesta'), 'música');
+      return;
+    }
+    est.classList.remove('malo');
+    est.textContent = `${r.cancion || 'una canción'} en ${r.reproductor}`
+      + (r.estado === 'reproduciendo' ? ' · sonando' : ' · no puedo confirmar que suene');
+    term(`abierta en el reproductor del sistema: ${r.reproductor} (${r.estado})`, 'música');
+  } catch {
+    if (boton) boton.disabled = false;
+    est.textContent = 'el backend no respondió';
+    est.classList.add('malo');
+  }
+}
+
+/* «guardar filtro»: lo que se está viendo pasa a `~/.cort/listas/<nombre>.m3u` y
+   vuelve como chip en la siguiente barrida. El nombre se pide DENTRO de la ventana
+   (un `prompt()` no se dibuja ni en el WebView ni en el instalador), y el backend
+   nunca sobrescribe: si el nombre ya existe, la cara dice eso y no escribe nada. */
+async function guardaLista() {
+  const est = document.getElementById('mestado');
+  const pie = document.getElementById('mpie');
+  if (!est || !pie) return;
+  const abierta = document.getElementById('mguarda-nombre');
+  if (abierta) {                                  // segundo clic: confirmar
+    const nombre = abierta.value.trim();
+    if (!nombre) { est.textContent = 'dale un nombre a la lista antes de guardarla'; abierta.focus(); return; }
+    est.classList.remove('malo');
+    est.textContent = `guardando «${nombre}» (${tracks.length} canciones)…`;
+    try {
+      const r = await (await fetch(API + '/api/music/lista', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, rutas: tracks.map(t => t.ruta).filter(Boolean) }),
+      })).json();
+      if (r.ok) {
+        mLista = r.nombre; mEstilo = ''; mQ = '';
+        const caja = document.getElementById('mbusca'); if (caja) caja.value = '';
+        /* la nota viaja CON la recarga: `pintaPie` se reconstruye en cada lista y
+           sin esto el aviso de «guardada» se borraba en el mismo instante */
+        loadMusic(true, `guardada: ${r.pistas} canciones en ${r.donde}`);
+        term(`playlist «${r.nombre}» guardada con ${r.pistas} canciones`, 'música');
+      } else {
+        est.textContent = (r.error || 'no pude guardar la lista')
+          + (r.existe ? ' · CORT no sobrescribe tus playlists: prueba con otro nombre' : '');
+        est.classList.add('malo');
+      }
+    } catch { est.textContent = 'el backend no respondió'; est.classList.add('malo'); }
+    return;
+  }
+  if (!tracks.length) { est.textContent = 'no hay nada que guardar: busca o filtra primero'; return; }
+  pie.insertAdjacentHTML('beforeend',
+    `<input id="mguarda-nombre" placeholder="nombre de la playlist" autocomplete="off" spellcheck="false">`);
+  const caja = document.getElementById('mguarda-nombre');
+  caja.focus();
+  caja.addEventListener('keydown', e => { if (e.key === 'Enter') guardaLista();
+                                          if (e.key === 'Escape') caja.remove(); });
+  est.textContent = 'escribe el nombre y vuelve a pulsar «guardar filtro»';
+}
+
+/* El buscador tarda 320 ms entre tecla y petición: barrer el disco cuesta y el
+   portátil de la dueña tiene dos núcleos. La tecla Enter filtra al instante. */
+function enlazaBuscador() {
+  const caja = document.getElementById('mbusca');
+  if (!caja) return;
+  caja.addEventListener('input', () => {
+    clearTimeout(mTimer);
+    mTimer = setTimeout(() => { mQ = caja.value.trim(); loadMusic(); }, 320);
+  });
+  caja.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { clearTimeout(mTimer); mQ = caja.value.trim(); loadMusic(); }
+    if (e.key === 'Escape') { caja.value = ''; mQ = ''; loadMusic(); }
+  });
+  const x = document.getElementById('mborrar');
+  if (x) x.onclick = () => { caja.value = ''; mQ = ''; loadMusic(); caja.focus(); };
+}
+
 function playTrack(i) {
   if (i < 0 || i >= tracks.length) return;
   tIdx = i;
@@ -1865,12 +2119,20 @@ async function send(raw) {
   if (single && tIdx >= 0 && aud.paused && /^(reanuda|contin[uú]a|sigue|play)\b/i.test(msg)) {
     resumeMusic(); add('a', 'Continuando la reproducción.', 'ejecutor'); speakTTS('Continuando'); return;
   }
-  if (single && tracks.length && /^(reproduce|pon|ponme|toca)\s+/i.test(msg)) {
+  /* El ejecutor interno de la cara sólo intercepta «pon X» en el TELÉFONO. En el PC
+     esa orden vale más mandarla a `/api/command`: allí `actions._musica` busca en el
+     disco entero con el plegado de acentos de `musica.py` (título, artista, álbum,
+     carpeta) y abre el REPRODUCTOR PREDETERMINADO del equipo, no un `<audio>` del
+     navegador. El matcher de abajo sólo miraba las pistas ya listadas y comparaba
+     `artista`, que en esta discoteca casi siempre viene vacío por falta de etiqueta. */
+  if (IS_ANDROID && single && tracks.length && /^(reproduce|pon|ponme|toca)\s+/i.test(msg)) {
     const c = msg.replace(/^(reproduce|pon|ponme|toca)\s+(la canci[oó]n\s+|el tema\s+)?/i, '').trim().toLowerCase();
-    const i = c.length > 2 ? tracks.findIndex(t => t.nombre.toLowerCase().includes(c) || t.artista.toLowerCase().includes(c)) : -1;
+    const i = c.length > 2 ? tracks.findIndex(t => (t.nombre || '').toLowerCase().includes(c)
+                                                 || (t.artista || '').toLowerCase().includes(c)) : -1;
     if (i >= 0) {
       playTrack(i);
-      add('a', `Reproduciendo «${tracks[i].nombre}» de ${tracks[i].artista} en el ejecutor de CORT.`, 'ejecutor');
+      add('a', `Reproduciendo «${tracks[i].nombre}»`
+        + (tracks[i].artista ? ` de ${tracks[i].artista}` : '') + ' en el ejecutor de CORT.', 'ejecutor');
       speakTTS('Reproduciendo ' + tracks[i].nombre); return;
     }
   }
@@ -2090,7 +2352,8 @@ export function wireUI(orbRef) {
     const r = e.currentTarget.getBoundingClientRect();
     aud.currentTime = (e.clientX - r.left) / r.width * aud.duration;
   };
-  document.getElementById('mref').onclick = loadMusic;
+  document.getElementById('mref').onclick = () => loadMusic(true);   // refrescar = barrer el disco otra vez
+  enlazaBuscador();
   loadMusic();
   document.getElementById('fgrid').onclick = () => { fGrid = true; openFiles(curFPath); };
   document.getElementById('flistbtn').onclick = () => { fGrid = false; openFiles(curFPath); };
