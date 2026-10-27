@@ -20,6 +20,7 @@
  * pantallas visibles. Así se puede montar en la sonda con el puente de mentira.
  */
 import { DICCIONARIO, TOTALES } from './diccionario.js';
+import { esc, sinTilde } from './texto.js';
 
 const CAPAS = {
   mando:  { nombre: 'Órdenes del aparato', icono: '⚙' },
@@ -30,11 +31,6 @@ const CAPAS = {
   herr:   { nombre: 'Herramientas',        icono: '▤' },
   ajuste: { nombre: 'Ajustes y permisos',  icono: '☰' },
 };
-
-const sinTilde = s => String(s ?? '').toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /** Las cuatro familias, ya planas, para pintar y filtrar. */
 function junta(apps) {

@@ -26,11 +26,12 @@
 
 export const CLAVE_ALMACEN = 'cort.autos.v1';
 
-/* Quita mayúsculas y tildes: «Modo Noche», «modo  noche» y «MODO noche» son la
-   misma orden. Es el mismo `normaliza` que usa el resto de la cara. */
-export const normaliza = s => String(s ?? '').toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+/* El pliegue de texto vive en `texto.js` desde la refactorización: aquí se importa
+   y se re-exporta, porque `scripts/prueba-automatiza.mjs` lo comprueba desde esta
+   hoja y las reglas lo usan por dentro. Es el mismo `normaliza` del resto de la
+   cara — tener dos copias era justamente lo que se quería quitar. */
+import { normaliza } from './texto.js';
+export { normaliza };
 
 /* ─────────────── los disparadores que de verdad tienen señal ───────────────
    Cada uno lista el evento que lo alimenta, y ese evento está MEDIDO en este

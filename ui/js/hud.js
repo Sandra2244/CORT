@@ -20,6 +20,7 @@ import { EJEMPLOS } from './diccionario.js';
    PURO —no toca el DOM— y lleva la regla de honestidad: lo que no está medido no se
    pinta, así que nunca aparece `undefined` ni un `--:--:--` de fábrica. */
 import { nombreNodo, horaPlaca, fechaPlaca, camposPlaca } from './placa.js';
+import { esc } from './texto.js';   // el mismo `esc` de las seis hojas (ver `texto.js`)
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -58,7 +59,7 @@ async function discoverApi() {
   return false;
 }
 const mobile = () => window.isMobileHUD && window.isMobileHUD();
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 let orb, voice;
 
 /* ---------- secuencia de arranque ---------- */

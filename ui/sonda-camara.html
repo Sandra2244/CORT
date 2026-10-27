@@ -39,12 +39,14 @@ window.CortNative = { hasPermission: () => true, requestPermission: () => true,
 
 <script type="module">
 import { initGestures } from './js/gestures.js';
+/* El mismo `esc` de las seis hojas (`js/texto.js`). Aquí estaba copiado y más flojo:
+   no escapaba comillas y un `null` se enseñaba como «null» en el registro. */
+import { esc } from './js/texto.js';
 
 const $ = s => document.querySelector(s);
 const salida = $('#salida');
 const lineas = [];
 let fallos = 0;
-const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 function dice(bien, texto) {
   if (!bien) fallos++;
   lineas.push(`<div class="${bien ? 'ok' : 'no'}">${bien ? 'ok' : 'NO'}  ${esc(texto)}</div>`);

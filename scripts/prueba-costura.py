@@ -4798,6 +4798,7 @@ F34_ORB = (RAIZ / "ui" / "js" / "orb.js").read_text(encoding="utf-8")
 F34_TRAJE = (RAIZ / "ui" / "js" / "traje.js").read_text(encoding="utf-8")
 F34_HUD = (RAIZ / "ui" / "js" / "hud.js").read_text(encoding="utf-8")
 F34_CENTRO = (RAIZ / "ui" / "js" / "centro.js").read_text(encoding="utf-8")
+F34_TEXTO = (RAIZ / "ui" / "js" / "texto.js").read_text(encoding="utf-8")
 F34_PANT = (RAIZ / "ui" / "js" / "pantallas.js").read_text(encoding="utf-8")
 F34_CSS = (RAIZ / "ui" / "css" / "hud.css").read_text(encoding="utf-8")
 F34_APPS = (RAIZ / "ui" / "css" / "apps.css").read_text(encoding="utf-8")
@@ -4840,8 +4841,17 @@ else:
 if "import { DICCIONARIO, TOTALES }" not in F34_CENTRO:
     falla("F19 · el Centro", "el Centro dejó de leer el diccionario generado: la lista se "
           "quedaría vieja respecto a `saber.py`")
-elif "normalize('NFD')" not in F34_CENTRO:
-    falla("F19 · el Centro", "la búsqueda no pliega tildes: «razon» no encontraría «razón»")
+elif ("sinTilde(" not in F34_CENTRO and "normaliza(" not in F34_CENTRO) \
+        or ("normalize('NFD')" not in F34_CENTRO
+            and not ("import { esc, sinTilde } from './texto.js'" in F34_CENTRO
+                     and "normalize('NFD')" in F34_TEXTO)):
+    # Con la refactorización el pliegue puede venir de `texto.js` en vez de estar
+    # copiado en el Centro; lo que NO se acepta es que el Centro busque sin plegar.
+    # Se exige la importación concreta, no un vago `from './texto.js'`: si el Centro
+    # deja de traer `sinTilde`, la comprobación vuelve a fallar como antes.
+    falla("F19 · el Centro", "la búsqueda no pliega tildes: «razon» no encontraría «razón» "
+          "—el pliegue puede estar en el archivo o venir de `texto.js`, pero tiene que "
+          "estar en el camino")
 elif "new CustomEvent('cort:orden'" not in F34_CENTRO or "b.dataset.frase" not in F34_CENTRO:
     falla("F19 · el Centro", "tocar una orden no manda su frase de ejemplo: el catálogo "
           "enseñaría algo distinto de lo que ejecuta")

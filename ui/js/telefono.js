@@ -33,15 +33,9 @@ import { creaMotor, marcapasos, necesitaReloj, DISPARADORES, ACCIONES, preajuste
    lista que vierte la tabla del APK y los casos de `Prueba5`. La ayuda de aquí no
    se escribe a mano: promete exactamente las intenciones que existen. */
 import { AYUDA } from './diccionario.js';
+import { esc, normaliza } from './texto.js';
 
 const N = () => window.CortNative || null;const enTelefono = () => !!N();
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-// Para comparar por palabras: sin mayúsculas ni tildes, porque la dueña dice
-// «mexicana», «Méxicana» o «la voz mexicana» y las tres son la misma idea.
-const normaliza = s => String(s ?? '').toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 let ctx = null;              // { orb, term, say, api, ir } — se lo pasa `initPantallas`
 let caja = null;             // el contenedor de los seis bloques

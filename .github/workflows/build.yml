@@ -414,6 +414,34 @@ jobs:
             echo "::error::prueba-pasos.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar los pliegues de texto y su cadena anti-copias (sin navegador)
+        id: texto
+        # `scripts/prueba-texto.mjs` vigila el primer paso de la refactorización que
+        # pide la dueña («la interfaz mil líneas máximo, divides y conectas»). En la
+        # cara `esc` estaba definido CINCO veces (hud, pantallas, telefono, arnes,
+        # centro) y `normaliza` dos byte a byte (automatiza, telefono); la sonda de
+        # cámara tenía además su propio escapeador más flojo, sin comillas. Ahora los
+        # tres pliegues viven en `ui/js/texto.js` y se importan. El sector [1]–[3]
+        # comprueba el comportamiento —escapar los cinco caracteres, `null`/`undefined`
+        # como cadena vacía para que «undefined» no vuelva a la placa, y `normaliza`
+        # con su ñ→n, que es el mismo criterio de `Cerebro.normaliza` en Java—. El
+        # sector [4]–[5] es la cadena: una segunda definición, o un `esc(` que no se
+        # importe desde `texto.js`, corta la compilación. Verificado con dos mutaciones
+        # (una definición repetida en `arnes.js` y un uso sin importar en `windows.js`):
+        # las dos muerden.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-texto.mjs > /tmp/texto.log 2>&1
+          st=$?
+          tail -20 /tmp/texto.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/texto.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/texto.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-texto.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar el índice de conocimiento con node/python (sin red, en arena)
         id: conocimiento
         # `scripts/prueba-conocimiento.py` ejerce el hueco 2.2 de

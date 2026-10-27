@@ -44,11 +44,10 @@ import { clasificarOrden } from './ordenes.js';
 /* Los estados del hilo del copiloto (J2.3): pendiente → corriendo → ok / falló, y el
    rojo que rechaza un paso. Módulo puro por lo mismo que los dos de arriba. */
 import { ESTADOS_PASO, puedeAceptar, puedeRechazar, arranca, rechaza, cierra } from './pasos.js';
+import { esc } from './texto.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 let ctx = null;                     // { api, term, say, orb, voice }
 let actual = 'orbe';

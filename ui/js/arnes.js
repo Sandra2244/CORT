@@ -23,6 +23,7 @@
  * así la sonda lo puede montar con dobles sin tocar el teléfono.
  */
 import { DICCIONARIO, TOTALES } from './diccionario.js';
+import { esc } from './texto.js';
 
 const CAPAS = {
   mando: { nombre: 'Aparato', icono: '⚙' },
@@ -30,9 +31,6 @@ const CAPAS = {
   casa:  { nombre: 'Casa y equipo', icono: '⌂' },
   nube:  { nombre: 'Nube', icono: '☁' },
 };
-
-const esc = s => String(s ?? '').replace(/[&<>"']/g,
-  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /** Objeto desde JSON, o `{}`. Nunca lanza: el arnés no se cae por un campo raro. */
 function objeto(v) {

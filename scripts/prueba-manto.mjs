@@ -200,8 +200,14 @@ ok('y esa única pintora es la fuente de la píldora: ningún otro camino la esc
    `${escribePildora} lectura del elemento`);
 const notas = [...pant.matchAll(/de: 'cort'/g)]
   .map(m => /nota:/.test(pant.slice(m.index, m.index + 260)));
+/* Seis desde J2.1 (`a3e980b`), y esta cuenta se quedó pidiendo cuatro. Las cuatro de
+   antes eran: sin núcleo, la respuesta buena con su fuente, el «se cayó a media
+   respuesta» y el recibo del cerebro del teléfono. J2.1 sumó dos caminos nuevos —la
+   burbuja que lleva el `hecho` de `/api/command` y el «el núcleo se cayó a media
+   orden»—. La cuenta exacta es parte de la prueba: si `matchAll` no encontrara
+   ninguno, `every(Boolean)` daría por bueno un desorden vacío. */
 ok('cada burbuja de CORT lleva escrita su `nota`, y la píldora la lee del final',
-   notas.length === 4 && notas.every(Boolean)
+   notas.length === 6 && notas.every(Boolean)
    && /ultimo\?\.de === 'cort' && ultimo\.nota/.test(pastilla),
    `${notas.filter(Boolean).length}/${notas.length} con nota`);
 /* Y la condición del final es la que la apaga: si dependiera sólo de la bandera, una
