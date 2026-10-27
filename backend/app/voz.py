@@ -158,21 +158,6 @@ def velocidades_a_wpm(velocidad: float) -> int:
     return max(WPM_MIN, min(WPM_MAX, round(WPM_NATURAL * velocidad)))
 
 
-def _suena(voz: str, ruta: Path,Timeout=8) -> bool:
-    """Sintetiza una palabra con esa voz y dice si de verdad sale audio."""
-    b = binario()
-    if not b:
-        return False
-    try:
-        r = subprocess.run([b, "-v", voz, "-w", str(ruta), FRASE_SONDA],
-                           capture_output=True, text=True, timeout=Timeout)
-        return r.returncode == 0 and ruta.exists() and ruta.stat().st_size > 1024
-    except (OSError, subprocess.SubprocessError):
-        return False
-    finally:
-        ruta.unlink(missing_ok=True)
-
-
 def _huella(voz: str, ruta: Path) -> bytes:
     """Los bytes del audio de esa voz, o b'' si no se puede sintetizar."""
     b = binario()

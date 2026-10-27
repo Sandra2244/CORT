@@ -11,6 +11,10 @@ desktop/out/
 # la llave de firma del APK: la genera el pipeline en su caché y NUNCA va al repo (es público)
 apps/apk/keystore/
 
+# Los APK viejos de referencia (la burbuja 1.1.0) ya no versionan: pesaban 1,8 MB
+# en cada clon. El respaldo vive en `~/Documentos/CORT-respaldos/`, fuera del repo.
+apps/apk/base/
+
 # El oído propio: 40 MB de modelo y 19 MB de `.so` que BAJA el pipeline
 # (`apps/apk/motor.sh`) y que no van al repo — es público y pesaría más que todo
 # lo demás. `build/` es el staging del APK; `motor-cache` la caché de Actions.
