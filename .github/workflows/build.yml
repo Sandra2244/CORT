@@ -414,6 +414,35 @@ jobs:
             echo "::error::prueba-pasos.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el índice de conocimiento con node/python (sin red, en arena)
+        id: conocimiento
+        # `scripts/prueba-conocimiento.py` ejerce el hueco 2.2 de
+        # `docs/ANALISIS-PROMPT-Y-VIDEOS.md`: el «conocimiento.py» + «carpeta de
+        # conocimiento» que el prompt de la dueña prometía y que en el repo no existía
+        # (sólo había `/api/lee`, que lee si le nombras la ruta). Se prueba en un
+        # `tempfile` con las raíces de `sensors` redirigidas a la arena, así que el
+        # `~/Documentos` de ella no se abre ni se escribe. Lo decisivo: que el título
+        # salga de la primera línea y no se invente, que el PDF/Word/el archivo grande
+        # se declaren FUERA con su motivo, que un vacío no cuente como leído, que los
+        # puntos de la búsqueda sean 3/2/1 con el desempate por fecha, que `../` y las
+        # raíces prohibidas se nieguen antes de tocar el disco, y que `responde` cite lo
+        # que salió del disco o confiese en cuántos archivos buscó. La batería
+        # `scripts/mutaciones-conocimiento.py` (7 mutaciones) comprueba que muerde.
+        # La RUTA HTTP todavía no está: vive en `main.py`, que la dueña tiene sin
+        # commitear, y por eso el módulo se prueba sin tocar su archivo.
+        shell: bash
+        run: |
+          set +e
+          python3 scripts/prueba-conocimiento.py > /tmp/conocimiento.log 2>&1
+          st=$?
+          tail -20 /tmp/conocimiento.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALLA|Error|error:' /tmp/conocimiento.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/conocimiento.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-conocimiento.py salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar los colores del orbe con node (sin WebGL)
         id: colores
         # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del
