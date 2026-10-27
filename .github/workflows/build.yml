@@ -2,8 +2,11 @@ name: Construir instaladores CORT
 
 # Compila el holograma de escritorio para Windows y Linux SIN usar tu PC, y el
 # APK del teléfono con el SDK que trae el runner:
-# cada vez que creas una etiqueta v* (p. ej. git tag -a v0.2.0-demo && git push origin v0.2.0-demo)
-# o desde Actions → "Construir instaladores CORT" → Run workflow.
+# corre en cada empujón a `v0.2-demo` (o `main`) y en cada pull request contra
+# esas dos ramas — así las suites avisan el día que algo se pone rojo, sin esperar
+# a la etiqueta. Con etiqueta (`git tag -a v0.2.0-demo && git push origin v0.2.0-demo`)
+# además se monta la Release, y desde Actions → "Construir instaladores CORT" →
+# Run workflow se puede lanzar a mano.
 # Los instaladores (.exe y .AppImage) aparecen como artefactos descargables
 # en la página de la ejecución y en la Release si el push fue de una etiqueta.
 #
@@ -15,6 +18,14 @@ on:
   workflow_dispatch:
   push:
     tags: ['v*']
+    # Y en cada empujón a la rama donde se trabaja. Esto se añade el 27/10 porque
+    # hasta ahora el flujo SOLO corría con etiqueta: `prueba-manto.mjs` estaba rojo
+    # desde J2.1 (`a3e980b`) y nadie lo vio —cinco commits por encima del fallo, y
+    # las suites viven en el job `apk`, que con `tags:` nunca llegaba a dispararse.
+    # Las etiquetas siguen siendo el único camino que monta la Release.
+    branches: ['v0.2-demo', 'main']
+  pull_request:
+    branches: ['v0.2-demo', 'main']
 
 jobs:
   build:
