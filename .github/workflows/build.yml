@@ -521,6 +521,11 @@ jobs:
         # uno en una COPIA del marco en /tmp (el repo no se abre a escribir) y doce
         # mordidas, contando el orden cambiado, el `typeof` del puente y el cache del
         # núcleo.
+        # Y un aviso para el que la toque: el arnés se pone el `navigator` de pega con
+        # `Object.defineProperty` (`pon(...)` en la suite). Con la asignación directa
+        # (`globalThis.navigator = {}`) pasó verde en el portátil de Node 20 y roja en el
+        # runner, que ya está en Node 24 y expone `navigator` como `get` sin `set`. Aquí
+        # el verde local no vale: manda Actions.
         shell: bash
         run: |
           set +e

@@ -434,6 +434,19 @@ corriendo; (b) el rojo del taller F15 era por dos mutaciones muertas, y (c) la c
 por el navegador **no** está verificada aquí: lo que se comprueba en local es el código
 estático y los módulos ejecutados con gemelos de papel.
 
+**La puerta de verdad es Actions, y estaba roja con mi firma.** El corte 3 se empujó
+(`4882066`) dando por hecho que estaba verde porque aquí lo estaba, y el job `apk` salió con
+dos pasos caídos; las anotaciones del check-run (`/commits/<sha>/check-runs` →
+`/check-runs/<id>/annotations`, que los logs sí que no son públicos) los nombran:
+`prueba-marco.mjs` reventaba en el arnés con *«Cannot set property navigator of #<Object>
+which has only a getter»* —Node 20 deja asignar `globalThis.navigator`, el Node 24 del runner
+lo expone como `get` sin `set`—, y `prueba-enruta.mjs` pide el verbo `pausa` en
+`backend/app/actions.py`, que está en el disco de la dueña pero **sin commitear**, así que en
+la rama no existe. Lo primero queda arreglado aquí (`prueba-marco.mjs:77` y `:89`, con el
+aviso escrito en el paso `marco` de la fábrica); lo segundo no se toca: la comprobación no se
+afloja, y se cierra sola el día que su ronda entre en la rama. Moraleja para quien siga el
+mapa: **el verde de este portátil no es el verde**, porque aquí manda Node 20 y dos núcleos.
+
 **Y lo que cambió el mapa desde el 25:** la limpieza `b4e6e09` sacó del versionado el APK base
 y la segunda `_suena` de `voz.py`; después llegaron J2.1, J4 y la refactorización por tamaño,
 cuyos **cortes 3 y 4** (`marco.js` + `charla.js`, y luego `codigo.js`) son lo que mueve las

@@ -69,6 +69,13 @@ const nodo = (clases = []) => {
   return el;
 };
 const html = nodo(['sin-movimiento']);
+/* `pon` en vez de `globalThis.x = …` a secas: desde Node 21 `navigator` vive en el
+   global como un `get` sin `set`, y en el runner (Node 24, el aviso lo pone GitHub)
+   `globalThis.navigator = {}` revienta con «Cannot set property navigator of
+   #<Object> which has only a getter». Aquí pasa en Node 20 y en Actions con 24, así
+   que se define con `defineProperty`, que vale en las dos. */
+const pon = (nombre, valor) =>
+  Object.defineProperty(globalThis, nombre, { value: valor, writable: true, configurable: true });
 globalThis.document = {
   documentElement: html, body: nodo(), createElement: () => nodo(),
   getElementById: () => null, querySelector: () => null, execCommand: () => true,
@@ -79,7 +86,7 @@ globalThis.window = {
   isSecureContext: true, dispatchEvent: e => { eventos.push(e); return true; },
   addEventListener: () => {}, CortNative: null,
 };
-globalThis.navigator = {};
+pon('navigator', {});
 globalThis.localStorage = { getItem: () => null, setItem: () => {} };
 globalThis.requestAnimationFrame = fn => fn();
 globalThis.setTimeout = fn => { fn(); return 0; };
