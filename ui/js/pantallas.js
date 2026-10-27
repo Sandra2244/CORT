@@ -41,6 +41,9 @@ import { montaTelefono, terminalTelefono } from './telefono.js';
 import { montaCentro } from './centro.js';
 import { montaArnes } from './arnes.js';
 import { clasificarOrden } from './ordenes.js';
+/* Los estados del hilo del copiloto (J2.3): pendiente → corriendo → ok / falló, y el
+   rojo que rechaza un paso. Módulo puro por lo mismo que los dos de arriba. */
+import { ESTADOS_PASO, puedeAceptar, puedeRechazar, arranca, rechaza, cierra } from './pasos.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -1461,7 +1464,10 @@ async function copilotoPlan(objetivo) {
       return false;
     }
     copiloto.token = j.token || '';
-    copiloto.pasos = j.pasos || [];
+    /* Cada paso nace con su estado (J2.3): los seguros quedan `pendiente` —con verde
+       y rojo—, y los que el núcleo no ejecuta nacen `enseñado`, que es la palabra
+       honesta: se enseñaron, no se hicieron. */
+    copiloto.pasos = (j.pasos || []).map(p => ({ ...p, estado: p.seguro ? 'pendiente' : 'enseñado' }));
     escribeCodigo('plan (' + (j.origen || 'pasos') + '): ' + (j.dice || ''), 'hecho');
     return true;
   } catch (e) {
@@ -1475,7 +1481,10 @@ async function copilotoEjecuta(indice) {
   if (!base || !copiloto.token) return;
   const paso = (copiloto.pasos || [])[indice];
   if (!paso) return;
-  paso.resultado = null; paso.cargando = true; pintaCopiloto();
+  /* El verde pasa por `pasos.js`: si el paso ya se corrió, se rechazó o no es seguro,
+     `arranca` no hace nada y el comando no se ejecuta dos veces por un toque de más. */
+  if (arranca(paso) !== 'corriendo') return;
+  pintaCopiloto();
   try {
     const r = await fetch(base + '/api/copiloto/ejecuta', {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1483,14 +1492,18 @@ async function copilotoEjecuta(indice) {
       signal: AbortSignal.timeout(35000),
     });
     const j = await r.json();
-    paso.resultado = j;
+    cierra(paso, j);
     escribeCodigo('▶ ' + paso.orden + ' — ' + (j.dice || ''), j.ejecutado && j.ok ? 'hecho' : 'aviso');
     if (j.salida) String(j.salida).split('\n').slice(0, 30)
       .forEach(l => escribeCodigo('  ' + l, 'cort'));
   } catch (e) {
+    /* El núcleo no contestó: eso es un paso que FALLÓ, no uno que «se enseñó». Si se
+       cerrara con `cierra`, la respuesta vacía lo dejaría en `enseñado` y la cara
+       contaría como neutro un corte de red. */
+    paso.estado = 'falló';
     paso.resultado = { ok: false, ejecutado: false, dice: 'no respondió: ' + e };
     escribeCodigo('▶ ' + paso.orden + ' — el copiloto no respondió: ' + e, 'aviso');
-  } finally { paso.cargando = false; pintaCopiloto(); }
+  } finally { pintaCopiloto(); }
 }
 
 /* Ejecuta en fila los pasos que el backend marcó como seguros, uno detrás de otro.
@@ -1515,21 +1528,34 @@ function pintaCopiloto() {
     caja.innerHTML = copiloto.ocupado ? '<div class="cp-nota">pensando los pasos…</div>' : '';
     return;
   }
-  const seguros = copiloto.pasos.filter(p => p.seguro).length;
+  /* Los que «se ejecutan solos» son los seguros QUE AÚN no se tocaron: un paso ya
+     corrido, rechazado o enseñado no vuelve a la cuenta, y así el botón `▶ ejecuta los
+     N seguros` dice cuántos corren si lo pulsas ahora mismo. */
+  const seguros = copiloto.pasos.filter(p => p.seguro && p.estado === 'pendiente').length;
+  const hechos = copiloto.pasos.filter(p => p.estado === 'ok' || p.estado === 'falló'
+    || p.estado === 'rechazado').length;
   caja.innerHTML = '<div class="cp-pie"><span class="cp-nota">'
     + copiloto.pasos.length + ' pasos · ' + seguros + ' se ejecutan solos · '
-    + (copiloto.pasos.length - seguros) + ' sólo se enseñan</span>'
+    + (copiloto.pasos.length - seguros - hechos) + ' sólo se enseñan'
+    + (hechos ? ' · ' + hechos + ' ya decididos' : '') + '</span>'
     + '<button class="eq-b" id="cp-todos"' + (seguros && !copiloto.ocupado ? '' : ' disabled')
     + '>▶ ejecuta los ' + seguros + ' seguros</button>'
     + '<button class="eq-b" id="cp-cierra">cerrar el plan</button></div>'
     + copiloto.pasos.map(p => {
       const res = p.resultado || {};
-      return '<div class="cp-paso' + (p.seguro ? '' : ' malo') + '">'
+      const est = ESTADOS_PASO[p.estado] || ESTADOS_PASO.pendiente;
+      const corriendo = p.estado === 'corriendo';
+      return '<div class="cp-paso' + (p.seguro ? '' : ' malo') + ' est-' + (p.estado || 'pendiente') + '">'
         + '<div class="cp-cabe"><span class="cp-tit">' + esc(p.paso || ('paso ' + (p.indice + 1)))
-        + '</span><button class="cp-b" data-copia="' + p.indice + '">copiar</button>'
+        + '</span><span class="cp-est" style="color:' + est.color + '">' + esc(est.dice) + '</span>'
+        + '<button class="cp-b" data-copia="' + p.indice + '">copiar</button>'
         + (p.seguro ? '<button class="cp-b puesta" data-ejecuta="' + p.indice + '"'
-          + (copiloto.ocupado ? ' disabled' : '') + '>' + (p.cargando ? '…' : '▶') + '</button>'
+          + (puedeAceptar(p) ? '' : ' disabled') + '>' + (corriendo ? '…' : '▶') + '</button>'
           : '<button class="cp-b" disabled>▶ no</button>')
+        /* El rojo (J2.3): rechazar es siempre posible mientras el paso esté pendiente o
+           enseñado, y es TERMINAL —después de decir «no» ya no hay verde que valga. */
+        + (puedeRechazar(p) ? '<button class="cp-b rojo" data-rechaza="' + p.indice
+            + '" title="no lo ejecutes, déjamelo escrito">✕</button>' : '')
         + '</div><div class="cp-orden">' + esc(p.orden || '') + '</div>'
         + (p.seguro ? '' : '<div class="cp-motivo">' + esc(p.motivo || 'no es de sólo lectura') + '</div>')
         + (p.permitido_por_ella ? '<div class="cp-nota">permitido por ti en copiloto.json</div>' : '')
@@ -1539,6 +1565,14 @@ function pintaCopiloto() {
     }).join('');
   caja.querySelectorAll('[data-ejecuta]').forEach(b => {
     b.onclick = () => copilotoEjecuta(Number(b.dataset.ejecuta));
+  });
+  caja.querySelectorAll('[data-rechaza]').forEach(b => {
+    b.onclick = () => {
+      const p = (copiloto.pasos || [])[Number(b.dataset.rechaza)];
+      if (rechaza(p) !== 'rechazado') return;
+      escribeCodigo('✕ ' + ((p && p.orden) || 'paso') + ' — no lo ejecuto: te lo dejo escrito', 'aviso');
+      pintaCopiloto();
+    };
   });
   caja.querySelectorAll('[data-copia]').forEach(b => {
     b.onclick = () => copia((copiloto.pasos[Number(b.dataset.copia)] || {}).orden || '', 'Comando copiado.');

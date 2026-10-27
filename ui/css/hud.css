@@ -956,6 +956,13 @@ html.pantallas-montadas.p-orbe #repro-pildora{bottom:calc(86px + env(safe-area-i
 .cp-b{all:unset;cursor:pointer;font-size:11px;color:#9fdcff;padding:5px 10px;border-radius:14px;
   border:1px solid rgba(80,190,255,.25);background:rgba(12,28,52,.5)}
 .cp-b.puesta{border-color:var(--primario);background:rgba(0,160,255,.26);color:#fff}
+/* J2.3 · el rojo de cada paso. Va en el otro extremo del verde y con su área de
+   toque, porque en el teléfono «rechazar» se pulsa con el pulgar y no puede quedar
+   pegado al ▶ (ejecutar lo que ella acaba de negar sería el peor error de esta cara). */
+.cp-b.rojo{border-color:rgba(255,91,91,.45);color:#ffb3b3;background:rgba(60,12,18,.5);margin-left:6px}
+.cp-b.rojo:hover{background:rgba(120,20,28,.6)}
+.cp-est{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;margin-left:auto}
+.cp-cabe{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .cp-b[disabled]{opacity:.38;cursor:default}
 .cp-pie{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px}
 .cp-nota{font-size:10px;color:#5e8cab;line-height:1.45}

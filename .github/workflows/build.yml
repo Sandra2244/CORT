@@ -390,6 +390,30 @@ jobs:
             echo "::error::prueba-placa.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar los estados del hilo del copiloto con node (sin teléfono)
+        id: pasos
+        # `scripts/prueba-pasos.mjs` ejerce el paso J2.3 sobre el módulo PURO
+        # `ui/js/pasos.js`, la máquina de estados del hilo de pasos (pendiente →
+        # corriendo → ok / falló / rechazado / enseñado). Se prueban las cuatro cosas
+        # que en la cara se ven igual y se pagan distinto: que un paso NO seguro no se
+        # pueda aceptar aunque la cara lo intente (la puerta la custodia
+        # `copiloto.py`), que el doble toque no corra el comando dos veces, que el
+        # rojo sea terminal (después de «no» ya no hay verde), y que lo que el núcleo
+        # dice que NO ejecutó se cuente `enseñado` y nunca `hizo`. Son 34
+        # comprobaciones, más la costura con `pantallas.js` y su CSS.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-pasos.mjs > /tmp/pasos.log 2>&1
+          st=$?
+          tail -20 /tmp/pasos.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/pasos.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/pasos.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-pasos.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar los colores del orbe con node (sin WebGL)
         id: colores
         # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del
