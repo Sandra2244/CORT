@@ -16,6 +16,10 @@ import { paraCasar, resuelve } from './mandos.js';
    `saber.py`): el Tab y la ventana 09 no prometen una frase que `Cerebro` y
    `Razon` no sepan atender. */
 import { EJEMPLOS } from './diccionario.js';
+/* La placa de arriba (paso 1.3): hora, fecha, nodo, modelo y estado. El módulo es
+   PURO —no toca el DOM— y lleva la regla de honestidad: lo que no está medido no se
+   pinta, así que nunca aparece `undefined` ni un `--:--:--` de fábrica. */
+import { nombreNodo, horaPlaca, fechaPlaca, camposPlaca } from './placa.js';
 
 // Dónde está el núcleo de CORT. En Android la pantalla la sirve el propio
 // backend (mismo origen, API = ''), en el navegador de PC vive en :8000
@@ -1222,6 +1226,7 @@ let lampTimer = 0;
 const ORBE_ESTADO = { reposo: 'reposo', escucha: 'escucha', pensando: 'piensa',
   hablando: 'habla', listo: 'reposo', oculto: 'reposo', error: 'error' };
 function setState(k) {
+  datosPlaca({ estado: k });
   try {
     if (orb && typeof orb.estado === 'function')
       orb.estado(ORBE_ESTADO[k] || 'reposo');
@@ -1239,8 +1244,26 @@ function setState(k) {
                            k === 'pensando' ? 12000 : 5200);
 }
 
-/* ---------- reloj y estado (siempre fijos) ---------- */setInterval(() => document.getElementById('clock').textContent =
-  new Date().toLocaleTimeString('es-MX', { hour12: false }), 500);
+/* ---------- la placa de arriba (paso 1.3) ----------
+   Antes esto era un `#clock` con la hora a secas y un parpadeo cada medio segundo.
+   Ahora el mismo panel es la placa monoespaciada de la referencia: hora, fecha, el
+   nodo que contesta, el modelo que respondió y el estado. Con una regla dura, que es
+   la razón de `placa.js`: cada campo se pinta SÓLO si hay un dato medido. `hora` y
+   `fecha` siempre las hay; `nodo` lo dice este archivo, que conoce el puente;
+   `modelo` lo trae una respuesta del núcleo (`ctx.placa` en las pantallas) y
+   `estado` lo fija `setState()`. Si el núcleo aún no habló, la fila de modelo no
+   existe: ni «undefined», ni «—» de adorno. */
+const PLACA = { hora: '', fecha: '', nodo: '', modelo: '', estado: '' };
+function pintaPlaca() {
+  const el = document.getElementById('clock');
+  if (!el) return;
+  const cs = camposPlaca(PLACA);
+  el.innerHTML = cs.map(c => `<span class="pl pl-${c.k}">${esc(c.v)}</span>`).join('');
+  el.title = cs.length ? cs.map(c => c.k + ' · ' + c.v).join('  ·  ') : 'la placa: nada medido todavía';
+}
+function datosPlaca(d) { Object.assign(PLACA, d || {}); pintaPlaca(); }
+setInterval(() => { const ahora = new Date();
+  datosPlaca({ hora: horaPlaca(ahora), fecha: fechaPlaca(ahora) }); }, 10000);
 
 async function refreshStatus() {
   const el = document.getElementById('status');
@@ -2287,6 +2310,12 @@ export function wireUI(orbRef) {
         setTimeout(chipNotes, 2600);      // bienvenida estilo Jared: notas flotando
       }
     }
+    /* La placa se pinta en el arranque, sin esperar el intervalo: si no, los primeros
+       diez segundos la cara muestra el `--:--:--` que trae el HTML. El nodo sí se puede
+       medir desde el minuto cero —este archivo sabe si corre en Android—, y el modelo
+       no: ese llega con la primera respuesta del núcleo, por `ctx.placa`. */
+    datosPlaca({ hora: horaPlaca(new Date()), fecha: fechaPlaca(new Date()),
+                 nodo: nombreNodo(IS_ANDROID), estado: 'reposo' });
     setInterval(refreshStatus, 10000);
     setInterval(refreshWeather, 10 * 60000);
     setInterval(refreshTree, 5 * 60000);
@@ -2450,6 +2479,10 @@ export function wireUI(orbRef) {
     orb, term, say: sayLine,
     speak: speakTTS,                             // leer una respuesta de la Charla
     api: () => API,                              // el núcleo localizado por discoverApi()
+    // La placa de arriba (1.3): las pantallas reportan con qué modelo contestó el
+    // núcleo. Sin esto, `modelo:` sólo podría decir el que está cargado, no el que
+    // habló — y decir el cargado sería inventarse una respuesta.
+    placa: datosPlaca,
   });
   /* Qué familia del puente 2.1 trae este APK, dicho una vez y en la consola: si
      mañana la dueña pregunta «¿por qué la linterna no está?», ahí está la respuesta

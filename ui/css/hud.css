@@ -65,6 +65,20 @@ html.electron:not(.glass) #top .sub{-webkit-app-region:no-drag}
   font-size:19px;font-family:Consolas,monospace;letter-spacing:.18em;color:#cfefff;
   border-radius:50%/100%;text-shadow:0 0 12px rgba(0,190,255,.8);
   border-color:rgba(110,210,255,.5)}
+/* ─── la placa de arriba (paso 1.3) ───
+   El mismo panel, ahora en fila monoespaciada: la hora manda y lo demás se lee chico.
+   Cada campo es un `<span class="pl pl-…">` que `placa.js` sólo emite si hay dato
+   medido, así que la fila se acorta sola cuando falta el modelo o el nodo; no hay
+   fila vacía ni guion de adorno. `flex-wrap:nowrap` porque en el teléfono el borde
+   no se puede comer la pantalla: allí se sacrifica la fecha, nunca la hora. */
+#clock{display:flex;align-items:baseline;gap:14px;white-space:nowrap;max-width:92vw;overflow:hidden}
+.pl{letter-spacing:.1em;text-shadow:none}
+.pl-hora{font-size:19px;letter-spacing:.18em;text-shadow:0 0 12px rgba(0,190,255,.8)}
+.pl-fecha,.pl-nodo,.pl-modelo{font-size:11px;color:#7fb6d8}
+.pl-estado{font-size:11px;color:#2bff9e;text-transform:lowercase}
+html.mobile #clock{gap:9px;padding:4px 14px;max-width:78vw}
+html.mobile .pl-hora{font-size:15px}
+html.mobile .pl-fecha{display:none}
 /* ---- marco de cabina sci-fi (referencia azul) ---- */
 #frame{position:fixed;inset:0;pointer-events:none;z-index:4;opacity:.5}
 #status{top:14px;left:14px;padding:8px 12px;font-size:11px;line-height:1.6;max-width:250px;z-index:5}

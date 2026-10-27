@@ -127,6 +127,20 @@ luz y el reposo. Ver §4.6.
 **1.3 · El panel de arriba** (reloj y cuadro de datos de la referencia) → placa
 monoespaciada con hora, fecha, nodo (PC/teléfono), modelo que respondió y estado.
 *Honestidad:* lo que no se pueda medir no se pinta (nada de `undefined`).
+**HECHO en la cara el 2026-10-27, con dos decisiones que hay que leer.** La placa vive
+en un módulo PURO (`ui/js/placa.js`) montado sobre el panel `#clock` que ya existía, y
+su regla no es cosmética: `medible()` rechaza `undefined`, `null`, `{}` (que stringueado
+sale «[object Object]», el peor cuadro posible), el `--:--:--` de fábrica y cualquier
+cadena de puros guiones, así que **el campo falta y la fila se acorta sola** — nunca se
+pinta un adorno. De ahí lo segundo: `modelo:` **sólo se nombra si ella eligió modelo**,
+porque `POST /api/chat` devuelve `{reply, source}` y no el nombre de quien habló; decir
+el que está cargado en Ollama sería inventarse una respuesta. Se prueba con
+`scripts/prueba-placa.mjs` (47 comprobaciones, enganchada a `build.yml`): 16 valores
+rotos que no se cuelan, hora y fecha con el reloj congelado, el contrato de que los
+**siete** estados de `LAMP` tengan su palabra (si falta uno la fila desaparece en
+silencio y eso es un bug), y la costura de `hud.js`/`pantallas.js`. **Lo que NO cierra
+el paso:** el aprobado a ojo de la dueña y la burbuja nativa del teléfono
+(`Flotante.java`), que está sin commitear en sus manos —ver §7 del plan de la Fase 2—.
 
 **1.4 · El chat transparente estilo mensajería** → **una sola** piel de burbuja (hoy hay
 dos: la vieja `.u/.a` de `hud.css:201-208` y la `.gm-msgs` de `apps.css:501-503`), sin
@@ -143,6 +157,12 @@ Ver §4.7.
 **1.5 · La forma de ejecutar y confirmar** → el flujo visible: petición → orbe en
 escucha → piensa → **qué hizo** (chip con la acción real y su resultado) → habla →
 reposo. Con estados de verdad: si algo falló, el chip lo dice.
+**HECHO el chip el 2026-10-27**, dentro del paso J2.1 de la Fase 2 (`ui/js/ordenes.js`):
+la orden se manda a `POST /api/command` y la burbuja pinta «hizo: …» **sólo** con lo que
+el núcleo devolvió en `done`; si `done` volvió vacío, la nota dice «cerebro <fuente>» y
+no se inventa ninguna acción; y si el texto del núcleo dice «no pude», el estado se pinta
+en ámbar aunque la orden estuviera reconocida —falló, y se dice fallando—. Faltan el
+«habla» del teléfono (vive en Java sin commitear) y su aprobado a ojo.
 
 **PUERTA DE LA FASE:** las cinco cosas funcionando en `ui/` real, `prueba-costura.py` y
 `prueba-orbe.mjs` en verde, fps medidos contra `docs/linea-base.md`, y la lista

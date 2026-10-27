@@ -366,6 +366,30 @@ jobs:
             echo "::error::prueba-enruta.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar la placa de arriba con node (sin navegador)
+        id: placa
+        # `scripts/prueba-placa.mjs` ejerce el paso 1.3 de la Fase 1 sobre el módulo
+        # PURO `ui/js/placa.js`. Lo que se persigue es lo de MÁS: que la placa nunca
+        # pinte un dato que no se midió. Con 16 valores rotos (`undefined`, `null`,
+        # `{}` → «[object Object]», el `--:--:--` de fábrica) comprueba que no se cuele
+        # ni uno; que hora y fecha salgan en español y en 24 horas con el reloj
+        # congelado; que TODOS los estados de `LAMP` en `hud.js` tengan su palabra en la
+        # placa (si falta uno la fila desaparece en silencio, y eso es un bug); y la
+        # costura: `setState()` alimenta el estado, la placa se pinta en el arranque y
+        # `modelo:` sólo se nombra si ella eligió uno. Son 47 comprobaciones.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-placa.mjs > /tmp/placa.log 2>&1
+          st=$?
+          tail -20 /tmp/placa.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/placa.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/placa.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-placa.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar los colores del orbe con node (sin WebGL)
         id: colores
         # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del

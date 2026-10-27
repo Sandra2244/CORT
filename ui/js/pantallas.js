@@ -1008,6 +1008,11 @@ async function charla(texto) {
                     hora: Date.now() });
     chPensando = false;
     jmEstado('cerebro: ' + (j.source || 'local'));
+    /* La placa de arriba (1.3) dice con qué se contestó. Se pinta SOLO si hay nombre
+       de modelo: `/api/chat` devuelve `{reply, source}` y nada más, así que sin
+       elección de ella no hay un modelo que nombrar — inventarlo sería justo lo que
+       el paso 1.3 prohibe. */
+    if (chModelo) ctx?.placa?.({ modelo: chModelo });
     ctx?.orb?.burst?.();
   } catch (e) {
     mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media respuesta: ' + e,
