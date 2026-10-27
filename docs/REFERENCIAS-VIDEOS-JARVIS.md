@@ -1,6 +1,6 @@
 # Los videos de referencia — leídos, no adivinados
 
-26 oct 2026 · ronda 2.15.0, ampliado en 2.17.0 · fuente de `docs/PLAN-FASE-2-JARVIS.md`
+26-27 oct 2026 · ronda 2.15.0, ampliado en 2.17.0 y re-medido en 2.19.0 · fuente de `docs/PLAN-FASE-2-JARVIS.md`
 
 La dueña mandó cuatro MP4 por WhatsApp y describió con qué los quiere:
 
@@ -302,6 +302,23 @@ los ~10 000 puntos de su nube. Aquí son 220 puntos con `vCalor` aclarándolos h
 los 60 fps medidos en la 2.12.0 en el navegador normal: la pestaña del prototipo de
 captura va limitada por el propio lazo de screenshots.
 
+
+#### Y lo que volvimos a mirar en el fotograma antes de la 2.19.0
+
+La dueña pidió «más partículas», y la respuesta estaba en dos fotogramas que ya estaban
+leídos pero no medidos en detalle:
+
+| fotograma | qué se ve **al medirlo** | qué entró en el código |
+|---|---|---|
+| `f7-orbe-000.jpg` (t = 0,0 s) | el centro **no es niebla**: es un punto quemado del que salen **seis púas** cortas | el degradado del halo arranca en `0,80` y cae a `0,34` en el 16 % del radio, y las púas se **pintan** en la misma textura de 128 px (tres trazos con degradado longitudinal girados 60°, con composite `lighter`) — **cero dibujos más** |
+| `f7-anillo-065.jpg` (anillo montado) | el agujero del toro está **vacío**, sin glow dentro | el portal **resta** brillo al halo (`- 0,11 · portal`), con suelo 0,05. Con el término positivo de la 2.17.0 las púas se cruzaban sobre el agujero: justo lo contrario del video |
+| `f7-dispersa-030.jpg` | la dispersión es una **corona aplastada** con estelas desiguales y manchas quemadas sueltas | el abanico pasa a `0,35 + 2,05·fase`, el estallido se aplasta en Y (`p.y *= 1 − 0,55·uDispersa`), los viajeros son **tres** y se guardan con `max`, y las líneas bajan al 7 % (`0,85 → 0,93`) porque con 1.057 hilos la tela volvía a ganar |
+| los mismos, alrededor de la bola | hay **profundidad**: puntos detrás que casi no se mueven | `N_POLVO = 160` estrellas en cáscara de 1,7 a 3,4 radios (medido: caen de 2,20 a 3,40), 1-3 px, alfa 0,55, girando **en contra** a la mitad de velocidad |
+
+Medido con `uPortal = 1` el halo queda en **0,056** de opacidad (agujero vacío) y con
+`uDispersa = 0,95` sube a **0,356** (el portazo de luz del estallido). El coste declarado
+de la sonda: **340 puntos · 1.057 líneas · 160 estrellas · 4 dibujos** (2 en el teléfono),
+y **0,06-0,12 ms** de JavaScript por cuadro.
 
 ### 5.3 Lo que el orbe viejo ya hacía, y lo que no se puede copiar de él
 

@@ -610,6 +610,82 @@ Sigue pendiente su ojo —que el anillo se parezca al del video lo decide ella a
 sigue abierto el paso **1.3** (la placa de arriba) y la verificación de la bajada de modelos
 en el teléfono. `prueba-costura.py` conserva **una sola roja y es suya**.
 
+## 4.10 · Más partículas, polvo de fondo, tres puntos calientes y núcleo encendido (2026-10-27, ronda 2.19.0)
+
+El encargo, con sus palabras: «**falta unas partículas en el orbe de referencia que debes
+agregarle al mio**», y lo mismo pedido para el plasma/estrellas que se ven en el video. Antes
+de tocar el archivo se volvió a mirar la referencia fotograma a fotograma
+(`docs/referencias/f7-orbe-000.jpg`, el arranque, y `f7-anillo-065.jpg`, el anillo montado):
+en el video la bola **no** flota sola — hay un campo de puntos detrás que casi no se mueve, y
+el centro no es niebla, es un punto quemado con púas.
+
+**Lo que se cambió, y por qué cuesta lo que cuesta.**
+
+| qué | cómo | precio |
+|---|---|---|
+| más nudos en la madeja | `N_PUNTOS` 220→**340** (elegido midiendo, no por parecido: es donde la sonda deja de verse geométrica sin bajar de los fps de antes) | +120 puntos y **+357 hilos** (700→**1.057**) |
+| las partículas de atrás | `N_POLVO = 160` estrellas en **cáscara hueca** de 1,7 a 3,4 radios, con sesgo `cbrt` para repartir por volumen y **semilla revuelta** para no copiar la corriente de la esfera; sin aristas, sin `MORFO`, sin `INCLINA`, de 1 a 3 px y alfa 0,55 (la mitad que un nudo) | **un dibujo más** |
+| profundidad barata | el polvo gira **en contra** (`-giro * 0,55`): se queda al ~45 % de la velocidad de la madeja | escribir un número por cuadro |
+| dos o tres manchas que corren | **tres** viajeros de coseno (`1,6`, `2,2·`, `2,3 rad/s`, dos en sentido contrario) guardados con **`max`** y no sumados | pintura en el mismo `vCalor` |
+| el núcleo del video | degradado del halo re-escrito (`0,80` → `0,34` en el 16 % → `0,09` en el 42 %) y **seis púas** pintadas como tres trazos con degradado longitudinal girados 60°, con `globalCompositeOperation = 'lighter'` | **cero dibujos**: es pintura sobre la misma textura de 128 px |
+| el estallido como corona | el abanico pasa de `0,55 + 1,45·fase` a `0,35 + 2,05·fase`, se **aplasta en Y** (`p.y *= 1 − 0,55·uDispersa`) y las líneas se apagan más (`0,85 → 0,93`) | un término más en el mismo `MORFO` |
+| el anillo avanza sobre sí mismo | `th` suma `uTiempo · 0,22 · uPortal`, o sea **nada** cuando el portal está apagado | idéntico en reposo |
+| el fogonazo y el agujero | el brillo del halo gana `+0,20·uDispersa` y **pierde** `0,11·portal`, con suelo `Math.max(0,05, …)` | un multiplicador más |
+
+**Medido en su portátil** (2 núcleos, gráficos integrados, `ui/sonda-orbe.html`, ratio de
+píxel 1,0): **340 puntos · 1.057 líneas · 160 estrellas · 4 dibujos** —y **2** dibujos en
+`modo:'bajo'`, que es como va en el teléfono: el polvo es el único dibujo que se recorta—.
+El JavaScript del orbe va de **0,06 a 0,12 ms por cuadro**. Los cuadros por segundo de la
+pestaña automatizada midieron **13–27** contra los **15–22** de la base de 220 puntos: el
+ruido de la pestaña (limitada por su propio lazo de capturas y por lo demás que corra en el
+equipo) es mayor que la diferencia, así que **esa cifra no prueba que vaya más rápido ni más
+lento** — lo que sí se puede afirmar es que el coste de JavaScript sigue siendo una décima
+de milisegundo y que el tope de 30 fps lo pone el módulo, no el aparato. La geometría
+(`aristasCercanas` con 340 puntos) costó **18,8 ms en caliente y 80 ms en frío**, y se paga
+**una sola vez al nacer**.
+
+**Lo que sólo la pantalla podía ver** (y esta vez volvió a poderlo): con 1.057 hilos la
+**tela blanca** de la 2.17.0 regresó —el estallido volvía a parecer una bola de alambre y no
+la corona de `f7-dispersa-030.jpg`—, de ahí el 0,93. Y el polvo con alfa 0,34 era invisible:
+los primeros fotogramas sólo contaban unos pocos puntos, así que subió a **0,55** sin que el
+centro perdiera aire. El portal, medido sobre los dos fotogramas de la referencia: con
+`uPortal = 1` el halo baja a **0,056** (el agujero vacío de `f7-anillo-065.jpg`) y con
+`uDispersa = 0,95` sube a **0,356** (el portazo de `f7-orbe-000.jpg`). Con el término
+positivo de la ronda anterior las púas se cruzaban sobre el agujero: **la referencia pide lo
+contrario**.
+
+**Pruebas: 121 + 51, y trece mutaciones con una que se escapó.** `scripts/prueba-orbe.mjs`
+sube de 94 a **121**: sector **[1b]** para el polvo (número, cáscara, semilla, que no copie
+la dirección de la esfera), sector **[4]** con los **seis** textos GLSL (`SHADERS.polvo` y
+`SHADERS.fragPolvo` exportados para exigir en node que el polvo no entra en el toro ni lleva
+`vCalor`), y los candados nuevos del halo (los `addColorStop` del núcleo, las **tres púas**
+contadas como trazos del canvas, el composite `lighter`, el signo del portal) y de la corona
+(el abanico, el aplastado en Y, los tres viajeros con `max`, el avance del anillo, la tela a
+0,93). `scripts/prueba-orbe-cara.mjs` se queda en **51** pero dos de sus comprobaciones
+cambian de valor (`cifras()` ahora promete 340 / 1.057 / 160 / 4 dibujos) y su `document` de
+pega tuvo que aprender **el canvas 2D entero** del halo (`createLinearGradient`, `stroke`,
+`save/restore/translate/rotate`), porque el stub viejo reventaba justo donde la cara real
+se caería en el navegador.
+
+La batería **M19-M31** son **trece** mutaciones sobre `ui/js/orbe-plexo.js`: **muerden doce y
+se escapa una**, con la base restaurada y el `md5` final idéntico (`2542c835…`). La que se
+escapó es **M21** — quitar la revuelta de la semilla del polvo (`semilla ^ 0x9e3779b9` →
+`semilla`) — y se escapó **porque la mutación no hace nada visible**: la esfera consume dos
+valores por punto y el polvo cuatro por estrella, así que las corrientes se separan ya en el
+segundo número y ninguna estrella acaba mirando hacia donde mira un nudo. El candado de la
+suite protege el **resultado** (direcciones distintas), que es lo que se ve, y se dejó el
+comentario del módulo dicho en limpio: la revuelta es higiene, no lo que sostiene el
+resultado. **Es la segunda vez que una mutación equivalence se caza con la batería y no con
+la lectura del código** — la primera fue la de `taller-f15.sh` en la línea base.
+
+**Lo que NO hace esta ronda.** No metió post-proceso ni bloom (siguen siendo 2 núcleos: las
+estelas son puntos aclarados con `vCalor`, no un `EffectComposer`), no tocó `orb.js` ni ningún
+`.java`, no añadió permiso ni servicio, no construyó APK y no saca nada a la nube. **Que el
+orbe se parezca al video lo decide ella a ojo**: lo de arriba son medidas, no aprobación.
+Siguen abiertos el paso **1.3** (la placa de arriba), la verificación de la bajada de modelos
+en el teléfono, y el plasma/animación de partículas más allá de lo que ya está (tarea #29 y la
+tanda nueva que ella pidió el 2026-10-27, en `docs/PLAN-FASE-2-JARVIS.md`).
+
 ## 5 · Fuera de esta fase, con su sitio
 
 - **La superficie `chat` única** — pedida por la dueña el 2026-10-26 en el mismo mensaje

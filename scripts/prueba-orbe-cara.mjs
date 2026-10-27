@@ -78,7 +78,17 @@ function makeDOM(clases) {
   };
   const canvas = {
     width: 0, height: 0,
-    getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }), fillRect() {} }),
+    /* El halo se pinta en un canvas 2D: el degradado radial y las TRES púas del núcleo
+       (2.19.0). El de pega tiene que saber de los dos mundos o `creaOrbe` revienta aquí,
+       que es exactamente el sitio donde la cara real se caería en el navegador. */
+    getContext: () => ({
+      createRadialGradient: () => ({ addColorStop() {} }),
+      createLinearGradient: () => ({ addColorStop() {} }),
+      fillRect() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
+      save() {}, restore() {}, translate() {}, rotate() {},
+      set fillStyle(v) {}, set strokeStyle(v) {}, set lineWidth(v) {},
+      set globalCompositeOperation(v) {},
+    }),
   };
   const mount = {
     tagName: 'DIV', hijos: [],
@@ -183,8 +193,12 @@ ok('la esfera queda a 7,2 de cámara: el tamaño del orbe en el video',
    renderer.ultimaCamara.position.z === 7.2, 'z=' + renderer.ultimaCamara?.position?.z);
 ok('el tamaño de punto se pasa en píxeles DEL APARATO (2,8 × ratio)',
    Math.abs(cifras.pixelRatio * 2.8 - 4.2) < .01, String(cifras.pixelRatio * 2.8));
-ok('`cifras()` son los 220 puntos y las 700 líneas que midió la sonda',
-   cifras.puntos === 220 && cifras.lineas === 700 && cifras.fps === 30, JSON.stringify(cifras));
+/* El presupuesto que midió la sonda en el portátil de la dueña, y que la 2.19.0 subió
+   cuando ella pidió más partículas: 340 nudos (antes 220), 1.057 hilos (antes 700) y un
+   campo de 160 estrellas de fondo que en el teléfono no se dibuja. Cuatro dibujos. */
+ok('`cifras()` son los 340 puntos, las 1.057 líneas y las 160 estrellas de la sonda',
+   cifras.puntos === 340 && cifras.lineas === 1057 && cifras.polvo === 160 &&
+   cifras.dibujos === 4 && cifras.fps === 30, JSON.stringify(cifras));
 const bajoInst = await monta({ dpr: 1 });
 const bajo = bajoInst.renderer.getPixelRatio();
 activa();                                             // el orbe principal vuelve a ser el visible

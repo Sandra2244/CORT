@@ -343,11 +343,12 @@ function bucle(ahora) {
   acum += dt; cuadros++;
   if (acum >= 1) {
     fps = cuadros / acum;
-    const cifras = orbe ? orbe.cifras() : { puntos: 0, lineas: 0, dibujos: 0 };
+    const cifras = orbe ? orbe.cifras() : { puntos: 0, lineas: 0, polvo: 0, dibujos: 0 };
     $('medida').innerHTML =
       `<b>${fps.toFixed(1)}</b> fps · <b>${(msOrbe / cuadros).toFixed(2)}</b> ms en el orbe<br>` +
-      `<b>${cifras.puntos}</b> puntos · <b>${cifras.lineas}</b> líneas · <b>${cifras.dibujos}</b> dibujos<br>` +
-      `pixel ratio <b>${renderer ? renderer.getPixelRatio().toFixed(1) : '—'}</b> · ${modo === 'bajo' ? 'sin líneas' : 'puntos y líneas'}`;
+      `<b>${cifras.puntos}</b> puntos · <b>${cifras.lineas}</b> líneas · ` +
+      `<b>${cifras.polvo}</b> estrellas · <b>${cifras.dibujos}</b> dibujos<br>` +
+      `pixel ratio <b>${renderer ? renderer.getPixelRatio().toFixed(1) : '—'}</b> · ${modo === 'bajo' ? 'sin líneas ni polvo' : 'puntos, líneas y polvo'}`;
     acum = 0; cuadros = 0; msOrbe = 0;
   }
 }

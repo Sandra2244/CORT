@@ -16,7 +16,7 @@
  *      vértices en el bucle.
  *   2. El movimiento vive en el `vertex shader` y sale de `uniforms` (tiempo, nivel de
  *      audio, color). Un frame = escribir 4 números, no 360.
- *   3. Dibujos: 3 (puntos, líneas, halo). Con `modo:'bajo'`, 2.
+ *   3. Dibujos: 4 (puntos, líneas, polvo y halo). Con `modo:'bajo'`, 2 (puntos y halo).
  *
  * Es un módulo PURO en su parte de geometría: `puntosFibonacci` y `aristasCercanas` no
  * tocan THREE ni el DOM, así que `scripts/prueba-orbe.mjs` las mide en node sin WebGL,
@@ -26,13 +26,28 @@
 
 /** Puntos sobre la esfera. 220 es lo que mide la bola de hilo del video (fotogramas
  *  vid-03/05/07: se ve como madeja, no como retícula); 2600 era el orbe viejo, y con
- *  120 —la primera medida de esta ronda— aún se leía como poliedro. */
-export const N_PUNTOS = 220;
+ *  120 —la primera medida de esta ronda— aún se leía como poliedro.
+ *
+ *  En la 2.19.0 sube a 340: la dueña pidió MÁS partículas («falta unas partículas en el
+ *  orbe de referencia que debes agregarle al mio»). El número no se eligió por gusto ni
+ *  por parecido al video: se MIDIO en `ui/sonda-orbe.html` sobre su portátil de 2 núcleos
+ *  y gráficos integrados, que es el techo real. Con 220 la sonda marcaba
+ *  15-22 cuadros por segundo y 0,05-0,07 ms de JavaScript por cuadro; 340 es el punto
+ *  donde la madeja ya se ve cerrada sin que los cuadros por segundo caigan por debajo de
+ *  los 220. Si el equipo afloja, se baja aquí y se vuelve a medir: lo que manda es la
+ *  medida, no esta constante. */
+export const N_PUNTOS = 340;
 
 /** Vecinos más cercanos enlazados por punto. Con 6 salen ~640 líneas: el video tiene
  *  las vetas muy cruzadas. Pasando de 7 el brillo se suma tanto que el centro deja de
  *  tener aire y vuelve a parecer un disco (medido en la 2.12.0). */
 export const VECINOS = 6;
+
+/** El polvo de fondo, la otra mitad de lo que ella pidió. Son ESTRELLAS sueltas detrás
+ *  del orbe, no más nudos de la esfera: el video tiene profundidad porque alrededor de la
+ *  bola hay partículas que casi no se mueven, y aquí eso cuesta UN dibujo más con puntos
+ *  de 1 a 3 px. En `modo:'bajo'` (el teléfono) no se dibujan. */
+export const N_POLVO = 160;
 
 /** Cuánto se sale cada punto del radio perfecto, de -GRANO/2 a +GRANO/2. El orbe del
  *  video NO es una esfera limpia: es un bulto. Sin este grano, por mucho que la onda
@@ -50,7 +65,8 @@ export const GRANO = 0.14;
  *  en reposo ocupando ~22 %, el toro tiene que valer ~2,4 veces su diámetro. A 1,62
  *  se veía como un collar apretado alrededor de la esfera; a 1,95 el agujero queda
  *  limpio y el proporción se parece a la del video (re-medido en el navegador). */
-export const RADIOS = Object.freeze({ esfera: 1, halo: 2.2, anillo: 1.95 });
+export const RADIOS = Object.freeze({ esfera: 1, halo: 2.2, anillo: 1.95,
+                                      polvoMin: 1.7, polvoMax: 3.4 });
 
 /* ---------------- la geometría, en arrays planos (sin THREE) ---------------- */
 
@@ -131,6 +147,49 @@ export function aristasCercanas(pos, n = N_PUNTOS, k = VECINOS) {
      no salían. Con 120 puntos sobran los 65.535 de un entero corto; si algún día
      `N_PUNTOS` pasara de eso, hay que cambiar a `Uint32Array` y comprobar que el WebGL
      del aparato soporte índices de 32 bits. Lo vigila `scripts/prueba-orbe.mjs` [2]. */
+}
+
+/**
+ * El polvo de fondo: `n` estrellas sueltas entre `RADIOS.polvoMin` y `RADIOS.polvoMax`.
+ * Es la otra mitad de lo que pidió la dueña en la 2.19.0 («falta unas partículas en el
+ * orbe de referencia»): en el video hay profundidad porque ALREDEDOR de la bola hay
+ * puntos que casi no se mueven, y eso aquí cuesta UN dibujo más con partículas de 1 a
+ * 3 px — ni aristas, ni morph, ni Fresnel.
+ *
+ * Va en una CÁSCARA HUECA y no en el volumen entero a propósito: si una estrella cayera
+ * dentro del orbe se leería como un nudo suelto de la madeja, que es justo lo que el
+ * grano (`GRANO`) y la retícula de Fibonacci no quieren. El radio sale de la RAÍZ CÚBICA
+ * de una uniforme, que es el sesgo que reparte parejo por VOLUMEN: sin él, un radio
+ * uniforme amontona todo cerca de la superficie y el campo se ve como una cáscara pintada.
+ *
+ * Es la MISMA xorshift sembrada de `puntosFibonacci`, con la semilla revuelta
+ * (`^ 0x9e3779b9`) para que las dos funciones no arranquen con el mismo valor. Dicho con
+ * la honestidad de la batería de mutaciones (M21, 2026-10-27): QUITAR esa revuelta **no
+ * se pone roja**, porque la esfera consume 2 valores por punto y el polvo 4 por estrella,
+ * así que las dos corrientes se separan ya en el segundo número y ninguna estrella acaba
+ * mirando hacia donde mira un nudo. El candado de la suite protege el RESULTADO —que el
+ * campo no se parezca a la retícula—, que es como debe ser: sobrevive a un refactor. La
+ * revuelta es higiene, no la que sostiene el resultado.
+ */
+export function polvoEstrella(n = N_POLVO, semilla = 7) {
+  const pos = new Float32Array(n * 3);
+  const fase = new Float32Array(n);
+  let s = (semilla ^ 0x9e3779b9) >>> 0;
+  const rnd = () => {
+    s ^= s << 13; s >>>= 0; s ^= s >> 17; s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+  for (let i = 0; i < n; i++) {
+    const y = 1 - rnd() * 2;                    // latitud uniforme, sin grumos en los polos
+    const r = Math.sqrt(Math.max(0, 1 - y * y));
+    const t = rnd() * Math.PI * 2;
+    const d = RADIOS.polvoMin + (RADIOS.polvoMax - RADIOS.polvoMin) * Math.cbrt(rnd());
+    pos[i * 3] = Math.cos(t) * r * d;
+    pos[i * 3 + 1] = y * d;
+    pos[i * 3 + 2] = Math.sin(t) * r * d;
+    fase[i] = rnd();
+  }
+  return { pos, fase };
 }
 
 /* ---------------- los estados, que son el color ---------------- */
@@ -233,10 +292,20 @@ void main() {
    (Escribir aquí un cierre de comentario de bloque también rompe el archivo: es la misma
    familia de error, y por eso el candado está en `scripts/prueba-orbe.mjs` [4].) */
 const MORFO = /* glsl */`
-  float th = atan(position.z, position.x);
+  // El anillo, una vez montado, AVANZA sobre si mismo: en el video la corona no es un toro
+  // quieto, gira y los puntos calientes dan vueltas con el. El avance va MULTIPLICADO por
+  // uPortal, asi que con el portal apagado el angulo es el de siempre y el reposo queda
+  // identico al de la 2.16.0. (Aqui dentro solo ASCII: esto se manda a la GPU.)
+  float th = atan(position.z, position.x) + uTiempo * 0.22 * uPortal;
   if (uDispersa > 0.001) {
     vec3 dir = normalize(position);
-    p += dir * uDispersa * (0.55 + 1.45 * aFase);
+    // El abanico: cada punto sale a SU distancia y el recorrido es MAS largo (hasta
+    // 2,4 radios en vez de 2,0) para que la nube se lea como estelas desiguales y no
+    // como una esfera que crece. Medido sobre docs/referencias/f7-dispersa-030.jpg.
+    p += dir * uDispersa * (0.35 + 2.05 * aFase);
+    // Y el estallido se APLASTA en Y mientras se abre: en el fotograma la dispersion es
+    // una CORONA con el centro vacio, no una bola de puercoespin. Medio radio vertical.
+    p.y *= 1.0 - 0.55 * uDispersa;
     float tor = uVortice * (1.2 - abs(dir.y)) * 1.9;
     float cs = cos(tor), sn = sin(tor);
     p = vec3(p.x * cs - p.z * sn, p.y, p.x * sn + p.z * cs);
@@ -248,11 +317,22 @@ const MORFO = /* glsl */`
     vec3 t = vec3((R + rt * cos(ph)) * cos(th), rt * sin(ph), (R + rt * cos(ph)) * sin(th));
     p = mix(p, t, clamp(uPortal, 0.0, 1.0));
   }
-  // Los puntos calientes que recorren la corona (en el video hay dos o tres, no un aro
-  // uniforme) y el fogonazo de la explosion. vCalor es 0 en reposo: la cara se ve igual
-  // que antes de esta ronda cuando no esta ejecutando nada.
-  float viajero = 0.5 + 0.5 * cos(th - uTiempo * 1.6);
-  vCalor = clamp(uDispersa * 0.8 + viajero * viajero * uPortal, 0.0, 1.0);`;
+  // Los puntos calientes que recorren la corona. En el video son DOS O TRES manchas que
+  // corren a distinta velocidad, no un aro uniforme: por eso hay aqui TRES viajeros de
+  // coseno (uno a -1,6 rad/s, otro doblado y en sentido contrario, otro a +2,3) y se
+  // guarda el MAS caliente con max, en vez de SUMARLOS. Sumarlos pintaba la corona entera
+  // de blanco y el agujero volvia a desaparecer, el mismo fallo medido de las lineas.
+  // vCalor es 0 en reposo: la cara se ve igual que en la 2.16.0 cuando no ejecuta nada.
+  // (Solo ASCII aqui dentro: esto se manda a la GPU, y un acento grave cierra el literal.)
+  float v1 = 0.5 + 0.5 * cos(th - uTiempo * 1.6);
+  float v2 = 0.5 + 0.5 * cos(th * 2.0 + uTiempo * 1.1 - 2.1);
+  float v3 = 0.5 + 0.5 * cos(th + uTiempo * 2.3 + 2.0);
+  float calor = max(v1 * v1, max(v2 * v2 * v2, v3 * v3));
+  // El foco vale tambien durante la explosion, no solo con el anillo montado: en el
+  // fotograma de la dispersion hay manchas quemadas sueltas sobre la nube, no un flash
+  // parejo. Por eso el termino base baja de 0.80 a 0.45 y los viajeros entran con max().
+  float foco = max(uPortal, uDispersa);
+  vCalor = clamp(uDispersa * 0.45 + calor * foco, 0.0, 1.0);`;
 
 /* La inclinación del anillo se aplica en ESPACIO DE CÁMARA, no dentro del toro.
    Costó tres pantallazos y los tres están medidos:
@@ -334,11 +414,14 @@ void main() {
   gl_FragColor = vec4(c * (0.65 + 0.7 * vBrillo + 0.55 * vCalor), a * uOpacidad);
 }`;
 
-/* El alfa de las líneas se apaga durante el morfeado. Con 700 aristas vivas la explosión
+/* El alfa de las líneas se apaga durante el morfeado. Con las aristas vivas la explosión
    y el anillo se tapaban con una tela blanca y el agujero del vórtice desaparecía; en el
    video la dispersión se hace con ESTRELLAS de partículas, no con una malla. El morfeado
-   sigue dibujando líneas (el `modo bajo` no es la única excepción), pero al 15 % de su
-   opacidad, que es lo que queda de 1 − 0,85·máx(dispersa, portal) con ambos a tope. */
+   sigue dibujando líneas (el `modo bajo` no es la única excepción), pero al 7 % de su
+   opacidad, que es lo que queda de 1 − 0,93·máx(dispersa, portal) con ambos a tope.
+   En la 2.19.0 el factor sube de 0,85 a 0,93 porque con 1.057 líneas (antes 700) la tela
+   volvía a ganar: medido en la sonda, el estallido seguía pareciendo una bola de alambre
+   y no la corona de estelas del fotograma `f7-dispersa-030.jpg`. */
 const FRAG_LINEAS = /* glsl */`
 uniform vec3 uColorB;
 uniform float uOpacidad;
@@ -347,17 +430,55 @@ uniform float uPortal;
 varying float vBrillo;
 varying float vCalor;
 void main() {
-  float tela = 1.0 - 0.85 * max(uDispersa, uPortal);
+  float tela = 1.0 - 0.93 * max(uDispersa, uPortal);
   vec3 c = mix(uColorB, vec3(0.85, 0.97, 1.0), 0.6 * vCalor);
   gl_FragColor = vec4(c * (0.5 + 0.9 * vBrillo + 0.5 * vCalor),
                       uOpacidad * (0.42 + 0.55 * vBrillo + 0.3 * vCalor) * tela);
 }`;
 
-/** Los cuatro textos GLSL, exportados sólo para que `prueba-orbe.mjs` los lea: en node
+/* ---------------- el polvo de fondo ---------------- */
+
+/* Comparte la CABECERA (`ONDA`) con los puntos y las líneas: el tiempo, el nivel, la
+   onda y el `vBrillo` salen de los mismos uniforms, que es la regla 2 del archivo (un
+   frame = escribir los uniforms, no recalcular nada). Lo que NO comparte es el `MORFO`:
+   el polvo no se mete en el toro ni se enlaza con nadie. Lo que sí hace durante la
+   explosión es SALIR HACIA FUERA a su distancia, con menos alcance que los nudos de la
+   esfera: en el video de referencia la dispersión se ve como un campo de estelas que se
+   abre, y eso no se consigue con 340 puntos, se consigue con las partículas de atrás.
+   Tampoco lleva `INCLINA`: la inclinación del anillo es un gesto del orbe, y el fondo
+   tiene que quedarse donde estaba para que el conjunto siga teniendo profundidad.
+   El tamaño va por fuera del tope de los puntos (1 a 3 px, no 1 a 9): una estrella gorda
+   taparía la madeja. */
+const VERT_POLVO = ONDA + /* glsl */`
+  vec3 dir = normalize(position);
+  p += dir * uDispersa * (0.35 + 1.15 * aFase);
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  gl_Position = projectionMatrix * mv;
+  gl_PointSize = clamp(uTamano * 0.7 * (7.2 / max(0.5, -mv.z)), 1.0, 3.0);
+}`;
+
+/* El alfa del polvo es MEDIA del del orbe: si brillara igual que los nudos, la bola se
+   vería dentro de una niebla y el centro perdería el aire que se midió en la 2.12.0. El
+   0,34 con el que nació esta capa en la 2.19.0 quedó DEMASIADO fino —medido en la sonda:
+   se contaban con los dedos las estrellas del fotograma—, y subió a 0,55 sin que el orbe
+   perdiera aire: sigue por debajo del brillo de un nudo cualquiera. */
+const FRAG_POLVO = /* glsl */`
+uniform vec3 uColorA;
+uniform float uOpacidad;
+varying float vBrillo;
+void main() {
+  float d = length(gl_PointCoord - vec2(0.5));
+  float a = smoothstep(0.5, 0.10, d);
+  if (a < 0.02) discard;
+  gl_FragColor = vec4(uColorA * (0.34 + 0.62 * vBrillo), a * uOpacidad * 0.55);
+}`;
+
+/** Los seis textos GLSL, exportados sólo para que `prueba-orbe.mjs` los lea: en node
  *  no hay GPU, pero sí se puede exigir que un shader declare lo que usa. */
 export const SHADERS = Object.freeze({
   puntos: VERT_PUNTOS, lineas: VERT_LINEAS,
   fragPuntos: FRAG_PUNTOS, fragLineas: FRAG_LINEAS,
+  polvo: VERT_POLVO, fragPolvo: FRAG_POLVO,
 });
 
 /* ---------------- el ritmo de la animación dispersiva ---------------- */
@@ -458,16 +579,60 @@ export function creaOrbe(THREE, opciones = {}) {
     objeto.add(lineas);
   }
 
+  /* El polvo de fondo, SÓLO en `pleno`. Es el cuarto dibujo y el más barato de los
+     cuatro (partículas de 1 a 3 px, sin aristas y sin morph), pero en el teléfono
+     cuenta como relleno de pantalla y ahí no se paga: `modo:'bajo'` se queda en dos
+     dibujos, que es lo que midió la sonda en el aparato de la dueña. */
+  let polvo = null, nPolvo = 0;
+  if (modo !== 'bajo') {
+    const geoPolvo = polvoEstrella(opciones.polvo || N_POLVO, opciones.semilla || 7);
+    nPolvo = geoPolvo.pos.length / 3;
+    const geomPolvo = new THREE.BufferGeometry();
+    geomPolvo.setAttribute('position', new THREE.BufferAttribute(geoPolvo.pos, 3));
+    geomPolvo.setAttribute('aFase', new THREE.BufferAttribute(geoPolvo.fase, 1));
+    polvo = new THREE.Points(geomPolvo, new THREE.ShaderMaterial({
+      uniforms: comp, vertexShader: VERT_POLVO, fragmentShader: FRAG_POLVO,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    objeto.add(polvo);
+  }
+
   // El halo: un degradado radial dibujado a mano en un canvas de 128 px. Da el "glow"
   // de la referencia sin post-proceso, que en 2 núcleos no se paga.
+  // En la 2.19.0 el centro es MÁS BRILLANTE y más CEÑIDO (los dos primeros tramos de la
+  // escala). La dueña pidió el núcleo encendido del video: ahí la bola no es un cascarón
+  // de hilo, tiene un fuego dentro. Cuesta CERO dibujos — es pintura sobre la misma
+  // textura de 128 px —, y por eso se puede pagar aunque el aparato vaya justo.
   const cnv = document.createElement('canvas');
   cnv.width = cnv.height = 128;
   const g = cnv.getContext('2d');
-  const rad = g.createRadialGradient(64, 64, 4, 64, 64, 62);
-  rad.addColorStop(0, 'rgba(255,255,255,0.55)');
-  rad.addColorStop(0.35, 'rgba(255,255,255,0.10)');
+  const rad = g.createRadialGradient(64, 64, 3, 64, 64, 62);
+  rad.addColorStop(0, 'rgba(255,255,255,0.80)');
+  rad.addColorStop(0.16, 'rgba(255,255,255,0.34)');
+  rad.addColorStop(0.42, 'rgba(255,255,255,0.09)');
   rad.addColorStop(1, 'rgba(255,255,255,0)');
   g.fillStyle = rad; g.fillRect(0, 0, 128, 128);
+  /* LAS PÚAS del núcleo. En el fotograma de arranque del video
+     (`docs/referencias/f7-orbe-000.jpg`, t = 0,0 s) el centro no es una bola difusa: es un
+     punto quemado del que salen SEIS púas cortas. Se pintan en la MISMA textura de 128 px
+     —tres trazos con degradado longitudinal, girados 60° cada uno—, así que cuestan CERO
+     dibujos y CERO uniforms: es pintura, y por eso se puede pagar en un aparato de 2
+     núcleos. `globalCompositeOperation = 'lighter'` para que las púas SUMEN sobre el
+     degradado en vez de taparlo con su alfa. */
+  g.save();
+  g.translate(64, 64);
+  g.globalCompositeOperation = 'lighter';
+  g.lineWidth = 1.6;
+  for (let i = 0; i < 3; i++) {
+    g.rotate(Math.PI / 3);
+    const pua = g.createLinearGradient(-58, 0, 58, 0);
+    pua.addColorStop(0, 'rgba(255,255,255,0)');
+    pua.addColorStop(0.5, 'rgba(255,255,255,0.85)');
+    pua.addColorStop(1, 'rgba(255,255,255,0)');
+    g.strokeStyle = pua;
+    g.beginPath(); g.moveTo(-58, 0); g.lineTo(58, 0); g.stroke();
+  }
+  g.restore();
   const texHalo = new THREE.CanvasTexture(cnv);
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({
     map: texHalo, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
@@ -526,6 +691,11 @@ export function creaOrbe(THREE, opciones = {}) {
     giro += paso * destino.vel * (0.5 + Math.min(1, nivel) * 1.2);
     objeto.rotation.y = giro;
     objeto.rotation.x = Math.sin(comp.uTiempo.value * 0.25) * 0.12;
+    /* Profundidad barata: el polvo NO gira con el orbe, gira en contra. Restando medio
+       `giro`, el campo de estrellas se queda a ~45 % de la velocidad de la madeja, que es
+       lo que hace en el video —el fondo casi no se mueve y la bola sí—. Cuesta escribir
+       UN número por frame y no añade ni un dibujo. */
+    if (polvo) polvo.rotation.y = -giro * 0.55;
     // Interpolación suave: la misma idea del orbe viejo (`.055` por frame), en segundos.
     const mez = 1 - Math.pow(0.001, paso);
     colorA.lerp(destino.a, mez);
@@ -547,7 +717,17 @@ export function creaOrbe(THREE, opciones = {}) {
       portal = comp.uPortal.value;
     }
     halo.material.color.copy(colorB);
-    halo.material.opacity = 0.10 + 0.26 * comp.uNivel.value + 0.22 * portal;
+    /* El fogonazo: el `uDispersa` entra también en el brillo del halo. En el video la
+       explosión no es sólo forma, es un portazo de luz que dura medio segundo, y aquí
+       cuesta un multiplicador más en la misma línea (mismo dibujo, mismo relleno).
+       Y el portal APAGA el núcleo, no lo enciende: medido sobre los dos fotogramas de la
+       referencia, en `f7-orbe-000.jpg` (el estallido) el centro es una estrella con púas,
+       y en `f7-anillo-065.jpg` (el anillo ya montado) el agujero está VACÍO. Con el término
+       de +0,22 de la 2.17.0 las púas se cruzaban sobre el agujero del vórtice, que es lo
+       contrario de lo que se ve en el video. El suelo de 0,05 deja un residuo de glow para
+       que el orbe no parezca apagado. */
+    halo.material.opacity = Math.max(0.05, 0.15 + 0.26 * comp.uNivel.value
+                                     + 0.20 * comp.uDispersa.value - 0.11 * portal);
     const s = RADIOS.halo * (1 + 0.10 * comp.uNivel.value + 0.75 * portal);
     halo.scale.set(s, s, 1);
   }
@@ -556,6 +736,7 @@ export function creaOrbe(THREE, opciones = {}) {
   function borrar() {
     puntos.geometry.dispose(); puntos.material.dispose();
     if (lineas) { lineas.geometry.dispose(); lineas.material.dispose(); }
+    if (polvo) { polvo.geometry.dispose(); polvo.material.dispose(); }
     halo.material.map.dispose(); halo.material.dispose();
   }
 
@@ -567,8 +748,10 @@ export function creaOrbe(THREE, opciones = {}) {
     vortice: () => (vort ? formaDelVortice(vort.t, vort.rit) : null),
     /** La tabla viva: lo que la sonda pinta en sus botones de estado. */
     estados: () => tabla,
-    /** Lo que la sonda enseña para que el coste no sea una promesa. */
+    /** Lo que la sonda enseña para que el coste no sea una promesa. `polvo` es 0 en el
+     *  `modo:'bajo'` del teléfono, y `dibujos` cuenta los cuatro de verdad: puntos,
+     *  líneas, polvo y halo (o dos: puntos y halo, si el aparato va justo). */
     cifras: () => ({ puntos: n, lineas: aristas.length / 2,
-                     dibujos: 2 + (lineas ? 1 : 0) }),
+                     polvo: nPolvo, dibujos: polvo ? 4 : 2 }),
   };
 }

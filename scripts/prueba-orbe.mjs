@@ -19,9 +19,9 @@
  */
 import { readFile } from 'node:fs/promises';
 import {
-  N_PUNTOS, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
+  N_PUNTOS, N_POLVO, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
   RITMOS, formaDelVortice, GIRO,
-  puntosFibonacci, aristasCercanas, creaOrbe, SHADERS,
+  puntosFibonacci, polvoEstrella, aristasCercanas, creaOrbe, SHADERS,
 } from '../ui/js/orbe-plexo.js';
 import { estados as coloresDelTraje, POR_DEFECTO } from '../ui/js/traje.js';
 
@@ -57,16 +57,71 @@ for (let i = 0; i < N_PUNTOS; i++) {
   }
 }
 // Con un `Math.random()` dos puntos caerían casi encima; la retícula de Fibonacci no.
-// El listón (0.07) sale de la cuenta: 220 puntos sobre la esfera dan un vecino medio a
-// ~0,13, y el grano puede recortar eso a la mitad en el peor par.
+// El listón (0.07) sale de la cuenta: 340 puntos sobre la esfera dan un vecino medio a
+// ~0,11 —medido: el par más cercano cae a 0,1024—, y el grano puede recortar eso a la
+// mitad en el peor par. Con 220 el mínimo medido era 0,13; al subir el presupuesto de
+// partículas en la 2.19.0 la esfera se aprieta y este listón se vuelve más ajustado.
 ok('sin grumos: el vecino más cercano no se pega', masCercanas > 0.07,
-   `distancia mínima ${masCercanas.toFixed(3)}`);
+   `distancia mínima ${masCercanas.toFixed(4)}`);
 const mismo = puntosFibonacci(), otraSemilla = puntosFibonacci(N_PUNTOS, RADIOS.esfera, 11);
 ok('la misma semilla da el mismo orbe', g.pos.join() === mismo.pos.join() && g.fase.join() === mismo.fase.join());
 ok('cambiar de semilla cambia el orbe entero (sitio y fase) sin romper la banda',
    otraSemilla.pos.join() !== g.pos.join() && otraSemilla.fase.join() !== g.fase.join());
 
+/* ---------- [1b] el polvo de fondo (2.19.0) ----------
+   La dueña pidió MÁS partículas, y en el video de referencia esas partículas son el
+   campo de estrellas de atrás, no más nudos de la esfera. Se prueba aquí, en node y sin
+   GPU, lo que se puede exigir de un campo de puntos: que sea el número prometido, que
+   esté FUERA del orbe (si una cayera dentro se leería como un nudo suelto), que sea
+   determinista con la semilla y que cambie con otra. Lo de cuánto cuesta en pantalla lo
+   mide la sonda en su portátil, sector aparte. */
+console.log('\n[1b] el polvo de fondo');
+const pol = polvoEstrella();
+ok('son N_POLVO estrellas, de tres en tres', pol.pos.length === N_POLVO * 3 && pol.fase.length === N_POLVO);
+let pMin = Infinity, pMax = -Infinity;
+for (let i = 0; i < N_POLVO; i++) {
+  const r = Math.hypot(pol.pos[i * 3], pol.pos[i * 3 + 1], pol.pos[i * 3 + 2]);
+  pMin = Math.min(pMin, r); pMax = Math.max(pMax, r);
+}
+/* El candado del «detrás, no dentro»: `polvoMin` vale 1,7 y el orbe termina en 1, así que
+   ninguna estrella puede tocar la madeja. Medido con la semilla de fábrica: 2,20 a 3,40
+   (el sesgo `cbrt` empuja hacia fuera, por eso el mínimo real queda en el borde del halo
+   y no en 1,7). */
+ok('lejos del orbe: ninguna estrella cae dentro de la esfera', pMin > RADIOS.esfera + 0.5,
+   `mín ${pMin.toFixed(2)} máx ${pMax.toFixed(2)} · orbe en ${RADIOS.esfera}`);
+ok('y dentro de la cáscara prometida',
+   pMin >= RADIOS.polvoMin - 1e-6 && pMax <= RADIOS.polvoMax + 1e-6,
+   `${pMin.toFixed(2)}..${pMax.toFixed(2)} · banda ${RADIOS.polvoMin}..${RADIOS.polvoMax}`);
+ok('el mismo número de semilla da el MISMO campo', polvoEstrella().pos.join() === pol.pos.join());
+ok('otra semilla mueve el polvo entero sin sacarlo de la banda', (() => {
+  const o = polvoEstrella(N_POLVO, 11);
+  if (o.pos.join() === pol.pos.join()) return false;
+  for (let i = 0; i < N_POLVO; i++) {
+    const r = Math.hypot(o.pos[i * 3], o.pos[i * 3 + 1], o.pos[i * 3 + 2]);
+    if (r < RADIOS.polvoMin - 1e-6 || r > RADIOS.polvoMax + 1e-6) return false;
+  }
+  return true; })());
+/* La semilla revuelta (`semilla ^ 0x9e3779b9`) existe para que el polvo y los nudos no
+   arranquen con el mismo número de la corriente. Con lo que esta comprobación **sí**
+   muerde es con el resultado: que ninguna estrella salga en la MISMA dirección que un
+   punto de la esfera. Medido con la batería de mutaciones (M21, 2026-10-27): quitar la
+   revuelta deja la suite verde, porque la esfera consume 2 valores por punto y el polvo
+   4 por estrella y las corrientes se separan en el segundo número. Se deja igual el candado
+   de dirección —es el que protege lo que se ve— y se quita de encima la promesa falsa.
+   Se compara la DIRECCIÓN (la llave es el vector normalizado a 4 decimales), porque los
+   radios son bandas distintas y por distancia nunca coincidirían. */
+const rumbo = (x, y, z) => {
+  const r = Math.hypot(x, y, z);
+  return [x / r, y / r, z / r].map(v => v.toFixed(4)).join(',');
+};
+ok('el polvo no copia el orden ni la dirección de la esfera', (() => {
+  const enOrbe = new Set();
+  for (let i = 0; i < N_PUNTOS; i++) enOrbe.add(rumbo(g.pos[i * 3], g.pos[i * 3 + 1], g.pos[i * 3 + 2]));
+  for (let i = 0; i < N_POLVO; i++) if (enOrbe.has(rumbo(pol.pos[i * 3], pol.pos[i * 3 + 1], pol.pos[i * 3 + 2]))) return false;
+  return true; })());
+
 /* ---------- [2] las aristas ---------- */
+
 console.log('\n[2] las líneas entre vecinos');
 const t0 = performance.now();
 const aristas = aristasCercanas(g.pos);          // frío: paga el JIT del motor
@@ -99,10 +154,12 @@ ok('los índices son Uint16Array (WebGL no sabe qué hacer con Int32)',
    aristas instanceof Uint16Array, aristas.constructor.name);
 /* Presupuesto de líneas. Subió de 600 a 900 cuando el orbe pasó de 120 a 220 puntos:
    la bola de hilo del video está muy cruzada y con 322 líneas se leía como poliedro.
-   Lo que sigue siendo barato no es el número en sí, que TODAS quepan en UN solo
-   `LineSegments` (900 líneas = 1.800 vértices, frente a los 2.600 puntos + 1.280
-   triángulos + rejilla + estrellas del orbe viejo). */
-ok('presupuesto: menos de 900 líneas', n > 0 && n < 900, `${n} líneas`);
+   Vuelve a subir (900 -> 1100) en la 2.19.0, cuando la dueña pide más partículas y la
+   esfera pasa de 220 a 340: con 6 vecinos por punto salen 1.057 líneas MEDIDAS aquí
+   mismo. Lo que sigue siendo barato no es el número en sí, que TODAS quepan en UN solo
+   `LineSegments` (1.057 líneas = 2.114 índices sobre 340 vértices compartidos, frente a
+   los 2.600 puntos + 1.280 triángulos + rejilla + estrellas del orbe viejo). */
+ok('presupuesto: menos de 1100 líneas', n > 0 && n < 1100, `${n} líneas`);
 ok('y ninguna de más: ninguna pasa de los ' + VECINOS + ' vecinos pedidos',
    n <= N_PUNTOS * VECINOS, `${n} ≤ ${N_PUNTOS * VECINOS}`);
 let malas = 0, bucles = 0;
@@ -143,10 +200,30 @@ ok('habla empuja más que reposo (el orbe se agita al hablar)',
 ok('pensar gira rápido (el remolino de la referencia)',
    ESTADOS.piensa.giro > ESTADOS.habla.giro);
 
-/* ---------- [4] los shaders ---------- */
-console.log('\n[4] los cuatro textos GLSL');
-ok('hay cuatro y ninguno está vacío',
+/* ---------- [4] los seis textos GLSL ---------- */
+console.log('\n[4] los seis textos GLSL');
+ok('hay seis y ninguno está vacío',
+   Object.values(SHADERS).length === 6 &&
    Object.values(SHADERS).every(s => typeof s === 'string' && s.length > 80));
+/* El polvo es el cuarto dibujo y el más barato, y también tiene sus candados: que pida
+   el tamaño topeado de estrella (1 a 3 px, no los 9 px de los nudos, que taparían la
+   madeja), que lea la CABECERA común (`ONDA`) para moverse con los mismos uniforms del
+   orbe, y que NO se le meta el morph: el campo de estrellas no se vuelve toro. */
+ok('el polvo comparte la cabecera y los uniforms del orbe',
+   SHADERS.polvo.includes('uniform float uTiempo;') &&
+   SHADERS.polvo.includes('varying float vBrillo;') &&
+   SHADERS.polvo.includes('vec3 p = position * respira;'));
+ok('el polvo sale disparado con la explosión (las estelas del video)',
+   /p \+= dir \* uDispersa \* \(0\.35 \+ 1\.15 \* aFase\);/.test(SHADERS.polvo));
+ok('pero el polvo NO se mete en el toro ni se tuerce',
+   !SHADERS.polvo.includes('if (uPortal > 0.001)') &&
+   !SHADERS.polvo.includes('float tor = uVortice') && !SHADERS.polvo.includes('vCalor ='),
+   SHADERS.polvo.slice(0, 60));
+ok('y su tamaño es de estrella, no de nudo (topeado a 3 px)',
+   /gl_PointSize = clamp\(uTamano \* 0\.7 .*, 1\.0, 3\.0\);/.test(SHADERS.polvo));
+ok('el fragmento del polvo se apaga a media opacidad del estado',
+   SHADERS.fragPolvo.includes('a * uOpacidad * 0.55') &&
+   !SHADERS.fragPolvo.includes('vCalor'), SHADERS.fragPolvo);
 ok('el de los puntos declara uTamano y lo usa topeado',
    /uniform float uTamano;/.test(SHADERS.puntos) &&
    /gl_PointSize\s*=\s*clamp\(uTamano/.test(SHADERS.puntos));
@@ -193,26 +270,57 @@ const THREE = {
     setAttribute(n, a) { this.attrs[n] = a; } getAttribute(n) { return this.attrs[n]; }
     setIndex(a) { this.index = a; } dispose() { this.dispuesto = true; } },
   BufferAttribute: class { constructor(a, i) { this.array = a; this.itemSize = i; } },
-  Points: class { constructor(g, m) { this.geometry = g; this.material = m; } },
-  LineSegments: class { constructor(g, m) { this.geometry = g; this.material = m; } },
+  Points: class { constructor(g, m) { this.geometry = g; this.material = m;
+    Object.assign(this, obj3d()); } },
+  LineSegments: class { constructor(g, m) { this.geometry = g; this.material = m;
+    Object.assign(this, obj3d()); } },
   ShaderMaterial: class { constructor(o) { Object.assign(this, o); this.uniforms = o.uniforms; } dispose() {} },
   Sprite: class { constructor(m) { this.material = m; Object.assign(this, obj3d()); } },
   SpriteMaterial: class { constructor(o) { Object.assign(this, o); this.color = o.color; } dispose() {} },
   CanvasTexture: class { constructor(c) { this.canvas = c; } dispose() { this.dispuesto = true; } },
   AdditiveBlending: 2,
 };
-globalThis.document = { createElement: () => ({ width: 0, height: 0,
-  getContext: () => ({ createRadialGradient: () => ({ addColorStop() {} }),
-    fillRect() {}, set fillStyle(v) {} }) }) };
+/* El canvas de pega REGISTRA lo que el módulo le pide, porque las púas del núcleo no son
+   geometría ni GLSL: son pintura sobre la textura del halo, y lo único que se puede
+   exigir en node es que los trazos se den. Medido sobre
+   `docs/referencias/f7-orbe-000.jpg`: un punto quemado con seis púas = tres trazos
+   girados 60° cada uno, sobre un degradado radial (un `fillRect`). */
+const lienzo = { relleno: 0, trazos: 0, degradados: 0, ancho: 0, compuesto: '',
+  width: 0, height: 0,
+  getContext: () => ({
+    createRadialGradient: () => ({ addColorStop() {} }),
+    createLinearGradient: () => { lienzo.degradados++; return { addColorStop() {} }; },
+    fillRect() { lienzo.relleno++; },
+    beginPath() {}, moveTo() {}, lineTo() {},
+    stroke() { lienzo.trazos++; },
+    save() {}, restore() {}, translate() {}, rotate() {},
+    set fillStyle(v) {}, set globalCompositeOperation(v) { lienzo.compuesto = v; },
+    set lineWidth(v) { lienzo.ancho = v; }, set strokeStyle(v) {},
+  }) };
+globalThis.document = { createElement: () => lienzo };
 
 console.log('\n[5] `creaOrbe` de punta a punta, con THREE de mentira');
+lienzo.relleno = 0; lienzo.trazos = 0; lienzo.degradados = 0; lienzo.compuesto = '';
 let orbe = null, armó = true, error = '';
 try { orbe = creaOrbe(THREE); } catch (e) { armó = false; error = e.message; }
 ok('monta sin lanzar', armó, error);
+/* El núcleo del video, que es pintura: un degradado radial (1 `fillRect`) y TRES trazos
+   con degradado longitudinal = seis púas. Si alguien quita las púas, la cara vuelve al
+   "sol difuso" que ya no se parece al fotograma, y ninguna medida de pantalla lo avisa. */
+ok('el núcleo se pinta con sus seis púas sobre el degradado',
+   lienzo.relleno === 1 && lienzo.trazos === 3 && lienzo.degradados === 3,
+   `${lienzo.relleno} rellenos · ${lienzo.trazos} trazos · ${lienzo.degradados} degradados`);
+ok('y las púas SUMEN en vez de tapar (composite `lighter`)', lienzo.compuesto === 'lighter',
+   lienzo.compuesto || 'sin composite');
 if (armó) {
-  ok('tres dibujos y la geometría contada', orbe.cifras().dibujos === 3 &&
-     orbe.cifras().puntos === N_PUNTOS && orbe.cifras().lineas === n,
+  ok('cuatro dibujos y la geometría contada (puntos, líneas, polvo y halo)',
+     orbe.cifras().dibujos === 4 && orbe.cifras().puntos === N_PUNTOS &&
+     orbe.cifras().lineas === n && orbe.cifras().polvo === N_POLVO,
      JSON.stringify(orbe.cifras()));
+  ok('el polvo va en el MISMO grupo, con los MISMOs uniforms que el orbe',
+     orbe.objeto.children.length === 4 &&
+     orbe.objeto.children[2].material.uniforms === orbe.objeto.children[0].material.uniforms,
+     `${orbe.objeto.children.length} hijos`);
   ok('empieza en reposo', orbe.estado() === ESTADO_INICIAL);
   ok('un estado inventado no tumba nada', orbe.setEstado('marte') === false && orbe.estado() === 'reposo');
   ok('los cinco estados reales se ponen', CLAVE.every(k => orbe.setEstado(k) === true));
@@ -220,14 +328,25 @@ if (armó) {
   try { for (let i = 0; i < 90; i++) orbe.pinta(1 / 30, i / 90); }
   catch (e) { animó = false; e2 = e.message; }
   ok('noventa frames de animación sin romperse', animó, e2);
+  /* La parallax del polvo: el campo de estrellas gira EN CONTRA medio `giro`, así que en
+     pantalla se queda al ~45 % de la velocidad de la madeja. Es el truco que da la
+     profundidad del video sin mover un vértice ni añadir un dibujo, y sin candado alguien
+     lo borraría creyendo que sobra. */
   const u = orbe.objeto.children[0].material.uniforms;
+  ok('el polvo NO va pegado al orbe: gira en contra y se queda atrás',
+     Math.abs(orbe.objeto.children[2].rotation.y + orbe.objeto.rotation.y * 0.55) < 1e-9,
+     `orbe ${orbe.objeto.rotation.y.toFixed(2)} · polvo ${orbe.objeto.children[2].rotation.y.toFixed(2)}`);
   ok('el tiempo y el nivel avanzan en los uniforms', u.uTiempo.value > 2.5 && u.uNivel.value > 0.5,
      `t=${u.uTiempo.value.toFixed(2)} nivel=${u.uNivel.value.toFixed(2)}`);
   ok('un hilo dormido no hace saltar el orbe', (() => {
       const antes = u.uTiempo.value; orbe.pinta(9.5, 0);
       return u.uTiempo.value - antes < 0.2; })());   // topa en 0,1 s; el margen es coma flotante
   let borró = true; try { orbe.borrar(); } catch (e) { borró = false; }
-  ok('libera la geometría y las texturas', borró && orbe.objeto.children[0].geometry.dispuesto === true);
+  /* Con 1,8 GiB de RAM, un orbe que no se borra es una fuga. El polvo es geometría nueva
+     de la 2.19.0 y tiene que correr la misma suerte que los puntos. */
+  ok('libera la geometría y las texturas, también la del polvo', borró &&
+     orbe.objeto.children[0].geometry.dispuesto === true &&
+     orbe.objeto.children[2].geometry.dispuesto === true);
   const flojo = creaOrbe(THREE, { modo: 'bajo' });
   ok('el modo bajo (para el teléfono) deja 2 dibujos', flojo.cifras().dibujos === 2 &&
      flojo.objeto.children.length === 2, String(flojo.objeto.children.length));
@@ -249,12 +368,38 @@ ok('la geometría se calcula en un único sitio del código',
    /export function aristasCercanas\(/.test(codigo) &&
    /const aristas = aristasCercanas\(geo\.pos/.test(codigo),
    `${(codigo.match(/aristasCercanas\(/g) || []).length} apariciones`);
+/* El polvo entra en el mismo candado: `polvoEstrella` se define y se llama UNA vez al
+   nacer. Si alguien la mete en `pinta`, cada frame costaría 160 `Math.hypot` y un
+   `Float32Array` nuevo, que es justo lo que este módulo juró no hacer (regla 1). */
+ok('el polvo, en el mismo candado: se define y se llama una sola vez',
+   (codigo.match(/polvoEstrella\(/g) || []).length === 2 &&
+   /export function polvoEstrella\(/.test(codigo),
+   `${(codigo.match(/polvoEstrella\(/g) || []).length} apariciones`);
 ok('el bucle (`pinta`) no toca la geometría',
-   !/setAttribute|new Buffer|aristasCercanas|puntosFibonacci|Float32Array/.test(cuerpo));
+   !/setAttribute|new Buffer|aristasCercanas|puntosFibonacci|polvoEstrella|Float32Array/.test(cuerpo));
 ok('el bucle sólo escribe uniforms y rotación',
    /comp\.uTiempo\.value|objeto\.rotation/.test(cuerpo));
 ok('no hay Fresnel ni cáscara de 1280 triángulos de vuelta',
    !/Icosahedron|Fresnel|GridHelper/.test(codigo));
+/* El núcleo encendido del video no es GLSL, es pintura sobre el canvas de 128 px del
+   halo: el degradado arranca en 0,80 de blanco y cae a 0,34 en el 16 % del radio. Con los
+   stops de antes (0,55 y un solo salto a 0,10) la bola se veía como un cascarón de hilo
+   con niebla dentro; en la referencia hay fuego. Cuesta CERO dibujos más, que es la razón
+   de añadirla en un aparato de 2 núcleos, y el candado existe porque bajar el stop otra
+   vez no se ve en ninguna medida: sólo en pantalla. */
+ok('el halo tiene núcleo: el degradado arranca brillante y ceñido',
+   /addColorStop\(0, 'rgba\(255,255,255,0\.80\)'\)/.test(codigo) &&
+   /addColorStop\(0\.16, 'rgba\(255,255,255,0\.34\)'\)/.test(codigo));
+/* Y el fogonazo: la explosión también se lleva en el brillo del halo, no sólo en la
+   forma. Sin esto el `dispara()` mueve los puntos pero la cara no destella.
+   El portal, en cambio, APAGA el núcleo: los dos fotogramas de la referencia lo piden
+   así (`f7-orbe-000.jpg` = estrella con púas en el estallido; `f7-anillo-065.jpg` = el
+   agujero del anillo vacío). Con el término positivo de la 2.17.0 las púas se cruzaban
+   sobre el agujero, y eso sólo se ve en pantalla — aquí se exige el signo. */
+ok('la explosión da un portazo de luz y el anillo apaga el núcleo',
+   /0\.20 \* comp\.uDispersa\.value/.test(codigo) &&
+   /- 0\.11 \* portal/.test(codigo) && /Math\.max\(0\.05,/.test(codigo),
+   'el glow tiene suelo, pero el centro del vórtice se vacía');
 
 /* ---------- [7] vestir el orbe (paso 1.2) ----------
    El color del orbe ya no está escrito aquí: lo da `traje.js`. Lo que se vigila es el
@@ -345,6 +490,24 @@ ok('a mitad del anillo (5 s) se MANTIENE: portal al máximo y vórtice flojo',
    en(5).portal === 1 && en(5).vortice < 0.4, JSON.stringify(en(5)));
 ok('y al cerrar (7,9 s) ya casi no queda nada',
    en(total - 0.1).portal < 0.05 && en(total - 0.1).dispersa < 0.02, JSON.stringify(en(total - 0.1)));
+/* Los TRES viajeros de la corona (2.19.0): la dueña pidió que se copiaran los puntos
+   calientes del video, y en el video son dos o tres manchas que corren a distinta
+   velocidad — no un aro uniforme. El candado tiene dos mitades: que haya tres cosenos con
+   tres velocidades DISTINTAS, y que se guarden con `max`, no sumándolos. Con `+` los tres
+   se suman, la corona entera se pone blanca y el agujero del vórtice desaparece; eso ya
+   se midió con las líneas, y por eso se exige la palabra `max(` en las dos cadenas. */
+ok('la corona lleva TRES puntos calientes que corren a distinta velocidad',
+   ['puntos', 'lineas'].every(k => /float v1 = 0\.5 \+ 0\.5 \* cos\(th - uTiempo \* 1\.6\);/.test(SHADERS[k]) &&
+                                    /float v2 = .*uTiempo \* 1\.1/.test(SHADERS[k]) &&
+                                    /float v3 = .*uTiempo \* 2\.3/.test(SHADERS[k])) &&
+   ['puntos', 'lineas'].every(k => /float calor = max\(v1 \* v1, max\(v2 \* v2 \* v2, v3 \* v3\)\);/.test(SHADERS[k])),
+   'tres viajeros, guardados con max');
+/* Y el anillo no es un toro quieto: avanza sobre sí mismo, multiplicado por `uPortal`
+   para que con el portal apagado el reposo siga siendo el de la 2.16.0. */
+ok('el anillo avanza sobre sí mismo, sólo mientras el portal está montado',
+   ['puntos', 'lineas'].every(k =>
+     SHADERS[k].includes('float th = atan(position.z, position.x) + uTiempo * 0.22 * uPortal;')));
+
 /* El candado del «sin costuras»: si alguien cambia un tramo y olvida el siguiente, la
    curva salta. Se mide frame a frame, que es como la va a ver la cara. El tope de 0,11
    no es un número redondo: la pendiente más fuerte de la curva es la explosión
@@ -456,10 +619,25 @@ ok('y el giro pivota sobre el CENTRO del orbe, no sobre la lente',
 ok('el giro vale 0 con el portal apagado (reposo idéntico a la 2.16.0)',
    ['puntos', 'lineas'].every(k => SHADERS[k].includes(`float ang = uPortal * ${GIRO};`)));
 ok('las líneas se APAGAN durante el morfeado (la tela tapaba el agujero)',
-   SHADERS.fragLineas.includes('float tela = 1.0 - 0.85 * max(uDispersa, uPortal);') &&
+   SHADERS.fragLineas.includes('float tela = 1.0 - 0.93 * max(uDispersa, uPortal);') &&
    SHADERS.fragLineas.includes('* tela);') &&
    !SHADERS.fragPuntos.includes('tela'),
    'los puntos siguen a tope: son las estelas del video');
+/* LA FORMA DEL ESTALLIDO, medida sobre `docs/referencias/f7-dispersa-030.jpg` (fotograma
+   de los 3,0 s del video `f7d16b9e…`): una CORONA de estelas desiguales con el centro
+   vacío, y NO una bola de alambre que crece. De ahí los tres números que se exigen:
+     · el recorrido (0,35 + 2,05 por fase): abanico ancho de distancias;
+     · el aplastado en Y (0,55): la corona se abre de canto, el polo se vacía;
+     · el foco `max(uPortal, uDispersa)`: las manchas quemadas también en la explosión.
+   Con el anterior `(0.55 + 1.45)` y sin aplastar, la sonda dibujaba un erizo: la forma
+   estaba bien contada en el tiempo (los 0,5 s) y mal contada en el espacio. */
+ok('el estallido es corona: abanico más ancho, aplastado en Y y con foco propio',
+   ['puntos', 'lineas'].every(k =>
+     SHADERS[k].includes('p += dir * uDispersa * (0.35 + 2.05 * aFase);') &&
+     SHADERS[k].includes('p.y *= 1.0 - 0.55 * uDispersa;') &&
+     SHADERS[k].includes('float foco = max(uPortal, uDispersa);') &&
+     SHADERS[k].includes('vCalor = clamp(uDispersa * 0.45 + calor * foco, 0.0, 1.0);')),
+   'los dos vertex, el mismo morph');
 ok('el tubo del toro va ATADO al radio, no es un número suelto',
    /float R = [\d.]+;\s*float rt = R \* [\d.]+;/.test(SHADERS.puntos));
 

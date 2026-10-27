@@ -2,7 +2,8 @@
    La cara habla con ONCE métodos (`speak`, `burst`, `activate`, `stop`, `listen`,
    `setDisc`, `setAudio`, `pausa`, `vestir`, `colores`, `estado`) y los esperaba de
    `orb.js`. Este archivo no dibuja nada nuevo: mete el orbe que se construyó y se midió
-   en el paso 1.1 (`orbe-plexo.js`, 220 puntos y 700 líneas, 30 fps) dentro de esos once
+   en el paso 1.1 (`orbe-plexo.js`, 340 puntos, 1.057 líneas y 160 estrellas de polvo,
+   medido en el portátil de la dueña) dentro de esos once
    métodos, para que la dueña pueda poner el de la referencia sin desmontar la cara.
 
    Por qué es un ADAPTADOR y no una reescritura: el otro orbe sigue existiendo y se
@@ -12,7 +13,7 @@
 
    Lo que NO hace este archivo, a propósito:
    · no copia geometría ni colores — los pide a `orbe-plexo.js` y a `traje.js`, que son
-     los que miden `prueba-orbe.mjs` (67) y `prueba-colores.mjs` (51);
+     los que miden `prueba-orbe.mjs` (121) y `prueba-colores.mjs` (51);
    · no arranca su bucle si el host no se lo pide, y lo congela con `pausa(true)` (el
      presupuesto de batería del teléfono: un WebGL que nadie ve es CPU, RAM y batería);
    · no inventa estados: los cinco nombres son los de la tabla del módulo.
