@@ -341,6 +341,31 @@ jobs:
             echo "::error::prueba-mandos.mjs salió con $st — ${msg:-registro vacío}"
             exit $st
           fi
+      - name: Probar el enrutado hablar/ejecutar con node (sin teléfono)
+        id: enruta
+        # `scripts/prueba-enruta.mjs` ejerce el paso J2.1 sobre el módulo PURO
+        # `ui/js/ordenes.js`: las 23 órdenes del ejecutor tienen que ir a
+        # `POST /api/command` y NO regalarse al cerebro; la conversación («cuéntame
+        # un chiste», «¿qué día es hoy?», el vacío) tiene que seguir yendo a
+        # `/api/chat`; la orden imposible también se enruta, porque el «no pude» lo
+        # dice el núcleo; y el vocabulario tiene que existir también en
+        # `backend/app/actions.py` (se compara sin andamio de regex ni tildes, que
+        # «cuánta» está escrita allí como `cu[aá]nta`). Cierra con la costura de la
+        # cara: el chip «hizo: …» se pinta SÓLO desde el `done` que devuelve el
+        # núcleo, nunca de la cara. Son 58 comprobaciones.
+        shell: bash
+        run: |
+          set +e
+          node scripts/prueba-enruta.mjs > /tmp/enruta.log 2>&1
+          st=$?
+          tail -20 /tmp/enruta.log
+          if [ $st -ne 0 ]; then
+            msg=$(grep -E '  NO |FALTA|Error|error:' /tmp/enruta.log \
+                  | head -12 | tr '\n\r' '  ' | sed 's/%/%25/g')
+            [ -n "$msg" ] || msg=$(tail -10 /tmp/enruta.log | tr '\n\r' '  ' | sed 's/%/%25/g')
+            echo "::error::prueba-enruta.mjs salió con $st — ${msg:-registro vacío}"
+            exit $st
+          fi
       - name: Probar los colores del orbe con node (sin WebGL)
         id: colores
         # `scripts/prueba-colores.mjs` ejerce el módulo PURO `ui/js/traje.js`, del

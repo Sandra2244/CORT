@@ -40,6 +40,7 @@
 import { montaTelefono, terminalTelefono } from './telefono.js';
 import { montaCentro } from './centro.js';
 import { montaArnes } from './arnes.js';
+import { clasificarOrden } from './ordenes.js';
 
 const N = () => window.CortNative || null;
 const enTelefono = () => !!N();
@@ -901,6 +902,7 @@ async function charla(texto) {
   const jarvis = chManto && modo.id === 'normal' ? FRASE_JARVIS : '';
   // El adjunto va DENTRO del mensaje: `POST /api/chat` sólo acepta `{message}`, así
   // que no hay campo donde poner un archivo. Se manda el texto leído y se dice cuál.
+  const habiaAdjunto = !!chAdj;
   const envio = [jarvis, modo.pide, chAdj
       ? '[Adjunto: ' + (chAdj.ruta || chAdj.nombre) + ']\n' + chAdj.texto : '', pregunta]
     .filter(Boolean).join('\n\n');
@@ -950,6 +952,46 @@ async function charla(texto) {
     mensajes.push({ de: 'cort', texto: sinNucleoFrase(), nota: 'sin núcleo', hora: Date.now() });
     chPensando = false;
     jmEstado('sin núcleo', true);
+    guardaMensajes(); pintaCharla(true); return;
+  }
+  /* ─── J2.1 · la regla de la superficie A: orden → `/api/command`, charla → `/api/chat` ───
+     Hasta aquí TODO se iba al cerebro y las órdenes quedaban sin manos. Si la frase casa
+     con el vocabulario del ejecutor (`ordenes.js`, espejo de `actions.py`), la manda a
+     `POST /api/command`, que responde `{reply, source, done:[acciones]}`; la burbuja
+     enseña `hecho:` SOLO con lo que el núcleo trajo en `done` — si volvió vacío, la cara
+     no inventa acciones. Con adjunto o con modo elegido, la frase sigue siendo charla:
+     ahí lo que ella pidió es análisis, no ejecutar. */
+  const orden = modo.id === 'normal' && !habiaAdjunto ? clasificarOrden(pregunta) : null;
+  if (orden && orden.ruta === 'orden') {
+    jmEstado('ejecutando: ' + orden.accion + '…');
+    try {
+      const r = await fetch(ctx.api() + '/api/command', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ message: pregunta }),
+      });
+      const j = await r.json();
+      const hecho = Array.isArray(j.done) ? j.done.filter(Boolean) : [];
+      const dicho = j.reply || j.error || 'No supe qué contestar.';
+      mensajes.push({ de: 'cort', texto: String(dicho), fuente: j.source || '', hecho,
+                      nota: hecho.length ? 'ejecutor · ' + hecho.join(' · ')
+                                         : 'cerebro ' + (j.source || 'local'),
+                      hora: Date.now() });
+      chPensando = false;
+      /* El aviso del estado se decide con la palabra del núcleo, no con la nuestra:
+         una orden que volvió `done:['carpeta']` pero cuyo texto dice «No pude»
+         también pinta el estado en ámbar. Lo que falló se dice fallando. */
+      const falló = /no pude|no hay|no encontr|fallo|error/i.test(String(dicho));
+      jmEstado(hecho.length ? (falló ? 'intentó: ' + hecho.join(' · ')
+                                     : 'hizo: ' + hecho.join(' · '))
+                            : 'cerebro ' + (j.source || 'local'), falló);
+      ctx?.orb?.burst?.();
+    } catch (e) {
+      mensajes.push({ de: 'cort', texto: 'El núcleo se cayó a media orden: ' + e,
+                      nota: 'el núcleo se cayó', hora: Date.now() });
+      chPensando = false;
+      jmEstado('sin núcleo', true);
+      nucleo = null;   // mismo trato que la charla: el «sí hay» guardado dejó de ser cierto
+    }
     guardaMensajes(); pintaCharla(true); return;
   }
   try {
@@ -1109,6 +1151,10 @@ function burbujaCharla(m, i) {
     pies.push(`<span class="bur-modo">${mo ? esc(mo.ic + ' ' + mo.txt) : esc(m.modo)}</span>`);
   }
   if (m.adj) pies.push(`<span class="bur-adj">📎 ${esc(m.adj)}</span>`);
+  // J2.1 · el chip «qué hizo», poblado sólo con el `done` que devolvió el ejecutor.
+  if (Array.isArray(m.hecho) && m.hecho.length) {
+    pies.push(`<span class="bur-hecho">hizo: ${esc(m.hecho.join(' · '))}</span>`);
+  }
   const cuando = horaDe(m.hora);
   const acciones = mio
     ? '<button class="bur-accion" data-a="copiar" title="Copiar mi pregunta">copiar</button>'
