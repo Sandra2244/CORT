@@ -245,7 +245,20 @@ export const ESTADO_INICIAL = 'reposo';
    `uTamano` se declara en la cabecera común y sólo lo lee el shader de los puntos: un
    uniform declarado y no usado es legal en GLSL (Three ni le busca ubicación), mientras
    que declararlo dos veces —como hacía la versión anterior— es lo que deja el parcheo
-   de texto como único modo de mantener las dos copias sincronizadas. */
+   de texto como único modo de mantener las dos copias sincronizadas.
+   Lo mismo pasa con `vFondo`, la profundidad de cada vértice (de 0, lo más cerca de la
+   lente, a 1, lo más lejos): se declara en ONDA porque es la cabecera de los TRES
+   vertex, lo escribe sólo INCLINA —que el polvo no incluye— y lo leen los dos
+   fragmentos del orbe. El del polvo no lo declara: en GLSL un `varying` que nadie lee
+   no cuesta nada, y duplicar la declaración sí. */
+/* La distancia de la cámara, UNA SOLA VEZ en el repo. No es un adorno de encuadre:
+   §5.2 de `docs/REFERENCIAS-VIDEOS-JARVIS.md` mide el reposo del video en ~1/3 del alto
+   de la pantalla, y con objetivo de 55° eso sale de 5,8 unidades (2 / (2·tan27,5°·5,8) =
+   0,331). `orbe-cara.js` pone la cámara AQUÍ y este archivo usa el mismo número dos
+   veces: como referencia del `gl_PointSize` y como centro del reparto de profundidad de
+   `vFondo`. Por eso no puede quedar escrito a mano en los dos archivos. */
+export const DISTANCIA = 5.8;
+
 const ONDA = /* glsl */`
 uniform float uTiempo;
 uniform float uNivel;
@@ -257,6 +270,7 @@ uniform float uTamano;
 attribute float aFase;
 varying float vBrillo;
 varying float vCalor;
+varying float vFondo;
 void main() {
   float f = aFase * 6.2831853;
   float onda = sin(uTiempo * 1.7 + f + position.y * 3.1);
@@ -367,6 +381,23 @@ const MORFO = /* glsl */`
    prueba tiene que poder exigir que el shader lo lleva dentro. Sin esto, cambiar el
    ángulo a 0 (que es quitar el anillo de la cara y dejarlo de canto) pasaba verde. */
 export const GIRO = 1.2217;
+/* ── EL AIRE: lo de atrás se apaga ──────────────────────────────────────────────
+   Medido en pantalla el 27/10, el orbe se leía como una bola de alambre y no como la
+   madeja con profundidad de la referencia. La cámara está a 5,8: el ecuador frontal
+   queda a ~4,8 de la lente y el dorsal a ~6,8, y como el relleno es aditivo los ~1.057
+   hilos de la cara de detrás se SUMABAN a los de delante. Apagar el fondo es lo único
+   que separa las dos mitades sin borrar un vértice (regla 1 del archivo), y cuesta un
+   `varying` y una resta por fragmento.
+     El reparto se calcula sobre la distancia YA INCLINADA (`vis.z`), no sobre `mv.z`:
+   con el anillo montado la corona se gira hacia la cara, y lo que tiene que apagarse es
+   lo que en ese momento queda lejos de la lente. `vFondo` sale 0 a 4,8 de la lente y 1
+   dos unidades y media más atrás.
+     Y va DENTRO de `INCLINA`, no de `MORFO`, por la misma razón de siempre: MORFO se
+   concatena también en el shader del polvo, que no se inclina ni tiene `vis`.
+     Este bloque está FUERA de la cadena GLSL a propósito. El candado [4] de
+   `scripts/prueba-orbe.mjs` no admite ni `/*` ni acentos graves dentro de los seis
+   textos, y los dos tienen su historia: el 27/10 escribí uno de estos comentarios con
+   backticks, el literal se cerró antes de tiempo, y la cara se quedó en blanco. */
 const INCLINA = /* glsl */`
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vec3 centro = modelViewMatrix[3].xyz;
@@ -376,6 +407,7 @@ const INCLINA = /* glsl */`
   vec4 vis = vec4(r.x + centro.x,
                   r.y * ci - r.z * si + centro.y,
                   r.y * si + r.z * ci + centro.z, mv.w);
+  vFondo = clamp((-vis.z - (${DISTANCIA} - 1.0)) / 2.6, 0.0, 1.0);
   gl_Position = projectionMatrix * vis;`;
 
 const VERT_LINEAS = ONDA + MORFO + INCLINA + /* glsl */`
@@ -394,24 +426,35 @@ const VERT_LINEAS = ONDA + MORFO + INCLINA + /* glsl */`
 const VERT_PUNTOS = ONDA + MORFO + INCLINA + /* glsl */`
   // gl_PointSize son píxeles del aparato: ver el comentario de VERT_PUNTOS. Se mide
   // sobre vis.z, la profundidad YA inclinada, para que el tamaño acompañe al anillo.
-  gl_PointSize = clamp(uTamano * (7.2 / max(0.5, -vis.z)) * (1.0 + vCalor * 0.5), 1.0, 9.0);
+  gl_PointSize = clamp(uTamano * (${DISTANCIA} / max(0.5, -vis.z)) * (1.0 + vCalor * 0.5), 1.0, 9.0);
 }`;
 
 /* Los puntos se dibujan como redondos suaves: `gl_PointCoord` evita una textura.
    El `mix` hacia `vec3(0.85, 0.97, 1.0)` es el núcleo blanco-cian de las estelas del
    video (`#90EFFF` medido sobre el fotograma de 1000 px): el color del traje manda en
-   reposo, y el vórtice lo aclara sin pintarlo de un color propio. */
+   reposo, y el vórtice lo aclara sin pintarlo de un color propio.
+   Lo que añade la pasada de los videos (27/10): **cada punto del video tiene un centro
+   quemado**, no es un disco plano de un solo color. `nucleo` mide el quinto central de la
+   mota y lo aclara hacia el mismo blanco-cian de siempre, así que la madeja deja de
+   parecer un encaje de hilo pintado y pasa a parecer luz. Cuesta una `smoothstep` más por
+   fragmento sobre ~340 motas de 3 px: nada. El `0.85` del brillo base sube desde `0.65`
+   por el mismo motivo medido en pantalla —con la cámara más cerca los puntos se veían
+   más grandes y más apagados a la vez—. */
 const FRAG_PUNTOS = /* glsl */`
 uniform vec3 uColorA;
 uniform float uOpacidad;
 varying float vBrillo;
 varying float vCalor;
+varying float vFondo;
 void main() {
   float d = length(gl_PointCoord - vec2(0.5));
   float a = smoothstep(0.5, 0.06, d);
   if (a < 0.02) discard;
-  vec3 c = mix(uColorA, vec3(0.85, 0.97, 1.0), 0.75 * vCalor);
-  gl_FragColor = vec4(c * (0.65 + 0.7 * vBrillo + 0.55 * vCalor), a * uOpacidad);
+  float nucleo = smoothstep(0.20, 0.0, d);
+  vec3 blanco = vec3(0.85, 0.97, 1.0);
+  vec3 c = mix(uColorA, blanco, min(1.0, 0.75 * vCalor + 0.5 * nucleo));
+  gl_FragColor = vec4(c * (0.85 + 0.7 * vBrillo + 0.55 * vCalor),
+                      a * uOpacidad * (1.0 - 0.45 * vFondo));
 }`;
 
 /* El alfa de las líneas se apaga durante el morfeado. Con las aristas vivas la explosión
@@ -421,7 +464,13 @@ void main() {
    opacidad, que es lo que queda de 1 − 0,93·máx(dispersa, portal) con ambos a tope.
    En la 2.19.0 el factor sube de 0,85 a 0,93 porque con 1.057 líneas (antes 700) la tela
    volvía a ganar: medido en la sonda, el estallido seguía pareciendo una bola de alambre
-   y no la corona de estelas del fotograma `f7-dispersa-030.jpg`. */
+   y no la corona de estelas del fotograma `f7-dispersa-030.jpg`.
+   Y en la pasada de los videos (27/10) baja también el **piso** del alfa, de 0,42 a 0,26,
+   subiendo a cambio lo que aporta `vBrillo` (0,55 → 0,62) y `vCalor` (0,3 → 0,34). La
+   razón es una pantalla, no una opinión: con la cámara más cerca, el encaje de hilos se
+   comía la bola y los puntos —que en la referencia son LO QUE SE VE— desaparecían detrás.
+   Ahora la madeja es tenue y desigual, como en `f7-orbe-000.jpg`, y el brillo lo ponen
+   los nudos. */
 const FRAG_LINEAS = /* glsl */`
 uniform vec3 uColorB;
 uniform float uOpacidad;
@@ -429,11 +478,13 @@ uniform float uDispersa;
 uniform float uPortal;
 varying float vBrillo;
 varying float vCalor;
+varying float vFondo;
 void main() {
   float tela = 1.0 - 0.93 * max(uDispersa, uPortal);
   vec3 c = mix(uColorB, vec3(0.85, 0.97, 1.0), 0.6 * vCalor);
   gl_FragColor = vec4(c * (0.5 + 0.9 * vBrillo + 0.5 * vCalor),
-                      uOpacidad * (0.42 + 0.55 * vBrillo + 0.3 * vCalor) * tela);
+                      uOpacidad * (0.26 + 0.62 * vBrillo + 0.34 * vCalor) * tela
+                      * (1.0 - 0.72 * vFondo));
 }`;
 
 /* ---------------- el polvo de fondo ---------------- */
@@ -454,7 +505,7 @@ const VERT_POLVO = ONDA + /* glsl */`
   p += dir * uDispersa * (0.35 + 1.15 * aFase);
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
-  gl_PointSize = clamp(uTamano * 0.7 * (7.2 / max(0.5, -mv.z)), 1.0, 3.0);
+  gl_PointSize = clamp(uTamano * 0.7 * (${DISTANCIA} / max(0.5, -mv.z)), 1.0, 3.0);
 }`;
 
 /* El alfa del polvo es MEDIA del del orbe: si brillara igual que los nudos, la bola se
@@ -634,9 +685,13 @@ export function creaOrbe(THREE, opciones = {}) {
   }
   g.restore();
   const texHalo = new THREE.CanvasTexture(cnv);
+  /* El color del halo es el **primario** del estado, no el secundario. Con `colorB` el
+     núcleo quemado del video se convertía en un azulillo de fondo: en los fotogramas
+     (los cuatro paneles de `docs/referencias` y los dos videos leídos el 27/10) lo más
+     brillante de la bola ES el centro, y aquí eso era lo más apagado. */
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({
     map: texHalo, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    opacity: 0.18, color: colorB.clone(),
+    opacity: 0.52, color: colorA.clone(),
   }));
   halo.scale.set(RADIOS.halo, RADIOS.halo, 1);
   objeto.add(halo);
@@ -716,18 +771,21 @@ export function creaOrbe(THREE, opciones = {}) {
       comp.uPortal.value = f ? f.portal : 0;
       portal = comp.uPortal.value;
     }
-    halo.material.color.copy(colorB);
+    halo.material.color.copy(colorA);
     /* El fogonazo: el `uDispersa` entra también en el brillo del halo. En el video la
        explosión no es sólo forma, es un portazo de luz que dura medio segundo, y aquí
        cuesta un multiplicador más en la misma línea (mismo dibujo, mismo relleno).
-       Y el portal APAGA el núcleo, no lo enciende: medido sobre los dos fotogramas de la
-       referencia, en `f7-orbe-000.jpg` (el estallido) el centro es una estrella con púas,
-       y en `f7-anillo-065.jpg` (el anillo ya montado) el agujero está VACÍO. Con el término
-       de +0,22 de la 2.17.0 las púas se cruzaban sobre el agujero del vórtice, que es lo
-       contrario de lo que se ve en el video. El suelo de 0,05 deja un residuo de glow para
-       que el orbe no parezca apagado. */
-    halo.material.opacity = Math.max(0.05, 0.15 + 0.26 * comp.uNivel.value
-                                     + 0.20 * comp.uDispersa.value - 0.11 * portal);
+       Y el portal, en cambio, APAGA el núcleo, no lo enciende: medido sobre los dos
+       fotogramas de la referencia, en `f7-orbe-000.jpg` (el estallido) el centro es una
+       estrella con púas, y en `f7-anillo-065.jpg` (el anillo montado) el agujero está
+       VACÍO. Con el término positivo de la 2.17.0 las púas se cruzaban sobre el agujero
+       del vórtice, que es lo contrario de lo que se ve en el video.
+       Los dos números del 27/10: la base sube de 0,15 a 0,52 y el portal resta 0,47 en vez
+       de 0,11. No es un capricho de brillo —es lo que queda al leer los fotogramas con la
+       bola ya grande (cámara a 5,8): con 0,15 el núcleo del video no existía en CORT, y el
+       suelo de 0,06 mantiene el agujero del toro vacío, que es la medida que lo manda. */
+    halo.material.opacity = Math.max(0.06, 0.52 + 0.26 * comp.uNivel.value
+                                     + 0.20 * comp.uDispersa.value - 0.47 * portal);
     const s = RADIOS.halo * (1 + 0.10 * comp.uNivel.value + 0.75 * portal);
     halo.scale.set(s, s, 1);
   }

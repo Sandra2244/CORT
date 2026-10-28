@@ -35,7 +35,14 @@ html.glass #boot{background:rgba(2,4,10,.92)}
   100%{transform:translate3d(-1%,2%,0) scale(1.04) rotate(-1deg)}
 }
 html.glass #agua{display:none}                 /* holograma: el escritorio manda */
-html.freno #agua{filter:none;opacity:.08;animation:none;transform:none}
+/* El freno apaga LO CARO, no la cara entera. Lo caro es `filter:blur(42px)`: un mapa de
+   42 px aplicado a un lienzo de pantalla completa, cada vez que se redibuja. La
+   respiración es SOLO `transform` sobre una capa con `will-change`, y eso lo hace el
+   compositor sin pasar por el CPU. Con la regla antigua (`animation:none`, opacidad .08)
+   el agua desaparecía del portátil de la dueña —que vive en `freno` porque tiene 1,9 GB—
+   y el orbe se quedaba flotando sobre un fondo muerto: una de las razones de «se ve
+   simple». Ahora conserva el tinte, sin desenfoque y sin coste nuevo. */
+html.freno #agua{filter:none;opacity:.14}
 html.freno .panel,
 html.freno .win,
 html.freno .chip,

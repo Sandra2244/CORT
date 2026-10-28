@@ -2295,21 +2295,18 @@ export function wireUI(orbRef) {
          trae cero voces (medido) y sin esta pregunta el Perfil quedaría mudo.
          Al resolver, `onBoca` repinta el desplegable y lo dice en la consola. */
       voice.descubreMotor();
-      if (mobile()) {
-        // celular: una ventana a la vez; arranca en el canal de voz
-        setTimeout(() => W.chat.show(), 150);
-        setTimeout(() => { openFiles(); W.chat.show(); }, 400);
-        setTimeout(chipNotes, 2200);
-        setTimeout(() => speakTTS('Sistemas en línea. CORT a sus órdenes.'), 600);
-      } else {
-        // los paneles se despliegan en cascada numerada, como en la referencia
-        setTimeout(() => W.chat.show(), 150);
-        setTimeout(() => { openFiles(); }, 500);
-        setTimeout(() => W.env.show(), 800);
-        setTimeout(() => W.music.show(), 1100);
-        setTimeout(() => W.term.show(), 1400);
-        setTimeout(chipNotes, 2600);      // bienvenida estilo Jared: notas flotando
-      }
+      /* El arranque NO abre ventanas. La primera cara las desplegaba en cascada
+         (canal de voz a los 150 ms, archivos a los 500, entorno, música y consola hasta
+         1,4 s) y con el rediseño eso dejó de tener sentido dos veces: la dueña pidió
+         «el orbe será sólo pantalla principal, sin botones» —está escrito en el
+         cabecero del cajón, `index.html:89`—, y las cinco hojas del cajón hacen lo
+         mismo mejor leído. Lo que quedaba en pantalla era una cara que nunca se veía
+         sola: al abrir CORT siempre había un panel tapando el holograma, y ésa es una
+         de las razones de «se ve muy simple». Las ventanas siguen vivas —las abre su
+         botón del cajón, la voz, los gestos y `centro.js`—; lo que se quita es que se
+         abran solas. */
+      setTimeout(chipNotes, mobile() ? 2200 : 2600);   // bienvenida estilo Jared
+      if (mobile()) setTimeout(() => speakTTS('Sistemas en línea. CORT a sus órdenes.'), 600);
     }
     /* La placa se pinta en el arranque, sin esperar el intervalo: si no, los primeros
        diez segundos la cara muestra el `--:--:--` que trae el HTML. El nodo sí se puede

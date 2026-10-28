@@ -19,7 +19,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import {
-  N_PUNTOS, N_POLVO, VECINOS, RADIOS, GRANO, ESTADOS, ESTADO_INICIAL,
+  N_PUNTOS, N_POLVO, VECINOS, RADIOS, GRANO, DISTANCIA, ESTADOS, ESTADO_INICIAL,
   RITMOS, formaDelVortice, GIRO,
   puntosFibonacci, polvoEstrella, aristasCercanas, creaOrbe, SHADERS,
 } from '../ui/js/orbe-plexo.js';
@@ -227,6 +227,29 @@ ok('el fragmento del polvo se apaga a media opacidad del estado',
 ok('el de los puntos declara uTamano y lo usa topeado',
    /uniform float uTamano;/.test(SHADERS.puntos) &&
    /gl_PointSize\s*=\s*clamp\(uTamano/.test(SHADERS.puntos));
+/* ── EL AIRE, que es el cambio del 27/10 ───────────────────────────────────────────
+   Leer los dos videos y su propio fotograma dio el mismo diagnóstico: la bola se veía
+   como un cascarón de alambre porque el relleno es aditivo y los ~1.057 hilos de la cara
+   TRASERA se sumaban a los de delante. La salida no es borrar vértices (regla 1: la
+   geometría nace una vez), es APAGAR por profundidad con un `varying`. Se exigen las
+   tres piezas, porque cada una sola se puede romper sin que ninguna otra lo note:
+     · la distancia de cámara, compartida entre la lente y el shader (`DISTANCIA`),
+     · `vFondo` declarado UNA vez en la cabecera común y escrito en `INCLINA`,
+     · y el factor de apagado en los dos fragmentos, más fuerte en las líneas (que son
+       la jaula) que en los puntos (que son las estrellas del video). */
+ok('la distancia de cámara es UN número, y el del tercio medido en el video',
+   DISTANCIA === 5.8 && SHADERS.puntos.includes('(5.8 / max(0.5, -vis.z)') &&
+   SHADERS.polvo.includes('(5.8 / max(0.5, -mv.z)'), String(DISTANCIA));
+ok('vFondo se declara una sola vez, en la cabecera que comparten los tres vertex',
+   (SHADERS.puntos.match(/varying float vFondo;/g) || []).length === 1 &&
+   (SHADERS.lineas.match(/varying float vFondo;/g) || []).length === 1 &&
+   SHADERS.polvo.includes('varying float vFondo;'));
+ok('y lo escribe la INCLINACIÓN, sobre la profundidad ya girada',
+   /vFondo = clamp\(\(-vis\.z - \(5\.8 - 1\.0\)\) \/ 2\.6, 0\.0, 1\.0\);/.test(SHADERS.puntos) &&
+   /vFondo = clamp\(\(-vis\.z - \(5\.8 - 1\.0\)\) \/ 2\.6, 0\.0, 1\.0\);/.test(SHADERS.lineas));
+ok('las líneas se apagan el 72 % atrás y los puntos sólo el 45 %',
+   SHADERS.fragLineas.includes('* (1.0 - 0.72 * vFondo)') &&
+   SHADERS.fragPuntos.includes('* (1.0 - 0.45 * vFondo)'));
 ok('el de las líneas NO usa gl_PointSize (no existe en LineSegments)',
    !/gl_PointSize/.test(SHADERS.lineas));
 ok('ambos declaran todo lo que usan',
@@ -398,8 +421,17 @@ ok('el halo tiene núcleo: el degradado arranca brillante y ceñido',
    sobre el agujero, y eso sólo se ve en pantalla — aquí se exige el signo. */
 ok('la explosión da un portazo de luz y el anillo apaga el núcleo',
    /0\.20 \* comp\.uDispersa\.value/.test(codigo) &&
-   /- 0\.11 \* portal/.test(codigo) && /Math\.max\(0\.05,/.test(codigo),
+   /- 0\.47 \* portal/.test(codigo) && /Math\.max\(0\.06,/.test(codigo),
    'el glow tiene suelo, pero el centro del vórtice se vacía');
+/* El núcleo encendido, que es lo que faltaba al leer los dos videos (27/10). La base del
+   halo estaba en 0,15 con el color SECUNDARIO del traje: el centro quemado de la
+   referencia se convertía en un azulillo de fondo y la bola se leía como un cascarón de
+   hilo. Ahora manda `colorA` (el primario del estado) y la base es 0,52. Se exige el
+   número y el color, porque los dos juntos son el cambio: con 0,52 en `colorB` la cara
+   gana un borrón azul, y con `colorA` a 0,15 sigue sin haber fuego. */
+ok('el núcleo del halo es el color primario, y brillante de fábrica',
+   /opacity: 0\.52, color: colorA\.clone\(\)/.test(codigo) &&
+   /halo\.material\.color\.copy\(colorA\)/.test(codigo));
 
 /* ---------- [7] vestir el orbe (paso 1.2) ----------
    El color del orbe ya no está escrito aquí: lo da `traje.js`. Lo que se vigila es el
@@ -570,11 +602,24 @@ ok('y los dos llevan el CUERPO del morph, no sólo la declaración',
      SHADERS.puntos.includes(k) && SHADERS.lineas.includes(k)));
 ok('el toro usa el radio medido del video, no un número suelto',
    SHADERS.puntos.includes(`float R = ${RADIOS.anillo};`), RADIOS.anillo);
+/* El blanco-cian medido (`#90EFFF` sobre el fotograma de 1000 px) tiene que seguir
+   estando, aunque ahora los puntos lo guarden en una constante porque lo usan dos veces:
+   para el calor del vórtice y para el centro quemado de cada mota. Se exige el literal,
+   no la forma de la línea: si alguien lo cambia por `vec3(1.0)`, la estela deja de ser
+   la del video y esto se pone rojo. */
 ok('los dos fragmento declaran `vCalor` y lo mezclan hacia el blanco-cian de la estela',
    SHADERS.fragPuntos.includes('varying float vCalor;') &&
    SHADERS.fragLineas.includes('varying float vCalor;') &&
-   /mix\(uColor[AB], vec3\(0\.85, 0\.97, 1\.0\)/.test(SHADERS.fragPuntos) &&
-   /mix\(uColor[AB], vec3\(0\.85, 0\.97, 1\.0\)/.test(SHADERS.fragLineas));
+   /vec3 blanco = vec3\(0\.85, 0\.97, 1\.0\);[\s\S]{0,120}mix\(uColorA, blanco/.test(SHADERS.fragPuntos) &&
+   /mix\(uColorB, vec3\(0\.85, 0\.97, 1\.0\)/.test(SHADERS.fragLineas));
+/* Cada mota del video tiene el centro quemado, no un color plano. `nucleo` es un
+   `smoothstep` sobre el quinto central del sprite, y se entra en el `mix` SUMANDO al
+   calor (con `min(1.0, …)` para que el vórtice no pase de blanco). Sin el `min` un
+   `0.75·vCalor + 0.5·nucleo` podría pasar de 1 y GLSL sí recorta, pero la intención del
+   tope tiene que estar escrita: esto es lo que separa «luz» de «mancha». */
+ok('y cada punto tiene su núcleo blanco, topado a 1',
+   /float nucleo = smoothstep\(0\.20, 0\.0, d\);/.test(SHADERS.fragPuntos) &&
+   /min\(1\.0, 0\.75 \* vCalor \+ 0\.5 \* nucleo\)/.test(SHADERS.fragPuntos));
 ok('y el varying del calor está declarado una sola vez en cada vertex',
    (SHADERS.puntos.match(/varying float vCalor;/g) || []).length === 1 &&
    (SHADERS.lineas.match(/varying float vCalor;/g) || []).length === 1);
@@ -620,7 +665,7 @@ ok('el giro vale 0 con el portal apagado (reposo idéntico a la 2.16.0)',
    ['puntos', 'lineas'].every(k => SHADERS[k].includes(`float ang = uPortal * ${GIRO};`)));
 ok('las líneas se APAGAN durante el morfeado (la tela tapaba el agujero)',
    SHADERS.fragLineas.includes('float tela = 1.0 - 0.93 * max(uDispersa, uPortal);') &&
-   SHADERS.fragLineas.includes('* tela);') &&
+   SHADERS.fragLineas.includes('* tela') &&
    !SHADERS.fragPuntos.includes('tela'),
    'los puntos siguen a tope: son las estelas del video');
 /* LA FORMA DEL ESTALLIDO, medida sobre `docs/referencias/f7-dispersa-030.jpg` (fotograma

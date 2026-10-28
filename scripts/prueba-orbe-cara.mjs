@@ -189,8 +189,18 @@ ok('el pixelRatio se corta en 1,5 aunque el aparato declare más',
 ok('antialias apagado y `powerPreference: low-power` pedido al navegador',
    renderer.antialias === false && renderer.powerPreference === 'low-power',
    JSON.stringify({ a: renderer.antialias, p: renderer.powerPreference }));
-ok('la esfera queda a 7,2 de cámara: el tamaño del orbe en el video',
-   renderer.ultimaCamara.position.z === 7.2, 'z=' + renderer.ultimaCamara?.position?.z);
+/* La distancia de cámara NO es un adorno: con objetivo de 55°, el alto visible vale
+   2·tan(27,5°)·z unidades, y la esfera (radio 1) ocupa 2 de esas unidades. A 7,2 era el
+   27 % del alto —un cuarto—; §5.2 de `docs/REFERENCIAS-VIDEOS-JARVIS.md` mide el reposo
+   del video en ~1/3 del alto, así que la cámara viene a 5,8 (2/6,04 = 33,1 %). Con la
+   misma lectura se comprueba el anillo: su caja de 4,6 unidades pasa del 61 % al 76 % del
+   alto, y el video llega al 82 %. El número se exige EXACTO porque el 7,2 está también
+   dentro de la fórmula del `gl_PointSize` como distancia de referencia: mover la cámara
+   sin decirlo agrandaría los puntos 1,24 veces por el camino. */
+ok('la esfera queda a 5,8 de cámara: el tercio del alto que mide el video',
+   renderer.ultimaCamara.position.z === 5.8, 'z=' + renderer.ultimaCamara?.position?.z);
+ok('y son 55° de objetivo, que es lo que hace ese tercio de 2 unidades',
+   renderer.ultimaCamara?.fov === 55, 'fov=' + renderer.ultimaCamara?.fov);
 ok('el tamaño de punto se pasa en píxeles DEL APARATO (2,8 × ratio)',
    Math.abs(cifras.pixelRatio * 2.8 - 4.2) < .01, String(cifras.pixelRatio * 2.8));
 /* El presupuesto que midió la sonda en el portátil de la dueña, y que la 2.19.0 subió

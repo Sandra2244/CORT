@@ -19,7 +19,7 @@
    · no inventa estados: los cinco nombres son los de la tabla del módulo.
 */
 import * as THREE from 'three';
-import { N_PUNTOS, VECINOS, RADIOS, creaOrbe } from './orbe-plexo.js';
+import { N_PUNTOS, VECINOS, RADIOS, DISTANCIA, creaOrbe } from './orbe-plexo.js';
 import { POR_DEFECTO } from './traje.js';
 
 export const CLAVE_ORBE = 'cort-orbe';
@@ -54,9 +54,19 @@ export function initOrbeCara(mount, opciones = {}) {
 
   const escena = new THREE.Scene();
   const camara = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, .1, 100);
-  /* 7,2 de cámara con una esfera de radio 1 y objetivo de 55°: la esfera ocupa ~un
-     cuarto del alto, que es el tamaño del orbe en el video. Medido en la sonda. */
-  camara.position.set(0, .25, 7.2);
+  /* 5,8 de cámara con una esfera de radio 1 y objetivo de 55°: el alto visible de la
+     escena vale 2·tan(27,5°)·5,8 = 6,04 unidades, así que la esfera de 2 unidades ocupa
+     el **33 % del alto**. Ese tercio es lo que mide el reposo del video
+     (`docs/REFERENCIAS-VIDEOS-JARVIS.md` §5.2, fila t=0,0: «plexus pequeño, ~1/3 de la
+     altura de la pantalla»). Estaba en 7,2, que da el 27 % —un cuarto— y era la mitad del
+     motivo por el que la dueña decía «se ve muy simple»: el orbe era correcto pero chico,
+     y el anillo del vórtice se quedaba en el 61 % del alto cuando el video llega al 82 %.
+     A 5,8 el toro (radio mayor 1,95 + tubo) ocupa el 76 %. La fórmula del tamaño de los
+     puntos lleva la misma distancia dentro como referencia, así que al acercar la cámara
+     cada punto crece 1,24 veces sin tocar `uTamano`. El número no está escrito aquí: es
+     `DISTANCIA`, exportado por `orbe-plexo.js`, para que la lente y el shader no puedan
+     separarse jamás. */
+  camara.position.set(0, .25, DISTANCIA);
 
   /* `tamano` en píxeles del aparato: `gl_PointSize` no conoce el pixel ratio y a 2x
      saldrían de la mitad de lo pedido (lo que midió la sonda del paso 1.1). */

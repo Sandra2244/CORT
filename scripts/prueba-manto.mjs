@@ -173,6 +173,22 @@ ok('la función sólo enciende en `orbe` y en `charla` con el manto',
 ok('y `pantallas.js` avisa cuando cambia, que es cuando hay que encenderlo o apagarlo',
    /dispatchEvent\(new CustomEvent\('cort-manto'/.test(pant)
    && /addEventListener\('cort-manto'/.test(hudj));
+/* ── El orbe es la pantalla principal, y se ve ────────────────────────────────────
+   La dueña lo pidió escrito en el cabecero del cajón (`index.html:89`): «el orbe será
+   sólo pantalla principal, sin botones». La cascada de arranque lo contradecía: a los
+   150 ms se abría el canal de voz solo, y en el PC también archivos, entorno, música y
+   consola hasta el 1,4 s. Resultado medido en pantalla el 27/10: al abrir CORT siempre
+   había un panel tapando el holograma, y ésa es una de las razones de «se ve muy
+   simple». Las ventanas siguen abriéndose —con su botón, por voz, por gesto y desde
+   `centro.js`—; lo que este candado no deja volver es a que se abran SOLAS. */
+const arranque = hudj.slice(hudj.indexOf('runBoot().then('),
+                            hudj.indexOf('setInterval(refreshStatus'));
+ok('el arranque deja el orbe solo: no abre ninguna ventana',
+   arranque.length > 200 && !/\.show\(\)/.test(arranque) &&
+   !/openFiles\(\)/.test(arranque) && /setTimeout\(chipNotes/.test(arranque),
+   (arranque.match(/[\w.]+\.show\(\)/g) || []).join(' · ') || 'sin ventanas abiertas');
+ok('y el saludo hablado del teléfono no se pierde con la cascada',
+   /speakTTS\('Sistemas en línea\. CORT a sus órdenes\.'\)/.test(arranque));
 
 /* ─── [7] lo que la cara dice de sí misma ─── */
 console.log('\n[7] el «parar» y el estado, sin prometer lo que no hay');

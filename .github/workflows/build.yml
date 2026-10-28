@@ -623,8 +623,8 @@ jobs:
         # `scripts/prueba-orbe.mjs` ejerce `ui/js/orbe-plexo.js`, el orbe del paso 1.1
         # (`docs/PLAN-FASE-1.md`), que todavía vive APARTE de la cara: se mide en
         # `ui/sonda-orbe.html` y sólo se integra cuando la dueña lo apruebe. En un CI no
-        # hay GPU, así que se prueba lo que no depende de ella: que los 220 puntos caigan
-        # repartidos y sin grumos, que las ~700 líneas no tengan duplicados ni bucles y
+        # hay GPU, así que se prueba lo que no depende de ella: que los 340 puntos caigan
+        # repartidos y sin grumos, que las 1.057 líneas no tengan duplicados ni bucles y
         # sean `Uint16Array` (con `Int32Array` OpenGL dice `GL_INVALID_ENUM` y las líneas
         # no se dibujan — medido en el navegador), que los cinco estados traigan colores
         # válidos y distinguibles, que el GLSL no esconda un cierre de literal (pasó: un
@@ -633,6 +633,23 @@ jobs:
         # El tiempo de pared se reporta pero no se prueba: en el portátil de la dueña un
         # `requestAnimationFrame` vacío rinde 16 fps con el equipo cargado, y una prueba
         # que depende de la carga se pone roja sola y deja de merecerse.
+        #
+        # La pasada del 27/10, después de que la dueña dijera «el orbe se ve muy simple
+        # comparado con las animaciones de estos dos videos». Cuatro defectos MEDIDOS en
+        # pantalla contra los fotogramas de `docs/REFERENCIAS-VIDEOS-JARVIS.md` §5.2, cada
+        # uno con su candado aquí dentro:
+        #   (1) La lente: `DISTANCIA = 5.8` es el tercio del alto que mide el video, no el
+        #       cuarto de 7,2; el mismo número va interpolado en las dos `gl_PointSize`.
+        #   (2) El aire: `vFondo` se declara UNA vez en la cabecera común (`ONDA`), se
+        #       escribe sobre la profundidad YA inclinada y apaga 72 % las líneas y 45 %
+        #       los puntos — sin eso los hilos de detrás se sumaban y la madeja se leía
+        #       como jaula de alambre.
+        #   (3) El fuego: el halo pinta en `colorA` con base 0,52, el anillo montado lo
+        #       APAGA (-0,47 · portal) y cada mota lleva su núcleo blanco topado con `min`.
+        #   (4) El precio: 340 puntos · 1.057 líneas · 160 estrellas · 4 dibujos.
+        # `scripts/muta-orbe-aire.sh` siembra M1-M9 sobre este archivo y cada mutación
+        # nombre y derriba SU comprobación; M10-M12 caen sobre `hud.css` y el arranque de
+        # `hud.js`, en los pasos `costura` y `manto`.
         shell: bash
         run: |
           set +e
@@ -674,7 +691,12 @@ jobs:
         # escrita a mano, una burbuja de CORT sin su `nota`, la pintora sin leerla, la
         # espera cortada atada sólo a la bandera, rehacer la charla entera por mensaje y
         # un `push` sin su repaint. Las catorce salieron rojas y la base, sin tocar nada,
-        # verde en 35 comprobaciones.
+        # verde. En la pasada del 27/10 el sector [6] ganó dos comprobaciones más —37— y
+        # dos mutaciones propias (`M11`/`M12` de `scripts/muta-orbe-aire.sh`): el arranque
+        # YA NO abre la cascada de ventanas, porque desde ese día el orbe es la pantalla
+        # principal y ocho paneles montados en 150 ms se la tapaban; y el saludo hablado
+        # del teléfono, que vivía dentro de esa cascada, sigue sonando. Devolver cualquier
+        # `.show()` al bloque de arranque, o cambiar la frase del `speakTTS`, se pone rojo.
         shell: bash
         run: |
           set +e

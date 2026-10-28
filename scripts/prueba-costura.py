@@ -4561,9 +4561,10 @@ else:
 #     arrastrable y que se aparta al borde. Se comprueba el arrastre real
 #     (`ACTION_MOVE` + `updateViewLayout`), la opacidad de reposo y que el toque
 #     siga abriendo CORT; el modo juego y el permiso no se tocan.
-#   · El agua (`#agua`) y el vidrio (`backdrop-filter`) se apagan con
-#     `html.freno`, que ponen la poca RAM declarada o el modo juego. Sin el freno,
-#     la animación sería decoración cara en el teléfono de 4 GB.
+#   · El agua (`#agua`) y el vidrio (`backdrop-filter`) se apagan CON el freno
+#     (`html.freno`), que ponen la poca RAM declarada o el modo juego — pero el freno
+#     apaga lo CARO (los desenfoques), no la cara entera: la ola sigue respirando.
+#     [32.e] vigila justamente esa línea: el desenfoque fuera, la animación dentro.
 print("\n[32] F17 · el orbe viste el atuendo, la burbuja se arrastra y el agua frena")
 
 F32_IA = APK / "src" / "com" / "cort" / "ia"
@@ -4739,11 +4740,23 @@ else:
               "28 % en reposo, sin salto al borde, con toque que abre CORT y modo juego primero")
 
 # 32.e · el agua y el vidrio con freno. La capa existe, el CSS la anima con
-#        `transform` y la apaga con `html.freno`; la cara pone esa clase con poca
-#        RAM o modo juego. El freno también quita el `backdrop-filter` (lo caro).
+#        `transform` y el freno le quita LO CARO, no la vida.
+#
+#        Medido en el portátil de la dueña (27/10): el `filter: blur(42px)` del agua es
+#        un mapa de 1280x800 que se recalcula cada cuadro; la ola en cambio es un
+#        `transform: translate/scale`, que el compositor resuelve sin pasar por la CPU.
+#        Apagar las dos cosas (como hacía el freno de la 2.16.0 con `animation:none` y
+#        `transform:none`) dejaba el orbe —que ahora es lo único que hay en pantalla
+#        desde que el arranque dejó de abrir ventanas— flotando sobre un fondo muerto.
+#        Así que el freno trae `filter:none` y baja el `opacity`, y la red exige ahora
+#        que DENTRO de ese bloque no haya `animation` ni `transform`: si alguien los
+#        devuelve, esta costura se pone roja.
 f32_agua = [t for t in ("@keyframes agua-ola", "#agua{", "html.freno #agua",
                         "html.freno .panel", "backdrop-filter:none !important")
             if t not in F32_CSS]
+f32_i_agua = F32_CSS.find("html.freno #agua")
+f32_bloque_agua = F32_CSS[f32_i_agua:F32_CSS.find("}", f32_i_agua)] if f32_i_agua >= 0 else ""
+f32_agua_viva = [t for t in ("filter:none", "opacity:.14") if t not in f32_bloque_agua]
 f32_pan = [t for t in ("navigator.deviceMemory", "<= 2", "classList.toggle('freno'",
                        "juegoPuesto = !!on", "POCA_RAM || juegoPuesto")
            if t not in F32_PAN]
@@ -4757,7 +4770,15 @@ elif 'id="agua"' not in F32_HTML:
           "existiría en la cara")
 elif f32_agua:
     falla("F17 · el agua con freno", f"falta {f32_agua} en `hud.css`: o no hay ola o el "
-          "freno no apaga el filtro y el desenfoque")
+          "freno no apaga el desenfoque del vidrio")
+elif f32_agua_viva:
+    falla("F17 · el agua con freno", f"el bloque `html.freno #agua` perdió {f32_agua_viva}: "
+          "sin `filter:none` el freno seguiría pagando el desenfoque de 42 px, y sin "
+          "`opacity:.14` el agua quedaría tapando el orbe")
+elif "animation" in f32_bloque_agua or "transform" in f32_bloque_agua:
+    falla("F17 · el agua con freno", "el freno volvió a apagar la OLÁ (`animation`/"
+          "`transform` dentro de `html.freno #agua`): eso es lo barato, y matarlo deja el "
+          "orbe sobre un fondo muerto —la dueña lo dijo mirando su propio portátil")
 elif f32_pan:
     falla("F17 · el agua con freno", f"`pantallas.js` no pone el freno como se espera: "
           f"falta {f32_pan}")
@@ -4768,8 +4789,9 @@ elif F32_PAN.count("ponFreno();") < 2:
     falla("F17 · el agua con freno", "el freno no se aplica al arrancar y al cambiar de modo: "
           "con poca RAM el agua seguiría animada hasta entrar en una hoja")
 else:
-    dice_ok("F17 · el agua con freno", "capa de agua con `@keyframes` de transform, y "
-              "`html.freno` apaga ola, desenfoque y `backdrop-filter` con poca RAM o juego")
+    dice_ok("F17 · el agua con freno", "capa de agua con `@keyframes` de transform, y el "
+              "freno quita SOLO lo caro (desenfoque del agua y `backdrop-filter` del vidrio) "
+              "dejando la ola respirando")
 
 # 32.f · la sonda visual existe, monta el MISMO orbe y comprueba los seis contra
 #        `orb.colores()`; y no viaja al APK (el pipeline descarta `sonda-*.html`).
