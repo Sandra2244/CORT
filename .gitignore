@@ -21,3 +21,7 @@ cort-bridge/cort_state.json
 # Los .orig SÍ se versionan a propósito: son el respaldo del archivo original de la
 # demo y la ruta de revertido documentada en cort-web/PROCEDENCIA.md. Pesan ~600 KB
 # entre los tres y sin ellos no se puede volver atrás ni comparar contra el original.
+
+# Los fotogramas sacados de los videos de referencia son grabaciones de terceros:
+# no se commitean ni se publican. Viven en ~/Escritorio/Referencias IA CORT/fotogramas.
+fotogramas/
