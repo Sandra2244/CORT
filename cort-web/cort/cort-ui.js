@@ -1030,6 +1030,14 @@
   // fixed, así que ninguna clave exacta del diccionario puede cubrirlo.
   // Aquí se reemplaza sólo el fragmento francés y se conserva el nombre propio.
   const REGRAS = [
+    // Panel «Configurar la IA local / Ollama»: estas cuatro etiquetas las escribe
+    // el bundle en francés dentro de un nodo con más texto, así que el diccionario
+    // no las alcanza. Se detectaron abriendo el panel y recorriendo sus nodos de
+    // texto (antes no se medían porque el panel sólo existe al abrirlo).
+    [/OPTION FACULTATIVE/g, { es: "OPCIÓN OPCIONAL", en: "OPTIONAL" }],
+    [/Connexion…|Connexion\.\.\./g, { es: "Conectando…", en: "Connecting…" }],
+    [/Enregistrer la surveillance/g, { es: "Guardar la vigilancia", en: "Save monitoring" }],
+    [/\bIA locale\b/g, { es: "IA local", en: "Local AI" }],
     [/ElevenLabs Ultra-Réel/g, { es: "ElevenLabs ultrarrealista", en: "ElevenLabs ultra-realistic" }],
     [/\(M\)(?=\s*—)/g, { es: "(voz de hombre)", en: "(M)" }],
     [/\(F\)(?=\s*—)/g, { es: "(voz de mujer)", en: "(F)" }],
@@ -1226,6 +1234,158 @@
     }
   }
 
+  // ---- 5b. Fila del cerebro: qué modelos hay en el equipo y qué falta para usarlos
+  //
+  // Todo lo que pinta sale del puente (`en_disco`, `ram_disponible_mb`, `catalogo`).
+  // Si el puente no ha contestado todavía, la fila lo dice en voz alta en vez de
+  // suponer modelos: la lista que traía la demo (dolphin3, phi3.5, llama3.1:8b) está
+  // escrita a mano y ninguno de esos tres existe en esta laptop.
+  let estadoCerebro = null;
+
+  function chipTexto(t, clase) {
+    const s = document.createElement("span");
+    s.className = "cort-cerebro-chip" + (clase ? " " + clase : "");
+    s.textContent = t;
+    return s;
+  }
+
+  function botonCerebro(texto, fn, opts) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "cort-cerebro-btn";
+    b.textContent = texto;
+    if (opts && opts.titulo) b.title = opts.titulo;
+    if (opts && opts.noCabe) b.dataset.noCabe = "1";
+    if (opts && opts.activo) b.dataset.activo = "1";
+    b.addEventListener("click", fn);
+    return b;
+  }
+
+  function revelarPanelModelos() {
+    const sel = document.getElementById("settings-preferred-brain");
+    if (sel) {
+      sel.value = "local_uncensored";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    // El selector de modelo vive dentro de #agent-model-modal, que está cerrado
+    // hasta que se pulsa su botón del menú. Poner el `wrap` a display:block no lo
+    // mostraba nada: el padre seguía en none (medido: altura 0 px). Se pulsa el
+    // botón real, que es lo que abre el modal de verdad.
+    const boton = document.getElementById("agent-modele-btn");
+    const modal = document.getElementById("agent-model-modal");
+    if (boton && (!modal || getComputedStyle(modal).display === "none")) boton.click();
+    const wrap = document.getElementById("local-model-selector-wrap");
+    if (wrap) wrap.style.display = "block";
+    if (typeof window.CORT_pedirEstadoCerebro === "function") window.CORT_pedirEstadoCerebro();
+  }
+
+  function elegirModelo(nombre) {
+    const radio = document.querySelector('input[name="local_model_choice"][value="' + nombre + '"]');
+    if (radio) radio.checked = true;
+    revelarPanelModelos();
+    if (typeof window.CORT_enviarAlCerebro === "function") {
+      window.CORT_enviarAlCerebro({ type: "set_local_model", model: nombre });
+    }
+  }
+
+  function descargarModelo(nombre) {
+    revelarPanelModelos();
+    if (typeof window.CORT_enviarAlCerebro === "function") {
+      window.CORT_enviarAlCerebro({ type: "pull_ollama_model", model: nombre });
+    }
+  }
+
+  function asegurarFilaCerebro() {
+    const panel = document.querySelector("#settings-modal .settings-container");
+    if (!panel) return false;
+    let fila = document.getElementById("cort-cerebro-row");
+    if (fila && panel.contains(fila)) return true;
+    if (!fila) fila = document.createElement("div");
+    fila.id = "cort-cerebro-row";
+    const filaIdioma = document.getElementById("cort-lang-row");
+    if (filaIdioma) panel.insertBefore(fila, filaIdioma.nextSibling);
+    else {
+      const cab = panel.querySelector(".settings-header");
+      panel.insertBefore(fila, cab ? cab.nextSibling : panel.firstChild);
+    }
+    pintarFilaCerebro();
+    return true;
+  }
+
+  function pintarFilaCerebro() {
+    const fila = document.getElementById("cort-cerebro-row");
+    if (!fila) return;
+    fila.innerHTML = "";
+    const titulo = document.createElement("span");
+    titulo.textContent = "CEREBRO //";
+    fila.appendChild(titulo);
+
+    const st = estadoCerebro;
+    if (!st) {
+      fila.appendChild(chipTexto("sin datos del puente", "aviso"));
+      if (typeof window.CORT_pedirEstadoCerebro === "function") {
+        fila.appendChild(botonCerebro("Preguntar al puente", () => window.CORT_pedirEstadoCerebro()));
+      }
+      return;
+    }
+
+    const libre = st.ram_disponible_mb || 0;
+    fila.appendChild(chipTexto(st.online ? "Ollama vivo" : "Ollama apagado", st.online ? "ok" : "aviso"));
+    fila.appendChild(chipTexto(libre + " MB libres de " + (st.ram_total_mb || "?")));
+    fila.appendChild(chipTexto((st.nucleos || "?") + " núcleos"));
+    if (st.selected_model) {
+      fila.appendChild(chipTexto("elegido: " + st.selected_model, "ok"));
+    }
+
+    const disco = st.en_disco || {};
+    const nombres = Object.keys(disco).sort((a, b) => disco[a].ram_est - disco[b].ram_est);
+    let cabeAlguno = false;
+    for (const n of nombres.slice(0, 4)) {
+      const d = disco[n];
+      const cabe = libre >= d.ram_est;
+      if (cabe) cabeAlguno = true;
+      fila.appendChild(botonCerebro(
+        n + " · " + d.mb + " MB",
+        () => elegirModelo(n),
+        {
+          noCabe: !cabe,
+          activo: st.selected_model === n,
+          titulo: (cabe ? "Cabe ahora (~" + d.ram_est + " MB que pide tienes)"
+                        : "Pide ~" + d.ram_est + " MB y hay " + libre +
+                          ": cierra navegador y editor, o usa el turno de noche") +
+            " · peso medido " + d.mb + " MB"
+        }
+      ));
+    }
+
+    const catalog = st.catalogo || {};
+    const porBajar = Object.keys(catalog)
+      .filter(n => !catalog[n].instalado)
+      .sort((a, b) => (catalog[a].mb || 0) - (catalog[b].mb || 0))
+      .slice(0, 2);
+    for (const n of porBajar) {
+      fila.appendChild(botonCerebro("↓ " + n, () => descargarModelo(n),
+        { titulo: "Bajar " + n + " (" + (catalog[n].tam || "tamaño sin medir") + "). " +
+          "Gasta disco, no RAM: se puede durante el turno de noche." }));
+    }
+
+    fila.appendChild(botonCerebro("Panel de modelos", revelarPanelModelos,
+      { titulo: "Abre el selector de la interfaz con el cerebro local activado" }));
+
+    if (!cabeAlguno && nombres.length) {
+      const falta = disco[nombres[0]].ram_est;
+      fila.appendChild(chipTexto(
+        "ninguno cabe con " + libre + " MB: el más ligero pide ~" + falta +
+        " (estimación sobre su peso). Turno de noche: ./cort_cerebro.sh", "aviso"));
+    }
+  }
+
+  // Lo llama cort-mock.js cada vez que llega un estado del puente.
+  window.CORT_alEstadoCerebro = (st) => {
+    estadoCerebro = st || null;
+    pintarFilaCerebro();
+  };
+
   // Único sitio donde se cambia de idioma durante el arranque: una esquina del
   // overlay, para poder elegir español/francés/inglés antes del primer render.
   function buildBootChip() {
@@ -1283,13 +1443,27 @@
     walk(document.body);
     buildBootChip();
     asegurarFilaIdioma();
+    asegurarFilaCerebro();
+    // Al arrancar el websocket del puente todavía puede estar abriendo (el puente
+    // tarda ~2 s en levantarse). Se insiste cada 3 s hasta tener estado y luego ya
+    // solo cada 15 s: preguntar de más son escaneos de disco en una máquina de dos
+    // núcleos.
+    if (typeof window.CORT_pedirEstadoCerebro === "function") window.CORT_pedirEstadoCerebro();
+    let tic = 0;
     // la app re-renderiza paneles dinámicamente: observamos y traducimos lo nuevo
     const mo = new MutationObserver(muts => {
       for (const m of muts) for (const node of m.addedNodes) walk(node);
       asegurarFilaIdioma();
+      asegurarFilaCerebro();
     });
     mo.observe(document.body, { childList: true, subtree: true });
-    setInterval(() => { walk(document.body); asegurarFilaIdioma(); }, 3000); // red de seguridad
+    setInterval(() => {
+      walk(document.body);
+      asegurarFilaIdioma();
+      asegurarFilaCerebro();
+      if (typeof window.CORT_pedirEstadoCerebro !== "function") return;
+      if (!estadoCerebro || ++tic % 5 === 0) window.CORT_pedirEstadoCerebro();
+    }, 3000); // red de seguridad
     console.log("%c[CORT] Marca, idioma y rediseño aplicados.", "color:#00ffc8;font-weight:bold;");
   }
 

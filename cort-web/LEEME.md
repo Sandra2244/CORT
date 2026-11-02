@@ -52,17 +52,18 @@ noche: con el navegador y el editor cerrados quedan 900 MB o más.
 
 ## 4. Ya tienes 6 modelos descargados (medido en disco, 2026-11-02)
 
-Leído de `~/.ollama/models/manifests` (4,7 GB de blobs). No hace falta descargar nada para
-empezar; hace falta **cargar** uno con memoria suficiente:
+Leído de `~/.ollama/models/manifests` (4,7 GB de blobs), en MiB y tal como lo reporta el
+puente. No hace falta descargar nada para empezar; hace falta **cargar** uno con memoria
+suficiente:
 
 | Modelo | Peso del archivo | RAM libre estimada para usarlo |
 |---|---|---|
-| `smollm2:135m` | 271 MB | ~530 MB |
-| `gemma3:270m` | 292 MB | ~560 MB |
-| `qwen2.5:0.5b` | 398 MB | ~700 MB |
-| `qwen3:0.6b` | 523 MB | ~880 MB |
-| `airaos-local:latest` | 753 MB | ~1 300 MB |
-| `qwen3.5:2b` | 2 741 MB | ~4 000 MB (fuera del alcance de este equipo) |
+| `smollm2:135m` | 258 MB | ~511 MB |
+| `gemma3:270m` | 278 MB | ~539 MB |
+| `qwen2.5:0.5b` | 379 MB | ~680 MB |
+| `qwen3:0.6b` | 498 MB | ~847 MB |
+| `airaos-local:latest` | 718 MB | ~1 155 MB |
+| `qwen3.5:2b` | 2 614 MB | ~3 809 MB (fuera del alcance de este equipo) |
 
 El peso es medido. La RAM es **estimación** con la fórmula `peso × 1,4 + 150 MB` (pesos +
 caché KV + contexto); está marcada como estimación en el código y se puede corregir midiendo.
@@ -84,7 +85,10 @@ servidor para devolver la memoria**. No deja nada comiéndose el equipo.
 
 ```bash
 cd ~/Escritorio/CORT/cort-bridge
-python3 cort_probe.py av                 # auditoría: pasos y hallazgos por consola
+python3 cort_probe.py                # estado del cerebro, sistema y clima
+python3 cort_probe.py av             # auditoría: pasos y hallazgos por consola
+python3 cort_probe.py modelos        # inventario del disco, catálogo y qué modelo cabe
+python3 cort_probe.py clima          # por IP, por ciudad escrita y con ciudad falsa
 python3 cort_probe.py cerebro "¿cómo va la RAM?"
 ```
 
@@ -95,13 +99,16 @@ Sirve para verificar el puente cuando el navegador no se puede abrir por falta d
 | Función | Estado | Qué se midió |
 |---|---|---|
 | CPU / RAM / disco del HUD | **real** | 99-100 % CPU, 82-84 % RAM, 314 MB libres — ya no los 14-26 % inventados |
-| Clima | **real** | ipapi.co → open-meteo: Carora, 34 °C, llovizna |
+| Clima | **real** | open-meteo: Carora, 32,3 °C, llovizna. Con ciudad escrita a mano se resuelve con el geocodificador de open-meteo; si la ciudad no existe, avisa de que usa el último punto conocido en vez de cambiar de ciudad en silencio |
+| Fila **CEREBRO** en Ajustes | **real** | lista los modelos leídos en disco con su peso, la RAM que piden y si caben con la memoria de este momento; los que no caben salen en punteado y un pie dice qué hacer |
+| Elegir modelo desde la interfaz | **real** | el botón de la fila manda `set_local_model` al puente y se comprueba que queda escrito en `cort_state.json` |
 | Auditoría de seguridad ("antivirus") | **real** | 4-5 hallazgos en 0,9-9 s en 4 pasos (arranque, procesos, archivos, permisos) |
 | Estado de Ollama | **real** | responde aunque el servidor esté apagado, con la RAM medida |
-| Descarga de modelos | **protocolo verificado** | validado contra un simulador etiquetado del protocolo; sin red ni riesgo de RAM |
+| Descarga de modelos | **real con puertas** | si el modelo ya está en disco lo dice en vez de volver a bajarlo; si falta, mide disco (500 MB de colchón) antes de empezar y sigue el progreso del `/api/pull`. El protocolo se validó además contra un simulador etiquetado, sin tocar red |
 | Chat con modelo | **cortado por RAM** | el puente se niega y dice el número; funciona en cuanto hay ~530 MB libres |
 | Jarvis OS | **honesto** | nada en el puerto 3000; el puente se niega a instalarlo (pediría el disco entero) |
-| Gestos con MediaPipe | pendientes | aún cargan desde CDN; ver PROCEDENCIA.md |
+| Gestos con MediaPipe | **desactivados a propósito** | los tres `<script>` del CDN fuera del index: el arranque ya no descarga nada de internet. El bundle tiene guardas, así que sólo pierde el modo holograma de gestos |
+| Guía de instalación de Ollama del panel | escrita para **Windows** | powerShell, "Windows 10 22H2", zona de notificaciones. En esta Canaima no aplica; hay que reescribirla para Linux (pendiente) |
 | ~46 comandos del menú (winget, juegos, correo, OBS, VPN…) | no implementados | son de Windows; en Linux hace falta escribir cada uno |
 
 ## 8. La regla que no se rompe

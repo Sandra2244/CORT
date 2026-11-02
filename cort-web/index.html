@@ -980,12 +980,12 @@
 
 
 
-  <!-- MediaPipe — chargé pour le mode hologramme -->
-  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.js"
-    crossorigin="anonymous"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.js"
-    crossorigin="anonymous"></script>
+  <!-- MediaPipe (gestos con la cámara) — DESACTIVADO en esta construcción.
+       Los tres scripts pesaban ~2 MB desde un CDN y se cargaban en cada arranque,
+       que es justo lo que CORT no hace: nada de red para levantar. El bundle trae
+       guardas `typeof Hands > "u"`, así que el modo holograma de gestos no arranca
+       y el resto de la interfaz sigue igual. Para volver a activarlo,
+       restaurar las tres etiquetas desde index.html.orig. -->
     <!-- Injection Démo Interactive JARVIS (Simulation Virtuelle) -->
   <!-- CORT v0 — capa propia. El mock francés y el banner de marketing quedan fuera.
        Para volver atrás: restaurar index.html.orig (mock-ws.js + demo-banner.js). -->
@@ -2707,18 +2707,18 @@
 
       <div class="settings-group" style="margin-bottom: 25px;">
         <label for="settings-preferred-brain"
-          style="display:block; margin-bottom: 10px; font-size:12px; letter-spacing:2px; color:rgba(0, 229, 255, 0.7);">CERVEAU
-          IA PRIORITAIRE (BRAIN LLM)</label>
+          style="display:block; margin-bottom: 10px; font-size:12px; letter-spacing:2px; color:rgba(0, 229, 255, 0.7);">CEREBRO
+          PREFERIDO (LLM)</label>
         <select id="settings-preferred-brain"
           style="width:100%; padding: 10px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.3); color: #00e5ff; font-family: 'Courier New', monospace; font-size: 14px; outline: none;">
-          <option value="auto">Routage automatique (Dynamique)</option>
-          <option value="gemini">Google Gemini (Par défaut)</option>
-          <option value="local">IA locale (Ollama)</option>
-          <option value="local_uncensored">🔴 LLM Local (Astro / Trash Mode)</option>
+          <option value="auto">Enrutado automático (dinámico)</option>
+          <option value="gemini">Google Gemini (necesita clave, no se usa sin ella)</option>
+          <option value="local">IA local (Ollama) — modelo por defecto</option>
+          <option value="local_uncensored">🟢 IA local (Ollama) — elegir modelo en CORT</option>
           <option value="groq">Groq (LLaMA 3)</option>
           <option value="grok">xAI Grok (Grok AI)</option>
           <option value="openai">OpenAI (ChatGPT)</option>
-          <option value="openai_realtime">🟣 OpenAI Realtime (conversation vocale directe)</option>
+          <option value="openai_realtime">🟣 OpenAI Realtime (voz directa por la red)</option>
           <option value="claude">Anthropic Claude</option>
           <option value="mistral">Mistral AI (Mistral Large)</option>
         </select>
@@ -2753,42 +2753,42 @@
       <div id="local-model-selector-wrap"
         style="display:none; margin-bottom: 16px; padding: 14px; background: rgba(255,51,102,0.04); border: 1px solid rgba(255,51,102,0.25); border-radius:6px;">
         <label
-          style="display:block; margin-bottom: 10px; font-size:11px; letter-spacing:2px; color:#ff3366; font-weight:bold;">CHOISIR
-          LE MODÈLE LOCAL 🖥️</label>
+          style="display:block; margin-bottom: 10px; font-size:11px; letter-spacing:2px; color:#ff3366; font-weight:bold;">ELIGE
+          EL MODELO LOCAL 🖥️</label>
         <div style="display:flex; flex-direction:column; gap:8px;">
           <label id="lm-opt-dolphin"
             style="display:flex; align-items:flex-start; gap:10px; padding:10px; background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.2); border-radius:4px; cursor:pointer; transition:all 0.2s;">
-            <input type="radio" name="local_model_choice" value="dolphin3" id="lm-radio-dolphin" checked
+            <input type="radio" name="local_model_choice" value="smollm2:135m" id="lm-radio-dolphin" checked
               style="margin-top:2px;">
             <div>
-              <div style="font-weight:bold; color:#00e5ff; font-size:12px;">🐬 Dolphin 3.0 — Uncensored</div>
-              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Sans filtre, libre, ~4.5 Go
-                VRAM &bull; GPU NVIDIA 8 Go+ recommandé</div>
+              <div style="font-weight:bold; color:#00e5ff; font-size:12px;">🪶 smollm2:135m — el más ligero</div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Ya está en tu disco, 258 MB
+                &bull; pide ~511 MB libres (estimación) &bull; respuestas cortas</div>
             </div>
           </label>
           <label id="lm-opt-phi"
             style="display:flex; align-items:flex-start; gap:10px; padding:10px; background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.2); border-radius:4px; cursor:pointer; transition:all 0.2s;">
-            <input type="radio" name="local_model_choice" value="phi3.5" id="lm-radio-phi" style="margin-top:2px;">
+            <input type="radio" name="local_model_choice" value="qwen2.5:0.5b" id="lm-radio-phi" style="margin-top:2px;">
             <div>
-              <div style="font-weight:bold; color:#00ff88; font-size:12px;">🔷 Phi-3.5 Mini — Microsoft</div>
-              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Ultra-rapide, léger, ~2.2 Go
-                VRAM &bull; Idéal pour PC modeste</div>
+              <div style="font-weight:bold; color:#00ff88; font-size:12px;">🔷 qwen2.5:0.5b — equilibrado</div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Ya está en tu disco, 379 MB
+                &bull; pide ~680 MB libres &bull; el mejor para la Canaima de madrugada</div>
             </div>
           </label>
           <label id="lm-opt-llama"
             style="display:flex; align-items:flex-start; gap:10px; padding:10px; background:rgba(0,229,255,0.04); border:1px solid rgba(0,229,255,0.2); border-radius:4px; cursor:pointer; transition:all 0.2s;">
-            <input type="radio" name="local_model_choice" value="llama3.1:8b" id="lm-radio-llama"
+            <input type="radio" name="local_model_choice" value="qwen3:0.6b" id="lm-radio-llama"
               style="margin-top:2px;">
             <div>
-              <div style="font-weight:bold; color:#ffaa00; font-size:12px;">🦙 Llama 3.1 8B — Meta</div>
-              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Puissant, polyvalent, ~5 Go
-                VRAM &bull; Meilleure compréhension du contexte</div>
+              <div style="font-weight:bold; color:#ffaa00; font-size:12px;">🧠 qwen3:0.6b — el más capaz que cabe</div>
+              <div style="font-size:10px; color:rgba(255,255,255,0.55); margin-top:2px;">Ya está en tu disco, 498 MB
+                &bull; pide ~847 MB libres &bull; navegador y editor tienen que estar cerrados</div>
             </div>
           </label>
         </div>
         <div id="local-model-save-confirm"
-          style="display:none; margin-top:8px; font-size:10px; color:#00ff88; text-align:center;">✅ Modèle local
-          sauvegardé !</div>
+          style="display:none; margin-top:8px; font-size:10px; color:#00ff88; text-align:center;">✅ Modelo local
+          guardado.</div>
       </div>
 
       <!-- Onboarding Container Ollama 1-Click -->

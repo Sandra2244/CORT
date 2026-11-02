@@ -259,6 +259,67 @@
   box-shadow: 0 0 12px rgba(0, 255, 200, .45);
 }
 
+/* ---------- 5b. Ajustes: la fila del cerebro (modelos reales del equipo) ------- */
+#cort-cerebro-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(34, 229, 255, .22);
+  clip-path: var(--cort-corte);
+  background: rgba(3, 8, 15, .55);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: .1em;
+  color: rgba(174, 240, 255, .8);
+}
+
+#cort-cerebro-row > span:first-child {
+  color: rgba(34, 229, 255, .75);
+  font-weight: 700;
+  letter-spacing: .18em;
+}
+
+.cort-cerebro-chip {
+  padding: 4px 8px;
+  border: 1px dashed rgba(174, 240, 255, .25);
+  color: rgba(174, 240, 255, .68);
+}
+
+.cort-cerebro-chip.ok { border-color: rgba(0, 255, 200, .45); color: var(--cort-menta); }
+.cort-cerebro-chip.aviso { border-color: rgba(255, 170, 0, .5); color: #ffaa00; }
+
+#cort-cerebro-row .cort-cerebro-btn {
+  padding: 4px 9px;
+  border: 1px solid rgba(34, 229, 255, .3);
+  background: transparent;
+  color: rgba(174, 240, 255, .78);
+  font: 700 9px/1.2 "Courier New", monospace;
+  letter-spacing: .1em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+#cort-cerebro-row .cort-cerebro-btn:hover {
+  border-color: var(--cort-menta);
+  color: var(--cort-menta);
+}
+
+#cort-cerebro-row .cort-cerebro-btn[data-activo="1"] {
+  background: linear-gradient(135deg, var(--cort-menta), var(--cort-cian));
+  border-color: transparent;
+  color: var(--cort-fondo);
+}
+
+/* el modelo no cabe con la RAM medida de ahora: se ofrece, pero se ve apagado */
+#cort-cerebro-row .cort-cerebro-btn[data-no-cabe="1"] {
+  border-style: dotted;
+  border-color: rgba(255, 51, 102, .45);
+  color: rgba(255, 138, 168, .8);
+}
+
 /* en pantallas estrechas el reloj no se come al orbe, pero NO perdemos CPU/RAM */
 @media (max-width: 560px) {
   #orb-clock-hud { right: 8px !important; top: 8px !important; padding: 4px 8px 3px !important; }

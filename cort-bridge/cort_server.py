@@ -9,13 +9,14 @@ Un solo proceso, dos puertos:
 Habla el MISMO protocolo JSON que la demo de referencia, así que la página no
 cambia. Lo que aquí se responde es REAL:
 
-  check_ollama_status   -> http://127.0.0.1:11434/api/tags
+  check_ollama_status   -> http://127.0.0.1:11434/api/tags + inventario leído en
+                           ~/.ollama/models (así la lista funciona con Ollama apagado)
   pull_ollama_model     -> /api/pull (progreso real, byte a byte)
   set_local_model       -> se guarda en cort_state.json
   user_input            -> /api/chat con el modelo elegido (cerebro de CORT)
   system_stats          -> /proc/stat, /proc/meminfo, /proc/stat de disco
   av-scan / scan        -> auditoría local real (autostart, procesos, firmas)
-  weather               -> ipapi.co + open-meteo.com (sin clave API)
+  weather               -> geocoding open-meteo (ciudad) o ipapi.co (por IP) + open-meteo
 
 Todo lo que NO se pueda verificar se dice con la letra grande: el campo
 `origen` vale "real" o "no disponible" en cada mensaje. Nada se inventa.
@@ -39,6 +40,7 @@ import time
 from pathlib import Path
 from urllib import request as urlreq
 from urllib.error import URLError, HTTPError
+import urllib.parse
 
 BASE = Path(__file__).resolve().parent.parent / "cort-web"
 ESTADO = Path(__file__).resolve().parent / "cort_state.json"
@@ -64,6 +66,17 @@ MODELOS = {
 RAM_SERVIDOR = 350     # MB libres mínimos para tener `ollama serve` de pie
 RAM_DESCARGA = 250     # MB libres mínimos mientras baja el archivo (es I/O)
 MARGEN_DISCO = 500     # MB de colchón además del tamaño del modelo
+
+# Inventario del disco: ~/.ollama/models. Se lee sin necesidad de que el servidor
+# esté vivo, que es justo cuando la interfaz no sabía qué había.
+OLLAMA_MODELOS = Path(os.environ.get(
+    "OLLAMA_MODELOS", os.path.expanduser("~/.ollama/models")))
+
+
+def ram_estimada_desde_peso(mb_peso):
+    """El peso del archivo es MEDIDO; la RAM que hará falta es ESTIMACIÓN
+    (pesos + caché KV + contexto). Se avisa de que es estimación al decirlo."""
+    return int(mb_peso * 1.4) + 150
 
 from aiohttp import web  # presente en este equipo (verificado)
 
@@ -157,6 +170,97 @@ def ollama_vivo():
     return True, modelos
 
 
+_inventario_cache = {"t": 0.0, "datos": {}}
+
+
+def inventario_disco(fuerzo=False):
+    """Modelos que YA están en ~/.ollama/models, leídos de los manifests.
+
+    No pregunta al servidor: funciona con Ollama apagado, que es cuando la
+    interfaz se quedaba sin lista. Devuelve {nombre:tag: {"mb": peso medido del
+    blob mayor, "ram_est": MB libres estimados para usarlo}}. Si no hay carpeta o
+    algo no se puede leer, devuelve lo que sí se pudo leer (y se ve vacío, no una
+    lista inventada). Se guarda en caché 20 s porque se consulta desde varios sitios
+    y dentro de una ordenación.
+    """
+    ahora = time.monotonic()
+    if not fuerzo and ahora - _inventario_cache["t"] < 20:
+        return _inventario_cache["datos"]
+    out = {}
+    try:
+        for f in sorted(OLLAMA_MODELOS.glob("manifests/*/*/*/*")):
+            partes = str(f).split("/manifests/")[1].split("/")
+            nombre, tag = partes[2], partes[3]
+            try:
+                m = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            pesos = []
+            for capa in m.get("layers", []):
+                b = OLLAMA_MODELOS / "blobs" / capa["digest"].replace(":", "-")
+                try:
+                    if b.is_file():
+                        pesos.append(b.stat().st_size)
+                except OSError:
+                    continue
+            if not pesos:
+                continue
+            mb = max(pesos) // (1024 * 1024)
+            out[f"{nombre}:{tag}"] = {"mb": mb, "ram_est": ram_estimada_desde_peso(mb)}
+    except Exception:
+        return {}
+    _inventario_cache["t"] = ahora
+    _inventario_cache["datos"] = out
+    return out
+
+
+def catalogo():
+    """Los descargables de siempre + los que ya están en disco, sin duplicar.
+
+    Cada entrada lleva `origen` para que la interfaz pueda decir la verdad:
+    "instalado" (en disco), "descargable" (hay que bajarlo) o ambos.
+    """
+    cat = {k: dict(v, instalado=False) for k, v in MODELOS.items()}
+    for nombre, datos in inventario_disco().items():
+        entrada = cat.get(nombre) or {"tam": f"{datos['mb']} MB", "nota": "ya está en tu disco"}
+        cat[nombre] = dict(entrada, mb=datos["mb"], ram_uso=datos["ram_est"], instalado=True)
+    return cat
+
+
+def estado_ollama():
+    """El estado que pide la interfaz. Con Ollama apagado no devuelve la lista vacía:
+    los modelos leídos en disco entran en `found_local_models` porque están instalados
+    de verdad, y `en_disco` / `catalogo` dan el detalle con pesos medidos."""
+    vivo, modelos = ollama_vivo()
+    disco = inventario_disco()
+    lista = dict(modelos)
+    for nombre in disco:
+        lista.setdefault(nombre, nombre)
+    return {
+        "online": vivo,
+        "found_local_models": lista,
+        "selected_model": leer_estado().get("local_model", ""),
+        "ram_disponible_mb": ram_disponible_mb(),
+        "ram_total_mb": cpu_ram_disco().get("ram_total_mb", 0),
+        "nucleos": os.cpu_count(),
+        "en_disco": disco,
+        "catalogo": catalogo(),
+        "origen": "real",
+    }
+
+
+def presupuesto_del_modelo(modelo):
+    """MB libres que exige `modelo`. Prioridad: lo medido en disco > el catálogo >
+    una cuenta prudente por si el modelo no se conoce."""
+    disco = inventario_disco().get(modelo)
+    if disco:
+        return disco["ram_est"], f"peso medido {disco['mb']} MB"
+    info = MODELOS.get(modelo) or catalogo().get(modelo) or {}
+    if info.get("ram_uso"):
+        return int(info["ram_uso"]), "tabla del catálogo"
+    return 1200, "sin medir: se aplica el suelo prudente de 1200 MB"
+
+
 def ollama_arrancar():
     """Levanta `ollama serve` sólo si el binario existe y la RAM lo permite."""
     binario = shutil.which("ollama")
@@ -182,23 +286,58 @@ def ollama_arrancar():
 
 
 # ------------------------------------------------------------------ clima
-def clima(ciudad=""):
-    """ipapi.co (sin clave) -> coordenadas -> open-meteo (sin clave)."""
+_ultima_ubicacion = {"lat": None, "lon": None, "ciudad": ""}
+
+
+def resolver_ubicacion(ciudad=""):
+    """(lat, lon, ciudad, origen_del_dato). Dos servicios gratuitos sin clave:
+
+    * nombre de ciudad -> geocoding de open-meteo. ipapi.co NO sirve aquí: su
+      ruta `/{x}/json/` pide una IP y con un nombre contesta
+      `{"error": true, "reason": "Invalid IP Address"}`, que era como el panel
+      del clima se quedaba vacío en cuanto Sandra escribía su ciudad en Ajustes.
+    * sin nombre -> ipapi.co por IP.
+    """
     if ciudad:
-        ok, geo = http_json(f"https://ipapi.co/{ciudad}/json/", timeout=6)
-    else:
-        ok, geo = http_json("https://ipapi.co/json/", timeout=6)
-    if not ok or not isinstance(geo, dict) or "latitude" not in geo:
-        return {"ok": False, "motivo": "no se pudo resolver la ubicación"}
-    lat, lon = geo["latitude"], geo["longitude"]
+        ok, geo = http_json(
+            "https://geocoding-api.open-meteo.com/v1/search?count=1&language=es"
+            f"&name={urllib.parse.quote(ciudad)}", timeout=6)
+        resultados = (geo or {}).get("results") if isinstance(geo, dict) else None
+        if ok and resultados:
+            r = resultados[0]
+            return r.get("latitude"), r.get("longitude"), r.get("name") or ciudad, "geocoding open-meteo"
+        return None, None, ciudad, "geocoding sin resultados"
+    ok, geo = http_json("https://ipapi.co/json/", timeout=6)
+    if ok and isinstance(geo, dict) and "latitude" in geo and not geo.get("error"):
+        return geo["latitude"], geo["longitude"], geo.get("city") or "", "ipapi por IP"
+    motivo = (geo or {}).get("reason", "no respondió") if isinstance(geo, dict) else str(geo)
+    return None, None, "", f"ipapi: {motivo}"
+
+
+def clima(ciudad=""):
+    """Coordenadas -> open-meteo (sin clave). Si la resolución falla, se usan las
+    últimas coordenadas buenas que CORT conoció, y se dice en el mensaje que el
+    punto del mapa viene de ahí en vez de dejar el panel vacío."""
+    lat, lon, nombre, como = resolver_ubicacion(ciudad)
+    de_cache = False
+    aviso = ""
+    if lat is None and _ultima_ubicacion["lat"] is not None:
+        lat, lon = _ultima_ubicacion["lat"], _ultima_ubicacion["lon"]
+        aviso = (f"No encontré «{ciudad}» ({como}); te doy el clima del último punto conocido: "
+                 f"{_ultima_ubicacion['ciudad'] or 'tu ubicación por IP'}.")
+        nombre = _ultima_ubicacion["ciudad"]
+        de_cache = True
+    if lat is None:
+        return {"ok": False, "motivo": f"no se pudo resolver la ubicación ({como}); tampoco hay una anterior guardada"}
+    _ultima_ubicacion.update({"lat": lat, "lon": lon, "ciudad": nombre or ciudad})
     ok, w = http_json(
         f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
         "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m"
         "&timezone=auto",
         timeout=6,
     )
-    if not ok or not isinstance(w, dict):
-        return {"ok": False, "motivo": "open-meteo no respondió"}
+    if not ok or not isinstance(w, dict) or "current" not in w:
+        return {"ok": False, "motivo": f"open-meteo no respondió ({str(w)[:90]})"}
     c = w.get("current", {})
     codigos = {0: "despejado", 1: "mayormente despejado", 2: "nublado", 3: "cubierto",
                45: "niebla", 48: "niebla helada", 51: "llovizna ligera", 53: "llovizna",
@@ -206,13 +345,19 @@ def clima(ciudad=""):
                80: "chubascos", 95: "tormenta"}
     return {
         "ok": True, "origen": "real",
-        "ville": geo.get("city") or ciudad or "tu ubicación",
+        "ville": nombre or ciudad or "tu ubicación",
         "temperature": c.get("temperature_2m"),
         "ressenti": c.get("apparent_temperature"),
         "humidite": c.get("relative_humidity_2m"),
         "vent": c.get("wind_speed_10m"),
         "code": c.get("weather_code"),
         "description": codigos.get(c.get("weather_code"), f"código {c.get('weather_code')}"),
+        # Datos del punto usado, para poder decirlo con nombre y sin inventar:
+        "resolucion": como,
+        "desde_cache": de_cache,
+        "ciudad_pedida": ciudad,
+        "aviso": aviso,
+        "coordenadas": f"{lat},{lon}",
     }
 
 
@@ -445,14 +590,22 @@ def intentos_locales(texto, estado):
         return f"Son las {time.strftime('%H:%M')}.", []
 
     if tiene("que dia", "la fecha", "hoy es", "dia es", "que dia es", "fecha de hoy"):
-        return f"Hoy es {time.strftime('%A %d de %B de %Y')}.", []
+        # strftime con %A/%B depende del locale del equipo y aquí sale en inglés,
+        # así que los nombres se ponen a mano.
+        dias = ("lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo")
+        meses = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+                 "septiembre", "octubre", "noviembre", "diciembre")
+        a = time.localtime()
+        return (f"Hoy es {dias[a.tm_wday]}, {a.tm_mday} de {meses[a.tm_mon - 1]} de {a.tm_year} "
+                f"y son las {time.strftime('%H:%M')} (reloj del equipo)."), []
 
     if tiene("clima", "tiempo hace", "temperatura exterior", "lluvia", "llover", "hace frio", "hace calor", "va a llover"):
         w = clima(estado.get("user_city") or "")
         if not w.get("ok"):
             return f"No pude leer el clima real: {w.get('motivo')}", []
         return (f"En {w['ville']}: {w['temperature']} grados, sensación {w['ressenti']}, "
-                f"{w['description']}, viento {w['vent']} km/h. Dato tomado de open-meteo hace segundos."), [
+                f"{w['description']}, viento {w['vent']} km/h. Dato tomado de open-meteo hace segundos."
+                + (f" {w['aviso']}" if w.get("aviso") else "")), [
             {"type": "weather_panel", "data": w}]
 
     if tiene("virus", "amenaza", "auditor", "seguridad", "escaneo", "optimiza", "escan", "analisis"):
@@ -470,11 +623,22 @@ def intentos_locales(texto, estado):
 
     if tiene("ollama", "modelo", "cerebro", "descarga", "instala"):
         vivo, modelos = ollama_vivo()
+        disco = inventario_disco()
+        total_mb = cpu_ram_disco().get("ram_total_mb", 0)
         if vivo:
             return (f"Ollama está vivo en 127.0.0.1:11434 con {len(modelos)} modelo(s): "
-                    f"{', '.join(sorted(modelos)) or 'ninguno descargado'}."), []
-        return (f"Ollama no responde y hay {ram_disponible_mb()} MB libres de 1851. Un modelo útil necesita más "
-                "memoria de la que hay ahora; por eso el puente no deja descargarlo todavía."), []
+                    f"{', '.join(sorted(modelos)) or 'ninguno cargado'}. "
+                    f"En disco hay {len(disco)}: {', '.join(sorted(disco)) or 'ninguno'}."), []
+        if disco:
+            los_chicos = sorted(disco, key=lambda k: disco[k]["ram_est"])[:2]
+            return (f"Ollama está apagado y hay {ram_disponible_mb()} MB libres de {total_mb}. "
+                    f"Pero no hace falta descargar nada: en tu disco ya hay {len(disco)} modelos "
+                    f"({', '.join(sorted(disco))}). El más ligero, {los_chicos[0]}, pide ~"
+                    f"{disco[los_chicos[0]]['ram_est']} MB libres, que es una estimación sobre su peso medido. "
+                    "Cierra navegador y editor y lo cargo en el turno de noche."), []
+        return (f"Ollama no responde y no hay ningún modelo en disco; hay {ram_disponible_mb()} MB libres "
+                f"de {total_mb}. Descargar solo necesita disco; cargar el modelo necesita memoria, "
+                "y ahora no cabe ninguno."), []
 
     if tiene("jarvis os", "sistema operativo"):
         v = jarvis_os_vivo()
@@ -494,22 +658,36 @@ def intentos_locales(texto, estado):
 def cerebro(prompt, historial, estado):
     vivo, modelos = ollama_vivo()
     if not vivo:
-        return {"ok": False, "texto": None,
-                "motivo": "Ollama no responde en 127.0.0.1:11434. Sin cerebro local no contesto con el modelo; "
-                          "puedo seguir con las funciones locales (clima, sistema, auditoría)."}
+        # Antes de rendirse, intenta levantar el servidor con su propia puerta de
+        # RAM: si no cabe, ollama_arrancar() dice el número y no congel nada.
+        ok, detalle = ollama_arrancar()
+        if ok:
+            for _ in range(12):
+                time.sleep(1.5)
+                vivo, modelos = ollama_vivo()
+                if vivo:
+                    break
+        if not vivo:
+            return {"ok": False, "texto": None,
+                    "motivo": (f"Ollama no responde en 127.0.0.1:11434 y tampoco lo pude levantar: {detalle}. "
+                               "Sin cerebro local no contesto con el modelo; puedo seguir con las funciones "
+                               "locales (clima, sistema, auditoría).")}
     modelo = estado.get("local_model") or estado.get("model") or ""
-    info = MODELOS.get(modelo, {})
     libre = ram_disponible_mb()
-    if info.get("ram_uso") and libre < info["ram_uso"]:
-        return {"ok": False, "texto": None,
-                "motivo": (f"{modelo} necesita ~{info['ram_uso']} MB libres y ahora hay {libre}. "
-                           "Está descargado, pero no cabe en la memoria: cierra cosas o usa un modelo más chico "
-                           "(qwen2.5:0.5b).")}
+    if modelo:
+        falta, como = presupuesto_del_modelo(modelo)
+        if libre < falta:
+            chicos = sorted(inventario_disco(), key=lambda k: inventario_disco()[k]["ram_est"])
+            mejor = chicos[0] if chicos else "ninguno en disco"
+            return {"ok": False, "texto": None,
+                    "motivo": (f"{modelo} pide ~{falta} MB libres ({como}) y ahora hay {libre}. "
+                               "Está descargado, pero no cabe en la memoria: cierra cosas o usa el más chico "
+                               f"que tienes en disco ({mejor}).")}
     if not modelo:
-        instalado = list(modelos)
+        instalado = list(modelos) or sorted(inventario_disco())
         if not instalado:
             return {"ok": False, "texto": None, "motivo": "no hay ningún modelo descargado; elige uno en Ajustes > Cerebro local"}
-        modelo = instalado[0]
+        modelo = min(instalado, key=lambda m: presupuesto_del_modelo(m)[0])
     nombre = estado.get("user_name") or "Sandra"
     sistema = (
         "Eres CORT: asistente personal de " + nombre + ". Respondes en español neutro, corto, "
@@ -561,33 +739,40 @@ async def ws_handler(request):
                 await ws.send_json({"type": "system_stats", **cpu_ram_disco()})
 
             elif t == "check_ollama_status":
-                vivo, modelos = ollama_vivo()
-                await ws.send_json({
-                    "type": "ollama_status_reply",
-                    "status": {
-                        "online": vivo,
-                        "found_local_models": modelos,
-                        "selected_model": leer_estado().get("local_model", ""),
-                        "ram_disponible_mb": ram_disponible_mb(),
-                        "origen": "real",
-                    },
-                })
+                # En un hilo: lee disco y hace una petición HTTP, y eso no puede
+                # congelar el bucle que atiende a las demás conexiones.
+                estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
+                await ws.send_json({"type": "ollama_status_reply", "status": estado})
 
             elif t == "start_ollama":
                 ok, detalle = ollama_arrancar()
                 await ws.send_json({"type": "ollama_start_result", "ok": ok, "detalle": detalle, "origen": "real"})
-                vivo, modelos = await asyncio.get_event_loop().run_in_executor(None, ollama_vivo)
-                await ws.send_json({"type": "ollama_status_reply",
-                                    "status": {"online": vivo, "found_local_models": modelos,
-                                               "ram_disponible_mb": ram_disponible_mb(), "origen": "real"}})
+                if ok:
+                    # El servidor tarda un poco en escuchar; dar margen antes de preguntar.
+                    await asyncio.sleep(3)
+                estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
+                await ws.send_json({"type": "ollama_status_reply", "status": estado})
 
             elif t == "pull_ollama_model":
                 modelo = d.get("model") or ""
-                info = MODELOS.get(modelo, {})
+                info = catalogo().get(modelo, {})
                 libre = ram_disponible_mb()
                 if PULANDO.get(modelo):
                     await ws.send_json({"type": "ollama_pull_progress", "status": "esa descarga ya está en curso",
                                         "pct": PULANDO[modelo], "done": False, "origen": "real"})
+                    continue
+                # Si ya está en disco, no se vuelve a bajar: se dice y se explica que
+                # lo que falta es memoria, no descarga.
+                ya = inventario_disco().get(modelo)
+                if ya:
+                    await ws.send_json({
+                        "type": "ollama_pull_progress", "done": True, "success": True, "pct": 100,
+                        "status": (f"{modelo} ya está descargado ({ya['mb']} MB) — no hace falta bajarlo otra vez"),
+                        "origen": "real"})
+                    await decir(ws, f"{modelo} ya estaba en tu disco, pesa {ya['mb']} MB. Para pensarlo "
+                                    f"hacen falta ~{ya['ram_est']} MB libres (estimación sobre su peso medido) "
+                                    f"y ahora hay {ram_disponible_mb()}. Con el navegador cerrado lo cargo; "
+                                    "para eso está el turno de noche.")
                     continue
                 # Puerta de DESCARGA: disco y RAM del servidor. La RAM de CARGA se
                 # comprueba al chatear, que es donde hace falta.
@@ -634,9 +819,25 @@ async def ws_handler(request):
                 asyncio.create_task(pull(modelo, ws))
 
             elif t == "set_local_model":
-                e = leer_estado(); e["local_model"] = d.get("model", "")
+                modelo_elegido = d.get("model", "")
+                e = leer_estado(); e["local_model"] = modelo_elegido
                 escribir_estado(e)
-                await ws.send_json({"type": "local_model_set", "model": e["local_model"], "origen": "real"})
+                vivo, cargados = ollama_vivo()
+                disco = inventario_disco()
+                datos = disco.get(modelo_elegido) or {}
+                if modelo_elegido and not datos and modelo_elegido not in cargados:
+                    mb = (MODELOS.get(modelo_elegido) or {}).get("mb", 700)
+                    aviso = (f"{modelo_elegido} no está en el disco ni cargado: hay que descargarlo antes "
+                             f"(~{mb} MB de disco).")
+                elif datos:
+                    aviso = (f"{modelo_elegido} está en disco, pesa {datos['mb']} MB. Para pensarlo hacen falta "
+                             f"~{datos['ram_est']} MB libres (estimación sobre el peso medido) y ahora hay "
+                             f"{ram_disponible_mb()}.")
+                else:
+                    aviso = f"{modelo_elegido} elegido; está cargado en el servidor."
+                await ws.send_json({"type": "local_model_set", "model": modelo_elegido,
+                                    "aviso": aviso, "origen": "real"})
+                await decir(ws, aviso)
 
             elif t in ("settings-save", "settings_save"):
                 e = leer_estado()
@@ -647,7 +848,8 @@ async def ws_handler(request):
                 await ws.send_json({"type": "settings_saved", "origen": "real"})
 
             elif t == "weather":
-                w = await asyncio.get_event_loop().run_in_executor(None, clima, d.get("city", ""))
+                ciudad = d.get("city") or leer_estado().get("user_city") or ""
+                w = await asyncio.get_event_loop().run_in_executor(None, clima, ciudad)
                 await ws.send_json({"type": "weather_panel", "data": w})
 
             elif t in ("av-scan", "run_security_scan", "security_scan", "av_scan_start"):
@@ -675,10 +877,9 @@ async def ws_handler(request):
                 })
 
             elif t == "get_agent_models":
-                vivo, instalados = ollama_vivo()
-                lista = sorted(instalados) or list(MODELOS)
+                installed = sorted(catalogo())
                 await ws.send_json({"type": "agent_models_info",
-                                    "data": {"available_models": {a: lista for a in ("principal", "rapido", "seguro")}},
+                                    "data": {"available_models": {a: installed for a in ("principal", "rapido", "seguro")}},
                                     "origen": "real"})
 
             elif t == "set_agent_models":
@@ -792,7 +993,8 @@ async def pull(modelo, ws):
                 await ws.send_json({"type": "ollama_pull_progress", "status": estado_txt,
                                     "pct": pct, "done": False, "origen": "real"})
         vivo, modelos = ollama_vivo()
-        if modelo in modelos or any(k.startswith(modelo.split(":")[0]) for k in modelos):
+        recien = inventario_disco(fuerzo=True)   # el archivo nuevo no puede taparlo la caché
+        if modelo in modelos or modelo in recien or any(k.startswith(modelo.split(":")[0]) for k in modelos):
             await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": True, "pct": 100,
                                 "status": f"{modelo} instalado", "origen": "real"})
             await decir(ws, f"Modelo {modelo} descargado y listo. Ya puedo pensar con él.")
@@ -871,7 +1073,14 @@ async def main():
     print(f"[CORT] websocket ws://127.0.0.1:{PUERTO_WS}/ws")
     print(f"[CORT] RAM disponible ahora: {ram_disponible_mb()} MB · núcleos {os.cpu_count()}")
     vivo, modelos = ollama_vivo()
-    print(f"[CORT] Ollama: {'vivo' if vivo else 'apagado'} · modelos: {list(modelos) or 'ninguno'}")
+    disco = inventario_disco()
+    print(f"[CORT] Ollama: {'vivo' if vivo else 'apagado'} · cargados: {list(modelos) or 'ninguno'}")
+    if disco:
+        los_chicos = sorted(disco, key=lambda k: disco[k]["ram_est"])
+        print(f"[CORT] en disco: {len(disco)} modelo(s) — " +
+              ", ".join(f"{n} ({disco[n]['mb']} MB, pide ~{disco[n]['ram_est']})" for n in los_chicos))
+    else:
+        print("[CORT] en disco: ninguno (~/.ollama/models vacío o ilegible)")
 
     runner_ws = web.AppRunner(app_ws)
     runner_web = web.AppRunner(app_web)

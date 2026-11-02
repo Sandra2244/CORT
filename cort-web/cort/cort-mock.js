@@ -53,6 +53,7 @@
     estado: "sin iniciar",
     reenviados: 0,
     recibidos: 0,
+    ultimo_status: null,
     escuchas: new Set(),
     _intento: 0,
 
@@ -95,6 +96,14 @@
 
     difundir(m) {
       const n = normalizar(m);
+      // El estado del cerebro se guarda aparte: la fila de Ajustes lo pinta aunque
+      // en ese instante no haya ninguna conexión de interfaz escuchando.
+      if (n.type === "ollama_status_reply") {
+        this.ultimo_status = n.status || null;
+        if (typeof window.CORT_alEstadoCerebro === "function") {
+          try { window.CORT_alEstadoCerebro(this.ultimo_status); } catch (e) {}
+        }
+      }
       const a = Array.from(this.escuchas);
       if (!a.length) return;
       // La demo abre tres canales a la vez y solo uno es el que renderiza: el que
@@ -131,8 +140,16 @@
         enviados: w._enviados || 0
       }));
     })(),
-    tipos_reales: Array.from(REALES)
+    tipos_reales: Array.from(REALES),
+    ultimo_status: PUENTE.ultimo_status
   });
+
+  // El puente tiene un único canal real con Python. La fila de Ajustes manda por él
+  // sus órdenes (elegir modelo, pedir descarga) en vez de abrir otro websocket: una
+  // conexión extra se convertiría en otro oyente y se repartiría los mensajes con la
+  // interfaz, que es justo lo que duplicaba los subtítulos.
+  window.CORT_enviarAlCerebro = (obj) => PUENTE.enviar(obj);
+  window.CORT_pedirEstadoCerebro = () => PUENTE.enviar({ type: "check_ollama_status" });
 
   // ---- datos reales que el navegador sí puede medir (no inventados) ----
   const HARDWARE = {

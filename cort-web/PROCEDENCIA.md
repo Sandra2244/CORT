@@ -45,7 +45,7 @@ sube sólo lo propio.
 
 | Ruta | Origen | Estado |
 |---|---|---|
-| `index.html` | Demo TechEnClair | Modificado (27 líneas) |
+| `index.html` | Demo TechEnClair | Modificado (56 líneas) |
 | `index.html.orig` | Demo TechEnClair | **Intacto** — respaldo del original |
 | `assets/main-s6G6kMTO.js` | Demo TechEnClair | Modificado (3 líneas) |
 | `assets/main-s6G6kMTO.js.orig` | Demo TechEnClair | **Intacto** |
@@ -63,7 +63,7 @@ sube sólo lo propio.
 
 ## 4. Qué se cambió exactamente en la base
 
-**`index.html`** (27 líneas tocadas sobre 5.900):
+**`index.html`** (56 líneas tocadas sobre 5.900):
 
 - `<html lang="fr">` → `lang="es"`; `<title>J.A.R.V.I.S</title>` → `<title>CORT</title>`.
 - Logo de arranque: `J.A.R.V.I.S` / `JUST A RATHER VERY INTELLIGENT SYSTEM` →
@@ -76,6 +76,22 @@ sube sólo lo propio.
   `cort/cort-ui.js` y `cort/cort-style.css`.
 - Botón `MISE À JOUR JARVIS` → `ACTUALIZAR CORT` (sin enlace externo).
 - Comentario de procedencia en el `<head>`.
+- **Los tres `<script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/...">` fuera**
+  (hands, camera_utils, drawing_utils). Pesaban ~2 MB desde un CDN y se cargaban en cada
+  arranque. El bundle trae guardas `typeof Hands > "u"`, así que el modo holograma de
+  gestos no arranca y el resto de la interfaz sigue igual (comprobado: consola limpia al
+  cargar). Para volver a activarlos, restaurar las tres etiquetas desde `index.html.orig`.
+- Selector "CEREBRO PREFERIDO (LLM)" y sus opciones, en español; los valores (`auto`,
+  `local_uncensored`, …) no se tocan porque el bundle los compara.
+- Las tres tarjetas de modelo local (`local_model_choice`) eran `dolphin3`, `phi3.5` y
+  `llama3.1:8b`: **ninguno de los tres existe en este equipo**. Ahora son
+  `smollm2:135m`, `qwen2.5:0.5b` y `qwen3:0.6b`, los tres medidos en disco, con su peso y
+  la RAM que piden.
+
+Tras estos cambios **no queda ninguna carga externa en el arranque**: `grep` de
+`src="http…"` en el index sale vacío. Lo que sí sigue yendo a internet **al usar el panel
+correspondiente** son losetas del mapa (`mt1.google.com`), las webcams de Windy, y el
+reproductor HLS (`cdn.jsdelivr.net/npm/hls.js`) que el bundle inyecta bajo demanda.
 
 **`assets/main-s6G6kMTO.js`** (3 líneas): las tres salidas a
 `https://www.techenclair.fr/...` (actualizador, banner y botón del panel) apuntan ahora a
@@ -84,12 +100,6 @@ sube sólo lo propio.
 **`demo/demo-banner.js`** (2 líneas): rutas relativas rotas del espejo (`../pages/jarvis.html`)
 → URL absoluta, para que el banner no apunte a la nada si algún día se vuelve a cargar.
 Hoy **no se carga**.
-
-**Todavía hay tres `<script defer src="https://cdn.jsdelivr.net/npm/@mediapipe/...">`** en
-`index.html` (hands, camera_utils, drawing_utils). Se dejan marcados abajo en "pendientes"
-porque quitarlos cambia una función; el bundle trae guardas `typeof Hands > "u"`, así que
-se pueden desactivar sin romper el arranque. Es el único punto de la interfaz que aún llama
-a internet en el arranque.
 
 ## 5. Cómo volver atrás
 
