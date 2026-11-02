@@ -93,6 +93,11 @@
         this._intento = 0;
         console.log("%c[CORT] puente real conectado en " + this.url + " — las medidas dejan de ser simuladas",
           "color:#10b981;font-weight:bold;");
+        // F2 — gesto de arranque: el vórtice se dispara con el puente VIVO, no con un
+        // reloj. Así el orbe nunca "actúa" conectado cuando no lo está.
+        if (typeof window.CORT_orbe_alMensaje === "function") {
+          try { window.CORT_orbe_alMensaje({ type: "puente_conectado" }); } catch (e) {}
+        }
       };
       s.onmessage = (ev) => {
         this.recibidos++;
@@ -160,6 +165,11 @@
         return !!(p && p.classList.contains("wp-visible"));
       })();
       mejor.dispatchServerMessage(n);
+      // La capa propia del orbe (cort/cort-orbe.js) traduce cada mensaje del puente
+      // en un gesto: no hay animación que no corresponda a algo que pasó de verdad.
+      if (typeof window.CORT_orbe_alMensaje === "function") {
+        try { window.CORT_orbe_alMensaje(n); } catch (e) {}
+      }
       if (n.empujado && n.type === "weather_panel" && !climaAbiertoAntes) {
         const p = document.getElementById("weather-panel");
         if (p) p.classList.remove("wp-visible");

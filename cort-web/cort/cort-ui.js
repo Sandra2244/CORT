@@ -1139,10 +1139,18 @@
 
   function applyTo(node) {
     if (node.nodeType === 3) {
-      const p = node.parentNode;
-      if (p && (NO_TOCAR.includes(p.tagName) || p.closest?.("script,style,textarea"))) return;
       const raw = node.nodeValue;
       if (!raw || !raw.trim()) return;
+      // Memoria por nodo: el repaso de seguridad recorre el documento cada 3 s y
+      // aquí es donde se iba el tiempo (medido: 150-462 ms por pasada, y eso
+      // hundía el orbe a 8-9 FPS en la Canaima). Si el texto del nodo es idéntico
+      // al que ya dejamos escrito, no se vuelve a mirar ni un regex.
+      if (node._cort === raw) return;
+      const p = node.parentNode;
+      if (p && (NO_TOCAR.includes(p.tagName) || p.closest?.("script,style,textarea"))) {
+        node._cort = raw;
+        return;
+      }
       // El nodo suele ser un trozo de frase ("1. Ouvrez les " + "Configuración…"):
       // si no devolvemos los espacios del borde, las palabras se pegan.
       const lead = (raw.match(/^\s*/) || [""])[0];
@@ -1153,6 +1161,7 @@
       if (key.length > 1) {
         cuenta(key, out !== raw);
         if (out !== raw) node.nodeValue = out;
+        node._cort = out;
       }
       return;
     }

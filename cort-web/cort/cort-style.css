@@ -383,3 +383,16 @@
 }
 
 .cort-sin-datos { color: rgba(174, 240, 255, .38) !important; font-style: italic; }
+
+/* ---------- F2: recuperar fotogramas antes de pintar el orbe ----------
+   Medido en la Canaima (2 núcleos, GPU Bay Trail): la página corría a 9-13 FPS.
+   El culpable no era el orbe ni el traductor: #recipe-modal queda con class
+   "hidden" pero su CSS lo deja display:flex y opacity:0, así que el navegador
+   compone un blur(12px) de 475x155 px CADA FOTO para un modal invisible. Con el
+   backdrop-filter apagado la misma página mide 19-20 FPS. La regla es general:
+   lo que está oculto no tiene derecho a costear desenfoque. */
+.hidden,
+[hidden] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

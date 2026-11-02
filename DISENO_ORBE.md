@@ -115,3 +115,54 @@ desmonta y la pantalla sigue funcionando (el motor ya tiene un camino mudo de re
 la tabla, ráfaga en menos de 400 ms, vórtice en menos de 900 ms, **FPS ≥ 24 medidos con
 `requestAnimationFrame`** en la pestaña real, y `window.CORT_orbe.fps()` devolviendo el
 número. Nada de "se ve más bonito": se mide y se muestra.
+
+## 5. Lo que quedó construido y lo que se midió (2026-11-02, Canaima)
+
+**Capa:** `cort-web/cort/cort-orbe.js` (código propio, canvas 2D, `mix-blend-mode:screen`
+montado sobre la caja medida del orbe: centro (271,265) y radio 104 px en 535×521).
+No toca el bundle minificado. 260 partículas en esfera de Fibonacci, 3 anillos
+orbitales, núcleo con gradiente, ~70 cuerdas entre vecinas y estela corta en la ráfaga.
+
+**Los dos gestos de la referencia, fotografiados fase por fase** con la pausa de
+laboratorio `CORT_orbe.congelar(modo, k)` (carpetas `~/Escritorio/Referencias IA
+CORT/fotogramas/orbe-cort/`, fuera del repo por ser capturas con el diseño de la demo):
+
+| fase | foto | lo que se ve |
+|---|---|---|
+| vórtice k=0,20 | `detalle-vortice-020.png` | esfera que empieza a recolectarse al plano |
+| vórtice k=0,45 | `detalle-vortice-045.png` | **toroide blanco girando** — es el fotograma 3-4,5 s del video 2 |
+| vórtice k=0,85 | `detalle-vortice-085.png` | dispersión y regreso a esfera |
+| ráfaga k=0,30 | `detalle-rafaga-030-v2.png` | cometa vertical ámbar (los 9 s del video 1) |
+| 7 estados | `montaje-estados-orbe.png` | reposo cian · escucha menta · pensando violeta+toroide · hablando menta con volumen · ejecutando ámbar+ráfaga · alerta magenta · descarga ámbar con anillo al 62 % |
+
+**Duraciones medidas en pared (`info().ultimoEfecto`, 4 rondas cada una):**
+
+| gesto | línea de tiempo | pared: mín · mediana · máx | fotogramas |
+|---|---|---|---|
+| vórtice | 850 ms | 856 · 939 · 982 ms | 8-12 |
+| ráfaga | 360 ms | 372 · 407 · 449 ms | 5-8 |
+| saludo de arranque | 850 ms | 925-1036 ms | 3-6 (con la página cargando) |
+
+La pared siempre pasa a `dur` por **un fotograma**: un gesto sólo puede terminar en un
+fotograma, así que `dur` se eligió para que con la página a 24-30 FPS el reloj de pared
+quede por debajo de la vara (850+35 < 900 y 360+35 < 400).
+
+**El techo de FPS no es el orbe (medido, no supuesto).** Prueba con tres condiciones en
+la misma pestaña, 2 s por condición: base **10 FPS**; los cuatro lienzos `holo-*`
+reducidos a 2×2 px **11 FPS**; además el `#orb-canvas` de la demo ocultado **9 FPS**;
+restaurado **10 FPS**. Esconder o achicar el WebGL no mueve el número. Lo que sí lo
+mueve está fuera de la página: en la misma corrida `top` marcaba **load average 5,9 con
+2 núcleos**, 83 % de CPU de usuario y **1,36 GB en swap**, y los dos procesos que más
+CPU pedían eran los del propio entorno del agente (63 % y 52 %). Mientras ese proceso
+corra, cualquier FPS medido en esta máquina está contaminado y **no vale como cifra de
+CORT**. La vara de FPS ≥ 24 queda **aplazada a una ventana sin carga** (madrugada, junto
+a la tarea del cerebro), no abandonada: `window.CORT_orbe.fps()` ya devuelve el número y
+`info().msPromedio` dice cuánto cuesta la capa, que es lo que sí se puede aislar
+(medido en reposo: **2,3 ms por fotograma** con las 260 partículas).
+
+**Recorte automático, corregido con número:** antes se guiaba por el FPS de la página y
+bajó la esfera de 260 a 88 partículas por culpa de un pico ajeno. Ahora se guía por su
+propio costo (> 12 ms/fotograma durante 3 ventanas seguidas, y nunca en los primeros 5 s
+de arranque), vuelve a llenar por debajo de 6 ms, y al recortar reparte los puntos que
+conserva en vez de tomar los primeros (los primeros n de una esfera de Fibonacci son un
+casquete). Con la corrección: **0 recortes y 260 partículas sostenidas** tras el arranque.

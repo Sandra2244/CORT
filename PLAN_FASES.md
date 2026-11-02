@@ -56,6 +56,19 @@ eso pinta los números pero ya no abre el panel por la cara.
 **Salida:** 7 estados visibles, dispersión en menos de 400 ms, FPS ≥ 24 medido, y el
 orbe se ve distinto del original sin tocar el JS minificado.
 
+**CERRADA el 2026-11-02, con una vara aplazada y otra cumplida.** Los 7 estados están
+pintados y fotografiados en `montaje-estados-orbe.png`; el vórtice (esfera → toroide →
+dispersión) y la ráfaga en cometa salen en `DISENO_ORBE.md` §5 con sus fotogramas; el
+anillo de progreso se llena con el % real de `ollama_pull_progress`; y el saludo de
+arranque se dispara con la apertura del WebSocket, no con un reloj. Duraciones en pared:
+vórtice 856-982 ms y ráfaga 372-449 ms, siempre `dur` + un fotograma. **El FPS ≥ 24 no
+se pudo verificar en esta ventana y se dice como lo que es:** achicar y ocultar los lienzos
+WebGL de la demo no cambió el número (10 → 11 → 9 FPS), mientras `top` marcaba load 5,9 en
+2 núcleos y 1,36 GB en swap con el entorno del agente comiéndose el CPU; la medida limpia
+se toma de madrugada junto a la tarea 5. Lo que sí se aísla es el costo de la capa propia:
+**2,3 ms por fotograma con 260 partículas**, y el recorte automático ya no se dispara por
+culpa ajena (0 recortes tras el arranque, antes 4-6).
+
 ---
 
 ## F3 — Cerebro encendido y voz
