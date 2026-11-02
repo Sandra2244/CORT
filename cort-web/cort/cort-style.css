@@ -1,0 +1,271 @@
+/* ============================================================
+   CORT — capa de rediseño visual (v0.1)
+   Propia de este proyecto. Va DESPUÉS del CSS de la demo, así que
+   gana sin tocar el bundle minificado. Reversible quitando una línea.
+   Paleta firma de CORT: neón menta + cian eléctrico + magenta.
+   ============================================================ */
+
+:root {
+  --cort-menta: #00ffc8;
+  --cort-cian: #22e5ff;
+  --cort-magenta: #ff2bd6;
+  --cort-violeta: #7b5cff;
+  --cort-fondo: #03070d;
+  --cort-corte: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
+}
+
+/* ---------- 1. Reloj: arriba a la derecha, compacto, cyberpunk ---------- */
+#orb-clock-hud {
+  left: auto !important;
+  right: 14px !important;
+  top: 12px !important;
+  transform: none !important;
+  text-align: right !important;
+  padding: 5px 12px 4px !important;
+  min-width: 0 !important;
+  background: linear-gradient(150deg, rgba(0, 255, 200, .07), rgba(255, 43, 214, .05)) !important;
+  border: 1px solid rgba(0, 255, 200, .34) !important;
+  border-radius: 0 !important;
+  clip-path: var(--cort-corte);
+  box-shadow: 0 0 16px rgba(0, 255, 200, .14), inset 0 0 18px rgba(0, 255, 200, .05) !important;
+  backdrop-filter: blur(6px);
+}
+
+/* esquinas: de escuadras blancas a corchetes de neón */
+#orb-clock-hud .hud-corner {
+  width: 8px !important;
+  height: 8px !important;
+  border-color: var(--cort-magenta) !important;
+  opacity: .9;
+}
+
+/* la fila CPU / hora / RAM: menos separación, todo en una línea fina */
+#orb-clock-hud > div:nth-child(6) {
+  gap: 10px !important;
+  justify-content: flex-end !important;
+  font-size: 10px !important;
+}
+
+#orb-clock-hud .hud-prefix {
+  font-size: 8px !important;
+  letter-spacing: .18em !important;
+  color: var(--cort-magenta) !important;
+  opacity: .85;
+}
+
+#orb-clock-hud .hud-labels {
+  font-size: 8px !important;
+  letter-spacing: .14em !important;
+  color: rgba(174, 240, 255, .62) !important;
+}
+
+/* los porcentajes CPU/RAM, encajonados y pequeños */
+#orb-clock-hud span {
+  font-size: 10px !important;
+  letter-spacing: .04em !important;
+  color: var(--cort-cian) !important;
+  padding: 0 5px !important;
+  border: 1px solid rgba(34, 229, 255, .22) !important;
+  border-radius: 2px;
+  background: rgba(3, 7, 13, .5);
+}
+
+/* la hora: de 42 px a 22 px, con degradado neón y halo estrecho */
+#orb-time-display {
+  font-family: "DejaVu Sans Mono", ui-monospace, "SFMono-Regular", monospace !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+  color: transparent !important;
+  background: linear-gradient(92deg, var(--cort-menta) 0%, var(--cort-cian) 55%, var(--cort-magenta) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: none !important;
+  filter: drop-shadow(0 0 5px rgba(0, 255, 200, .55));
+}
+
+/* parpadeo del separador: guiño de terminal, no de adorno */
+#orb-time-display::after {
+  content: "_";
+  color: var(--cort-magenta);
+  -webkit-text-fill-color: var(--cort-magenta);
+  animation: cort-cursor 1.15s steps(2, start) infinite;
+}
+
+@keyframes cort-cursor {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* ---------- 2. Botón de menú: pastilla con corte, relleno neón ---------- */
+#jarvis-menu-btn {
+  padding: 7px 15px 7px 11px !important;
+  color: var(--cort-fondo) !important;
+  background: linear-gradient(135deg, var(--cort-menta), var(--cort-cian) 70%) !important;
+  border: none !important;
+  border-radius: 0 !important;
+  clip-path: var(--cort-corte);
+  box-shadow: 0 0 14px rgba(0, 255, 200, .35);
+  font-size: 10px !important;
+  letter-spacing: .22em !important;
+  transition: box-shadow .18s ease, filter .18s ease;
+}
+
+#jarvis-menu-btn:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 22px rgba(0, 255, 200, .6), 0 0 46px rgba(255, 43, 214, .25);
+}
+
+/* desplegable del menú: panel angular con filete de neón */
+#jarvis-menu-dropdown {
+  border-radius: 0 !important;
+  border: 1px solid rgba(0, 255, 200, .3) !important;
+  background: rgba(3, 8, 15, .94) !important;
+  clip-path: var(--cort-corte);
+  box-shadow: 0 0 26px rgba(0, 0, 0, .6), inset 0 0 26px rgba(0, 255, 200, .04) !important;
+}
+
+#jarvis-menu-dropdown button:hover {
+  background: linear-gradient(90deg, rgba(0, 255, 200, .16), transparent) !important;
+  color: var(--cort-menta) !important;
+}
+
+/* ---------- 3. Subtítulos / HUD de texto ---------- */
+#subtitle-hud {
+  border-color: rgba(0, 255, 200, .28) !important;
+  border-radius: 0 !important;
+  clip-path: var(--cort-corte);
+}
+
+/* ---------- 3b. Trío de utilidades: de la esquina derecha (chocaba con el
+   reloj nuevo) a la izquierda, en familia con el botón de menú ---------- */
+#https-tunnel-btn, #companion-button, #mobile-pairing-btn {
+  top: 18px !important;
+  right: auto !important;
+  border-radius: 0 !important;
+  clip-path: var(--cort-corte);
+  border: 1px solid rgba(0, 255, 200, .35) !important;
+  background: rgba(3, 8, 15, .8) !important;
+  color: var(--cort-menta) !important;
+}
+#https-tunnel-btn { left: 106px !important; }
+#companion-button { left: 146px !important; }
+#mobile-pairing-btn { left: 186px !important; }
+
+#https-tunnel-btn:hover, #companion-button:hover, #mobile-pairing-btn:hover {
+  box-shadow: 0 0 14px rgba(0, 255, 200, .45);
+  color: #fff !important;
+}
+
+/* ---------- 4. Pantalla de arranque: marca nueva, sin el anillo viejo ---------- */
+#boot-logo-ring {
+  width: 92px !important;
+  height: 104px !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: conic-gradient(from 0deg, var(--cort-menta), var(--cort-cian), var(--cort-magenta), var(--cort-menta));
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  animation: cort-giro 3.6s linear infinite;
+  filter: drop-shadow(0 0 16px rgba(0, 255, 200, .45));
+}
+
+#boot-ring-inner {
+  position: absolute;
+  inset: 5px !important;
+  width: auto !important;
+  height: auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 255, 200, .85), rgba(3, 7, 13, .98) 62%);
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+  animation: cort-pulso 1.7s ease-in-out infinite;
+}
+
+@keyframes cort-giro {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cort-pulso {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+
+#boot-logo-text {
+  background: linear-gradient(92deg, var(--cort-menta), var(--cort-cian) 55%, var(--cort-magenta));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  letter-spacing: .3em !important;
+  text-shadow: none !important;
+  filter: drop-shadow(0 0 12px rgba(0, 255, 200, .35));
+}
+
+#boot-logo-sub {
+  color: rgba(174, 240, 255, .72) !important;
+  letter-spacing: .22em !important;
+  font-size: 9px !important;
+}
+
+#boot-logo-version {
+  color: var(--cort-magenta) !important;
+  opacity: .75;
+}
+
+#boot-progress-bar {
+  background: linear-gradient(90deg, var(--cort-menta), var(--cort-cian), var(--cort-magenta)) !important;
+}
+
+#boot-separator .boot-sep-line {
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 200, .55), transparent) !important;
+}
+
+/* ---------- 5. Ajustes: el selector de idioma que inyectamos nosotros ---------- */
+#cort-lang-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(0, 255, 200, .26);
+  clip-path: var(--cort-corte);
+  background: rgba(3, 8, 15, .6);
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  letter-spacing: .14em;
+  color: rgba(174, 240, 255, .8);
+}
+
+#cort-lang-row .cort-lang-btn {
+  padding: 5px 12px;
+  border: 1px solid rgba(34, 229, 255, .3);
+  background: transparent;
+  color: rgba(174, 240, 255, .75);
+  font: 700 10px/1 "Courier New", monospace;
+  letter-spacing: .14em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+#cort-lang-row .cort-lang-btn:hover {
+  border-color: var(--cort-menta);
+  color: var(--cort-menta);
+}
+
+#cort-lang-row .cort-lang-btn[data-activo="1"] {
+  background: linear-gradient(135deg, var(--cort-menta), var(--cort-cian));
+  border-color: transparent;
+  color: var(--cort-fondo);
+  box-shadow: 0 0 12px rgba(0, 255, 200, .45);
+}
+
+/* en pantallas estrechas el reloj no se come al orbe, pero NO perdemos CPU/RAM */
+@media (max-width: 560px) {
+  #orb-clock-hud { right: 8px !important; top: 8px !important; padding: 4px 8px 3px !important; }
+  #orb-time-display { font-size: 17px !important; }
+  #orb-clock-hud span { font-size: 8px !important; padding: 0 3px !important; }
+  #orb-clock-hud > div:nth-child(6) { gap: 5px !important; }
+  #https-tunnel-btn { left: 100px !important; }
+  #companion-button { left: 136px !important; }
+  #mobile-pairing-btn { left: 172px !important; }
+}

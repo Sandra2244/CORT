@@ -1,0 +1,23 @@
+# Cosas que se generan al correr y no tienen sentido versionar
+__pycache__/
+*.py[cod]
+*.egg-info/
+.run/
+logs/
+*.log
+
+# Dependencias de terceros (se reinstalan, no se copian)
+**/node_modules/
+frontend/package-lock.json
+
+# Estado local del puente: es la configuración personal de Sandra (modelo elegido,
+# ciudad, nombre). No va al repo; cada equipo tiene el suyo.
+cort-bridge/cort_state.json
+
+# Copias de trabajo grandes que no son código
+*.bak
+*.tmp
+
+# Los .orig SÍ se versionan a propósito: son el respaldo del archivo original de la
+# demo y la ruta de revertido documentada en cort-web/PROCEDENCIA.md. Pesan ~600 KB
+# entre los tres y sin ellos no se puede volver atrás ni comparar contra el original.

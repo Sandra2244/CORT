@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>CORT · sin servicios externos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --menta: #00ffc8; --cian: #22e5ff; --magenta: #ff2bd6; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: radial-gradient(1200px 600px at 50% -10%, #06202a, #03070d 60%, #01030a);
+      color: #aef0ff; font-family: "Courier New", ui-monospace, monospace;
+    }
+    .marco {
+      width: min(560px, 92vw); padding: 26px 28px;
+      border: 1px solid rgba(0, 255, 200, .35);
+      clip-path: polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+      background: rgba(3, 10, 16, .88);
+      box-shadow: 0 0 40px rgba(0, 255, 200, .12), inset 0 0 30px rgba(0, 255, 200, .05);
+    }
+    h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: .28em; color: transparent;
+         background: linear-gradient(92deg, var(--menta), var(--cian) 55%, var(--magenta));
+         -webkit-background-clip: text; background-clip: text; }
+    .sub { font-size: 10px; letter-spacing: .2em; opacity: .65; margin-bottom: 18px; }
+    p { font-size: 12px; line-height: 1.75; margin: 0 0 12px; }
+    code { color: var(--menta); background: rgba(0, 255, 200, .08); padding: 1px 5px; }
+    .aviso { border-left: 2px solid var(--magenta); padding-left: 12px; font-size: 11px; opacity: .85; }
+    a { color: var(--cian); }
+    button { margin-top: 18px; padding: 9px 16px; font: 700 11px/1 "Courier New", monospace;
+             letter-spacing: .18em; color: #03070d; border: 0; cursor: pointer;
+             background: linear-gradient(135deg, var(--menta), var(--cian));
+             clip-path: polygon(0 0, 100% 0, 100% 70%, calc(100% - 10px) 100%, 0 100%); }
+  </style>
+</head>
+<body>
+  <div class="marco">
+    <h1>CORT</h1>
+    <div class="sub">SIN SERVICIOS EXTERNOS · MODO LOCAL</div>
+
+    <p>Has pulsado un botón que en la interfaz de referencia abría una página de
+    descargas o de actualizaciones de terceros. En esta construcción ese enlace
+    está <strong>cortado</strong>: CORT no carga nada desde fuera de tu equipo
+    salvo lo que tú le pidas explícitamente (Ollama en <code>127.0.0.1:11434</code>,
+    Home Assistant, y las APIs sin clave de clima <code>ipapi.co</code> /
+    <code>open-meteo.com</code> cuando las actives).</p>
+
+    <p class="aviso">Comprobación de versiones: desactivada. Para actualizar CORT
+    se usará tu propio repositorio cuando el proyecto tenga permiso de publicación;
+    hasta entonces, el cambio de versión es manual, con git en la rama
+    <code>web/cort-v0</code>.</p>
+
+    <p>Descargas de modelos: el panel <em>Cerebro local / Ollama</em> pide los
+    modelos directamente al servidor Ollama de tu PC, no a una web de terceros.</p>
+
+    <button onclick="history.length > 1 ? history.back() : (location.href='index.html')">◈ VOLVER A CORT</button>
+  </div>
+</body>
+</html>
