@@ -29,6 +29,15 @@ descargado: ahí está la línea que protege tu autoría sin frenar nada.
 **Salida:** al sondear las 34 órdenes, ninguna queda muda (contesta dato o contesta
 motivo); 0 trazas en `/tmp/cort_bridge.log` tras recargar tres veces a media frase.
 
+**CERRADA el 2026-11-02 con la vara medida:** `cort_probe.py menu` → 34 contestan · 0 en
+silencio; 0 trazas tras tres recargas a mitad de subtítulo y de escáner (puente con 5 min
+de vida, RSS estable en 43 MB, 8 conexiones y 7 cierres: nada se queda colgado). La prueba
+de sordera: `user_input` + `av_scan_start` en el mismo canal y a 0,2 s de distancia → los
+dos contestan (15 subtítulos y 5 avances del escáner en la misma escucha).
+El sondeo de clima no lo hace la página sino el puente (`latido_clima`, cada 10 min, una
+sola petición a open-meteo compartida por todas las pestañas) y llega marcado `empujado`:
+eso pinta los números pero ya no abre el panel por la cara.
+
 ---
 
 ## F2 — El orbe y el arranque, ya de CORT

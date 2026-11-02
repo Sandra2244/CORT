@@ -330,3 +330,56 @@
   #companion-button { left: 136px !important; }
   #mobile-pairing-btn { left: 172px !important; }
 }
+
+/* ---------- F1: avisos honestos dentro de los paneles ----------
+   Un panel que no tiene backend ya no gira y gira: el puente manda el motivo y
+   esta caja lo pinta arriba del todo, donde estaba la espera infinita. */
+.cort-aviso {
+  margin: 10px 12px 4px;
+  padding: 9px 11px;
+  background: linear-gradient(150deg, rgba(255, 170, 0, .10), rgba(255, 43, 214, .06));
+  border: 1px solid rgba(255, 170, 0, .42);
+  border-left: 3px solid #ffaa00;
+  clip-path: var(--cort-corte);
+  color: #ffd27a;
+  font: 700 10px/1.55 "Courier New", monospace;
+  letter-spacing: .06em;
+  text-transform: none;
+}
+
+.cort-aviso-titulo {
+  color: #ffaa00;
+  letter-spacing: .18em;
+  margin-bottom: 4px;
+}
+
+.cort-aviso-motivo { color: rgba(255, 226, 178, .92); font-weight: 400; }
+
+#cort-temp-nota { margin: 8px 10px 0; }
+
+/* Órdenes sin panel propio: una línea breve que aparece y se va sola. */
+#cort-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 86px;
+  transform: translateX(-50%) translateY(14px);
+  max-width: min(72vw, 620px);
+  padding: 9px 14px;
+  background: rgba(3, 7, 13, .92);
+  border: 1px solid rgba(255, 170, 0, .5);
+  clip-path: var(--cort-corte);
+  color: #ffd27a;
+  font: 700 10px/1.5 "Courier New", monospace;
+  letter-spacing: .08em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease, transform .25s ease;
+  z-index: 90;
+}
+
+#cort-toast.cort-toast-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.cort-sin-datos { color: rgba(174, 240, 255, .38) !important; font-style: italic; }

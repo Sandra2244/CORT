@@ -36,6 +36,29 @@
   // Estos también van al puente, pero la interfaz necesita su eco local inmediato.
   const REALES_CON_ECO = new Set(["update_settings"]);
 
+  // Fase F1 — los paneles que en el censo del 2026-11-02 se quedaban girando sin
+  // que nadie respondiera. Con el puente vivo, la orden viaja y el puente contesta
+  // lo que mide o un `puente_aviso` con el motivo exacto y lo que haría falta; ya
+  // no se pinta un dato inventado ni una rueda de carga eterna. Con el puente caído
+  // se vuelve al simulador de esta página, que es lo único que queda.
+  const VAN_AL_PUENTE = new Set([
+    "vpn_get_status", "vpn_get_countries", "vpn_connect", "vpn_disconnect", "vpn_cancel",
+    "get_winget_upgrades", "run_winget_upgrade",
+    "get_installed_programs", "uninstall_program", "clean_leftovers",
+    "games_get_library", "games_scan", "games_launch", "games_hide", "games_pick_folder", "detect_apps",
+    "get_desktop_wallpaper",
+    "ha_get_states", "ha_call_service", "ha_add_voice_alias",
+    "get_shopping_list", "update_shopping_list",
+    "print3d_check_deps", "print3d_check_hardware", "print3d_generate", "print3d_generate_lithophane",
+    "print3d_install", "print3d_open_folder",
+    "read_obsidian_note", "save_obsidian_note", "delete_obsidian_note",
+    "get_windy_webcams", "iptv_open_file", "iptv_parse_m3u", "iptv_parse_url",
+    "open_browser", "close_browser", "get_https_tunnel_status", "mobile_auth",
+    "get_elevenlabs_voices", "check_local_tts_status", "check_kokoro_status",
+    "claude_code_status", "av_speak", "toggle_mic", "toggle_fullscreen",
+    "toggle_always_listen", "clear_cache", "temperatura"
+  ]);
+
   // La demo lee unas respuestas por `s.type` y otras por `s.action` (live_subtitles,
   // jarvis_text, weather_panel, system_stats van por `action`). El puente siempre
   // manda `type`, así que se duplica el discriminador antes de entregar el mensaje.
@@ -54,6 +77,8 @@
     reenviados: 0,
     recibidos: 0,
     ultimo_status: null,
+    ultima_temperatura: null,
+    avisos: {},
     escuchas: new Set(),
     _intento: 0,
 
@@ -104,6 +129,21 @@
           try { window.CORT_alEstadoCerebro(this.ultimo_status); } catch (e) {}
         }
       }
+      // Los dos mensajeros nuevos del puente (fase F1) se guardan aparte y se
+      // entregan a la pantalla por su propia vía: un aviso de "aquí no hay nadie"
+      // tiene que pintarse dentro del panel afectado, no perderse entre subtítulos.
+      if (n.type === "sala_temperatura") {
+        this.ultima_temperatura = n.data || null;
+        if (typeof window.CORT_alTemperatura === "function") {
+          try { window.CORT_alTemperatura(n); } catch (e) {}
+        }
+      }
+      if (n.type === "puente_aviso") {
+        this.avisos[n.orden || n.panel || "?"] = n;
+        if (typeof window.CORT_alAvisoPanel === "function") {
+          try { window.CORT_alAvisoPanel(n); } catch (e) {}
+        }
+      }
       const a = Array.from(this.escuchas);
       if (!a.length) return;
       // La demo abre tres canales a la vez y solo uno es el que renderiza: el que
@@ -111,7 +151,19 @@
       // cada línea del escáner; entregar al primero no llegaba a la pantalla.
       let mejor = a[0];
       for (const w of a) if ((w._enviados || 0) > (mejor._enviados || 0)) mejor = w;
+      // Regla de la fase F1: un dato EMPUJADO por el puente (nadie lo pidió) pinta
+      // sus números, pero no tiene derecho a tapar la pantalla. La demo abre el
+      // panel de clima en cuanto llega un `weather_panel`, así que se cierra justo
+      // después si estaba cerrado. Lo que la usuaria pide sigue abriendo su panel.
+      const climaAbiertoAntes = (() => {
+        const p = document.getElementById("weather-panel");
+        return !!(p && p.classList.contains("wp-visible"));
+      })();
       mejor.dispatchServerMessage(n);
+      if (n.empujado && n.type === "weather_panel" && !climaAbiertoAntes) {
+        const p = document.getElementById("weather-panel");
+        if (p) p.classList.remove("wp-visible");
+      }
     }
   };
 
@@ -141,6 +193,9 @@
       }));
     })(),
     tipos_reales: Array.from(REALES),
+    tipos_al_puente: Array.from(VAN_AL_PUENTE),
+    ultima_temperatura: PUENTE.ultima_temperatura,
+    avisos: Object.keys(PUENTE.avisos),
     ultimo_status: PUENTE.ultimo_status
   });
 
@@ -307,7 +362,8 @@
       const type = msg.type;
 
       // ---- 1. Enrutador al puente real ------------------------------------
-      if (REALES.has(type) || REALES_CON_ECO.has(type)) {
+      const vaAlPuente = REALES.has(type) || REALES_CON_ECO.has(type) || VAN_AL_PUENTE.has(type);
+      if (vaAlPuente) {
         if (!PUENTE.vivo()) PUENTE.conectar();
         if (PUENTE.vivo() && PUENTE.enviar(msg)) {
           if (!REALES_CON_ECO.has(type)) return;   // contesta el puente, no se simula
@@ -469,22 +525,23 @@
           return this.speak(`Hoy es ${d}.`);
         }
         if (tiene("clima", "tiempo", "temperatura exterior", "lluvia", "va a llover")) {
-          if (!ciudad) {
-            return this.speak("No tengo ciudad configurada. Dímela en Ajustes y te doy el clima real.");
-          }
-          this.dispatchServerMessage({ state: "speaking" });
+          // Con el puente vivo esta frase la contesta cort_server.py con open-meteo
+          // y aquí no se llega. Si se llega, es que el puente está caído: no se
+          // inventan grados, se dice.
           this.dispatchServerMessage({
-            action: "weather_panel",
-            data: { ville: ciudad, temperature: 22, ressenti: 23, humidite: 50, vent: 14, code: 1, description: "Sol entre nubes" }
+            type: "puente_aviso", orden: "weather", panel: "weather-panel", origen: "simulado",
+            motivo: "puente caído: sin medida de clima",
+            hace_falta: "arranca cort-bridge/cort_server.py y vuelve a preguntar"
           });
-          return this.speak(`En ${ciudad}: 22 grados, sol entre nubes, viento de 14 kilómetros por hora. Aviso: esto aún es el simulador, el clima real llega con el módulo de clima.`);
+          return this.speak("No te doy el clima: el puente que lo mide está apagado y no pienso inventarme los grados.");
         }
         if (tiene("temperatura", "grado", "cuánto marca")) {
           this.dispatchServerMessage({
-            action: "temp_panel",
-            data: { piece: "Escritorio principal", temperature: "21.8", humidite: "48%" }
+            type: "puente_aviso", orden: "temperatura", panel: "temp-panel", origen: "simulado",
+            motivo: "puente caído: sin lectura de sensores",
+            hace_falta: "arranca cort-bridge/cort_server.py (lee /sys/class/thermal)"
           });
-          return this.speak("En tu escritorio la temperatura está estable en 21,8 grados y la humedad al 48 por ciento.");
+          return this.speak("Nada de números inventados: con el puente apagado no hay quién lea los sensores del equipo.");
         }
         if (tiene("música", "musica", "canción", "cancion", "playlist", "reproduce", "pon")) {
           this.dispatchServerMessage({

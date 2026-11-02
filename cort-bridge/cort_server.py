@@ -599,7 +599,8 @@ def intentos_locales(texto, estado):
         return (f"Hoy es {dias[a.tm_wday]}, {a.tm_mday} de {meses[a.tm_mon - 1]} de {a.tm_year} "
                 f"y son las {time.strftime('%H:%M')} (reloj del equipo)."), []
 
-    if tiene("clima", "tiempo hace", "temperatura exterior", "lluvia", "llover", "hace frio", "hace calor", "va a llover"):
+    if tiene("clima", "tiempo hace", "temperatura exterior", "lluvia", "llover",
+             "hace frio", "hace calor", "va a llover", "fuera", "afuera", "el tiempo"):
         w = clima(estado.get("user_city") or "")
         if not w.get("ok"):
             return f"No pude leer el clima real: {w.get('motivo')}", []
@@ -607,6 +608,22 @@ def intentos_locales(texto, estado):
                 f"{w['description']}, viento {w['vent']} km/h. Dato tomado de open-meteo hace segundos."
                 + (f" {w['aviso']}" if w.get("aviso") else "")), [
             {"type": "weather_panel", "data": w}]
+
+    interior = tiene("temperatura ambiente", "que temperatura", "cual es la temperatura",
+                     "temperatura de la sala", "temperatura del equipo", "cuanto marca",
+                     "temperatura interior")
+    # "qué temperatura hace fuera" es clima, no sensores: si la frase habla de la
+    # calle se deja pasar a la regla del clima de arriba.
+    if interior and not tiene("fuera", "afuera", "exterior", "calle", "en la ciudad"):
+        # No es clima: son los sensores térmicos del kernel. Se dice el nombre del
+        # sensor porque en esta laptop no hay sonda de ambiente y confundirlos
+        # sería una mentira con número.
+        t = temperatura_sala()
+        if not t.get("ok"):
+            return f"No puedo darte una temperatura real: {t.get('motivo')}", []
+        return (f"{t['piece']} a {t['temperature']} grados. {t['aviso']} "
+                f"El clima de la calle es otra medida: pregunta por el tiempo."), [
+            {"type": "sala_temperatura", "data": t}]
 
     if tiene("virus", "amenaza", "auditor", "seguridad", "escaneo", "optimiza", "escan", "analisis"):
         return "Empiezo la auditoría real: arranque, procesos, archivos y permisos. No borro nada.", [
@@ -714,16 +731,267 @@ PULANDO = {}
 CANCELADOS = set()   # conexiones cuyo escaneo pidió cancelar la interfaz
 ESCANEANDO = set()   # conexiones con un escaneo en curso (no se duplican)
 
+# Salidas: cada conexión tiene su cola y su redactor.
+#
+# Por qué: antes el lazo de lectura esperaba a que terminar de hablar. Una
+# respuesta larga dormía ~9 s (0,05 s por cada trozo de subtítulo más el final) y
+# durante ese tiempo CORT no oía ningún botón: la auditoría del informe leyó un
+# escaneo como "silencio" por culpa de esto. Con la cola, quien habla se limita a
+# dejar mensajes en la bandeja y el lazo de lectura sigue libre.
+SALIDA = {}      # ws -> asyncio.Queue de (datos, pausa_antes)
+REDACTOR = {}    # ws -> tarea que vacía esa bandeja
+
+
+def enviar(ws, datos, pausa=0.0):
+    """Deja un mensaje en la bandeja de salida de esta conexión.
+
+    Es sincrónico a propósito: pedir algo nunca puede bloquear al que pregunta.
+    Si la conexión ya no tiene bandeja (se cerró) se ignora en vez de reventar.
+    """
+    cola = SALIDA.get(ws)
+    if cola is None:
+        return False
+    try:
+        cola.put_nowait((datos, pausa))
+        return True
+    except Exception:
+        return False
+
+
+async def redactor(ws, cola):
+    """Único que escribe en el WebSocket: así no hay dos tareas pisándose."""
+    while True:
+        try:
+            datos, pausa = await cola.get()
+        except asyncio.CancelledError:
+            break
+        if pausa:
+            await asyncio.sleep(pausa)
+        try:
+            if ws.closed:
+                break
+            await ws.send_json(datos)
+        except Exception as e:
+            # Pestaña cerrada a media frase: es lo normal al recargar, no es un error
+            # que merezca una traza de 15 líneas en el registro.
+            print(f"[CORT] conexión caída al escribir ({type(e).__name__}); la retiro")
+            break
+    CONEXIONES.discard(ws)
+    SALIDA.pop(ws, None)
+    REDACTOR.pop(ws, None)
+
+
+async def abrir_canal(ws):
+    global MUESTREO
+    cola = asyncio.Queue(maxsize=512)
+    SALIDA[ws] = cola
+    REDACTOR[ws] = asyncio.create_task(redactor(ws, cola))
+    # Con la primera pestaña abierta arranca el muestreo por su cuenta; si no, los
+    # paneles de clima y temperatura esperarían a que alguien los abriera para tener
+    # un número. Una sola tarea para todas las conexiones.
+    if MUESTREO is None or MUESTREO.done():
+        MUESTREO = asyncio.create_task(latido_clima())
+    return cola
+
+
+async def cerrar_canal(ws):
+    tarea = REDACTOR.pop(ws, None)
+    SALIDA.pop(ws, None)
+    if tarea:
+        # Se le da un instante para escribir lo último que quedaba.
+        await asyncio.sleep(0.05)
+        tarea.cancel()
+
+
+# ------------------------------------------- qué le falta a cada panel muerto
+# El censo del 2026-11-02 (INFORME_FUNCIONES.md) midió 34 órdenes de lectura y sólo
+# 6 tenían alguien al otro lado. Estas tablas son la verdad de cada una: si el
+# puente no puede, lo dice con el motivo y con lo que haría falta. Nada de
+# indicadores de carga eternos.
+PANEL_DE_ORDEN = {
+    "vpn_get_status": "vpn-panel", "vpn_get_countries": "vpn-panel",
+    "vpn_connect": "vpn-panel", "vpn_disconnect": "vpn-panel", "vpn_cancel": "vpn-panel",
+    "get_winget_upgrades": "winget-panel", "run_winget_upgrade": "winget-panel",
+    "get_installed_programs": "uninstaller-panel", "uninstall_program": "uninstaller-panel",
+    "clean_leftovers": "uninstaller-panel",
+    "games_get_library": "games-panel", "games_scan": "games-panel", "detect_apps": "games-panel",
+    "games_launch": "games-panel", "games_hide": "games-panel", "games_pick_folder": "games-panel",
+    "get_desktop_wallpaper": "wallpaper-modal",
+    "ha_get_states": "ha-panel", "ha_call_service": "ha-panel", "ha_add_voice_alias": "ha-panel",
+    "update_shopping_list": "shopping-panel", "get_shopping_list": "shopping-panel",
+    "print3d_check_deps": "print3d-panel", "print3d_check_hardware": "print3d-panel",
+    "print3d_generate": "print3d-panel", "print3d_install": "print3d-panel",
+    "print3d_generate_lithophane": "print3d-panel", "print3d_open_folder": "print3d-panel",
+    "read_obsidian_note": "obsidian-panel", "save_obsidian_note": "obsidian-panel",
+    "delete_obsidian_note": "obsidian-panel",
+    "get_windy_webcams": "webcam-preview-panel",
+    "iptv_open_file": "iptv-panel", "iptv_parse_m3u": "iptv-panel", "iptv_parse_url": "iptv-panel",
+    "open_browser": "hud-browser-panel", "close_browser": "hud-browser-panel",
+    "get_https_tunnel_status": "", "mobile_auth": "",
+    "get_elevenlabs_voices": "settings-modal",
+}
+
+# Lo que responde el puente cuando la orden no está en ningún otro sitio.
+FALTA_EN_EL_PUENTE = {
+    "vpn_get_status": ("El puente no levanta ninguna VPN.",
+                       "hace falta un cliente (ProtonVPN o WireGuard) y tú decides cuál; ahora no hay ninguno configurado"),
+    "vpn_get_countries": ("La lista de países la daba el backend de la demo, que ya no existe.",
+                          "misma razón: sin cliente VPN no hay países que listar"),
+    "get_winget_upgrades": ("winget es el gestor de paquetes de Windows; este equipo es MX Linux.",
+                            "las actualizaciones reales se piden con apt, y eso es una acción de F5 con confirmación"),
+    "get_installed_programs": ("El desinstalador leía el registro de Windows.",
+                               "en Linux sí se puede listar con apt, pero desinstalar nunca es automático: fase F5"),
+    "games_get_library": ("La biblioteca leía carpetas de Steam de Windows.",
+                          "se puede hacer real en Linux (F5): leer ~/.local/share/applications y las carpetas que digas"),
+    "detect_apps": ("Detectar programas era un vistazo al registro de Windows.",
+                    "acá la lista real sale de /usr/share/applications; entra en F5"),
+    "get_desktop_wallpaper": ("El puente todavía no lee el fondo del escritorio.",
+                              "en MX Linux sí se puede: xfconf-query -c xfce4-desktop (canal comprobado en este equipo); F6"),
+    "ha_get_states": ("No hay servidor Home Assistant en tu red, así que no hay sensores que leer.",
+                      "hace falta la IP y el token de un Home Assistant; sin eso el panel está vacío por verdad, no por fallo"),
+    "get_windy_webcams": ("Las cámaras de Windy piden una clave gratuita de su API.",
+                          "con clave en Ajustes esto funciona; sin clave no se inventa nada"),
+    "get_elevenlabs_voices": ("Las voces de ElevenLabs son de pago y piden clave.",
+                              "no tienes tarjeta: la voz local se decide en F3"),
+    "check_local_tts_status": ("No hay motor de voz local instalado todavía.",
+                               "F3 decide motor (espeak-ng es el que ya está en el equipo)"),
+    "check_kokoro_status": ("Kokoro baja varios gigabytes de modelos.",
+                            "con 1851 MB de RAM y sin disco de sobra no se instala a ciegas: F3"),
+    "claude_code_status": ("Claude Code no está instalado ni autenticado en este equipo.",
+                           "node sí está (/usr/bin/node), pero pide cuenta y clave: no entra sin tu autorización"),
+    "print3d_check_hardware": ("El puente no detecta ninguna impresora 3D conectada.",
+                               "haría caso si algún día la conectas; no se finge un hardware"),
+    "read_obsidian_note": ("Obsidian no está instalado en este equipo (verificado con `which obsidian`).",
+                           "las notas de CORT se guardan en su propio archivo desde F4, sin depender de Obsidian"),
+    "get_https_tunnel_status": ("Túnel HTTPS: no se abre ningún agujero al exterior sin tu orden explícita.",
+                                "el teléfono se enlaza por red local con token (F7), sin exponer nada a internet"),
+    "mobile_auth": ("El emparejamiento con el teléfono aún no existe.",
+                    "se hace en F7 por Wi-Fi local con QR generado aquí, no con api.qrserver.com"),
+    "toggle_mic": ("El micrófono está apagado a propósito.",
+                   "así lo dejaste hasta decidir el alcance; vuelve en F3 con indicador de escucha en el orbe"),
+    "toggle_always_listen": ("Escucha continua: igual que el micrófono, apagada hasta F3.",
+                             "consume RAM y privacidad: se decide con número medido"),
+    "open_browser": ("El navegador incrustado depende del backend que ya no existe.",
+                     "abrir navegadores reales es acción de F5, con confirmación"),
+    "av_speak": ("Todavía no hay motor de voz de salida; el texto sí aparece en pantalla.",
+                 "F3 trae la voz; el subtítulo y el HUD ya funcionan"),
+    "clear_cache": ("El puente no guarda cachas propias que limpiar todavía (solo 20 s de inventario en memoria).",
+                    "se dirá con cifras cuando exista algo que limpiar"),
+    "get_shopping_list": ("La lista de compras vive en la plantilla con 3 artículos de ejemplo.",
+                          "F4 la convierte en tuya y persistente en el estado del puente"),
+}
+
+RAZON_GENERICA = ("Nadie atiende esta orden en el puente: la plantilla la mandaba a su backend de Windows.",
+                  "está anotada en PLAN_FASES.md y se decide en la fase que corresponda")
+
+
+def aviso_sin_backend(orden, extra=""):
+    """Mensaje honesto para una orden que el puente no puede cumplir."""
+    panel = PANEL_DE_ORDEN.get(orden, "")
+    motivo, hace_falta = FALTA_EN_EL_PUENTE.get(orden, RAZON_GENERICA)
+    return {"type": "puente_aviso", "orden": orden, "panel": panel,
+            "motivo": motivo, "hace_falta": hace_falta, "origen": "real",
+            "nota": extra or ""}
+
+
+def temperatura_sala():
+    """Temperatura real del equipo, leída de los sensores del kernel.
+
+    No hay sonda de ambiente en esta laptop: se dice el nombre del sensor que se
+    está leyendo, para que nadie confunda la temperatura de la CPU con la de la sala.
+    """
+    zonas = []
+    for p in sorted(Path("/sys/class/thermal").glob("thermal_zone*/temp")):
+        try:
+            valor = float(p.read_text().strip()) / 1000.0
+        except Exception:
+            continue
+        try:
+            nombre = (p.parent / "type").read_text().strip()
+        except Exception:
+            nombre = p.parent.name
+        zonas.append((nombre, valor))
+    if not zonas:
+        return {"ok": False, "motivo": "no hay sensores térmicos en este equipo"}
+    nombre, valor = max(zonas, key=lambda z: z[1])
+    return {"ok": True, "origen": "real", "piece": f"sensor {nombre}",
+            "temperature": round(valor, 1), "sensores": dict(zonas),
+            "aviso": "Es la temperatura del chip, no la de la sala: no hay sonda ambiente."}
+
+
+def ajustes_reales():
+    """Lo que Ajustes debe rellenar con datos del puente (no con valores de ejemplo)."""
+    e = leer_estado()
+    return {"user_name": e.get("user_name", ""), "user_age": str(e.get("user_age", "")),
+            "user_city": e.get("user_city", ""), "local_model": e.get("local_model", ""),
+            "language": e.get("language", "es"), "reminders": e.get("reminders", []),
+            "shopping": e.get("shopping", [])}
+
+
+async def muestra_medidas():
+    """Mide lo que la pantalla necesita y nadie pidió: cerebro, sensores y clima.
+
+    Se marca con `empujado` porque no es una petición de la usuaria: la demo abre
+    sus paneles en cuanto llega un dato, y un dato que nadie pidió no tiene derecho
+    a taparle la pantalla. Se pinta, pero se deja cerrado.
+    """
+    bucle = asyncio.get_event_loop()
+    estado = await bucle.run_in_executor(None, estado_ollama)
+    t = await bucle.run_in_executor(None, temperatura_sala)
+    w = await bucle.run_in_executor(None, clima, leer_estado().get("user_city") or "")
+    return [
+        {"type": "ollama_status_reply", "status": estado},
+        {"type": "sala_temperatura", "data": t, "empujado": True},
+        {"type": "weather_panel", "data": w, "empujado": True},
+    ]
+
+
+async def muestrear_al_conectar(ws):
+    for m in await muestra_medidas():
+        if m["type"] == "sala_temperatura" and not m["data"].get("ok"):
+            continue
+        if m["type"] == "weather_panel" and not m["data"].get("ok"):
+            continue
+        enviar(ws, m)
+
+
+MUESTREO = None
+MINUTOS_CLIMA = 10
+
+
+async def latido_clima():
+    """Renueva las medidas por su cuenta: así el panel tiene datos sin que nadie
+    tenga que preguntar, y el coste es una petición a open-meteo cada 10 minutos."""
+    while True:
+        try:
+            mensajes = await muestra_medidas()
+            for ws in list(CONEXIONES):
+                for m in mensajes:
+                    if m["type"] == "sala_temperatura" and not m["data"].get("ok"):
+                        continue
+                    if m["type"] == "weather_panel" and not m["data"].get("ok"):
+                        continue
+                    enviar(ws, m)
+        except Exception as e:
+            print(f"[CORT] muestreo periódico falló ({type(e).__name__}): {e}")
+        await asyncio.sleep(MINUTOS_CLIMA * 60)
+
 
 async def ws_handler(request):
     ws = web.WebSocketResponse(heartbeat=25)
     await ws.prepare(request)
     CONEXIONES.add(ws)
+    await abrir_canal(ws)
+    candado = asyncio.Lock()
     print(f"[CORT] interfaz conectada ({len(CONEXIONES)} sesión/es)")
     historial = []
 
-    await ws.send_json({"type": "connected", "origen": "real", "puente": "cort-bridge v0"})
-    await ws.send_json({"type": "system_stats", **cpu_ram_disco()})
+    enviar(ws, {"type": "connected", "origen": "real", "puente": "cort-bridge v0"})
+    enviar(ws, {"type": "system_stats", **cpu_ram_disco()})
+    # Al conectar ya se empuja lo que la pantalla muestra vacío si nadie lo pide:
+    # estado del cerebro, temperatura del equipo y clima. La demo esperaba que su
+    # backend propio con estos datos; ése era el motivo del «OBTENIENDO…» eterno.
+    asyncio.create_task(muestrear_al_conectar(ws))
 
     try:
         async for msg in ws:
@@ -736,36 +1004,36 @@ async def ws_handler(request):
             t = d.get("type") or d.get("action") or ""
 
             if t == "system_stats":
-                await ws.send_json({"type": "system_stats", **cpu_ram_disco()})
+                enviar(ws, {"type": "system_stats", **cpu_ram_disco()})
 
             elif t == "check_ollama_status":
                 # En un hilo: lee disco y hace una petición HTTP, y eso no puede
                 # congelar el bucle que atiende a las demás conexiones.
                 estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
-                await ws.send_json({"type": "ollama_status_reply", "status": estado})
+                enviar(ws, {"type": "ollama_status_reply", "status": estado})
 
             elif t == "start_ollama":
                 ok, detalle = ollama_arrancar()
-                await ws.send_json({"type": "ollama_start_result", "ok": ok, "detalle": detalle, "origen": "real"})
+                enviar(ws, {"type": "ollama_start_result", "ok": ok, "detalle": detalle, "origen": "real"})
                 if ok:
                     # El servidor tarda un poco en escuchar; dar margen antes de preguntar.
                     await asyncio.sleep(3)
                 estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
-                await ws.send_json({"type": "ollama_status_reply", "status": estado})
+                enviar(ws, {"type": "ollama_status_reply", "status": estado})
 
             elif t == "pull_ollama_model":
                 modelo = d.get("model") or ""
                 info = catalogo().get(modelo, {})
                 libre = ram_disponible_mb()
                 if PULANDO.get(modelo):
-                    await ws.send_json({"type": "ollama_pull_progress", "status": "esa descarga ya está en curso",
+                    enviar(ws, {"type": "ollama_pull_progress", "status": "esa descarga ya está en curso",
                                         "pct": PULANDO[modelo], "done": False, "origen": "real"})
                     continue
                 # Si ya está en disco, no se vuelve a bajar: se dice y se explica que
                 # lo que falta es memoria, no descarga.
                 ya = inventario_disco().get(modelo)
                 if ya:
-                    await ws.send_json({
+                    enviar(ws, {
                         "type": "ollama_pull_progress", "done": True, "success": True, "pct": 100,
                         "status": (f"{modelo} ya está descargado ({ya['mb']} MB) — no hace falta bajarlo otra vez"),
                         "origen": "real"})
@@ -779,7 +1047,7 @@ async def ws_handler(request):
                 falta_disco = info.get("mb", 700) + MARGEN_DISCO
                 libre_disco_mb = shutil.disk_usage("/").free // (1024 * 1024)
                 if libre_disco_mb < falta_disco:
-                    await ws.send_json({
+                    enviar(ws, {
                         "type": "ollama_pull_progress", "done": True, "success": False, "pct": 0,
                         "status": (f"Disco insuficiente: {libre_disco_mb} MB libres, hacen falta {falta_disco} MB "
                                    f"para {modelo} ({info.get('tam', 'tamano sin medir')})."),
@@ -792,7 +1060,7 @@ async def ws_handler(request):
                     # que levantar el servidor; si ya está vivo, bajar un modelo es
                     # puro disco y no congelar nada.
                     if libre < RAM_SERVIDOR:
-                        await ws.send_json({
+                        enviar(ws, {
                             "type": "ollama_pull_progress", "done": True, "success": False, "pct": 0,
                             "origen": "real",
                             "status": (f"RAM insuficiente para levantar el servidor: {libre} MB libres, "
@@ -801,10 +1069,10 @@ async def ws_handler(request):
                         continue
                     ok_arranque, detalle = ollama_arrancar()
                     if not ok_arranque:
-                        await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": False,
+                        enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": False,
                                             "pct": 0, "status": detalle, "origen": "real"})
                         continue
-                    await ws.send_json({"type": "ollama_pull_progress", "done": False, "pct": 0,
+                    enviar(ws, {"type": "ollama_pull_progress", "done": False, "pct": 0,
                                         "status": f"Arrancando Ollama: {detalle}", "origen": "real"})
                     for _ in range(20):
                         await asyncio.sleep(1)
@@ -812,7 +1080,7 @@ async def ws_handler(request):
                         if vivo:
                             break
                     if not vivo:
-                        await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": False,
+                        enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": False,
                                             "pct": 0, "origen": "real",
                                             "status": "Ollama no llegó a responder en 20 s; mira /tmp/cort-ollama.log"})
                         continue
@@ -835,29 +1103,61 @@ async def ws_handler(request):
                              f"{ram_disponible_mb()}.")
                 else:
                     aviso = f"{modelo_elegido} elegido; está cargado en el servidor."
-                await ws.send_json({"type": "local_model_set", "model": modelo_elegido,
+                enviar(ws, {"type": "local_model_set", "model": modelo_elegido,
                                     "aviso": aviso, "origen": "real"})
                 await decir(ws, aviso)
 
-            elif t in ("settings-save", "settings_save"):
+            elif t in ("settings-save", "settings_save", "update_settings"):
+                # La interfaz manda `update_settings` al pulsar GUARDAR y el puente
+                # sólo entendía `settings-save`: el botón llevaba todo el proyecto
+                # sin guardar nada. Los tres nombres son el mismo acto.
                 e = leer_estado()
                 for k, v in (d.get("settings") or d).items():
                     if isinstance(v, (str, int, float, bool, list, dict)) and k not in ("type", "action"):
                         e[k] = v
                 escribir_estado(e)
-                await ws.send_json({"type": "settings_saved", "origen": "real"})
+                enviar(ws, {"type": "settings_saved", "origen": "real"})
+                enviar(ws, {"type": "settings_data", "data": ajustes_reales()})
+
+            elif t == "get_settings":
+                enviar(ws, {"type": "settings_data", "data": ajustes_reales(), "origen": "real"})
+
+            elif t == "get_shopping_list":
+                e = leer_estado()
+                enviar(ws, {"type": "shopping_list", "items": e.get("shopping") or [],
+                            "origen": "real", "nota": "lista guardada por CORT en el puente"})
+
+            elif t == "update_shopping_list":
+                e = leer_estado()
+                e["shopping"] = d.get("items") or []
+                escribir_estado(e)
+                enviar(ws, {"type": "shopping_list", "items": e["shopping"], "origen": "real"})
+
+            elif t == "ha_get_states":
+                # Sin servidor no hay sensores: se dice con `success` y el aviso, para
+                # que el panel deje de girar mostrando una carga que nunca termina.
+                enviar(ws, {"type": "ha_states", "success": False, "states": [],
+                            "motivo": "no hay Home Assistant en esta red", "origen": "real"})
+                enviar(ws, aviso_sin_backend("ha_get_states"))
+
+            elif t == "temperatura":
+                tx = await asyncio.get_event_loop().run_in_executor(None, temperatura_sala)
+                if tx.get("ok"):
+                    enviar(ws, {"type": "sala_temperatura", "data": tx})
+                else:
+                    enviar(ws, aviso_sin_backend("temperatura", tx.get("motivo", "")))
 
             elif t == "weather":
                 ciudad = d.get("city") or leer_estado().get("user_city") or ""
                 w = await asyncio.get_event_loop().run_in_executor(None, clima, ciudad)
-                await ws.send_json({"type": "weather_panel", "data": w})
+                enviar(ws, {"type": "weather_panel", "data": w})
 
             elif t in ("av-scan", "run_security_scan", "security_scan", "av_scan_start"):
                 if ws in ESCANEANDO:
                     # La interfaz pide el escaneo dos veces (abre el panel y además
                     # dispara su propio botón): el segundo se ignora para no duplicar
                     # cada línea del registro.
-                    await ws.send_json({"type": "av_progress", "percent": 50, "step": "curso",
+                    enviar(ws, {"type": "av_progress", "percent": 50, "step": "curso",
                                         "message": "La auditoría ya está en curso", "origen": "real"})
                     continue
                 CANCELADOS.discard(ws)
@@ -865,11 +1165,11 @@ async def ws_handler(request):
 
             elif t == "av_scan_cancel":
                 CANCELADOS.add(ws)
-                await ws.send_json({"type": "av_cancel", "origen": "real"})
+                enviar(ws, {"type": "av_cancel", "origen": "real"})
 
             elif t == "av_threat_action":
                 # Regla dura: CORT informa, no borra ni mata procesos por su cuenta.
-                await ws.send_json({
+                enviar(ws, {
                     "type": "av_action_result", "ok": False,
                     "message": "No voy a borrar ni bloquear «" + str((d.get("threat") or {}).get("name", "?")) +
                                "». Un falso positivo cuesta más que una amenaza visible: dime tú qué hacer.",
@@ -878,18 +1178,18 @@ async def ws_handler(request):
 
             elif t == "get_agent_models":
                 installed = sorted(catalogo())
-                await ws.send_json({"type": "agent_models_info",
+                enviar(ws, {"type": "agent_models_info",
                                     "data": {"available_models": {a: installed for a in ("principal", "rapido", "seguro")}},
                                     "origen": "real"})
 
             elif t == "set_agent_models":
                 e = leer_estado(); e["agent_models"] = d.get("models") or {}
                 escribir_estado(e)
-                await ws.send_json({"type": "agent_models_saved", "origen": "real"})
+                enviar(ws, {"type": "agent_models_saved", "origen": "real"})
 
             elif t == "check_jarvis_os_status":
                 vivo = await asyncio.get_event_loop().run_in_executor(None, jarvis_os_vivo)
-                await ws.send_json({"type": "jarvis_os_status_reply", "installed": vivo,
+                enviar(ws, {"type": "jarvis_os_status_reply", "installed": vivo,
                                     "port": JARVIS_OS_PUERTO,
                                     "motivo": None if vivo else "nada escuchando en 127.0.0.1:%d" % JARVIS_OS_PUERTO,
                                     "origen": "real"})
@@ -897,7 +1197,7 @@ async def ws_handler(request):
             elif t.startswith("jarvis_os_"):
                 # Se responde con honestidad en vez de dejar el panel colgado: instalar
                 # un SO entero en una Canaima de 1,8 GiB significaría borrar su disco.
-                await ws.send_json({"type": "jarvis_os_install_progress", "done": True, "progress": 0,
+                enviar(ws, {"type": "jarvis_os_install_progress", "done": True, "progress": 0,
                                     "status": "Detenido a propósito por CORT",
                                     "log": ("Jarvis OS necesita el disco completo; en este equipo (2 núcleos, "
                                             "1851 MB) sustituiría tu MX Linux. No lo instalo sin tu orden explícita "
@@ -915,50 +1215,73 @@ async def ws_handler(request):
                 texto = (d.get("text") or "").strip()
                 if not texto:
                     continue
-                await ws.send_json({"state": "thinking"})
-                estado = leer_estado()
-                local = await asyncio.get_event_loop().run_in_executor(None, intentos_locales, texto, estado)
-                if local:
-                    respuesta, extras = local
-                    for m in extras:
-                        if m.get("type") == "av-scan":
-                            asyncio.create_task(escaneo(ws))
-                        else:
-                            await ws.send_json({**m, "action": m.get("type")})
-                    historial.append({"role": "user", "content": texto})
-                    historial.append({"role": "assistant", "content": respuesta})
-                    await decir(ws, respuesta)
-                    await ws.send_json({"type": "brain_used", "modelo": "reglas locales + datos del sistema",
-                                        "origen": "real"})
-                    continue
-                r = await asyncio.get_event_loop().run_in_executor(None, cerebro, texto, historial, estado)
-                if r["ok"]:
-                    historial.append({"role": "user", "content": texto})
-                    historial.append({"role": "assistant", "content": r["texto"]})
-                    await decir(ws, r["texto"])
-                    await ws.send_json({"type": "brain_used", "modelo": r.get("modelo"), "origen": "real"})
-                else:
-                    await decir(ws, "Sin cerebro local: " + r["motivo"])
+                # Se atiende en su propia tarea: si no, mientras el modelo piensa o
+                # mientras CORT habla, el lazo no lee ningún botón más. El candado
+                # mantiene las respuestas en orden de pregunta.
+                asyncio.create_task(atender_input(ws, texto, historial, candado))
+
+            else:
+                # Ninguna orden se queda ya sin respuesta: si el puente no puede,
+                # dice por qué y qué haría falta. Así se distingue "no hace nada"
+                # de "está esperando", y el censo de la sonda deja de leer silencios.
+                enviar(ws, aviso_sin_backend(t or "(vacío)",
+                                             d.get("model") or d.get("city") or ""))
     finally:
+        await cerrar_canal(ws)
         CONEXIONES.discard(ws)
         print("[CORT] interfaz desconectada")
     return ws
 
 
+async def atender_input(ws, texto, historial, candado):
+    """Responde una frase escrita o dictada: primero reglas locales, luego modelo."""
+    async with candado:
+        if ws not in SALIDA:
+            return
+        enviar(ws, {"state": "thinking"})
+        estado = leer_estado()
+        local = await asyncio.get_event_loop().run_in_executor(None, intentos_locales, texto, estado)
+        if local:
+            respuesta, extras = local
+            for m in extras:
+                if m.get("type") == "av-scan":
+                    asyncio.create_task(escaneo(ws))
+                else:
+                    enviar(ws, {**m, "action": m.get("type")})
+            historial.append({"role": "user", "content": texto})
+            historial.append({"role": "assistant", "content": respuesta})
+            await decir(ws, respuesta)
+            enviar(ws, {"type": "brain_used", "modelo": "reglas locales + datos del sistema",
+                        "origen": "real"})
+            return
+        r = await asyncio.get_event_loop().run_in_executor(None, cerebro, texto, historial, estado)
+        if r["ok"]:
+            historial.append({"role": "user", "content": texto})
+            historial.append({"role": "assistant", "content": r["texto"]})
+            await decir(ws, r["texto"])
+            enviar(ws, {"type": "brain_used", "modelo": r.get("modelo"), "origen": "real"})
+        else:
+            await decir(ws, "Sin cerebro local: " + r["motivo"])
+
+
 async def decir(ws, texto):
-    """Respuesta visible en el HUD: la app enseña subtítulos con live_subtitles."""
+    """Deja la respuesta en la bandeja de salida y sigue su camino.
+
+    Antes dormía aquí entre subtítulo y subtítulo: una frase de 300 caracteres
+    tenía sorda a CORT unos 9 s. Ahora cada pieza lleva su pausa y el redactor la
+    aplica, que es quien escribe de verdad.
+    """
     ident = "cort-%d" % int(time.time() * 1000)
-    await ws.send_json({"state": "speaking"})
-    await ws.send_json({"type": "user_speech", "text": ""})
+    enviar(ws, {"state": "speaking"})
+    enviar(ws, {"type": "user_speech", "text": ""})
     trozos = [texto[i:i + 26] for i in range(0, len(texto), 26)] or [texto]
-    await ws.send_json({"type": "live_subtitles", "id": ident, "phase": "start"})
-    for k, trozo in enumerate(trozos):
-        await ws.send_json({"type": "live_subtitles", "id": ident, "phase": "delta", "text": trozo + " "})
-        await asyncio.sleep(0.05)
-    await ws.send_json({"type": "live_subtitles", "id": ident, "phase": "end"})
-    await ws.send_json({"type": "jarvis_text", "text": texto, "origen": "real"})
-    await asyncio.sleep(max(1.2, len(texto) * 0.03))
-    await ws.send_json({"state": "idle"})
+    enviar(ws, {"type": "live_subtitles", "id": ident, "phase": "start"})
+    for trozo in trozos:
+        enviar(ws, {"type": "live_subtitles", "id": ident, "phase": "delta", "text": trozo + " "},
+               pausa=0.05)
+    enviar(ws, {"type": "live_subtitles", "id": ident, "phase": "end"})
+    enviar(ws, {"type": "jarvis_text", "text": texto, "origen": "real"})
+    enviar(ws, {"state": "idle"}, pausa=max(1.2, len(texto) * 0.03))
 
 
 async def pull(modelo, ws):
@@ -977,7 +1300,7 @@ async def pull(modelo, ws):
                 except json.JSONDecodeError:
                     continue
                 if j.get("error"):
-                    await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": False,
+                    enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": False,
                                         "status": j["error"], "origen": "real"})
                     return
                 tot, done = j.get("total") or 0, j.get("completed") or 0
@@ -990,20 +1313,20 @@ async def pull(modelo, ws):
                     continue
                 if tot:
                     estado_txt = f"{estado_txt} — {done/1e6:.0f} / {tot/1e6:.0f} MB"
-                await ws.send_json({"type": "ollama_pull_progress", "status": estado_txt,
+                enviar(ws, {"type": "ollama_pull_progress", "status": estado_txt,
                                     "pct": pct, "done": False, "origen": "real"})
         vivo, modelos = ollama_vivo()
         recien = inventario_disco(fuerzo=True)   # el archivo nuevo no puede taparlo la caché
         if modelo in modelos or modelo in recien or any(k.startswith(modelo.split(":")[0]) for k in modelos):
-            await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": True, "pct": 100,
+            enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": True, "pct": 100,
                                 "status": f"{modelo} instalado", "origen": "real"})
             await decir(ws, f"Modelo {modelo} descargado y listo. Ya puedo pensar con él.")
         else:
-            await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": False,
+            enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": False,
                                 "status": "la descarga terminó pero el modelo no aparece en la lista",
                                 "origen": "real"})
     except Exception as e:
-        await ws.send_json({"type": "ollama_pull_progress", "done": True, "success": False,
+        enviar(ws, {"type": "ollama_pull_progress", "done": True, "success": False,
                             "status": f"descarga interrumpida: {e}", "origen": "real"})
     finally:
         PULANDO.pop(modelo, None)
@@ -1015,29 +1338,29 @@ async def escaneo(ws):
     d = time.time()
     ESCANEANDO.add(ws)
     try:
-        await ws.send_json({"type": "av_start", "message": "Auditoría de seguridad local", "origen": "real"})
+        enviar(ws, {"type": "av_start", "message": "Auditoría de seguridad local", "origen": "real"})
         total = len(PASOS) + 1
         hallazgos = []
         for i, (clave, nombre, fn) in enumerate(PASOS, start=1):
-            await ws.send_json({"type": "av_progress", "percent": int(100 * i / total),
+            enviar(ws, {"type": "av_progress", "percent": int(100 * i / total),
                                 "step": clave, "message": f"Comprobando {nombre}",
                                 "threats_found": len(hallazgos), "origen": "real"})
             if ws in CANCELADOS:
                 CANCELADOS.discard(ws)
-                await ws.send_json({"type": "av_cancel", "origen": "real"})
+                enviar(ws, {"type": "av_cancel", "origen": "real"})
                 return
             nuevo_ = await asyncio.get_event_loop().run_in_executor(None, fn)
             hallazgos += nuevo_
             for h in nuevo_:
-                await ws.send_json({"type": "av_threat_detected", "threat": h, "origen": "real"})
+                enviar(ws, {"type": "av_threat_detected", "threat": h, "origen": "real"})
         dur = round(time.time() - d, 2)
-        await ws.send_json({"type": "av_progress", "percent": 100, "step": "fin",
+        enviar(ws, {"type": "av_progress", "percent": 100, "step": "fin",
                             "message": f"{len(hallazgos)} hallazgo(s) en {dur} s",
                             "threats_found": len(hallazgos), "origen": "real"})
         # La interfaz solo entra en su rama de amenazas si status vale "infected" y
         # lee el conteo en `threats`; con otro nombre muestra "sin amenazas" encima
         # de un registro con hallazgos (así se detectó midiéndolo).
-        await ws.send_json({"type": "av_complete",
+        enviar(ws, {"type": "av_complete",
                             "status": "ok" if not hallazgos else "infected",
                             "threats": hallazgos, "hallazgos": len(hallazgos),
                             "threats_found": len(hallazgos), "segundos": dur, "origen": "real"})
@@ -1054,7 +1377,7 @@ async def latido():
         datos = {"type": "system_stats", **cpu_ram_disco()}
         for ws in list(CONEXIONES):
             try:
-                await ws.send_json(datos)
+                enviar(ws, datos)
             except Exception:
                 CONEXIONES.discard(ws)
         await asyncio.sleep(4)

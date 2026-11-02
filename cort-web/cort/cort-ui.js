@@ -1410,6 +1410,109 @@
     boot.appendChild(chip);
   }
 
+  // ---- 5bis. F1: que ningún panel mienta ni se quede girando ---------------
+  // El puente (cort-bridge/cort_server.py) responde ahora a TODAS las órdenes: o
+  // con un dato medido, o con un `puente_aviso` que dice el motivo exacto y qué
+  // haría falta. Esta parte lo pinta dentro del panel que corresponde, para que
+  // la respuesta se vea donde estaba la pregunta y no perdida en los subtítulos.
+  const avisosVistos = {};
+  let ultimaTemperatura = null;
+
+  function avisoTexto(a) {
+    const partes = [];
+    if (a.motivo) partes.push(a.motivo);
+    if (a.nota && a.nota !== a.motivo) partes.push(a.nota);
+    if (a.hace_falta) partes.push("· " + a.hace_falta);
+    return partes.join(" ");
+  }
+
+  // Caja honesta: reemplaza a la rueda de carga infinita. Se pinta una vez por
+  // panel y se actualiza si llega un aviso distinto.
+  window.CORT_alAvisoPanel = (a) => {
+    if (!a || !a.type) return;
+    avisosVistos[a.orden || a.panel || "?"] = a;
+    const caja = document.getElementById(a.panel || "");
+    if (!caja) return avisoFlotante(a);
+    const viejo = caja.querySelector(".cort-aviso");
+    if (viejo) viejo.remove();
+    const div = document.createElement("div");
+    div.className = "cort-aviso";
+    const titulo = document.createElement("div");
+    titulo.className = "cort-aviso-titulo";
+    titulo.textContent = "CORT · aquí no hay nada medido";
+    const cuerpo = document.createElement("div");
+    cuerpo.className = "cort-aviso-motivo";
+    cuerpo.textContent = avisoTexto(a);
+    div.appendChild(titulo);
+    div.appendChild(cuerpo);
+    caja.insertBefore(div, caja.firstChild);
+    // Y se apagan los "Cargando…" que la plantilla deja puestos para siempre: si
+    // no va a llegar nada, el texto que promete que está llegando es una mentira.
+    const andamiaje = /^(cargando|loading|recherche|chargement|buscando|escaneando|analizando|\.\.\.|…)/i;
+    caja.querySelectorAll("span, div, option, td, li, p").forEach(el => {
+      if (el.children.length) return;
+      const t = (el.textContent || "").trim();
+      if (t && t.length < 40 && andamiaje.test(t)) {
+        el.textContent = "— sin datos —";
+        el.classList.add("cort-sin-datos");
+      }
+    });
+  };
+
+  // Aviso para órdenes que no tienen panel propio: una línea breve abajo del todo,
+  // una sola vez por carga de página. No es un error del sistema, es una respuesta.
+  function avisoFlotante(a) {
+    const clave = "flotante-" + (a.orden || "?");
+    if (avisosVistos[clave]) return;
+    avisosVistos[clave] = a;
+    let toast = document.getElementById("cort-toast");
+    if (!toast) {
+      toast = document.createElement("div");
+      toast.id = "cort-toast";
+      document.body.appendChild(toast);
+    }
+    toast.textContent = "CORT: " + avisoTexto(a);
+    toast.classList.add("cort-toast-visible");
+    clearTimeout(avisoFlotante._t);
+    avisoFlotante._t = setTimeout(() => toast.classList.remove("cort-toast-visible"), 7000);
+  }
+
+  // Temperatura real. La demo pintaba aquí un número inventado por el simulador;
+  // ahora se pinta el sensor del kernel y se dice cuál es. Un dato empujado al
+  // conectar no abre el panel por la cara: solo lo que ella pide.
+  window.CORT_alTemperatura = (mensaje) => {
+    if (!mensaje) return;
+    const d = mensaje.data || {};
+    ultimaTemperatura = d;
+    const panel = document.getElementById("temp-panel");
+    if (!panel) return;
+    const pieza = document.getElementById("tp-piece");
+    const grado = document.getElementById("tp-temp");
+    const marca = document.getElementById("tp-marker");
+    const humedad = document.getElementById("tp-hum-row");
+    if (pieza) pieza.textContent = (d.piece || (d.motivo || "sin sensor")).toUpperCase();
+    if (grado) grado.textContent = d.ok ? String(Math.round(d.temperature)) : "--";
+    if (humedad) humedad.style.display = "none";   // no hay higrómetro: se apaga, no se finge
+    if (marca && d.ok) {
+      // La barra es de confort de sala (10-30 °C). Un chip a 48 °C se sale: se deja
+      // el marcador en el borde y lo dice la nota, en lugar de disimularlo.
+      const pct = Math.min(100, Math.max(0, (d.temperature - 10) / 20 * 100));
+      marca.style.left = pct + "%";
+    }
+    let nota = document.getElementById("cort-temp-nota");
+    if (!nota) {
+      nota = document.createElement("div");
+      nota.id = "cort-temp-nota";
+      nota.className = "cort-aviso";
+      panel.insertBefore(nota, panel.firstChild);
+    }
+    nota.textContent = d.ok
+      ? (d.aviso || "Lectura del sensor del equipo.") +
+        (d.sensores ? " Sensores: " + Object.keys(d.sensores).join(", ") + "." : "")
+      : ("Sin lectura de temperatura: " + (d.motivo || "no hay sensores accesibles."));
+    if (d.ok && !mensaje.empujado) panel.classList.add("tp-visible");
+  };
+
   // ---- 6. API de medición --------------------------------------------------
   window.CORT = {
     version: "v0",
@@ -1434,7 +1537,12 @@
     // sonda: traduce una cadena suelta sin tocar el DOM (para depurar misses)
     prueba: s => translate(String(s)),
     esFrances: s => esFrances(String(s)),
-    rewalk: () => walk(document.body)
+    rewalk: () => walk(document.body),
+    // F1: qué avisos honestos se pintaron y qué temperatura se leyó. Se mide desde
+    // la consola sin tener que abrir el panel correspondiente.
+    avisos: () => Object.keys(avisosVistos),
+    avisosDetalles: () => avisosVistos,
+    temperatura: () => ultimaTemperatura
   };
 
   function start() {
