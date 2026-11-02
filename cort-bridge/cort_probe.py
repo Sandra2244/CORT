@@ -6,6 +6,7 @@ Uso:
     python3 cort_probe.py            #=status y sistema (rápido, no toca el disco)
     python3 cort_probe.py av         #+ auditoría del antivirus con tiempos
     python3 cort_probe.py modelos    #+ inventario del disco, catálogo y puertas de RAM
+    python3 cort_probe.py menu       #+ qué órdenes del menú tienen respuesta y cuáles callan
     python3 cort_probe.py clima      #+ clima por IP, por ciudad escrita y ciudad falsa
     python3 cort_probe.py cerebro "pregunta"   #+ una pregunta al modelo local
 
@@ -43,11 +44,79 @@ async def oir(ws, tipos, segundos=45, etiquetas=(), parar_al_primero=False):
     return sal
 
 
+async def sondear(ws, tipo, espera=2.0):
+    """Envía un tipo de mensaje y escucha hasta `espera` s después del último.
+
+    Sirve para medir qué botones del menú tienen a alguien al otro lado y cuáles
+    se quedan en silencio. Solo se usan mensajes de leer: los que ejecutan de
+    verdad (lanzar juegos, conectar VPN, desinstalar) no se envían aquí.
+    """
+    vistos = []
+    await ws.send_str(json.dumps({"type": tipo}))
+    fin = time.monotonic() + espera
+    while time.monotonic() < fin:
+        try:
+            msg = await ws.receive(timeout=max(0.05, fin - time.monotonic()))
+        except Exception:
+            break
+        if msg.type != aiohttp.WSMsgType.TEXT:
+            break
+        d = json.loads(msg.data)
+        t = d.get("type") or d.get("action") or "(sin type)"
+        # El puente emite system_stats solo, cada 4 s (el latido): si este sondeo no
+        # lo pidió, no vale como respuesta.
+        if t == "system_stats" and tipo != "system_stats":
+            continue
+        # cada mensaje reactiva la ventana: así un panel que tarda no se lee como silencio
+        fin = time.monotonic() + 0.7
+        vistos.append(t)
+    return vistos
+
+
 async def main():
     modo = sys.argv[1] if len(sys.argv) > 1 else ""
     async with aiohttp.ClientSession() as s:
         async with s.ws_connect(WS, timeout=10) as ws:
             t0 = time.monotonic()
+
+            if modo == "menu":
+                # Inventario honesto del menú: se envía cada orden de LEER que la
+                # interfaz sabe mandar y se apunta si el puente contesta o calla.
+                solo_lectura = [
+                    "system_stats", "check_ollama_status", "get_agent_models", "weather",
+                    "check_jarvis_os_status", "get_settings", "update_settings",
+                    "get_shopping_list", "update_shopping_list", "ha_get_states",
+                    "vpn_get_status", "vpn_get_countries", "get_winget_upgrades",
+                    "get_installed_programs", "games_get_library", "games_scan",
+                    "detect_apps", "get_desktop_wallpaper", "open_jarvis_folder",
+                    "get_windy_webcams", "get_elevenlabs_voices", "check_local_tts_status",
+                    "check_kokoro_status", "claude_code_status", "print3d_check_deps",
+                    "print3d_check_hardware", "read_obsidian_note", "get_https_tunnel_status",
+                    "mobile_auth", "toggle_mic", "toggle_fullscreen", "av_speak",
+                    "clear_cache", "clean_leftovers",
+                ]
+                # Vaciar lo que ya llegó al conectar (el "connected" y el latido):
+                # si no, el primer sondeo se anotaría una respuesta que no es suya.
+                while True:
+                    try:
+                        await ws.receive_nowait()
+                    except Exception:
+                        break
+
+                print(f"[menú] {len(solo_lectura)} órdenes de lectura, puente en {WS}\n")
+                con_resp = sin_resp = 0
+                for tipo in solo_lectura:
+                    r = await sondear(ws, tipo)
+                    if r:
+                        con_resp += 1
+                        uniq = sorted(set(r))
+                        print(f"  CON RESPUESTA  {tipo:26s} ← {', '.join(uniq)[:90]}")
+                    else:
+                        sin_resp += 1
+                        print(f"  SILENCIO       {tipo}")
+                print(f"\n  resumen: {con_resp} contestan · {sin_resp} quedan en silencio")
+                await ws.close()
+                return
 
             await ws.send_str(json.dumps({"type": "check_ollama_status"}))
             print("[cerebro]"); await oir(ws, {"ollama_status_reply"}, 10)
