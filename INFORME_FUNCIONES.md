@@ -34,6 +34,24 @@ la encuesta sale de aquí.
 
 ---
 
+## 1bis. Addendum: qué cambió al cerrar la fase F1 (mismo día, después de este censo)
+
+Las cifras de arriba son la foto del censo. Con la fase F1 cerrada (commit `21162c5`):
+
+| Qué | Antes | Después (medido) |
+|---|---|---|
+| Órdenes de lectura que contestan | 6 de 34 | **34 de 34** (28 contestan con `puente_aviso`: motivo + lo que hace falta) |
+| Trazas al recargar a media frase | 1 por recarga | **0** tras tres recargas |
+| Órdenes simultáneas en un canal | la segunda se perdía | **las dos contestan** (cola de salida con un único escritor) |
+| Temperatura del panel térmico | 21,8 °C inventados por el simulador | **48–49 °C del sensor TCPU**, con el nombre del sensor y la advertencia de que es el chip |
+| Clima | 22 °C inventados si el puente estaba caído | dato real de open-meteo, renovado cada 10 min por el puente |
+| Paneles zombis | «Cargando…» eterno | caja ámbar «aquí no hay nada medido» + los «Cargando…» convertidos en «— sin datos —» |
+
+Sigue sin funcionar lo que no depende de la interfaz: no hay cliente VPN, ni Home
+Assistant en la red, ni motor de voz de salida, ni micrófono activado. Eso es F3, F5 y F7.
+
+---
+
 ## 2. Lo que SÍ funciona hoy (real, medido en esta sesión)
 
 | Función | Qué hace realmente | Prueba de esta sesión |
