@@ -71,7 +71,19 @@ culpa ajena (0 recortes tras el arranque, antes 4-6).
 
 ---
 
-## F3 — Cerebro encendido y voz
+## F3 — Cerebro encendido y voz  ·  **voz CERRADA el 2026-11-02; cerebro parcial**
+
+Cerrado con número: espeak-ng (factor 0,14 ms de CPU por segundo de audio) y Piper
+(1,90 / 2,55 + 14 s de carga del modelo, cargado UNA vez dentro del puente). El camino
+de salida se probó con un sink nulo temporal y midió RMS 2521 / pico 32754: el puente
+entrega audio de verdad; lo que no hay en la Canaima es altavoz físico (`auto_null`).
+Vosk transcribe el WAV generado por CORT (7,0 s de proceso para 3,9 s de audio), así que
+oír->entender funciona sin micrófono. Órdenes vivas: `voz_estado/voz_on/voz_off/voz_motor/
+av_speak/mic_on/mic_off/mic_estado/check_local_tts_status/check_kokoro_status`.
+
+Pendiente de la fase: puntos 1 (turno de noche con `smollm2:135m`), 2 (historial
+persistente) y 3 (reglas corregidas); el micrófono real sigue sin hardware — entra por
+el teléfono en F7.
 
 1. Turno de noche real: cargar `smollm2:135m` con `CORT_RAM_MIN=900 MODELO=smollm2:135m
 ./cort_cerebro.sh` y verificar con `cort_probe.py cerebro` (hoy: 210–320 MB libres, el
@@ -105,7 +117,22 @@ reinicio** del puente.
 
 ---
 
-## F5 — Acciones sobre el equipo (35 comandos del censo)
+## F5 — Acciones sobre el equipo (35 comandos del censo)  ·  **CERRADA el 2026-11-02**
+
+`cort-bridge/cort_acciones.py` con lista blanca de verbos Linux y `shell=False` en todas
+las llamadas. Doce acciones medidas en la Canaima: abrir aplicación (165 entradas
+.desktop leídas; «abre vlc» lanzó VLC y «cierra la ventana vlc» la cerró 2 s después de
+mapear), ventanas con wmctrl, volumen y silencio con pactl, brillo (sin brilloctl: se
+avisa que el gamma de X11 no es luz real), teclas multimedia por xdotool, notificaciones,
+captura con scrot, portapapeles y selección primaria con xclip, fondo con xfconf-query,
+`apt list --upgradable` en lugar de winget y dpkg en lugar del registro de Windows.
+
+Registro auditable en `~/.local/share/cort/registro-acciones.jsonl` (hora, acción, frase
+de origen, resultado). Apagar y reiniciar no se ejecutan sin confirmación explícita:
+probado — «apaga el equipo» respondió pidiendo confirmación y no tocó nada.
+
+Queda fuera a propósito: desinstalar programas y lanzar juegos (F5+ con confirmación en
+pantalla) y el panel gráfico de acciones, que se hace sobre el testigo `pc` de la pantalla.
 
 1. Capa `acciones.py` con lista blanca cerrada de verbos Linux: abrir carpeta, abrir
    app, volumen, brillo, captura de pantalla, apagar el salvapantallas.

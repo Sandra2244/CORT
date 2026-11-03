@@ -1537,11 +1537,16 @@
       '<button type="button" id="cvb-habla" class="cvb-btn" title="hablar o callar">🔇</button>' +
       '<button type="button" id="cvb-motor" class="cvb-btn" title="cambiar motor de voz">ra</button>' +
       '<button type="button" id="cvb-mic" class="cvb-btn" title="micrófono">mic</button>' +
+      '<button type="button" id="cvb-pc" class="cvb-btn" title="qué ve CORT en este equipo">pc</button>' +
       '<span id="cvb-texto" class="cvb-texto"></span>';
     (document.body || document.documentElement).appendChild(b);
     b.querySelector("#cvb-habla").addEventListener("click", () => {
       const activa = !(ultimaVoz && ultimaVoz.activa);
       window.CORT_enviarAlCerebro({ type: activa ? "voz_on" : "voz_off" });
+    });
+    b.querySelector("#cvb-pc").addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "pc_estado" });
+      flotante("Consultando el equipo: ventanas, volumen, brillo y programas…");
     });
     b.querySelector("#cvb-motor").addEventListener("click", () => {
       const actual = (ultimaVoz && ultimaVoz.motor) || "rapida";
@@ -1626,6 +1631,35 @@
       requestAnimationFrame(latir);
     }
   }
+
+  // Aviso breve reutilizable (F5): la misma línea que usa el puente para avisos,
+  // pero sin el filtro de "una vez por carga", porque las acciones se repiten.
+  function flotante(texto, ok) {
+    let t = document.getElementById("cort-toast");
+    if (!t) {
+      t = document.createElement("div");
+      t.id = "cort-toast";
+      (document.body || document.documentElement).appendChild(t);
+    }
+    t.textContent = "CORT: " + String(texto).slice(0, 300);
+    t.style.borderColor = ok === false ? "rgba(255,120,120,.6)" : "rgba(255,170,0,.5)";
+    t.classList.add("cort-toast-visible");
+    clearTimeout(flotante._t);
+    flotante._t = setTimeout(() => t.classList.remove("cort-toast-visible"), 6500);
+  }
+
+  window.CORT_alAccion = (m) => {
+    if (!m) return;
+    if (m.type === "pc_estado") {
+      const v = m.volumen || {}, b = m.brillo || {};
+      flotante(`${m.ventanas} ventanas · ${m.apps} programas · volumen ${v.porcentaje ?? "--"}%` +
+               ` · brillo ${b.porcentaje ?? "--"}% (${b.sensor || "sin sensor"})` +
+               ` · sink ${v.sink || "?"}`, true);
+      return;
+    }
+    const extra = m.nota ? " — " + m.nota : "";
+    flotante(`${m.ok ? "hecho" : "no"}: ${m.detalle || m.motivo || ""}${extra}`, m.ok);
+  };
 
   window.CORT_alVoz = (n) => {
     if (!n) return;

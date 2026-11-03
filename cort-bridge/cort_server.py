@@ -28,6 +28,7 @@ libre y, si no cabe, se dice el número en vez de congelar el equipo.
 """
 
 import asyncio
+import base64
 import json
 import os
 import re
@@ -61,6 +62,16 @@ except Exception as _e_voz:                 # sin venv el puente sigue valiendo;
     VOZ_ERROR = f"{type(_e_voz).__name__}: {_e_voz}"
 else:
     VOZ_ERROR = ""
+
+# Capa de acción nativa (F5). Solo usa la biblioteca estándar, así que si la voz
+# no está disponible, las manos del equipo sí lo están.
+try:
+    import cort_acciones
+except Exception as _e_acc:
+    cort_acciones = None
+    ACCIONES_ERROR = f"{type(_e_acc).__name__}: {_e_acc}"
+else:
+    ACCIONES_ERROR = ""
 
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
@@ -596,6 +607,118 @@ def sin_acentos(t):
                    if unicodedata.category(c) != "Mn")
 
 
+NAVEGADORES = ("firefox", "chromium", "chrome", "brave", "epiphany", "midori", "tor browser")
+
+
+def _objetivo_despues(q, *verbos):
+    """«abre el vlc» -> 'vlc'. Quita artículo, cortesía y la palabra ventana.
+
+    Sin esto, «cierra la ventana vlc» buscaba una ventana llamada «ventana vlc» y
+    no encontraba ninguna: el sustantivo del medio hay que tirarlo.
+    """
+    for v in verbos:
+        m = re.search(r"\b" + v + r"\s+(?:el|la|los|las|un|una|mi|por)?\s*([a-z0-9 ._\-]{2,40})", q)
+        if m:
+            objetivo = m.group(1).strip()
+            for sobra in ("por favor", "ahora", "enseguida", "inmediatamente", "favor"):
+                objetivo = objetivo.replace(sobra, "").strip()
+            objetivo = re.sub(r"^(ventana|ventanas|app|aplicacion|aplicaciones|programa|archivo)\s+",
+                              "", objetivo).strip()
+            if objetivo:
+                return objetivo
+    return ""
+
+
+def accion_desde_frase(q):
+    """Traduce una frase a una acción real de Linux y la ejecuta.
+
+    Devuelve (texto, extras) o None si la frase no pide tocar nada. Aquí es donde
+    CORT deja de ser un chat: cada rama llama a cort_acciones, que ejecuta con
+    lista de argumentos (jamás con shell) y responde con `origen`.
+    """
+    if cort_acciones is None:
+        return None
+    tiene = lambda *v: any(x in q for x in v)
+    r = None
+
+    # confirmación por escrito de lo peligroso (apagar / reiniciar)
+    if tiene("confirmar apagar", "apagar confirmado", "confirmar reiniciar", "reiniciar confirmado"):
+        que = "apagar" if "apagar" in q else "reiniciar"
+        r = cort_acciones.energia(que, confirmar=True)
+        return (f"Hecho: {r['detalle']}.", [])
+
+    if tiene("sube el volumen", "subir volumen", "mas volumen", "sube volumen", "mas fuerte"):
+        r = cort_acciones.cambiar_volumen(paso=+10)
+    elif tiene("baja el volumen", "bajar volumen", "menos volumen", "baja volumen", "mas bajo"):
+        r = cort_acciones.cambiar_volumen(paso=-10)
+    elif tiene("volumen al ", "pon el volumen", "volumen a "):
+        m = re.search(r"(\d{1,3})\s*%?", q)
+        r = cort_acciones.cambiar_volumen(destino=int(m.group(1)) if m else 50)
+    elif tiene("silencio", "deja el sonido", "calla el equipo", "mute"):
+        r = cort_acciones.cambiar_volumen(mudo=True)
+    elif tiene("quita el silencio", "devuelve el sonido"):
+        r = cort_acciones.cambiar_volumen(mudo=False)
+    elif tiene("sube el brillo", "mas brillo"):
+        r = cort_acciones.cambiar_brillo(paso=+10)
+    elif tiene("baja el brillo", "menos brillo"):
+        r = cort_acciones.cambiar_brillo(paso=-10)
+    elif tiene("ventanas abiertas", "que ventanas", "que hay abierto", "lista de ventanas"):
+        vs = cort_acciones.ventanas()
+        titulos = ", ".join(v["titulo"].replace("Sandra ", "")[:30] for v in vs[:8])
+        return (f"Hay {len(vs)} ventanas abiertas: {titulos or 'ninguna'}.", [])
+    elif tiene("cierra la ventana", "cierra ventana", "cerrar ventana"):
+        r = cort_acciones.cerrar_ventana(_objetivo_despues(q, "cierra", "cerrar"))
+    elif tiene("minimiza", "esconde la ventana"):
+        r = cort_acciones.minimizar_ventana(_objetivo_despues(q, "minimiza", "esconde"))
+    elif tiene("al frente", "enfoca", "trae la ventana"):
+        r = cort_acciones.enfocar_ventana(_objetivo_despues(q, "enfoca", "trae"))
+    elif tiene("captura de pantalla", "pantallazo", "haz una captura", "captura pantalla"):
+        r = cort_acciones.captura_pantalla()
+    elif tiene("pausa la musica", "pausa el video", "pausa el audio", "pon pausa"):
+        r = cort_acciones.tecla_media("pause")
+    elif tiene("reanuda", "sigue la musica", "play de nuevo"):
+        r = cort_acciones.tecla_media("play")
+    elif tiene("siguiente cancion", "tema siguiente", "pasa a la siguiente"):
+        r = cort_acciones.tecla_media("next")
+    elif tiene("bloquea la pantalla", "bloqueo de pantalla", "pon la pantalla en bloqueo"):
+        r = cort_acciones.energia("bloquear")
+    elif tiene("apaga el equipo", "apaga la laptop", "apaga todo", "reinicia el equipo",
+               "reinicia la laptop"):
+        que = "reiniciar" if "reinicia" in q else "apagar"
+        r = cort_acciones.energia(que)          # sin confirmar: responde pidiendo confirmación
+    elif tiene("actualizaciones disponibles", "que se puede actualizar", "paquetes pendientes"):
+        r = cort_acciones.actualizaciones()
+    elif tiene("fondo de pantalla", "que fondo"):
+        r = cort_acciones.fondo_escritorio()
+    elif tiene("notifica en pantalla", "avisame en pantalla", "muestra una notificacion"):
+        texto = _objetivo_despues(q, "notifica", "avisame", "muestra") or "CORT está listo"
+        r = cort_acciones.notificar(texto)
+    elif tiene("abre ", "abrir ", "lanza ", "ejecuta ", "arranca "):
+        objetivo = _objetivo_despues(q, "abre", "abrir", "lanza", "ejecuta", "arranca")
+        if not objetivo:
+            return None
+        if any(n in objetivo for n in ("navegador", "browser")) or objetivo.split()[0] in NAVEGADORES:
+            apps = cort_acciones.apps_disponibles()
+            elegido = next((a for n in NAVEGADORES for a in apps if n in a["nombre"].lower()), None)
+            if not elegido:
+                return ("No hay navegador instalado en este equipo: busqué "
+                        + ", ".join(NAVEGADORES) + " entre las entradas de escritorio.", [])
+            objetivo = elegido["nombre"]
+        r = cort_acciones.abrir_aplicacion(objetivo)
+    elif tiene("cierra ", "cerrar "):
+        r = cort_acciones.cerrar_ventana(_objetivo_despues(q, "cierra", "cerrar"))
+    if not r:
+        return None
+    cort_acciones.registrar(r.get("accion"), {"frase": q[:90]}, r)
+    extra = (" " + r["nota"]) if r.get("nota") else ""
+    if r.get("pide_confirmacion"):
+        return (r["detalle"] + " Si de verdad quieres, responde «confirmar " +
+                str(r.get("accion", "")) + "».", [])
+    return ((r["detalle"] or ("no se pudo: " + str(r.get("motivo", "")))) + extra,
+            [{"type": "cort_accion", "accion": r.get("accion"), "ok": r.get("ok"),
+              "origen": "real"}])
+
+
 def intentos_locales(texto, estado):
     """Lo que CORT responde con datos REALES aunque Ollama esté apagado.
 
@@ -687,6 +810,13 @@ def intentos_locales(texto, estado):
     if tiene("quien eres", "que eres", "tu nombre", "presentate"):
         return ("Soy CORT: Cognitiva, Omnipresente, Rapsodia, Terminal. Corro en local en tu equipo y digo "
                 "siempre si un dato es real o simulado."), []
+
+    # ---- F5: órdenes que tocan el equipo -------------------------------------------
+    # Van al final a propósito: primero responden las reglas de lectura (hora, clima,
+    # temperatura, cerebro) y sólo si no eran eso se intenta una acción real.
+    accion = accion_desde_frase(q)
+    if accion:
+        return accion
 
     return None
 
@@ -857,16 +987,6 @@ FALTA_EN_EL_PUENTE = {
                        "hace falta un cliente (ProtonVPN o WireGuard) y tú decides cuál; ahora no hay ninguno configurado"),
     "vpn_get_countries": ("La lista de países la daba el backend de la demo, que ya no existe.",
                           "misma razón: sin cliente VPN no hay países que listar"),
-    "get_winget_upgrades": ("winget es el gestor de paquetes de Windows; este equipo es MX Linux.",
-                            "las actualizaciones reales se piden con apt, y eso es una acción de F5 con confirmación"),
-    "get_installed_programs": ("El desinstalador leía el registro de Windows.",
-                               "en Linux sí se puede listar con apt, pero desinstalar nunca es automático: fase F5"),
-    "games_get_library": ("La biblioteca leía carpetas de Steam de Windows.",
-                          "se puede hacer real en Linux (F5): leer ~/.local/share/applications y las carpetas que digas"),
-    "detect_apps": ("Detectar programas era un vistazo al registro de Windows.",
-                    "acá la lista real sale de /usr/share/applications; entra en F5"),
-    "get_desktop_wallpaper": ("El puente todavía no lee el fondo del escritorio.",
-                              "en MX Linux sí se puede: xfconf-query -c xfce4-desktop (canal comprobado en este equipo); F6"),
     "ha_get_states": ("No hay servidor Home Assistant en tu red, así que no hay sensores que leer.",
                       "hace falta la IP y el token de un Home Assistant; sin eso el panel está vacío por verdad, no por fallo"),
     "get_windy_webcams": ("Las cámaras de Windy piden una clave gratuita de su API.",
@@ -883,8 +1003,6 @@ FALTA_EN_EL_PUENTE = {
                                 "el teléfono se enlaza por red local con token (F7), sin exponer nada a internet"),
     "mobile_auth": ("El emparejamiento con el teléfono aún no existe.",
                     "se hace en F7 por Wi-Fi local con QR generado aquí, no con api.qrserver.com"),
-    "open_browser": ("El navegador incrustado depende del backend que ya no existe.",
-                     "abrir navegadores reales es acción de F5, con confirmación"),
     "clear_cache": ("El puente no guarda cachas propias que limpiar todavía (solo 20 s de inventario en memoria).",
                     "se dirá con cifras cuando exista algo que limpiar"),
     "get_shopping_list": ("La lista de compras vive en la plantilla con 3 artículos de ejemplo.",
@@ -1332,9 +1450,17 @@ async def ws_handler(request):
                                     "origen": "real"})
 
             elif t in ("voz_estado", "check_local_tts_status"):
-                # La demo pregunta por su motor viejo; aquí se contesta con el motor
-                # que sí hay, y con el altavoz que PipeWire ve de verdad.
-                enviar(ws, estado_voz())
+                # La demo lee su fila de Ajustes por `local_tts_status_reply` con el
+                # campo status.piper; se manda también, además del estado completo.
+                estado = estado_voz()
+                enviar(ws, estado)
+                if t == "check_local_tts_status":
+                    enviar(ws, {"type": "local_tts_status_reply", "origen": "real",
+                                "status": {"piper": bool(estado.get("habla")),
+                                           "chatterbox": False,
+                                           "chatterbox_missing": ["chatterbox (no instalado a propósito)"],
+                                           "motor": estado.get("motor"),
+                                           "altavoz_real": estado.get("altavoz_real")}})
 
             elif t == "voz_on":
                 VOZ_ACTIVA = True
@@ -1399,12 +1525,117 @@ async def ws_handler(request):
 
             elif t == "check_kokoro_status":
                 # Kokoro no está instalado y no se baja a ciegas: hay Piper local medido.
-                enviar(ws, {"type": "kokoro_status", "origen": "real", "installed": False,
-                            "motivo": "Kokoro baja varios GB de modelos y este equipo tiene 1851 MB",
-                            "en_su_lugar": ("Piper es_ES + espeak-ng, medidos en la tabla de F3 "
-                                            "(0,14 y 1,90 ms de CPU por segundo de audio)"
-                                            if cort_voz else "sin módulo de voz"),
-                            "nota": "si algún día lo pides, se descarga con número de disco por delante"})
+                # La demo pinta esto por `kokoro_status_reply` leyendo status.online.
+                enviar(ws, {"type": "kokoro_status_reply", "origen": "real",
+                            "status": {"online": False, "installed": False,
+                                       "motivo": "Kokoro baja varios GB de modelos y este equipo tiene 1851 MB"},
+                            "nota": ("en su lugar: Piper es_ES + espeak-ng, medidos en la tabla de F3 "
+                                     "(0,14 y 1,90 ms de CPU por segundo de audio)"
+                                     if cort_voz else "sin módulo de voz")})
+
+            elif t == "pc_accion":
+                # La vía directa del panel: {accion: "...", ...datos}. Todo lo que
+                # ejecuta el equipo pasa por aquí o por las frases de abajo.
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    nombre = (d.get("accion") or "").strip()
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: cort_acciones.accion(nombre, d))
+                    enviar(ws, {**r, "type": "cort_accion", "origen": "real"})
+
+            elif t == "pc_estado":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    enviar(ws, await asyncio.get_event_loop().run_in_executor(
+                        None, cort_acciones.estado_pc))
+
+            elif t == "open_browser":
+                # El navegador incrustado de la demo se fue con su backend. Lo que sí
+                # existe es abrir la URL en el navegador del sistema y decirlo.
+                url = (d.get("url") or "").strip()
+                if cort_acciones is None or not url:
+                    enviar(ws, aviso_sin_backend("open_browser",
+                                                 "no llega URL que abrir" if not url else ACCIONES_ERROR))
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: cort_acciones.abrir_url(url))
+                    enviar(ws, {"type": "browser_state", "origen": "real",
+                                "state": "abierto-en-el-sistema" if r.get("ok") else "cerrado",
+                                "url": url,
+                                "nota": "el panel incrustado ya no existe: se abrió en el navegador "
+                                        "por defecto de MX Linux con xdg-open"})
+
+            elif t == "detect_apps":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    a = await asyncio.get_event_loop().run_in_executor(
+                        None, cort_acciones.apps_disponibles)
+                    # La demo lee `nom` y `chemin` (los campos de su backend francés).
+                    enviar(ws, {"type": "detected_apps", "origen": "real",
+                                "apps": [{"nom": x["nombre"], "chemin": x["ejec"] or x["archivo"]}
+                                         for x in a]})
+
+            elif t == "get_installed_programs":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, cort_acciones.programas_instalados)
+                    enviar(ws, {"type": "installed_programs", "origen": "real",
+                                "programs": [{"name": p["nombre"], "version": p["version"],
+                                              "publisher": "dpkg (gestor de paquetes de este equipo)",
+                                              "hive": f"{p['tamano_kb']} KB"}
+                                             for p in r.get("programs", [])]})
+
+            elif t == "get_winget_upgrades":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, cort_acciones.actualizaciones)
+                    enviar(ws, {"type": "winget_upgrades", "origen": "real",
+                                "nota": ("winget no existe en Linux: leído con `apt list --upgradable`"),
+                                "upgrades": [{"name": u["nombre"], "id": u["nombre"],
+                                              "version": u["de"], "available": u["a"],
+                                              "source": "apt"}
+                                             for u in r.get("upgrades", [])]})
+
+            elif t == "games_get_library":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    def biblioteca():
+                        apps = cort_acciones.apps_disponibles()
+                        juegos = [a for a in apps if "game" in (a.get("nota", "") + a["archivo"]).lower()]
+                        return juegos
+                    juegos = await asyncio.get_event_loop().run_in_executor(None, biblioteca)
+                    enviar(ws, {"type": "games_library", "origen": "real",
+                                "games": [{"name": g["nombre"], "path": g["ejec"],
+                                           "exe": g["ejec"], "folder": str(Path(g["archivo"]).parent)}
+                                          for g in juegos],
+                                "folders": sorted({str(Path(g["archivo"]).parent) for g in juegos}),
+                                "nota": "biblioteca leída de los .desktop con categoría Game; "
+                                        "no hay Steam en este equipo"})
+
+            elif t == "get_desktop_wallpaper":
+                if cort_acciones is None:
+                    enviar(ws, aviso_sin_backend(t, ACCIONES_ERROR))
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, cort_acciones.fondo_escritorio)
+                    data_url = ""
+                    if r.get("existe") and r.get("archivo") and Path(r["archivo"]).is_file():
+                        crudo = Path(r["archivo"]).read_bytes()
+                        if len(crudo) < 4_000_000:            # 4 MB de base64 ya no caben por WS
+                            data_url = ("data:image/png;base64," +
+                                        base64.b64encode(crudo).decode())
+                    enviar(ws, {"type": "desktop_wallpaper_result", "origen": "real",
+                                "data_url": data_url, "archivo": r.get("archivo") or "",
+                                "nota": (r["detalle"] if not data_url else
+                                         f"fondo leído con xfconf-query: {r.get('archivo')}")})
 
             elif t == "location_update":
                 e = leer_estado()

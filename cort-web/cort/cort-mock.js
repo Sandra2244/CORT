@@ -58,7 +58,10 @@
     "claude_code_status", "av_speak", "toggle_mic", "toggle_fullscreen",
     "toggle_always_listen", "clear_cache", "temperatura",
     // F3: la voz y el micro ya tienen quién conteste en el puente.
-    "voz_estado", "voz_on", "voz_off", "voz_motor", "mic_on", "mic_off", "mic_estado"
+    "voz_estado", "voz_on", "voz_off", "voz_motor", "mic_on", "mic_off", "mic_estado",
+    // F5: acciones reales sobre el equipo (las respondía un backend de Windows).
+    "pc_accion", "pc_estado", "detect_apps", "get_installed_programs", "get_winget_upgrades",
+    "games_get_library", "get_desktop_wallpaper", "open_browser"
   ]);
 
   // La demo lee unas respuestas por `s.type` y otras por `s.action` (live_subtitles,
@@ -81,6 +84,7 @@
     ultimo_status: null,
     ultima_temperatura: null,
     ultima_voz: null,
+    ultima_accion: null,
     avisos: {},
     escuchas: new Set(),
     _intento: 0,
@@ -162,6 +166,13 @@
           n.type === "mic_texto" || n.type === "voz_pedido") {
         if (typeof window.CORT_alVoz === "function") {
           try { window.CORT_alVoz(n); } catch (e) {}
+        }
+      }
+      // F5: resultado de una acción real sobre el equipo (abrir, cerrar, volumen…).
+      if (n.type === "cort_accion" || n.type === "pc_estado") {
+        this.ultima_accion = n;
+        if (typeof window.CORT_alAccion === "function") {
+          try { window.CORT_alAccion(n); } catch (e) {}
         }
       }
       const a = Array.from(this.escuchas);
