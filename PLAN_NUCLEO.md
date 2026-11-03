@@ -186,13 +186,36 @@ por adb (el PC no lo ve y no se instala software de terceros de un acortador).
 
 ## 7. Cómo se mide el cerebro sin congelar la máquina
 
-`scripts/cerebro_prueba.sh` (escrito en esta fase) hace la única prueba decisiva:
-cierra el puente, mide la RAM libre, **se niega** a cargar si no hay 900 MB, arranca
-Ollama, carga el modelo, pasa tus 12 frases reales por el compilador, apunta cuántas
-JSON salieron bien y cuántos tokens/s da, y apaga todo. Se corre **con Qoder cerrado**,
-porque con el agente abierto la RAM libre es 150 MB y el resultado sería una máquina
-congelada, no una medida.
+`scripts/sonda_cerebro.sh` (escrito en esta fase) hace la única prueba decisiva: mide la
+RAM disponible, **se niega** a cargar si no hay 900 MB, arranca Ollama, y corre
+`scripts/cerebro_prueba.py` con los dos candidatos (`qwen2.5:0.5b` y `qwen3:0.6b`, ambos
+ya en disco): pasa tus 12 frases reales por el compilador, apunta cuántas JSON salieron
+bien y cuántos tokens/s da, y libera el modelo al terminar. Se corre **con Qoder cerrado**,
+porque con el agente abierto la RAM libre medida hoy es 170 MB y el resultado sería una
+máquina congelada, no una medida.
 
 Salida esperada en el archivo `~/.local/share/cort/registro-cerebro.jsonl`: por cada frase,
 el JSON que propuso el modelo, si el validador lo aceptó y los milisegundos que tardó. Con
 eso se decide el modelo (0,5 B vs 0,6 B) con datos, y no por gusto.
+
+---
+
+## 8. La reja ya está construida y medida (2026-11-03, 01:00)
+
+El modelo todavía no se midió (hace falta Qoder cerrado), pero la parte que no depende
+de él ya corre y ya tiene número: `cort_archivos.py`, `cort_media.py`,
+`cort_intenciones.py` y su prueba `scripts/prueba_intenciones.py`.
+
+| qué | medido |
+|---|---|
+| casos de la reja | **18 / 18 correctos**, salida 0 |
+| planes buenos ejecutados | 6 (mover, listar, crear, reproducir, JSON en cercado, JSON plano en inglés) |
+| planes malos frenados | 12 (borrar, `/etc`, `../../../../etc/passwd`, prosa en vez de JSON, verbo inexistente, argumento faltante, sobrescribir sin confirmar, vacío, dos rutas ambiguas) |
+| raíces reales en esta laptop | `Documentos`, `Descargas`, `Escritorio`, `Imágenes`, `Música` — `Videos` **no existe** |
+| pistas encontradas en `~/Música` | **16** (la carpeta `Dark Rose` está entre ellas) |
+| reproductor | `vlc` presente; `playerctl` **ausente** → pausar/siguiente responden «no puedo» en vez de fingir |
+| borra algo CORT? | no existe el verbo: `dir(cort_archivos)` no tiene `borrar`, `rm` ni `vaciar` |
+| sobrescribir | con `confirmar=True` lo anterior se rescata como `informe-cort-010058.txt`; sin confirmar, se pide |
+
+Lo que falta para cerrar F9 es el primer tramo (frase → JSON): el modelo, que mide la
+sonda. La reja no cambia cuál sea el modelo que se elija.
