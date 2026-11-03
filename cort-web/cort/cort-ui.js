@@ -1697,6 +1697,105 @@
     pintarVoz();
   };
 
+  // ---- 5c. bandeja de petición escrita (fase F9) ----------------------------
+  // La plantilla sólo traía órdenes de una lista fija y el micrófono. Si el cerebro
+  // entiende frases largas tiene que haber un sitio donde escribirlas: además sirve de
+  // destino al dictado, porque CORT_alVoz busca #command-input y ese es este campo.
+  function bandeja() {
+    let b = document.getElementById("cort-bandeja");
+    if (b) return b;
+    b = document.createElement("form");
+    b.id = "cort-bandeja";
+    b.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9997;display:flex;gap:8px;" +
+      "padding:8px;border-radius:14px;background:rgba(10,14,24,.82);border:1px solid rgba(255,170,0,.35);" +
+      "box-shadow:0 6px 22px rgba(0,0,0,.4)";
+    const campo = document.createElement("input");
+    campo.id = "command-input";
+    campo.type = "text";
+    campo.autocomplete = "off";
+    campo.placeholder = "pide lo que sea: «mueve la carpeta proyectos a documentos»";
+    campo.style.cssText = "flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid rgba(120,160,220,.35);" +
+      "background:rgba(6,10,18,.9);color:#e9edf5;font:14px/1.4 system-ui";
+    const boton = document.createElement("button");
+    boton.type = "submit";
+    boton.id = "cort-bandeja-pedir";
+    boton.textContent = "pedir";
+    boton.style.cssText = "padding:8px 14px;border-radius:10px;cursor:pointer;border:1px solid rgba(255,170,0,.6);" +
+      "background:rgba(255,170,0,.16);color:#ffd68a;font:14px/1.2 system-ui";
+    b.append(campo, boton);
+    (document.body || document.documentElement).appendChild(b);
+    b.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const texto = campo.value.trim();
+      if (!texto) return;
+      window.CORT_enviarAlCerebro({ type: "user_input", text: texto });
+      campo.value = "";
+      flotante("pidiendo: " + texto.slice(0, 60));
+    });
+    return b;
+  }
+
+  // ---- F9: lo que el cerebro entendió y qué hizo la reja ---------------------
+  // La tarjeta se queda a propósito: un aviso de 6 s no alcanza para leer el plan,
+  // y si la reja frenó hay que ver con qué palabras hay que confirmar.
+  let ultimoPlan = null;
+
+  function tarjetaPlan(n) {
+    let c = document.getElementById("cort-plan");
+    if (!c) {
+      c = document.createElement("div");
+      c.id = "cort-plan";
+      // bottom:152 y no 78: medido, a 78 la tarjeta tapaba los botones de micrófono,
+      // silencio y escucha continua (y378-436), que sí reciben clic.
+      c.style.cssText = "position:fixed;left:12px;bottom:152px;z-index:9998;max-width:min(430px,88vw);" +
+        "padding:10px 12px;border-radius:12px;font:12px/1.45 system-ui;color:#e9edf5;" +
+        "background:rgba(10,14,24,.86);border:1px solid rgba(255,170,0,.45);box-shadow:0 6px 22px rgba(0,0,0,.45)";
+      (document.body || document.documentElement).appendChild(c);
+    }
+    const args = Object.entries((n.plan && n.plan.argumentos) || {})
+      .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    const pide = !n.valido && /confirmaci/i.test((n.motivo || "") + " " + (n.decir || ""));
+    c.innerHTML = "";
+    const titulo = document.createElement("div");
+    titulo.style.cssText = "font-weight:700;letter-spacing:.4px;color:" +
+      (n.valido ? "#8ff0b4" : "#ffb0b0");
+    titulo.textContent = `${n.valido ? "hecho" : "no lo hice"} · ${n.intencion || "nada"} · ${n.origen}`;
+    const frase = document.createElement("div");
+    frase.textContent = "«" + (n.frase || "") + "»";
+    const plan = document.createElement("div");
+    plan.style.opacity = ".82";
+    plan.textContent = args ? "argumentos: " + args : "sin argumentos";
+    const decir = document.createElement("div");
+    decir.style.marginTop = "4px";
+    decir.textContent = n.decir || n.motivo || "";
+    c.append(titulo, frase, plan, decir);
+    if (pide) {
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.id = "cort-plan-confirmar";
+      boton.textContent = "Confirmar";
+      boton.style.cssText = "margin-top:8px;padding:5px 12px;border-radius:9px;cursor:pointer;" +
+        "border:1px solid rgba(255,170,0,.6);background:rgba(255,170,0,.14);color:#ffd68a";
+      boton.addEventListener("click", () => {
+        boton.disabled = true;
+        window.CORT_enviarAlCerebro({ type: "user_input", text: "confirma" });
+      });
+      c.appendChild(boton);
+    }
+    clearTimeout(tarjetaPlan._t);
+    c.style.opacity = "1";
+    tarjetaPlan._t = setTimeout(() => { c.style.opacity = "0"; }, 32000);
+  }
+
+  window.CORT_alPlan = (n) => {
+    if (!n || n.type !== "plan_resultado") return;
+    ultimoPlan = n;
+    const args = Object.entries((n.plan && n.plan.argumentos) || {})
+      .filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" · ");
+    flotante(`${n.intencion || "nada"}${args ? " (" + args + ")" : ""} — ${n.decir}`, n.valido);
+    tarjetaPlan(n);
+  };
+
   window.CORT_alVoz = (n) => {
     if (!n) return;
     if (n.type === "voz_estado" || n.type === "voz_activada" || n.type === "voz_motor_result") {
@@ -1712,8 +1811,12 @@
     }
     pintarVoz();
   };
-  if (document.readyState !== "loading") pintarVoz();
-  else document.addEventListener("DOMContentLoaded", pintarVoz);
+  function arrancarVoz() {
+    pintarVoz();
+    bandeja();          // sin bandeja no hay cómo escribir una frase larga
+  }
+  if (document.readyState !== "loading") arrancarVoz();
+  else document.addEventListener("DOMContentLoaded", arrancarVoz);
 
   // ---- 6. API de medición --------------------------------------------------
   window.CORT = {

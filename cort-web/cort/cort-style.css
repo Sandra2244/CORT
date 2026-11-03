@@ -435,3 +435,12 @@
   /* En el teléfono el badge se aplasta contra el orbe: se queda en dos líneas y nada más. */
   #cort-voz-badge { left: 6px; bottom: 34px; max-width: 62vw; flex-wrap: wrap; }
 }
+
+/* ---------- F9: la bandeja de petición ocupa el pie ----------
+   Medido en el navegador (525x521): la bandeja nueva caía encima del badge de
+   voz — que sí recibe clics — y de las tres líneas de estado. Se suben los
+   cuatro a la franja libre de arriba a la izquierda, despejada y sin orbe. */
+#cort-voz-badge    { left: 12px !important; top: 50px !important; bottom: auto !important; right: auto !important; }
+#status-text       { left: 12px !important; top: 106px !important; bottom: auto !important; right: auto !important; transform: none !important; }
+#model-status-text { left: 12px !important; top: 122px !important; bottom: auto !important; right: auto !important; transform: none !important; }
+#assistant-label   { left: 12px !important; top: 138px !important; bottom: auto !important; right: auto !important; transform: none !important; text-align: left !important; }

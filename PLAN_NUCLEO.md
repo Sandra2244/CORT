@@ -229,3 +229,32 @@ de él ya corre y ya tiene número: `cort_archivos.py`, `cort_media.py`,
 
 Lo que falta para cerrar F9 es el primer tramo (frase → JSON): el modelo, que mide la
 sonda. La reja no cambia cuál sea el modelo que se elija.
+
+### 8.1 Y ya está conectado al puente y a la pantalla (2026-11-03, 02:15)
+
+`scripts/prueba_nucleo.py` sube un Ollama falso en un puerto de arena, arranca el puente
+contra una casa falsa y habla por WebSocket como lo hace la interfaz:
+
+| qué | medido |
+|---|---|
+| frases de extremo a extremo | **7 / 7 correctas**, salida 0 |
+| qué se le mandó al modelo | `format=json`, `temperature=0` en las **6** llamadas a `/api/generate` |
+| la charla sigue siendo charla | «hola buenos días» → sin `plan_resultado`, con respuesta del chat |
+| confirmación con sí humano | `confirma` ejecutó y rescató lo viejo como `informe-cort-021204.txt` |
+| casa real | `~/Documentos/proyectos` **no existe** antes y después: intacta |
+| regresión F4 | `prueba_vida.py 8775` → salida 0, `TIPOS VISTOS` con 10 `jarvis_text`, **nada** sin `origen: real` |
+
+En la pantalla (navegador integrado, viewport 525×521):
+
+| qué | medido |
+|---|---|
+| bandeja de petición | 12,453 · 501×56 — la frase se escribe y se manda, el campo se limpia solo |
+| tarjeta del plan | 12,256 · 430×113 (y 12,221 · 430×148 con el botón) — título `hecho · mover_archivo · real`, la frase entre comillas, los argumentos y lo que CORT dijo |
+| botón «Confirmar» | 25,331 · 85×27, sólo cuando el motivo habla de confirmación; al pulsarlo llega `«confirma»` y la tarjeta cambia a `hecho · real` |
+| choque que se corrigió | la bandeja tapaba el badge de voz (clicable, 6,439) y las tres líneas de estado (458/479/487); las cuatro se subieron a la franja libre 12,50 → 12,138 |
+| segundo choque corregido | la tarjeta a `bottom:78` tapaba micrófono, silencio y escucha continua (197,378 · 58×58); ahora a `bottom:152` |
+
+Un detalle sin resolver y dicho aquí para que no se pierda: en el primer volcado de F4
+apareció un `jarvis_text` con el texto en inglés «Weighing the options…». No está en
+ningún archivo del repo y **no volvió en tres corridas completas** (`grep -c` = 0). Se
+queda mirando; si reaparece, se rastrea por la hora del mensaje.

@@ -83,6 +83,17 @@ except Exception as _e_vida:
 else:
     VIDA_ERROR = ""
 
+# La reja del núcleo (F9): recibe el plan que propuso el modelo y decide si puede
+# ejecutarse. Si este módulo no carga, el puente sigue con todo lo demás pero NINGÚN
+# plan llega al disco: sin reja no hay manos, y eso es exactamente el punto.
+try:
+    import cort_intenciones
+except Exception as _e_reja:
+    cort_intenciones = None
+    REJA_ERROR = f"{type(_e_reja).__name__}: {_e_reja}"
+else:
+    REJA_ERROR = ""
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -905,7 +916,7 @@ def intentos_locales(texto, estado):
                 f"({m['ram_disponible_mb']} MB libres), disco al {m['disco_pct']} % en {m['nucleos']} núcleos. "
                 "Con esta memoria no puedo cargar un modelo grande; el puente lo bloquea para no congelarte."), []
 
-    if tiene("ollama", "modelo", "cerebro", "descarga", "instala"):
+    if tiene("ollama") or dice("modelo", "modelos", "cerebro", "descarga", "instala"):
         vivo, modelos = ollama_vivo()
         disco = inventario_disco()
         total_mb = cpu_ram_disco().get("ram_total_mb", 0)
@@ -943,6 +954,90 @@ def intentos_locales(texto, estado):
         return accion
 
     return None
+
+
+# ------------------------------------------------------ compilador de intenciones ----
+# Fase F9. Lo que falta entre «oí la frase» y «lo hice». El modelo pequeño no comprende,
+# predice texto: por eso acá sólo produce una propuesta y `cort_intenciones` decide si es
+# ejecutable. Dos puertas antes de llamarlo, porque la experiencia de F3/F4 fue clara:
+#   * si Ollama no está vivo, no se levanta para esto: cargar un modelo con la RAM justa
+#     es congelar la Canaima a mitad de una frase.
+#   * si el modelo elegido no cabe en la RAM medida, se dice el número y se usa la
+#     respuesta normal del chat, no se intenta el carga.
+# CORT_NUCLEO_FALSO='{"intencion":"listar_archivos",...}' permite probar todo el camino
+# sin modelo, igual que la arena de las fases anteriores.
+SISTEMA_NUCLEO = (
+    "Eres el compilador de intenciones de CORT, un asistente local en Linux. "
+    "Recibes una frase hablada, a veces con errores de dictado. Devuelves SOLO un objeto "
+    "JSON, sin prosa y sin cercas de markdown, con estas llaves: "
+    '"intencion": una de {listar_archivos, mover_archivo, copiar_archivo, crear_carpeta, '
+    'reproducir, pausar, siguiente, investigar, playlists_telefono, borrar_archivo, nada}; '
+    '"argumentos": un objeto con las rutas o nombres que nombraron (origen, destino, '
+    'carpeta, nombre, pista, playlist, tema); '
+    '"necesita_confirmacion": true si el usuario pidió sobrescribir o borrar; '
+    '"no_entendido": true si la frase no corresponde a ninguna acción. '
+    'Nunca inventes rutas: si no nombraron la carpeta, deja el argumento vacío. '
+    'Si la frase es un saludo, una pregunta o una charla, responde '
+    '{"intencion":"nada","no_entendido":true,"argumentos":{}}.'
+)
+PENDIENTE: dict = {}                  # el último plan que pidió un sí humano, con su hora
+NUCLEO_ON = os.environ.get("CORT_NUCLEO", "1") == "1"
+
+
+def ollama_cargados():
+    """Modelos que YA están en memoria según /api/ps. Si uno está cargado, usarlo no
+    cuesta el presupuesto de carga: cobrarlo igual sería una puerta que miente."""
+    ok, datos = http_json(f"{OLLAMA}/api/ps", datos={}, timeout=3)
+    if not ok or not isinstance(datos, dict):
+        return []
+    return [m.get("name", "") for m in datos.get("models", []) if isinstance(m, dict)]
+
+
+def modelo_del_nucleo(estado):
+    """El modelo que se usa para compilar, con su puerta de RAM. (nombre|None, motivo)."""
+    vivo, modelos = ollama_vivo()
+    if not vivo:
+        return None, ("Ollama no está levantando ahora mismo; el núcleo no carga un modelo "
+                      "por su cuenta para no congelar el equipo.")
+    pedido = estado.get("nucleo_model") or estado.get("local_model") or estado.get("model") or ""
+    candidatos = list(modelos) or sorted(inventario_disco())
+    if not candidatos:
+        return None, "no hay ningún modelo descargado; elige uno en Ajustes > Cerebro local"
+    elegido = pedido if pedido in candidatos else min(candidatos, key=lambda m: presupuesto_del_modelo(m)[0])
+    if elegido not in candidatos:
+        return None, f"{pedido} no está en disco; lo que hay es {', '.join(sorted(candidatos))}"
+    if elegido not in ollama_cargados():
+        falta, como = presupuesto_del_modelo(elegido)
+        libre = ram_disponible_mb()
+        if libre < falta:
+            chicos = sorted(inventario_disco(), key=lambda k: inventario_disco()[k]["ram_est"])
+            mejor = chicos[0] if chicos else "ninguno en disco"
+            return None, (f"{elegido} pide ~{falta} MB libres ({como}) y hay {libre}: no lo cargo para "
+                          f"esto, congelaría la máquina. Cierra cosas o usa el más chico ({mejor}).")
+    return elegido, ""
+
+
+def compilar_intencion(frase, estado):
+    """frase hablada -> (plan|None, motivo). No ejecuta absolutamente nada."""
+    if cort_intenciones is None:
+        return None, "la reja del núcleo no cargó: " + REJA_ERROR
+    simulado = os.environ.get("CORT_NUCLEO_FALSO")
+    if simulado:
+        return cort_intenciones.plan_desde_texto(simulado), "plan simulado por variable de prueba"
+    modelo, motivo = modelo_del_nucleo(estado)
+    if not modelo:
+        return None, motivo
+    ok, r = http_json(
+        f"{OLLAMA}/api/generate",
+        {"model": modelo, "system": SISTEMA_NUCLEO, "prompt": frase, "stream": False,
+         "format": "json", "keep_alive": os.environ.get("CORT_KEEP_ALIVE", "2m"),
+         "options": {"temperature": 0, "num_ctx": 2048, "num_predict": 180}},
+        timeout=int(os.environ.get("CORT_NUCLEO_TIMEOUT", "90")),
+    )
+    if not ok:
+        return None, f"el cerebro no respondió: {r}"
+    crudo = (r.get("response") if isinstance(r, dict) else None) or ""
+    return cort_intenciones.plan_desde_texto(crudo), crudo[:200]
 
 
 # ------------------------------------------------------------------ chat
@@ -1915,6 +2010,37 @@ async def atender_input(ws, texto, historial, candado):
             enviar(ws, {"type": "brain_used", "modelo": "reglas locales + datos del sistema",
                         "origen": "real"})
             return
+        # ---- F9: si la frase es una orden, no es charla ----
+        # La confirmación se pide y se recibe con palabras, igual que en F5 con apagar:
+        # un plan del modelo nunca se autosirve.
+        oido = (sin_acentos(texto) or "").strip()
+        if PENDIENTE.get("plan") and re.match(r"^(confirmar|confirma|adelante|hazlo)\b", oido):
+            if time.monotonic() - PENDIENTE["hora"] > 120:
+                PENDIENTE.clear()
+                await responder_plan(ws, {"decir": "Ese plan ya se venció: pídeme la orden de nuevo.",
+                                          "valido": False, "origen": "no disponible",
+                                          "intencion": "", "motivo": "confirmación fuera de tiempo"},
+                                     texto, historial, "")
+                return
+            plan = PENDIENTE["plan"]
+            PENDIENTE.clear()
+            r = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: cort_intenciones.ejecutar(plan, confirmar=True))
+            await responder_plan(ws, r, texto, historial, "")
+            return
+        if NUCLEO_ON and cort_intenciones is not None:
+            plan, crudo = await asyncio.get_event_loop().run_in_executor(
+                None, compilar_intencion, texto, estado)
+            if plan is not None:
+                r = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: cort_intenciones.ejecutar(plan))
+                es_charla = (r.get("intencion") or "nada") in ("nada", "") and not r.get("valido")
+                if not es_charla:
+                    if not r["valido"] and "confirmaci" in (r.get("motivo") or ""):
+                        # un sí humano, no del modelo; y no caduca si la pestaña se recarga
+                        PENDIENTE.update({"plan": plan, "hora": time.monotonic()})
+                    await responder_plan(ws, r, texto, historial, crudo)
+                    return
         r = await asyncio.get_event_loop().run_in_executor(None, cerebro, texto, historial, estado)
         if r["ok"]:
             historial.append({"role": "user", "content": texto})
@@ -1923,6 +2049,20 @@ async def atender_input(ws, texto, historial, candado):
             enviar(ws, {"type": "brain_used", "modelo": r.get("modelo"), "origen": "real"})
         else:
             await decir(ws, "Sin cerebro local: " + r["motivo"])
+
+
+async def responder_plan(ws, r, texto, historial, crudo=""):
+    """Cuenta qué entendió el cerebro, qué aceptó la reja y qué salió de ejecutarlo."""
+    enviar(ws, {"type": "plan_resultado", "origen": r.get("origen") or "no disponible",
+                "intencion": r.get("intencion") or "", "valido": bool(r.get("valido")),
+                "decir": r.get("decir") or "", "motivo": r.get("motivo") or "",
+                "plan": r.get("plan"), "detalle": r.get("detalle"),
+                "crudo": (crudo or "")[:240], "frase": texto})
+    historial.append({"role": "user", "content": texto})
+    historial.append({"role": "assistant", "content": r.get("decir") or ""})
+    await decir(ws, r.get("decir") or "")
+    enviar(ws, {"type": "brain_used", "modelo": "modelo local + reja de intenciones",
+                "origen": "real"})
 
 
 async def decir(ws, texto):
@@ -1942,7 +2082,10 @@ async def decir(ws, texto):
                pausa=0.05)
     enviar(ws, {"type": "live_subtitles", "id": ident, "phase": "end"})
     enviar(ws, {"type": "jarvis_text", "text": texto, "origen": "real"})
-    enviar(ws, {"state": "idle"}, pausa=max(1.2, len(texto) * 0.03))
+    # El respiro antes de volver a "idle" se tope en 4 s: con una respuesta larga
+    # (la selección subrayada llega a tener mil caracteres) la pausa de 30 s dejaba
+    # la bandeja sin oír ningún botón, que es el defecto que ya combatimos en F3.
+    enviar(ws, {"state": "idle"}, pausa=min(4.0, max(1.2, len(texto) * 0.03)))
     # Y además lo dice: la voz sale en su hilo, así que el subtítulo y la escucha
     # de botones no esperan los milisegundos que tarde sintetizar.
     await hablar_por_el_puente(ws, texto)

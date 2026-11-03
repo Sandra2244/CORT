@@ -77,8 +77,13 @@
     return m;
   }
 
+  // ?puente= permite medir la interfaz contra un puente de arena sin tocar el de
+  // siempre; sólo se acepta si apunta a ws:// o wss:// y nada más.
+  const OTRO = (new URLSearchParams(location.search).get("puente") || "").trim();
+
   const PUENTE = {
-    url: "ws://" + (location.hostname || "127.0.0.1") + ":8765/ws",
+    url: /^(wss?:\/\/\S+)$/i.test(OTRO) ? OTRO
+                                       : "ws://" + (location.hostname || "127.0.0.1") + ":8765/ws",
     ws: null,
     estado: "sin iniciar",
     reenviados: 0,
@@ -182,6 +187,13 @@
         this.ultima_accion = n;
         if (typeof window.CORT_alAccion === "function") {
           try { window.CORT_alAccion(n); } catch (e) {}
+        }
+      }
+      // F9: el plan que armó el cerebro, si la reja lo aceptó y qué salió de ejecutarlo.
+      if (n.type === "plan_resultado") {
+        this.ultima_plan = n;
+        if (typeof window.CORT_alPlan === "function") {
+          try { window.CORT_alPlan(n); } catch (e) {}
         }
       }
       const a = Array.from(this.escuchas);
