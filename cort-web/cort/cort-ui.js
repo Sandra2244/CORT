@@ -1844,6 +1844,135 @@
     tarjetaPlan(n);
   };
 
+  // ---- M1: panel de cerebro — qué hay en disco, bajarlo y probarlo ------------
+  // El puente ya mandaba el inventario y el progreso; faltaba una pantalla donde
+  // ver el peso MEDIDO, la RAM estimada y si cabe ahora. Nada de aquí carga un
+  // modelo por su cuenta: «probar» pregunta la puerta de RAM antes de disparar.
+  let ultimoCerebro = null;
+  let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
+  const progresoPull = {};
+  const BOTON_CEREBRO = "padding:3px 9px;border-radius:8px;cursor:pointer;font:11px/1.2 system-ui;" +
+    "border:1px solid rgba(90,210,255,.6);background:rgba(40,150,220,.2);color:#bfeeff";
+
+  function chipCerebro() {
+    if (document.getElementById("cort-cerebro-chip")) return;
+    const chip = document.createElement("button");
+    chip.id = "cort-cerebro-chip";
+    chip.type = "button";
+    chip.textContent = "◉";
+    chip.title = "cerebro: modelos en disco, descargas y prueba";
+    chip.setAttribute("aria-label", "abrir el panel del cerebro");
+    chip.style.cssText = "position:fixed;left:0;bottom:150px;z-index:9999;width:34px;height:44px;" +
+      "border:1px solid rgba(90,200,255,.5);border-left:none;border-radius:0 12px 12px 0;" +
+      "background:linear-gradient(180deg,rgba(20,70,110,.92),rgba(8,24,44,.92));" +
+      "color:#bfeeff;font:700 16px/1 'Courier New',monospace;cursor:pointer;" +
+      "box-shadow:0 0 14px rgba(60,180,255,.22)";
+    const panel = document.createElement("div");
+    panel.id = "cort-cerebro";
+    panel.style.cssText = "position:fixed;left:44px;bottom:12px;z-index:9998;display:none;" +
+      "width:min(430px,calc(100vw - 60px));max-height:62vh;overflow:auto;padding:10px 12px;" +
+      "border-radius:12px;background:rgba(8,16,28,.94);border:1px solid rgba(90,200,255,.45);" +
+      "color:#dff1ff;font:12px/1.5 system-ui";
+    (document.body || document.documentElement).append(chip, panel);
+    chip.addEventListener("click", () => {
+      const abierto = panel.style.display === "block";
+      panel.style.display = abierto ? "none" : "block";
+      if (!abierto) {
+        window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
+        pintarCerebro();
+      }
+    });
+  }
+
+  function pintarCerebro() {
+    const panel = document.getElementById("cort-cerebro");
+    if (!panel) return;
+    const s = (ultimoCerebro && ultimoCerebro.type === "ollama_status_reply") ? ultimoCerebro.status : null;
+    panel.innerHTML = "";
+    const titulo = document.createElement("div");
+    titulo.style.cssText = "font-weight:700;letter-spacing:.5px;color:#bfeeff";
+    if (!s) {
+      titulo.textContent = "cerebro — sin datos del puente todavía";
+      panel.appendChild(titulo);
+      return;
+    }
+    const libre = s.ram_disponible_mb, nucleos = s.nucleos;
+    titulo.textContent = `cerebro · Ollama ${s.online ? "vivo" : "apagado"} · ` +
+      `RAM libre ${libre} MB · ${nucleos} núcleos`;
+    panel.appendChild(titulo);
+    const nota = document.createElement("div");
+    nota.style.cssText = "opacity:.72;margin:2px 0 8px";
+    nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +
+      "sobre ese peso. «probar» no carga nada si la cuenta no cabe.";
+    panel.appendChild(nota);
+    const cat = s.catalogo || {};
+    Object.entries(cat).sort((a, b) => ((a[1].ram_uso || 1e9) - (b[1].ram_uso || 1e9)))
+      .forEach(([nombre, info]) => {
+        const fila = document.createElement("div");
+        fila.style.cssText = "padding:6px 0;border-top:1px solid rgba(120,200,240,.18)";
+        const cabe = info.instalado && libre >= 0 && info.ram_uso <= libre;
+        const datos = document.createElement("div");
+        datos.innerHTML = `<b>${nombre}</b> · ` +
+          (info.instalado ? `en disco ${info.mb} MB` : (info.tam || "no bajado")) +
+          ` · pide ~${info.ram_uso || "?"} MB` +
+          `<span style="opacity:.6"> ${info.instalado ? (cabe ? "· cabe ahora" : "· no cabe ahora") : ""}</span>`;
+        fila.appendChild(datos);
+        const linea = document.createElement("div");
+        linea.style.cssText = "display:flex;gap:6px;margin-top:4px";
+        if (!info.instalado) {
+          const bajar = document.createElement("button");
+          bajar.type = "button"; bajar.textContent = "descargar";
+          bajar.style.cssText = BOTON_CEREBRO;
+          bajar.addEventListener("click", () =>
+            window.CORT_enviarAlCerebro({ type: "pull_ollama_model", model: nombre }));
+          linea.appendChild(bajar);
+        }
+        const probar = document.createElement("button");
+        probar.type = "button"; probar.textContent = "probar el cerebro";
+        probar.style.cssText = BOTON_CEREBRO;
+        probar.disabled = !info.instalado;
+        probar.addEventListener("click", () =>
+          window.CORT_enviarAlCerebro({ type: "probar_cerebro", model: nombre }));
+        linea.appendChild(probar);
+        fila.appendChild(linea);
+        if (progresoPull[nombre] !== undefined) {
+          const p = document.createElement("div");
+          p.style.cssText = "opacity:.8";
+          p.textContent = progresoPull[nombre];
+          fila.appendChild(p);
+        }
+        panel.appendChild(fila);
+      });
+    const r = ultimaPrueba;
+    if (r) {
+      const caja = document.createElement("div");
+      caja.style.cssText = "margin-top:8px;padding:6px 8px;border-radius:9px;" +
+        "border:1px solid rgba(90,200,255,.4);background:rgba(20,60,90,.35)";
+      caja.textContent = r.ok
+        ? `prueba con ${r.modelo}: ${r.ms} ms · ${r.tok_s} tok/s · reja: ` +
+          `${r.valido ? "plan aceptado" : "rechazado"}${r.motivo ? " — " + r.motivo : ""}`
+        : `prueba con ${r.modelo || "?"}: no corrió — ${r.motivo}`;
+      panel.appendChild(caja);
+    }
+  }
+
+  window.CORT_alCerebro = (n) => {
+    if (!n) return;
+    if (n.type === "ollama_pull_progress") {
+      progresoPull[n.model] = `${n.pct || 0}% — ${n.status || ""}${n.done ? "" : " (bajando)"}`;
+      if (n.done) delete progresoPull[n.model];
+      flotante(n.status || "descarga terminada", n.success !== false);
+    }
+    if (n.type === "ollama_status_reply") ultimoCerebro = n;
+    if (n.type === "cerebro_prueba" && !n.empezando) ultimaPrueba = n;
+    if (n.type === "cerebro_prueba" && n.empezando) {
+      flotante(`probando ${n.modelo}: ${n.frase}`);
+      return;
+    }
+    chipCerebro();
+    pintarCerebro();
+  };
+
   window.CORT_alVoz = (n) => {
     if (!n) return;
     if (n.type === "voz_estado" || n.type === "voz_activada" || n.type === "voz_motor_result") {
@@ -1862,6 +1991,7 @@
   function arrancarVoz() {
     pintarVoz();
     bandeja();          // sin bandeja no hay cómo escribir una frase larga
+    chipCerebro();      // y sin este canto no hay cómo bajar ni probar un modelo
   }
   if (document.readyState !== "loading") arrancarVoz();
   else document.addEventListener("DOMContentLoaded", arrancarVoz);

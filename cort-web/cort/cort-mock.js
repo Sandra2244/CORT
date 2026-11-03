@@ -196,6 +196,14 @@
           try { window.CORT_alPlan(n); } catch (e) {}
         }
       }
+      // M1: inventario de modelos, progreso de descarga y prueba del cerebro.
+      if (n.type === "ollama_status_reply" || n.type === "ollama_pull_progress" ||
+          n.type === "cerebro_prueba") {
+        this.ultima_cerebro = n;
+        if (typeof window.CORT_alCerebro === "function") {
+          try { window.CORT_alCerebro(n); } catch (e) {}
+        }
+      }
       const a = Array.from(this.escuchas);
       if (!a.length) return;
       // La demo abre tres canales a la vez y solo uno es el que renderiza: el que

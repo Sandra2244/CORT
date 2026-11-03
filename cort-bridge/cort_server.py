@@ -1040,6 +1040,55 @@ def compilar_intencion(frase, estado):
     return cort_intenciones.plan_desde_texto(crudo), crudo[:200]
 
 
+NOMBRE_MODEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$")
+
+
+def probar_cerebro(modelo, frase):
+    """Un disparo real al modelo, sin ejecutar nada: mide latencia y si la reja
+    aceptaría el plan. La puerta de RAM sigue mandando — si el modelo no cabe, se
+    dice el número y no se carga, que es como se evita congelar el equipo."""
+    if not modelo or not NOMBRE_MODEL.match(modelo):
+        return {"ok": False, "motivo": "ese nombre de modelo no es válido"}
+    if cort_intenciones is None:
+        return {"ok": False, "motivo": "la reja del núcleo no cargó: " + REJA_ERROR}
+    vivo, cargados = ollama_vivo()
+    if not vivo:
+        ok, detalle = ollama_arrancar()
+        if not ok:
+            return {"ok": False, "motivo": detalle}
+        vivo, cargados = ollama_vivo()
+        if not vivo:
+            return {"ok": False, "motivo": "Ollama sigue sin responder tras intentarlo levantar"}
+    if modelo not in cargados:
+        falta = presupuesto_del_modelo(modelo)[0]
+        libre = ram_disponible_mb()
+        if 0 <= libre < falta:
+            return {"ok": False,
+                    "motivo": f"{modelo} pide ~{falta} MB libres y hay {libre}: no lo cargo "
+                              f"para no congelar el equipo. Cierra programas y vuelve a probar."}
+    t0 = time.monotonic()
+    ok, r = http_json(
+        f"{OLLAMA}/api/generate",
+        {"model": modelo, "system": SISTEMA_NUCLEO, "prompt": frase, "stream": False,
+         "format": "json", "keep_alive": os.environ.get("CORT_KEEP_ALIVE", "2m"),
+         "options": {"temperature": 0, "num_ctx": 2048, "num_predict": 180}},
+        timeout=int(os.environ.get("CORT_NUCLEO_TIMEOUT", "120")),
+    )
+    ms = int((time.monotonic() - t0) * 1000)
+    if not ok:
+        return {"ok": False, "motivo": f"el cerebro no respondió: {r}", "ms": ms}
+    crudo = (r.get("response") if isinstance(r, dict) else None) or ""
+    plan = cort_intenciones.plan_desde_texto(crudo)
+    valido, motivo = (False, "el modelo devolvió prosa en vez de un objeto JSON")
+    if plan is not None:
+        valido, motivo = cort_intenciones.validar(plan)
+    tokens = (r.get("eval_count") or 0) if isinstance(r, dict) else 0
+    return {"ok": True, "modelo": modelo, "frase": frase, "ms": ms,
+            "tok_s": round(tokens / max(0.4, ms / 1000.0), 1),
+            "crudo": crudo[:240], "plan": plan, "valido": valido, "motivo": motivo,
+            "origen": "real"}
+
+
 # ------------------------------------------------------------------ chat
 def cerebro(prompt, historial, estado):
     vivo, modelos = ollama_vivo()
@@ -1520,6 +1569,19 @@ async def ws_handler(request):
                     await asyncio.sleep(3)
                 estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
                 enviar(ws, {"type": "ollama_status_reply", "status": estado})
+
+            elif t == "probar_cerebro":
+                modelo = (d.get("model") or "").strip()
+                frase = (d.get("frase") or "mueve la carpeta proyectos a documentos").strip()[:300]
+                enviar(ws, {"type": "cerebro_prueba", "origen": "real", "empezando": True,
+                            "modelo": modelo, "frase": frase})
+                r = await asyncio.get_event_loop().run_in_executor(
+                    None, probar_cerebro, modelo, frase)
+                enviar(ws, {"type": "cerebro_prueba", "origen": r.get("origen") or "no disponible",
+                            "modelo": modelo,
+                            **{k: v for k, v in r.items() if k not in ("origen", "modelo")}})
+                if not r.get("ok"):
+                    await decir(ws, "No probé el cerebro: " + r.get("motivo", ""))
 
             elif t == "pull_ollama_model":
                 modelo = d.get("model") or ""
@@ -2190,11 +2252,53 @@ async def latido():
         await asyncio.sleep(4)
 
 
+async def auto_sonda():
+    """CORT se mide sola cuando la RAM lo permite (M2).
+
+    Espera la ventana —con Qoder y el navegador abiertos no hay 900 MB libres—,
+    prueba el modelo más chico que quepa y deja el número en
+    `mediciones/medicion-cerebro.json`. No ejecuta ninguna orden y no insiste: si
+    el disparo no cabe, vuelve a mirar en diez minutos; si sale, se apaga.
+    """
+    umbral = int(os.environ.get("CORT_AUTOSONDA_UMBRAL", "900"))
+    frase = os.environ.get("CORT_AUTOSONDA_FRASE", "mueve la carpeta proyectos a documentos")
+    archivo = Path(os.environ.get("CORT_MEDICIONES",
+                                  str(BASE.parent / "mediciones"))) / "medicion-cerebro.json"
+    bucle = asyncio.get_running_loop()
+    while True:
+        await asyncio.sleep(int(os.environ.get("CORT_AUTOSONDA_CICLO", "600")))
+        if archivo.exists() and os.environ.get("CORT_AUTOSONDA_REPITA", "0") != "1":
+            return
+        libre = ram_disponible_mb()
+        if 0 <= libre < umbral:
+            continue
+        candidatos = sorted(inventario_disco().items(), key=lambda kv: kv[1]["ram_est"])
+        elegido = next((n for n, d in candidatos if d["ram_est"] <= libre), None)
+        if not elegido:
+            continue
+        r = await bucle.run_in_executor(None, probar_cerebro, elegido, frase)
+        if not r.get("ok"):
+            print(f"[CORT] auto-sonda con {elegido}: {r.get('motivo')}", file=sys.stderr)
+            continue
+        try:
+            archivo.parent.mkdir(parents=True, exist_ok=True)
+            archivo.write_text(json.dumps(r, ensure_ascii=False, indent=1), encoding="utf-8")
+        except OSError as e:
+            print(f"[CORT] no se pudo guardar la medición: {e}", file=sys.stderr)
+        print(f"[CORT] cerebro medido solo: {elegido} respondió en {r['ms']} ms "
+              f"({r['tok_s']} tok/s), reja: {'acepta' if r['valido'] else 'rechaza'}")
+        for w in list(CONEXIONES):
+            enviar(w, {"type": "cerebro_prueba", "origen": "real", "auto": True, **r})
+        return
+
+
 async def main():
     global BUCLE
     BUCLE = asyncio.get_running_loop()
     if cort_vida:
         cort_vida.avivar()      # un hilo, grano de 1 s: los pendientes vencen solos
+    if os.environ.get("CORT_AUTOSONDA", "0") == "1":
+        asyncio.create_task(auto_sonda())
 
     # F7: por defecto el puente sólo escucha en casa (127.0.0.1). Abrirlo a la red
     # local es decisión de la usuaria, con la variable CORT_BIND, y sin HTTPS el
