@@ -1822,6 +1822,25 @@ async def latido():
 async def main():
     global BUCLE
     BUCLE = asyncio.get_running_loop()
+
+    # F7: por defecto el puente sólo escucha en casa (127.0.0.1). Abrirlo a la red
+    # local es decisión de la usuaria, con la variable CORT_BIND, y sin HTTPS el
+    # teléfono no puede instalar la aplicación (los navegadores sólo permiten el
+    # service worker y el micrófono en origen seguro).
+    bind = os.environ.get("CORT_BIND", "127.0.0.1")
+    ssl_ctx = None
+    tls = os.environ.get("CORT_TLS", "")
+    if tls:
+        try:
+            cert, clave = tls.split(",")
+            import ssl as _ssl
+            ssl_ctx = _ssl.create_default_context(_ssl.Purpose.CLIENT_AUTH)
+            ssl_ctx.load_cert_chain(cert, clave)
+        except Exception as e:
+            print(f"[CORT] TLS pedido pero no cargó ({type(e).__name__}: {e}); sigo en http")
+    protocolo = "https" if ssl_ctx else "http"
+    ws_protocolo = "wss" if ssl_ctx else "ws"
+
     app_ws = web.Application()
     app_ws.router.add_get("/ws", ws_handler)
     app_ws.router.add_get("/", ws_handler)
@@ -1846,8 +1865,13 @@ async def main():
     app_web.router.add_get("/audio/{nombre}", audio)
     app_web.router.add_static("/", BASE, show_index=False, follow_symlinks=True)
 
-    print(f"[CORT] interfaz  http://127.0.0.1:{PUERTO_WEB}/index.html")
-    print(f"[CORT] websocket ws://127.0.0.1:{PUERTO_WS}/ws")
+    print(f"[CORT] interfaz  {protocolo}://{bind}:{PUERTO_WEB}/index.html")
+    print(f"[CORT] websocket {ws_protocolo}://{bind}:{PUERTO_WS}/ws")
+    if bind != "127.0.0.1":
+        ip = socket.gethostbyname_ex(socket.gethostname())[2]
+        print(f"[CORT] a la red local: {protocolo}://{(ip or [bind])[0]}:{PUERTO_WEB}/ "
+              + ("(HTTPS: se puede instalar como aplicación)" if ssl_ctx else
+                 "(sin HTTPS el teléfono no instala la PWA ni da micrófono: origen no seguro)"))
     print(f"[CORT] RAM disponible ahora: {ram_disponible_mb()} MB · núcleos {os.cpu_count()}")
     vivo, modelos = ollama_vivo()
     disco = inventario_disco()
@@ -1862,8 +1886,8 @@ async def main():
     runner_ws = web.AppRunner(app_ws)
     runner_web = web.AppRunner(app_web)
     await runner_ws.setup(); await runner_web.setup()
-    await web.TCPSite(runner_ws, "127.0.0.1", PUERTO_WS).start()
-    await web.TCPSite(runner_web, "127.0.0.1", PUERTO_WEB).start()
+    await web.TCPSite(runner_ws, bind, PUERTO_WS, ssl_context=ssl_ctx).start()
+    await web.TCPSite(runner_web, bind, PUERTO_WEB, ssl_context=ssl_ctx).start()
     asyncio.create_task(latido())
     while True:
         await asyncio.sleep(3600)

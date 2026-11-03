@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#03070d"/>
+  <polygon points="256,64 424,160 424,352 256,448 88,352 88,160"
+           fill="none" stroke="#00ffc8" stroke-width="14"/>
+  <circle cx="256" cy="256" r="96" fill="none" stroke="#22d3ee" stroke-width="10"/>
+  <circle cx="256" cy="256" r="46" fill="#00ffc8" opacity="0.85"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#0a6f7d" stroke-width="4" stroke-dasharray="10 14"/>
+  <text x="256" y="486" font-family="monospace" font-size="46" fill="#aef0ff" text-anchor="middle" letter-spacing="8">CORT</text>
+</svg>

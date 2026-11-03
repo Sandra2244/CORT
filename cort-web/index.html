@@ -6,6 +6,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="author" content="Sandra López — CORT" />
+  <!-- CORT fase F7: se puede instalar como aplicación en el teléfono. El manifest
+       apunta a este mismo origen; si se abre por http://192.168.x.x el navegador lo
+       trata como origen no seguro y no ofrece instalar (se dice en el README). -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#00ffc8" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/png" href="/iconos/cort-192.png" />
+  <link rel="apple-touch-icon" href="/iconos/cort-192.png" />
   <!-- Interfaz derivada de la demo web de J.A.R.V.I.S (TechEnClair). Ver PROCEDENCIA.md -->
   <title>CORT</title>
   <link rel="stylesheet" href="cort/vendor/leaflet/leaflet.css" /> <!-- CORT: espejo local, sin CDN -->

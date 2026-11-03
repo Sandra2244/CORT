@@ -657,3 +657,24 @@
 
   console.log("%c[CORT] Simulador listo. Palabra de activación configurada: «" + currentSettings.wake_word + "»", "color:#10b981;font-weight:bold;");
 })();
+
+// ---- F7: aplicable en el teléfono -------------------------------------------
+// El service worker sólo funciona en origen seguro (https o localhost). Si se abre
+// por IP en http, el navegador lo rechaza: se avisa en la consola en vez de dejar
+// la instalación a medio hacer sin decir nada.
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    if (!window.isSecureContext) {
+      console.log("%c[CORT] sin service worker: este origen no es seguro (" +
+        location.origin + "). Para instalar CORT en el teléfono hace falta https " +
+        "(ver README, apartado F7).", "color:#f59e0b");
+      return;
+    }
+    navigator.serviceWorker.register("/cort-sw.js").then(() => {
+      console.log("%c[CORT] aplicación instalable: service worker activo", "color:#10b981");
+    }).catch((e) => {
+      console.log("%c[CORT] el service worker no se registró: " + e, "color:#f59e0b");
+    });
+  });
+})();
