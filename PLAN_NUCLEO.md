@@ -23,14 +23,24 @@ aquí se tomó en la Classmate o en el A16 en las condiciones que se dicen.
 
 ### Lo que pide cada modelo que ya está en tu disco
 
-| modelo | en disco | RAM que pide | ¿cabe con Qoder cerrado? |
+Corregido el 2026-11-03 a las 01:10: en la versión de Ollama que tienes, `ollama show`
+**no** reporta "system requirements" (se comprobó con los cuatro candidatos: sólo da
+arquitectura, parámetros, contexto, cuantización). Los pesos en disco sí están medidos,
+y el servidor vacío también: `ollama serve` ocupa **35,9 MB** antes de cargar nada. La
+columna de RAM es **estimación** (pesos + cache KV para 2048 tokens + overhead del
+corredor), no medida; la sonda la convierte en número real.
+
+| modelo | peso medido en disco | RAM estimada | ¿cabe con Qoder cerrado (~1,25 GB)? |
 |---|---|---|---|
-| smollm2:135m | 258 MB | ~511 MB | sí, sobrado |
-| gemma3:270m | 278 MB | ~539 MB | sí |
-| qwen2.5:0.5b | 379 MB | ~680 MB | **sí — el candidato** |
-| qwen3:0.6b | 498 MB | ~847 MB | sí, justo (quedan ~400 MB de aire) |
-| airaos-local | 718 MB | ~1155 MB | al límite: riesgo de congelar |
-| qwen3.5:2b | 2614 MB | ~3809 MB | **no entra nunca en 1,8 GB** |
+| smollm2:135m | 271 MB | ~450-510 MB | sí, sobrado |
+| gemma3:270m | 292 MB | ~480-540 MB | sí |
+| qwen2.5:0.5b | 398 MB | ~600-680 MB | **sí — el candidato** |
+| qwen3:0.6b | 523 MB | ~780-850 MB | sí, justo |
+| airaos-local | 718 MB | ~1,1-1,2 GB | al límite: riesgo de congelar |
+| qwen3.5:2b | 2614 MB | ~3,8 GB | **no entra nunca en 1,8 GB** |
+
+Con Qoder abierto quedan 170 MB (medido con el agente corriendo), así que ni el más
+chico cabe mientras yo trabajo: por eso la sonda la corres tú con el agente cerrado.
 
 ---
 
