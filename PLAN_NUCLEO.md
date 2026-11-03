@@ -258,3 +258,65 @@ Un detalle sin resolver y dicho aquí para que no se pierda: en el primer volcad
 apareció un `jarvis_text` con el texto en inglés «Weighing the options…». No está en
 ningún archivo del repo y **no volvió en tres corridas completas** (`grep -c` = 0). Se
 queda mirando; si reaparece, se rastrea por la hora del mensaje.
+
+---
+
+## 9. L1 · D1 · M1 · M2 · U1 (2026-11-03, madrugada)
+
+### L1 — la autoría es de Sandra y Askher
+`LICENSE` reemplazada: atribución + uso libre + **prohibición de monetizar** sin atribuir
+créditos y sin contacto previo a `Sandrasofialopezgomez3@gmail.com` / `Carlosa3325@gmail.com`;
+`© 2026 Askher Vargas y Sandra Lopez`. Se agregó `AVISO_LEGAL.md` y la pantalla de arranque,
+el rótulo del HUD, la fila de Ajustes y la respuesta a «¿quién te creó?» dicen lo mismo en
+español. TechEnClair queda acreditado **sólo como referencia visual** (maqueta y orbe) y
+Cortana como estilo; no hay asset de Microsoft en el repo.
+
+### D1 — rediseño Cortana y bandeja de tirador (medido en 525×521)
+
+| qué | medido |
+|---|---|
+| tirador ‹ › | 0,381 · 34×66 — tocado, la bandeja sale de 12,453 (447×56) y se va a x=-461 con `opacity:0` y `pointer-events:none`; el segundo toque la devuelve a x=12 |
+| chip ◉ del cerebro | 0,327 · 34×44, con punto rojo de aviso arriba a la derecha cuando hay versión nueva |
+| botones del pie | micrófono 146,378 · escucha continua 234,378 · silencio 322,378 (los tres 58×58, centros equidistantes 88 px alrededor de 263) |
+| franja superior | badge de voz 12,50 · 326×48; debajo, las tres líneas de estado |
+| arreglo para el teléfono | el `mouseenter` que abría la bandeja ahora sólo se escucha con cursor de verdad (`hover:hover and pointer:fine`): en Android el navegador dispara el hover antes del click y abrir+cerrar en el mismo toque dejaba la bandeja inservible |
+
+### M1 + M2 — bajar y probar modelos desde la propia pantalla
+Panel `#cort-cerebro`: estado de Ollama, RAM libre medida, núcleos, y una fila por modelo con
+`en disco N MB · pide ~M MB · cabe / no cabe ahora`. Los no bajados traen botón **descargar**
+(con progreso por WebSocket) y todos los instalados **probar el cerebro**, que hace un disparo
+real con `format:json`, `temperature:0` y `num_ctx:2048` y devuelve `ms`, `tok/s`, el plan y si
+la reja lo aceptaría. La puerta de RAM manda: con 172-233 MB libres medidos, ningún modelo
+cabe y CORT lo dice con la cifra en vez de congelar el equipo. `scripts/prueba_sonda.py` cierra
+el ciclo sin modelo: falso Ollama + modelo de juguete en arena → `mini:1m respondió en 4 ms
+(105.0 tok/s) · reja: acepta`, y `auto_sonda()` escribe `mediciones/medicion-cerebro.json` en
+cuanto la RAM supere el umbral (900 MB por defecto).
+
+### U1 — canal de actualización (6/6 en `scripts/prueba_actualiza.py`)
+`cort-bridge/cort_actualiza.py` lee las etiquetas del repo **derivado de `git remote`** y la
+versión local de `git describe`; consulta GitHub con 8 s de tiempo de vida y responde
+`origen: real` o `no disponible`. El primer aviso real midió
+`{version_local: 0.9.0, remota: v0.17.0, hay_nueva: true, sin_etiqueta_local: true}` y en la
+pantalla quedó, arriba del panel y sin hacer scroll:
+
+> **nueva versión** v0.17.0 · local 0.9.0 · git fetch --tags y revisa
+> https://github.com/Sandra2244/CORT/tags — cambiar de versión con `git checkout v0.17.0`
+> reescribe el árbol de trabajo, así que se hace con el proyecto commiteado y decidido por ti
+> · origen real
+
+**CORT no se autoinstala.** Bajar y cambiar código en el equipo de la usuaria es decisión suya;
+el puente informa el número, el comando y dónde mirar. Dos defectos corregidos en esta fase:
+las variables de entorno se leían al importar (los cuatro casos de prueba devolvían el mismo
+dict) y el repo venía adivinado — adivinarlo mandó la primera corrida a buscar etiquetas de un
+proyecto que no era el suyo, y el consejo de `git checkout` habría reescrito su árbol de trabajo.
+
+### Lo que se deja dicho, con número, de las dos peticiones que no entran esta noche
+- **Sensores de cámara para mover ventanas del sistema**: hace falta un modelo de visión. En
+  2 núcleos / 1851 MB, con Qoder abierto quedan 172-233 MB libres y Ollama apagado; MediaPipe o
+  un TFLite propio corren en el A16, no aquí. Se planifica como fase aparte (mano → puntero en
+  el teléfono), no se improvisa esta madrugada.
+- **Vincular PC ↔ Android para que CORT aprenda de ti**: el puente ya puede hablar con el
+  teléfono (`CORT_BIND` + TLS + token), pero sin HTTPS el navegador del A16 no instala la PWA
+  ni deja usar el micrófono, y el APK (F11/F12) es el que lo resuelve de verdad. La memoria
+  compartida entre dispositivos se escribe cifrada en el repo local de cada equipo; sin APK,
+  compartir memoria significaría exponerla en la red local.

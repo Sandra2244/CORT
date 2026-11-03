@@ -94,6 +94,12 @@ except Exception as _e_reja:
 else:
     REJA_ERROR = ""
 
+# U1: el canal de actualización. Si no carga, CORT simplemente no avisa de versiones.
+try:
+    import cort_actualiza
+except Exception:
+    cort_actualiza = None
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -1570,6 +1576,19 @@ async def ws_handler(request):
                 estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
                 enviar(ws, {"type": "ollama_status_reply", "status": estado})
 
+            elif t == "buscar_actualizacion":
+                if cort_actualiza is None:
+                    enviar(ws, {"type": "actualizacion", "origen": "no disponible", "ok": False,
+                                "motivo": "el módulo del canal de actualización no cargó"})
+                    continue
+                r = await asyncio.get_event_loop().run_in_executor(
+                    None, lambda: cort_actualiza.registrar(cort_actualiza.consultar()))
+                enviar(ws, {"type": "actualizacion", **r})
+                await decir(ws, (f"Hay una versión nueva de CORT: {r['remota']}. "
+                                 f"Para traerla: {r['como']}") if r.get("hay_nueva") else
+                            (r.get("motivo") or f"CORT {r['version_local']} está al día "
+                             f"respecto a {r.get('remota')}"))
+
             elif t == "probar_cerebro":
                 modelo = (d.get("model") or "").strip()
                 frase = (d.get("frase") or "mueve la carpeta proyectos a documentos").strip()[:300]
@@ -2292,6 +2311,24 @@ async def auto_sonda():
         return
 
 
+async def vigila_version():
+    """U1: mira las etiquetas del repo de vez en cuando y avisa si hay versión nueva.
+
+    No descarga ni instala nada: un asistente que se actualiza solo es la puerta de
+    entrada a que lo haga otro. Aquí se informa el número y el comando.
+    """
+    ciclo = int(os.environ.get("CORT_ACTUALIZA_CICLO", "21600"))
+    await asyncio.sleep(20)
+    bucle = asyncio.get_running_loop()
+    while cort_actualiza is not None:
+        r = await bucle.run_in_executor(None, lambda: cort_actualiza.registrar(cort_actualiza.consultar()))
+        if r.get("hay_nueva"):
+            print(f"[CORT] versión nueva disponible: {r['remota']} (local {r['version_local']})")
+            for w in list(CONEXIONES):
+                enviar(w, {"type": "actualizacion", **r})
+        await asyncio.sleep(ciclo)
+
+
 async def main():
     global BUCLE
     BUCLE = asyncio.get_running_loop()
@@ -2299,6 +2336,8 @@ async def main():
         cort_vida.avivar()      # un hilo, grano de 1 s: los pendientes vencen solos
     if os.environ.get("CORT_AUTOSONDA", "0") == "1":
         asyncio.create_task(auto_sonda())
+    if os.environ.get("CORT_ACTUALIZA", "1") == "1" and cort_actualiza is not None:
+        asyncio.create_task(vigila_version())
 
     # F7: por defecto el puente sólo escucha en casa (127.0.0.1). Abrirlo a la red
     # local es decisión de la usuaria, con la variable CORT_BIND, y sin HTTPS el

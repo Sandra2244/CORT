@@ -1764,12 +1764,17 @@
     };
     if (!abierto) cierra();
     tirador.addEventListener("click", () => {
-      (b.style.pointerEvents === "none" ? abre : cierra)();
-      if (b.style.pointerEvents !== "none") campo.focus();
+      (b.classList.contains("cort-abierta") ? cierra : abre)();
+      if (b.classList.contains("cort-abierta")) campo.focus();
     });
-    // En PC alcanza con acercar el cursor; en el teléfono el toque del tirador hace lo mismo.
-    tirador.addEventListener("mouseenter", abre);
-    b.addEventListener("mouseenter", abre);
+    // En PC alcanza con acercar el cursor; en el teléfono el toque del tirador hace lo
+    // mismo. El hover sólo se escucha con cursor de verdad: en Android el navegador
+    // dispara mouseenter antes del click, y abrir+cerrar en el mismo toque dejaba la
+    // bandeja inutilizable.
+    if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      tirador.addEventListener("mouseenter", abre);
+      b.addEventListener("mouseenter", abre);
+    }
     document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cierra(); });
 
     b.addEventListener("submit", (ev) => {
@@ -1849,6 +1854,7 @@
   // ver el peso MEDIDO, la RAM estimada y si cabe ahora. Nada de aquí carga un
   // modelo por su cuenta: «probar» pregunta la puerta de RAM antes de disparar.
   let ultimoCerebro = null;
+  let ultimaVersion = null;    // U1: lo que dijo el canal del repo
   let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
   const progresoPull = {};
   const BOTON_CEREBRO = "padding:3px 9px;border-radius:8px;cursor:pointer;font:11px/1.2 system-ui;" +
@@ -1862,6 +1868,11 @@
     chip.textContent = "◉";
     chip.title = "cerebro: modelos en disco, descargas y prueba";
     chip.setAttribute("aria-label", "abrir el panel del cerebro");
+    const aviso = document.createElement("span");
+    aviso.id = "cort-cerebro-aviso";
+    aviso.style.cssText = "position:absolute;top:5px;right:5px;width:9px;height:9px;" +
+      "border-radius:50%;background:#ff5f7a;box-shadow:0 0 8px #ff5f7a;display:none";
+    chip.appendChild(aviso);
     chip.style.cssText = "position:fixed;left:0;bottom:150px;z-index:9999;width:34px;height:44px;" +
       "border:1px solid rgba(90,200,255,.5);border-left:none;border-radius:0 12px 12px 0;" +
       "background:linear-gradient(180deg,rgba(20,70,110,.92),rgba(8,24,44,.92));" +
@@ -1879,9 +1890,31 @@
       panel.style.display = abierto ? "none" : "block";
       if (!abierto) {
         window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
+        window.CORT_enviarAlCerebro({ type: "buscar_actualizacion" });
         pintarCerebro();
       }
     });
+  }
+
+  function nodoVersion() {
+    const v = document.createElement("div");
+    v.id = "cort-version";
+    // Va arriba, no al pie: en una pantalla de 521 px el listado de modelos empujaba
+    // el aviso de versión fuera del panel y había que hacer scroll para enterarse.
+    v.style.cssText = "margin:0 0 8px;padding:5px 8px;border-radius:9px;" +
+      "border:1px solid rgba(120,200,240,.28);background:rgba(16,44,68,.5);opacity:.92";
+    const n = ultimaVersion;
+    const etiqueta = document.createElement("b");
+    etiqueta.textContent = n.hay_nueva ? "nueva versión" : "canal";
+    const cuerpo = document.createElement("span");
+    cuerpo.textContent = " " + (n.hay_nueva
+      ? `${n.remota} · local ${n.version_local} · ${n.como}`
+      : (n.ok ? `${n.version_local} está al día frente a ${n.remota}` : n.motivo));
+    const origen = document.createElement("span");
+    origen.style.cssText = "opacity:.6";
+    origen.textContent = ` · origen ${n.origen || "?"}`;
+    v.append(etiqueta, cuerpo, origen);
+    return v;
   }
 
   function pintarCerebro() {
@@ -1905,6 +1938,7 @@
     nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +
       "sobre ese peso. «probar» no carga nada si la cuenta no cabe.";
     panel.appendChild(nota);
+    if (ultimaVersion) panel.appendChild(nodoVersion());
     const cat = s.catalogo || {};
     Object.entries(cat).sort((a, b) => ((a[1].ram_uso || 1e9) - (b[1].ram_uso || 1e9)))
       .forEach(([nombre, info]) => {
@@ -1955,6 +1989,16 @@
       panel.appendChild(caja);
     }
   }
+
+  window.CORT_alVersion = (n) => {
+    if (!n || n.type !== "actualizacion") return;
+    ultimaVersion = n;
+    const punto = document.getElementById("cort-cerebro-aviso");
+    if (punto) punto.style.display = n.hay_nueva ? "block" : "none";
+    if (n.hay_nueva) flotante(`hay versión nueva de CORT: ${n.remota}`, true);
+    chipCerebro();
+    pintarCerebro();
+  };
 
   window.CORT_alCerebro = (n) => {
     if (!n) return;

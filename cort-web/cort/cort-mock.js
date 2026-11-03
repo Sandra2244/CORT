@@ -204,6 +204,13 @@
           try { window.CORT_alCerebro(n); } catch (e) {}
         }
       }
+      // U1: canal de actualización del repo.
+      if (n.type === "actualizacion") {
+        this.ultima_version = n;
+        if (typeof window.CORT_alVersion === "function") {
+          try { window.CORT_alVersion(n); } catch (e) {}
+        }
+      }
       const a = Array.from(this.escuchas);
       if (!a.length) return;
       // La demo abre tres canales a la vez y solo uno es el que renderiza: el que
