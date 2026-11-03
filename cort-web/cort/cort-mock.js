@@ -56,7 +56,9 @@
     "open_browser", "close_browser", "get_https_tunnel_status", "mobile_auth",
     "get_elevenlabs_voices", "check_local_tts_status", "check_kokoro_status",
     "claude_code_status", "av_speak", "toggle_mic", "toggle_fullscreen",
-    "toggle_always_listen", "clear_cache", "temperatura"
+    "toggle_always_listen", "clear_cache", "temperatura",
+    // F3: la voz y el micro ya tienen quién conteste en el puente.
+    "voz_estado", "voz_on", "voz_off", "voz_motor", "mic_on", "mic_off", "mic_estado"
   ]);
 
   // La demo lee unas respuestas por `s.type` y otras por `s.action` (live_subtitles,
@@ -78,6 +80,7 @@
     recibidos: 0,
     ultimo_status: null,
     ultima_temperatura: null,
+    ultima_voz: null,
     avisos: {},
     escuchas: new Set(),
     _intento: 0,
@@ -147,6 +150,18 @@
         this.avisos[n.orden || n.panel || "?"] = n;
         if (typeof window.CORT_alAvisoPanel === "function") {
           try { window.CORT_alAvisoPanel(n); } catch (e) {}
+        }
+      }
+      // Fase F3 — voz. El puente dice qué motor hay, qué altavoz ve PipeWire y, cuando
+      // termina una frase, manda la URL del WAV. Se guarda aparte para que Ajustes
+      // siempre tenga el estado a mano aunque la pantalla no lo esté mirando.
+      if (n.type === "voz_estado" || n.type === "voz_activada" || n.type === "voz_motor_result") {
+        this.ultima_voz = n;
+      }
+      if (n.type === "voz_estado" || n.type === "voz_audio" || n.type === "mic_estado" ||
+          n.type === "mic_texto" || n.type === "voz_pedido") {
+        if (typeof window.CORT_alVoz === "function") {
+          try { window.CORT_alVoz(n); } catch (e) {}
         }
       }
       const a = Array.from(this.escuchas);

@@ -402,7 +402,6 @@
   // ---- traducción de mensajes del puente a gesto del orbe -------------------
   // La capa no decide nada por su cuenta: cada gesto responde a un mensaje real.
   // Así el orbe miente menos que la pantalla, que hojea estados que nadie ejecutó.
-  let latidoVolumen = 0;
   window.CORT_orbe_alMensaje = (m) => {
     if (!m) return;
     const t = m.type || m.action || "";
@@ -419,14 +418,17 @@
     }
     if (t === "user_input") { window.CORT_orbe.estado("pensando"); return; }
     if (t === "live_subtitles") {
-      // un trozo de subtítulo = un pulso de voz (todavía no hay analizador real: F3)
-      const ahora = performance.now();
-      if (ahora - latidoVolumen > 90) {
-        latidoVolumen = ahora;
-        window.CORT_orbe.volumen(0.35 + Math.random() * 0.4);
-      }
+        // Desde F3 el volumen del orbe sale del analizador real del navegador
+        // (cort-ui.js: AudioContext sobre el WAV que habla el puente). Aquí sólo se
+        // marca el estado: un pulso con Math.random() era la mentira que sobraba.
+        window.CORT_orbe.estado("hablando");
+        return;
+    }
+    if (t === "mic_estado") {
+      window.CORT_orbe.estado(m.estado === "escuchando" ? "escuchando" : "reposo");
       return;
     }
+    if (t === "mic_texto") { window.CORT_orbe.estado("pensando"); window.CORT_orbe.rafaga(300); return; }
     if (t === "av_scan_start") { window.CORT_orbe.estado("ejecutando"); window.CORT_orbe.rafaga(400); return; }
     if (t === "av_progress") { window.CORT_orbe.estado("ejecutando"); return; }
     if (t === "av_threat_detected") { window.CORT_orbe.estado("alerta"); window.CORT_orbe.vortice(520); return; }

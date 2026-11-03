@@ -1522,6 +1522,129 @@
     if (d.ok && !mensaje.empujado) panel.classList.add("tp-visible");
   };
 
+  // ---- 5b. voz de salida y micrófono (fase F3) -------------------------------
+  // La regla es la misma que en F1: si el equipo no tiene altavoz, se dice con el
+  // nombre del dispositivo. Y si el puente ya sacó el sonido por sus propios altavoces,
+  // el navegador NO lo vuelve a lanzar: se duplicaría y en la Canaima se oiría raro.
+  let ultimaVoz = null, ultimoMic = null, reproductorVoz = null, medidorVoz = null;
+
+  function badgeVoz() {
+    let b = document.getElementById("cort-voz-badge");
+    if (b) return b;
+    b = document.createElement("div");
+    b.id = "cort-voz-badge";
+    b.innerHTML =
+      '<button type="button" id="cvb-habla" class="cvb-btn" title="hablar o callar">🔇</button>' +
+      '<button type="button" id="cvb-motor" class="cvb-btn" title="cambiar motor de voz">ra</button>' +
+      '<button type="button" id="cvb-mic" class="cvb-btn" title="micrófono">mic</button>' +
+      '<span id="cvb-texto" class="cvb-texto"></span>';
+    (document.body || document.documentElement).appendChild(b);
+    b.querySelector("#cvb-habla").addEventListener("click", () => {
+      const activa = !(ultimaVoz && ultimaVoz.activa);
+      window.CORT_enviarAlCerebro({ type: activa ? "voz_on" : "voz_off" });
+    });
+    b.querySelector("#cvb-motor").addEventListener("click", () => {
+      const actual = (ultimaVoz && ultimaVoz.motor) || "rapida";
+      window.CORT_enviarAlCerebro({ type: "voz_motor", motor: actual === "rapida" ? "natural" : "rapida" });
+    });
+    b.querySelector("#cvb-mic").addEventListener("click", () => {
+      const encendido = ultimoMic && ultimoMic.estado === "escuchando";
+      window.CORT_enviarAlCerebro({ type: encendido ? "mic_off" : "mic_on" });
+    });
+    return b;
+  }
+
+  function pintarVoz() {
+    const b = badgeVoz();
+    const v = ultimaVoz || {}, mic = ultimoMic || {};
+    const habla = b.querySelector("#cvb-habla"), motor = b.querySelector("#cvb-motor"),
+          micro = b.querySelector("#cvb-mic"), texto = b.querySelector("#cvb-texto");
+    const activa = v.activa !== false;
+    habla.textContent = activa ? "🔊" : "🔇";
+    habla.classList.toggle("cvb-apagado", !activa);
+    motor.textContent = (v.motor === "natural" || v.motor === "natural2") ? "na" : "ra";
+    const escuchando = mic.estado === "escuchando";
+    micro.textContent = escuchando ? "● mic" : "mic";
+    micro.classList.toggle("cvb-activo", escuchando);
+    micro.classList.toggle("cvb-apagado", !escuchando);
+    const partes = [];
+    if (!v.habla && !v.motor) partes.push("consultando la voz…");
+    else {
+      partes.push((v.habla || v.motor || "sin motor"));
+      partes.push(v.altavoz_real ? ("altavoz: " + (v.sink || "sí")) : "sin altavoz (auto_null)");
+      partes.push(escuchando ? "escuchando" :
+                  (mic.estado === "sin micro" ? "sin micrófono" : "mic apagado"));
+    }
+    texto.textContent = partes.join(" · ");
+    texto.classList.toggle("cvb-alerta", v.ok === false || v.altavoz_real === false);
+  }
+
+  function analizadorDe(el, fuenteCtx) {
+    // Medidor real de lo que está sonando: RMS de la propia pista, no una animación
+    // inventada. Si el navegador no deja montar el grafo, simplemente no hay pulso.
+    try {
+      const ctx = fuenteCtx || (window.AudioContext || window.webkitAudioContext)();
+      if (!ctx) return null;
+      const src = ctx.createMediaElementSource(el);
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      src.connect(an); an.connect(ctx.destination);
+      const datos = new Uint8Array(an.fftSize);
+      return { ctx, an, datos, rms() {
+        an.getByteTimeDomainData(datos);
+        let s = 0; for (let i = 0; i < datos.length; i++) { const d = (datos[i] - 128) / 128; s += d * d; }
+        return Math.sqrt(s / datos.length);
+      } };
+    } catch (e) { return null; }
+  }
+
+  function sonarVoz(n) {
+    if (!n || !n.url) return;
+    if (n.altavoz_real) return;          // ya sonó por el altavoz del equipo
+    const url = n.url + "?t=" + (n.id || Date.now());
+    if (!reproductorVoz) {
+      reproductorVoz = new Audio();
+      reproductorVoz.preload = "auto";
+      medidorVoz = analizadorDe(reproductorVoz);
+    }
+    reproductorVoz.src = url;
+    const p = reproductorVoz.play();
+    if (p && p.catch) p.catch(() => {
+      // Autoplay bloqueado: se reintenta con el primer gesto de la usuaria.
+      const r = () => { reproductorVoz.play().catch(() => {});
+                        window.removeEventListener("pointerdown", r);
+                        window.removeEventListener("keydown", r); };
+      window.addEventListener("pointerdown", r, { once: true });
+      window.addEventListener("keydown", r, { once: true });
+    });
+    if (medidorVoz && typeof window.CORT_orbe === "object") {
+      const latir = () => {
+        if (!reproductorVoz || reproductorVoz.paused) { window.CORT_orbe.volumen(0); return; }
+        try { window.CORT_orbe.volumen(Math.min(1.6, medidorVoz.rms() * 6)); } catch (e) {}
+        requestAnimationFrame(latir);
+      };
+      requestAnimationFrame(latir);
+    }
+  }
+
+  window.CORT_alVoz = (n) => {
+    if (!n) return;
+    if (n.type === "voz_estado" || n.type === "voz_activada" || n.type === "voz_motor_result") {
+      ultimaVoz = n;
+    }
+    if (n.type === "mic_estado") ultimoMic = n;
+    if (n.type === "voz_audio" && n.ok) sonarVoz(n);
+    if (n.type === "mic_texto") {
+      // Lo dictado se ve igual que lo escrito: la demo no tenía esta vía.
+      const campo = document.getElementById("command-input") ||
+                    document.querySelector("input[type=text][id*='input']");
+      if (campo && !campo.value) campo.value = n.texto || "";
+    }
+    pintarVoz();
+  };
+  if (document.readyState !== "loading") pintarVoz();
+  else document.addEventListener("DOMContentLoaded", pintarVoz);
+
   // ---- 6. API de medición --------------------------------------------------
   window.CORT = {
     version: "v0",
@@ -1551,7 +1674,10 @@
     // la consola sin tener que abrir el panel correspondiente.
     avisos: () => Object.keys(avisosVistos),
     avisosDetalles: () => avisosVistos,
-    temperatura: () => ultimaTemperatura
+    temperatura: () => ultimaTemperatura,
+    // F3: motor de voz elegido, altavoz que ve PipeWire y estado del micrófono.
+    voz: () => ultimaVoz,
+    mic: () => ultimoMic
   };
 
   function start() {

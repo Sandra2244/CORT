@@ -30,6 +30,7 @@ libre y, si no cabe, se dice el número en vez de congelar el equipo.
 import asyncio
 import json
 import os
+import re
 import shutil
 import signal
 import unicodedata
@@ -47,6 +48,25 @@ ESTADO = Path(__file__).resolve().parent / "cort_state.json"
 OLLAMA = os.environ.get("CORT_OLLAMA", "http://127.0.0.1:11434")
 PUERTO_WS = int(os.environ.get("CORT_WS_PORT", "8765"))
 PUERTO_WEB = int(os.environ.get("CORT_WEB_PORT", "8766"))
+
+# --------------------------------------------------------------- voz (fase F3)
+# El módulo vive al lado del puente y trae lo medido (motores, dispositivos,
+# factores). Se importa con ruta explícita porque el puente puede arrancarse desde
+# cualquier carpeta con systemd --user, y ahí el directorio actual no es el repo.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import cort_voz
+except Exception as _e_voz:                 # sin venv el puente sigue valiendo; la voz avisa
+    cort_voz = None
+    VOZ_ERROR = f"{type(_e_voz).__name__}: {_e_voz}"
+else:
+    VOZ_ERROR = ""
+
+VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
+MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
+MIC = None                                          # cort_voz.EscuchaContinua, uno solo
+BUCLE = None                                        # el lazo de asyncio, para avisos desde hilos
+ALMENOS_AUDIO = 200                                 # MB libres mínimos para cargar Vosk
 
 # Modelos que la interfaz ofrece. Dos puertas distintas, porque son dos cosas
 # distintas: DESCARGAR gasta disco (y poca RAM), CARGAR el modelo gasta RAM.
@@ -852,11 +872,7 @@ FALTA_EN_EL_PUENTE = {
     "get_windy_webcams": ("Las cámaras de Windy piden una clave gratuita de su API.",
                           "con clave en Ajustes esto funciona; sin clave no se inventa nada"),
     "get_elevenlabs_voices": ("Las voces de ElevenLabs son de pago y piden clave.",
-                              "no tienes tarjeta: la voz local se decide en F3"),
-    "check_local_tts_status": ("No hay motor de voz local instalado todavía.",
-                               "F3 decide motor (espeak-ng es el que ya está en el equipo)"),
-    "check_kokoro_status": ("Kokoro baja varios gigabytes de modelos.",
-                            "con 1851 MB de RAM y sin disco de sobra no se instala a ciegas: F3"),
+                              "no tienes tarjeta: desde F3 CORT habla con Piper/espeak-ng aquí dentro"),
     "claude_code_status": ("Claude Code no está instalado ni autenticado en este equipo.",
                            "node sí está (/usr/bin/node), pero pide cuenta y clave: no entra sin tu autorización"),
     "print3d_check_hardware": ("El puente no detecta ninguna impresora 3D conectada.",
@@ -867,14 +883,8 @@ FALTA_EN_EL_PUENTE = {
                                 "el teléfono se enlaza por red local con token (F7), sin exponer nada a internet"),
     "mobile_auth": ("El emparejamiento con el teléfono aún no existe.",
                     "se hace en F7 por Wi-Fi local con QR generado aquí, no con api.qrserver.com"),
-    "toggle_mic": ("El micrófono está apagado a propósito.",
-                   "así lo dejaste hasta decidir el alcance; vuelve en F3 con indicador de escucha en el orbe"),
-    "toggle_always_listen": ("Escucha continua: igual que el micrófono, apagada hasta F3.",
-                             "consume RAM y privacidad: se decide con número medido"),
     "open_browser": ("El navegador incrustado depende del backend que ya no existe.",
                      "abrir navegadores reales es acción de F5, con confirmación"),
-    "av_speak": ("Todavía no hay motor de voz de salida; el texto sí aparece en pantalla.",
-                 "F3 trae la voz; el subtítulo y el HUD ya funcionan"),
     "clear_cache": ("El puente no guarda cachas propias que limpiar todavía (solo 20 s de inventario en memoria).",
                     "se dirá con cifras cuando exista algo que limpiar"),
     "get_shopping_list": ("La lista de compras vive en la plantilla con 3 artículos de ejemplo.",
@@ -892,6 +902,117 @@ def aviso_sin_backend(orden, extra=""):
     return {"type": "puente_aviso", "orden": orden, "panel": panel,
             "motivo": motivo, "hace_falta": hace_falta, "origen": "real",
             "nota": extra or ""}
+
+
+# ------------------------------------------------------------------ voz (F3) ----
+# El puente no puede esperar a que el motor hable: Piper tarda y esta máquina tiene
+# dos núcleos. Así que la síntesis va en su hilo (cort_voz.hablar_en_hilo) y aquí
+# sólo se vigila el resultado, que se convierte en una URL que la página reproduce.
+# Dos salidas y no una: en la Canaima suena el altavoz conectado (HDMI/USB) si lo hay,
+# y en el teléfono suena el navegador. Si ninguna de las dos existe, se dice con el
+# nombre del dispositivo, que es la regla de F1: nada de callarse fingiendo hablar.
+
+def estado_voz():
+    """Inventario real de la voz, con el campo `origen` que pide el contrato."""
+    if cort_voz is None:
+        return {"type": "voz_estado", "origen": "real", "ok": False,
+                "motor": None, "motivo": "el módulo de voz no se pudo importar",
+                "nota": VOZ_ERROR,
+                "hace_falta": "arrancar el puente con .venv/bin/python (vosk + piper)"}
+    d = cort_voz.disponibilidad()
+    return {"type": "voz_estado", "origen": "real", "ok": bool(d.get("habla")),
+            "habla": d.get("habla"), "motor": cort_voz.MOTOR,
+            "activa": VOZ_ACTIVA, "sintetiza_ms": d.get("factor_medido"),
+            "stt": d.get("stt"), "stt_mb": d.get("stt_mb"),
+            "altavoz_real": d["dispositivos"]["suena"],
+            "sink": cort_voz.salida_por_defecto(),
+            "micro": d["dispositivos"]["escucha"],
+            "microfonos": [m["nombre"] for m in d["dispositivos"]["microfonos_reales"]],
+            "entradas_que_ve": [e["nombre"] for e in d["dispositivos"]["entradas"]],
+            "escucha": (MIC.estado if MIC else "apagada"),
+            "nota": ("" if d["dispositivos"]["suena"] else
+                     "no hay altavoz físico: la única salida es auto_null (conecta HDMI o dongle USB)"),
+            }
+
+
+def avisa_desde_hilo(mensaje):
+    """Un hilo de voz/escucha deja su mensaje en todas las bandejas sin tocar el lazo."""
+    def repartir():
+        for ws in list(CONEXIONES):
+            enviar(ws, mensaje)
+    if BUCLE is not None:
+        try:
+            BUCLE.call_soon_threadsafe(repartir)
+        except Exception:
+            pass
+
+
+async def vigilar_voz(ws, ident):
+    """Espera el resultado de una frase sintetizada y lo manda a la página."""
+    for _ in range(220):                     # hasta ~66 s; Piper con modelo frío pesa
+        await asyncio.sleep(0.3)
+        r = cort_voz.tarea(ident) if cort_voz else None
+        if not r:
+            continue
+        nombre = Path(r.get("archivo", "")).name if r.get("ok") else ""
+        enviar(ws, {"type": "voz_audio", "origen": "real", "id": ident,
+                    "url": ("/audio/" + nombre) if nombre else None,
+                    "texto": r.get("texto"), "motor": r.get("motor"),
+                    "ms_sintesis": r.get("ms_sintesis"),
+                    "audio_segundos": r.get("audio_segundos"),
+                    "reproducido": r.get("reproducido"),
+                    "altavoz_real": r.get("altavoz_real"),
+                    "ok": r.get("ok"), "nota": r.get("nota") or r.get("motivo") or ""})
+        return
+
+
+async def hablar_por_el_puente(ws, texto):
+    """Voz de salida para una respuesta: en hilo, con subtítulo ya enviado."""
+    global VOZ_ACTIVA
+    if cort_voz is None or not VOZ_ACTIVA or not (texto or "").strip():
+        return
+    ident = cort_voz.hablar_en_hilo(texto[:400])
+    asyncio.create_task(vigilar_voz(ws, ident))
+
+
+def mic_arrancar(ws, historial, candado):
+    """Escucha continua sobre el micrófono real. Si no hay micro, lo dice con nombre."""
+    global MIC
+    if cort_voz is None:
+        return {"ok": False, "motivo": "sin módulo de voz", "nota": VOZ_ERROR}
+    libre = ram_disponible_mb()
+    if libre < ALMENOS_AUDIO:
+        return {"ok": False, "motivo": f"hacen falta ~{ALMENOS_AUDIO} MB libres para cargar Vosk "
+                                       f"y hay {libre}", "origen": "real"}
+    if MIC is not None and MIC.hilo and MIC.hilo.is_alive():
+        return {"ok": True, "estado": MIC.estado, "nota": "ya estaba escuchando"}
+
+    def al_texto(texto):
+        avisa_desde_hilo({"type": "mic_texto", "texto": texto, "origen": "real"})
+        try:
+            BUCLE.call_soon_threadsafe(
+                lambda: asyncio.create_task(atender_input(ws, texto, historial, candado)))
+        except Exception as e:
+            avisa_desde_hilo({"type": "mic_error", "motivo": f"{type(e).__name__}", "origen": "real"})
+
+    def al_estado(estado):
+        avisa_desde_hilo({"type": "mic_estado", "estado": estado, "origen": "real"})
+
+    MIC = cort_voz.EscuchaContinua(al_texto, al_estado)
+    r = MIC.arrancar()
+    r["estado"] = MIC.estado
+    return r
+
+
+def mic_apagar():
+    global MIC
+    if MIC is None:
+        return {"ok": True, "estado": "apagada", "nota": "no estaba encendida"}
+    r = MIC.detener()
+    r["textos"] = MIC.textos
+    if MIC.errores:
+        r["errores"] = MIC.errores[-3:]
+    return r
 
 
 def temperatura_sala():
@@ -953,6 +1074,11 @@ async def muestrear_al_conectar(ws):
         if m["type"] == "weather_panel" and not m["data"].get("ok"):
             continue
         enviar(ws, m)
+    if cort_voz is not None:
+        # La voz también se empuja: si no hay altavoz, la pantalla lo dice desde el
+        # primer segundo en vez de dejar un icono de altavoz esperando un sonido que no llega.
+        estado = await asyncio.get_event_loop().run_in_executor(None, estado_voz)
+        enviar(ws, estado)
 
 
 MUESTREO = None
@@ -978,6 +1104,7 @@ async def latido_clima():
 
 
 async def ws_handler(request):
+    global VOZ_ACTIVA, MICRO_ACTIVO
     ws = web.WebSocketResponse(heartbeat=25)
     await ws.prepare(request)
     CONEXIONES.add(ws)
@@ -1204,6 +1331,81 @@ async def ws_handler(request):
                                             "y un respaldo previo.\n"),
                                     "origen": "real"})
 
+            elif t in ("voz_estado", "check_local_tts_status"):
+                # La demo pregunta por su motor viejo; aquí se contesta con el motor
+                # que sí hay, y con el altavoz que PipeWire ve de verdad.
+                enviar(ws, estado_voz())
+
+            elif t == "voz_on":
+                VOZ_ACTIVA = True
+                r = estado_voz(); r["type"] = "voz_activada"
+                enviar(ws, r)
+
+            elif t == "voz_off":
+                VOZ_ACTIVA = False
+                enviar(ws, {"type": "voz_desactivada", "origen": "real",
+                            "nota": "el texto sigue apareciendo en pantalla"})
+
+            elif t == "voz_motor":
+                nuevo = (d.get("motor") or d.get("value") or "").strip()
+                if cort_voz is None:
+                    enviar(ws, {"type": "voz_motor_result", "origen": "real", "ok": False,
+                                "motivo": "sin módulo de voz", "nota": VOZ_ERROR})
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: cort_voz.cambiar_motor(nuevo))
+                    # La primera frase con Piper paga la carga del modelo (14 s medidos).
+                    enviar(ws, {"type": "voz_motor_result", "origen": "real", **r,
+                                "aviso": ("el primer saying tarda ~15 s: el modelo se carga una sola vez"
+                                          if r.get("ok") and nuevo != "rapida" else "")})
+
+            elif t == "av_speak":
+                texto = (d.get("text") or d.get("texto") or "").strip()
+                if cort_voz is None or not texto:
+                    enviar(ws, aviso_sin_backend("av_speak", "no llega texto que hablar"
+                                                 if not texto else VOZ_ERROR))
+                else:
+                    ident = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: cort_voz.hablar_en_hilo(texto[:400]))
+                    enviar(ws, {"type": "voz_pedido", "origen": "real", "id": ident,
+                                "texto": texto[:120],
+                                "nota": "sintetizando en segundo plano"})
+                    asyncio.create_task(vigilar_voz(ws, ident))
+
+            elif t in ("toggle_mic", "toggle_always_listen", "mic_on"):
+                if MICRO_ACTIVO:
+                    enviar(ws, {"type": "mic_estado", "estado": (MIC.estado if MIC else "apagada"),
+                                "origen": "real", "nota": "ya encendido"})
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, lambda: mic_arrancar(ws, historial, candado))
+                    MICRO_ACTIVO = bool(r.get("ok"))
+                    enviar(ws, {"type": "mic_estado", "origen": "real",
+                                "estado": r.get("estado", "apagada"),
+                                "ok": r.get("ok"), "motivo": r.get("motivo", ""),
+                                "microfonos": [m["nombre"] for m in
+                                               cort_voz.dispositivos()["microfonos_reales"]]
+                                              if cort_voz else [],
+                                "nota": ("el orbe indica cuándo escucha" if r.get("ok")
+                                         else "sin micro en este equipo: el del teléfono entra en F7")})
+
+            elif t in ("mic_off", "stop_listening"):
+                r = await asyncio.get_event_loop().run_in_executor(None, mic_apagar)
+                MICRO_ACTIVO = False
+                enviar(ws, {"type": "mic_estado", "origen": "real", **r})
+
+            elif t == "mic_estado":
+                enviar(ws, estado_voz())
+
+            elif t == "check_kokoro_status":
+                # Kokoro no está instalado y no se baja a ciegas: hay Piper local medido.
+                enviar(ws, {"type": "kokoro_status", "origen": "real", "installed": False,
+                            "motivo": "Kokoro baja varios GB de modelos y este equipo tiene 1851 MB",
+                            "en_su_lugar": ("Piper es_ES + espeak-ng, medidos en la tabla de F3 "
+                                            "(0,14 y 1,90 ms de CPU por segundo de audio)"
+                                            if cort_voz else "sin módulo de voz"),
+                            "nota": "si algún día lo pides, se descarga con número de disco por delante"})
+
             elif t == "location_update":
                 e = leer_estado()
                 for k in ("lat", "lon", "city"):
@@ -1282,6 +1484,9 @@ async def decir(ws, texto):
     enviar(ws, {"type": "live_subtitles", "id": ident, "phase": "end"})
     enviar(ws, {"type": "jarvis_text", "text": texto, "origen": "real"})
     enviar(ws, {"state": "idle"}, pausa=max(1.2, len(texto) * 0.03))
+    # Y además lo dice: la voz sale en su hilo, así que el subtítulo y la escucha
+    # de botones no esperan los milisegundos que tarde sintetizar.
+    await hablar_por_el_puente(ws, texto)
 
 
 async def pull(modelo, ws):
@@ -1384,12 +1589,30 @@ async def latido():
 
 
 async def main():
+    global BUCLE
+    BUCLE = asyncio.get_running_loop()
     app_ws = web.Application()
     app_ws.router.add_get("/ws", ws_handler)
     app_ws.router.add_get("/", ws_handler)
 
     app_web = web.Application()
     app_web.router.add_get("/", lambda r: web.FileResponse(BASE / "index.html"))
+
+    async def audio(request):
+        """Sirve el WAV recién hablado, para que suene también en el navegador.
+
+        Ruta cerrada: sólo nombres con el formato que escribe cort_voz y sólo desde
+        su carpeta temporal. Un navegador en el teléfono no puede leer /tmp.
+        """
+        nombre = request.match_info.get("nombre", "")
+        if not re.fullmatch(r"(decir|escucha)-[0-9]+(-[0-9]+)?\.wav", nombre):
+            return web.Response(status=404, text="no existe")
+        ruta = Path(cort_voz.TMP if cort_voz else "/tmp/cort-voz") / nombre
+        if not ruta.is_file():
+            return web.Response(status=404, text="no existe")
+        return web.FileResponse(ruta)
+
+    app_web.router.add_get("/audio/{nombre}", audio)
     app_web.router.add_static("/", BASE, show_index=False, follow_symlinks=True)
 
     print(f"[CORT] interfaz  http://127.0.0.1:{PUERTO_WEB}/index.html")

@@ -25,3 +25,11 @@ cort-bridge/cort_state.json
 # Los fotogramas sacados de los videos de referencia son grabaciones de terceros:
 # no se commitean ni se publican. Viven en ~/Escritorio/Referencias IA CORT/fotogramas.
 fotogramas/
+
+# Entorno local de CORT: el venv con vosk/piper/aiohttp y los modelos de voz
+# (61 MB cada uno) se descargan con el instructivo del README, no se comitan.
+.venv/
+venv/
+*.onnx
+*.onnx.json
+modelos/vosk*/

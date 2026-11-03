@@ -396,3 +396,42 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* ---------- F3: testigo de voz y micrófono ----------
+   Es el único sitio de la pantalla donde se ve si CORT tiene altavoz. Con la
+   Classmate en auto_null el texto se pinta en ámbar: el orbe no miente, pero
+   tampoco hay sonido que oír, y eso tiene que estar a la vista. */
+#cort-voz-badge {
+  position: fixed;
+  left: 10px;
+  bottom: 44px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: rgba(3, 7, 13, .88);
+  border: 1px solid rgba(0, 255, 200, .35);
+  clip-path: var(--cort-corte);
+  font: 700 9px/1.4 "Courier New", monospace;
+  letter-spacing: .08em;
+  z-index: 88;
+  pointer-events: auto;
+}
+#cort-voz-badge .cvb-btn {
+  background: rgba(0, 255, 200, .10);
+  border: 1px solid rgba(0, 255, 200, .42);
+  color: #aef0ff;
+  font: 700 9px/1 "Courier New", monospace;
+  letter-spacing: .06em;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+#cort-voz-badge .cvb-btn:hover { background: rgba(0, 255, 200, .22); }
+#cort-voz-badge .cvb-apagado { opacity: .45; }
+#cort-voz-badge .cvb-activo { border-color: #10b981; color: #6ff7c4; }
+#cort-voz-badge .cvb-texto { color: rgba(174, 240, 255, .78); }
+#cort-voz-badge .cvb-texto.cvb-alerta { color: #ffd27a; }
+@media (max-width: 560px) {
+  /* En el teléfono el badge se aplasta contra el orbe: se queda en dos líneas y nada más. */
+  #cort-voz-badge { left: 6px; bottom: 34px; max-width: 62vw; flex-wrap: wrap; }
+}
