@@ -1412,8 +1412,20 @@
   // Lo llama cort-mock.js cada vez que llega un estado del puente.
   window.CORT_alEstadoCerebro = (st) => {
     estadoCerebro = st || null;
+    rotuloCerebro(estadoCerebro);
     pintarFilaCerebro();
   };
+
+  function rotuloCerebro(st) {
+    const e = document.getElementById("model-status-text");
+    if (!e) return;
+    // La maqueta escribe «gemini» por defecto y CORT no usa nubes: el rótulo tiene
+    // que decir qué modelo tiene el puente, y si no tiene ninguno, decirlo.
+    e.textContent = !st ? "cerebro: sin datos del puente"
+      : (st.online && st.selected_model) ? `cerebro: ${st.selected_model}`
+      : st.online ? "cerebro: Ollama vivo · ningún modelo cargado"
+      : "cerebro: Ollama apagado";
+  }
 
   // Único sitio donde se cambia de idioma durante el arranque: una esquina del
   // overlay, para poder elegir español/francés/inglés antes del primer render.
@@ -2036,6 +2048,25 @@
     pintarVoz();
     bandeja();          // sin bandeja no hay cómo escribir una frase larga
     chipCerebro();      // y sin este canto no hay cómo bajar ni probar un modelo
+    rotuloCerebro(estadoCerebro);
+    // El paquete de la maqueta se inicializa después que este archivo y escribe
+    // «gemini» en el rótulo. Se devuelve cada vez que lo toque: CORT no usa nubes.
+    const elRotulo = document.getElementById("model-status-text");
+    if (elRotulo && !elRotulo._guarda) {
+      elRotulo._guarda = true;
+      new MutationObserver(() => {
+        if (!/^cerebro:/.test(elRotulo.textContent || "")) rotuloCerebro(estadoCerebro);
+      }).observe(elRotulo, { childList: true, characterData: true, subtree: true });
+    }
+    // Y se pide el estado al conectar: el rótulo y la fila de Ajustes no pueden
+    // quedarse con el nombre que trajo la maqueta. Reintenta 20 s, que es lo que
+    // tarda el puente en tener el WebSocket listo en un equipo de dos núcleos.
+    let intentos = 0;
+    const pide = () => {
+      if (typeof window.CORT_pedirEstadoCerebro === "function" && window.CORT_pedirEstadoCerebro()) return;
+      if (++intentos < 20) setTimeout(pide, 1000);
+    };
+    setTimeout(pide, 1200);
   }
   if (document.readyState !== "loading") arrancarVoz();
   else document.addEventListener("DOMContentLoaded", arrancarVoz);
