@@ -32,6 +32,11 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Reglas locales (hora, fecha, clima, temperatura, estado del equipo) | real | `/proc`, open-meteo y sensores del kernel |
 | Auditoría de seguridad | real, informa y no borra | arranque, procesos, archivos y permisos |
 | Vida diaria: lista de compras, notas, recordatorios, temporizadores, «léeme la selección» | real | `cort-bridge/cort_vida.py`; 0,34 s de frase a respuesta y temporizador de 5,00 s disparado a los 5,52 s |
+| Núcleo con reja: frase → plan JSON → validar → ejecutar → verificar | real | `cort-bridge/cort_intenciones.py`; 18/18 en `prueba_intenciones.py` y 6+12 en `prueba_nucleo.py`, siempre en arena (`CORT_HOME=/tmp`) |
+| Bajar y probar modelos Ollama desde la pantalla | real | panel `#cort-cerebro`: pesos medidos en disco, RAM estimada, `descargar` con progreso y `probar el cerebro` con latencia medida |
+| Sonda automática del cerebro | real, disparada por la RAM | `auto_sonda()` mide el modelo en cuanto hay RAM libre y escribe `mediciones/medicion-cerebro.json`; 11/11 en `prueba_sonda.py` con Ollama falso |
+| Palabra de despertar («cort») | real la lógica, pendiente de micro | `filtro_wake()` 11/11 en `prueba_wake.py`; ventana de 8 s y variantes acústicas cubiertas |
+| Canal de actualización desde el repo | real | `cort-bridge/cort_actualiza.py`; 7/7 en `prueba_actualiza.py`. Avisa y da el comando, **no se autoinstala** |
 | Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
 | Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
@@ -46,19 +51,40 @@ puede, CORT lo dice con el motivo y con el número que falta — no simula.
 ```
 cort-bridge/            proceso único, dos puertos
   cort_server.py        8766 HTTP (interfaz) + 8765 WebSocket (protocolo JSON)
+  cort_intenciones.py   la reja del núcleo: verbos y raíces permitidos, confirmación humana
   cort_voz.py           voz de salida (espeak-ng / Piper) y escucha (Vosk)
   cort_acciones.py      manos en Linux: wmctrl, pactl, xdotool, scrot, xclip, apt, dpkg
+  cort_archivos.py      mover/copiar/renombrar con verificación después
+  cort_vida.py          compras, notas, pendientes, temporizadores, selección leída
+  cort_actualiza.py     lee las etiquetas del repo y avisa; no descarga ni cambia nada
   cort_state.json       preferencias personales (ignoradas por git)
 cort-web/
   index.html            la interfaz (rediseñada sobre la plantilla)
   cort/cort-mock.js     enlace con el puente; lo que no hay puente se simula y se dice
   cort/cort-orbe.js     capa de partículas del orbe (medida, no decorada)
-  cort/cort-ui.js       idioma español, avisos honestos, testigo de voz y de PC
+  cort/cort-ui.js       idioma español, avisos honestos, testigo de voz, bandeja de tirador,
+                        panel del cerebro y aviso de versión
   cort/cort-style.css   recorte HUD, paneles y testigos
-scripts/                pruebas por WebSocket (prueba_voz.py, prueba_acciones.py, prueba_vida.py)
+scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_sonda ·
+                        prueba_wake · prueba_actualiza · prueba_vida · prueba_voz ·
+                        prueba_acciones · arranca_con_sonda.sh
+PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…U1)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```
+
+El núcleo son cinco capas y ninguna puede saltarse a la siguiente:
+
+```
+oído (Vosk / bandeja escrita)
+  → compilador (Ollama con format:"json", temperature:0, num_ctx:2048)
+    → reja (lista blanca de verbos y raíces; si duda, pide confirmación humana)
+      → ejecutor (argumentos, nunca shell)
+        → verificador (mide el resultado y lo cuenta con origen real o "no disponible")
+```
+
+La regla que sostiene todo: **el modelo nunca toca el disco, la red ni el teléfono.**
+Propone un JSON; decide la reja.
 
 Un navegador habla con el puente por `ws://127.0.0.1:8765/ws`. El puente nunca usa
 `shell=True`: ejecuta listas de argumentos y compara lo que le piden contra lo que
@@ -111,6 +137,18 @@ existe en el equipo (ventanas abiertas, entradas `.desktop`).
    .venv/bin/python cort-bridge/cort_acciones.py estado
    ```
 
+6. Cerebro local (opcional, y sólo cuando la máquina respire):
+
+   Ollama se instala desde su página oficial, **descargando el instalador y leyéndolo
+   antes de ejecutarlo** (no se corre `curl … | sh` a ciegas). En MX Linux vale el
+   paquete `.deb` para amd64 de esa página, o el tarball: se descomprime en
+   `/usr/local/bin` y se arranca con `ollama serve`.
+
+   Con el puente corriendo, abrir el panel **◉** de la interfaz: lista los modelos que
+   hay en disco con su peso medido y cuánta RAM pedirían, deja **descargar** los que
+   faltan y **probar el cerebro** con una frase. Si la cuenta no cabe, no lo carga y
+   dice la cifra en vez de congelar el equipo.
+
 ### Como servicio de usuario (que arranque solo)
 
 ```bash
@@ -145,6 +183,13 @@ del repo; aparece en el menú de XFCE como «CORT».
 | `CORT_VOZ_MOTOR` | `rapida` (espeak-ng) o `natural` (Piper) | `rapida` |
 | `CORT_VOZ` | `1` habla cada respuesta, `0` sólo texto | `1` |
 | `CORT_MIC` | `1` enciende la escucha continua al arrancar | `0` |
+| `CORT_WAKE` | `1` el micro sólo obedece después de oír «cort» | `0` |
+| `CORT_WAKE_VENTANA` | segundos de escucha tras la palabra | `8` |
+| `CORT_AUTOSONDA` | `1` mide el cerebro solo, cuando la RAM lo permita | `0` |
+| `CORT_AUTOSONDA_UMBRAL` | MB libres a partir de los cuales se atreve a cargar | `900` |
+| `CORT_ACTUALIZA` | `1` revisa las etiquetas del repo cada 6 h | `1` |
+| `CORT_REPO` / `CORT_VERSION` | con qué repo y qué versión comparar (si no, se derivan de `git remote` y `git describe`) | derivados |
+| `CORT_BIND` / `CORT_TLS` | abrir el puente a la red local, con certificado `cert,clave` | `127.0.0.1`, sin TLS |
 | `CORT_RAM_MIN` | MB libres mínimos para cargar un modelo | según modelo |
 | `CORT_HOME` / `CORT_DATOS` | dónde guarda estado, voz y registro | `~/.local/share/cort` |
 | `CORT_WS_PORT` / `CORT_WEB_PORT` | puertos del puente | `8765` / `8766` |
@@ -166,15 +211,47 @@ del repo; aparece en el menú de XFCE como «CORT».
 
 ## Pruebas
 
+Todo lo que toca el equipo se prueba en **arena**: `CORT_HOME` y `CORT_DATOS` apuntan a
+`/tmp`, `CORT_MEDIA_SIMULA=1` y `CORT_NUCLEO_FALSO` fingen el plan. Ninguna de estas
+pruebas mueve una carpeta real ni escribe en tu lista de compras.
+
 ```bash
-.venv/bin/python scripts/prueba_voz.py        # órdenes de voz por WebSocket y descarga del WAV
-.venv/bin/python scripts/prueba_acciones.py    # pc_estado, detect_apps, apt, abrir/cerrar ventana
+.venv/bin/python scripts/prueba_intenciones.py   # la reja: 6 planes buenos pasan, 12 malos se frenan
+.venv/bin/python scripts/prueba_nucleo.py        # frase → plan → reja → ejecución → verificación
+.venv/bin/python scripts/prueba_wake.py          # palabra de despertar y su ventana de 8 s
+.venv/bin/python scripts/prueba_actualiza.py     # canal de versión contra un GitHub falso
+.venv/bin/python scripts/prueba_sonda.py         # la auto-sonda con un Ollama falso en arena
+.venv/bin/python scripts/prueba_voz.py           # órdenes de voz por WebSocket y descarga del WAV
+.venv/bin/python scripts/prueba_acciones.py      # pc_estado, detect_apps, apt, abrir/cerrar ventana
 ```
 
 `prueba_acciones.py` lanza y cierra VLC: es la prueba de que la mano funciona de verdad.
 
 ```bash
 # F4 en arena: el puente de prueba usa CORT_DATOS=/tmp y no toca tu lista real
-CORT_DATOS=/tmp/cort-arena/datos .venv/bin/python -u cort-bridge/cort_server.py &
-.venv/bin/python scripts/prueba_vida.py      # lista, notas, pendientes y selección
+CORT_HOME=/tmp/cort-arena CORT_DATOS=/tmp/cort-arena/datos CORT_WS_PORT=8775 \
+  .venv/bin/python -u cort-bridge/cort_server.py &
+CORT_WS_PORT=8775 .venv/bin/python scripts/prueba_vida.py   # lista, notas, pendientes y selección
 ```
+
+Para ver la interfaz contra un puente de arena sin tocar el tuyo, la página acepta
+`?puente=` con una URL `ws://` (así se midieron las pantallas de este repo):
+
+```
+http://127.0.0.1:8776/index.html?puente=ws%3A%2F%2F127.0.0.1%3A8775%2Fws
+```
+
+## Lo que se pidió y todavía no está, dicho con número
+
+- **Mover ventanas con la cámara (PC y teléfono)** hace falta un modelo de visión. En
+  esta máquina, con 2 núcleos y 1851 MB, quedan 172–233 MB libres y Ollama está
+  apagado; un modelo de manos (MediaPipe o TFLite) corre en el Galaxy A16, no aquí.
+  Se planifica como fase propia, no se improvisa.
+- **Vincular PC y Android para que CORT comparta memoria** necesita tres cosas que
+  aún no están todas: `CORT_BIND` abierto, TLS con certificado propio y un token.
+  Sin HTTPS el navegador del teléfono no instala la PWA ni deja usar el micrófono,
+  y compartir la memoria sin cifrar por la red local sería exponerla. El APK (F11/F12)
+  es el que resuelve el frente.
+- **El cerebro cargado**: la puerta de RAM manda. Con la interfaz abierta ningún
+  modelo de los 6 en disco cabe; `auto_sonda()` lo mide solo en el turno en que la
+  máquina respire.
