@@ -1,21 +1,37 @@
-MIT License
+CORT — Licencia de atribución, uso libre y no monetización
+==========================================================
 
-Copyright (c) 2026 Sandra Sofia Lopez
+CORT (Cognitiva · Omnipresente · Rapsodia · Terminal)
+Copyright (c) 2026 Askher Vargas y Sandra Lopez
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Correos de soporte y permisos:
+  Sandrasofialopezgomez3@gmail.com
+  Carlosa3325@gmail.com
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. USO PERMITIDO
+Se permite usar, copiar, estudiar, modificar y compartir este software de forma
+gratuita, en cualquier dispositivo, con fines personales, educativos o de
+evaluación del proyecto.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. NO MONETIZACIÓN
+No se puede vender, sublicenciar, empaquetar de pago, publicar en tiendas de
+aplicaciones con cobro, ni monetizar de ninguna manera (suscripciones,
+publicidad, donaciones obligatorias, servicios de pago que revendan a CORT)
+sin atribuir la autoría a Askher Vargas y Sandra Lopez y sin escribir antes a
+los correos de soporte y obtener respuesta por escrito.
+
+3. ATRIBUCIÓN OBLIGATORIA
+Cualquier copia, derivado o distribución visible debe conservar esta licencia,
+los nombres de las autorías y los correos de contacto.
+
+4. GARANTÍA
+Se entrega tal cual, sin garantía. Quien lo ejecuta es responsable de lo que
+haga en su equipo. CORT está diseñado para no borrar archivos y para pedir
+confirmación humana antes de una acción irreversible.
+
+5. REFERENCIAS DE ESTILO (NO SON PARTE DE CORT)
+La maqueta web de J.A.R.V.I.S publicada por TechEnClair sirvió de andamio de
+plantilla y de referencia visual; se rediseñó y se acredita. La estética
+holográfica de Cortana (Halo, Microsoft) es sólo una referencia de estilo:
+CORT no incluye código, modelos, sonido ni personajes de Microsoft.
+Ver `cort-web/PROCEDENCIA.md`.
