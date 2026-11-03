@@ -170,7 +170,7 @@
         this.ultima_voz = n;
       }
       if (n.type === "voz_estado" || n.type === "voz_audio" || n.type === "mic_estado" ||
-          n.type === "mic_texto" || n.type === "voz_pedido") {
+          n.type === "mic_texto" || n.type === "voz_pedido" || n.type === "despierto" || n.type === "wake_estado") {
         if (typeof window.CORT_alVoz === "function") {
           try { window.CORT_alVoz(n); } catch (e) {}
         }

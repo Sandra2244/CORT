@@ -1750,6 +1750,19 @@
       "background:rgba(40,150,220,.22);color:#bfeeff;font:14px/1.2 system-ui";
     b.append(campo, boton);
 
+    // F10: el candado del oído. Con la palabra encendida, CORT escucha en silencio y
+    // sólo obedece lo que va dicho después de «cort».
+    const wake = document.createElement("button");
+    wake.id = "cort-bandeja-wake";
+    wake.type = "button";
+    wake.textContent = "«cort»";
+    wake.title = "palabra de despertar: sólo obedece después de oír su nombre";
+    wake.style.cssText = "padding:8px 9px;border-radius:10px;cursor:pointer;font:13px/1.2 system-ui;" +
+      "border:1px solid rgba(90,210,255,.45);background:rgba(20,60,90,.25);color:#9fd8ef";
+    wake.addEventListener("click", () =>
+      window.CORT_enviarAlCerebro({ type: wake.dataset.on === "1" ? "wake_off" : "wake_on" }));
+    b.insertBefore(wake, boton);
+
     const tirador = document.createElement("button");
     tirador.id = "cort-bandeja-tirador";
     tirador.type = "button";
@@ -1798,6 +1811,16 @@
       flotante("pidiendo: " + texto.slice(0, 60));
     });
     return b;
+  }
+
+  function pintaWake(n) {
+    const w = document.getElementById("cort-bandeja-wake");
+    if (!w) return;
+    const encendido = !!n.wake;
+    w.dataset.on = encendido ? "1" : "0";
+    w.textContent = encendido ? "«cort» ✓" : "«cort»";
+    w.style.background = encendido ? "rgba(0,229,255,.30)" : "rgba(20,60,90,.25)";
+    w.style.color = encendido ? "#03202e" : "#9fd8ef";
   }
 
   // ---- F9: lo que el cerebro entendió y qué hizo la reja ---------------------
@@ -2035,8 +2058,16 @@
       ultimaVoz = n;
     }
     if (n.type === "mic_estado") ultimoMic = n;
+    if (n.type === "despierto") {
+      // F10: el nombre ya se oyó; la ventana dice cuántos segundos queda de escucha.
+      flotante(`despierta · te escucho ${n.ventana_seg || 8} s`, true);
+      pintaWake({ wake: true });
+      return;
+    }
+    if (n.type === "wake_estado") { pintaWake(n); return; }
     if (n.type === "voz_audio" && n.ok) sonarVoz(n);
     if (n.type === "mic_texto") {
+      if (n.descartado) return;   // habló otra cosa: no era para CORT
       // Lo dictado se ve igual que lo escrito: la demo no tenía esta vía.
       const campo = document.getElementById("command-input") ||
                     document.querySelector("input[type=text][id*='input']");

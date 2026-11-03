@@ -106,6 +106,31 @@ MIC = None                                          # cort_voz.EscuchaContinua, 
 BUCLE = None                                        # el lazo de asyncio, para avisos desde hilos
 ALMENOS_AUDIO = 200                                 # MB libres mínimos para cargar Vosk
 
+# ---- F10: palabra de despertar -------------------------------------------------
+# Con CORT_WAKE=1 el micro sigue escuchando, pero una frase suelta no se atiende
+# hasta que dice el nombre. Es la diferencia entre un oído y una puerta abierta.
+WAKE = os.environ.get("CORT_WAKE", "0") == "1"
+VENTANA_WAKE = int(os.environ.get("CORT_WAKE_VENTANA", "8"))   # segundos tras el nombre
+DESPIERTO_HASTA = 0.0
+# El modelo acústico en español escribe el nombre de varias maneras; las variantes
+# son las que salieron al dictar «CORT» con acento, no suposiciones.
+NOMBRE_OIDO = re.compile(r"\b(cort|corts|coat|cot|court|cord|cortt)\b", re.I)
+
+
+def filtro_wake(texto, despierto_hasta, ahora):
+    """Qué hacer con lo que dijo el micrófono. Función limpia a propósito: el reloj
+    entra como argumento y así se puede probar sin esperar ocho segundos reales."""
+    t = (texto or "").strip()
+    if NOMBRE_OIDO.search(t):
+        resto = NOMBRE_OIDO.sub("", t).strip()
+        return {"atender": bool(resto), "texto": resto, "descartado": False,
+                "dijo_nombre": True, "despierto_hasta": ahora + VENTANA_WAKE}
+    if ahora <= despierto_hasta:
+        return {"atender": bool(t), "texto": t, "descartado": False,
+                "dijo_nombre": False, "despierto_hasta": despierto_hasta}
+    return {"atender": False, "texto": t, "descartado": True,
+            "dijo_nombre": False, "despierto_hasta": despierto_hasta}
+
 # Modelos que la interfaz ofrece. Dos puertas distintas, porque son dos cosas
 # distintas: DESCARGAR gasta disco (y poca RAM), CARGAR el modelo gasta RAM.
 # Confundirlas fue lo que dejó CORT sin cerebro: con 288 MB libres el puente
@@ -1318,6 +1343,8 @@ def estado_voz():
             "microfonos": [m["nombre"] for m in d["dispositivos"]["microfonos_reales"]],
             "entradas_que_ve": [e["nombre"] for e in d["dispositivos"]["entradas"]],
             "escucha": (MIC.estado if MIC else "apagada"),
+            "wake": WAKE,
+            "despierto": bool(WAKE and time.time() < DESPIERTO_HASTA),
             "nota": ("" if d["dispositivos"]["suena"] else
                      "no hay altavoz físico: la única salida es auto_null (conecta HDMI o dongle USB)"),
             }
@@ -1413,7 +1440,24 @@ def mic_arrancar(ws, historial, candado):
         return {"ok": True, "estado": MIC.estado, "nota": "ya estaba escuchando"}
 
     def al_texto(texto):
-        avisa_desde_hilo({"type": "mic_texto", "texto": texto, "origen": "real"})
+        global DESPIERTO_HASTA
+        if WAKE:
+            d = filtro_wake(texto, DESPIERTO_HASTA, time.time())
+            DESPIERTO_HASTA = d["despierto_hasta"]
+            aviso = {"type": "mic_texto", "texto": d["texto"], "origen": "real"}
+            if d["descartado"]:
+                aviso["descartado"] = True
+            if d["dijo_nombre"]:
+                aviso["wake"] = True
+            avisa_desde_hilo(aviso)
+            if d["dijo_nombre"]:
+                avisa_desde_hilo({"type": "despierto", "ventana_seg": VENTANA_WAKE,
+                                  "origen": "real"})
+            if not d["atender"]:
+                return
+            texto = d["texto"]
+        else:
+            avisa_desde_hilo({"type": "mic_texto", "texto": texto, "origen": "real"})
         try:
             BUCLE.call_soon_threadsafe(
                 lambda: asyncio.create_task(atender_input(ws, texto, historial, candado)))
@@ -1532,7 +1576,7 @@ async def latido_clima():
 
 
 async def ws_handler(request):
-    global VOZ_ACTIVA, MICRO_ACTIVO
+    global VOZ_ACTIVA, MICRO_ACTIVO, WAKE
     ws = web.WebSocketResponse(heartbeat=25)
     await ws.prepare(request)
     CONEXIONES.add(ws)
@@ -1926,6 +1970,18 @@ async def ws_handler(request):
 
             elif t == "mic_estado":
                 enviar(ws, estado_voz())
+
+            elif t in ("wake_on", "wake_off"):
+                # F10: con la palabra encendida el micro sigue escuchando pero sólo
+                # se atiende lo que va dicho después del nombre.
+                WAKE = (t == "wake_on")
+                enviar(ws, {"type": "wake_estado", "origen": "real", "wake": WAKE,
+                            "ventana_seg": VENTANA_WAKE,
+                            "nota": ("el micro sigue apagado hasta que lo enciendas"
+                                     if not MICRO_ACTIVO else "escuchando en silencio")})
+                await decir(ws, (f"Palabra de despertar activada: di «cort» y tengo "
+                                 f"{VENTANA_WAKE} segundos") if WAKE else
+                            "Palabra de despertar apagada: atiendo todo lo que escuche")
 
             elif t == "check_kokoro_status":
                 # Kokoro no está instalado y no se baja a ciegas: hay Piper local medido.
