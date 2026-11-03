@@ -73,6 +73,16 @@ except Exception as _e_acc:
 else:
     ACCIONES_ERROR = ""
 
+# Vida diaria (F4): lista de compras, notas, recordatorios y temporizadores.
+# Biblioteca estándar sola; si la voz o las manos fallan, esto sigue en pie.
+try:
+    import cort_vida
+except Exception as _e_vida:
+    cort_vida = None
+    VIDA_ERROR = f"{type(_e_vida).__name__}: {_e_vida}"
+else:
+    VIDA_ERROR = ""
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -610,7 +620,25 @@ def sin_acentos(t):
 NAVEGADORES = ("firefox", "chromium", "chrome", "brave", "epiphany", "midori", "tor browser")
 
 
-def _objetivo_despues(q, *verbos):
+def _rebanada(original, q, m, grupo=1):
+    """El trozo de texto ORIGINAL que corresponde al match hecho sobre `q`."""
+    if not m:
+        return ""
+    if not original or original == q:
+        return (m.group(grupo) or "").strip()
+    mapa = []
+    for i, ch in enumerate(original):
+        for c in unicodedata.normalize("NFD", ch.lower()):
+            if unicodedata.category(c) != "Mn":
+                mapa.append(i)
+    mapa.append(len(original))
+    try:
+        return original[mapa[m.start(grupo)]:mapa[m.end(grupo)]].strip()
+    except Exception:
+        return (m.group(grupo) or "").strip()
+
+
+def _objetivo_despues(q, *verbos, original=None):
     """«abre el vlc» -> 'vlc'. Quita artículo, cortesía y la palabra ventana.
 
     Sin esto, «cierra la ventana vlc» buscaba una ventana llamada «ventana vlc» y
@@ -625,11 +653,20 @@ def _objetivo_despues(q, *verbos):
             objetivo = re.sub(r"^(ventana|ventanas|app|aplicacion|aplicaciones|programa|archivo)\s+",
                               "", objetivo).strip()
             if objetivo:
+                if original:
+                    m2 = re.search(r"\b" + v + r"\s+(?:el|la|los|las|un|una|mi|por)?\s*([a-z0-9 ._\-]{2,40})", q)
+                    cortado = _rebanada(original, q, m2)
+                    for sobra in ("por favor", "ahora", "enseguida", "inmediatamente", "favor"):
+                        cortado = cortado.replace(sobra, "").strip()
+                    cortado = re.sub(r"^(ventana|ventanas|app|aplicacion|aplicaciones|programa|archivo)\s+",
+                                     "", cortado, flags=re.I).strip()
+                    if cortado:
+                        return cortado
                 return objetivo
     return ""
 
 
-def accion_desde_frase(q):
+def accion_desde_frase(q, original=None):
     """Traduce una frase a una acción real de Linux y la ejecuta.
 
     Devuelve (texto, extras) o None si la frase no pide tocar nada. Aquí es donde
@@ -638,6 +675,7 @@ def accion_desde_frase(q):
     """
     if cort_acciones is None:
         return None
+    o = original or q        # lo escrito por la usuaria, con sus tildes: eso es lo que se guarda
     tiene = lambda *v: any(x in q for x in v)
     r = None
 
@@ -693,6 +731,81 @@ def accion_desde_frase(q):
     elif tiene("notifica en pantalla", "avisame en pantalla", "muestra una notificacion"):
         texto = _objetivo_despues(q, "notifica", "avisame", "muestra") or "CORT está listo"
         r = cort_acciones.notificar(texto)
+    # ------------------------------------------------------------- vida (F4) ----
+    elif cort_vida and tiene("comprame", "anota en la lista", "agrega a la lista", "papela",
+               "pon en la lista", "apunta en la compra"):
+        m2 = re.search(r"comprame(?:me)?\s+(.{2,160})", q)
+        qu = _rebanada(o, q, m2) if m2 else ""
+        if not qu:
+            m2 = re.search(r"(?:lista|compra)[^a-z]{0,12}(.{2,160})", q)
+            qu = _rebanada(o, q, m2)
+        r = cort_vida.comprar(qu) if qu else {"ok": False, "motivo": "no dice qué comprar"}
+    elif cort_vida and ((re.search(r"\b(?:quita|quitame|tacha|tachame|borra|saca)\w*\b", q) and
+                         re.search(r"\b(?:lista|compra|papela)\b", q)) or
+                        re.search(r"\bya\b.*\bcompre\b", q)):
+        qu = _objetivo_despues(q, "quita", "quitame", "tacha", "tachame", "borra", "saca",
+                               original=o) or o
+        qu = re.sub(r"^ya\s+(?:he\s+)?compre\s+", "", qu)
+        # el nombre del medio ("de la lista", "en la compra") se tira por donde esté
+        qu = re.sub(r"\b(?:de|en|a|para)?\s*(?:la|el|mi|nuestra)?\s*(?:lista|compra|papela)\b", " ", qu)
+        qu = re.sub(r"\s+", " ", qu).strip()
+        qu = re.sub(r"^(?:de|el|la|los|las|un|una|mi)\s+", "", qu)
+        r = cort_vida.quitar_compra(qu or "nada")
+    elif cort_vida and tiene("vacia la lista", "termino la lista"):
+        r = cort_vida.vaciar_compras()
+    elif cort_vida and tiene("que tengo que comprar", "lista de compras", "que falta comprar", "lee la lista"):
+        items = cort_vida.compras()
+        return ("Tu lista de compras: " + (", ".join(items) if items else "está vacía") + ".",
+                [{"type": "shopping_list", "items": items, "origen": "real"}])
+    elif cort_vida and tiene("anota que", "apunta que", "nueva nota", "guarda la nota"):
+        m = re.search(r"(?:anota|apunta|guarda)(?:\s+la nota)?\s+que\s+(.{3,600})", q)
+        cuerpo = _rebanada(o, q, m) if m else o
+        titulo = re.split(r"[,.]", cuerpo)[0].strip()[:48] or "nota de cort"
+        r = cort_vida.guardar_nota(titulo[:1].upper() + titulo[1:], cuerpo)
+        return (f"Nota guardada: «{r.get('titulo','')}» ({r.get('caracteres',0)} caracteres). " +
+                (r.get("motivo", "") if not r.get("ok") else ""),
+                [{"type": "obsidian_notes", "notes": notas_para_panel(), "origen": "real"}])
+    elif cort_vida and tiene("mis notas", "lee mis notas", "que notas tengo"):
+        n = cort_vida.notas()
+        return (f"Tienes {len(n)} nota(s): " + (", ".join(x["titulo"] for x in n[:8]) or "ninguna") + ".",
+                [{"type": "obsidian_notes", "notes": notas_para_panel(), "origen": "real",
+                  "nota": "son las notas de CORT; Obsidian no está instalado"}])
+    elif cort_vida and (tiene("recuerdame", "recorda me") or tiene("no se me olvide")):
+        m = (re.search(r"recuerdame\s+(.{3,200})", q) or
+             re.search(r"no se me olvide\s+(.{3,200})", q))
+        cuerpo = _rebanada(o, q, m) if m else o
+        r = cort_vida.poner_recordatorio(cuerpo, cuando=cuerpo)
+        if r.get("ok"):
+            return (f"Te lo recuerdo dentro de {r['item']['segundos']} segundos "
+                    f"({r['item']['texto']}).",
+                    [{"type": "vida_estado", "origen": "real",
+                      "pendientes": cort_vida.recordatorios(pendientes=True)}])
+        return ("No supe cuándo: " + r.get("motivo", ""), [])
+    elif cort_vida and tiene("temporizador", "countdown", "dame una alerta de", "cronometra"):
+        m = re.search(r"(\d+(?:[.,]\d+)?)\s*(minutos?|segundos?|horas?)", q)
+        seg = cort_vida.segundos_en(q) if m else None
+        if not seg:
+            return ("Dime la duración en minutos o segundos: «temporizador de 10 minutos».", [])
+        r = cort_vida.poner_recordatorio(f"temporizador de {seg} segundos",
+                                         cuando=f"{seg} segundos", tipo="temporizador")
+        return ((f"Temporizador puesto: {seg} segundos. Te aviso y hablo cuando termine."
+                 if r.get("ok") else "No pude ponerlo: " + r.get("motivo", "")),
+                [{"type": "timer_add", "duration": seg, "origen": "real"}])
+    elif cort_vida and tiene("que tengo pendiente", "que pendientes", "resumen del dia",
+               "que tengo anotado", "como va mi dia"):
+        return (cort_vida.resumen_hablado(),
+                [{"type": "vida_estado", "origen": "real",
+                  "datos": cort_vida.disponibilidad(), "compras": cort_vida.compras()}])
+    elif cort_vida and tiene("leeme la seleccion", "lee lo que tengo seleccionado", "leeme esto",
+               "lee la seleccion"):
+        p = cort_acciones.portapapeles(seleccion_primaria=True)
+        if not p.get("ok"):
+            return ("No hay selección que leer: " + p.get("motivo", ""), [])
+        txt = (p.get("texto") or "").strip()
+        if not txt:
+            return ("No hay texto subrayado que leer: el portapapeles primario está vacío.", [])
+        return (txt[:600] + ("…" if len(txt) > 600 else ""),
+                [{"type": "vida_estado", "origen": "real", "seleccion_leida": len(txt)}])
     elif tiene("abre ", "abrir ", "lanza ", "ejecuta ", "arranca "):
         objetivo = _objetivo_despues(q, "abre", "abrir", "lanza", "ejecuta", "arranca")
         if not objetivo:
@@ -709,6 +822,14 @@ def accion_desde_frase(q):
         r = cort_acciones.cerrar_ventana(_objetivo_despues(q, "cierra", "cerrar"))
     if not r:
         return None
+    if "detalle" not in r:
+        # Los resultados de vida diaria (F4) traen otros campos: se les traduce el
+        # texto aquí y no se registran como acción de la máquina, que no lo son.
+        decir = r.get("nota") or r.get("motivo") or (
+            "apuntado" if r.get("ok") else "no se pudo")
+        return (str(decir) + ("." if not str(decir).endswith((".", "…")) else ""),
+                [{"type": "vida_estado", "origen": "real",
+                  "datos": cort_vida.disponibilidad(), "compras": cort_vida.compras()}])
     cort_acciones.registrar(r.get("accion"), {"frase": q[:90]}, r)
     extra = (" " + r["nota"]) if r.get("nota") else ""
     if r.get("pide_confirmacion"):
@@ -728,6 +849,9 @@ def intentos_locales(texto, estado):
     """
     q = sin_acentos(texto)
     tiene = lambda *v: any(x in q for x in v)
+    # Las siglas van con frontera de palabra: "ram" vive dentro de «cómprame», y
+    # una lista de la compra contestada con el uso de memoria es un robo de turno.
+    dice = lambda *v: any(re.search(r"\b" + x + r"\b", q) for x in v)
 
     if tiene("que hora", "la hora", "hora es", "hora actual", "dime la hora"):
         return f"Son las {time.strftime('%H:%M')}.", []
@@ -772,8 +896,8 @@ def intentos_locales(texto, estado):
         return "Empiezo la auditoría real: arranque, procesos, archivos y permisos. No borro nada.", [
             {"type": "av_open"}, {"type": "av-scan"}]
 
-    if tiene("cpu", "ram", "memoria", "disco", "rendimiento", "estado del sistema", "como va el sistema",
-               "como esta el equipo", "va el equipo", "estado del equipo", "como va todo"):
+    if dice("cpu", "ram", "memoria", "disco", "rendimiento", "estado del sistema", "como va el sistema",
+            "como esta el equipo", "va el equipo", "estado del equipo", "como va todo"):
         cpu_ram_disco()             # primera muestra: marca el punto de partida
         time.sleep(0.6)             # sin intervalo no hay porcentaje real que dar
         m = cpu_ram_disco()
@@ -814,7 +938,7 @@ def intentos_locales(texto, estado):
     # ---- F5: órdenes que tocan el equipo -------------------------------------------
     # Van al final a propósito: primero responden las reglas de lectura (hora, clima,
     # temperatura, cerebro) y sólo si no eran eso se intenta una acción real.
-    accion = accion_desde_frase(q)
+    accion = accion_desde_frase(q, texto)
     if accion:
         return accion
 
@@ -997,16 +1121,12 @@ FALTA_EN_EL_PUENTE = {
                            "node sí está (/usr/bin/node), pero pide cuenta y clave: no entra sin tu autorización"),
     "print3d_check_hardware": ("El puente no detecta ninguna impresora 3D conectada.",
                                "haría caso si algún día la conectas; no se finge un hardware"),
-    "read_obsidian_note": ("Obsidian no está instalado en este equipo (verificado con `which obsidian`).",
-                           "las notas de CORT se guardan en su propio archivo desde F4, sin depender de Obsidian"),
     "get_https_tunnel_status": ("Túnel HTTPS: no se abre ningún agujero al exterior sin tu orden explícita.",
                                 "el teléfono se enlaza por red local con token (F7), sin exponer nada a internet"),
     "mobile_auth": ("El emparejamiento con el teléfono aún no existe.",
                     "se hace en F7 por Wi-Fi local con QR generado aquí, no con api.qrserver.com"),
     "clear_cache": ("El puente no guarda cachas propias que limpiar todavía (solo 20 s de inventario en memoria).",
                     "se dirá con cifras cuando exista algo que limpiar"),
-    "get_shopping_list": ("La lista de compras vive en la plantilla con 3 artículos de ejemplo.",
-                          "F4 la convierte en tuya y persistente en el estado del puente"),
 }
 
 RAZON_GENERICA = ("Nadie atiende esta orden en el puente: la plantilla la mandaba a su backend de Windows.",
@@ -1063,6 +1183,43 @@ def avisa_desde_hilo(mensaje):
             BUCLE.call_soon_threadsafe(repartir)
         except Exception:
             pass
+
+
+# ------------------------------------------------------------------ vida (F4) ----
+def notas_para_panel() -> list:
+    """El panel de notas de la plantilla pide `titre` / `mtime` / `taille`. Le
+    llegan las notas reales de CORT; se avisa en el mensaje de que no es Obsidian."""
+    if cort_vida is None:
+        return []
+    salida = []
+    for n in cort_vida.notas():
+        epoca = 0
+        try:
+            epoca = int(time.mktime(time.strptime(n.get("hora", ""), "%Y-%m-%dT%H:%M:%S")))
+        except Exception:
+            pass
+        salida.append({"titre": n["titulo"], "mtime": epoca, "taille": n.get("chars", 0)})
+    return salida
+
+
+def al_vencer_recordatorio(r):
+    """La vela de cort_vida avisa desde su hilo: panel + voz, no sólo consola."""
+    falta = max(0, int(r.get("para", 0) - time.time()))
+    hora = time.strftime("%H:%M", time.localtime(r.get("para", time.time())))
+    enviar_aviso = {"type": "reminder_trigger", "time": hora, "text": r.get("texto", ""),
+                    "origen": "real", "tipo": r.get("tipo", "recordatorio"), "seg": falta}
+    avisa_desde_hilo(enviar_aviso)
+    if VOZ_ACTIVA and cort_voz:
+        decir = (f"Temporizador terminado." if r.get("tipo") == "temporizador"
+                 else f"Recordatorio: {r.get('texto', '')}")
+        try:
+            cort_voz.hablar_en_hilo(decir[:200])
+        except Exception:
+            pass
+
+
+if cort_vida:
+    cort_vida.al_vencer(al_vencer_recordatorio)
 
 
 async def vigilar_voz(ws, ident):
@@ -1161,10 +1318,13 @@ def temperatura_sala():
 def ajustes_reales():
     """Lo que Ajustes debe rellenar con datos del puente (no con valores de ejemplo)."""
     e = leer_estado()
+    compras = cort_vida.compras() if cort_vida else e.get("shopping", [])
+    pend = ([r["texto"] for r in cort_vida.recordatorios(pendientes=True)]
+            if cort_vida else e.get("reminders", []))
     return {"user_name": e.get("user_name", ""), "user_age": str(e.get("user_age", "")),
             "user_city": e.get("user_city", ""), "local_model": e.get("local_model", ""),
-            "language": e.get("language", "es"), "reminders": e.get("reminders", []),
-            "shopping": e.get("shopping", [])}
+            "language": e.get("language", "es"), "reminders": pend,
+            "shopping": compras}
 
 
 async def muestra_medidas():
@@ -1368,15 +1528,83 @@ async def ws_handler(request):
                 enviar(ws, {"type": "settings_data", "data": ajustes_reales(), "origen": "real"})
 
             elif t == "get_shopping_list":
-                e = leer_estado()
-                enviar(ws, {"type": "shopping_list", "items": e.get("shopping") or [],
-                            "origen": "real", "nota": "lista guardada por CORT en el puente"})
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    items = cort_vida.compras()
+                    enviar(ws, {"type": "shopping_list", "items": items, "origen": "real",
+                                "nota": f"lista de CORT, guardada en {cort_vida.VIDA}",
+                                "empujado": bool(d.get("empujado"))})
 
             elif t == "update_shopping_list":
-                e = leer_estado()
-                e["shopping"] = d.get("items") or []
-                escribir_estado(e)
-                enviar(ws, {"type": "shopping_list", "items": e["shopping"], "origen": "real"})
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    r = await asyncio.get_event_loop().run_in_executor(
+                        None, cort_vida.fijar_compras, d.get("items") or [])
+                    if r.get("ok"):
+                        enviar(ws, {"type": "shopping_list", "items": r["items"],
+                                    "origen": "real"})
+                    else:
+                        enviar(ws, {"type": "shopping_list", "items": cort_vida.compras(),
+                                    "origen": "no disponible", "motivo": r.get("motivo", "")})
+
+            elif t == "vida_estado":
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    enviar(ws, {"type": "vida_estado", "origen": "real",
+                                "datos": cort_vida.disponibilidad(),
+                                "compras": cort_vida.compras(),
+                                "notas": cort_vida.notas(),
+                                "pendientes": cort_vida.recordatorios(pendientes=True),
+                                "resumen": cort_vida.resumen_hablado()})
+
+            elif t == "save_obsidian_note":
+                # El panel se llama Obsidian en la plantilla, pero Obsidian no está
+                # instalado: aquí mandan las notas de CORT, y se dice en la propia nota.
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    r = cort_vida.guardar_nota(d.get("titre") or d.get("titulo") or "",
+                                               d.get("content") or d.get("texto") or "")
+                    if r.get("ok"):
+                        enviar(ws, {"type": "obsidian_notes", "notes": notas_para_panel(),
+                                    "origen": "real",
+                                    "nota": f"nota de CORT en {cort_vida.VIDA} (no es Obsidian)"})
+                        enviar(ws, {"type": "obsidian_note_content", "titre": r["titulo"],
+                                    "content": (d.get("content") or "")[:20000],
+                                    "origen": "real"})
+                    else:
+                        enviar(ws, {"type": "puente_aviso", "orden": t, "panel": "obsidian-panel",
+                                    "motivo": r.get("motivo", "no se pudo guardar"),
+                                    "hace_falta": "un título y un texto", "origen": "real"})
+
+            elif t == "read_obsidian_note":
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    r = cort_vida.leer_nota(d.get("titre") or d.get("titulo") or "")
+                    enviar(ws, {"type": "obsidian_notes", "notes": notas_para_panel(),
+                                "origen": "real"})
+                    if r.get("ok"):
+                        enviar(ws, {"type": "obsidian_note_content", "titre": r["titulo"],
+                                    "content": r["content"], "origen": "real"})
+                    else:
+                        enviar(ws, {"type": "puente_aviso", "orden": t, "panel": "obsidian-panel",
+                                    "motivo": r.get("motivo", ""), "hace_falta": "un título guardado",
+                                    "origen": "real"})
+
+            elif t == "delete_obsidian_note":
+                if cort_vida is None:
+                    enviar(ws, aviso_sin_backend(t, VIDA_ERROR))
+                else:
+                    r = cort_vida.borrar_nota(d.get("titre") or d.get("titulo") or "")
+                    enviar(ws, {"type": "obsidian_notes", "notes": notas_para_panel(),
+                                "origen": "real"})
+                    enviar(ws, {"type": "puente_aviso" if not r.get("ok") else "obsidian_nota_borrada",
+                                "orden": t, "panel": "obsidian-panel", "titulo": r.get("titulo", ""),
+                                "motivo": r.get("motivo", ""), "origen": "real"})
 
             elif t == "ha_get_states":
                 # Sin servidor no hay sensores: se dice con `success` y el aviso, para
@@ -1822,6 +2050,8 @@ async def latido():
 async def main():
     global BUCLE
     BUCLE = asyncio.get_running_loop()
+    if cort_vida:
+        cort_vida.avivar()      # un hilo, grano de 1 s: los pendientes vencen solos
 
     # F7: por defecto el puente sólo escucha en casa (127.0.0.1). Abrirlo a la red
     # local es decisión de la usuaria, con la variable CORT_BIND, y sin HTTPS el

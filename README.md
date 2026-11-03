@@ -25,8 +25,10 @@ plantilla; este proyecto la rediseña y conserva su estructura de paneles. Ver
 | Cerebro con Ollama | real pero limitado | 6 modelos en disco; el más ligero pide ~511 MB y hay 227–266 MB libres |
 | Reglas locales (hora, fecha, clima, temperatura, estado del equipo) | real | `/proc`, open-meteo y sensores del kernel |
 | Auditoría de seguridad | real, informa y no borra | arranque, procesos, archivos y permisos |
-| Mapa propio, lista de compras persistente, recordatorios | en fases (F4/F6) | ver `PLAN_FASES.md` |
-| Panel de teléfono / PWA | en fase (F7) | ver `PLAN_FASES.md` |
+| Vida diaria: lista de compras, notas, recordatorios, temporizadores, «léeme la selección» | real | `cort-bridge/cort_vida.py`; 0,34 s de frase a respuesta y temporizador de 5,00 s disparado a los 5,52 s |
+| Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
+| PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
+| Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
 puede, CORT lo dice con el motivo y con el número que falta — no simula.
@@ -47,7 +49,7 @@ cort-web/
   cort/cort-orbe.js     capa de partículas del orbe (medida, no decorada)
   cort/cort-ui.js       idioma español, avisos honestos, testigo de voz y de PC
   cort/cort-style.css   recorte HUD, paneles y testigos
-scripts/                pruebas por WebSocket (prueba_voz.py, prueba_acciones.py)
+scripts/                pruebas por WebSocket (prueba_voz.py, prueba_acciones.py, prueba_vida.py)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```
@@ -164,3 +166,9 @@ del repo; aparece en el menú de XFCE como «CORT».
 ```
 
 `prueba_acciones.py` lanza y cierra VLC: es la prueba de que la mano funciona de verdad.
+
+```bash
+# F4 en arena: el puente de prueba usa CORT_DATOS=/tmp y no toca tu lista real
+CORT_DATOS=/tmp/cort-arena/datos .venv/bin/python -u cort-bridge/cort_server.py &
+.venv/bin/python scripts/prueba_vida.py      # lista, notas, pendientes y selección
+```

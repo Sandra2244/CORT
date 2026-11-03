@@ -507,6 +507,12 @@
     ["-- Détection automatique --", "-- Detección automática --", "-- Automatic detection --"],
     ["Requis pour récupérer et visionner les webcams publiques en direct partout dans le monde sur le Globe 3D.", "Requerido para obtener y ver webcams públicas en directo desde cualquier parte del mundo en el Globo 3D.", "Required to fetch and watch public live webcams worldwide on the 3D Globe."],
 
+    // 📝 Notas y lista de la compra (paneles que re-renderiza el puente en F4)
+    ["MODIFIÉ :", "MODIFICADO:", "MODIFIED:"],
+    ["TAILLE :", "TAMAÑO:", "SIZE:"],
+    ["Aucune note", "Ninguna nota", "No notes"],
+    ["Date inconnue", "Fecha desconocida", "Unknown date"],
+
     // 🎤 Micrófono y sensibilidad
     ["Pour résoudre ce problème :", "Para resolver este problema:", "To fix this:"],
     ["Paramètres Windows -> Confidentialité -> Microphone", "Configuración de Windows -> Privacidad -> Micrófono", "Windows Settings -> Privacy -> Microphone"],
@@ -1034,6 +1040,12 @@
     // el bundle en francés dentro de un nodo con más texto, así que el diccionario
     // no las alcanza. Se detectaron abriendo el panel y recorriendo sus nodos de
     // texto (antes no se medían porque el panel sólo existe al abrirlo).
+    // Etiquetas del panel de notas (F4): van en el mismo nodo que la fecha y el
+    // tamaño medidos, así que solo las reglas las alcanzan.
+    [/MODIFIÉ\s*:/g, { es: "MODIFICADO:", en: "MODIFIED:" }],
+    [/TAILLE\s*:/g, { es: "TAMAÑO:", en: "SIZE:" }],
+    [/Aucune note/g, { es: "Ninguna nota", en: "No notes" }],
+    [/Date inconnue/g, { es: "Fecha desconocida", en: "Unknown date" }],
     [/OPTION FACULTATIVE/g, { es: "OPCIÓN OPCIONAL", en: "OPTIONAL" }],
     [/Connexion…|Connexion\.\.\./g, { es: "Conectando…", en: "Connecting…" }],
     [/Enregistrer la surveillance/g, { es: "Guardar la vigilancia", en: "Save monitoring" }],
@@ -1527,6 +1539,7 @@
   // nombre del dispositivo. Y si el puente ya sacó el sonido por sus propios altavoces,
   // el navegador NO lo vuelve a lanzar: se duplicaría y en la Canaima se oiría raro.
   let ultimaVoz = null, ultimoMic = null, reproductorVoz = null, medidorVoz = null;
+  let ultimaVida = null;
 
   function badgeVoz() {
     let b = document.getElementById("cort-voz-badge");
@@ -1538,6 +1551,7 @@
       '<button type="button" id="cvb-motor" class="cvb-btn" title="cambiar motor de voz">ra</button>' +
       '<button type="button" id="cvb-mic" class="cvb-btn" title="micrófono">mic</button>' +
       '<button type="button" id="cvb-pc" class="cvb-btn" title="qué ve CORT en este equipo">pc</button>' +
+      '<button type="button" id="cvb-vida" class="cvb-btn" title="lista, notas y pendientes">🛒</button>' +
       '<span id="cvb-texto" class="cvb-texto"></span>';
     (document.body || document.documentElement).appendChild(b);
     b.querySelector("#cvb-habla").addEventListener("click", () => {
@@ -1551,6 +1565,10 @@
     b.querySelector("#cvb-motor").addEventListener("click", () => {
       const actual = (ultimaVoz && ultimaVoz.motor) || "rapida";
       window.CORT_enviarAlCerebro({ type: "voz_motor", motor: actual === "rapida" ? "natural" : "rapida" });
+    });
+    b.querySelector("#cvb-vida").addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "vida_estado" });
+      flotante("Leyendo la vida diaria: lista de compras, notas y pendientes del disco…");
     });
     b.querySelector("#cvb-mic").addEventListener("click", () => {
       const encendido = ultimoMic && ultimoMic.estado === "escuchando";
@@ -1579,6 +1597,10 @@
       partes.push(v.altavoz_real ? ("altavoz: " + (v.sink || "sí")) : "sin altavoz (auto_null)");
       partes.push(escuchando ? "escuchando" :
                   (mic.estado === "sin micro" ? "sin micrófono" : "mic apagado"));
+      const d = (ultimaVida && ultimaVida.datos) || null;
+      if (d) partes.push(`🛒 ${d.compras} · 📝 ${d.notas} · ⏰ ${d.pendientes}` +
+                         (d.proximo ? ` (${Math.round(d.proximo.faltan_seg / 60)}m)` : ""));
+      else if (ultimaVida) partes.push("vida leída");
     }
     texto.textContent = partes.join(" · ");
     texto.classList.toggle("cvb-alerta", v.ok === false || v.altavoz_real === false);
@@ -1659,6 +1681,20 @@
     }
     const extra = m.nota ? " — " + m.nota : "";
     flotante(`${m.ok ? "hecho" : "no"}: ${m.detalle || m.motivo || ""}${extra}`, m.ok);
+  };
+
+  window.CORT_alVida = (n) => {
+    if (!n) return;
+    if (n.type === "reminder_trigger") {
+      // El pendiente venció en el puente: se ve y se oye, no se queda en el registro.
+      flotante(`⏰ ${n.time} — ${n.text}`, true);
+      ultimaVida = { type: "vida_estado", datos: null };
+      window.CORT_enviarAlCerebro({ type: "vida_estado" });
+      pintarVoz();
+      return;
+    }
+    ultimaVida = n;
+    pintarVoz();
   };
 
   window.CORT_alVoz = (n) => {

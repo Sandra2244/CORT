@@ -33,3 +33,7 @@ venv/
 *.onnx
 *.onnx.json
 modelos/vosk*/
+
+# respaldos locales de esta sesión (copias .f1bak y .respaldo-*): no se comitan
+.respaldo-*/
+*.f1bak

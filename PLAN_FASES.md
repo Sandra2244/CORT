@@ -101,16 +101,46 @@ diciendo en voz alta una respuesta de más de 300 caracteres sin congelar el equ
 
 ---
 
-## F4 — Vida diaria (17 comandos del censo)
+## F4 — Vida diaria (17 comandos del censo)  ·  **CERRADA el 2026-11-03**
 
-1. Temporizadores y alarmas de verdad en el puente: cuenta atrás al HUD y aviso hablado.
-2. Notas y recordatorios persistentes («anota que…», «muéstrame mis notas»).
-3. Lista de tareas y de compras persistentes, sustituyendo los 3 artículos de ejemplo
-   que trae la plantilla.
-4. Modo «léeme la selección»: leer en voz alta el texto seleccionado (su estudio del
-   suelo pelviano en el libro, sin capturar pantalla).
-5. Escenas «modo estudio» y «modo madrugada»: silencian avisos, cambian color del orbe
-   y ajustan el volumen.
+`cort-bridge/cort_vida.py`, sólo con la biblioteca estándar. Todo se escribe en
+`~/.local/share/cort/vida/*.json` **antes** de responder, y se reléye: prometer
+«guardado» sin volver a abrir el archivo es la forma fina de mentir.
+
+Medido con un puente en arena (`CORT_DATOS=/tmp`, para no llenar la lista real de
+pruebas) y con la interfaz en el navegador integrado:
+
+| prueba | resultado |
+|---|---|
+| «cómprame leche, tres huevos y pan» | 3 artículos (se divide por `,`, ` y `, `+`) |
+| «cómprame leche» otra vez | «0 nuevo(s), 1 ya estaban» — no duplica |
+| «quítame de la lista los huevos» | saca `tres huevos` buscando la palabra suelta |
+| «ya compre el pan» | lo tacha |
+| «anota que el sónar muestra tres capas» | nota «El sónar muestra tres capas» (27 caracteres) |
+| «mis notas» / panel de notas | `MODIFICADO: 03/11/2026 00:09 · TAMAÑO: 29 B` con datos del puente |
+| «recuerdame llamar a la tía en media hora» | pendiente a 1 800 s, **con sus tildes** |
+| «temporizador de 5 segundos» | puesto a los 0,00 s, `reminder_trigger` a los **5,52 s** (vela de 1 s) |
+| frase → `jarvis_text` | **0,34 s** de ida y vuelta con el puente y el navegador abiertos |
+| «léeme la selección» | leídos 44 caracteres del portapapeles primario (xclip) y dichos en voz alta |
+| apagar y levantar el puente | la lista, las notas y los pendientes **siguen ahí** |
+
+Lo que **no** se hizo de la lista y por qué: las escenas «modo estudio» y «modo
+madrugada» (punto 5) son decoración de la fase F6 — se recortaron con su acuerdo;
+el aviso hablado del temporizador depende del motor de voz de F3 y en la Canaima no
+hay altavoz físico, así que se ve en pantalla y se oye sólo si hay HDMI o dongle USB.
+
+Dos defectos que esta fase destapó en el puente, corregidos aquí mismo:
+
+1. La regla de estado del equipo buscaba `ram` como subcadena, y «cóm**pram**e leche»
+   contestaba con el uso de memoria. Las siglas (`cpu`, `ram`, `disco`) se buscan ahora
+   con frontera de palabra.
+2. Todo lo que se guardaba se guardaba sin tildes, porque las reglas trabajan sobre la
+   frase normalizada. Se añade `_rebanada()`: se busca en la versión sin acentos y se
+   recorta del texto original, así que la lista y las notas conservan lo que escribió.
+
+El panel de notas de la plantilla se llama Obsidian; Obsidian **no está instalado**
+en este equipo. Se alimenta con las notas de CORT y el propio mensaje lo dice
+(`"no es Obsidian"`), que es lo que se prometió en F1.
 
 **Salida:** los 17 comandos de esta familia responden con datos que **sobreviven a un
 reinicio** del puente.
@@ -149,7 +179,12 @@ la lista blanca.
 
 ---
 
-## F6 — Mapa propio y CORT OS de escenas
+## F6 — Mapa propio y CORT OS de escenas  ·  **APARCADA (recorte acordado)**
+
+Fue lo primero que se tiró del plan cuando quedó claro que no daba tiempo a todo:
+no aporta nada que no pudiera esperar. Sin mapa no hay nada que fingir, así que el
+panel queda como está y no se disfraza.
+
 
 1. Quitar el `<iframe>` de ArcGIS y montar el mapa con el **Leaflet ya vendorizado**
    (`cort/vendor/leaflet/`): funciona sin internet si se añaden teselas locales.
@@ -166,7 +201,20 @@ vuelos pedidos por voz.
 
 ---
 
-## F7 — Teléfono: app de asistente y puente con la Canaima
+## F7 — Teléfono: app de asistente y puente con la Canaima  ·  **PWA CERRADA el 2026-11-03, APK pendiente**
+
+Hecho y medido en el navegador integrado: `manifest.webmanifest` parsea (3 iconos,
+`start_url` `/index.html`, `display` standalone), el service worker queda `activated`
+en `http://127.0.0.1:8766/` y la caché `cort-v1` guarda las **9 piezas del programa**
+— nunca `/audio/` ni medidas, para que un número viejo no se disfrace de actual. El
+puente arranca con `CORT_BIND` (por defecto `127.0.0.1`) y `CORT_TLS=cert,clave`: sin
+HTTPS el teléfono no instala la app ni presta el micrófono, y eso se imprime al arrancar.
+Medida también la traducción de las etiquetas del panel de notas (`MODIFICADO:` /
+`TAMAÑO:`), que el diccionario no alcanzaba porque van dentro del nodo con la fecha.
+
+Pendiente, y se dice sin adornos: el **APK** (pasos 1-5 de abajo) no está compilado.
+Hace falta el linaje elegido y la Action con `CORT_APK_KEYSTORE_B64`; no se instala
+ningún `.apk` descargado de un acortador.
 
 1. Elegir linaje y montar su proyecto fuente: `2.11.0-nucleo` (47,5 MB, con Vosk
    español sin internet y su propia `assets/ui`) o `bolsillo` (1 MB, fuente en
@@ -185,7 +233,16 @@ el puente de la Canaima por Wi-Fi.
 
 ---
 
-## F8 — Presentación y publicación
+## F8 — Presentación y publicación  ·  **README y LICENSE cerradas; empujar, no**
+
+El README está reescrito en español con arquitectura, instructivo de instalación paso a
+paso, variables de entorno y la tabla de lo que funciona **con su número medido**.
+`LICENSE` es MIT (c) 2026 Sandra Sofía Lopez y la nota de referencia visual a TechEnClair
+queda en el propio README y en `PROCEDENCIA.md`.
+
+Lo que falta es suyo, no mío: **empujar a `Sandra2244/CORT`, la etiqueta y el ZIP** no se
+hacen sin su autorización explícita. Sigue sin publicarse `.orig`, el espejo descargado,
+los estados personales ni las capturas de terceros.
 
 1. Rótulos definitivos: cero «JARVIS» a la vista y cero francés (hoy quedan 3 cadenas
    visibles, medido con el propio detector de la página).
