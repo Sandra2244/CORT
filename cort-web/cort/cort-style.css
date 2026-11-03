@@ -444,3 +444,33 @@
 #status-text       { left: 12px !important; top: 106px !important; bottom: auto !important; right: auto !important; transform: none !important; }
 #model-status-text { left: 12px !important; top: 122px !important; bottom: auto !important; right: auto !important; transform: none !important; }
 #assistant-label   { left: 12px !important; top: 138px !important; bottom: auto !important; right: auto !important; transform: none !important; text-align: left !important; }
+
+/* ---------- D1: CORT mira a Cortana (referencia de estilo, no activo) ----------
+   Paleta de hielo sobre azul, rejilla de scanlines fija (sin animar: en 2 núcleos
+   una capa animada cuesta FPS) y los tres botones del pie reordenados por uso:
+   micrófono primero, escucha continua después, silencio al final. */
+#cort-bandeja-tirador {
+  position: fixed; left: 0; bottom: 74px; z-index: 9999;
+  width: 34px; height: 66px; padding: 0; cursor: pointer;
+  border: 1px solid rgba(90,200,255,.5); border-left: none;
+  border-radius: 0 12px 12px 0;
+  background: linear-gradient(180deg, rgba(20,70,110,.92), rgba(8,24,44,.92));
+  color: #bfeeff; font: 700 22px/1 "Courier New", monospace;
+  box-shadow: 0 0 14px rgba(60,180,255,.22), inset 0 0 10px rgba(120,220,255,.14);
+}
+#cort-bandeja-tirador:hover { background: linear-gradient(180deg, rgba(34,104,150,.95), rgba(10,32,58,.95)); }
+#cort-bandeja.cort-abierta { transform: translateX(0); opacity: 1; }
+
+#mic-btn, #mute-button, #always-listen-btn { top: auto !important; bottom: 85px !important; right: auto !important; }
+/* La plantilla ya los centra con translateX(-50%): se mueve el centro, no la orilla. */
+#mic-btn            { left: calc(50% - 88px) !important; }
+#always-listen-btn  { left: 50% !important; }
+#mute-button        { left: calc(50% + 88px) !important; }
+
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 9996; pointer-events: none;
+  background: repeating-linear-gradient(180deg,
+    rgba(150,225,255,.05) 0px, rgba(150,225,255,.05) 1px,
+    rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);
+  mix-blend-mode: screen;
+}

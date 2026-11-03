@@ -235,10 +235,17 @@
     ["CORT est un projet personnel ambitieux, conçu pour repousser les limites de l'assistance virtuelle sur ordinateur.", "CORT es un proyecto personal ambicioso, diseñado para empujar los límites de la asistencia virtual en el ordenador.", "CORT is an ambitious personal project built to push the limits of desktop virtual assistance."],
     ["Ce projet est 100% open-source et entièrement gratuit.", "Este proyecto es 100% de código abierto y totalmente gratuito.", "This project is 100% open-source and completely free."],
     ["⚠ AVERTISSEMENT LÉGAL", "⚠ AVISO LEGAL", "⚠ LEGAL NOTICE"],
-    ["Ce logiciel ne peut en aucun cas être vendu ou monétisé de quelque manière que ce soit.", "Este software no puede bajo ningún concepto venderse ni monetizarse de ninguna manera.", "This software may under no circumstances be sold or monetized in any way."],
-    ["Pour plus d'informations, des tutoriels ou pour soutenir le projet, visitez le site officiel.", "Para más información, tutoriales o para apoyar el proyecto, visita el sitio oficial.", "For more information, tutorials or to support the project, visit the official site."],
-    ["SITE OFFICIEL", "SITIO OFICIAL", "OFFICIAL SITE"],
+    ["Ce logiciel ne peut en aucun cas être vendu ou monétisé de quelque manière que ce soit.",
+     "No se puede vender ni monetizar sin atribuir la autoría a Askher Vargas y Sandra Lopez ni sin escribir a los correos de soporte.",
+     "It may not be sold or monetized without crediting Askher Vargas and Sandra Lopez, or without writing to the support emails first."],
+    ["Pour plus d'informations, des tutoriels ou pour soutenir le projet, visitez le site officiel.",
+     "Para más información, tutoriales o para apoyar el proyecto, escribe a los correos de soporte o visita el repositorio.",
+     "For more information, tutorials or to support the project, write to the support emails or visit the repository."],
+    ["SITE OFFICIEL", "SOPORTE Y PERMISOS", "SUPPORT AND PERMISSIONS"],
     ["J'AI COMPRIS", "ENTENDIDO", "GOT IT"],
+    ["Soporte y permisos: Sandrasofialopezgomez3@gmail.com · Carlosa3325@gmail.com",
+     "Soporte y permisos: Sandrasofialopezgomez3@gmail.com · Carlosa3325@gmail.com",
+     "Support and permissions: Sandrasofialopezgomez3@gmail.com · Carlosa3325@gmail.com"],
 
     // Teclado en pantalla
     ["ENTREZ VOTRE COMMANDE ICI...", "ESCRIBE TU COMANDO AQUÍ…", "ENTER YOUR COMMAND HERE..."],
@@ -290,7 +297,8 @@
     // Ayuda: comandos generales
     ["💬 COMMANDES GÉNÉRALES & IDENTITÉ", "💬 COMANDOS GENERALES E IDENTIDAD", "💬 GENERAL COMMANDS & IDENTITY"],
     ["Qui t'a créé ?", "¿Quién te creó?", "Who created you?"],
-    ["Présente ton créateur TechEnClair", "Presenta a tu creador TechEnClair", "Introduce your creator TechEnClair"],
+    ["CORT es de Askher Vargas y Sandra Lopez", "CORT es de Askher Vargas y Sandra Lopez",
+     "CORT belongs to Askher Vargas and Sandra Lopez"],
     ["Blague aléatoire", "Chiste aleatorio", "Random joke"],
     ["Calcul mathématique", "Cálculo matemático", "Math calculation"],
     ["Combien de jours avant Noël ?", "¿Cuántos días faltan para Navidad?", "How many days until Christmas?"],
@@ -1697,33 +1705,73 @@
     pintarVoz();
   };
 
-  // ---- 5c. bandeja de petición escrita (fase F9) ----------------------------
+  // ---- 5c. bandeja de petición escrita (F9) con tirador lateral (D1) ---------
   // La plantilla sólo traía órdenes de una lista fija y el micrófono. Si el cerebro
   // entiende frases largas tiene que haber un sitio donde escribirlas: además sirve de
   // destino al dictado, porque CORT_alVoz busca #command-input y ese es este campo.
+  // El cajón se guarda medio cerrado detrás de una flecha en el canto izquierdo: en el
+  // teléfono no tapa el orbe hasta que lo pides, y en el PC basta pasar el cursor.
   function bandeja() {
     let b = document.getElementById("cort-bandeja");
     if (b) return b;
+    const abierto = localStorage.getItem("cort_bandeja") !== "cerrada";
     b = document.createElement("form");
     b.id = "cort-bandeja";
-    b.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;z-index:9997;display:flex;gap:8px;" +
-      "padding:8px;border-radius:14px;background:rgba(10,14,24,.82);border:1px solid rgba(255,170,0,.35);" +
-      "box-shadow:0 6px 22px rgba(0,0,0,.4)";
+    b.className = abierto ? "cort-abierta" : "";
+    b.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:9997;display:flex;gap:8px;" +
+      "width:min(520px,calc(100vw - 78px));padding:8px;border-radius:14px;" +
+      "background:rgba(8,16,28,.86);border:1px solid rgba(90,200,255,.42);" +
+      "box-shadow:0 6px 24px rgba(0,0,0,.45),0 0 18px rgba(60,180,255,.16);" +
+      "transition:transform .22s ease,opacity .22s ease";
     const campo = document.createElement("input");
     campo.id = "command-input";
     campo.type = "text";
     campo.autocomplete = "off";
     campo.placeholder = "pide lo que sea: «mueve la carpeta proyectos a documentos»";
-    campo.style.cssText = "flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid rgba(120,160,220,.35);" +
-      "background:rgba(6,10,18,.9);color:#e9edf5;font:14px/1.4 system-ui";
+    campo.style.cssText = "flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid rgba(120,200,240,.35);" +
+      "background:rgba(6,12,22,.9);color:#e9f4ff;font:14px/1.4 system-ui";
     const boton = document.createElement("button");
     boton.type = "submit";
     boton.id = "cort-bandeja-pedir";
     boton.textContent = "pedir";
-    boton.style.cssText = "padding:8px 14px;border-radius:10px;cursor:pointer;border:1px solid rgba(255,170,0,.6);" +
-      "background:rgba(255,170,0,.16);color:#ffd68a;font:14px/1.2 system-ui";
+    boton.style.cssText = "padding:8px 14px;border-radius:10px;cursor:pointer;border:1px solid rgba(90,210,255,.65);" +
+      "background:rgba(40,150,220,.22);color:#bfeeff;font:14px/1.2 system-ui";
     b.append(campo, boton);
-    (document.body || document.documentElement).appendChild(b);
+
+    const tirador = document.createElement("button");
+    tirador.id = "cort-bandeja-tirador";
+    tirador.type = "button";
+    tirador.textContent = abierto ? "‹" : "›";
+    tirador.title = "bandeja de petición";
+    tirador.setAttribute("aria-label", "abrir o cerrar la bandeja de petición");
+    (document.body || document.documentElement).append(b, tirador);
+
+    const abre = () => {
+      b.classList.add("cort-abierta");
+      b.style.transform = "translateX(0)";
+      b.style.opacity = "1";
+      b.style.pointerEvents = "auto";
+      tirador.textContent = "‹";
+      localStorage.setItem("cort_bandeja", "abierta");
+    };
+    const cierra = () => {
+      b.classList.remove("cort-abierta");
+      b.style.transform = "translateX(calc(-100% - 26px))";
+      b.style.opacity = "0";
+      b.style.pointerEvents = "none";
+      tirador.textContent = "›";
+      localStorage.setItem("cort_bandeja", "cerrada");
+    };
+    if (!abierto) cierra();
+    tirador.addEventListener("click", () => {
+      (b.style.pointerEvents === "none" ? abre : cierra)();
+      if (b.style.pointerEvents !== "none") campo.focus();
+    });
+    // En PC alcanza con acercar el cursor; en el teléfono el toque del tirador hace lo mismo.
+    tirador.addEventListener("mouseenter", abre);
+    b.addEventListener("mouseenter", abre);
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cierra(); });
+
     b.addEventListener("submit", (ev) => {
       ev.preventDefault();
       const texto = campo.value.trim();
@@ -1748,8 +1796,8 @@
       // bottom:152 y no 78: medido, a 78 la tarjeta tapaba los botones de micrófono,
       // silencio y escucha continua (y378-436), que sí reciben clic.
       c.style.cssText = "position:fixed;left:12px;bottom:152px;z-index:9998;max-width:min(430px,88vw);" +
-        "padding:10px 12px;border-radius:12px;font:12px/1.45 system-ui;color:#e9edf5;" +
-        "background:rgba(10,14,24,.86);border:1px solid rgba(255,170,0,.45);box-shadow:0 6px 22px rgba(0,0,0,.45)";
+        "padding:10px 12px;border-radius:12px;font:12px/1.45 system-ui;color:#e9f4ff;" +
+        "background:rgba(8,16,28,.88);border:1px solid rgba(90,200,255,.45);box-shadow:0 6px 22px rgba(0,0,0,.45)";
       (document.body || document.documentElement).appendChild(c);
     }
     const args = Object.entries((n.plan && n.plan.argumentos) || {})
@@ -1775,7 +1823,7 @@
       boton.id = "cort-plan-confirmar";
       boton.textContent = "Confirmar";
       boton.style.cssText = "margin-top:8px;padding:5px 12px;border-radius:9px;cursor:pointer;" +
-        "border:1px solid rgba(255,170,0,.6);background:rgba(255,170,0,.14);color:#ffd68a";
+        "border:1px solid rgba(90,210,255,.65);background:rgba(40,150,220,.22);color:#bfeeff";
       boton.addEventListener("click", () => {
         boton.disabled = true;
         window.CORT_enviarAlCerebro({ type: "user_input", text: "confirma" });

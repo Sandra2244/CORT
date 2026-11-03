@@ -2,6 +2,11 @@
 
 **Leé esto antes de publicar, modificar o borrar cualquier cosa de esta carpeta.**
 
+**Autoría:** CORT es de Askher Vargas y Sandra Lopez; soporte y permisos en
+`Sandrasofialopezgomez3@gmail.com` y `Carlosa3325@gmail.com` (ver `../LICENSE` y
+`../AVISO_LEGAL.md`). Lo que sigue describe de dónde salió la plantilla, no quién
+dueño del proyecto.
+
 ---
 
 ## 1. Qué es esta carpeta

@@ -5,10 +5,16 @@ abre también en el teléfono. Nada de CORT sale del equipo: el puente es un pro
 Python en `127.0.0.1`, la interfaz es una página servida por ese mismo proceso y las
 respuestas se deciden con reglas locales y con los sensores y mandos reales del equipo.
 
-Licencia MIT © 2026 Sandra Sofia Lopez (ver `LICENSE`).
-Referencia visual: la maqueta de JARVIS de TechEnClair, usada como andamio de
-plantilla; este proyecto la rediseña y conserva su estructura de paneles. Ver
-`cort-web/PROCEDENCIA.md`.
+**Autoría y derechos: Askher Vargas y Sandra Lopez (2026).** Soporte y permisos:
+`Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com`.
+
+Licencia de atribución con no monetización (ver `LICENSE` y `AVISO_LEGAL.md`): se
+puede usar, estudiar y modificar libremente, pero **no se puede vender ni monetizar
+sin dar la autoría y sin escribir antes a esos correos**.
+
+Referencias de estilo, no dueñas de CORT: la maqueta de JARVIS de TechEnClair sirvió
+de andamio de plantilla y se rediseñó; la estética holográfica de Cortana (Halo) es
+sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 
 ---
 
