@@ -1889,6 +1889,7 @@
   // ver el peso MEDIDO, la RAM estimada y si cabe ahora. Nada de aquí carga un
   // modelo por su cuenta: «probar» pregunta la puerta de RAM antes de disparar.
   let ultimoCerebro = null;
+  let ultimoPerfil = null;   // S1: el escaneo del equipo (nivel, motivo, plan)
   let ultimaVersion = null;    // U1: lo que dijo el canal del repo
   let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
   const progresoPull = {};
@@ -1926,6 +1927,7 @@
       if (!abierto) {
         window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
         window.CORT_enviarAlCerebro({ type: "buscar_actualizacion" });
+        window.CORT_enviarAlCerebro({ type: "perfil_equipo" });
         pintarCerebro();
       }
     });
@@ -1952,6 +1954,96 @@
     return v;
   }
 
+  function nodoPerfil() {
+    const p = ultimoPerfil;
+    const caja = document.createElement("div");
+    caja.id = "cort-perfil";
+    caja.style.cssText = "margin:0 0 8px;padding:6px 8px;border-radius:9px;" +
+      "border:1px solid rgba(120,220,190,.35);background:rgba(14,48,44,.5)";
+    const n = p.nivel || {};
+    const cab = document.createElement("div");
+    cab.style.cssText = "font-weight:700;color:#c9f2e0";
+    cab.textContent = p.origen === "real"
+      ? `equipo · nivel ${n.nivel ?? "?"} — ${n.nombre || "?"}`
+      : "equipo · escaneo no disponible";
+    caja.appendChild(cab);
+    if (p.origen !== "real") {
+      const m = document.createElement("div");
+      m.style.cssText = "opacity:.75";
+      m.textContent = p.motivo || "el puente no devolvió el perfil";
+      caja.appendChild(m);
+      return caja;
+    }
+    const c = p.cpu || {}, m = p.memoria || {}, g = p.gpu || {}, t = p.temperatura || {};
+    const partes = [
+      `${c.modelo || "?"} · ${c.nucleos || 0} núcleos · ${c.mhz || 0} MHz`,
+      `AVX ${c.avx ? "sí" : "no"} / AVX2 ${c.avx2 ? "sí" : "no"} · SSE4.2 ${c.sse42 ? "sí" : "no"}`,
+      `RAM ${m.libre_mb}/${m.total_mb} MB libre`,
+      `disco ${Math.round((p.disco || {}).libre_mb / 1024)} GB libres`,
+      (p.camara || []).length ? `cámara ${(p.camara || []).map(x => x.nodo).join(", ")}` : "sin cámara",
+      `GPU ${g.cuda ? "CUDA" : (g.etiqueta || g.descripcion || "no disponible")}`,
+      `${t.celsius ?? "?"} °C (${t.sensor || "sin sensor"})`,
+      `carga ${c.carga_1min ?? "?"}`,
+    ];
+    const datos = document.createElement("div");
+    datos.style.cssText = "opacity:.8;margin:3px 0";
+    datos.textContent = partes.join(" · ");
+    caja.appendChild(datos);
+    const motivo = document.createElement("div");
+    motivo.textContent = n.motivo || "";
+    caja.appendChild(motivo);
+    if ((n.se_apaga_texto || []).length) {
+      const apa = document.createElement("div");
+      apa.style.cssText = "margin-top:3px;color:#ffd9a0";
+      apa.textContent = `se apaga para que quepa: ${n.se_apaga_texto.join(", ")}`;
+      caja.appendChild(apa);
+    }
+    if ((p.ajustes_aplicados || []).length) {
+      const he = document.createElement("div");
+      he.style.cssText = "color:#9fe6b2";
+      he.textContent = `el puente ya cambió: ${p.ajustes_aplicados.join(", ")}`;
+      caja.appendChild(he);
+    }
+    const pie = document.createElement("div");
+    pie.style.cssText = "display:flex;gap:6px;align-items:center;margin-top:5px";
+    const medido = document.createElement("span");
+    medido.style.cssText = "opacity:.55";
+    medido.textContent = `medido ${p.medido_en || ""}`;
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.textContent = "reescanear";
+    boton.style.cssText = BOTON_CEREBRO;
+    boton.addEventListener("click", () =>
+      window.CORT_enviarAlCerebro({ type: "perfil_equipo", fuerzo: true }));
+    pie.append(boton, medido);
+    caja.appendChild(pie);
+    return caja;
+  }
+
+  function aplicaAjustesPerfil() {
+    const p = (ultimoPerfil && ultimoPerfil.plan) || null;
+    if (!p) return;
+    if (window.CORT_orbe && CORT_orbe.tope) CORT_orbe.tope(p.orbe_fps >= 60 ? 0 : p.orbe_fps);
+    // Las scanlines son rejillas animadas sobre cada panel: en 2 núcleos se pintan
+    // igual que el orbe, así que el plan las apaga de verdad y no sólo en el cartel.
+    const display = p.scanlines ? "" : "none";
+    document.querySelectorAll(".av-panel-scanlines,.dropdown-scanlines,.tp-scanlines," +
+      ".wp-scanlines,.print3d-panel-scanlines,.uninstaller-panel-scanlines")
+      .forEach((e) => { e.style.display = display; });
+  }
+
+  window.CORT_alPerfil = (n) => {
+    if (!n || n.type !== "perfil_reply") return;
+    ultimoPerfil = n;
+    aplicaAjustesPerfil();
+    chipCerebro();
+    pintarCerebro();
+    if (n.cambio) {
+      flotante(`el equipo cambió de nivel: ${n.nivel ? n.nivel.nombre : "?"} — ` +
+               `${n.memoria ? n.memoria.libre_mb : "?"} MB libres`, true);
+    }
+  };
+
   function pintarCerebro() {
     const panel = document.getElementById("cort-cerebro");
     if (!panel) return;
@@ -1962,12 +2054,16 @@
     if (!s) {
       titulo.textContent = "cerebro — sin datos del puente todavía";
       panel.appendChild(titulo);
+      if (ultimoPerfil) panel.appendChild(nodoPerfil());
       return;
     }
     const libre = s.ram_disponible_mb, nucleos = s.nucleos;
     titulo.textContent = `cerebro · Ollama ${s.online ? "vivo" : "apagado"} · ` +
       `RAM libre ${libre} MB · ${nucleos} núcleos`;
     panel.appendChild(titulo);
+    // El escaneo va primero: es lo que decide si tiene sentido bajar un modelo, y en
+    // una pantalla de 521 px lo de abajo se lee haciendo scroll.
+    if (ultimoPerfil) panel.appendChild(nodoPerfil());
     const nota = document.createElement("div");
     nota.style.cssText = "opacity:.72;margin:2px 0 8px";
     nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +

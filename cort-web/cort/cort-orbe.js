@@ -184,10 +184,16 @@
   let ultimo = 0;
   let congelado = null;    // {modo, k} — pausa de laboratorio para fotografiar una fase
   const FPS_REPOSO = 20;   // en reposo la capa se limita sola; con efecto, va a tope
+  let FPS_TOPE = 0;        // S1: tope que impone el escaneo del equipo (0 = no impone ninguno)
 
   function fotograma(tiempo) {
     if (!corriendo) return;
-    if (!congelado && !anim && progresoDescarga == null && tiempo - ultimo < 1000 / FPS_REPOSO) {
+    // Con tope del escaneo, el tope manda incluso durante el efecto: es la diferencia
+    // entre «el orbe se recorta cuando sufre» y «el orbe nunca promete 60 fps a un Celeron».
+    // Sin tope se conserva lo de antes: ir a tope con efecto, 20 fps en reposo.
+    const con_efecto = congelado || anim || progresoDescarga != null;
+    const espera = FPS_TOPE ? 1000 / FPS_TOPE : (con_efecto ? 0 : 1000 / FPS_REPOSO);
+    if (!congelado && tiempo - ultimo < espera) {
       requestAnimationFrame(fotograma);
       return;
     }
@@ -352,6 +358,8 @@
   window.CORT_orbe = {
     estado: (e) => { if (ESTADOS[e]) estado = e; return estado; },
     volumen: (v) => { volumen = Math.max(0, Math.min(1, v || 0)); return volumen; },
+    // S1: el escaneo del equipo pone el techo de fotogramas. 0 = sin techo.
+    tope: (n) => { FPS_TOPE = Math.max(0, Math.min(60, parseInt(n, 10) || 0)); return FPS_TOPE; },
     // Duraciones elegidas para que la vara se cumpla en RELOJ DE PARED, no en la
     // línea de tiempo del gesto: un gesto sólo puede terminar en un fotograma, así
     // que la pared tarda `dur` + un fotograma. Con la página a 24-30 FPS (60 ms por
@@ -382,6 +390,7 @@
     fps: () => cron.fps,
     info: () => ({
       fps: cron.fps,
+      tope: FPS_TOPE,
       msPorFotograma: cron.ms,
       msPromedio: cron.msProm,
       particulas: particulas.length,

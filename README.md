@@ -37,6 +37,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Sonda automática del cerebro | real, disparada por la RAM | `auto_sonda()` mide el modelo en cuanto hay RAM libre y escribe `mediciones/medicion-cerebro.json`; 11/11 en `prueba_sonda.py` con Ollama falso |
 | Palabra de despertar («cort») | real la lógica, pendiente de micro | `filtro_wake()` 11/11 en `prueba_wake.py`; ventana de 8 s y variantes acústicas cubiertas |
 | Canal de actualización desde el repo | real | `cort-bridge/cort_actualiza.py`; 7/7 en `prueba_actualiza.py`. Avisa y da el comando, **no se autoinstala** |
+| Escáner de capacidades (el equipo se adapta solo) | real medido | `cort-bridge/cort_perfil.py`; 14/14 en `prueba_perfil.py`. En esta laptop: nivel 0, `AVX no`, 397 ms de ida y vuelta por WebSocket y la interfaz bajando a 30 fps con las scanlines apagadas |
 | Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
 | Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
@@ -57,6 +58,8 @@ cort-bridge/            proceso único, dos puertos
   cort_archivos.py      mover/copiar/renombrar con verificación después
   cort_vida.py          compras, notas, pendientes, temporizadores, selección leída
   cort_actualiza.py     lee las etiquetas del repo y avisa; no descarga ni cambia nada
+  cort_perfil.py        escanea el equipo (CPU/AVX, RAM, GPU, cámara, temperatura) y decide
+                        el nivel de cerebro y qué se apaga para que lo demás quepa
   cort_state.json       preferencias personales (ignoradas por git)
 cort-web/
   index.html            la interfaz (rediseñada sobre la plantilla)
@@ -66,9 +69,9 @@ cort-web/
                         panel del cerebro y aviso de versión
   cort/cort-style.css   recorte HUD, paneles y testigos
 scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_sonda ·
-                        prueba_wake · prueba_actualiza · prueba_vida · prueba_voz ·
-                        prueba_acciones · arranca_con_sonda.sh
-PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…U1)
+                        prueba_wake · prueba_actualiza · prueba_perfil · prueba_vida ·
+                        prueba_voz · prueba_acciones · arranca_con_sonda.sh
+PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S1)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```
@@ -188,6 +191,7 @@ del repo; aparece en el menú de XFCE como «CORT».
 | `CORT_AUTOSONDA` | `1` mide el cerebro solo, cuando la RAM lo permita | `0` |
 | `CORT_AUTOSONDA_UMBRAL` | MB libres a partir de los cuales se atreve a cargar | `900` |
 | `CORT_ACTUALIZA` | `1` revisa las etiquetas del repo cada 6 h | `1` |
+| `CORT_PERFIL_CICLO` | segundos entre re-escaneos del equipo; sólo avisa si el nivel cambia | `900` |
 | `CORT_REPO` / `CORT_VERSION` | con qué repo y qué versión comparar (si no, se derivan de `git remote` y `git describe`) | derivados |
 | `CORT_BIND` / `CORT_TLS` | abrir el puente a la red local, con certificado `cert,clave` | `127.0.0.1`, sin TLS |
 | `CORT_RAM_MIN` | MB libres mínimos para cargar un modelo | según modelo |
@@ -220,6 +224,7 @@ pruebas mueve una carpeta real ni escribe en tu lista de compras.
 .venv/bin/python scripts/prueba_nucleo.py        # frase → plan → reja → ejecución → verificación
 .venv/bin/python scripts/prueba_wake.py          # palabra de despertar y su ventana de 8 s
 .venv/bin/python scripts/prueba_actualiza.py     # canal de versión contra un GitHub falso
+.venv/bin/python scripts/prueba_perfil.py        # el escáner: 6 equipos fingidos + la medida real
 .venv/bin/python scripts/prueba_sonda.py         # la auto-sonda con un Ollama falso en arena
 .venv/bin/python scripts/prueba_voz.py           # órdenes de voz por WebSocket y descarga del WAV
 .venv/bin/python scripts/prueba_acciones.py      # pc_estado, detect_apps, apt, abrir/cerrar ventana

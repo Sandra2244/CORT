@@ -100,6 +100,13 @@ try:
 except Exception:
     cort_actualiza = None
 
+# S1: el escáner de capacidades. Si no carga, la interfaz no se adapta sola y el
+# puente se comporta como antes: con lo que había, sin fingir un nivel medido.
+try:
+    import cort_perfil
+except Exception:
+    cort_perfil = None
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -295,6 +302,56 @@ def inventario_disco(fuerzo=False):
     _inventario_cache["t"] = ahora
     _inventario_cache["datos"] = out
     return out
+
+
+_perfil_cache = {"t": 0.0, "datos": None}
+
+
+def perfil_equipo(fuerzo=False):
+    """S1: medir el equipo y traducirlo en nivel de cerebro + plan de degradación.
+
+    Se cachea 15 segundos: lo piden la conexión nueva, el botón de la pantalla y el
+    latido, y releer `/proc` dentro de la misma orden no aporta un dato más nuevo.
+    El `llama_vivo` se pregunta con una HTTP de 3 s y el inventario ya trae su propia
+    caché, así que el coste de un refuerzo real es de decenas de milisegundos.
+    """
+    if cort_perfil is None:
+        return {"origen": "no disponible",
+                "motivo": "el módulo del perfil (cort_perfil) no cargó en este puente"}
+    ahora = time.monotonic()
+    if not fuerzo and _perfil_cache["datos"] and ahora - _perfil_cache["t"] < 15:
+        return _perfil_cache["datos"]
+    vivo, _modelos = ollama_vivo()
+    audio = {"nota": "el módulo de voz no cargó: sin sondeo de audio"}
+    if cort_voz is not None:
+        try:
+            d = cort_voz.disponibilidad()["dispositivos"]
+            audio = {"suena": d.get("suena"), "escucha": d.get("escucha"),
+                     "micros": [m["nombre"] for m in d.get("microfonos_reales", [])]}
+        except Exception as e:
+            audio = {"nota": f"no se pudo sondear el audio: {type(e).__name__}"}
+    r = cort_perfil.informe(ollama_vivo=vivo, modelos=inventario_disco(), audio=audio)
+    _perfil_cache["t"] = ahora
+    _perfil_cache["datos"] = r
+    return r
+
+
+def aplica_plan(perfil):
+    """S1: pasar el plan del escaneo a decisiones del puente. Hoy decide el motor de voz.
+
+    Piper conlleva ~2,5 ms de CPU por milisegundo de audio y un modelo de varios
+    cientos de MB; si el nivel measured dice que no hay margen, se baja a espeak-ng
+    antes de la primera frase, no a mitad de una respuesta.
+    """
+    p = perfil.get("plan") or {}
+    hechas = []
+    if not p or cort_voz is None:
+        return hechas
+    if not p.get("voz_natural", True) and cort_voz.MOTOR != "rapida":
+        r = cort_voz.cambiar_motor("rapida")
+        if r.get("ok"):
+            hechas.append("voz natural -> espeak-ng (el equipo no da para Piper)")
+    return hechas
 
 
 def catalogo():
@@ -1551,6 +1608,13 @@ async def muestrear_al_conectar(ws):
         # primer segundo en vez de dejar un icono de altavoz esperando un sonido que no llega.
         estado = await asyncio.get_event_loop().run_in_executor(None, estado_voz)
         enviar(ws, estado)
+    if cort_perfil is not None:
+        # S1: el escaneo llega solo, sin que nadie lo pida. Es lo que hace que la
+        # interfaz se adapte en el primer fotograma en vez de prometer 60 fps en una
+        # máquina que no los da.
+        r = await asyncio.get_event_loop().run_in_executor(None, perfil_equipo)
+        aplicar = aplica_plan(r) if r.get("origen") == "real" else []
+        enviar(ws, {"type": "perfil_reply", **r, "ajustes_aplicados": aplicar, "auto": True})
 
 
 MUESTREO = None
@@ -1619,6 +1683,23 @@ async def ws_handler(request):
                     await asyncio.sleep(3)
                 estado = await asyncio.get_event_loop().run_in_executor(None, estado_ollama)
                 enviar(ws, {"type": "ollama_status_reply", "status": estado})
+
+            elif t == "perfil_equipo":
+                # S1: la pantalla (o la usuaria) pide el escaneo. Se responde el informe
+                # completo, con el nivel, el motivo y el plan que el puente ya obedeció.
+                if cort_perfil is None:
+                    enviar(ws, {"type": "perfil_reply", "origen": "no disponible",
+                                "motivo": "el módulo del perfil no cargó"})
+                    continue
+                r = await asyncio.get_event_loop().run_in_executor(
+                    None, perfil_equipo, bool(d.get("fuerzo")))
+                if r.get("origen") == "no disponible":
+                    enviar(ws, {"type": "perfil_reply", **r})
+                    continue
+                enviar(ws, {"type": "perfil_reply", **r,
+                            "ajustes_aplicados": aplica_plan(r)})
+                if d.get("hable", "1") == "1":
+                    await decir(ws, cort_perfil.resumen(r))
 
             elif t == "buscar_actualizacion":
                 if cort_actualiza is None:
@@ -2344,6 +2425,16 @@ async def auto_sonda():
         await asyncio.sleep(int(os.environ.get("CORT_AUTOSONDA_CICLO", "600")))
         if archivo.exists() and os.environ.get("CORT_AUTOSONDA_REPITA", "0") != "1":
             return
+        if cort_perfil is not None:
+            # S1 antes de gastar un disparo: si el chip no trae AVX, NINGÚN binario de
+            # llama.cpp corre aquí y la prueba no puede más que reventar. Parar con el
+            # motivo medido vale más que insistir cada diez minutos.
+            p = await bucle.run_in_executor(None, perfil_equipo)
+            c = p.get("cpu") or {}
+            if p.get("origen") == "real" and not (c.get("avx") or c.get("avx2")):
+                print("[CORT] auto-sonda parada sin probar: " + p["nivel"]["motivo"],
+                      file=sys.stderr)
+                return
         libre = ram_disponible_mb()
         if 0 <= libre < umbral:
             continue
@@ -2385,11 +2476,53 @@ async def vigila_version():
         await asyncio.sleep(ciclo)
 
 
+async def latido_perfil():
+    """S1: re-escanear y sólo molestar si el nivel cambia.
+
+    La RAM de esta máquina cambia de 150 a 350 MB según lo que esté abierto, así que
+    el nivel de la semana pasada no es el de ahora. Cada ciclo mide; si el escalón es
+    el mismo, no empuja nada (una interfaz con parpadeos cada quince minutos parece
+    averiada) y si cambia, adapta el puente y avisa.
+    """
+    ciclo = int(os.environ.get("CORT_PERFIL_CICLO", "900"))
+    bucle = asyncio.get_running_loop()
+    anterior = None
+    while True:
+        try:
+            r = await bucle.run_in_executor(None, lambda: perfil_equipo(fuerzo=True))
+            nuevo = (r.get("nivel") or {}).get("nivel")
+            if r.get("origen") != "real" or nuevo is None:
+                await asyncio.sleep(ciclo)
+                continue
+            if anterior is not None and nuevo != anterior:
+                aplicar = aplica_plan(r)
+                print(f"[CORT] el nivel pasó de {anterior} a {nuevo}: {r['nivel']['motivo']}")
+                for w in list(CONEXIONES):
+                    enviar(w, {"type": "perfil_reply", **r, "ajustes_aplicados": aplicar,
+                               "auto": True, "cambio": True})
+            anterior = nuevo
+        except Exception as e:
+            print(f"[CORT] re-escaneo falló ({type(e).__name__}: {e})", file=sys.stderr)
+        await asyncio.sleep(ciclo)
+
+
 async def main():
     global BUCLE
     BUCLE = asyncio.get_running_loop()
     if cort_vida:
         cort_vida.avivar()      # un hilo, grano de 1 s: los pendientes vencen solos
+    if cort_perfil is not None:
+        # S1: escanear antes de la primera frase. El coste medido es de decenas de ms
+        # y evita el error contrario: prometer 60 fps y voz natural a un Celeron.
+        perfil = await BUCLE.run_in_executor(None, perfil_equipo)
+        if perfil.get("origen") == "real":
+            for hecho in aplica_plan(perfil):
+                print(f"[CORT] adaptado por el escaneo: {hecho}")
+            n = perfil["nivel"]
+            print(f"[CORT] nivel {n['nivel']} ({n['nombre']}) — "
+                  f"{perfil['cpu']['modelo']}, {perfil['memoria']['libre_mb']} MB libres, "
+                  f"cámara: {'sí' if perfil['camara'] else 'no'}")
+        asyncio.create_task(latido_perfil())
     if os.environ.get("CORT_AUTOSONDA", "0") == "1":
         asyncio.create_task(auto_sonda())
     if os.environ.get("CORT_ACTUALIZA", "1") == "1" and cort_actualiza is not None:

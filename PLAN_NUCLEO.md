@@ -292,7 +292,7 @@ el ciclo sin modelo: falso Ollama + modelo de juguete en arena → `mini:1m resp
 (105.0 tok/s) · reja: acepta`, y `auto_sonda()` escribe `mediciones/medicion-cerebro.json` en
 cuanto la RAM supere el umbral (900 MB por defecto).
 
-### U1 — canal de actualización (6/6 en `scripts/prueba_actualiza.py`)
+### U1 — canal de actualización (7/7 en `scripts/prueba_actualiza.py`)
 `cort-bridge/cort_actualiza.py` lee las etiquetas del repo **derivado de `git remote`** y la
 versión local de `git describe`; consulta GitHub con 8 s de tiempo de vida y responde
 `origen: real` o `no disponible`. El primer aviso real midió
@@ -310,11 +310,50 @@ las variables de entorno se leían al importar (los cuatro casos de prueba devol
 dict) y el repo venía adivinado — adivinarlo mandó la primera corrida a buscar etiquetas de un
 proyecto que no era el suyo, y el consejo de `git checkout` habría reescrito su árbol de trabajo.
 
+### S1 — escáner de capacidades (14/14 en `scripts/prueba_perfil.py`)
+`cort-bridge/cort_perfil.py` lee `/proc/cpuinfo`, `/proc/meminfo`, `sysfs` y `lspci` y saca dos
+cosas: el **nivel de cerebro** al que aspira el equipo ahora mismo y el **plan de degradación**
+(lo que se apaga para que lo importante quepa). Las pruebas no comprueban el número de esta
+laptop —ése se ve en la pantalla— sino la **decisión**: un chip sin AVX se queda en nivel 0
+aunque tenga 15 000 MB libres, CUDA sube al 3, y sin cámara los gestos se apagan solos con su
+motivo.
+
+Lo que dijo la Canaima medida (no de memoria):
+
+| Qué | Número | De dónde sale |
+|---|---|---|
+| CPU | Intel Celeron N2805 @1467 MHz, 2 núcleos | `/proc/cpuinfo` |
+| Instrucciones | `sse4_2` sí, **AVX no, AVX2 no** | flags del kernel |
+| RAM | 174–282 MB libres de 1851 | `MemAvailable` |
+| GPU | Atom Z36xxx/Z37xxx, `/dev/dri/card0`, sin CUDA | `lspci` + `/dev/dri` |
+| Cámara | `/dev/video0` y `/dev/video1` («USB 2.0 Camera») | `/sys/class/video4linux` |
+| Temperatura | 47–49 °C (sensor TCPU) | `/sys/class/thermal` |
+| Carga | 4,15–8,69 a 1 min | `os.getloadavg()` |
+| Nivel | **0 — reglas locales** | el motivo, abajo |
+
+El motivo del nivel 0 es doble y ahora está dicho con la instrucción concreta: *los binarios
+oficiales de llama.cpp piden AVX y revientan con `Illegal instruction`* — además de la RAM, que
+ya se sabía. Esto explica por qué el cerebro nunca cargó aquí aunque hubiera modelos en disco.
+
+El escaneo **no es un cartel, es comportamiento**. Conectar la interfaz dispara la medición sola
+(397 ms de ida y vuelta por WebSocket, medido en arena con `CORT_WS_PORT=8791`) y el plan se
+obedece: `CORT_orbe.tope(30)` baja el techo de fotogramas del orbe —con tope 0 se conserva el
+comportamiento anterior, 20 fps en reposo y a tope con efecto— y las rejillas de scanlines de los
+17 paneles pasan a `display:none`. En la pantalla de 525×521 la tarjeta quedó en y=215, alto 193
+(fondo 408), visible sin scroll, con el botón `reescanear` y la marca `medido 2026-11-03 10:03:27`.
+
+`latido_perfil()` re-mide cada `CORT_PERFIL_CICLO` (900 s) y **sólo avisa si el nivel cambia**:
+la RAM de esta máquina se mueve de 150 a 350 MB según lo abierto, así que el nivel de hace una
+hora no es el de ahora. Y `auto_sonda()` (M2) pregunta primero al perfil: si el chip no tiene
+AVX se para con el motivo en vez de estrellarse cada diez minutos contra el mismo muro.
+
 ### Lo que se deja dicho, con número, de las dos peticiones que no entran esta noche
-- **Sensores de cámara para mover ventanas del sistema**: hace falta un modelo de visión. En
-  2 núcleos / 1851 MB, con Qoder abierto quedan 172-233 MB libres y Ollama apagado; MediaPipe o
-  un TFLite propio corren en el A16, no aquí. Se planifica como fase aparte (mano → puntero en
-  el teléfono), no se improvisa esta madrugada.
+- **Sensores de cámara para mover ventanas del sistema**: la sonda de esta mañana corrigió el
+  pronóstico. La webcam **sí da cuadros** en este equipo: 10/10 cuadros recibidos a 320×240 RGB,
+  a 640×480 MJPG y a 320×240 YUY2 (a 160×120 no da ninguno: ese formato no lo trae). Lo que no
+  hay es ffmpeg ni OpenCV en el entorno, y un modelo de visión no cabe en 1851 MB. El camino
+  medido es un detector propio sobre numpy (piel y movimiento), no MediaPipe; se construye como
+  fase S2 con los cuadros sin guardar nunca en disco.
 - **Vincular PC ↔ Android para que CORT aprenda de ti**: el puente ya puede hablar con el
   teléfono (`CORT_BIND` + TLS + token), pero sin HTTPS el navegador del A16 no instala la PWA
   ni deja usar el micrófono, y el APK (F11/F12) es el que lo resuelve de verdad. La memoria

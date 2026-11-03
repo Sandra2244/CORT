@@ -89,6 +89,7 @@
     reenviados: 0,
     recibidos: 0,
     ultimo_status: null,
+    ultimo_perfil: null,    // S1: el escaneo que el puente empuja al conectar
     ultima_temperatura: null,
     ultima_voz: null,
     ultima_accion: null,
@@ -204,6 +205,13 @@
           try { window.CORT_alCerebro(n); } catch (e) {}
         }
       }
+      // S1: el escaneo del equipo — nivel de cerebro y qué se apagó por medida.
+      if (n.type === "perfil_reply") {
+        this.ultimo_perfil = n;
+        if (typeof window.CORT_alPerfil === "function") {
+          try { window.CORT_alPerfil(n); } catch (e) {}
+        }
+      }
       // U1: canal de actualización del repo.
       if (n.type === "actualizacion") {
         this.ultima_version = n;
@@ -267,6 +275,7 @@
     tipos_reales: Array.from(REALES),
     tipos_al_puente: Array.from(VAN_AL_PUENTE),
     ultima_temperatura: PUENTE.ultima_temperatura,
+    ultimo_perfil: PUENTE.ultimo_perfil,
     avisos: Object.keys(PUENTE.avisos),
     ultimo_status: PUENTE.ultimo_status
   });
