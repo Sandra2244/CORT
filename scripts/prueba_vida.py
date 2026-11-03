@@ -6,11 +6,14 @@ frase dictada/escrita, orden directa del panel y el vencimiento de un temporizad
 """
 import asyncio
 import json
+import os
 import sys
 
 import websockets
 
-PUERTO = int(sys.argv[1]) if len(sys.argv) > 1 else 8775
+# El puerto se puede pasar a mano o leer de la arena que esté corriendo: dejar 8775
+# fijo hacía que la prueba se rehusara contra un puente apagado.
+PUERTO = int(sys.argv[1] if len(sys.argv) > 1 else os.environ.get("CORT_WS_PORT", "8775"))
 FRASES = [
     "cómprame leche, tres huevos y pan",
     "cómprame leche",
