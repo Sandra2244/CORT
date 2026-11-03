@@ -55,12 +55,21 @@ def config():
             os.environ.get("CORT_API_GITHUB", API))
 
 NOMBRE_REPO = re.compile(r"^[\w.-]+/[\w.-]+$")
-ETIQUETA = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
+# El prefijo se acepta porque las etiquetas de esta línea se llaman cort-vX.Y.Z: en el
+# repo de GitHub ya existen v0.1 … v0.17.0 y son de otra base de código, así que
+# compartir el número habría hecho que CORT se creyera más vieja o más nueva de lo que es.
+ETIQUETA = re.compile(r"^(?:[A-Za-z][\w-]*[-_])?v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$")
 
 
 def _numero(etiqueta):
     m = ETIQUETA.match((etiqueta or "").strip())
     return tuple(int(x) for x in m.groups()) if m else None
+
+
+def _prefijo(etiqueta):
+    """El nombre de línea de una etiqueta: «cort-v0.9.0» → «cort-», «v0.17.0» → «»."""
+    m = re.match(r"^([A-Za-z][\w-]*[-_])?v?\d", (etiqueta or "").strip())
+    return m.group(1) if m and m.group(1) else ""
 
 
 def mas_nueva(local, remota):
@@ -90,11 +99,27 @@ def consultar():
                 "motivo": f"no se pudo leer {repo}: {type(e).__name__} {e}",
                 "version_local": version}
     nombres = [t.get("name", "") for t in etiquetas if isinstance(t, dict)]
-    validas = [(n, _numero(n)) for n in nombres]
+    if not nombres:
+        return {"ok": False, "origen": "real", "version_local": version,
+                "motivo": f"el repo {repo} existe pero todavía no tiene ninguna etiqueta de versión",
+                "etiquetas": nombres[:8]}
+    # Sólo se comparan etiquetas de la misma línea: el repo de GitHub guarda v0.1 …
+    # v0.17.0 de otra base de código, y anunciar «hay nueva v0.17.0» sobre este árbol
+    # habría empujado a la usuaria a cambiar su proyecto por el de otra época.
+    linea = _prefijo(version)
+    comparables = [n for n in nombres if _prefijo(n) == linea]
+    if not comparables:
+        return {"ok": False, "origen": "real", "version_local": version, "hay_nueva": False,
+                "motivo": (f"el repo {repo} tiene {len(nombres)} etiquetas "
+                           f"({', '.join(nombres[:3])}…) pero ninguna de la línea "
+                           f"«{linea or 'sin prefijo'}»: son de otra base de código y no "
+                           f"son comparables con esta"),
+                "etiquetas": nombres[:8]}
+    validas = [(n, _numero(n)) for n in comparables]
     validas = [(n, v) for n, v in validas if v]
     if not validas:
         return {"ok": False, "origen": "real", "version_local": version,
-                "motivo": f"el repo {repo} existe pero todavía no tiene ninguna etiqueta de versión",
+                "motivo": f"el repo {repo} tiene etiquetas pero ninguna con número de versión válido",
                 "etiquetas": nombres[:8]}
     mejor, _ = max(validas, key=lambda par: par[1])
     hay = mas_nueva(version, mejor)

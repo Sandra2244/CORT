@@ -60,6 +60,10 @@ def main():
         elif espera == "sin-etiquetas":
             ok = r.get("ok") is False and "ninguna etiqueta" in (r.get("motivo") or "")
             motivo = "dice que el repo aún no etiqueta" if ok else f"contestó {r}"
+        elif espera == "otra-linea":
+            ok = (r.get("ok") is False and r.get("hay_nueva") is False
+                  and "otra base de código" in (r.get("motivo") or ""))
+            motivo = "no confunde dos líneas de versiones" if ok else f"contestó {r}"
         else:  # mal-formado
             ok = r.get("origen") == "no disponible" and "no tiene forma válida" in (r.get("motivo") or "")
             motivo = "rechaza un nombre de repo imposible" if ok else f"contestó {r}"
@@ -70,6 +74,10 @@ def main():
     corre("pepe/cort", tres, "0.9.0", "nueva")
     corre("pepe/cort", [{"name": "v0.9.0"}], "0.9.0", "al-dia")
     corre("pepe/cort", [], "0.9.0", "sin-etiquetas")
+    # Las etiquetas que ya están en GitHub (v0.1 … v0.17.0) son de otra base de código:
+    # anunciarlas como «versión nueva» habría empujado a bajar el proyecto de otra época.
+    corre("Sandra2244/CORT", [{"name": n} for n in ("v0.17.0", "v0.9.0", "v0.8.0")],
+          "cort-v0.9.0", "otra-linea")
     corre("..\\..\\etc", tres, "0.9.0", "mal")
 
     # El repo se deriva del remoto real de este proyecto, no de un valor fijo.
