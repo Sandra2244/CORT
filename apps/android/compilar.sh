@@ -276,5 +276,11 @@ cat build/auditoria.txt
 } > build/firma.txt
 
 echo "peso: $BYTES bytes ($MB MB)"
-sha256sum build/CORT-movil.apk | tee build/CORT-movil.apk.sha256
+# El nombre que se anota es el **desnudo**. Medido en el run 41881069892: con
+# `sha256sum build/CORT-movil.apk` el archivo quedaba como
+# `…  build/CORT-movil.apk`, y al bajar el APK suelto de la release
+# `sha256sum -c` respondía «No existe el fichero o el directorio» aunque la suma
+# fuera buena. La dueña comprueba así, según el propio README: el `-c` tiene que
+# funcionar sin tener que reescribir el archivo a mano.
+(cd build && sha256sum CORT-movil.apk) | tee build/CORT-movil.apk.sha256
 echo "APK listo: build/CORT-movil.apk"

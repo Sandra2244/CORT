@@ -522,3 +522,54 @@ fuera del clasificador las grafías que son palabra española igual (`tres`, `vi
 positivos. Lo que el número no cubre: sigue siendo un detector por vocabulario, no una
 traducción automática — una frase francesa con palabras fuera de la lista se escapa, y se
 escapa en silencio.
+
+## 18. El teléfono autónomo: F12 (4 de noviembre, 13:22–14:10)
+
+Dos frases tuyas eran la misma cosa: *«no necesito ajuro una IP para usarlo»* y *«su apk no
+pesa nada, no lo has compilado bien»*. Se arreglan metiendo el oído dentro.
+
+**Qué entró en `apps/android`.** 18 clases Java, 5 119 líneas: la cara del orbe, el registro,
+el cerebro de 33 reglas con 15 manos locales, la memoria SQLite del aparato y el traje de
+asistente de Android, transplantados de la otra línea (`origin/main`) y adaptados a los
+puertos de esta rama (interfaz 8766, core 8765). Y una clase nueva, `Motor.java`, que es lo que
+quita la IP de en medio: Vosk con el modelo español dentro del teléfono.
+
+**Los números del APK, del run 41881069892** (verde, `0.12.0`, `versionCode 1200`):
+
+| | antes (`cort-v0.11.0`) | ahora (F12) |
+|---|---|---|
+| peso | 16 873 bytes | **59 335 837 bytes = 56,59 MB** |
+| `classes.dex` | 15 120 B | 294 056 B |
+| oído | el del aparato, **por internet** | Vosk dentro del APK + respaldo del aparato |
+| dependencias | ninguna | Vosk 0.3.75 (Apache-2.0), JNA 5.14.0 (LGPL-2.1+), modelo (Apache-2.0) |
+| firma | llave del repo `faabef46…1977` | la misma: se instala encima sin desinstalar |
+
+Dentro del APK, medido sobre el archivo que bajé del artefacto y no del log:
+modelo `vosk-model-small-es-0.42.zip` **39 817 833 B**, `libvosk.so` **10 042 800 B** (arm64) y
+**8 985 628 B** (v7a), `libjnidispatch.so` 168 176 / 122 296 B, `habilidades.json` 9 770 B;
+16 entradas y 59 458 359 B sin comprimir. La SHA-256 del APK
+(`aa8dea3f…d5c1f4`) la volví a calcular aquí y coincide con la que publicó el runner.
+
+**Tres cosas que se arreglaron al repasar el código transplantado, y se confiesan:**
+
+1. `Puente.java` decía «la página vive en el 8780». En esta rama son 8766 y 8765.
+2. El puente de esta rama **no sirve `/memoria/puente`** (sólo `POST /mic` y estática,
+   `cort-bridge/cort_server.py:2808`), así que la sincronía con la PC da 404. `Sincroniza`
+   ahora lo traduce: *«ese puente aún no tiene memoria compartida: la ruta llega con F14. CORT
+   sigue acordándose aquí, en el teléfono»*. No se vende como hecho lo que no está.
+3. La voz pedía `es-CO` porque la otra línea usa `speechSynthesis` con ese acento. **La voz del
+   PC de esta rama es castellana** (`cort-bridge/cort_voz.py`: espeak-ng y Piper
+   `es_ES-mls_10246-low` a 1,90× y `davefx-medium` a 2,55×), así que el teléfono pasó a `es-ES`
+   y `scripts/prueba_apk.py` compara el `IDIOMA` del Java con los `.onnx` del puente. Fue un
+   descuido de transplantar sin mirar la cara de la otra rama.
+
+**Lo que sigue sin medir, dicho con la boca llena:** cuánto tarda el modelo en cargarse en el
+A16, cuánta RAM ocupa y cuánto tarda un dictado real tuyo. `Motor.java` imprime el tiempo de
+cada dictado (`ultimoDictadoMs`) para que esa cifra salga de la mano y no de un deseo. Lo que
+sí está comprobado sin teléfono: el compile, la firma, que las `.so` van sin comprimir y
+alineadas a página (`extractNativeLibs="false"` muere sin eso), y 44 comprobaciones de
+`scripts/prueba_apk.py` que corren sin red.
+
+**Un bug que te tocó a ti:** el archivo `.sha256` del artefacto decía
+`build/CORT-movil.apk`, así que `sha256sum -c` respondía *«no existe el fichero»* aunque la
+suma fuera buena. Se anotó el nombre desnudo y hay una comprobación que lo vigila.

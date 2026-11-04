@@ -188,6 +188,9 @@ def main():
     prueba("no se firma con llave distinta sin decirlo (firma.txt y auditoría)",
            "auditoria.txt" in script and "--print-certs" in script)
     prueba("el min/target siguen en 26/34", "--min-sdk-version 26" in script and "--target-sdk-version 34" in script)
+    prueba("la suma se anota con el nombre desnudo (`sha256sum -c` sirve en la release)",
+           "(cd build && sha256sum CORT-movil.apk)" in script,
+           "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
 
     print("\n== la tabla de frases del cerebro nativo ==")
     tabla_path = APP / "assets" / "habilidades.json"

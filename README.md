@@ -61,7 +61,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| **APK nativo para el teléfono** | real, publicado `cort-v0.11.0` | `apps/android` (WebView sobre el puente, cero dependencias externas, sin Gradle) + `.github/workflows/apk-movil.yml` sobre `apps/android/compilar.sh`. Medido en el runner: **16 873 bytes**, `versionCode 1100`, minSdk 26, firmado **con la llave del repo** (se instala encima), compilado en **22–25 s**, SHA-256 `bc384b62…8f4012` comprobado volviendo a descargar el archivo de la release. El oído del teléfono entra por `POST /mic`: **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM). Falta su prueba física en el A16. Con el icono nuevo (commit `911b2ff`) el mismo flujo produce **21 140 bytes** y se verificó dentro del zip: `res/mipmap-anydpi-v26/ic_cort.xml` (548 B) + `ic_cort_foreground.xml` (5 172 B) + `ic_cort_background.xml` (724 B). Sigue pesando poco a propósito: es la carcasa nativa, no el cerebro — el peso real llega con el modelo Vosk y las librerías dentro del APK (F12) |
+| **APK nativo para el teléfono** | real medido, publicado `cort-v0.11.0`; el de F12 compilado y medido, pendiente de etiqueta | `apps/android` es **CORT nativo** (18 clases Java, 5 119 líneas: orbe, cara, cerebro de 33 reglas, 15 manos locales, SQLite y traje de asistente) **con el oído dentro**: Vosk 0.3.75 + JNA + el modelo español de 39,8 MB viajan en el APK, descargados en el pipeline con su SHA-256 fijado en `apps/android/deps.txt` y acreditados pieza por pieza en `apps/android/ACREDITACION.md`. Sin Gradle ni AndroidX: el mismo método de siempre (`aapt2` → `javac --release 11` → `d8` → `zip -0` → `zipalign -p` → `apksigner`) en `.github/workflows/apk-movil.yml`. **Medido en el run 41881069892** (`0.12.0`, `versionCode 1200`): **59 335 837 bytes = 56,59 MB**, SHA-256 `aa8dea3f…d5c1f4` comprobado descargando el artefacto y volviendo a medirlo aquí, 16 entradas, `classes.dex` de 294 056 B, `libvosk.so` de 10 042 800 B (arm64) y 8 985 628 B (v7a), las `.so` y `resources.arsc` **sin comprimir y alineadas a página** (`extractNativeLibs="false"` lo exige), firmado **con la llave del repo** (`faabef46…1977`, la misma de `cort-v0.11.0`: se instala encima). Antes pesaba **16 873 bytes** porque era una carcasa: la ×3 517 es el oído, no el código. Falta su prueba física en el A16 (carga del modelo, RAM y latencia real del dictado). El camino viejo sigue medido: `POST /mic` **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM en la Classmate) |
 | Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
@@ -100,7 +100,9 @@ scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_s
                         prueba_mic_telefono · inventario_funciones ·
                         instala_cort · arranca_cort · para_cort · desinstala_cort ·
                         arranca_con_sonda.sh
-apps/android/           el cliente del teléfono (WebView + micro nativo), sin dependencias
+apps/android/           CORT nativo del teléfono (orbe, cerebro, manos, SQLite y oído Vosk)
+apps/android/deps.txt   qué se baja para el oído, con su URL y su SHA-256
+apps/android/ACREDITACION.md  licencias pieza por pieza y qué NO va dentro del APK
 docs/ANDROID.md         cómo se compila el APK, cómo se instala y qué no hace todavía
 requirements-cort.txt   lo mínimo que necesita el puente, con las versiones medidas
 PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S4)
@@ -262,18 +264,25 @@ el puente al iniciar sesión. `arranca_cort.sh` no duplica: si ya hay algo en 87
 
 ### En el teléfono (Android)
 
+**El teléfono no necesita al portátil.** Desde `cort-v0.12.0` el APK es CORT nativo: orbe,
+registro, cerebro de frases, 15 manos locales, memoria SQLite propia y **oído dentro del
+aparato** (Vosk con el modelo español de 39,8 MB viajando en el APK). Se instala, se pulsa ● y
+se dicta sin IP, sin servidor y sin certificados.
+
 ```bash
-./scripts/instala_cort.sh --red      # abre el puente a la red local (CORT_BIND=0.0.0.0)
+./scripts/instala_cort.sh --red      # SÓLO si quieres además la cara de la PC en el teléfono
 ```
 
-Instalar el `CORT-v0.11.0.apk` de la
-[release `cort-v0.11.0`](https://github.com/Sandra2244/CORT/releases/tag/cort-v0.11.0) y
-abrirlo con la dirección que imprime el puente. Antes de tocarlo, comprobar su SHA-256 contra
-el `.sha256` que publica la misma release. El APK es un WebView sobre el puente de la PC, con
-un botón «● hablar» que graba en el teléfono y manda el WAV a `POST /mic`: el navegador de
-Android no da micrófono por `http` (origen no seguro), y por eso hace falta la aplicación y no
-la web instalable. Cómo se compila, qué firma lleva, qué mide y **qué no hace todavía**
-(emparejamiento y TLS) está en [`docs/ANDROID.md`](docs/ANDROID.md).
+Instalar el `CORT-movil.apk` de la última release y abrirlo. Antes de tocarlo, comprobar su
+SHA-256 contra el `.sha256` que publica la misma release. El botón «● hablar» graba con el
+micrófono del teléfono y lo resuelve **Vosk dentro del aparato**; si el modelo aún se está
+cargando —o el APK salió delgado— cede el oído al motor que trae Android y **lo dice en la
+línea «oído: …»**, que es la forma honesta de que la dueña sepa si está hablando con su
+teléfono o con internet. El puente de la PC sigue pudiendo recibir WAV por `POST /mic` para
+quien quiera la cara grande. Cómo se compila (el mismo método sin Gradle, ahora con las
+descargas fijadas por SHA-256 en `apps/android/deps.txt`), qué firma lleva, **los 56,59 MB
+medidos** y qué no hace todavía (sincronía de memoria, QR, TLS) está en
+[`docs/ANDROID.md`](docs/ANDROID.md) y en `apps/android/ACREDITACION.md`.
 
 ### Otros sistemas operativos
 
