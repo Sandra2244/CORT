@@ -18,6 +18,14 @@
 # Licencias: Vosk y sus modelos pequeños son Apache-2.0 (LICENSE dentro del AAR
 # y README de los modelos); JNA es LGPL-2.1 / Apache-2.0 doble. Se acreditan en
 # `apps/android/ACREDITACION.md`, que se sube junto al APK.
+#
+# `zxing-core-3.5.3.jar` es el decodificador del QR del enlace (F14b). Se leyó antes
+# de fijarlo: 332 entradas, todas `.class` de Java —ni una `.so`, ni un recurso, ni un
+# `META-INF/services`—; el propio manifest del jar declara Apache-2.0 y exige JavaSE 1.8,
+# así que entra por `javac --release 11` y por `d8` sin más. La comprobación no quedó en
+# la palabra: la `.sha1` que publica Maven Central para ese archivo (ca13492…a9c4b) es la
+# de la copia descargada, y la `.sha256` de abajo es la de esa misma copia.
 vosk-android-0.3.75.aar|ab2f8b91ac8051561aa325546b35fed9a68b36b8121bac5c6fb927525c4adfad|https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.aar
 jna-5.14.0.aar|81a8b9afc65f9d6b205338c25908af8de0ff8411a00985104c9d83fffdfab380|https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.aar
 vosk-model-small-es-0.42.zip|09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f|https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip
+zxing-core-3.5.3.jar|8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82|https://repo1.maven.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar

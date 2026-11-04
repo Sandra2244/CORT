@@ -65,37 +65,46 @@ command -v curl  >/dev/null || { echo "falta curl: sin él no se baja el modelo"
 rm -rf build
 mkdir -p build/obj build/apk vendor build/stage build/recursos
 
-# -- 1. Las dependencias del oído, descargadas y comprobadas -------------------
+# -- 1. Las dependencias, descargadas y comprobadas ----------------------------
 # Cada línea de deps.txt es `nombre|sha256|url`. Se baja a un temporal, se le
 # calcula la suma y sólo entonces pasa a su sitio: así un corte de red a medias
 # no deja nunca un archivo a medio verificar dentro del APK.
 MOTOR=0
+DELGADO=0
 if [ "${CORT_SIN_MOTOR:-0}" = "1" ]; then
+    DELGADO=1
     echo "CORT_SIN_MOTOR=1: se compila el APK DELGADO, sin oído local (el teléfono dictará por el motor de Android)"
-else
-    while IFS='|' read -r NOMBRE SHA URL; do
-        case "$NOMBRE" in ''|'#'*) continue ;; esac
-        if [ -z "$SHA" ] || [ -z "$URL" ]; then
-            echo "::error::deps.txt mal escrito en la línea '$NOMBRE'"; exit 1
-        fi
-        DESTINO="vendor/$NOMBRE"
-        if [ -f "$DESTINO" ] && printf '%s  %s\n' "$SHA" "$DESTINO" | sha256sum -c --status -; then
-            echo "ya bajada y comprobada: $NOMBRE"
-            continue
-        fi
-        echo "descargando $NOMBRE"
-        curl -fsSL --retry 3 --max-time 900 -o "$DESTINO.tmp" "$URL"
-        if ! printf '%s  %s\n' "$SHA" "$DESTINO.tmp" | sha256sum -c -; then
-            echo "::error::$NOMBRE no cuadra con la suma fijada en deps.txt"
-            echo "::error::esperada $SHA"
-            echo "::error::recibida $(sha256sum "$DESTINO.tmp" | cut -d' ' -f1)"
-            rm -f "$DESTINO.tmp"
-            exit 1
-        fi
-        mv "$DESTINO.tmp" "$DESTINO"
-        echo "verificada: $NOMBRE ($(stat -c%s "$DESTINO") bytes)"
-    done < deps.txt
+fi
 
+# El escáner del QR (zxing) se baja siempre: el enlace con la PC no depende del oído,
+# y un APK delgado que no sabe leer el cuadro sería dos pasos para atrás.
+while IFS='|' read -r NOMBRE SHA URL; do
+    case "$NOMBRE" in ''|'#'*) continue ;; esac
+    if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ]; then
+        continue
+    fi
+    if [ -z "$SHA" ] || [ -z "$URL" ]; then
+        echo "::error::deps.txt mal escrito en la línea '$NOMBRE'"; exit 1
+    fi
+    DESTINO="vendor/$NOMBRE"
+    if [ -f "$DESTINO" ] && printf '%s  %s\n' "$SHA" "$DESTINO" | sha256sum -c --status -; then
+        echo "ya bajada y comprobada: $NOMBRE"
+        continue
+    fi
+    echo "descargando $NOMBRE"
+    curl -fsSL --retry 3 --max-time 900 -o "$DESTINO.tmp" "$URL"
+    if ! printf '%s  %s\n' "$SHA" "$DESTINO.tmp" | sha256sum -c -; then
+        echo "::error::$NOMBRE no cuadra con la suma fijada en deps.txt"
+        echo "::error::esperada $SHA"
+        echo "::error::recibida $(sha256sum "$DESTINO.tmp" | cut -d' ' -f1)"
+        rm -f "$DESTINO.tmp"
+        exit 1
+    fi
+    mv "$DESTINO.tmp" "$DESTINO"
+    echo "verificada: $NOMBRE ($(stat -c%s "$DESTINO") bytes)"
+done < deps.txt
+
+if [ "$DELGADO" = "0" ]; then
     # Desarmar los AAR: `classes.jar` va al `javac` y a `d8`; las `.so` van al
     # APK en `lib/<abi>/`, que es el sitio donde Android las busca.
     for AAR in vosk-android-0.3.75 jna-5.14.0; do
@@ -151,22 +160,20 @@ cp -a assets/. build/recursos/assets/
 # prohibida desde target 9 (medido en la otra línea con el JDK del runner).
 # Los `classes.jar` de Vosk y JNA van al classpath para `javac` (que sólo necesita
 # las firmas) y como entrada de programa para `d8` (que los convierte en dex).
-CLASSPATH="$PLAT/android.jar"
+CLASSPATH="$PLAT/android.jar:vendor/zxing-core-3.5.3.jar"
+# Una sola llamada a `d8`: dos llamadas escribirían `classes.dex` dos veces y la segunda
+# traería las clases de la app repetidas (`d8` lo castiga con "Type is already defined").
+OIDO=()
 if [ "$MOTOR" = "1" ]; then
     CLASSPATH="$CLASSPATH:vendor/vosk-android-0.3.75/classes.jar:vendor/jna-5.14.0/classes.jar"
+    OIDO=(vendor/vosk-android-0.3.75/classes.jar vendor/jna-5.14.0/classes.jar)
 fi
 javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
 
 D8_ENTRADAS="$(find build/obj -name '*.class')"
-if [ "$MOTOR" = "1" ]; then
-    "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \
-        vendor/vosk-android-0.3.75/classes.jar \
-        vendor/jna-5.14.0/classes.jar \
-        $D8_ENTRADAS
-else
-    "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk $D8_ENTRADAS
-fi
+"$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \
+    vendor/zxing-core-3.5.3.jar "${OIDO[@]}" $D8_ENTRADAS
 
 (cd build/apk && zip -q -j sin-alinear.apk classes*.dex)
 
@@ -228,6 +235,8 @@ MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
     else
         echo "oído: el motor de voz del aparato (APK delgado, CORT_SIN_MOTOR=1)"
     fi
+    echo "visor: zxing core 3.5.3 dentro del APK (escanea el QR del enlace, F14b)" \
+         "— $(stat -c%s vendor/zxing-core-3.5.3.jar) bytes fijados en deps.txt"
     echo "arquitecturas: $ABIS"
     if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
         echo "llave: la del repo (se instala encima de la versión anterior)"

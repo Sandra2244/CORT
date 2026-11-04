@@ -82,7 +82,11 @@ public class MainActivity extends Activity {
     private LinearLayout capa;  // root: una sola cara a la vez
     private TextView aviso;     // el motivo por el que el enlace no vale
     private TextView ayuda;     // el texto que cuenta qué está pasando
+    private EditText campoEnlace;   // el campo de la pantalla de enlace, para rellenarlo desde la cámara
     private volatile boolean buscando;
+
+    /** El identificador de la vuelta del escáner de QR (F14b). */
+    private static final int ESCANEO = 43;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -313,11 +317,16 @@ public class MainActivity extends Activity {
      * reconstruirlo sería una forma de romper un secreto.
      */
     private void abrir(String base, String token) {
+        // El enlace que se guarda es el que imprime la PC y cabe en el QR —`…:8765/memoria/puente`—
+        // y la ventana necesita la interfaz. `urlDeLaCara` cambia el puerto y la ruta
+        // conservando la llave; si ya era una dirección de página, devuelve lo mismo.
+        String vuelta = Puente.urlDeLaCara(base);
+        final String pagina = vuelta == null ? base : vuelta;
         // `final` y en una sola expresión: el `WebViewClient` anónimo de abajo
         // captura esta cadena, y una variable reasignada no la puede capturar.
-        final String destino = (token.isEmpty() || base.contains("token="))
-                ? base
-                : base + (base.contains("?") ? "&" : "/?") + "token=" + token;
+        final String destino = token.isEmpty() || pagina.contains("token=")
+                ? pagina
+                : pagina + (pagina.contains("?") ? "&" : "?") + "token=" + token;
         web = new WebView(this);
         // Oscuro desde el primer fotograma: sin esto el WebView pinta su fondo
         // blanco antes de que la página arranque.
@@ -401,11 +410,12 @@ public class MainActivity extends Activity {
         titulo.setLetterSpacing(0.16f);
         pantalla.addView(titulo, centrado(-2));
 
-        ayuda = texto("Sólo si tu red no deja buscar por Wi-Fi. En la PC:\n"
-                + "  ./scripts/instala_cort.sh --red\n"
-                + "y aquí escribes la dirección que imprime (puerto 8766). Se guarda y "
-                + "no se vuelve a pedir. Sin enlace el teléfono sigue funcionando solo: "
-                + "lo que hay aquí es la ventana hacia el portátil, no su requisito.",
+        ayuda = texto("Dos formas de enlazar la PC (F14). En la PC, con CORT abierto a la red:\n"
+                + "  python3 cort-bridge/cort_enlace.py --qr\n"
+                + "y escanea el cuadro, o pega aquí la línea entera que imprime el arranque —"
+                + "con su `?token=`, que es la llave de la red de la casa—. Se guarda y no se "
+                + "vuelve a pedir. Sin enlace el teléfono sigue funcionando solo: lo que hay "
+                + "aquí es la ventana hacia el portátil y su memoria, no su requisito.",
                 15f, Paleta.CLARO);
         ayuda.setLineSpacing(0f, 1.25f);
         LinearLayout.LayoutParams cuerpo = new LinearLayout.LayoutParams(-1, -2);
@@ -413,7 +423,7 @@ public class MainActivity extends Activity {
         pantalla.addView(ayuda, cuerpo);
 
         final EditText campo = new EditText(this);
-        campo.setHint("http://192.168.100.xxx:8766/index.html");
+        campo.setHint("http://192.168.1.xxx:8765/memoria/puente?token=…");
         campo.setInputType(InputType.TYPE_TEXT_VARIATION_URI
                 | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         campo.setSingleLine(true);
@@ -428,6 +438,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams caja = new LinearLayout.LayoutParams(-1, -2);
         caja.topMargin = dp(18);
         pantalla.addView(campo, caja);
+        campoEnlace = campo;
 
         aviso = texto("", 13f, Paleta.AVISO);
         aviso.setVisibility(View.INVISIBLE);
@@ -442,6 +453,19 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams boton = new LinearLayout.LayoutParams(-1, dp(54));
         boton.topMargin = dp(14);
         pantalla.addView(entrar, boton);
+
+        // Leer el cuadro con la cámara del teléfono es lo que quita de en medio teclear una
+        // llave de 24 caracteres en una pantalla de 6 pulgadas. Es un botón más, no el único
+        // camino: si la cámara falla, el campo de arriba sigue funcionando igual.
+        Button escanear = new Button(this);
+        escanear.setText("Escanear el QR del portátil");
+        escanear.setTextColor(Paleta.CIAN);
+        escanear.setBackgroundColor(0xFF132F3F);
+        escanear.setTextSize(15f);
+        escanear.setLetterSpacing(0.04f);
+        LinearLayout.LayoutParams leedor = new LinearLayout.LayoutParams(-1, dp(54));
+        leedor.topMargin = dp(10);
+        pantalla.addView(escanear, leedor);
 
         Button volver = new Button(this);
         volver.setText("Seguir en el teléfono");
@@ -459,6 +483,8 @@ public class MainActivity extends Activity {
         pantalla.addView(pie, piecaja);
 
         entrar.setOnClickListener(v -> intentar(campo));
+        escanear.setOnClickListener(v ->
+                startActivityForResult(new Intent(this, Escaner.class), ESCANEO));
         volver.setOnClickListener(v -> montarCara());
         campo.setOnEditorActionListener((v, accion, ev) -> {
             intentar(campo);
@@ -483,15 +509,40 @@ public class MainActivity extends Activity {
         if (!pegado.matches("https?://[^/]+:\\d+.*")) {
             pegado = pegado.replaceFirst("(https?://[^/]+)", "$1:8766");
         }
-        // El `token` de la otra línea **no** se pide aquí: el puente de esta rama
-        // todavía no lo tiene (escrito está en el README: «aún no están todas:
-        // `CORT_BIND` abierto, TLS con certificado propio y un token»). Exigirlo
-        // sería cerrar la puerta con una llave que no existe; cuando llegue (F14,
-        // con el QR), esta pantalla lo acepta tal cual porque la URL se guarda
-        // completa.
+        // Desde F14a el puente **sí** pide llave: sin `?token=` responde 401 y `Sincroniza`
+        // lo dice con palabras. La ventana, en cambio, abre igual —por eso aquí no se
+        // rechaza el enlace—, pero se avisa: una dirección sin llave es media CORT.
+        if (!pegado.contains("token=")) {
+            // `Toast` y no `marcar`: justo debajo se monta el WebView, y el `TextView` de
+            // aviso se va con la pantalla. Lo que la dueña tiene que leer sobrevive al cambio.
+            Toast.makeText(this, "Sin la llave no hay memoria compartida: pega la línea "
+                            + "completa que imprime la PC, con su «?token=…». La ventana abre igual.",
+                    Toast.LENGTH_LONG).show();
+        }
         prefs().edit().putString("url", pegado).putString("token", "").apply();
         esconderTeclado();
         abrir(pegado, "");
+    }
+
+    /**
+     * La vuelta del escáner (F14b). Con cuadro leído se rellena el campo y se abre: la llave
+     * ya venía dentro del enlace, así que pedirle a la dueña otro toque sería inventárselo.
+     */
+    @Override
+    protected void onActivityResult(int peticion, int resultado, Intent datos) {
+        super.onActivityResult(peticion, resultado, datos);
+        if (peticion != ESCANEO || campoEnlace == null) {
+            return;
+        }
+        String leido = datos == null ? null : datos.getStringExtra(Escaner.TEXTO);
+        if (resultado == RESULT_OK && leido != null && !leido.trim().isEmpty()) {
+            campoEnlace.setText(leido.trim());
+            intentar(campoEnlace);
+            return;
+        }
+        marcar(leido == null || leido.trim().isEmpty()
+                ? "el cuadro no se leyó: acerca el teléfono a la pantalla y prueba otra vez"
+                : leido);
     }
 
     private void marcar(String motivo) {

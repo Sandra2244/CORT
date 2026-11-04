@@ -192,6 +192,58 @@ def main():
            "(cd build && sha256sum CORT-movil.apk)" in script,
            "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
 
+    print("\n== el escáner del QR del enlace (F14b) ==")
+    zxing = [l for l in lineas if l.startswith("zxing-core-")]
+    prueba("zxing está fijado en deps.txt con su suma y su URL de Maven Central",
+           len(zxing) == 1
+           and "8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82" in zxing[0]
+           and zxing[0].endswith("https://repo1.maven.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar"),
+           zxing[0][:60] if zxing else "ninguna línea zxing")
+    prueba("el jar entra al classpath de `javac` y a `d8`, y `d8` se llama una sola vez",
+           "vendor/zxing-core-3.5.3.jar" in script and script.count('"$BT/d8"') == 1,
+           f'llamadas a d8: {script.count(chr(34) + "$BT/d8" + chr(34))}')
+    escaner_path = SRC / "Escaner.java"
+    prueba("Escaner.java existe (la cámara leyendo el cuadro de la PC)", escaner_path.is_file())
+    if escaner_path.is_file():
+        escaner = lee(escaner_path)
+        prueba("decodifica sólo QR: con todos los formatos zxing gasta ciclos buscando barras",
+               "BarcodeFormat.QR_CODE" in escaner and "POSSIBLE_FORMATS" in escaner)
+        prueba("lee el plano Y de YUV_420_888 con su rowStride (sin convertir a ARGB)",
+               "ImageFormat.YUV_420_888" in escaner and "getRowStride()" in escaner)
+        prueba("no acumula frames: uno cada vez y los demás se tiran",
+               "acquireLatestImage()" in escaner and "compareAndSet(false, true)" in escaner)
+        prueba("no guarda ninguna imagen en disco (la regla de la cámara)",
+               not any(m in escaner for m in ("FileOutputStream", "getExternalStorage",
+                                              "MediaStore", "openOutputStream")),
+               "aquí no se escribe ni un fotograma")
+        prueba("suelta la cámara al salir: si no, el aparato queda con la luz encendida",
+               "quitSafely" in escaner and "protected void onPause" in escaner)
+        prueba("si algo falla lo dice con palabras y no cierra en seco",
+               "pega la dirección a mano" in escaner)
+    actividad = lee(SRC / "MainActivity.java")
+    prueba("la pantalla de enlace tiene el botón y recibe su vuelta",
+           "startActivityForResult(new Intent(this, Escaner.class), ESCANEO)" in actividad
+           and "protected void onActivityResult" in actividad
+           and "campoEnlace.setText" in actividad)
+    prueba("el campo para escribir la IP sigue ahí: el plan B no se quita",
+           "final EditText campo = new EditText(this);" in actividad)
+    puente = lee(SRC / "Puente.java")
+    prueba("la ventana carga la interfaz aunque el enlace guardado sea el de memoria",
+           "Puente.urlDeLaCara(base)" in actividad and "PUERTO_CARA" in puente)
+    cuerpoCara = puente[puente.index("public static String urlDeLaCara"):]
+    prueba("urlDeLaCara conserva la llave (sin ella el puente contesta 401)",
+           "?token=" in cuerpoCara[:900] and "/index.html" in cuerpoCara[:900])
+    prueba("y si no hay llave no inventa un query vacío",
+           '(llave.isEmpty() ? "" : "?token="' in puente)
+    manifiesto_texto = lee(APP / "AndroidManifest.xml")
+    prueba("el escáner va declarado en el manifiesto y nadie de fuera lo abre",
+           'android:name=".Escaner"' in manifiesto_texto
+           and 'android:exported="false"' in manifiesto_texto)
+    prueba("la cámara sigue sin ser obligatoria: un teléfono sin cámara enlaza escribiendo",
+           'android:name="android.permission.CAMERA"' in manifiesto_texto)
+    prueba("el enlace sin `?token=` se avisa por escrito, no se traga en silencio",
+           'contains("token=")' in actividad)
+
     print("\n== la tabla de frases del cerebro nativo ==")
     tabla_path = APP / "assets" / "habilidades.json"
     prueba("assets/habilidades.json viaja en el repo (lo lee Java con getAssets)",

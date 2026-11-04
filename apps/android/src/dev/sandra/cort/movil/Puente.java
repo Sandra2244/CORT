@@ -44,8 +44,8 @@ public class Puente {
     public static final String ORIGEN = "telefono";
 
     /**
-     * La ruta del portátil. No es decoración: `Sincroniza` la concatena tal cual.
-     * En esta rama el puente contesta 404 — ver el encabezado de esta clase.
+     * La ruta del portátil. No es decoración: `Sincroniza` la concatena tal cual, y el
+     * puente de esta rama ya la sirve (F14a) — con token, en el puerto del core.
      */
     public static final String RUTA = "/memoria/puente";
 
@@ -56,6 +56,9 @@ public class Puente {
      * el otro conservando el host. No es el 8780 de la otra línea.
      */
     public static final int PUERTO_API = 8765;
+
+    /** El puerto de la interfaz: lo que el `WebView` del teléfono carga encima del enlace. */
+    public static final int PUERTO_CARA = 8766;
 
     // Los tres topes, con el mismo número que en Python. Un puente sin techo es una
     // subida que se come la memoria de un teléfono de gama de entrada.
@@ -263,6 +266,28 @@ public class Puente {
         }
         String llave = tokenDe(limpio);
         return esquema + host + ":" + PUERTO_API + RUTA
+                + (llave.isEmpty() ? "" : "?token=" + llave);
+    }
+
+    /**
+     * La dirección de la **interfaz** para el mismo portátil. El QR y el arranque de la PC
+     * imprimen el enlace de memoria (`:8765/memoria/puente?token=…`); el `WebView` necesita
+     * `:8766/index.html` y nada más, y se guarda una sola preferencia para las dos cosas.
+     * Devuelve `null` si el enlace no es un `http(s)`, que es lo que ya hace `urlDelPuente`.
+     */
+    public static String urlDeLaCara(String enlace) {
+        String delPuente = urlDelPuente(enlace);
+        if (delPuente == null) {
+            return null;
+        }
+        String esquema = delPuente.startsWith("https://") ? "https://" : "http://";
+        String resto = delPuente.substring(esquema.length());
+        int finAutoridad = resto.indexOf(':');
+        if (finAutoridad < 0) {
+            return null;
+        }
+        String llave = tokenDe(enlace);
+        return esquema + resto.substring(0, finAutoridad) + ":" + PUERTO_CARA + "/index.html"
                 + (llave.isEmpty() ? "" : "?token=" + llave);
     }
 
