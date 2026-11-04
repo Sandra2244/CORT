@@ -567,8 +567,11 @@ modelo `vosk-model-small-es-0.42.zip` **39 817 833 B**, `libvosk.so` **10 042 80
 A16, cuánta RAM ocupa y cuánto tarda un dictado real tuyo. `Motor.java` imprime el tiempo de
 cada dictado (`ultimoDictadoMs`) para que esa cifra salga de la mano y no de un deseo. Lo que
 sí está comprobado sin teléfono: el compile, la firma, que las `.so` van sin comprimir y
-alineadas a página (`extractNativeLibs="false"` muere sin eso), y 44 comprobaciones de
-`scripts/prueba_apk.py` que corren sin red.
+alineadas a página (`extractNativeLibs="false"` muere sin eso), y las 53 comprobaciones de
+`scripts/prueba_apk.py` que corren sin red. Desde este commit la suite no es sólo de la laptop:
+el workflow la ejecuta en el runner antes de publicar, y las notas de la release copian de su
+salida el número de comprobaciones — hasta hoy lo decía el texto a mano, y se había quedado en
+44 mintiendo sobre su propia prueba.
 
 **Un bug que te tocó a ti:** el archivo `.sha256` del artefacto decía
 `build/CORT-movil.apk`, así que `sha256sum -c` respondía *«no existe el fichero»* aunque la

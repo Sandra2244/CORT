@@ -213,10 +213,16 @@ fi
 # Todo lo que se afirma de este APK en el README o en la Release sale de aquí,
 # con números medidos sobre el archivo final y no de memoria.
 BYTES="$(stat -c%s build/CORT-movil.apk)"
-MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}")"
+# Los números de este archivo se leen en español: separador de miles con espacio
+# y coma decimal. `numfmt --grouping` no vale porque el separador que usa depende
+# del locale del runner (en Actions es coma; en la laptop, punto), así que se
+# agrupa con `sed`, que no pregunta idioma.
+AGRUPAR() { echo "$1" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1 \2/;ta'; }
+BYTES_GRUPO="$(AGRUPAR "$BYTES")"
+MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
 {
     echo "APK móvil de CORT $VERSION (versionCode $CODE)"
-    echo "peso: $BYTES bytes ($MB MB)"
+    echo "peso: $BYTES_GRUPO bytes ($MB MB)"
     if [ "$MOTOR" = "1" ]; then
         echo "oído: Vosk dentro del APK (modelo español pequeño, sin red)"
     else
@@ -275,7 +281,7 @@ cat build/auditoria.txt
     "$BT/apksigner" verify --print-certs build/CORT-movil.apk
 } > build/firma.txt
 
-echo "peso: $BYTES bytes ($MB MB)"
+echo "peso: $BYTES_GRUPO bytes ($MB MB)"
 # El nombre que se anota es el **desnudo**. Medido en el run 41881069892: con
 # `sha256sum build/CORT-movil.apk` el archivo quedaba como
 # `…  build/CORT-movil.apk`, y al bajar el APK suelto de la release

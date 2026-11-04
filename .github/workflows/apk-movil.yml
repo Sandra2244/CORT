@@ -133,6 +133,23 @@ jobs:
           fi
           exit $COD
 
+      - name: la suite de comprobaciones del APK
+        # Corre DESPUÉS de compilar, porque varias comprobaciones miran lo que salió
+        # en `build/`. Y existe porque el 2026-11-04 las notas de la release citaban
+        # el número a mano («44 comprobaciones») cuando la suite ya llevaba 51: el
+        # texto publicado mentía sobre su propia prueba. Ahora la release copia el
+        # número que imprime la suite de esta misma corrida.
+        run: |
+          python3 scripts/prueba_apk.py | tee /tmp/suite.log
+          COD=${PIPESTATUS[0]}
+          if [ "$COD" != "0" ]; then
+            echo "::error::la suite cayó con código $COD"
+            grep -A20 'sin pasar' /tmp/suite.log | sed 's/^/::error::/' || true
+            exit $COD
+          fi
+          TOTAL="$(sed -n 's/^resultado: \([0-9]*\)\/.*/\1/p' /tmp/suite.log | tail -1)"
+          echo "COMPROBACIONES=$TOTAL" >> "$GITHUB_ENV"
+
       - name: publicar el artefacto
         uses: actions/upload-artifact@v4
         with:
@@ -163,7 +180,7 @@ jobs:
           set -e
           cd apps/android/build
           PESO=$(stat -c%s CORT-movil.apk)
-          MB=$(awk "BEGIN{printf \"%.2f\", $PESO/1048576}")
+          MB=$(awk "BEGIN{printf \"%.2f\", $PESO/1048576}" | tr '.' ',')
           SHA=$(awk '{print $1}' CORT-movil.apk.sha256)
           VERSION=$(sed -n 's/^APK móvil de CORT \([^ ]*\).*/\1/p' auditoria.txt)
           CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' auditoria.txt)
@@ -171,6 +188,13 @@ jobs:
           LLAVE=$(sed -n 's/^llave: //p' auditoria.txt)
           HUELLA=$(sed -n 's/.*certificate SHA-256 digest: //p' firma.txt)
           MODEL=$(awk '$1=="39817833" || /vosk-model-small-es/ {print $1}' auditoria.txt | head -1)
+          # El número lo dejó el paso de la suite en `$GITHUB_ENV`; el respaldo sólo
+          # evita una línea vacía si alguien quita ese paso.
+          COMPROBACIONES="${COMPROBACIONES:-la suite}"
+          # Miles con espacio y coma decimal, para que la release se lea en español.
+          # `numfmt --grouping` depende del locale del runner y en Actions mete comas.
+          PESO="$(echo "$PESO" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1 \2/;ta')"
+          MODEL="$(echo "$MODEL" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1 \2/;ta')"
           cat > notas.md <<NOTAS
           # CORT $VERSION — el teléfono funciona solo
 
@@ -184,7 +208,7 @@ jobs:
           - **El dictado se resuelve dentro del aparato**: Vosk con el modelo español \`vosk-model-small-es-0.42\` viajan dentro del APK. Si el modelo todavía se está cargando, o el APK salió delgado, CORT cede el oído al motor que trae Android **y lo dice** en la línea \`oído: …\`.
           - **Traje de asistente de Android** (\`VoiceInteractionService\` + \`RecognitionService\`): puede responder al botón de asistente del sistema.
           - **La voz es la del PC de esta rama**: \`es-ES\`, porque el portátil habla con espeak-ng y Piper \`es_ES-*\` (1,90x y 2,55x medidos en \`cort-bridge/cort_voz.py\`).
-          - **Se instala encima de la versión anterior**: $LLAVE (\`versionCode $CODE\`, huella \`${HUELLA:0:16}…\`).
+          - **Firmado:** $LLAVE — \`versionCode $CODE\`, huella del certificado \`${HUELLA:0:16}…\` (la misma de las versiones anteriores, así que no hace falta desinstalar).
 
           ## Los números, medidos sobre el archivo que te estás bajando
 
@@ -221,7 +245,7 @@ jobs:
           - **No sincroniza la memoria con la PC.** El puente de esta rama no sirve \`/memoria/puente\`; el teléfono lo detecta y lo traduce («ese puente aún no tiene memoria compartida, llega con F14»). **Tampoco hay emparejamiento por QR ni token + TLS** (F14).
           - **No lleva cerebro grande dentro.** El modelo que razona sigue en la PC (Ollama); en el teléfono sólo está el oído (F13 es el cerebro GGUF local).
           - **No despierta con «ok CORT» en segundo plano** y la cámara del teléfono no se usa.
-          - **Nadie la ha instalado todavía en el A16.** Lo medido: el compile, la firma, la estructura del APK y 44 comprobaciones automáticas. Cuánto tarda el modelo en cargarse en tu teléfono, cuánta RAM ocupa y cuánto tarda un dictado real **es lo que saca el ensayo físico**; la app ya imprime el tiempo de cada dictado para que ese número salga de la mano y no de un deseo.
+          - **Nadie la ha instalado todavía en el A16.** Lo medido: el compile, la firma, la estructura del APK y las $COMPROBACIONES comprobaciones de \`scripts/prueba_apk.py\`, que esta misma corrida corrió y están en el log. Cuánto tarda el modelo en cargarse en tu teléfono, cuánta RAM ocupa y cuánto tarda un dictado real **es lo que saca el ensayo físico**; la app ya imprime el tiempo de cada dictado para que ese número salga de la mano y no de un deseo.
 
           ---
           SHA-256 del APK publicado: \`$SHA\`
@@ -230,7 +254,7 @@ jobs:
           # espacios de indentación, así que se recortan con `sed` antes de publicar.
           sed -i 's/^          //' notas.md
           if gh release view "$ETIQUETA" >/dev/null 2>&1; then
-            gh release edit "$ETIQUETA" --notes-file notas.md
+            gh release edit "$ETIQUETA" --notes-file notas.md --target "${COMITE:-$GITHUB_SHA}"
             gh release upload "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt --clobber
           else
             gh release create "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt \

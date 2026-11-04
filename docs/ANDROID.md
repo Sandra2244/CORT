@@ -201,7 +201,9 @@ apps/android/ACREDITACION.md              licencias pieza por pieza y qué NO va
 apps/android/compilar.sh                  aapt2 + javac + d8 + zip(-0) + zipalign(-p) + apksigner
 cort-bridge/cort_server.py                `POST /mic` (el teléfono también puede dictar a la PC)
 cort-bridge/cort_voz.py                   la voz de la PC: espeak-ng y Piper es_ES (1,90× / 2,55×)
-scripts/prueba_apk.py                     44 comprobaciones sin red: manifiesto, Java, sums, guiones
+scripts/prueba_apk.py                     comprobaciones sin red: manifiesto, Java, sums, guiones
+                                          (corren en cada compilación de Actions; su número lo
+                                          imprime la propia suite y la release lo copia)
 .github/workflows/apk-movil.yml           la compilación y sus medidas
 ```
 

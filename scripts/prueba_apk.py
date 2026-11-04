@@ -237,6 +237,12 @@ def main():
     prueba("`gh` recibe su token dentro del runner",
            re.search(r"GH_TOKEN: \$\{\{ github\.token \}\}", flujo) is not None,
            "sin GH_TOKEN el paso cae con «set the GH_TOKEN environment variable» (run 41891940880)")
+    prueba("la suite corre también en el runner, no sólo en la laptop",
+           "python3 scripts/prueba_apk.py" in flujo,
+           "si la suite no se ejecuta en Actions, lo publicado no lo verificó más que esta máquina")
+    prueba("las notas copian el número de comprobaciones de la suite",
+           re.search(r"\$COMPROBACIONES comprobaciones", flujo) is not None,
+           "el 2026-11-04 la release decía «44 comprobaciones» cuando ya eran 51: mentía sobre su prueba")
 
     totales = len(RESULTADOS)
     buenos = sum(1 for _, ok, _ in RESULTADOS if ok)
