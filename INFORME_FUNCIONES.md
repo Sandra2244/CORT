@@ -434,3 +434,34 @@ Condiciones para que el teléfono alcance al puente: abrirlo a la red local
 (`instala_cort.sh --red`, que pone `CORT_BIND=0.0.0.0`). Sin HTTPS la PWA no se instala en
 Android y el navegador no da micro por `http`, y de ahí que el cliente sea un APK.
 
+
+## 16. El APK publicado: `cort-v0.11.0` (4 de noviembre, 06:41–06:45)
+
+Lo que estaba escrito y sin compilar ahora es un archivo descargable. Dos runs verdes de
+`.github/workflows/apk-movil.yml`: `41787218390` (push de la rama, 25 s) y `41787686415`
+(push de la etiqueta, 22 s). El segundo confirma que el `versionName` también sale del
+nombre de la etiqueta, no sólo del `workflow_dispatch`.
+
+| qué | cifra medida |
+|---|---|
+| peso del APK | **16 873 bytes** (0,016 MB) |
+| lo que hay dentro | `AndroidManifest.xml` 2 352 · `classes.dex` 15 120 · `resources.arsc` 952 · icono vectorial 640 · `META-INF` de la firma |
+| versión y código | `versionName 0.11.0`, `versionCode 1100` (derivado de la versión; manda Android para decidir si es actualización) |
+| SDK | minSdk 26 · targetSdk 34 · compilado con build-tools **37.0.0** sobre platform **android-37.2** (el runner tiene hasta API 37; el script toma el más nuevo y `--target-sdk-version` sigue fijando 34) |
+| firma | **llave del repo**, no desechable: el secreto `CORT_APK_KEYSTORE_B64` estaba montado desde el 2026-10-21 (lo puso la otra línea). `llave: la del repo (se instala encima de la versión anterior)` salió impreso por el propio script, y la huella del certificado es `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977` |
+| SHA-256 del APK | `bc384b621439e9f16ccaa3d55a1f8e67ab6664d3f9ea05c15a9ee7f71f8f4012` |
+| comprobación externa | se volvió a descargar con `curl` desde la página de la release y la suma **coincidió byte a byte** (16 873 bytes, HTTP 200) |
+| paquetes en el teléfono | `dev.sandra.cort.movil` (esta línea) y `dev.sandra.cort` (la de `main`) son **dos aplicaciones distintas**: conviven, no se pisan |
+
+**Dos correcciones que se hicieron leyendo, no corriendo.** Este equipo no tiene `javac`
+(OpenJDK 21 sólo runtime) ni SDK de Android, así que el Java no se puede compilar aquí: cada
+error se paga con un run. Al releer `MainActivity.java` salieron dos —el recurso del WebView
+se llama `PermissionRequest.RESOURCE_AUDIO_CAPTURE` y aquí estaba escrito `REQUEST_AUDIO_CAPTURE`,
+que no existe; y el texto transcrito se metía al JS con comillas a mano, que un salto de línea
+de Vosk rompía. Ambos corregidos antes de empujar, y el run salió verde a la primera.
+
+**Lo que el run 22–25 s no demuestra.** Que el botón funcione con una voz real en un Galaxy
+A16. La ruta `/mic` está medida con audio sintético (7/7, §15) y el APK está firmado y
+descargable, pero nadie lo ha instalado aún en el teléfono: el permiso de micrófono, la
+dirección del puente con `--red` y la latencia real con el Wi‑Fi de la casa son cosa de la
+prueba física.

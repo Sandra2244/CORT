@@ -217,13 +217,19 @@ Medida también la traducción de las etiquetas del panel de notas (`MODIFICADO:
 - Por qué no se compila en casa: medido en esta laptop, hay OpenJDK 21 **sólo runtime**
   (`javac` no existe), y no hay Gradle, ni SDK de Android, ni `adb`. Lo que se puede
   garantizar es que el APK salga del código de este repo con un workflow leído
-  (`.github/workflows/apk.yml`) y que su peso y SHA-256 se publiquen medidos.
+  (`.github/workflows/apk-movil.yml`) y que su peso y SHA-256 se publiquen medidos.
 - El proyecto `apps/android/` no declara **ninguna** dependencia externa: WebView +
   `AudioRecord` + `org.json`, todo del SDK, y **no usa Gradle**: `apps/android/compilar.sh`
   llama a `aapt2`, `javac --release 11`, `d8`, `zipalign` y `apksigner` del runner
   (`minSdk 26`, `targetSdk 34`), que es el método ya probado por la otra línea del repo.
-  Sin el secreto `CORT_APK_KEYSTORE_B64` la firma es desechable y hay que desinstalar el
-  anterior: se dice en la release, no escondido en el log.
+- **Compilado, firmado y publicado el 2026-11-04** (runs 41787218390 y 41787686415, los dos
+  verdes): `CORT-v0.11.0.apk` de **16 873 bytes**, `versionCode 1100`, build-tools 37.0.0 con
+  platform `android-37.2`, **22–25 s** de compilación y SHA-256
+  `bc384b621439e9f16ccaa3d55a1f8e67ab6664d3f9ea05c15a9ee7f71f8f4012`, comprobado volviendo a
+  descargar el archivo desde la release. El secreto `CORT_APK_KEYSTORE_B64` **sí estaba
+  montado** en el repo (subido el 2026-10-21 por la otra línea), así que salió firmado con la
+  **llave de la autora** y se instala encima del anterior: `CORT-v0.11.0-firma.txt` publica la
+  huella del certificado con la que se comprueba desde fuera.
 - El oído del teléfono entra por `POST /mic` en el puente (el navegador no da
   `getUserMedia` por `http`). Medido con `scripts/prueba_mic_telefono.py`: **7/7**,
   22,4 s la primera subida (Vosk cargando 58 MB) y **2,82 s** con el modelo en RAM para
@@ -233,9 +239,9 @@ Medida también la traducción de las etiquetas del panel de notas (`MODIFICADO:
   script: `scripts/instala_cort.sh`, probado en esta máquina de principio a fin.
 
 Sigue pendiente, y se dice con nombre: **emparejamiento y clave** (S3) — con `--red`
-cualquiera de tu Wi‑Fi llega al puente; la firma de autora con `CORT_APK_KEYSTORE_B64`; y
-la prueba física en el A16, que sólo puedes hacer tú. No se instala ningún `.apk` de un
-acortador.
+cualquiera de tu Wi‑Fi llega al puente — y la **prueba física en el A16**, que sólo puedes
+hacer tú. La firma de autora ya no está en esa lista: está montada y medida arriba. No se
+instala ningún `.apk` de un acortador.
 
 1. Elegir linaje y montar su proyecto fuente: `2.11.0-nucleo` (47,5 MB, con Vosk
    español sin internet y su propia `assets/ui`) o `bolsillo` (1 MB, fuente en

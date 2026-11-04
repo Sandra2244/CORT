@@ -61,13 +61,33 @@ que el runner de Ubuntu trae preinstaladas —
 El proyecto **no declara ninguna dependencia externa**: sólo `android.*` y `org.json`, que
 vienen con el SDK. No hay nada de terceros que pueda cambiar después de publicado.
 
-**La firma.** Con el secreto `CORT_APK_KEYSTORE_B64` en el repo, el APK sale con la llave de
-la autora y se puede instalar encima del anterior. Sin ese secreto —que todavía no está
-montado— `compilar.sh` genera una llave **desechable** en el runner, y entonces hay que
-**desinstalar la versión anterior** antes de instalar la nueva: es verdad, es molesto, y se
-dice aquí y en la release en vez de esconderse en el log. `build/firma.txt` (la huella SHA-256
-del certificado, que es información pública porque vive dentro del APK) se sube al lado del APK
-para que se pueda comprobar desde fuera con qué llave salió.
+**La firma — medido el 2026-11-04 en el run 41787218390.** El secreto `CORT_APK_KEYSTORE_B64`
+**sí está montado** en el repo (subido el 2026-10-21 por la otra línea y compartido por las
+dos), así que `compilar.sh` firmó con la llave de la autora y **el APK se instala encima del
+anterior sin desinstalar**. El log lo dice él mismo: `llave: la del repo`. La huella del
+certificado quedó publicada en `CORT-v0.11.0-firma.txt`: `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`
+(SHA-256 del certificado, información pública porque vive dentro del APK). Si algún día se
+quita el secreto, el script vuelve a generar una llave desechable y entonces sí hay que
+desinstalar la versión anterior; el propio `firma.txt` de cada release dice en una línea en
+qué caso estás, en vez de esconderse en el log.
+
+**Peso y comprobación.** El APK publicado pesa **16 873 bytes (0,02 MB)** y su SHA-256 es
+`bc384b621439e9f16ccaa3d55a1f8e67ab6664d3f9ea05c15a9ee7f71f8f4012`; dentro van sólo
+`AndroidManifest.xml`, el vector del orbe, `resources.arsc`, `classes.dex` (15 120 bytes) y
+el bloque `META-INF` de la firma. La compilación completa tardó **22–25 s** en el runner
+(`ubuntu-24.04`, build-tools 37.0.0, platform android-37.2) y el `versionCode` derivado de
+`0.11.0` salió como `1100`, que es lo que Android usa para decidir si es actualización.
+Descargar y comprobar desde fuera, sin confiar en este texto:
+
+```bash
+B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.11.0
+curl -sL -o CORT-v0.11.0.apk      $B/CORT-v0.11.0.apk
+curl -sL -o CORT-v0.11.0.apk.sha256 $B/CORT-v0.11.0.apk.sha256
+sha256sum -c CORT-v0.11.0.apk.sha256
+```
+
+La comparación es contra el archivo `.sha256` de la propia release, no contra un número que
+este documento repita: si alguien sustituyó el APK, la suma ya no cuadra y el chequeo falla.
 
 ## 4. Instalarla en el Galaxy A16
 
@@ -78,10 +98,10 @@ para que se pueda comprobar desde fuera con qué llave salió.
    cd ~/Escritorio/CORT && CORT_BIND=0.0.0.0 .venv/bin/python -u cort-bridge/cort_server.py
    ```
    El puente imprime su dirección: `a la red local: http://192.168.x.x:8766/`. Apunta esa IP.
-2. Bajar el `CORT-movil.apk` de la release en el teléfono. Android avisará de que la fuente
-   no es conocida: **es verdad** — mientras no esté montada la llave de la autora, el APK sale
-   firmado con una llave desechable y hay que desinstalar el anterior. Acepta sólo si el
-   archivo viene de tu propio repo y **compara el SHA-256** con el que pone la release antes de abrirlo.
+2. Bajar **`CORT-v0.11.0.apk`** de la release en el teléfono. Android avisará de que la fuente
+   no es conocida: **es verdad en el sentido de que no está en ninguna tienda** —el APK sale de
+   tu propio repo, firmado con la llave del repo (apartado 3)—. Acepta sólo si el archivo viene
+   de ahí y **compara el SHA-256** con el `.sha256` que publica la misma release antes de abrirlo.
 3. Abrir la aplicación. La primera vez pregunta dónde está CORT: escribe la dirección del
    paso 1 (`http://192.168.x.x:8766/index.html`). Se guarda en el teléfono.
 4. Pedirá permiso de **micrófono**. Sin él la interfaz funciona igual; sólo falta «● hablar».
@@ -116,6 +136,10 @@ botella es esta CPU de 2 núcleos, no el teléfono ni el Wi-Fi.** Con el cerebro
 - **No hay notificaciones ni "ok CORT" en segundo plano.** Sin servicio que escuche
   siempre, la app hace de escucha mientras esté abierta.
 - **La cámara del teléfono no se usa.** La mirada (S2) corre en el PC con su cámara.
+- **Nadie la ha instalado todavía en el A16.** Lo medido es el compile+firma en el runner y la
+  ruta `/mic` con audio sintético (7/7); el trayecto completo audio-real-del-teléfono → Vosk →
+  respuesta sigue pendiente de su prueba física, y ahí se verá si el botón, el permiso y la
+  dirección del puente se comportan en la mano y no en la prueba.
 
 ## 7. Dónde está cada cosa
 
@@ -132,8 +156,10 @@ cort-bridge/cort_server.py                                 ruta `POST /mic` (rec
 ```
 
 > **Ojo con el nombre, porque hay dos CORT en este repo.** La rama `main` lleva otra línea
-> (la del cerebro en Java y su `apps/apk/compilar.sh`, con releases `v0.15…v0.17` publicadas
-> en octubre). Esta carpeta `apps/android` es la línea del puente Python y la interfaz
+> (la del cerebro en Java y su `apps/apk/compilar.sh`, con releases `v0.1…v0.17` y `v0.2.x-demo`
+> publicadas en octubre). Esta carpeta `apps/android` es la línea del puente Python y la interfaz
 > JARVIS rediseñada, que es la que corre en la PC de la casa y la que se etiqueta `cort-vX.Y.Z`.
-> Los dos APK se llaman distinto (`CORT.apk` y `CORT-movil.apk`) y se compilan con workflows
-> distintos para no pisarse.
+> Los dos APK se llaman distinto (`CORT.apk` y `CORT-v0.11.0.apk`), se compilan con workflows
+> distintos para no pisarse y **tienen paquetes distintos** (`dev.sandra.cort` y
+> `dev.sandra.cort.movil`), así que en el teléfono conviven como dos aplicaciones separadas y no
+> se actualiza una por encima de la otra.
