@@ -1,11 +1,10 @@
-package es.cort.android;
+package dev.sandra.cort.movil;
 
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.Bundle;
@@ -89,7 +88,7 @@ public class MainActivity extends Activity {
                 String[] pidos = solicitud.getResources();
                 boolean soloMicro = pidos.length > 0;
                 for (String q : pidos) {
-                    if (!q.equals(PermissionRequest.REQUEST_AUDIO_CAPTURE)) soloMicro = false;
+                    if (!q.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) soloMicro = false;
                 }
                 if (soloMicro) {
                     solicitud.grant(pidos);
@@ -266,10 +265,14 @@ public class MainActivity extends Activity {
                 enHiloPrincipal("dijiste: " + texto);
                 // La misma ruta que la caja de texto de la interfaz: el puente
                 // decide con sus reglas o con el modelo y responde por el WebSocket.
-                runOnUiThread(() -> web.evaluateJavascript(
-                        "window.CORT_enviarAlCerebro && window.CORT_enviarAlCerebro("
-                                + "{type:'user_input', text:" + JSONObject.quote(texto) + "})",
-                        null));
+                // El payload se arma con JSONObject y no con comillas a mano, para
+                // que las comillas o saltos de la transcripción no rompan el JS.
+                JSONObject envio = new JSONObject();
+                envio.put("type", "user_input");
+                envio.put("text", texto);
+                final String js = "window.CORT_enviarAlCerebro && window.CORT_enviarAlCerebro("
+                        + envio.toString() + ")";
+                runOnUiThread(() -> web.evaluateJavascript(js, null));
             } else {
                 enHiloPrincipal("el puente no pudo transcribir: " + j.optString("motivo", "sin motivo"));
             }

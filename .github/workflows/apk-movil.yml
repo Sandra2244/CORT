@@ -1,0 +1,87 @@
+name: apk-movil
+
+# El APK de esta rama (la que abre el puente de la PC desde el teléfono) se
+# compila aquí, no en la Classmate: medido en esta máquina, OpenJDK 21 está sólo
+# en versión *runtime* (no hay `javac`), y no hay Gradle, ni SDK de Android, ni
+# `adb`. `apps/android/compilar.sh` usa las herramientas que el runner ya trae
+# (`aapt2`, `d8`, `zipalign`, `apksigner`) y no descarga nada de terceros.
+#
+# Las logs de Actions de un repo privado no se pueden leer desde fuera sin
+# sesión, así que si un paso falla su final se publica como **annotation del
+# check-run**, que sí es pública. Eso es lo que se mira cuando el triángulo sale
+# rojo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "versión que se escribe dentro del APK (X.Y.Z)"
+        default: "0.11.0"
+  push:
+    branches: [web/cort-v0]
+    tags: ["cort-v*"]
+    paths:
+      - "apps/android/**"
+      - ".github/workflows/apk-movil.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: código
+        uses: actions/checkout@v4
+
+      - name: qué trae el runner (medido en el log)
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          S="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          ls "$S" 2>/dev/null || echo "(el SDK no está en esa ruta)"
+          echo "plataformas:"; ls "$S/platforms" 2>/dev/null || echo "(ninguna)"
+          echo "build-tools:";  ls "$S/build-tools" 2>/dev/null || echo "(ninguna)"
+          for h in aapt2 d8 zipalign apksigner javac keytool; do
+            printf "  %-10s %s\n" "$h" "$(command -v $h || ls "$S"/build-tools/*/ 2>/dev/null | head -1)"
+          done
+          java -version 2>&1 | head -2
+
+      - name: compilar
+        id: compila
+        env:
+          # Sin estas dos líneas el secreto del repo no llegaría nunca al script:
+          # las variables de un paso no se heredan del `env:` del trabajo si no se
+          # declaran aquí. Con `CORT_APK_KEYSTORE_B64` el APK se actualiza
+          # instalando encima; sin él sale llave desechable y hay que desinstalar.
+          CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
+          CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+        run: |
+          V="${{ github.event.inputs.version }}"
+          if [ -z "$V" ]; then V="$(echo "${GITHUB_REF_NAME}" | sed 's/^cort-v//')"; fi
+          case "$V" in *[!0-9.]*) V="0.11.0";; esac
+          echo "versión: $V"
+          # `set +e` y `bash -x`, ambos medidos en la otra línea del repo (runs
+          # 38677344363 y el del 2026-10-15): el shell de Actions se comporta como
+          # `bash -e` y mataba el paso antes de leer el código de salida, y un
+          # fallo mudo no se puede diagnosticar desde fuera.
+          set +e
+          bash -x apps/android/compilar.sh "$V" > /tmp/salida.log 2>&1
+          COD=$?
+          cat /tmp/salida.log
+          if [ $COD -ne 0 ]; then
+            # Los errores de `javac` PRIMERO y después el final del log: con sólo
+            # el `tail`, la lista de veinte se cortaba por caracteres y llegaba
+            # la cola del último. Cada run cuesta.
+            ERRORES="$(grep -E '\.java:[0-9]+: error:' /tmp/salida.log | head -20 | sed 's/%/%25/g')"
+            echo "::error::compilar.sh cayó con código $COD"
+            printf '%s\n' "${ERRORES:-sin errores .java en el log}" | head -20 | sed 's/^/::error::/'
+            tail -c 900 /tmp/salida.log | tr '\n\r' '  ' | sed -e 's/%/%25/g' -e 's/^/::error::final: /'
+          fi
+          exit $COD
+
+      - name: publicar el artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: CORT-movil-${{ github.run_number }}
+          path: |
+            apps/android/build/CORT-movil.apk
+            apps/android/build/CORT-movil.apk.sha256
+            apps/android/build/firma.txt
+          if-no-files-found: error

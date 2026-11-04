@@ -43,7 +43,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| **APK nativo para el teléfono** | real, compilado en Actions | `apps/android` (WebView sobre el puente, cero dependencias externas) + `.github/workflows/apk.yml`; el oído del teléfono entra por `POST /mic` y está medido con `scripts/prueba_mic_telefono.py` (**7/7**, 2,82 s de subida→texto con el modelo en RAM). Peso y SHA-256 del APK publicado, en la release y en `docs/ANDROID.md` |
+| **APK nativo para el teléfono** | real, compilado en Actions | `apps/android` (WebView sobre el puente, cero dependencias externas, sin Gradle) + `.github/workflows/apk-movil.yml` sobre `apps/android/compilar.sh`; el oído del teléfono entra por `POST /mic` y está medido con `scripts/prueba_mic_telefono.py` (**7/7**, 2,82 s de subida→texto con el modelo en RAM). Peso y SHA-256 del APK publicado, en la release y en `docs/ANDROID.md` |
 | Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
@@ -248,7 +248,7 @@ el puente al iniciar sesión. `arranca_cort.sh` no duplica: si ya hay algo en 87
 ./scripts/instala_cort.sh --red      # abre el puente a la red local (CORT_BIND=0.0.0.0)
 ```
 
-Instalar el `app-debug.apk` de la release y abrirlo con la dirección que imprime el puente.
+Instalar el `CORT-movil.apk` de la release y abrirlo con la dirección que imprime el puente.
 El APK es un WebView sobre el puente de la PC, con un botón «● hablar» que graba en el
 teléfono y manda el WAV a `POST /mic`: el navegador de Android no da micrófono por `http`
 (origen no seguro), y por eso hace falta la aplicación y no la web instalable. Cómo se

@@ -219,8 +219,11 @@ Medida también la traducción de las etiquetas del panel de notas (`MODIFICADO:
   garantizar es que el APK salga del código de este repo con un workflow leído
   (`.github/workflows/apk.yml`) y que su peso y SHA-256 se publiquen medidos.
 - El proyecto `apps/android/` no declara **ninguna** dependencia externa: WebView +
-  `AudioRecord` + `org.json`, todo del SDK. `minSdk 24`, `targetSdk 34`, firma de
-  **depuración** (`.dep`): instalable, y se dice en la release que no es firma de autora.
+  `AudioRecord` + `org.json`, todo del SDK, y **no usa Gradle**: `apps/android/compilar.sh`
+  llama a `aapt2`, `javac --release 11`, `d8`, `zipalign` y `apksigner` del runner
+  (`minSdk 26`, `targetSdk 34`), que es el método ya probado por la otra línea del repo.
+  Sin el secreto `CORT_APK_KEYSTORE_B64` la firma es desechable y hay que desinstalar el
+  anterior: se dice en la release, no escondido en el log.
 - El oído del teléfono entra por `POST /mic` en el puente (el navegador no da
   `getUserMedia` por `http`). Medido con `scripts/prueba_mic_telefono.py`: **7/7**,
   22,4 s la primera subida (Vosk cargando 58 MB) y **2,82 s** con el modelo en RAM para

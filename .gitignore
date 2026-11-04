@@ -38,10 +38,8 @@ modelos/vosk*/
 .respaldo-*/
 *.f1bak
 
-# Android: lo que genera la compilación, no el código
-apps/android/app/build/
+# Android: lo que genera la compilación (en el pipeline), no el código
 apps/android/build/
-apps/android/.gradle/
 *.apk
 *.keystore
 *.jks
