@@ -43,7 +43,8 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
+| **APK nativo para el teléfono** | real, compilado en Actions | `apps/android` (WebView sobre el puente, cero dependencias externas) + `.github/workflows/apk.yml`; el oído del teléfono entra por `POST /mic` y está medido con `scripts/prueba_mic_telefono.py` (**7/7**, 2,82 s de subida→texto con el modelo en RAM). Peso y SHA-256 del APK publicado, en la release y en `docs/ANDROID.md` |
+| Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
 puede, CORT lo dice con el motivo y con el número que falta — no simula.
@@ -78,7 +79,12 @@ cort-web/
 scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_sonda ·
                         prueba_wake · prueba_actualiza · prueba_perfil · prueba_vida ·
                         prueba_voz · prueba_acciones · prueba_vision · prueba_memoria ·
+                        prueba_mic_telefono · inventario_funciones ·
+                        instala_cort · arranca_cort · para_cort · desinstala_cort ·
                         arranca_con_sonda.sh
+apps/android/           el cliente del teléfono (WebView + micro nativo), sin dependencias
+docs/ANDROID.md         cómo se compila el APK, cómo se instala y qué no hace todavía
+requirements-cort.txt   lo mínimo que necesita el puente, con las versiones medidas
 PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S4)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
@@ -104,6 +110,30 @@ existe en el equipo (ventanas abiertas, entradas `.desktop`).
 ---
 
 ## Instalación en Linux (MX Linux / XFCE, probado en una Classmate con 2 núcleos y 1851 MB)
+
+### En un paso
+
+```bash
+cd CORT && ./scripts/instala_cort.sh
+```
+
+Hace, y lo dice en la pantalla, exactamente esto: comprueba `python3` y `venv` (si faltan,
+pide tu consentimiento con los paquetes exactos delante y **no ejecuta sudo por ti**), crea
+`.venv`, instala sólo lo declarado en `requirements-cort.txt`, escribe el lanzador de menú
+`~/.local/share/applications/cort.desktop` y su arranque automático de XFCE, y si el equipo
+tiene instancia de usuario de systemd escribe y activa `~/.config/systemd/user/cort.service`.
+
+Medido en esta laptop: **MX Linux 13 + XFCE no trae user manager de systemd**
+(`/run/user/1000/bus` no existe y `systemctl --user` falla con «Failed to connect to user
+scope bus»). El instalador lo comprueba, lo dice, y deja el arranque automático de XFCE, que
+sí funciona aquí. Donde sí hay systemd (Debian y Ubuntu de hoy) queda el servicio.
+
+Opciones: `--red` abre el puente a la red local para usarlo desde el teléfono,
+`--sin-autostart` no pone el arranque automático, `--sin-pregunta` corre sin preguntas para
+documentos o CI. Al final `scripts/para_cort.sh` apaga, `scripts/desinstala_cort.sh` quita lo
+instalado **sin tocar tus datos**, y `scripts/arranca_cort.sh` es lo que llama el lanzador.
+
+### Paso a paso, si prefieres verlo
 
 1. Copiar el repo y entrar en él:
 
@@ -183,6 +213,10 @@ No entra audio ni imagen: los cuadros de la cámara se tiran después de sacar c
 
 ### Como servicio de usuario (que arranque solo)
 
+`instala_cort.sh` hace esto solo, con la ruta real del repo. A mano, y **sólo si el equipo
+tiene instancia de usuario de systemd** (compruébalo con `systemctl --user show-environment`;
+en esta MX Linux no la hay, ver arriba):
+
 ```bash
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/cort.service <<'UNIT'
@@ -191,9 +225,10 @@ Description=CORT — puente local
 After=default.target
 
 [Service]
-WorkingDirectory=%h/Documents/CORT
-ExecStart=%h/Documents/CORT/.venv/bin/python -u %h/Documents/CORT/cort-bridge/cort_server.py
+WorkingDirectory=%h/Escritorio/CORT
+ExecStart=%h/Escritorio/CORT/.venv/bin/python -u %h/Escritorio/CORT/cort-bridge/cort_server.py
 Restart=on-failure
+Nice=10
 
 [Install]
 WantedBy=default.target
@@ -203,8 +238,38 @@ systemctl --user daemon-reload && systemctl --user enable --now cort
 
 ### Lanzador de escritorio
 
-`~/.local/share/applications/cort.desktop`, con `Exec` apuntando al script de arranque
-del repo; aparece en el menú de XFCE como «CORT».
+`~/.local/share/applications/cort.desktop`, con `Exec` apuntando a `scripts/arranca_cort.sh`
+del repo; aparece en el menú de XFCE como «CORT» y, si se deja el arranque automático, levanta
+el puente al iniciar sesión. `arranca_cort.sh` no duplica: si ya hay algo en 8766, lo dice y sale.
+
+### En el teléfono (Android)
+
+```bash
+./scripts/instala_cort.sh --red      # abre el puente a la red local (CORT_BIND=0.0.0.0)
+```
+
+Instalar el `app-debug.apk` de la release y abrirlo con la dirección que imprime el puente.
+El APK es un WebView sobre el puente de la PC, con un botón «● hablar» que graba en el
+teléfono y manda el WAV a `POST /mic`: el navegador de Android no da micrófono por `http`
+(origen no seguro), y por eso hace falta la aplicación y no la web instalable. Cómo se
+compila, qué firma lleva, qué mide y **qué no hace todavía** (emparejamiento y TLS) está en
+[`docs/ANDROID.md`](docs/ANDROID.md).
+
+### Otros sistemas operativos
+
+- **Debian / Ubuntu con XFCE o GNOME**: el mismo `scripts/instala_cort.sh`. Ahí sí hay
+  instancia de usuario de systemd, así que queda además el servicio con `systemctl --user`.
+- **macOS**: no hay capa de acciones nativas escrita todavía. El puente corre
+  (`python3 -m venv .venv && .venv/bin/pip install -r requirements-cort.txt &&
+  .venv/bin/python -u cort-bridge/cort_server.py`) y la interfaz se abre en el navegador;
+  las órdenes de ventana, volumen y apps contestan `origen: no disponible` con el motivo.
+- **Windows**: la capa nativa (`user32.dll` / PowerShell) está **pendiente**, escrita en
+  `docs/PRODUCTO.md` como W1. Lo que ya funciona en cualquier Windows es abrir la dirección
+  del puente en el navegador o en el APK del teléfono, porque la interfaz y el protocolo no
+  dependen del sistema.
+
+Ninguno de estos pasos baja instaladores de terceros por tubería a `sh`: si hace falta
+algo (Ollama, el modelo de Vosk), se baja, **se lee** y luego se ejecuta.
 
 ---
 
@@ -258,6 +323,8 @@ pruebas mueve una carpeta real ni escribe en tu lista de compras.
 .venv/bin/python scripts/prueba_perfil.py        # el escáner: 6 equipos fingidos + la medida real
 .venv/bin/python scripts/prueba_vision.py        # la mirada: cuadros, gestos y ventanas reales
 .venv/bin/python scripts/prueba_memoria.py       # memoria, constitución y autocorrección por WebSocket
+.venv/bin/python scripts/prueba_mic_telefono.py  # el micro del teléfono: POST /mic con WAV, 7/7
+.venv/bin/python scripts/inventario_funciones.py # censo de las 29 órdenes de lectura, con ms
 .venv/bin/python scripts/prueba_sonda.py         # la auto-sonda con un Ollama falso en arena
 .venv/bin/python scripts/prueba_voz.py           # órdenes de voz por WebSocket y descarga del WAV
 .venv/bin/python scripts/prueba_acciones.py      # pc_estado, detect_apps, apt, abrir/cerrar ventana

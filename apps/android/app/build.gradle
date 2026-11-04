@@ -1,0 +1,35 @@
+plugins {
+    id "com.android.application"
+}
+
+android {
+    namespace "es.cort.android"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "es.cort.android"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.11.0"
+    }
+
+    buildTypes {
+        debug {
+            // Se publica firmado con la clave de depuración: instalable en el
+            // teléfono, pero la firma NO es la de la autora. Se dice en la release.
+            applicationIdSuffix ".dep"
+        }
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Sin dependencias externas: la aplicación sólo usa android.* y org.json.
+// Nada que descargar de terceros, nada que pueda cambiar después de publicar.

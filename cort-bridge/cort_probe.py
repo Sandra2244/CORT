@@ -15,12 +15,15 @@ nunca disfraza una simulación de medida.
 """
 import asyncio
 import json
+import os
 import sys
 import time
 
 import aiohttp
 
-WS = "ws://127.0.0.1:8765/ws"
+WS = os.environ.get(
+    "CORT_WS_URL",
+    "ws://127.0.0.1:%s/ws" % os.environ.get("CORT_WS_PORT", "8765"))
 
 
 async def oir(ws, tipos, segundos=45, etiquetas=(), parar_al_primero=False):

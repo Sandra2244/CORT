@@ -353,7 +353,7 @@ def resumen():
         # vacío con dos puntos. Sin nada guardado se dice tal cual y cómo se llena.
         return (f"Aún no sé nada de ti: {RUTA} está vacío. "
                 "Se llena diciendo «recuerda que…» o «no me digas X, dime Y».")
-    base = f"Sé {len(trozos)} cosas de ti"
+    base = f"Sé {len(trozos)} cosa" + ("s" if len(trozos) != 1 else "") + " de ti"
     if n:
         base += f" y tengo {n} apunte" + ("s" if n != 1 else "")
     return base + ": " + "; ".join(trozos) + f". Todo dentro de {RUTA}, en este equipo."

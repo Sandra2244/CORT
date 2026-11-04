@@ -2751,7 +2751,7 @@ async def main():
     app_ws.router.add_get("/ws", ws_handler)
     app_ws.router.add_get("/", ws_handler)
 
-    app_web = web.Application()
+    app_web = web.Application(client_max_size=4 * 1024 * 1024)
     app_web.router.add_get("/", lambda r: web.FileResponse(BASE / "index.html"))
 
     async def audio(request):
@@ -2769,6 +2769,43 @@ async def main():
         return web.FileResponse(ruta)
 
     app_web.router.add_get("/audio/{nombre}", audio)
+
+    async def mic(request):
+        """F7: el micrófono del teléfono entra por aquí, no por el navegador.
+
+        El WebView de Android no puede dar getUserMedia mientras el puente va por
+        http: un origen no seguro no tiene acceso al micro aunque la aplicación
+        tenga el permiso. Así que la aplicación graba, sube el WAV y este puente
+        lo transcribe con Vosk. El audio se borra en cuanto sale el texto: lo que
+        guarda CORT son palabras, nunca grabaciones.
+        """
+        cuerpo = await request.read()
+        if len(cuerpo) < 44 or cuerpo[:4] != b"RIFF" or cuerpo[8:12] != b"WAVE":
+            return web.json_response({"ok": False, "origen": "no disponible",
+                                      "motivo": "lo que subió el teléfono no es un WAV"})
+        if cort_voz is None:
+            return web.json_response({"ok": False, "origen": "no disponible",
+                                      "motivo": "el módulo de voz no cargó en el puente"})
+        ruta = Path(cort_voz.TMP) / f"micro-{os.getpid()}.wav"
+        try:
+            ruta.parent.mkdir(parents=True, exist_ok=True)
+            ruta.write_bytes(cuerpo)
+            r = await asyncio.get_event_loop().run_in_executor(
+                None, cort_voz.transcribir_wav, ruta)
+            r = dict(r)
+            r.setdefault("origen", "real" if r.get("ok") else "no disponible")
+            r["procedencia"] = "micrófono del teléfono"
+            return web.json_response(r)
+        except Exception as e:
+            return web.json_response({"ok": False, "origen": "no disponible",
+                                      "motivo": f"falló la transcripción ({type(e).__name__}: {e})"})
+        finally:
+            try:
+                ruta.unlink()
+            except OSError:
+                pass
+
+    app_web.router.add_post("/mic", mic)
     app_web.router.add_static("/", BASE, show_index=False, follow_symlinks=True)
 
     print(f"[CORT] interfaz  {protocolo}://{bind}:{PUERTO_WEB}/index.html")

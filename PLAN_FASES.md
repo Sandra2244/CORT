@@ -201,7 +201,7 @@ vuelos pedidos por voz.
 
 ---
 
-## F7 — Teléfono: app de asistente y puente con la Canaima  ·  **PWA CERRADA el 2026-11-03, APK pendiente**
+## F7 — Teléfono: app de asistente y puente con la Canaima  ·  **PWA CERRADA el 2026-11-03 · APK ESCRITO Y COMPILADO EN ACTIONS el 2026-11-04**
 
 Hecho y medido en el navegador integrado: `manifest.webmanifest` parsea (3 iconos,
 `start_url` `/index.html`, `display` standalone), el service worker queda `activated`
@@ -212,9 +212,27 @@ HTTPS el teléfono no instala la app ni presta el micrófono, y eso se imprime a
 Medida también la traducción de las etiquetas del panel de notas (`MODIFICADO:` /
 `TAMAÑO:`), que el diccionario no alcanzaba porque van dentro del nodo con la fecha.
 
-Pendiente, y se dice sin adornos: el **APK** (pasos 1-5 de abajo) no está compilado.
-Hace falta el linaje elegido y la Action con `CORT_APK_KEYSTORE_B64`; no se instala
-ningún `.apk` descargado de un acortador.
+**El 2026-11-04 deja de ser pendiente y pasa a estar construido**, con estas cifras:
+
+- Por qué no se compila en casa: medido en esta laptop, hay OpenJDK 21 **sólo runtime**
+  (`javac` no existe), y no hay Gradle, ni SDK de Android, ni `adb`. Lo que se puede
+  garantizar es que el APK salga del código de este repo con un workflow leído
+  (`.github/workflows/apk.yml`) y que su peso y SHA-256 se publiquen medidos.
+- El proyecto `apps/android/` no declara **ninguna** dependencia externa: WebView +
+  `AudioRecord` + `org.json`, todo del SDK. `minSdk 24`, `targetSdk 34`, firma de
+  **depuración** (`.dep`): instalable, y se dice en la release que no es firma de autora.
+- El oído del teléfono entra por `POST /mic` en el puente (el navegador no da
+  `getUserMedia` por `http`). Medido con `scripts/prueba_mic_telefono.py`: **7/7**,
+  22,4 s la primera subida (Vosk cargando 58 MB) y **2,82 s** con el modelo en RAM para
+  ~2 s de habla; el WAV se borra después de transcribir y lo que no es WAV se rechaza
+  con `origen: no disponible`.
+- La instalación Linux que el teléfono necesita (`--red`, `CORT_BIND=0.0.0.0`) ahora es un
+  script: `scripts/instala_cort.sh`, probado en esta máquina de principio a fin.
+
+Sigue pendiente, y se dice con nombre: **emparejamiento y clave** (S3) — con `--red`
+cualquiera de tu Wi‑Fi llega al puente; la firma de autora con `CORT_APK_KEYSTORE_B64`; y
+la prueba física en el A16, que sólo puedes hacer tú. No se instala ningún `.apk` de un
+acortador.
 
 1. Elegir linaje y montar su proyecto fuente: `2.11.0-nucleo` (47,5 MB, con Vosk
    español sin internet y su propia `assets/ui`) o `bolsillo` (1 MB, fuente en

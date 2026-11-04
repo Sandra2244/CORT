@@ -344,3 +344,93 @@ botón de inicio).
 6. **Encuestas → decidir las 3 familias que merecen la pena** antes de escribir código.
 7. **APK** sobre el método de `CORT-nuevo` (Actions), como app de asistente.
 8. **Publicación** en `Sandra2244/CORT` cuando el rediseño ya lo haga distinto.
+
+---
+
+## 15. Censo completo del 4 de noviembre — la versión que se publica
+
+**Puente medido:** el instalado en `~/Escritorio/CORT` tras correr `scripts/instala_cort.sh`,
+con los datos reales de la casa (`~/.local/share/cort`).
+**Cómo se midió:** `scripts/inventario_funciones.py` manda cada orden de **leer** por el
+WebSocket y espera el mensaje que el propio puente promete devolver (el mapa está leído en
+`cort_server.py`, no adivinado). 29 sondas, `nice -19`, carga del equipo entre 6,7 y 9,9.
+**Nada de esto ejecuta una orden de actuar:** `pc_accion`, `open_browser`, `mic_on`,
+`vision_on`, `start_ollama` y `pull_ollama_model` se dejaron fuera a propósito.
+
+| orden | qué contesta | origen | ms | qué se ve en pantalla |
+|---|---|---|---|---|
+| `system_stats` | `system_stats` | real | 4 | cpu 98,7 % · 118 MB libres de 1851 · disco 22,3 % |
+| `check_ollama_status` | `ollama_status_reply` | real | 8 | apagado; 6 modelos en disco |
+| `perfil_equipo` | `perfil_reply` | real | 1040 | Celeron N2805, 2 núcleos, sin AVX/AVX2, nivel 0 |
+| `buscar_actualizacion` | `actualizacion` | real | 4781 | 30 etiquetas de otra base; ninguna `cort-` comparable aún |
+| `get_settings` | `settings_data` | real | 4374 | ciudad Carora, modelo pedido `smollm2:135m`, idioma es |
+| `get_shopping_list` | `shopping_list` | real | 15 | lista vacía, en `~/.local/share/cort/vida` |
+| `vida_estado` | `vida_estado` | real | 44 | 0 compras · 0 notas · 0 pendientes |
+| `ha_get_states` | `ha_states` | real | 11 | «no hay Home Assistant en esta red» |
+| `temperatura` | `sala_temperatura` | real | 16 | TCPU 49,0 °C (4 sensores leídos de sysfs) |
+| `weather` | `weather_panel` | real | 2376 | Caracas 18,9 °C, sensación 21,0, nublado |
+| `get_agent_models` | `agent_models_info` | real | 0 | familia de modelos disponibles por rol |
+| `check_jarvis_os_status` | `jarvis_os_status_reply` | real | 6 | nada escuchando en 127.0.0.1:3000 |
+| `check_local_tts_status` | `local_tts_status_reply` | real | 206 | Piper sí, Chatterbox no (a propósito), motor `rapida` |
+| `voz_estado` | `voz_estado` | real | 144 | sin altavoz físico: sólo `auto_null` |
+| `mic_estado` | `voz_estado` | real | 148 | el mismo inventario: no hay fuente de captura en el PC |
+| `vision_estado` | `vision_estado` | real | 15 | «la mirada está apagada» (encenderla es orden tuya) |
+| `memoria_estado` | `memoria_estado` | real | 5 | archivo existe, 1 preferencia, constitución de 786 caracteres |
+| `check_kokoro_status` | `kokoro_status_reply` | real | 5 | Kokoro no; en su lugar Piper + espeak-ng con sus números |
+| `pc_estado` | `pc_estado` | real | 11428 | ventanas, volumen y apps leídas de wmctrl/pactl/sysfs |
+| `detect_apps` | `detected_apps` | real | 10 | apps leídas de los `.desktop` del sistema |
+| `get_installed_programs` | `installed_programs` | real | 718 | leído con dpkg, con tamaño en KB |
+| `get_winget_upgrades` | `winget_upgrades` | real (en arena) | 7638 arena / >20000 aquí | «winget no existe en Linux: leído con `apt list --upgradable`» |
+| `games_get_library` | `games_library` | real | 2376 | biblioteca de `.desktop` con categoría Game; sin Steam |
+| `get_desktop_wallpaper` | `desktop_wallpaper_result` | real | 284 | leído con xfconf-query |
+| `av_scan_cancel` | `av_cancel` | real | 1 | cancela si había análisis; si no, lo dice |
+| «hola CORT, qué eres» | `jarvis_text` | real | 325 | se describe y dice que distingue real de simulado |
+| «qué sabes de mí» | `jarvis_text` | real | 4104 | «Sé 1 cosa de ti: te llamas Sandra…» |
+| «qué hora es» | `jarvis_text` | real | 3359 | «Son las 02:24» |
+| «gracias» | `jarvis_text` | real | 2032 | dice sin rodeos que no hay cerebro local y por qué (217 MB libres) |
+
+**28 de 29 contestan con `origen: real`.** La que no llegó aquí (`get_winget_upgrades`) sí
+contestó en 7,6 s contra el puente de arena: `apt list --upgradable` se arrastra con el
+equipo al 98 % de CPU. Es lento, no mudo, y ya está apuntada su mejora.
+
+### Lo que este censo destapó (confesado antes de arreglado)
+
+1. **`instala_cort.sh` fallaba a medias**: pedía `vosk.__version__` y el paquete vosk no
+   expone ese atributo → `AttributeError` y el instalador se caía antes de escribir el
+   lanzador. Ahora lee la versión con `importlib.metadata` y el instalador terminó
+   entero en esta máquina (eso es como está medida la tabla).
+2. **En MX Linux 13 + XFCE no hay instancia de usuario de systemd**: `/run/user/1000/bus`
+   no existe y `systemctl --user` contesta «Failed to connect to user scope bus». El
+   instalador ya lo comprueba y, cuando no está, lo dice y deja el arranque automático
+   de XFCE, que es el que funciona en esta laptop. En Debian/Ubuntu con user manager sí
+   escribe y activa la unidad.
+3. **`mic_estado` no estaba roto**: contesta con el inventario de voz completo
+   (`voz_estado`), y la primera versión del censo buscaba un mensaje `mic_estado` que
+   nadie manda. El fallo era del sondeo, no del puente — por eso el mapa de respuestas
+   se leyó en el código en vez de adivinarse.
+4. **La memoria real estaba vacía.** El puente vivo contestó «Aún no sé nada de ti».
+   Todo lo que se midió en S4 con nombre y examen era arena (`/tmp`). Para cerrar la
+   prueba de escritura contra tus datos reales se guardó una sola cosa, y es tuya:
+   `preferencias.nombre = "Sandra"`. Se borra así:
+   `rm ~/.local/share/cort/memoria.json` (CORT vuelve a preguntar y a empezar de cero).
+5. **`Sé 1 cosas de ti`** salía con el plural mal cuando había un solo asunto. Corregido
+   y verificado en vivo: «Sé 1 cosa de ti: te llamas Sandra».
+
+### El oído del teléfono, medido (F7)
+
+`POST /mic` con un WAV de 16 kHz mono 16 bits, generado con espeak-ng + sox
+(`scripts/prueba_mic_telefono.py`, 7/7 casos):
+
+| qué | cifra |
+|---|---|
+| round trip completo, primera subida (modelo Vosk cargando) | 22 440 ms |
+| round trip con el modelo ya en RAM | 2 820 ms |
+| trabajo de transcripción solo (Vosk) | 2 463 ms sobre 2 s de audio |
+| audio que cabe por la ruta | 4 MB = ~62 s de habla |
+| qué queda en disco después | nada: el WAV se borra (`micro-*.wav` no existe) |
+| qué pasa si sube otra cosa | `ok: false`, `origen: no disponible`, «lo que subió el teléfono no es un WAV» |
+
+Condiciones para que el teléfono alcance al puente: abrirlo a la red local
+(`instala_cort.sh --red`, que pone `CORT_BIND=0.0.0.0`). Sin HTTPS la PWA no se instala en
+Android y el navegador no da micro por `http`, y de ahí que el cliente sea un APK.
+

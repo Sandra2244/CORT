@@ -1,0 +1,10 @@
+# Dependencias del puente de CORT, medida en la Classmate (MX Linux 13, python 3.13.5):
+#   aiohttp 3.14.5 · vosk 0.3.45 · numpy 2.5.4
+# Sin estas tres el puente no arranca. Lo demás es opcional y CORT avisa si falta.
+aiohttp>=3.9
+vosk>=0.3.45
+numpy
+
+# Opcional, no se instala por defecto:
+#   piper-tts            voz natural (si no, habla con espeak-ng o calla)
+#   opencv-python-headless  la mirada de la fase S2 (gestos con cámara)

@@ -37,3 +37,11 @@ modelos/vosk*/
 # respaldos locales de esta sesión (copias .f1bak y .respaldo-*): no se comitan
 .respaldo-*/
 *.f1bak
+
+# Android: lo que genera la compilación, no el código
+apps/android/app/build/
+apps/android/build/
+apps/android/.gradle/
+*.apk
+*.keystore
+*.jks
