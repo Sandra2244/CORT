@@ -210,6 +210,14 @@ def main():
                "BarcodeFormat.QR_CODE" in escaner and "POSSIBLE_FORMATS" in escaner)
         prueba("lee el plano Y de YUV_420_888 con su rowStride (sin convertir a ARGB)",
                "ImageFormat.YUV_420_888" in escaner and "getRowStride()" in escaner)
+        # Los dos que se escaparon en el primer compilado del runner (run 41905634981):
+        # el anidado de `Image` se llama `Plane`, no `Plano`, y en zxing las filas de
+        # luminancia son `byte[]`, no `int[]`. Son nombres de API: se escriben mal ni
+        # por traducidos, y sólo el `javac` del pipeline los ve.
+        prueba("los nombres de la API están en su inglés: `Image.Plane`, no `Image.Plano`",
+               "Image.Plane" in escaner and "Image.Plano" not in escaner)
+        prueba("y la fila de luminancia es `byte[]` (zxing no usa `int[]` en LuminanceSource)",
+               "byte[] getRow(int y, byte[] fila)" in escaner and "int[] getRow" not in escaner)
         prueba("no acumula frames: uno cada vez y los demás se tiran",
                "acquireLatestImage()" in escaner and "compareAndSet(false, true)" in escaner)
         prueba("no guarda ninguna imagen en disco (la regla de la cámara)",

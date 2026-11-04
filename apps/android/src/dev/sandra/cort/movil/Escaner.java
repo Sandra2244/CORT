@@ -310,11 +310,11 @@ public class Escaner extends Activity {
 
     /** El plano `Y` apretado, sin los rellenos de `rowStride` (zxing espera filas pegadas). */
     private static byte[] copiarLuminancia(Image imagen) {
-        Image.Plano y = imagen.getPlanes()[0];
-        java.nio.ByteBuffer buffer = y.getBuffer();
+        Image.Plane primero = imagen.getPlanes()[0];
+        java.nio.ByteBuffer buffer = primero.getBuffer();
         int ancho = imagen.getWidth();
         int alto = imagen.getHeight();
-        int salto = y.getRowStride();
+        int salto = primero.getRowStride();
         byte[] apretado = new byte[ancho * alto];
         if (salto == ancho) {
             buffer.get(apretado, 0, Math.min(buffer.remaining(), apretado.length));
@@ -364,15 +364,12 @@ public class Escaner extends Activity {
             return datos;
         }
 
-        @Override public int[] getRow(int y, int[] fila) {
+        @Override public byte[] getRow(int y, byte[] fila) {
             int ancho = getWidth();
             if (fila == null || fila.length < ancho) {
-                fila = new int[ancho];
+                fila = new byte[ancho];
             }
-            int base = y * ancho;
-            for (int x = 0; x < ancho; x++) {
-                fila[x] = datos[base + x] & 0xFF;
-            }
+            System.arraycopy(datos, y * ancho, fila, 0, ancho);
             return fila;
         }
     }
