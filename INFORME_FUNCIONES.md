@@ -465,3 +465,60 @@ A16. La ruta `/mic` está medida con audio sintético (7/7, §15) y el APK está
 descargable, pero nadie lo ha instalado aún en el teléfono: el permiso de micrófono, la
 dirección del puente con `--red` y la latencia real con el Wi‑Fi de la casa son cosa de la
 prueba física.
+
+## 17. Cara publicable: marca, capturas reales y el cierre del idioma (4 de noviembre)
+
+**La marca sale del orbe, no de un dibujo nuevo.** `cort-web/iconos/cort.svg` se genera
+con la misma distribución de puntos que pinta `cort-orbe.js`: 140 puntos sobre una esfera
+(espiral de Fibonacci, eje inclinado 0,42 rad), núcleo blanco–cian y dos órbitas (cian
+sólida y magenta punteada), sobre `#03070d`. Paleta tomada de `cort-style.css`: menta
+`#00ffc8`, cian `#22e5ff`, magenta `#ff2bd6`, violeta `#7b5cff`. Sin texto en el isotipo:
+a 48 px una palabra no se lee y el launcher recorta los bordes.
+
+| Archivo | cómo se obtuvo | medida |
+|---|---|---|
+| `cort.svg` | `rsvg-convert` (renderer real, no el de ImageMagick) | 13 595 bytes |
+| `cort-192.png` / `cort-512.png` | rasterizados del SVG, los dos que pide `manifest.webmanifest` | 23 767 B / 92 194 B |
+| `apps/android/res/mipmap-anydpi-v26/ic_cort.xml` | icono adaptativo generado con la misma matemática (21 puntos del hemisferio delantero) | 548 B + foreground 5 172 B + background 724 B |
+
+**El icono ya está dentro del APK compilado.** Run `41803422504` del flujo `apk-movil`
+(commit `911b2ff`): verde, **21 140 bytes** (antes 16 873; la diferencia son los vectores)
+y al abrir el zip aparecen `res/mipmap-anydpi-v26/ic_cort.xml`, `ic_cort_foreground.xml` e
+`ic_cort_background.xml`, los tres nombrados también en `resources.arsc`. `minSdk` es 26,
+así que no hacen falta los PNG de densidades. Que pese poco es una decisión, no un olvido:
+la carcasa nativa no lleva el cerebro dentro todavía — eso es F12, y ahí el peso sube a
+decenas de MB con el modelo Vosk y las librerías.
+
+**Capturas: todas reales, ninguna generada.** Se tomaron en el navegador integrado, cuyo
+viewport está medido en **525×521**. Con 153 MB libres no se puede abrir un Chrome sin
+interfaz para captar a 1600×900 (el límite es de RAM, no de ganas), así que el banner se
+compuso con GraphicsMagick bajando cada captura de 525 a 380 px de ancho — reducir no
+inventa detalle. `docs/promo/banner.png` (1600×720, 602 KB) lleva marca + 4 pantallas;
+`docs/promo/recorrido.gif` (525×567, 6 fotogramas, 595 KB) recorre orbe → menú → pedido →
+lista → repertorio → antivirus, con pie de foto quemado en cada cuadro. Las 7 capturas
+quedan en `docs/promo/capturas/` por si hay que comprobar de dónde salió el banner.
+
+**El detalle que la promo destapó: el medidor de idiomas mentía.** `window.CORT.estado()`
+presumía «cobertura 100 %» contando sólo 504 cadenas como francesas, porque el clasificador
+no reconocía el francés **sin tilde** ni palabras corrientes. Con el menú abierto se leían
+`◈ CONTROLES_SYSTEME // MENU` e `INTELLIGENCE ARTIFICIELLE` en la pantalla. Al arreglarlo:
+
+| | antes | después del arreglo |
+|---|---|---|
+| cadenas reconocidas como francesas | 504 | 644 |
+| pendientes de traducir | 1 | 59 (36 + 23) |
+| cobertura declarada | «100 %» | medida real |
+
+Las 59 se tradujeron (958 triples `[fr, es, en]` más reglas para las que llevan datos
+dinámicos pegados: `CHARGEMENT... N%`, `Caméra (…)`, los estados de instalar Ollama).
+Cierre medido con todos los paneles abiertos —menú, lista, repertorio, antivirus y
+Ajustes—: **1804 cadenas vistas, 644 francesas, 644 traducidas, 0 pendientes**.
+
+Dos cosas se evitaron a propósito. «é» **no** entró en la firma de letras francesas: el
+español la usa en «café», «esté», «hablé» y en el voseo, y habría contado como pendiente
+texto que ya es español; esos términos entran uno a uno con la forma `[eé]`. Y quedaron
+fuera del clasificador las grafías que son palabra española igual (`tres`, `video`,
+`micro`, `agenda`, `carte`, `liste`, `tache`, `retro`): 33 casos de prueba, 0 falsos
+positivos. Lo que el número no cubre: sigue siendo un detector por vocabulario, no una
+traducción automática — una frase francesa con palabras fuera de la lista se escapa, y se
+escapa en silencio.

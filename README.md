@@ -1,9 +1,26 @@
 # CORT — Cognitiva · Omnipresente · Rapsodia · Terminal
 
-Asistente local, privado y con voz, que corre en una laptop modesta con Linux y se
-abre también en el teléfono. Nada de CORT sale del equipo: el puente es un proceso
-Python en `127.0.0.1`, la interfaz es una página servida por ese mismo proceso y las
-respuestas se deciden con reglas locales y con los sensores y mandos reales del equipo.
+![CORT — orbe, menú, lista de la compra, repertorio de comandos y antivirus](docs/promo/banner.png)
+
+Asistente local, privado y con voz. **No es una página web: es una app híbrida con
+dos instaladores distintos.** En el teléfono es una APK nativa (`dev.sandra.cort.movil`,
+Java + WebView + grabación de audio propia) y en el equipo es un programa de escritorio
+que corre el puente Python y abre la interfaz en el navegador del sistema. Los dos
+frentes comparten el mismo puente y el mismo perfil. Nada de CORT sale del equipo: el puente es
+un proceso Python en `127.0.0.1`, la interfaz la sirve ese mismo proceso y las respuestas
+se deciden con reglas locales y con los sensores y mandos reales del equipo.
+
+![Recorrido por la interfaz: orbe, menú, pedido, lista, comandos y antivirus](docs/promo/recorrido.gif)
+
+Las dos imágenes son capturas reales tomadas en el navegador integrado (viewport
+525×521 medido en esta máquina); ningún píxel de interfaz está generado por IA. La
+marca es el orbe de la interfaz vectorizado: 140 puntos sobre una esfera con la
+inclinación de eje que se ve en pantalla, núcleo blanco-cian y dos órbitas, con la
+paleta de `cort-style.css` (menta `#00ffc8`, cian `#22e5ff`, magenta `#ff2bd6`).
+El mismo generador de puntos produce el icono adaptativo de Android
+(`apps/android/res/mipmap-anydpi-v26/ic_cort.xml`), así la marca del teléfono y la del
+escritorio no son dos dibujos distintos.
+
 
 **Autoría y derechos: Askher Vargas y Sandra Lopez (2026).** Soporte y permisos:
 `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com`.
@@ -40,10 +57,11 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Escáner de capacidades (el equipo se adapta solo) | real medido | `cort-bridge/cort_perfil.py`; 14/14 en `prueba_perfil.py`. En esta laptop: nivel 0, `AVX no`, 397 ms de ida y vuelta por WebSocket y la interfaz bajando a 30 fps con las scanlines apagadas |
 | Gestos con cámara → mover ventanas | real medido | `cort-bridge/cort_vision.py`; 12/12 en `prueba_vision.py` y 7/7 en `cort_vision.py selftest`. Webcam real: YUY2 320×240 a **15 cuadros/s**, **1,9–4,6 ms** de cálculo por cuadro, worker de 33,7 MB y **ninguna imagen guardada**. Una persona sentada quieta dispara **0 gestos** (era 8 cada 8 s antes de cerrar el umbral de movimiento) |
 | Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
+| Idiomas: español por defecto sobre una interfaz que nació en francés | real medido | capa `cort-web/cort/cort-ui.js`: 958 triples `[fr, es, en]` más reglas para los rótulos que llevan datos dinámicos. Con todos los paneles abiertos, `window.CORT.estado()` mide 1804 cadenas vistas, 644 reconocidas como francesas, 644 traducidas y 0 pendientes. Antes el medidor presumía «100 %» contando sólo 504: el clasificador no conocía el francés sin tilde (`SYSTEME`, `MINUTEUR`, `CHARGEMENT`, `CAMÉRA`). Arreglado, salieron 59 cadenas reales que se tradujeron; 33 casos de prueba del clasificador, 0 falsos positivos con palabras españolas de la misma grafía (`tres`, `video`, `micro`, `agenda`, `carte`) |
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| **APK nativo para el teléfono** | real, publicado `cort-v0.11.0` | `apps/android` (WebView sobre el puente, cero dependencias externas, sin Gradle) + `.github/workflows/apk-movil.yml` sobre `apps/android/compilar.sh`. Medido en el runner: **16 873 bytes**, `versionCode 1100`, minSdk 26, firmado **con la llave del repo** (se instala encima), compilado en **22–25 s**, SHA-256 `bc384b62…8f4012` comprobado volviendo a descargar el archivo de la release. El oído del teléfono entra por `POST /mic`: **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM). Falta su prueba física en el A16 |
+| **APK nativo para el teléfono** | real, publicado `cort-v0.11.0` | `apps/android` (WebView sobre el puente, cero dependencias externas, sin Gradle) + `.github/workflows/apk-movil.yml` sobre `apps/android/compilar.sh`. Medido en el runner: **16 873 bytes**, `versionCode 1100`, minSdk 26, firmado **con la llave del repo** (se instala encima), compilado en **22–25 s**, SHA-256 `bc384b62…8f4012` comprobado volviendo a descargar el archivo de la release. El oído del teléfono entra por `POST /mic`: **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM). Falta su prueba física en el A16. Con el icono nuevo (commit `911b2ff`) el mismo flujo produce **21 140 bytes** y se verificó dentro del zip: `res/mipmap-anydpi-v26/ic_cort.xml` (548 B) + `ic_cort_foreground.xml` (5 172 B) + `ic_cort_background.xml` (724 B). Sigue pesando poco a propósito: es la carcasa nativa, no el cerebro — el peso real llega con el modelo Vosk y las librerías dentro del APK (F12) |
 | Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
