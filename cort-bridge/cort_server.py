@@ -107,6 +107,16 @@ try:
 except Exception:
     cort_perfil = None
 
+# S2: la mirada. Necesita numpy (en el venv) y un worker aparte con el Python del
+# sistema, que es el que tiene GStreamer. Si algo falta, la orden dice el motivo.
+try:
+    import cort_vision
+except Exception as _e_vision:
+    cort_vision = None
+    VISION_ERROR = f"{type(_e_vision).__name__}: {_e_vision}"
+else:
+    VISION_ERROR = ""
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -1541,6 +1551,78 @@ def mic_apagar():
     return r
 
 
+# ------------------------------------------------------------------ visión (S2) ----
+MIRADA = None
+
+
+def hablar_desde_hilo(texto):
+    """Un hilo de trabajo deja que CORT diga algo, sin tocar el lazo desde fuera."""
+    if not VOZ_ACTIVA or BUCLE is None:
+        return
+    ws = next(iter(CONEXIONES), None)
+    if ws is not None:
+        try:
+            asyncio.run_coroutine_threadsafe(decir(ws, texto), BUCLE)
+        except Exception:
+            pass
+
+
+def vision_apagar():
+    global MIRADA
+    if MIRADA is None:
+        return {"ok": True, "origen": "real", "mirando": False,
+                "motivo": "la mirada no estaba encendida"}
+    r = MIRADA.apagar()
+    MIRADA = None
+    return r
+
+
+def vision_arrancar():
+    """S2: encender la cámara y traducir gesto en orden de ventana.
+
+    Tres puertas antes de mirar: que el módulo cargue, que el escaneo de S1 vea una
+    cámara real, y que haya ventanas que mover. Si falta algo se dice con el motivo;
+    no se finge una mirada.
+    """
+    global MIRADA
+    if cort_vision is None or cort_acciones is None:
+        return {"ok": False, "origen": "no disponible",
+                "motivo": "los módulos de visión o de acciones no cargaron en este puente"}
+    if MIRADA is not None:
+        return MIRADA.estado()
+    plan = (perfil_equipo().get("plan") or {})
+    if not plan.get("vision", True):
+        return {"ok": False, "origen": "real", "mirando": False,
+                "motivo": "el escaneo no encontró cámara en este equipo: "
+                          "los gestos no tienen de dónde salir"}
+    libre = ram_disponible_mb()
+    if libre < ALMENOS_AUDIO:
+        return {"ok": False, "origen": "real", "mirando": False,
+                "motivo": f"quedan {libre} MB libres y la mirada necesita ~{ALMENOS_AUDIO} "
+                          f"para el worker de GStreamer"}
+
+    def al_gesto(g):
+        nombre, datos = cort_vision.GESTO_A_ACCION.get(g["gesto"], (None, None))
+        if nombre is None:
+            return
+        r = cort_acciones.accion(nombre, datos)
+        detalle = r.get("detalle") or r.get("motivo") or ""
+        avisa_desde_hilo({"type": "vision_gesto", "origen": r.get("origen") or "real",
+                          "gesto": g["gesto"], "por": g["por"], "cuadro": g["cuadro"],
+                          "accion": nombre, "ok": bool(r.get("ok")), "detalle": detalle})
+        if r.get("ok"):
+            hablar_desde_hilo(f"Gesto {g['gesto'].replace('_', ' ')}: {detalle}")
+
+    def al_estado(e):
+        avisa_desde_hilo({"type": "vision_estado", "origen": "real", **e})
+
+    MIRADA = cort_vision.Mirada(al_gesto=al_gesto, al_estado=al_estado)
+    r = MIRADA.arrancar()
+    if not r.get("ok"):
+        MIRADA = None
+    return r
+
+
 def temperatura_sala():
     """Temperatura real del equipo, leída de los sensores del kernel.
 
@@ -2051,6 +2133,27 @@ async def ws_handler(request):
 
             elif t == "mic_estado":
                 enviar(ws, estado_voz())
+
+            elif t == "vision_on":
+                # S2: encender la mirada es siempre una orden explícita de la usuaria.
+                r = await asyncio.get_event_loop().run_in_executor(None, vision_arrancar)
+                enviar(ws, {"type": "vision_estado", "origen": r.get("origen") or "real",
+                            "mirando": bool(r.get("ok")), "motivo": r.get("motivo", ""),
+                            "nota": "los cuadros se leen y se tiran: no se guarda ninguna imagen"
+                            if r.get("ok") else
+                            "sin mirada: " + (r.get("motivo") or VISION_ERROR)})
+
+            elif t == "vision_off":
+                r = await asyncio.get_event_loop().run_in_executor(None, vision_apagar)
+                enviar(ws, {"type": "vision_estado", "origen": "real", "mirando": False,
+                            "motivo": r.get("motivo", "mirada apagada"),
+                            "cuadros": r.get("cuadros", 0),
+                            "ultimo_gesto": r.get("ultimo_gesto")})
+
+            elif t == "vision_estado":
+                enviar(ws, {"type": "vision_estado", "origen": "real",
+                            **(MIRADA.estado() if MIRADA else
+                               {"mirando": False, "motivo": "la mirada está apagada"})})
 
             elif t in ("wake_on", "wake_off"):
                 # F10: con la palabra encendida el micro sigue escuchando pero sólo

@@ -90,6 +90,7 @@
     recibidos: 0,
     ultimo_status: null,
     ultimo_perfil: null,    // S1: el escaneo que el puente empuja al conectar
+    ultima_vision: null,    // S2: último estado de la mirada (cuadros, fps, motivo)
     ultima_temperatura: null,
     ultima_voz: null,
     ultima_accion: null,
@@ -212,6 +213,14 @@
           try { window.CORT_alPerfil(n); } catch (e) {}
         }
       }
+      // S2: la mirada. `vision_estado` dice si el worker está dando cuadros y a qué
+      // ritmo; `vision_gesto` dice qué se reconoció y qué orden de ventana salió.
+      if (n.type === "vision_estado" || n.type === "vision_gesto") {
+        if (n.type === "vision_estado") this.ultima_vision = n;
+        if (typeof window.CORT_alVision === "function") {
+          try { window.CORT_alVision(n); } catch (e) {}
+        }
+      }
       // U1: canal de actualización del repo.
       if (n.type === "actualizacion") {
         this.ultima_version = n;
@@ -276,6 +285,7 @@
     tipos_al_puente: Array.from(VAN_AL_PUENTE),
     ultima_temperatura: PUENTE.ultima_temperatura,
     ultimo_perfil: PUENTE.ultimo_perfil,
+    ultima_vision: PUENTE.ultima_vision,
     avisos: Object.keys(PUENTE.avisos),
     ultimo_status: PUENTE.ultimo_status
   });

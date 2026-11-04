@@ -347,13 +347,88 @@ la RAM de esta máquina se mueve de 150 a 350 MB según lo abierto, así que el 
 hora no es el de ahora. Y `auto_sonda()` (M2) pregunta primero al perfil: si el chip no tiene
 AVX se para con el motivo en vez de estrellarse cada diez minutos contra el mismo muro.
 
+### S2 — la mirada: cámara → gesto → ventana (11/11 en `scripts/prueba_vision.py`, 5/5 en `cort_vision.py selftest`)
+
+`cort-bridge/cort_vision.py` hace lo que se pidió con la cámara: **una mano delante de la
+webcam mueve ventanas**. No hay modelo de visión —no cabe en 1851 MB— y no hace falta: se
+detecta piel por croma (Cb/Cr del propio YUY2), se mide el bulto y su centro, y cuatro gestos
+discretos se traducen en las cuatro órdenes que ya estaban en la voz.
+
+Medido en esta máquina, con la webcam real y el navegador cerrado:
+
+| Qué | Número | De dónde sale |
+|---|---|---|
+| Formato que negocia | **YUY2 320×240, 153 600 B/cuadro** | GStreamer + `/dev/video0` |
+| Ritmo real | **14,9–15,1 cuadros/s** (67–68 ms entre cuadros) | `estado()["fps_reciente"]` |
+| Coste de la pasada | **1,9–4,6 ms/cuadro** (2,5 con la máquina quieta, 4,6 con el navegador y el agente abiertos) | `estado()["ms_calculo"]` |
+| Arranque | **~2,4 s** hasta el primer cuadro | cronometrado en el puente |
+| Worker | **33,7 MB** de RSS, proceso aparte con `/usr/bin/python3` | `ps` |
+| Cuadros acumulados en la prueba de puente | **1092** sin disparar un gesto | `vision_off` |
+
+El detalle que costó: pedir `framerate=10/1` **clavado** pone la tubería en `failure` y no sale
+ni un cuadro —esta cámara sólo sabe dar 15/1 a ese tamaño. Se pide el rango `[1/1, 30/1]` y
+negocia lo que puede. Esto se probó por las malas: la primera vez la mirada «se encendía» y no
+traía nada.
+
+**Gestos y qué hacen de verdad** (`GESTO_A_ACCION`, verificado con `xprop _NET_WM_STATE` sobre
+dos terminales que abre y cierra la propia prueba):
+
+| Gesto | Orden | Verificación medida |
+|---|---|---|
+| barrido derecha/izquierda | `cambiar_ventana` | la ventana activa pasa de `0x06000003` a `0x06200003` |
+| palma arriba / mano levantada | `maximizar` | `_NET_WM_STATE_MAXIMIZED_VERT/HORZ` presentes |
+| empujar abajo | `restaurar` | las banderas desaparecen (queda `FOCUSED`) |
+| puño | `minimizar_activa` | `wmctrl -b add,hidden` |
+
+Un error que habría hecho todo esto inútil: `xdotool getactivewindow` imprime el id en
+**decimal** (`90177540`) y `wmctrl` en hexadecimal (`0x059f0004`). Sin convertir, la ventana
+activa «no se podía leer» y el barrido se aplicaba a la primera de la lista. Ahora se normaliza
+a `0x%08x`.
+
+**El falso positivo que encontró la cámara real, y cómo se cerró.** La primera prueba con la
+webcam encendida y la usuaria sentada delante dio, en 8 segundos, **ocho gestos `palma_arriba`**:
+la cara y el pecho cumplen la regla de «bulto de piel grande en la mitad de arriba» (medido: área
+15 %, centro (0,53 / 0,28), `mov` 0,0000–0,0003). Con el puente vivo eso maximiza una ventana por
+segundo sin que nadie mueva la mano. La solución no es subir el área —el bulto real de una mano
+y el de una cara tienen un tamaño parecido—, es exigir **cambio**:
+
+* `MOV_MINIMO = 0,02`: palma y puño sólo cuentan si en la ventana se movió al menos el 2 % de los
+  píxeles. Medido en escena quieta: 0,00–0,23 %. Es decir, el piso está **ocho veces por encima**
+  del ruido de una persona sentada, y una mano que entra en cuadro mueve el 18,8 % (caso g del
+  `selftest`).
+* *la mano tiene que **llegar***: dentro de la ventana tiene que haber al menos un cuadro sin
+  bulto. Quien ya está en el cuadro no puede dar la orden; se espera el gesto.
+* `REFRACCARIO = 2,0 s` entre órdenes (antes 1 s): la misma mano repetía.
+
+Verificado dos veces: en sintético (`selftest` 7/7, con los casos «una persona quieta no es un
+gesto» y «la palma que llega sí lo es») y con la webcam real apuntando a la usuaria: **59 cuadros,
+bulto en los 59, área media 15,0 %, mov máximo 0,23 %, 0 gestos emitidos**. En la suite de
+ventanas, el mismo caso con un worker que manda 44 cuadros quietos: `0 gestos`.
+
+Por el puente (`cort_server.py`): `vision_on` / `vision_off` / `vision_estado`, y el puente
+empuja `vision_gesto` y `vision_estado`. Tres puertas antes de encender —módulo cargado, cámara
+vista por S1, RAM libre≥ el piso del worker— y cada una dice su motivo con número. Medido por
+WebSocket en arena (`CORT_WS_PORT=8790`): `vision_on` contesta en **1,01 s**, y a los 5 s el
+estado empujado traía `cuadros:300, fps_reciente:15, ms_calculo:1.9`.
+
+En la interfaz, la tarjeta `mirada` vive dentro del panel del cerebro, justo debajo del escaneo
+de S1: 389×112 px en la pantalla de 525×521 (y=416, visible sin scroll), botón de **122×34 px**
+—el mínimo que se puede tocar con el pulgar en el A16—, y mientras la cámara calienta dice
+*«esperando el primer cuadro (la cámara tarda ~2,4 s)»* en lugar de un `0 cuadros/s` que
+parecería un fallo. El botón y el estado se probaron contra el puente real: encendido → `15
+cuadros/s · 300 leídos · 3,9 ms`; apagado → `mirada apagada · 334 cuadros`.
+
+**Nunca se guarda una imagen.** El worker vierte bytes crudos por un pipe, el hilo saca cuatro
+números y tira el cuadro; no existe en el código ninguna ruta que escriba un cuadro a disco. Si
+algún día la hubiera, esta frase se borra.
+
 ### Lo que se deja dicho, con número, de las dos peticiones que no entran esta noche
 - **Sensores de cámara para mover ventanas del sistema**: la sonda de esta mañana corrigió el
   pronóstico. La webcam **sí da cuadros** en este equipo: 10/10 cuadros recibidos a 320×240 RGB,
   a 640×480 MJPG y a 320×240 YUY2 (a 160×120 no da ninguno: ese formato no lo trae). Lo que no
   hay es ffmpeg ni OpenCV en el entorno, y un modelo de visión no cabe en 1851 MB. El camino
   medido es un detector propio sobre numpy (piel y movimiento), no MediaPipe; se construye como
-  fase S2 con los cuadros sin guardar nunca en disco.
+  fase S2 con los cuadros sin guardar nunca en disco. **(Hecho: ver S2 arriba.)**
 - **Vincular PC ↔ Android para que CORT aprenda de ti**: el puente ya puede hablar con el
   teléfono (`CORT_BIND` + TLS + token), pero sin HTTPS el navegador del A16 no instala la PWA
   ni deja usar el micrófono, y el APK (F11/F12) es el que lo resuelve de verdad. La memoria

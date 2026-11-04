@@ -38,6 +38,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Palabra de despertar («cort») | real la lógica, pendiente de micro | `filtro_wake()` 11/11 en `prueba_wake.py`; ventana de 8 s y variantes acústicas cubiertas |
 | Canal de actualización desde el repo | real | `cort-bridge/cort_actualiza.py`; 7/7 en `prueba_actualiza.py`. Avisa y da el comando, **no se autoinstala** |
 | Escáner de capacidades (el equipo se adapta solo) | real medido | `cort-bridge/cort_perfil.py`; 14/14 en `prueba_perfil.py`. En esta laptop: nivel 0, `AVX no`, 397 ms de ida y vuelta por WebSocket y la interfaz bajando a 30 fps con las scanlines apagadas |
+| Gestos con cámara → mover ventanas | real medido | `cort-bridge/cort_vision.py`; 12/12 en `prueba_vision.py` y 7/7 en `cort_vision.py selftest`. Webcam real: YUY2 320×240 a **15 cuadros/s**, **1,9–4,6 ms** de cálculo por cuadro, worker de 33,7 MB y **ninguna imagen guardada**. Una persona sentada quieta dispara **0 gestos** (era 8 cada 8 s antes de cerrar el umbral de movimiento) |
 | Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
 | Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
@@ -60,6 +61,8 @@ cort-bridge/            proceso único, dos puertos
   cort_actualiza.py     lee las etiquetas del repo y avisa; no descarga ni cambia nada
   cort_perfil.py        escanea el equipo (CPU/AVX, RAM, GPU, cámara, temperatura) y decide
                         el nivel de cerebro y qué se apaga para que lo demás quepa
+  cort_vision.py        la mirada: lee la webcam cuadro a cuadro, saca piel+movimiento y
+                        traduce cuatro gestos en órdenes de ventana (nada se guarda)
   cort_state.json       preferencias personales (ignoradas por git)
 cort-web/
   index.html            la interfaz (rediseñada sobre la plantilla)
@@ -70,8 +73,8 @@ cort-web/
   cort/cort-style.css   recorte HUD, paneles y testigos
 scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_sonda ·
                         prueba_wake · prueba_actualiza · prueba_perfil · prueba_vida ·
-                        prueba_voz · prueba_acciones · arranca_con_sonda.sh
-PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S1)
+                        prueba_voz · prueba_acciones · prueba_vision · arranca_con_sonda.sh
+PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S2)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```
@@ -225,6 +228,7 @@ pruebas mueve una carpeta real ni escribe en tu lista de compras.
 .venv/bin/python scripts/prueba_wake.py          # palabra de despertar y su ventana de 8 s
 .venv/bin/python scripts/prueba_actualiza.py     # canal de versión contra un GitHub falso
 .venv/bin/python scripts/prueba_perfil.py        # el escáner: 6 equipos fingidos + la medida real
+.venv/bin/python scripts/prueba_vision.py        # la mirada: cuadros, gestos y ventanas reales
 .venv/bin/python scripts/prueba_sonda.py         # la auto-sonda con un Ollama falso en arena
 .venv/bin/python scripts/prueba_voz.py           # órdenes de voz por WebSocket y descarga del WAV
 .venv/bin/python scripts/prueba_acciones.py      # pc_estado, detect_apps, apt, abrir/cerrar ventana

@@ -291,6 +291,72 @@ def enfocar_ventana(texto: str) -> dict:
     return resultado("enfocar_ventana", rc == 0, err[:120] or f"al frente «{w['titulo']}»")
 
 
+def ventana_activa():
+    """Id de la ventana que tiene el foco ahora mismo, o None si no se puede saber.
+
+    Sin `xdotool` no se adivina: devolver la primera de la lista haría que
+    «cambiar de ventana» moviera el foco a una ventana cualquiera creyendo que era
+    la activa.
+
+    `xdotool getactivewindow` imprime el id en decimal (`90177540`) y `wmctrl` en
+    hexadecimal (`0x059f0004`); sin convertir, la comparación nunca cuadra y la
+    ventana activa parecería siempre desconocida.
+    """
+    if _hay("xdotool"):
+        rc, salida, _ = _correr(["xdotool", "getactivewindow"])
+        texto = salida.strip()
+        if rc == 0 and texto:
+            try:
+                numero = int(texto, 16) if texto.startswith("0x") else int(texto)
+            except ValueError:
+                return None
+            return "0x%08x" % numero
+    return None
+
+
+def accion_sobre_activa(que: str) -> dict:
+    """Maximizar / restaurar / minimizar la ventana que está al frente (S2 y voz).
+
+    Se actúa sobre `:ACTIVE:` y no sobre un título: el gesto no dice qué ventana es,
+    y elegir una a ciegas movería otra cosa. Después se verifica el estado real.
+    """
+    banderas = {"maximizar": "add,maximized_vert,maximized_horz",
+                "restaurar": "remove,maximized_vert,maximized_horz",
+                "minimizar": "add,hidden"}
+    if que not in banderas:
+        return resultado(que + "_activa", False, "orden de ventana desconocida", "no disponible")
+    if not _hay("ventanas_acciones"):
+        return resultado(que + "_activa", False, "no está wmctrl", "no disponible")
+    if not ventanas():
+        return resultado(que + "_activa", False, "no hay ninguna ventana abierta en este equipo")
+    rc, _, err = _correr(["wmctrl", "-r", ":ACTIVE:", "-b", banderas[que]])
+    return resultado(que + "_activa", rc == 0,
+                     err[:120] or f"{que} sobre la ventana al frente", origen="real",
+                     ventanas=len(ventanas()))
+
+
+def cambiar_ventana(direccion: str = "siguiente") -> dict:
+    """Pasar el foco a la ventana siguiente o anterior de la lista real."""
+    vs = ventanas()
+    if len(vs) < 2:
+        return resultado("cambiar_ventana", False,
+                         f"hay {len(vs)} ventana(s): no hay a dónde cambiar")
+    activa = ventana_activa()
+    ids = [w["id"] for w in vs]
+    try:
+        i = ids.index(activa) if activa else 0
+    except ValueError:
+        i = 0
+    paso = 1 if direccion != "anterior" else -1
+    destino = vs[(i + paso) % len(vs)]
+    rc, _, err = _correr(["wmctrl", "-i", "-a", destino["id"]])
+    despues = ventana_activa()
+    ok = rc == 0 and (despues == destino["id"] or despues is None)
+    return resultado("cambiar_ventana", ok,
+                     err[:120] or f"foco en «{destino['titulo']}»",
+                     titulo=destino["titulo"], total=len(vs))
+
+
 # ------------------------------------------------------------------ volumen ----
 def volumen_actual() -> dict:
     sink = _correr(["pactl", "get-default-sink"])[1].strip()
@@ -573,6 +639,13 @@ def _ejecutar(nombre: str, d: dict) -> dict:
     if nombre == "ventanas":
         vs = ventanas()
         return resultado("ventanas", bool(vs), f"{len(vs)} ventanas abiertas", ventanas=vs)
+    # S2: las órdenes que llegan de un gesto no nombran ventana, actúan sobre la que
+    # está al frente. Están también en la voz por el mismo motivo.
+    if nombre in ("maximizar", "restaurar", "minimizar_activa"):
+        return accion_sobre_activa("maximizar" if nombre == "maximizar" else
+                                   "restaurar" if nombre == "restaurar" else "minimizar")
+    if nombre == "cambiar_ventana":
+        return cambiar_ventana(d.get("direccion") or d.get("objetivo") or "siguiente")
     if nombre == "volumen":
         return cambiar_volumen(destino=d.get("valor"), paso=d.get("paso"),
                                mudo=(1 if d.get("mudo") else 0 if d.get("mudo") is False else None))

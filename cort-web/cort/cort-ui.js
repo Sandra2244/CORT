@@ -1890,6 +1890,7 @@
   // modelo por su cuenta: «probar» pregunta la puerta de RAM antes de disparar.
   let ultimoCerebro = null;
   let ultimoPerfil = null;   // S1: el escaneo del equipo (nivel, motivo, plan)
+  let ultimoVision = null;   // S2: el estado de la mirada (cuadros, ritmo, motivo)
   let ultimaVersion = null;    // U1: lo que dijo el canal del repo
   let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
   const progresoPull = {};
@@ -1928,6 +1929,7 @@
         window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
         window.CORT_enviarAlCerebro({ type: "buscar_actualizacion" });
         window.CORT_enviarAlCerebro({ type: "perfil_equipo" });
+        window.CORT_enviarAlCerebro({ type: "vision_estado" });
         pintarCerebro();
       }
     });
@@ -2032,6 +2034,81 @@
       .forEach((e) => { e.style.display = display; });
   }
 
+  // S2: los gestos con nombres legibles; el identificador interno no se le muestra.
+  const GESTO_NOMBRE = {
+    barrido_derecha: "barrido a la derecha",
+    barrido_izquierda: "barrido a la izquierda",
+    levantar_mano: "mano levantada",
+    palma_arriba: "palma abierta",
+    punar: "puño cerrado",
+    empujar_abajo: "empujar hacia abajo",
+  };
+  let ultimoGestoVision = null;
+
+  function nodoMirada() {
+    const v = ultimoVision || {};
+    const caja = document.createElement("div");
+    caja.id = "cort-mirada";
+    caja.style.cssText = "margin:0 0 8px;padding:6px 8px;border-radius:9px;" +
+      "border:1px solid rgba(220,170,255,.35);background:rgba(38,20,52,.5)";
+    const cab = document.createElement("div");
+    cab.style.cssText = "font-weight:700;color:#e7d2ff";
+    const mirando = !!v.mirando;
+    // Recién encendida la cámara tarda en dar el primer cuadro (2,4 s medidos en esta
+    // máquina): decir «0 cuadros/s» parecería que no funciona, y no es cierto.
+    cab.textContent = mirando
+      ? (v.cuadros
+          ? `mirada · encendida · ${v.fps_reciente || v.fps_medidos || 0} cuadros/s · ` +
+            `${v.cuadros} leídos · ${v.ms_calculo || "?"} ms por cuadro`
+          : "mirada · encendida, esperando el primer cuadro (la cámara tarda ~2,4 s)")
+      : "mirada · apagada";
+    caja.appendChild(cab);
+
+    const pie = document.createElement("div");
+    pie.style.cssText = "display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px";
+    const boton = document.createElement("button");
+    boton.type = "button";
+    // 34 px de alto medidos: en el teléfono un botón de 11 px no se toca con el pulgar.
+    boton.style.cssText = "padding:7px 12px;min-height:34px;border-radius:9px;cursor:pointer;" +
+      "font:12px/1.2 system-ui;border:1px solid rgba(200,150,255,.6);" +
+      "background:rgba(120,60,190,.22);color:#e7d2ff";
+    boton.textContent = mirando ? "apagar la mirada" : "encender la mirada";
+    boton.addEventListener("click", () => window.CORT_enviarAlCerebro(
+      { type: mirando ? "vision_off" : "vision_on" }));
+    const nota = document.createElement("span");
+    nota.style.cssText = "opacity:.6";
+    nota.textContent = "los cuadros se leen y se tiran: no se guarda ninguna imagen";
+    pie.append(boton, nota);
+    caja.appendChild(pie);
+
+    const motivo = document.createElement("div");
+    motivo.style.cssText = "margin-top:3px;opacity:.85";
+    motivo.textContent = v.motivo || (mirando ? "" : "nadie ha pedido mirar todavía");
+    if (motivo.textContent) caja.appendChild(motivo);
+
+    if (ultimoGestoVision) {
+      const g = document.createElement("div");
+      g.style.cssText = "margin-top:3px;color:" + (ultimoGestoVision.ok ? "#9fe6b2" : "#ffd9a0");
+      g.textContent = `último gesto: ${GESTO_NOMBRE[ultimoGestoVision.gesto] || ultimoGestoVision.gesto}` +
+        ` → ${ultimoGestoVision.accion} · ` +
+        (ultimoGestoVision.detalle || ultimoGestoVision.por || "");
+      caja.appendChild(g);
+    }
+    return caja;
+  }
+
+  window.CORT_alVision = (n) => {
+    if (!n) return;
+    if (n.type === "vision_gesto") {
+      ultimoGestoVision = n;
+      flotante(`${GESTO_NOMBRE[n.gesto] || n.gesto} → ${n.accion}: ` +
+               (n.detalle || (n.ok ? "hecho" : "no se pudo")), !!n.ok);
+    } else if (n.type === "vision_estado") {
+      ultimoVision = n;
+    }
+    pintarCerebro();
+  };
+
   window.CORT_alPerfil = (n) => {
     if (!n || n.type !== "perfil_reply") return;
     ultimoPerfil = n;
@@ -2055,6 +2132,7 @@
       titulo.textContent = "cerebro — sin datos del puente todavía";
       panel.appendChild(titulo);
       if (ultimoPerfil) panel.appendChild(nodoPerfil());
+      panel.appendChild(nodoMirada());
       return;
     }
     const libre = s.ram_disponible_mb, nucleos = s.nucleos;
@@ -2064,6 +2142,7 @@
     // El escaneo va primero: es lo que decide si tiene sentido bajar un modelo, y en
     // una pantalla de 521 px lo de abajo se lee haciendo scroll.
     if (ultimoPerfil) panel.appendChild(nodoPerfil());
+    panel.appendChild(nodoMirada());
     const nota = document.createElement("div");
     nota.style.cssText = "opacity:.72;margin:2px 0 8px";
     nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +
