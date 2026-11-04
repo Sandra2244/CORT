@@ -350,13 +350,116 @@ def ip_de_casa():
         return None
 
 
+# --- el QR del enlace ----------------------------------------------------------
+# `qrcodegen` es la biblioteca de Project Nayuki (MIT), vendida en
+# `cort-bridge/terceros/` con su suma fijada en `terceros.txt` y leída antes de
+# usarla: sólo importa `collections`, `itertools` y `re` — no abre red, no escribe
+# disco, no ejecuta nada. Que el QR lo dibuje CORT y no una página de terceros es
+# lo que permite que el enlace **nunca salga de la casa**.
+try:
+    sys.path.insert(0, str(BASE / "terceros"))
+    import qrcodegen
+except Exception:
+    qrcodegen = None
+
+
+def qr_matriz(texto):
+    """La rejilla del QR como lista de listas de `bool`, o None si la biblioteca falta."""
+    if qrcodegen is None:
+        return None
+    codigo = qrcodegen.QrCode.encode_text(texto, qrcodegen.QrCode.Ecc.MEDIUM)
+    tam = codigo.get_size()
+    return [[codigo.get_module(x, y) for y in range(tam)] for x in range(tam)]
+
+
+def qr_svg(texto, modulo=6, margen_modulos=4):
+    """El QR como SVG de texto: se abre en cualquier navegador sin instalar nada."""
+    rejilla = qr_matriz(texto)
+    if rejilla is None:
+        return None
+    lado = len(rejilla)
+    total = (lado + 2 * margen_modulos) * modulo
+    cuadros = []
+    for x, columna in enumerate(rejilla):
+        for y, oscuro in enumerate(columna):
+            if oscuro:
+                cuadros.append('<rect x="%d" y="%d" width="%d" height="%d"/>' % (
+                    (x + margen_modulos) * modulo, (y + margen_modulos) * modulo, modulo, modulo))
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d">'
+            '<rect width="100%%" height="100%%" fill="#ffffff"/><g fill="#000000">%s</g></svg>'
+            % (total, total, total, total, "".join(cuadros)))
+
+
+def qr_terminal(texto, con_ansi=None):
+    """El mismo QR dibujado en la consola con bloques Unicode (dos módulos por carácter).
+
+    Es el camino por defecto: la dirección con la llave **no se sirve por red**, así
+    que nadie en el Wi-Fi puede abrir una página y llevársela. Se lee aquí, en la
+    pantalla de la PC, con el teléfono delante.
+
+    Los cuatro módulos de zona de silencio no son adorno: el estándar los pide y sin
+    ellos zxing en el teléfono no ve dónde empieza el cuadro. El fondo blanco forzado
+    (sólo en terminal interactiva) es por lo mismo: en una consola oscura los espacios
+    serían negros y el QR saldría invertido.
+    """
+    rejilla = qr_matriz(texto)
+    if rejilla is None:
+        return "el enlace tiene dirección pero este equipo no tiene `qrcodegen` para dibujar el QR"
+    if con_ansi is None:
+        con_ansi = sys.stdout.isatty()
+    tam = len(rejilla)
+    MARGEN = 4
+    ancho = tam + 2 * MARGEN
+    # fg negro sobre bg blanco: los espacios salen blancos y los bloques ▀▄█ negros, así
+    # que el cuadro se ve igual en consola clara que en oscura.
+    fondo = "\033[30m\033[47m" if con_ansi else ""
+    apagar = "\033[0m" if con_ansi else ""
+    franca = fondo + " " * ancho + apagar
+    lineas = [franca] * (MARGEN // 2)     # cada línea de texto vale dos módulos de alto
+    for i in range(0, tam, 2):
+        pedazos = []
+        for x in range(tam):
+            arriba = rejilla[x][i]
+            abajo = rejilla[x][i + 1] if i + 1 < tam else False
+            pedazos.append("█" if arriba and abajo else ("▀" if arriba else ("▄" if abajo else " ")))
+        lineas.append(fondo + " " * MARGEN + "".join(pedazos) + " " * MARGEN + apagar)
+    lineas += [franca] * (MARGEN // 2)
+    return "\n".join(lineas)
+
+
 def principal(argv):
     import argparse
     p = argparse.ArgumentParser(description="el enlace de memoria PC ↔ teléfono (F14)")
     p.add_argument("--cuadro", action="store_true", help="imprimir el cuadro que bajaría el teléfono")
     p.add_argument("--enlace", action="store_true", help="imprimir la dirección con la llave")
     p.add_argument("--token", action="store_true", help="forjar una llave nueva y decir cuál es")
+    p.add_argument("--qr", action="store_true", help="dibujar el enlace en la consola, para escanearlo con el teléfono")
+    p.add_argument("--qr-svg", metavar="ARCHIVO", help="guardar el enlace como SVG (se abre en el navegador)")
+    p.add_argument("--en-casa", action="store_true",
+                   help="forzar 127.0.0.1 en vez de la IP de la red (el teléfono no podría leerlo)")
     args = p.parse_args(argv)
+    if args.qr or args.qr_svg:
+        # Sin esto el QR apuntaría a `127.0.0.1`, que en el teléfono es el propio teléfono:
+        # un cuadro que se escanea y no encuentra nada. Se dibuja la IP de la casa.
+        anfitrion = "127.0.0.1" if args.en_casa else (ip_de_casa() or "127.0.0.1")
+        url = enlace_del_puente(anfitrion)
+    if args.qr:
+        if anfitrion == "127.0.0.1":
+            print("esta PC no ve su propia IP de la red: el cuadro apuntaría a sí misma y "
+                  "el teléfono no encontraría nada. Conecta el Wi-Fi, o escribe la dirección "
+                  "a mano en el teléfono.")
+        print(qr_terminal(url))
+        print(url)
+        return 0
+    if args.qr_svg:
+        svg = qr_svg(url)
+        if svg is None:
+            print("no hay `qrcodegen` en cort-bridge/terceros/", file=sys.stderr)
+            return 1
+        Path(args.qr_svg).write_text(svg, encoding="utf-8")
+        print(args.qr_svg)
+        print(url)
+        return 0
     if args.token:
         print(token(nuevo=True))
         return 0

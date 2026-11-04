@@ -1,0 +1,13 @@
+# Terceros que vienen DENTRO del repo del puente (no los baja nadie al instalar).
+#
+# Formato: nombre | sha256 | url | licencia
+#
+# Se copian aquí y no se descargan al arrancar por dos motivos, y los dos son de la dueña:
+# * la Classmate no siempre tiene internet cuando se usa CORT, y un puente que no puede
+#   dibujar su propio QR no enlaza el teléfono;
+# * ningún archivo ajeno se ejecuta sin leerse antes. Este se leyó: sólo importa
+#   `collections`, `itertools`, `re` y `typing` — no abre red, no escribe disco, no ejecuta.
+#
+# La suma es del archivo tal como está en el repo; `scripts/prueba_enlace.py` la vuelve a
+# calcular en cada pasada, así que un cambio de bytes sin cambiar esta línea se detecta.
+qrcodegen.py|9f4ed1dd201dcb92b1bc0d6e14f46c754bcff0ce48580c5d7e8ace8f6926c8ef|https://raw.githubusercontent.com/nayuki/QR-Code-generator/master/python/qrcodegen.py|MIT (Project Nayuki)

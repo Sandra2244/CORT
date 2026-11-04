@@ -231,6 +231,64 @@ def main():
     prueba("el puente sigue sirviendo lo suyo (404 en lo que no existe, no cascos)",
            http["ruta_estatica"] == 404)
 
+    print("\n== el QR del enlace (lo que se escanea con el teléfono) ==")
+    url = cort_enlace.enlace_del_puente("192.168.1.19", 8765, llave)
+    rejilla = cort_enlace.qr_matriz(url)
+    prueba("la biblioteca de QR está vendida y carga", rejilla is not None)
+    tam = len(rejilla) if rejilla else 0
+    prueba("el QR es cuadrado y su lado es 4·versión+17 (21, 25, …)",
+           rejilla is not None and all(len(f) == tam for f in rejilla)
+           and (tam - 17) % 4 == 0 and 21 <= tam <= 177,
+           f"lado {tam}")
+    esquina = rejilla[0][:8] if rejilla else []
+    prueba("los tres ojos del QR están donde van (búsqueda 1:1:3:1:1)",
+           esquina == [True, True, True, True, True, True, True, False], str(esquina))
+    svg = cort_enlace.qr_svg(url)
+    oscuros = sum(1 for fila in rejilla for modulo in fila if modulo)
+    prueba("el SVG dibuja exactamente los módulos oscuros de la rejilla",
+           svg is not None and svg.count("<rect x=") == oscuros,
+           f"svg {svg.count('<rect x=') if svg else 0} · rejilla {oscuros}")
+    consola = cort_enlace.qr_terminal(url, con_ansi=False)
+    filas_consola = consola.count("\n") + 1
+    prueba("la consola dibuja el QR (una línea por cada dos módulos) con su zona de silencio",
+           filas_consola == (len(rejilla) + 1) // 2 + 4,
+           f"{filas_consola} líneas para un lado de {len(rejilla)}")
+    sin_ansi = [linea for linea in cort_enlace.qr_terminal(url, con_ansi=True).split("\n")
+                if re.sub(r"\033\[[0-9;]*m", "", linea).strip(" ")]
+    prueba("el QR de consola fuerza el fondo blanco: en terminal oscura saldría invertido",
+           all("\033[47m" in linea for linea in sin_ansi)
+           and "\033[" not in cort_enlace.qr_terminal(url, con_ansi=False),
+           f"{len(sin_ansi)} líneas pintadas")
+    vuelta = []
+    for k, linea in enumerate(sin_ansi):
+        desnuda = re.sub(r"\033\[[0-9;]*m", "", linea)[4:-4]
+        for mitad, par in (("█▀", 2 * k), ("█▄", 2 * k + 1)):
+            if par >= len(rejilla):        # con lado impar la última línea media fila sobra
+                continue
+            for x, caracter in enumerate(desnuda):
+                vuelta.append((caracter in mitad, x, par))
+    prueba("lo que se imprime ES la rejilla: ni un módulo de más ni de menos",
+           len(vuelta) == len(rejilla) ** 2 and all(
+               rejilla[x][y] == oscuro for oscuro, x, y in vuelta),
+           f"{len(vuelta)} módulos releídos")
+    prueba("la zona de silencio rodea el cuadro (zxing la pide: cuatro módulos)",
+           all(len(re.sub(r"\033\[[0-9;]*m", "", linea)) == len(rejilla) + 8
+               and re.sub(r"\033\[[0-9;]*m", "", linea)[:4] == "    "
+               for linea in sin_ansi)
+           and cort_enlace.qr_terminal(url, con_ansi=False).split("\n")[0].strip(" ") == "",
+           f"lado {len(rejilla)} + 4 de margen por banda")
+
+    terceros = (RAIZ / "cort-bridge/terceros/qrcodegen.py").read_text(encoding="utf-8")
+    prueba("el QR de terceros no abre red ni disco ni ejecuta nada",
+           not any(m in terceros for m in ("import socket", "import subprocess", "import urllib",
+                                          "os.open", "eval(", "exec(")),
+           "la licencia MIT está en el encabezado del propio archivo")
+    lista = (RAIZ / "cort-bridge/terceros/terceros.txt").read_text(encoding="utf-8")
+    import hashlib
+    suma_real = hashlib.sha256((RAIZ / "cort-bridge/terceros/qrcodegen.py").read_bytes()).hexdigest()
+    prueba("la suma fijada en `terceros.txt` es la del archivo que se usa",
+           suma_real in lista, suma_real)
+
     print("\n== el puente de la casa tiene que montar el enlace ==")
     servidor = (RAIZ / "cort-bridge" / "cort_server.py").read_text(encoding="utf-8")
     prueba("`cort_server.py` importa el módulo del enlace", "cort_enlace" in servidor)

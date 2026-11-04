@@ -25,11 +25,15 @@ teléfono (app nativa, Java, sin Gradle ni AndroidX)
                       ws://IP_CASA:8765/ws  y  POST /mic (el teléfono también puede dictar al puente)
 ```
 
-Lo que **no** está todavía es la sincronía de memoria con el portátil: la ruta
-`/memoria/puente` no la sirve el puente de esta rama (sólo `POST /mic` y estática, medido en
-`cort-bridge/cort_server.py:2808`). El teléfono lo dice con palabras —«ese puente aún no
-tiene memoria compartida, llega con F14»— en vez de soltar un `404`. Lo enseñado en un lado
-no aparece en el otro **hasta esa fase**, y no se finge que sí.
+La sincronía de memoria con el portátil **sí la sirve ya esta rama** (F14a): el puente
+monta `GET` y `POST /memoria/puente` en el puerto del core —`8765`— detrás de una llave que
+se guarda en `~/.local/share/cort/enlace.json` con modo `0600`. El arranque de CORT imprime
+la dirección completa, y `python3 cort-bridge/cort_enlace.py --qr` dibuja encima un cuadro
+que se escanea con el teléfono; si se prefiere teclear, el plan B es pegar **esa línea
+entera** (con su `?token=`) en la pantalla de enlace de la aplicación. Lo que todavía no
+está es el escáner de cámara dentro del APK: mientras no se compile, el enlace se pega a
+mano. Y lo que llega por el puente son los recuerdos; las preferencias, la lista y las notas
+van en el siguiente viaje (F14c).
 
 La aplicación es **híbrida de propósito**, y por eso hay dos instaladores distintos: el APK
 del teléfono y el instalador de escritorio para Linux/Windows. Los dos hablan el mismo español

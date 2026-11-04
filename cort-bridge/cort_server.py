@@ -2838,14 +2838,26 @@ async def main():
     print(f"[CORT] RAM disponible ahora: {ram_disponible_mb()} MB · núcleos {os.cpu_count()}")
     if llave_enlace:
         host_enlace = bind
-        if bind == "0.0.0.0":
-            host_enlace = (socket.gethostbyname_ex(socket.gethostname())[2] or [bind])[0]
-        # La llave se imprime porque hay que teclearla en el teléfono (o meterla en el QR de
-        # F14b). Vive en ~/.local/share/cort/enlace.json con modo 0600; sin ella el enlace
+        if bind in ("0.0.0.0", "::"):
+            # `ip_de_casa` usa el truco del socket UDP conectado: la IP real del adaptador,
+            # sin mandar tráfico. `gethostbyname_ex` falla con hostname sin registro.
+            host_enlace = cort_enlace.ip_de_casa() or bind
+        # La llave se imprime porque hay que teclearla en el teléfono (o meterla en el QR).
+        # Vive en ~/.local/share/cort/enlace.json con modo 0600; sin ella el enlace
         # responde 401 y el teléfono sigue acordándose a sí mismo.
-        print(f"[CORT] memoria compartida (F14): "
-              f"{protocolo}://{host_enlace}:{PUERTO_WS}{cort_enlace.RUTA}?token={llave_enlace}")
-        print("[CORT]   ← eso es lo que se pega en el teléfono; el QR llega con F14b")
+        enlace_url = (f"{protocolo}://{host_enlace}:{PUERTO_WS}{cort_enlace.RUTA}"
+                      f"?token={llave_enlace}")
+        print(f"[CORT] memoria compartida (F14): {enlace_url}")
+        # El QR se dibuja sólo cuando el puente está abierto a la red y en una terminal viva:
+        # en localhost el teléfono escanearía su propio bolsillo, y en un log serían líneas de
+        # ruido con la llave dentro. La dirección de arriba sigue siendo el plan B, tecleable.
+        if host_enlace != "127.0.0.1" and sys.stdout.isatty():
+            for linea in cort_enlace.qr_terminal(enlace_url).split("\n"):
+                print("[CORT]   " + linea)
+            print("[CORT]   ← escanea esto con el teléfono (pantalla de enlace) o pega la dirección")
+        else:
+            print("[CORT]   ← eso es lo que se pega en el teléfono; "
+                  "`python3 cort-bridge/cort_enlace.py --qr` dibuja el cuadro para escanearlo")
     vivo, modelos = ollama_vivo()
     disco = inventario_disco()
     print(f"[CORT] Ollama: {'vivo' if vivo else 'apagado'} · cargados: {list(modelos) or 'ninguno'}")

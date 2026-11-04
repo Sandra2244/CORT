@@ -281,8 +281,32 @@ línea «oído: …»**, que es la forma honesta de que la dueña sepa si está 
 teléfono o con internet. El puente de la PC sigue pudiendo recibir WAV por `POST /mic` para
 quien quiera la cara grande. Cómo se compila (el mismo método sin Gradle, ahora con las
 descargas fijadas por SHA-256 en `apps/android/deps.txt`), qué firma lleva, **los 56,59 MB
-medidos** y qué no hace todavía (sincronía de memoria, QR, TLS) está en
+medidos** y qué no hace todavía (el escáner de cámara para leer el QR, TLS) está en
 [`docs/ANDROID.md`](docs/ANDROID.md) y en `apps/android/ACREDITACION.md`.
+
+**Enlazar el teléfono con la PC** (F14). Arrancar CORT abierto a la red —`CORT_BIND=<IP>` o
+el instalador con `--red`— y mirar el arranque: imprime una línea
+
+```
+[CORT] memoria compartida (F14): http://192.168.1.19:8765/memoria/puente?token=…
+```
+
+y, si la terminal está abierta, el mismo cuadro en QR. Dos formas de usarlo, la primera es la
+rápida:
+
+* **Escanear**: `python3 cort-bridge/cort_enlace.py --qr` pinta el cuadro en la pantalla de la
+  PC y se lee con la cámara del teléfono desde la pantalla de enlace. El escáner dentro del
+  APK llega con la próxima compilación; mientras tanto sirve la segunda forma.
+* **Pegar**: se copia esa línea **completa**, con su `?token=`, en el campo de enlace de la
+  aplicación. `Puente.urlDelPuente` se encarga del resto: quita el puerto de la interfaz
+  (8766), pone el del core (8765) y lleva la llave en el query. Escribir sólo la IP también
+  vale, pero sin llave el puente contesta `401` y el teléfono lo dice con palabras.
+
+Lo que viaja hoy son los recuerdos: `cort-bridge/cort_enlace.py --cuadro` muestra el cuadro
+que bajaría el teléfono —máximo 300 caracteres por fila, 500 filas, 262 144 bytes— y las
+cuatro reglas están escritas en el mismo archivo: la llave de la red nunca viaja dentro de un
+recuerdo, fusionar no borra nunca, el dedupe compara sin espacios de sobra y los topes están
+fijos. Preferencias, lista y notas entran en el siguiente viaje (F14c).
 
 ### Otros sistemas operativos
 
@@ -388,11 +412,14 @@ http://127.0.0.1:8776/index.html?puente=8775
   esta máquina, con 2 núcleos y 1851 MB, quedan 172–233 MB libres y Ollama está
   apagado; un modelo de manos (MediaPipe o TFLite) corre en el Galaxy A16, no aquí.
   Se planifica como fase propia, no se improvisa.
-- **Vincular PC y Android para que CORT comparta memoria** necesita tres cosas que
-  aún no están todas: `CORT_BIND` abierto, TLS con certificado propio y un token.
-  Sin HTTPS el navegador del teléfono no instala la PWA ni deja usar el micrófono,
-  y compartir la memoria sin cifrar por la red local sería exponerla. El APK (F11/F12)
-  es el que resuelve el frente.
+- **Vincular PC y Android** ya funciona a medias, y se dice de qué parte. Desde F14a el puente
+  sirve `GET` y `POST /memoria/puente` en el `8765` con token obligatorio (`0600` en
+  `~/.local/share/cort/enlace.json`), y desde F14b la PC imprime el cuadro QR con
+  `cort_enlace.py --qr`; son 46 comprobaciones en `scripts/prueba_enlace.py`, puente vivo
+  incluido. Falta lo que sostiene el teléfono: **el escáner de cámara dentro del APK** —hoy se
+  pega la dirección a mano— y **TLS**, que es lo que falta para que la llave y los recuerdos
+  viajen cifrados por la red de la casa. Sin HTTPS el navegador del teléfono además no instala
+  la PWA ni deja usar el micrófono, así que el camino elegido es el APK nativo (F11/F12).
 - **El cerebro cargado**: la puerta de RAM manda. Con la interfaz abierta ningún
   modelo de los 6 en disco cabe; `auto_sonda()` lo mide solo en el turno en que la
   máquina respire.
