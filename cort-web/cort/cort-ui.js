@@ -1126,7 +1126,8 @@
     ["Processeur", "Procesador", "Processor"],
     ["Efface mes notes", "Borra mis notas", "Clear my notes"],
     ["Vide la to-do list", "Vacía la lista de tareas", "Clears the to-do list"],
-    ["Fais-moi un rap / pop / rock...", "Hazme un rap / pop / rock...", "Make me a rap / pop / rock..."]
+    ["Fais-moi un rap / pop / rock...", "Hazme un rap / pop / rock...", "Make me a rap / pop / rock..."],
+    ["Aucun article dans la liste", "Ningún artículo en la lista", "No items in the list"]
   ];
 
   // ---- 2b. Reglas para rótulos dinámicos -----------------------------------
