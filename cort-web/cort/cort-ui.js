@@ -1891,6 +1891,9 @@
   let ultimoCerebro = null;
   let ultimoPerfil = null;   // S1: el escaneo del equipo (nivel, motivo, plan)
   let ultimoVision = null;   // S2: el estado de la mirada (cuadros, ritmo, motivo)
+  let ultimaMemoria = null;    // S4: qué guarda CORT de ti y en qué archivo
+  let ultimaIniciativa = null; // S4: lo que CORT dijo por su cuenta al conectar
+  let ultimoControl = null;    // S4: la autocrítica que cambió una respuesta del modelo
   let ultimaVersion = null;    // U1: lo que dijo el canal del repo
   let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
   const progresoPull = {};
@@ -1930,6 +1933,7 @@
         window.CORT_enviarAlCerebro({ type: "buscar_actualizacion" });
         window.CORT_enviarAlCerebro({ type: "perfil_equipo" });
         window.CORT_enviarAlCerebro({ type: "vision_estado" });
+        window.CORT_enviarAlCerebro({ type: "memoria_estado" });
         pintarCerebro();
       }
     });
@@ -2109,6 +2113,97 @@
     pintarCerebro();
   };
 
+  // S4: la memoria. Es la tarjeta que dice qué sabe CORT de ti, en qué archivo vive
+  // y qué te propuso al conectar. Se muestra el camino entero porque «tengo 12
+  // apuntes» sin decir dónde están es una promesa sin prueba.
+  function nodoMemoria() {
+    const m = (ultimaMemoria && ultimaMemoria.datos) || {};
+    const ini = ultimaIniciativa || {};
+    // El plural se escribe a propósito: «1 apuntes» delataba que la tarjeta nunca
+    // se había leído con un solo dato guardado.
+    const uno = (n, s, p) => `${n || 0} ${n === 1 ? s : p}`;
+    const caja = document.createElement("div");
+    caja.id = "cort-memoria";
+    caja.style.cssText = "margin:0 0 8px;padding:6px 8px;border-radius:9px;" +
+      "border:1px solid rgba(150,230,190,.35);background:rgba(18,40,32,.5)";
+    const cab = document.createElement("div");
+    cab.style.cssText = "font-weight:700;color:#c9f2da";
+    // Tres estados, no dos: abrir la tarjeta y ver «todavía no has guardado nada»
+    // mientras la consulta está en camino era afirmar algo que no se sabía.
+    cab.textContent = !ultimaMemoria
+      ? "memoria · consultando tu archivo…"
+      : ultimaMemoria.origen !== "real"
+        ? "memoria · el puente no pudo medirla"
+        : m.existe
+          ? `memoria · ${uno(m.hechos, "apunte", "apuntes")} · ` +
+            `${uno(m.correcciones, "corrección", "correcciones")} · ` +
+            `${uno(m.preferencias, "preferencia", "preferencias")}`
+          : "memoria · todavía no has guardado nada";
+    caja.appendChild(cab);
+
+    // El motivo se pinta entero: una tarjeta vacía sin explicación es exactamente lo
+    // que se vino a corregir desde la fase F1.
+    if (ultimaMemoria && ultimaMemoria.origen !== "real" && ultimaMemoria.motivo) {
+      const why = document.createElement("div");
+      why.style.cssText = "margin-top:3px;color:#ffb4b4;font-size:11px";
+      why.textContent = ultimaMemoria.motivo;
+      caja.appendChild(why);
+    }
+
+    if (ultimaIniciativa) {
+      const dicho = document.createElement("div");
+      dicho.style.cssText = "margin-top:3px;color:#dff5e6";
+      dicho.textContent = [ini.saludo, ini.nota].filter(Boolean).join(" · ");
+      if (dicho.textContent) caja.appendChild(dicho);
+    }
+
+    // Lo que CORT está a punto de mandarle al modelo, con sus palabras: es la
+    // prueba de que el apunte entró en el prompt y no una cifra suelta.
+    if (ultimaMemoria && ultimaMemoria.contexto) {
+      const sabe = document.createElement("div");
+      sabe.style.cssText = "margin-top:3px;color:#dff5e6;font-size:11px";
+      sabe.textContent = "lo que sabe de ti: " + ultimaMemoria.contexto;
+      caja.appendChild(sabe);
+    }
+
+    const pie = document.createElement("div");
+    pie.style.cssText = "margin-top:3px;opacity:.7;font-size:11px;word-break:break-all";
+    // El resumen ya termina diciendo en qué archivo vive; repetir el camino entero
+    // debajo hacía la tarjeta más larga sin decir nada nuevo.
+    const ruta = m.ruta || "~/.local/share/cort/memoria.json";
+    const trozos = [];
+    if (!((ultimaMemoria && ultimaMemoria.contexto) || "").includes(ruta)) {
+      trozos.push(ruta + " · todo en este equipo");
+    }
+    if (m.constitucion) trozos.push(`constitución de ${m.constitucion} caracteres`);
+    if (trozos.length) { pie.textContent = trozos.join(" · "); caja.appendChild(pie); }
+
+    if (ultimoControl && ultimoControl.ajustes && ultimoControl.ajustes.length) {
+      const c = document.createElement("div");
+      c.style.cssText = "margin-top:3px;color:#ffd9a0;font-size:11px";
+      c.textContent = "control antes de hablar: " + ultimoControl.ajustes.join(" · ");
+      caja.appendChild(c);
+    }
+
+    const prueba = document.createElement("div");
+    prueba.style.cssText = "margin-top:4px;opacity:.8;font-size:11px";
+    prueba.textContent = "Se prueba diciendo: «recuerda que …», «no me digas X, dime Y», " +
+      "«¿qué sabes de mí?». CORT aprende de tus correcciones escribiéndolas, no " +
+      "reentrenando: aquí no hay GPU y eso se dice con la medida delante.";
+    caja.appendChild(prueba);
+    return caja;
+  }
+
+  window.CORT_alMemoria = (n) => {
+    if (!n) return;
+    if (n.type === "memoria_estado") ultimaMemoria = n;
+    else if (n.type === "iniciativa") {
+      ultimaIniciativa = n;
+      if (n.nota) flotante(n.nota, true);
+    } else if (n.type === "autocritica") ultimoControl = n;
+    pintarCerebro();
+  };
+
   window.CORT_alPerfil = (n) => {
     if (!n || n.type !== "perfil_reply") return;
     ultimoPerfil = n;
@@ -2133,6 +2228,7 @@
       panel.appendChild(titulo);
       if (ultimoPerfil) panel.appendChild(nodoPerfil());
       panel.appendChild(nodoMirada());
+      panel.appendChild(nodoMemoria());
       return;
     }
     const libre = s.ram_disponible_mb, nucleos = s.nucleos;
@@ -2143,6 +2239,7 @@
     // una pantalla de 521 px lo de abajo se lee haciendo scroll.
     if (ultimoPerfil) panel.appendChild(nodoPerfil());
     panel.appendChild(nodoMirada());
+    panel.appendChild(nodoMemoria());
     const nota = document.createElement("div");
     nota.style.cssText = "opacity:.72;margin:2px 0 8px";
     nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +

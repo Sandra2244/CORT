@@ -45,7 +45,12 @@ from urllib.error import URLError, HTTPError
 import urllib.parse
 
 BASE = Path(__file__).resolve().parent.parent / "cort-web"
-ESTADO = Path(__file__).resolve().parent / "cort_state.json"
+# El estado (modelo elegido, ciudad, lat/lon) estaba fijado a la ruta del repo, así
+# que una prueba de arena escrita en /tmp leía y ESCRIBÍA el config del puente vivo:
+# el modelo que Sandra eligió podía quedar borrado por un test. Con `CORT_STATE` la
+# arena tiene su propio archivo y el puente vivo sigue usando el de siempre.
+ESTADO = Path(os.environ.get("CORT_STATE",
+                             str(Path(__file__).resolve().parent / "cort_state.json")))
 OLLAMA = os.environ.get("CORT_OLLAMA", "http://127.0.0.1:11434")
 PUERTO_WS = int(os.environ.get("CORT_WS_PORT", "8765"))
 PUERTO_WEB = int(os.environ.get("CORT_WEB_PORT", "8766"))
@@ -116,6 +121,17 @@ except Exception as _e_vision:
     VISION_ERROR = f"{type(_e_vision).__name__}: {_e_vision}"
 else:
     VISION_ERROR = ""
+
+# S4: la memoria y la constitución. Biblioteca estándar sola (leen y escribir un
+# JSON), así que vive incluso sin venv y sin Ollama: es la capa que hace que CORT
+# te conozca mañana con lo que le corregiste hoy, sin reentrenar nada.
+try:
+    import cort_memoria
+except Exception as _e_mem:
+    cort_memoria = None
+    MEMORIA_ERROR = f"{type(_e_mem).__name__}: {_e_mem}"
+else:
+    MEMORIA_ERROR = ""
 
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
@@ -962,6 +978,16 @@ def intentos_locales(texto, estado):
     # una lista de la compra contestada con el uso de memoria es un robo de turno.
     dice = lambda *v: any(re.search(r"\b" + x + r"\b", q) for x in v)
 
+    # S4: una orden de memoria se atiende antes que todo lo demás, porque es la única
+    # regla que ESCRIBE en disco («recuerda que…», «no me digas X, dime Y»,
+    # «llámame…», «olvida…»). Si se dejara detrás del modelo, la corrección se
+    # perdería en la charla y mañana CORT volvería a decir lo que no querías.
+    if cort_memoria is not None:
+        dicho = cort_memoria.aprender(texto)
+        if dicho is not None:
+            return dicho, [{"type": "memoria_estado", "origen": "real",
+                            "datos": cort_memoria.disponibilidad()}]
+
     if tiene("que hora", "la hora", "hora es", "hora actual", "dime la hora"):
         return f"Son las {time.strftime('%H:%M')}.", []
 
@@ -1222,11 +1248,17 @@ def cerebro(prompt, historial, estado):
             return {"ok": False, "texto": None, "motivo": "no hay ningún modelo descargado; elige uno en Ajustes > Cerebro local"}
         modelo = min(instalado, key=lambda m: presupuesto_del_modelo(m)[0])
     nombre = estado.get("user_name") or "Sandra"
-    sistema = (
-        "Eres CORT: asistente personal de " + nombre + ". Respondes en español neutro, corto, "
-        "sin listas salvo que se pidan. Si no sabes un dato, lo dices; no lo inventas. "
-        "Horario local y sistema: Linux."
-    )
+    if cort_memoria is not None:
+        # El prompt se arma con la constitución escrita y los apuntes que tienen que
+        # ver con ESTA frase: así las correcciones de ayer siguen vivas hoy, que es
+        # la única forma de "aprender" que cabe en 260 MB de RAM.
+        sistema = cort_memoria.sistema(prompt, estado, nombre)
+    else:
+        sistema = (
+            "Eres CORT: asistente personal de " + nombre + ". Respondes en español neutro, corto, "
+            "sin listas salvo que se pidan. Si no sabes un dato, lo dices; no lo inventas. "
+            "Horario local y sistema: Linux."
+        )
     mensajes = [{"role": "system", "content": sistema}] + historial[-8:] + [
         {"role": "user", "content": prompt}
     ]
@@ -1699,6 +1731,31 @@ async def muestrear_al_conectar(ws):
         enviar(ws, {"type": "perfil_reply", **r, "ajustes_aplicados": aplicar, "auto": True})
 
 
+async def empujar_iniciativa(ws):
+    """S4: lo que CORT dice por su cuenta al conectar, en tarea aparte.
+
+    Medir y hablar no puede ir en el camino de la conexión: el escáner en frío
+    cuesta ~1,3 s en esta máquina y mientras se esperaba, la primera pregunta de la
+    pantalla se contestaba 7 s después. Aquí se calcula y se manda, y si algo falla
+    se dice en la consola en vez de dejar la conexión muda.
+    """
+    try:
+        pend = cort_vida.proximo_pendiente() if cort_vida else None
+        stats = cpu_ram_disco()
+        # El nivel sale del escáner S1 con su caché de 15 s; se pide en un hilo
+        # para no bloquear el lazo si la caché estaba fría.
+        perfil = await asyncio.get_event_loop().run_in_executor(None, perfil_equipo)
+        nivel = (perfil.get("nivel") or {}).get("nivel")
+        dicho = cort_memoria.iniciativa(None, pendiente=pend, nivel=nivel,
+                                        ram_libre=stats.get("ram_disponible_mb"))
+        enviar(ws, {"type": "iniciativa", "origen": "real",
+                    "saludo": cort_memoria.saludo(cort_memoria.nombre()),
+                    "nota": dicho or "",
+                    "memoria": cort_memoria.disponibilidad()})
+    except Exception as e:
+        print(f"[CORT] la iniciativa falló ({type(e).__name__}): {e}")
+
+
 MUESTREO = None
 MINUTOS_CLIMA = 10
 
@@ -1737,6 +1794,16 @@ async def ws_handler(request):
     # estado del cerebro, temperatura del equipo y clima. La demo esperaba que su
     # backend propio con estos datos; ése era el motivo del «OBTENIENDO…» eterno.
     asyncio.create_task(muestrear_al_conectar(ws))
+
+    # S4: CORT abre la boca primero, una vez, con lo que ya está medido. No es
+    # adivinar: es un recordatorio que vence, la RAM real leída en /proc o el nivel
+    # de cerebro del escáner. Si no hay nada que decir, se queda callado.
+    # Va en tarea aparte: medido, el escáner en frío tarda 1,3 s en esta máquina, y
+    # si aquí se esperara, el lazo de lectura no empezaría hasta entonces y la
+    # primera pregunta de la pantalla (la tarjeta de memoria) se contestaba 7 s
+    # después de haberse pedido.
+    if cort_memoria is not None:
+        asyncio.create_task(empujar_iniciativa(ws))
 
     try:
         async for msg in ws:
@@ -2155,6 +2222,23 @@ async def ws_handler(request):
                             **(MIRADA.estado() if MIRADA else
                                {"mirando": False, "motivo": "la mirada está apagada"})})
 
+            elif t == "memoria_estado":
+                # S4: la pantalla pregunta qué hay guardado y dónde. Si el módulo no
+                # cargó, se dice con su motivo en vez de mandar una tarjeta vacía.
+                if cort_memoria is None:
+                    enviar(ws, {"type": "memoria_estado", "origen": "no disponible",
+                                "motivo": "el módulo de memoria no cargó: " + MEMORIA_ERROR})
+                else:
+                    # Con texto, la tarjeta muestra lo que la búsqueda encontró para
+                    # ese tema; sin texto (se acabó de abrir el panel) mostrar una
+                    # búsqueda vacía era decir «no sé nada» teniendo apuntes guardados:
+                    # ahí va el resumen completo.
+                    pide = (d.get("text") or "").strip()
+                    enviar(ws, {"type": "memoria_estado", "origen": "real",
+                                "datos": cort_memoria.disponibilidad(),
+                                "contexto": (cort_memoria.contexto(pide) if pide
+                                             else cort_memoria.resumen())})
+
             elif t in ("wake_on", "wake_off"):
                 # F10: con la palabra encendida el micro sigue escuchando pero sólo
                 # se atiende lo que va dicho después del nombre.
@@ -2364,9 +2448,23 @@ async def atender_input(ws, texto, historial, candado):
                     return
         r = await asyncio.get_event_loop().run_in_executor(None, cerebro, texto, historial, estado)
         if r["ok"]:
+            # La pasada de control (S4): antes de abrir la boca se revisa el texto del
+            # modelo. No se fía uno de 135 M parámetros de decir "ya cerré la ventana"
+            # sin que nadie la cerrara, ni de soltar una lista con asteriscos por el
+            # altavoz. Las reglas están en cort_memoria y se pueden probar.
+            texto_resp = r["texto"]
+            if cort_memoria is not None:
+                # origen="modelo": lo que sale de un LM chico NO es una medida. Si dice
+                # «ya cerré la ventana» sin que nadie la cerrara, la regla lo tumba.
+                rev = cort_memoria.revisar(texto_resp, origen="modelo")
+                if rev.get("ajustes"):
+                    enviar(ws, {"type": "autocritica", "origen": "real",
+                                "ajustes": rev["ajustes"], "antes": texto_resp[:120],
+                                "despues": rev["texto"][:120]})
+                texto_resp = rev["texto"]
             historial.append({"role": "user", "content": texto})
-            historial.append({"role": "assistant", "content": r["texto"]})
-            await decir(ws, r["texto"])
+            historial.append({"role": "assistant", "content": texto_resp})
+            await decir(ws, texto_resp)
             enviar(ws, {"type": "brain_used", "modelo": r.get("modelo"), "origen": "real"})
         else:
             await decir(ws, "Sin cerebro local: " + r["motivo"])

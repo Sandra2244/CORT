@@ -40,6 +40,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Escáner de capacidades (el equipo se adapta solo) | real medido | `cort-bridge/cort_perfil.py`; 14/14 en `prueba_perfil.py`. En esta laptop: nivel 0, `AVX no`, 397 ms de ida y vuelta por WebSocket y la interfaz bajando a 30 fps con las scanlines apagadas |
 | Gestos con cámara → mover ventanas | real medido | `cort-bridge/cort_vision.py`; 12/12 en `prueba_vision.py` y 7/7 en `cort_vision.py selftest`. Webcam real: YUY2 320×240 a **15 cuadros/s**, **1,9–4,6 ms** de cálculo por cuadro, worker de 33,7 MB y **ninguna imagen guardada**. Una persona sentada quieta dispara **0 gestos** (era 8 cada 8 s antes de cerrar el umbral de movimiento) |
 | Mapa propio (Leaflet + OSM) | **aparcado (F6)** | recortable por acuerdo; no se finge un mapa |
+| Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
 | Panel de APK nativo | en fase | se compila en GitHub Actions, no en esta máquina |
 
@@ -63,7 +64,9 @@ cort-bridge/            proceso único, dos puertos
                         el nivel de cerebro y qué se apaga para que lo demás quepa
   cort_vision.py        la mirada: lee la webcam cuadro a cuadro, saca piel+movimiento y
                         traduce cuatro gestos en órdenes de ventana (nada se guarda)
-  cort_state.json       preferencias personales (ignoradas por git)
+  cort_memoria.py       la persona: constitución, memoria escrita en disco, autocorrección
+                        antes de hablar e iniciativa al conectar (nunca reentrena pesos)
+  cort_state.json       preferencias personales (ignoradas por git; CORT_STATE elige la ruta)
 cort-web/
   index.html            la interfaz (rediseñada sobre la plantilla)
   cort/cort-mock.js     enlace con el puente; lo que no hay puente se simula y se dice
@@ -73,8 +76,9 @@ cort-web/
   cort/cort-style.css   recorte HUD, paneles y testigos
 scripts/                pruebas: prueba_intenciones · prueba_nucleo · prueba_sonda ·
                         prueba_wake · prueba_actualiza · prueba_perfil · prueba_vida ·
-                        prueba_voz · prueba_acciones · prueba_vision · arranca_con_sonda.sh
-PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S2)
+                        prueba_voz · prueba_acciones · prueba_vision · prueba_memoria ·
+                        arranca_con_sonda.sh
+PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S4)
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```
@@ -155,6 +159,27 @@ existe en el equipo (ventanas abiertas, entradas `.desktop`).
    faltan y **probar el cerebro** con una frase. Si la cuenta no cabe, no lo carga y
    dice la cifra en vez de congelar el equipo.
 
+### Qué guarda CORT de ti, dónde, y cómo borrarlo
+
+Todo son archivos de texto en `~/.local/share/cort/` (`CORT_DATOS`). Se pueden abrir con
+cualquier editor y borrar sin desinstalar nada:
+
+| Archivo | Qué hay dentro | Cómo se llena |
+|---|---|---|
+| `memoria.json` | `preferencias` (nombre, ciudad, tono, gustos), `hechos` (lo que pediste recordar), `correcciones` (lo que no quieres que diga), `avisos` (cuándo habló por última vez por su cuenta) | diciendo «recuerda que…», «llámame…», «no me digas X, dime Y» |
+| `constitucion.md` | los 7 principios que viajan en el `system` de cada frase | se edita a mano; si tiene más de 40 caracteres, CORT usa este y no el de fábrica |
+| `cort_state.json` | modelo elegido y preferencias del puente | desde el panel ◉ o la consola |
+| `vida/` | lista de compras, notas y pendientes con fecha | «anota que…», «pon como pendiente… para el…» |
+
+Borrar la memoria es literalmente borrar el archivo, y CORT deja de saber esas cosas:
+
+```bash
+cp ~/.local/share/cort/memoria.json ~/memoria-cort-respaldo.json && rm ~/.local/share/cort/memoria.json
+```
+
+No entra audio ni imagen: los cuadros de la cámara se tiran después de sacar cuatro números
+(fase S2), y a `memoria.json` sólo va texto que tú pediste recordar o corregir.
+
 ### Como servicio de usuario (que arranque solo)
 
 ```bash
@@ -198,7 +223,9 @@ del repo; aparece en el menú de XFCE como «CORT».
 | `CORT_REPO` / `CORT_VERSION` | con qué repo y qué versión comparar (si no, se derivan de `git remote` y `git describe`) | derivados |
 | `CORT_BIND` / `CORT_TLS` | abrir el puente a la red local, con certificado `cert,clave` | `127.0.0.1`, sin TLS |
 | `CORT_RAM_MIN` | MB libres mínimos para cargar un modelo | según modelo |
-| `CORT_HOME` / `CORT_DATOS` | dónde guarda estado, voz y registro | `~/.local/share/cort` |
+| `CORT_HOME` / `CORT_DATOS` | dónde guarda estado, voz, memoria y registro | `~/.local/share/cort` |
+| `CORT_STATE` | archivo de preferencias del puente; en las pruebas de arena apunta a `/tmp` para no escribir en el tuyo | `<esta carpeta>/cort_state.json` |
+| `CORT_MEM_LIMITE` | caracteres de memoria que se re-inyectan en el prompt de cada frase | `420` |
 | `CORT_WS_PORT` / `CORT_WEB_PORT` | puertos del puente | `8765` / `8766` |
 
 ---
@@ -229,6 +256,7 @@ pruebas mueve una carpeta real ni escribe en tu lista de compras.
 .venv/bin/python scripts/prueba_actualiza.py     # canal de versión contra un GitHub falso
 .venv/bin/python scripts/prueba_perfil.py        # el escáner: 6 equipos fingidos + la medida real
 .venv/bin/python scripts/prueba_vision.py        # la mirada: cuadros, gestos y ventanas reales
+.venv/bin/python scripts/prueba_memoria.py       # memoria, constitución y autocorrección por WebSocket
 .venv/bin/python scripts/prueba_sonda.py         # la auto-sonda con un Ollama falso en arena
 .venv/bin/python scripts/prueba_voz.py           # órdenes de voz por WebSocket y descarga del WAV
 .venv/bin/python scripts/prueba_acciones.py      # pc_estado, detect_apps, apt, abrir/cerrar ventana
@@ -244,10 +272,15 @@ CORT_WS_PORT=8775 .venv/bin/python scripts/prueba_vida.py   # lista, notas, pend
 ```
 
 Para ver la interfaz contra un puente de arena sin tocar el tuyo, la página acepta
-`?puente=` con una URL `ws://` (así se midieron las pantallas de este repo):
+`?puente=` con una URL `ws://` o con el puerto a secas (así se midieron las pantallas de
+este repo). Lo del puerto suelto existe porque la página lleva 8765 fijado: si `?puente=8775`
+no significara nada, la pestaña de arena se conectaría en secreto al puente vivo y allí se
+mediría otra cosa. Antes de teclear, comprueba el destino real con
+`CORT_puente().url` en la consola:
 
 ```
 http://127.0.0.1:8776/index.html?puente=ws%3A%2F%2F127.0.0.1%3A8775%2Fws
+http://127.0.0.1:8776/index.html?puente=8775
 ```
 
 ## Lo que se pidió y todavía no está, dicho con número

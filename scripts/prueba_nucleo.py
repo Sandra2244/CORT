@@ -137,6 +137,9 @@ threading.Thread(target=servidor.serve_forever, daemon=True).start()
 
 ENTORNO = {**os.environ,
            "CORT_HOME": str(ARENA), "CORT_DATOS": str(ARENA / ".local/share/cort"),
+           # config del puente también en la arena: sin esto un test escribe el
+           # modelo y la ciudad reales de Sandra en cort-bridge/cort_state.json
+           "CORT_STATE": str(ARENA / "cort_state.json"),
            "CORT_OLLAMA": f"http://127.0.0.1:{PORT_CEREBRO}",
            "CORT_WS_PORT": str(PORT_WS), "CORT_WEB_PORT": str(PORT_WEB),
            "CORT_VOZ": "0", "CORT_MIC": "0", "CORT_NUCLEO": "1",

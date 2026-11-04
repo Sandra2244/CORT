@@ -63,7 +63,11 @@
     "pc_accion", "pc_estado", "detect_apps", "get_installed_programs", "get_winget_upgrades",
     "games_get_library", "get_desktop_wallpaper", "open_browser",
     // F4: la vida diaria (lista, notas, pendientes) la contesta el puente.
-    "vida_estado"
+    "vida_estado",
+    // S4: la memoria escrita (qué hay guardado, dónde, y el resumen de lo que CORT
+    // sabe de ti) la contesta el puente; si no está en la lista, la orden se queda
+    // en el simulador y la tarjeta de memoria nunca se llena.
+    "memoria_estado"
   ]);
 
   // La demo lee unas respuestas por `s.type` y otras por `s.action` (live_subtitles,
@@ -78,11 +82,18 @@
   }
 
   // ?puente= permite medir la interfaz contra un puente de arena sin tocar el de
-  // siempre; sólo se acepta si apunta a ws:// o wss:// y nada más.
+  // siempre. Se aceptan dos formas: la URL completa (ws://host:puerto/ws) o el
+  // número de puerto solo (8775). Lo del puerto suelto existe porque la página
+  // lleva 8765 fijado en el código: si ?puente=8775 no significara nada, la
+  // pestaña de arena se conectaría en secreto al asistente vivo y allí se mediría
+  // otra cosa. Con el puerto suelto se reescribe el destino de verdad, y la consola
+  // siempre imprime la URL a la que se va (window.CORT_puente().url).
   const OTRO = (new URLSearchParams(location.search).get("puente") || "").trim();
+  const PUERTO_ALT = /^\d{2,5}$/.test(OTRO) ? OTRO : "";
 
   const PUENTE = {
     url: /^(wss?:\/\/\S+)$/i.test(OTRO) ? OTRO
+         : PUERTO_ALT ? "ws://" + (location.hostname || "127.0.0.1") + ":" + PUERTO_ALT + "/ws"
                                        : "ws://" + (location.hostname || "127.0.0.1") + ":8765/ws",
     ws: null,
     estado: "sin iniciar",
@@ -91,6 +102,8 @@
     ultimo_status: null,
     ultimo_perfil: null,    // S1: el escaneo que el puente empuja al conectar
     ultima_vision: null,    // S2: último estado de la mirada (cuadros, fps, motivo)
+    ultima_memoria: null,   // S4: qué hay guardado en la memoria local y dónde
+    ultima_iniciativa: null, // S4: lo que CORT dijo por su cuenta al conectar
     ultima_temperatura: null,
     ultima_voz: null,
     ultima_accion: null,
@@ -221,6 +234,17 @@
           try { window.CORT_alVision(n); } catch (e) {}
         }
       }
+      // S4: la memoria y la iniciativa. `memoria_estado` dice qué hay guardado y en
+      // qué archivo; `iniciativa` es lo que CORT propone al conectar (un pendiente que
+      // vence, la RAM justa); `autocritica` es la corrección que el control hizo antes
+      // de hablar, para que se vea que no se fía del modelo.
+      if (n.type === "memoria_estado" || n.type === "iniciativa" || n.type === "autocritica") {
+        if (n.type === "memoria_estado") this.ultima_memoria = n;
+        if (n.type === "iniciativa") this.ultima_iniciativa = n;
+        if (typeof window.CORT_alMemoria === "function") {
+          try { window.CORT_alMemoria(n); } catch (e) {}
+        }
+      }
       // U1: canal de actualización del repo.
       if (n.type === "actualizacion") {
         this.ultima_version = n;
@@ -286,6 +310,8 @@
     ultima_temperatura: PUENTE.ultima_temperatura,
     ultimo_perfil: PUENTE.ultimo_perfil,
     ultima_vision: PUENTE.ultima_vision,
+    ultima_memoria: PUENTE.ultima_memoria,
+    ultima_iniciativa: PUENTE.ultima_iniciativa,
     avisos: Object.keys(PUENTE.avisos),
     ultimo_status: PUENTE.ultimo_status
   });

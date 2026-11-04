@@ -79,6 +79,9 @@ def main():
     env = {**os.environ,
            "CORT_HOME": str(arena),
            "CORT_DATOS": str(arena / "datos"),
+           # el config del puente (modelo, ciudad) también en la arena: sin esto la
+           # sonda escribe en cort-bridge/cort_state.json, que es el archivo vivo
+           "CORT_STATE": str(arena / "cort_state.json"),
            "CORT_WS_PORT": "8798", "CORT_WEB_PORT": "8799",
            "CORT_VOZ": "0", "CORT_NUCLEO": "1",
            "CORT_OLLAMA": f"http://127.0.0.1:{puerto}",

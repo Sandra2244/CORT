@@ -422,6 +422,73 @@ cuadros/s · 300 leídos · 3,9 ms`; apagado → `mirada apagada · 334 cuadros`
 números y tira el cuadro; no existe en el código ninguna ruta que escriba un cuadro a disco. Si
 algún día la hubiera, esta frase se borra.
 
+### S4 — carisma y memoria escrita: constitución, autocorrección e iniciativa (23/23 en `scripts/prueba_memoria.py`, 16/16 en `cort_memoria.py selftest`)
+
+`cort-bridge/cort_memoria.py` (599 líneas) responde a la pregunta que abrió la fase: *¿cómo
+aprenden Claude o Gemini, y puede CORT aprender igual?* Hay dos mecanismos que se llaman
+«aprender» y no son el mismo.
+
+| Mecanismo | Qué pasa dentro | Qué hace falta | Qué hace CORT |
+|---|---|---|---|
+| Entrenar pesos | predecir el token siguiente miles de millones de veces sobre una constitución de principios, y auto-reflexionar sobre las propias respuestas | GPU, días, terabytes | **no**: sin AVX/AVX2 y con 158–268 MB libres medidos en `/proc`, ni siquiera cabe un modelo de 1 B cargado |
+| Memoria escrita | guardar en un archivo lo que la usuaria corrigió o pidió recordar, y **re-inyectarlo en el prompt** cada vez que se habla | leer y escribir texto | **sí**: 2,16 ms por ciclo memoria+prompt+revisión |
+
+Lo que se copió de los productos grandes es la *forma*, no el peso: una **constitución** de 7
+principios (786 caracteres, editable en `constitucion.md`) que va en el `system` de cada llamada,
+en lugar de filtrar respuesta por respuesta a mano; la **autocorrección** por reglas antes de
+hablar; y la **iniciativa**: CORT abre la boca primero una vez al conectar, con un pendiente que
+vence, la RAM leída en `/proc` o el nivel del escáner S1 —con enfriamiento de 30 min / 1 h / 6 h
+para no ser pesado.
+
+**Medido en arena** (`CORT_HOME=/tmp/…`, Ollama simulada que registra lo que le llega):
+
+| Qué | Número | De dónde sale |
+|---|---|---|
+| Coste del ciclo completo | **1,56–3,21 ms por frase** (2,16 en la corrida de esta noche) | `selftest` |
+| Compruebas | **23/23** en `prueba_memoria.py` + **16/16** en el selftest | salida de la suite |
+| Constitución que viaja en el `system` | **1207 caracteres** de prompt de sistema | la falsa Ollama imprime lo que recibió |
+| Tope del prompt de memoria | **420 caracteres**, y el `system` completo **1400** recortando líneas enteras | `LIMITE_CONTEXTO`, `sistema()` |
+| Ida y vuelta `memoria_estado` | **3–9 ms** con cliente crudo | cronometrado contra el puente |
+| Tarjeta llena en el navegador | **113 ms** desde la orden | medido en la página |
+
+**Lo que la suite obligó a confesar** (cuatro fallos reales, no de prueba):
+
+1. `¿qué sabes de mí?` nunca funcionaba: la expresión estaba escrita con tilde y el texto de
+   entrada llega **sin acentos** (los pliegue para que «memoria» y «memória» sean la misma
+   palabra). Se reescribió sin tilde.
+2. «borra la carpeta proyectos» se guardaba como preferencia. La guardia de verbos buscaba la
+   raíz `borra` y el subjuntivo «borre» no la contiene; ahora la lista está **conjugada** (abre,
+   abrir, abra, borre, cerre…) y una orden disfrazada de recuerdo se rechaza con su motivo.
+3. Las pruebas de arena escribían en el `cort_state.json` **de casa**: el puente lo cargaba por
+   ruta fija. Se añadió `CORT_STATE` y las tres suites lo usan. No era un detalle de test: era la
+   puerta de RAM decidiendo con datos de otra sesión.
+4. La tarjeta de memoria se abría vacía **7 segundos**. El empuje de iniciativa al conectar
+   bloqueaba en el `await` del escáner S1 (1,3 s en frío medido) *antes* de entrar al bucle de
+   lectura, así que la primera pregunta de la pantalla se contestaba cuando el puente se
+   dignaba. Ahora va en `asyncio.create_task(empujar_iniciativa(ws))` y la suite lo comprueba.
+
+**Honestidad antes de hablar** (`revisar()`): si el modelo responde en markdown, se convierte a
+texto plano; si promete en pasado algo que la reja no ejecutó o que no tiene prueba del sistema,
+se sustituye por *«No puedo afirmar que lo hice: no hay prueba del sistema.»* y se empuja
+`autocritica` a la pantalla con los ajustes aplicados. Medido: el caso «ya cerré la ventana» con
+`origen: "modelo"` sale corregido y sin `**`.
+
+**En la interfaz**, la tarjeta `memoria` vive debajo de `mirada` dentro del panel del cerebro:
+**389×195 px en 525×521** (x=57, y=250, dentro del panel de 430×323). Tiene tres estados y no
+dos: *«consultando tu archivo…»* mientras la orden va por el cable, *«el puente no pudo
+medirla»* con el motivo si `origen` no es `real`, y el recuento con plurales correctos
+(`1 apunte · 1 corrección · 1 preferencia`). Debajo, la frase literal que CORT le mandaría al
+modelo —«lo que sabe de ti: …»— y el camino entero del archivo: un «tengo 3 cosas de ti» sin
+dirección es una promesa sin prueba.
+
+**Lo que NO hace esta fase, dicho con todas sus letras:** no entrena pesos, no usa
+*embeddings* (la recuperación es por palabra clave, porque una red semántica no cabe en 2
+núcleos), no habla sola por el altavoz —eso es F3/F10— y no destila de modelos de la nube. Lo
+segundo sí es posible y está pendiente: guardar los ejemplos buenos que da un modelo grande y
+recitarlos como banco local, que es la única forma honesta de «aprender de otros modelos» en
+esta máquina.
+
+
 ### Lo que se deja dicho, con número, de las dos peticiones que no entran esta noche
 - **Sensores de cámara para mover ventanas del sistema**: la sonda de esta mañana corrigió el
   pronóstico. La webcam **sí da cuadros** en este equipo: 10/10 cuadros recibidos a 320×240 RGB,
