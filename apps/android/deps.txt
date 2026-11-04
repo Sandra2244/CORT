@@ -1,0 +1,23 @@
+# Dependencias que el build del APK descarga y verifica antes de meterlas dentro.
+#
+# Formato: nombre | sha256 | url  (separado por barra vertical, sin espacios de más)
+#
+# Por qué están fijadas aquí y no "al último":
+#
+# * El oído de CORT es código de terceros (`libvosk.so`) más un modelo de lenguaje
+#   (39,8 MB). Ninguno de los dos se escribe en este repo, y tampoco se baja "el
+#   que haya ahora": se baja el que está nombrado, se le calcula la suma y, si no
+#   coincide, el build se cae. Es la regla de la dueña sobre instaladores y
+#   archivos ajenos aplicada a un pipeline: se lee primero, se usa después.
+# * Las dos primeras vienen de Maven Central, que publica sus propias sumas
+#   (`.aar.sha256` / `.aar.sha1`) y con ellas se comprobaron las que van abajo.
+# * La suma del modelo es la de la copia que ya estaba dentro del APK
+#   `CORT-IA-2.11.0-nucleo.apk` de la dueña — la que ella probó y le gustó — y
+#   se volvió a comprobar contra el zip oficial de alphacephei.com.
+#
+# Licencias: Vosk y sus modelos pequeños son Apache-2.0 (LICENSE dentro del AAR
+# y README de los modelos); JNA es LGPL-2.1 / Apache-2.0 doble. Se acreditan en
+# `apps/android/ACREDITACION.md`, que se sube junto al APK.
+vosk-android-0.3.75.aar|ab2f8b91ac8051561aa325546b35fed9a68b36b8121bac5c6fb927525c4adfad|https://repo1.maven.org/maven2/com/alphacephei/vosk-android/0.3.75/vosk-android-0.3.75.aar
+jna-5.14.0.aar|81a8b9afc65f9d6b205338c25908af8de0ff8411a00985104c9d83fffdfab380|https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.aar
+vosk-model-small-es-0.42.zip|09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f|https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip

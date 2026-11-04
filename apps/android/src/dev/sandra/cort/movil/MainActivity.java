@@ -1,373 +1,600 @@
 package dev.sandra.cort.movil;
 
-import android.Manifest;
 import android.app.Activity;
-import android.content.Context;
+import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.SharedPreferences;
-import android.media.AudioFormat;
-import android.media.AudioRecord;
-import android.media.MediaRecorder;
+import android.graphics.Typeface;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
+import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
-
-import org.json.JSONObject;
-
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import android.widget.Toast;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+import java.nio.charset.StandardCharsets;
 
 /**
- * CORT en el teléfono: una ventana sobre el puente de la casa.
+ * La ventana de CORT en el teléfono, y desde `v0.15.0` también su cuerpo.
+ * Escrito contra el SDK puro —sin AndroidX, sin Gradle, sin Capacitor— porque
+ * cada dependencia es una descarga que el pipeline tiene que traer y este
+ * proyecto no reparte sorpresas: `compilar.sh` usa sólo `aapt2`, `javac` y `d8`.
  *
- * No hay nube. La aplicación abre la misma interfaz que corre en el PC
- * (http://IP:8766) y por eso todo lo que CORT sabe, puede y guarda sigue
- * estando en el equipo de Sandra. Lo único que hace aquí el teléfono es:
- * enseñar la interfaz, pedir el micrófono y mandar lo que se dijo.
+ * El reparto nuevo, en tres caminos y ninguno obligatorio:
  *
- * El micrófono se graba en el teléfono y se sube en WAV al puente, que lo
- * transccribe con Vosk. Se hace así y no con getUserMedia porque el puente
- * va por http en la red local: un origen no seguro no tiene acceso al micro
- * desde el navegador, aunque el permiso de la aplicación exista.
+ * - **El portátil está publicado en la Wi-Fi** → `WebView` con la página React:
+ *   la cara buena, el cuerpo 3D, los atuendos. Se encuentra solo, con el
+ *   protocolo UDP de `v0.14.4`.
+ * - **No está** → `Nexo`: desde `v0.17.0` la **misma cara del PC**, servida
+ *   desde los `assets` del APK sobre el origen inventado
+ *   `https://cort.local`, con el cerebro Java detrás (`Cerebro`, `Acciones`,
+ *   `Recuerdos`, `Voz`) y los mismos cuadros que viajan por el WebSocket.
+ * - **Tampoco viajó el `dist`, o el WebView se cayó** → `Cara`, la cara nativa: CORT oye por el micrófono de Android,
+ *   habla por su altavoz, maneja el aparato y recuerda en SQLite. Sin servidor,
+ *   sin HTTPS y sin abrir el portátil — que es lo que la dueña pidió.
+ * - **Ninguna de las dos funciona** (red aislada, core caído) → el campo de
+ *   siempre para pegar el enlace, escondido detrás de un toque largo.
+ *
+ * Esta clase decide **qué superficie se ve** y nada más: el lazo está en
+ * `Cerebro`/`Acciones`, la memoria en `Recuerdos`, la voz en `Voz` y la nube
+ * opcional en `Nube`.
  */
 public class MainActivity extends Activity {
+    /* El protocolo de divulgación: dos datagramas, y su otra mitad vive en
+       `scripts/cort.py` (`DESCUBRIR`, `DESCUBRIR_RESPUESTA`, `DESCUBRIR_PUERTO`).
+       `test_apk_manifesta.py` comprueba que los dos lados sigan diciendo lo
+       mismo — aquí no hay import compartido posible entre Java y Python, así
+       que la prueba es la costura. */
+    private static final String SONDA = "CORT-ENCONTRARSO-1";
+    private static final String RESPUESTA = "CORT-AQUI-1|";
+    private static final int PUERTO_DIVULGACION = 8781;
+    private static final int MILISEGAS_POR_INTENTO = 900;
+    private static final int INTENTOS = 3;
 
-    private static final String PREFS = "cort";
-    private static final String CLAVE_URL = "url_puente";
-    private static final int MUESTREO = 16000;
-    private static final int MAX_SEGUNDOS = 20;
+    /**
+     * La bandera que ponen `Sesion.java` y `Reconocimiento.java` al abrir la cara
+     * desde fuera: «ábrete y ponte a escuchar». Vive aquí, y no como cadena
+     * suelta en los dos archivos, porque las tres mitades tienen que decir
+     * literalmente lo mismo y aquí no hay un test de Android que lo compruebe.
+     */
+    public static final String PIDE_ESCUCHAR = "cort-escuchar";
 
     private WebView web;
-    private LinearLayout panelConfig;
-    private EditText campoUrl;
-    private Button botonMic;
-    private TextView estado;
-    private String urlPuente = "";
-
-    private volatile boolean grabando = false;
-    private Thread hiloGrabacion;
+    private Nexo nexo;          // la cara del PC, servida desde el propio APK
+    private Cara cara;          // la superficie nativa, cuando no hay portátil
+    private LinearLayout capa;  // root: una sola cara a la vez
+    private TextView aviso;     // el motivo por el que el enlace no vale
+    private TextView ayuda;     // el texto que cuenta qué está pasando
+    private volatile boolean buscando;
 
     @Override
-    protected void onCreate(Bundle guardado) {
-        super.onCreate(guardado);
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getWindow().getDecorView().setBackgroundColor(Paleta.FONDO);
+        // Con el teclado abierto la pantalla se recoloca en vez de quedar
+        // tapada: el campo está en el centro y el botón debajo.
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        capa = new LinearLayout(this);
+        capa.setOrientation(LinearLayout.VERTICAL);
+        capa.setBackgroundColor(Paleta.FONDO);
+        setContentView(capa);
+        mostrarOSetup();
+        escuchaSiPidenDesdeFuera();
+    }
 
-        SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        urlPuente = p.getString(CLAVE_URL, "");
+    @Override
+    protected void onNewIntent(Intent intento) {
+        super.onNewIntent(intento);
+        // `singleTop` en el manifiesto: el asistente que se vuelve a pulsar no
+        // monta una segunda cara encima de la primera, entrega aquí su bandera.
+        setIntent(intento);
+        escuchaSiPidenDesdeFuera();
+    }
 
-        FrameLayout raiz = new FrameLayout(this);
-        raiz.setBackgroundColor(0xFF04121C);
+    /**
+     * Si quien abrió la app fue el traje de asistente (`Sesion.java`,
+     * `Reconocimiento.java`), CORT se pone a escuchar sin que nadie pulse el ●.
+     *
+     * Va con `post()` y no en línea: en el primer arranque `mostrarOSetup()` está
+     * decidiendo si la cara es la nativa o el WebView del portátil, y `cara` aún
+     * es `null`. Si el portátil apareció y manda la ventana, **no** se escucha
+     * por este camino: esa cara tiene su propio micrófono en la página.
+     */
+    private void escuchaSiPidenDesdeFuera() {
+        final Intent pedido = getIntent();
+        if (pedido == null || !pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
+            return;
+        }
+        capa.post(() -> {
+            if (nexo != null && web == null) {
+                // La cara embebida no tiene micrófono propio: el WebView no expone
+                // `SpeechRecognition`. Quien oye es el `SpeechRecognizer` de Java,
+                // por el mismo puente que usa el botón ● de la página.
+                nexo.escuchar();
+                return;
+            }
+            if (cara != null && web == null) {
+                cara.escucharAhora();
+            }
+        });
+    }
 
+    private SharedPreferences prefs() {
+        return getSharedPreferences("cort", MODE_PRIVATE);
+    }
+
+    /**
+     * Ya no se espera a nadie: la cara nativa se monta **siempre**, y encima se
+     * busca el portátil. Si aparece, se cambia de superficie; si no, CORT sigue
+     * siendo útil aquí dentro.
+     *
+     * Cuando hay una dirección guardada de otra sesión se prueba primero el
+     * WebView, que es la cara completa; si falla la carga se cae a la nativa en
+     * vez de dejar la pantalla en blanco de Android.
+     */
+    private void mostrarOSetup() {
+        String url = prefs().getString("url", "");
+        if (!url.isEmpty()) {
+            abrir(url, prefs().getString("token", ""));
+            return;
+        }
+        // `v0.17.0`: sin portátil ya no hace falta montar la cara nativa. El APK
+        // trae consigo la cara del PC (`assets/web/`), y mientras ese `dist` exista
+        // es la que se ve: la misma React, el mismo orbe, los mismos paneles.
+        // `Cara` queda de respaldo, y si la página no viajó en el compilado o el
+        // WebView se cae, se monta igual.
+        if (hayCaraEmbebida()) {
+            montarWebLocal();
+        } else {
+            montarCara();
+        }
+        buscarATelefonoSilencio();
+    }
+
+    private Boolean embebida;
+
+    /**
+     * Si el `dist` de la cara viajó dentro de este APK. Se mira una sola vez y se
+     * guarda: `AssetManager.list` toca disco, y esto se decide en cada `onCreate`.
+     */
+    private boolean hayCaraEmbebida() {
+        if (embebida == null) {
+            boolean encontrada = false;
+            try {
+                for (String nombre : getAssets().list(Nexo.DOSSIER)) {
+                    if ("index.html".equals(nombre)) {
+                        encontrada = true;
+                    }
+                }
+            } catch (IOException noHay) {
+                encontrada = false;   // sin dossier no hay cara embebida, y no pasa nada
+            }
+            embebida = encontrada;
+        }
+        return embebida;
+    }
+
+    /** La cara del portátil, montada sobre los archivos del propio teléfono. */
+    private void montarWebLocal() {
+        nexo = new Nexo(this, () -> {
+            // El `WebView` se cayó de verdad: sin `dist` en el APK, sin WebView en
+            // el aparato, o con el arranque cortado. La nativa funciona sin página,
+            // así que nunca se queda la dueña en blanco.
+            runOnUiThread(this::volverACara);
+        });
+        nexo.montar(capa);
+    }
+
+    /** La superficie nativa, con sus datos de aparato ya sembrados. */
+    private void montarCara() {
+        if (cara != null) {
+            capa.removeAllViews();
+            cara.montar(capa);
+            return;
+        }
+        cara = new Cara(this);
+        capa.removeAllViews();
+        cara.montar(capa);
+    }
+
+    /**
+     * Pregunta en la red, y si CORT contesta cambia a la ventana del portátil
+     * sin que nadie toque nada — que es lo que la dueña pidió: «que inicie con
+     * su animación como una IA normal».
+     *
+     * Corre en su propio hilo porque `DatagramSocket.receive` bloquea, y
+     * bloquear el hilo de la interfaz congela el anillo. El resultado se aplica
+     * con `runOnUiThread`, y **sólo si la usuaria sigue sin haber abierto nada**:
+     * si mientras tanto escribió o salió, no se le cambia la pantalla.
+     */
+    private void buscarATelefonoSilencio() {
+        if (buscando) {
+            return;
+        }
+        buscando = true;
+        new Thread(() -> {
+            final String encontrado = preguntarEnLaRed();
+            buscando = false;
+            runOnUiThread(() -> {
+                if (encontrado == null) {
+                    if (cara != null) {
+                        cara.decirDondeEstaElPortatil(false);
+                        cara.hablar("Estoy en el teléfono. Tu portátil no aparece por "
+                                + "la Wi-Fi, pero funcionamos igual.");
+                    }
+                    return;
+                }
+                if (web != null) {
+                    return;
+                }
+                if (nexo != null) {
+                    // Apareció el portátil: la cara embebida se quita y manda el
+                    // core, que es la misma regla de siempre con la cara nativa.
+                    nexo.cerrar();
+                    nexo = null;
+                }
+                prefs().edit().putString("url", encontrado).putString("token", "").apply();
+                abrir(encontrado, "");
+            });
+        }).start();
+    }
+
+    /**
+     * La sonda, tres intentos de 900 ms, y la primera respuesta válida vale.
+     *
+     * `255.255.255.255` es el broadcast del segmento: llega al portátil sin
+     * saber su IP, que es justo el conocimiento que faltaba. Hay redes donde el
+     * broadcast no pasa —VLAN de oficina, puntos de acceso con aislamiento de
+     * cliente—, así que esto devuelve `null` sin dramas: desde `v0.15.0` el
+     * silencio ya no deja a la usuaria delante de un formulario, deja la cara
+     * nativa encendida.
+     */
+    private String preguntarEnLaRed() {
+        DatagramSocket socket = null;
+        try {
+            socket = new DatagramSocket();
+            socket.setBroadcast(true);
+            socket.setSoTimeout(MILISEGAS_POR_INTENTO);
+            byte[] sonda = SONDA.getBytes(StandardCharsets.UTF_8);
+            InetAddress difusion = InetAddress.getByName("255.255.255.255");
+            byte[] buffer = new byte[1024];
+            for (int intento = 0; intento < INTENTOS; intento++) {
+                try {
+                    socket.send(new DatagramPacket(sonda, sonda.length, difusion,
+                            PUERTO_DIVULGACION));
+                    DatagramPacket respuesta = new DatagramPacket(buffer, buffer.length);
+                    socket.receive(respuesta);
+                    String texto = new String(respuesta.getData(), respuesta.getOffset(),
+                            respuesta.getLength(), StandardCharsets.UTF_8);
+                    if (texto.startsWith(RESPUESTA)) {
+                        String enlace = texto.substring(RESPUESTA.length()).trim();
+                        if (enlace.startsWith("http://") || enlace.startsWith("https://")) {
+                            return enlace;
+                        }
+                    }
+                } catch (SocketTimeoutException nadieAun) {
+                    // silencio en este turno: se insiste mientras gira el anillo
+                } catch (IOException noSePuede) {
+                    return null;   // ni sonda sale ni respuesta entra: CORT se queda en el teléfono
+                }
+            }
+            return null;
+        } catch (IOException sinSocket) {
+            return null;   // sin UDP no hay descubrimiento, y la cara nativa sigue ahí
+        } finally {
+            if (socket != null) {
+                socket.close();
+            }
+        }
+    }
+
+    /* ------------------------------------------------------------------ WebView */
+
+    /**
+     * El enlace que abre la ventana. Si ya trae `?token=` —porque la usuaria
+     * copió el enlace completo del lanzador— se respeta tal cual: parsearlo y
+     * reconstruirlo sería una forma de romper un secreto.
+     */
+    private void abrir(String base, String token) {
+        // `final` y en una sola expresión: el `WebViewClient` anónimo de abajo
+        // captura esta cadena, y una variable reasignada no la puede capturar.
+        final String destino = (token.isEmpty() || base.contains("token="))
+                ? base
+                : base + (base.contains("?") ? "&" : "/?") + "token=" + token;
         web = new WebView(this);
+        // Oscuro desde el primer fotograma: sin esto el WebView pinta su fondo
+        // blanco antes de que la página arranque.
+        web.setBackgroundColor(Paleta.FONDO);
+        capa.removeAllViews();
+        capa.addView(web, new LinearLayout.LayoutParams(-1, -1));
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
+        // `speechSynthesis` y el `<video>` de los gestos son «reproducción» a
+        // ojos del WebView: sin esta línea CORT quedaría muda hasta que alguien
+        // toque la pantalla.
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setAllowFileAccess(false);
+        s.setAllowFileAccess(false);       // la página viene de la red, no del disco
         s.setAllowContentAccess(false);
-        s.setCacheMode(WebSettings.LOAD_DEFAULT);
-        web.setBackgroundColor(0xFF04121C);
-
-        web.setWebViewClient(new WebViewClient());
-        web.setWebChromeClient(new WebChromeClient() {
+        web.setWebViewClient(new WebViewClient() {
             @Override
-            public void onPermissionRequest(PermissionRequest solicitud) {
-                // Sólo el micro. Si la página pidiera cámara o cualquier otra
-                // cosa, se niega y se dice en la raya de estado.
-                String[] pidos = solicitud.getResources();
-                boolean soloMicro = pidos.length > 0;
-                for (String q : pidos) {
-                    if (!q.equals(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) soloMicro = false;
+            public void onReceivedError(WebView vista, WebResourceRequest peticion,
+                                        WebResourceError error) {
+                if (!peticion.isForMainFrame()) {
+                    return;   // un icono que falta no es CORT caído
                 }
-                if (soloMicro) {
-                    solicitud.grant(pidos);
-                } else {
-                    solicitud.deny();
-                    muestra("la página pidió algo más que el micrófono y se lo negué");
-                }
+                // El caso normal no es un fallo raro: el portátil se apagó o su IP
+                // cambió. Antes esto dejaba la cara de Android; desde `v0.15.0` se
+                // cae a la nativa, que funciona sin él.
+                avisar("Se fue el portátil. Sigo en el teléfono.");
+                prefs().edit().putString("url", "").apply();
+                volverACara();
             }
         });
-        raiz.addView(web, new FrameLayout.LayoutParams(-1, -1));
-
-        panelConfig = panelDeConfiguracion();
-        raiz.addView(panelConfig, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
-
-        estado = new TextView(this);
-        estado.setTextColor(0xFF9FE8FF);
-        estado.setTextSize(12f);
-        estado.setBackgroundColor(0xB004121C);
-        estado.setPadding(18, 8, 18, 8);
-        estado.setVisibility(View.GONE);
-        FrameLayout.LayoutParams le = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        raiz.addView(estado, le);
-
-        botonMic = new Button(this);
-        botonMic.setText("● hablar");
-        botonMic.setTextColor(0xFF04121C);
-        botonMic.setBackgroundColor(0xFF37E0C8);
-        botonMic.setOnClickListener(v -> alternaGrabacion());
-        FrameLayout.LayoutParams mb = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-        mb.topMargin = 12;
-        mb.rightMargin = 12;
-        raiz.addView(botonMic, mb);
-
-        setContentView(raiz);
-
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, 7);
-        }
-
-        if (urlPuente.isEmpty()) {
-            abreConfiguracion("abre el puente en la PC y copia la dirección que imprime");
-        } else {
-            web.loadUrl(urlPuente);
-        }
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                // Los gestos de cámara (`defocus.ts`) y el micrófono por
+                // `getUserMedia` piden aquí. Se concede lo que la página solicita,
+                // dentro de lo que el manifest declaró.
+                request.grant(request.getResources());
+            }
+        });
+        web.loadUrl(destino);
     }
 
-    private LinearLayout panelDeConfiguracion() {
-        LinearLayout caja = new LinearLayout(this);
-        caja.setOrientation(LinearLayout.VERTICAL);
-        caja.setBackgroundColor(0xF0031018);
-        caja.setPadding(24, 32, 24, 24);
+    /** Cerrar el WebView y devolver el control a la cara nativa. */
+    private void volverACara() {
+        if (web != null) {
+            web.destroy();
+            web = null;
+        }
+        if (nexo != null) {
+            nexo.cerrar();
+            nexo = null;
+        }
+        montarCara();
+        buscarATelefonoSilencio();
+    }
 
-        TextView titulo = new TextView(this);
-        titulo.setText("¿dónde está CORT?");
-        titulo.setTextColor(0xFF37E0C8);
-        titulo.setTextSize(18f);
-        caja.addView(titulo);
+    /* ------------------------------------------------------------------ pegado de respaldo */
 
-        TextView ayuda = new TextView(this);
-        ayuda.setTextSize(12f);
-        ayuda.setTextColor(0xFFBFD9E6);
-        caja.addView(ayuda);
-        this.ayuda = ayuda;
+    private void pantallaDeConfiguracion(final String previo) {
+        capa.removeAllViews();
+        if (web != null) {
+            web.destroy();
+            web = null;
+        }
+        ScrollView desplazable = new ScrollView(this);
+        LinearLayout pantalla = new LinearLayout(this);
+        pantalla.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(24);
+        pantalla.setPadding(pad, pad, pad, pad);
+        desplazable.addView(pantalla, new LinearLayout.LayoutParams(-1, -2));
+        capa.addView(desplazable, new LinearLayout.LayoutParams(-1, -1));
 
-        campoUrl = new EditText(this);
-        campoUrl.setHint("http://192.168.1.20:8766/index.html");
-        campoUrl.setTextColor(0xFFFFFFFF);
-        campoUrl.setHintTextColor(0xFF6C8B99);
-        campoUrl.setTextSize(14f);
-        caja.addView(campoUrl);
+        Anillo anillo = new Anillo(this);
+        LinearLayout.LayoutParams marca = new LinearLayout.LayoutParams(dp(120), dp(120));
+        marca.topMargin = dp(14);
+        marca.gravity = Gravity.CENTER_HORIZONTAL;
+        pantalla.addView(anillo, marca);
+
+        TextView titulo = texto("CORT", 32f, Paleta.CIAN);
+        titulo.setTypeface(Typeface.create("sans-serif-light", Typeface.BOLD));
+        titulo.setLetterSpacing(0.16f);
+        pantalla.addView(titulo, centrado(-2));
+
+        ayuda = texto("Sólo si tu red no deja buscar por Wi-Fi. En la PC:\n"
+                + "  ./scripts/instala_cort.sh --red\n"
+                + "y aquí escribes la dirección que imprime (puerto 8766). Se guarda y "
+                + "no se vuelve a pedir. Sin enlace el teléfono sigue funcionando solo: "
+                + "lo que hay aquí es la ventana hacia el portátil, no su requisito.",
+                15f, Paleta.CLARO);
+        ayuda.setLineSpacing(0f, 1.25f);
+        LinearLayout.LayoutParams cuerpo = new LinearLayout.LayoutParams(-1, -2);
+        cuerpo.topMargin = dp(26);
+        pantalla.addView(ayuda, cuerpo);
+
+        final EditText campo = new EditText(this);
+        campo.setHint("http://192.168.100.xxx:8766/index.html");
+        campo.setInputType(InputType.TYPE_TEXT_VARIATION_URI
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        campo.setSingleLine(true);
+        campo.setTextColor(Paleta.CLARO);
+        campo.setHintTextColor(Paleta.SUAVE);
+        campo.setBackgroundColor(Paleta.CAMPO);
+        campo.setTextSize(15f);
+        campo.setPadding(dp(14), dp(16), dp(14), dp(16));
+        if (!previo.isEmpty()) {
+            campo.setText(previo);
+        }
+        LinearLayout.LayoutParams caja = new LinearLayout.LayoutParams(-1, -2);
+        caja.topMargin = dp(18);
+        pantalla.addView(campo, caja);
+
+        aviso = texto("", 13f, Paleta.AVISO);
+        aviso.setVisibility(View.INVISIBLE);
+        pantalla.addView(aviso, centrado(-2));
 
         Button entrar = new Button(this);
-        entrar.setText("entrar");
-        entrar.setOnClickListener(v -> guardaYAbre());
-        caja.addView(entrar);
+        entrar.setText("Abrir CORT");
+        entrar.setTextColor(Paleta.CIAN);
+        entrar.setBackgroundColor(0xFF0F2B3A);
+        entrar.setTextSize(17f);
+        entrar.setLetterSpacing(0.06f);
+        LinearLayout.LayoutParams boton = new LinearLayout.LayoutParams(-1, dp(54));
+        boton.topMargin = dp(14);
+        pantalla.addView(entrar, boton);
 
-        caja.setVisibility(View.GONE);
-        return caja;
+        Button volver = new Button(this);
+        volver.setText("Seguir en el teléfono");
+        volver.setTextColor(Paleta.SUAVE);
+        volver.setBackgroundColor(Paleta.FONDO);
+        volver.setTextSize(14f);
+        pantalla.addView(volver, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        TextView pie = texto("¿No lo tienes? En el portátil:  python scripts/cort.py --lan\n"
+                + "El enlace sale en la línea «red» del arranque, con su llave.",
+                12f, Paleta.SUAVE);
+        pie.setLineSpacing(0f, 1.3f);
+        LinearLayout.LayoutParams piecaja = new LinearLayout.LayoutParams(-1, -2);
+        piecaja.topMargin = dp(20);
+        pantalla.addView(pie, piecaja);
+
+        entrar.setOnClickListener(v -> intentar(campo));
+        volver.setOnClickListener(v -> montarCara());
+        campo.setOnEditorActionListener((v, accion, ev) -> {
+            intentar(campo);
+            return true;
+        });
+        campo.post(() -> campo.requestFocus());
     }
 
-    private TextView ayuda;
-
-    private void abreConfiguracion(String porque) {
-        ayuda.setText("El puente tiene que escuchar en la red local.\nEn la PC:\n"
-                + "  CORT_BIND=0.0.0.0 python3 cort-bridge/cort_server.py\n\n"
-                + "y copias la dirección que imprime con la IP del equipo.\n"
-                + "Lo que pasa ahora: " + porque);
-        campoUrl.setText(urlPuente);
-        panelConfig.setVisibility(View.VISIBLE);
-        web.setVisibility(View.GONE);
-    }
-
-    private void guardaYAbre() {
-        String url = campoUrl.getText().toString().trim();
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            ayuda.setText("Eso no parece una dirección. Tiene que empezar por http:// y llevar el puerto, por ejemplo http://192.168.1.20:8766/index.html");
+    /** Validar el enlace pegado, guardarlo y abrir la ventana. */
+    private void intentar(EditText campo) {
+        String pegado = campo.getText().toString().trim();
+        if (pegado.isEmpty()) {
+            marcar("Pega el enlace que imprime CORT al arrancar.");
             return;
         }
-        if (!url.contains(":8766") && !url.contains(":8767")) {
-            ayuda.setText("Ojo: la interfaz web del puente escucha en el puerto 8766. "
-                    + "Si tu dirección usa otro, pruébalo igual, pero el puente abre 8766 por defecto.");
+        if (!pegado.startsWith("http://") && !pegado.startsWith("https://")) {
+            // Amable con quien escribe la IP a mano: `192.168.x.x` no es un enlace,
+            // pero se adivina — y en esta rama la interfaz del puente vive en el
+            // 8766, así que si no trae puerto se le pone ése.
+            pegado = "http://" + pegado;
         }
-        urlPuente = url;
-        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(CLAVE_URL, url).apply();
-        panelConfig.setVisibility(View.GONE);
-        web.setVisibility(View.VISIBLE);
-        web.loadUrl(urlPuente);
+        if (!pegado.matches("https?://[^/]+:\\d+.*")) {
+            pegado = pegado.replaceFirst("(https?://[^/]+)", "$1:8766");
+        }
+        // El `token` de la otra línea **no** se pide aquí: el puente de esta rama
+        // todavía no lo tiene (escrito está en el README: «aún no están todas:
+        // `CORT_BIND` abierto, TLS con certificado propio y un token»). Exigirlo
+        // sería cerrar la puerta con una llave que no existe; cuando llegue (F14,
+        // con el QR), esta pantalla lo acepta tal cual porque la URL se guarda
+        // completa.
+        prefs().edit().putString("url", pegado).putString("token", "").apply();
+        esconderTeclado();
+        abrir(pegado, "");
     }
 
-    // ---- hablar por el micrófono del teléfono --------------------------------
-
-    private void alternaGrabacion() {
-        if (grabando) {
-            grabando = false;
-            botonMic.setText("● hablar");
-            return;
-        }
-        if (!tieneMicro()) return;
-        if (urlPuente.isEmpty()) {
-            abreConfiguracion("todavía no me dijiste dónde está el puente");
-            return;
-        }
-        grabando = true;
-        botonMic.setText("■ detener");
-        muestra("grabando… pulsa detener cuando termines");
-        hiloGrabacion = new Thread(this::grabaYSube, "cort-mic");
-        hiloGrabacion.start();
-    }
-
-    private boolean tieneMicro() {
-        return getPackageManager().hasSystemFeature("android.hardware.microphone");
-    }
-
-    private void grabaYSube() {
-        int min = AudioRecord.getMinBufferSize(MUESTREO,
-                AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-        if (min <= 0) {
-            enHiloPrincipal("el micrófono de este teléfono no da 16 kHz mono; CORT no pudo grabar");
-            return;
-        }
-        AudioRecord ar = null;
-        try {
-            ar = new AudioRecord(MediaRecorder.AudioSource.MIC, MUESTREO,
-                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, min * 4);
-            ByteArrayOutputStream cruda = new ByteArrayOutputStream();
-            byte[] b = new byte[min];
-            ar.startRecording();
-            long t0 = System.currentTimeMillis();
-            while (grabando && (System.currentTimeMillis() - t0) < MAX_SEGUNDOS * 1000L) {
-                int n = ar.read(b, 0, b.length);
-                if (n > 0) cruda.write(b, 0, n);
-            }
-            boolean cortada = (System.currentTimeMillis() - t0) >= MAX_SEGUNDOS * 1000L;
-            grabando = false;
-            ar.stop();
-            byte[] muestras = cruda.toByteArray();
-            if (muestras.length < MUESTREO / 5) {
-                enHiloPrincipal("no se oyó nada (" + (muestras.length / 32000.0) + " s de audio)");
-                return;
-            }
-            byte[] wav = cabeceroWav(muestras, MUESTREO);
-            enHiloPrincipal(cortada
-                    ? "corté a los " + MAX_SEGUNDOS + " s; subo lo grabado"
-                    : "subiendo " + (muestras.length / 32000.0) + " s al puente…");
-            String respuesta = sube(wav);
-            JSONObject j = new JSONObject(respuesta);
-            if (j.optBoolean("ok", false)) {
-                String texto = j.optString("texto", "").trim();
-                if (texto.isEmpty()) {
-                    enHiloPrincipal("el puente oyó audio pero no sacó palabras");
-                    return;
-                }
-                enHiloPrincipal("dijiste: " + texto);
-                // La misma ruta que la caja de texto de la interfaz: el puente
-                // decide con sus reglas o con el modelo y responde por el WebSocket.
-                // El payload se arma con JSONObject y no con comillas a mano, para
-                // que las comillas o saltos de la transcripción no rompan el JS.
-                JSONObject envio = new JSONObject();
-                envio.put("type", "user_input");
-                envio.put("text", texto);
-                final String js = "window.CORT_enviarAlCerebro && window.CORT_enviarAlCerebro("
-                        + envio.toString() + ")";
-                runOnUiThread(() -> web.evaluateJavascript(js, null));
-            } else {
-                enHiloPrincipal("el puente no pudo transcribir: " + j.optString("motivo", "sin motivo"));
-            }
-        } catch (Exception e) {
-            enHiloPrincipal("falló el micrófono o la subida (" + e.getClass().getSimpleName() + ")");
-        } finally {
-            if (ar != null) {
-                try { ar.release(); } catch (Exception ignorado) { }
-            }
-            runOnUiThread(() -> botonMic.setText("● hablar"));
+    private void marcar(String motivo) {
+        if (aviso != null) {
+            aviso.setText(motivo);
+            aviso.setVisibility(View.VISIBLE);
         }
     }
 
-    /** WAV PCM 16 bits mono: el formato que lee vosk.KaldiRecognizer sin dependencias. */
-    private static byte[] cabeceroWav(byte[] datos, int tasa) {
-        int largo = datos.length;
-        byte[] w = new byte[44 + largo];
-        copia(w, 0, new byte[] {'R', 'I', 'F', 'F'});
-        entero(w, 4, 36 + largo);
-        copia(w, 8, new byte[] {'W', 'A', 'V', 'E', 'f', 'm', 't', ' '});
-        entero(w, 16, 16);
-        entero(w, 20, (1 << 16) | 1);                    // PCM, un canal
-        entero(w, 24, tasa);
-        entero(w, 28, tasa * 2);                          // bytes por segundo
-        entero(w, 32, 16);                                // 16 bits por muestra
-        copia(w, 36, new byte[] {'d', 'a', 't', 'a'});
-        entero(w, 40, largo);
-        System.arraycopy(datos, 0, w, 44, largo);
-        return w;
+    private LinearLayout.LayoutParams centrado(int alto) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, alto);
+        l.gravity = Gravity.CENTER_HORIZONTAL;
+        return l;
     }
 
-    private static void copia(byte[] destino, int donde, byte[] de) {
-        System.arraycopy(de, 0, destino, donde, de.length);
+    private TextView texto(String contenido, float sp, int color) {
+        TextView t = new TextView(this);
+        t.setText(contenido);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        t.setGravity(Gravity.CENTER_HORIZONTAL);
+        return t;
     }
 
-    private static void entero(byte[] d, int donde, int v) {
-        d[donde] = (byte) (v & 0xff);
-        d[donde + 1] = (byte) ((v >> 8) & 0xff);
-        d[donde + 2] = (byte) ((v >> 16) & 0xff);
-        d[donde + 3] = (byte) ((v >> 24) & 0xff);
+    private int dp(float valor) {
+        return Math.round(valor * getResources().getDisplayMetrics().density);
     }
 
-    private String sube(byte[] wav) throws Exception {
-        URL base = new URL(urlPuente);
-        URL destino = new URL(base.getProtocol(), base.getHost(), base.getPort(), "/mic");
-        HttpURLConnection c = (HttpURLConnection) destino.openConnection();
-        c.setRequestMethod("POST");
-        c.setDoOutput(true);
-        c.setConnectTimeout(8000);
-        c.setReadTimeout(30000);
-        c.setRequestProperty("Content-Type", "audio/wav");
-        c.setFixedLengthStreamingMode(wav.length);
-        try (OutputStream salida = c.getOutputStream()) {
-            salida.write(wav);
+    private void avisar(String mensaje) {
+        Toast.makeText(this, mensaje, Toast.LENGTH_LONG).show();
+    }
+
+    /** La llave no va en un toast que puede acabar en una captura. */
+    private String recortar(String enlace) {
+        int corte = enlace.indexOf("?token=");
+        return corte > 0 ? enlace.substring(0, corte) + "/?token=…" : enlace;
+    }
+
+    private void esconderTeclado() {
+        View foco = getCurrentFocus();
+        if (foco != null) {
+            InputMethodManager inm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            inm.hideSoftInputFromWindow(foco.getWindowToken(), 0);
         }
-        int code = c.getResponseCode();
-        InputStream fuente = code >= 400 ? c.getErrorStream() : c.getInputStream();
-        ByteArrayOutputStream dentro = new ByteArrayOutputStream();
-        if (fuente != null) {
-            byte[] b = new byte[4096];
-            int n;
-            while ((n = fuente.read(b)) > 0) dentro.write(b, 0, n);
-            fuente.close();
-        }
-        String cuerpo = dentro.toString("UTF-8");
-        if (code >= 400) {
-            throw new Exception("el puente respondió " + code + ": " + cuerpo);
-        }
-        return cuerpo;
     }
 
-    private void enHiloPrincipal(String texto) {
-        runOnUiThread(() -> muestra(texto));
-    }
-
-    private void muestra(String texto) {
-        estado.setText(texto);
-        estado.setVisibility(View.VISIBLE);
-        estado.postDelayed(() -> estado.setVisibility(View.GONE), 9000);
-    }
+    /* ------------------------------------------------------------------ gestos */
 
     @Override
     public void onBackPressed() {
-        if (panelConfig.getVisibility() == View.VISIBLE && !urlPuente.isEmpty()) {
-            panelConfig.setVisibility(View.GONE);
-            web.setVisibility(View.VISIBLE);
+        if (web != null && web.canGoBack()) {
+            web.goBack();
             return;
         }
-        if (web.canGoBack()) web.goBack(); else super.onBackPressed();
+        // El botón «atrás» no sale a la calle a la primera: abre el menú de
+        // conexión. En un teléfono con una sola pantalla, salir sin querer
+        // significa perder a CORT de vista.
+        menu();
+    }
+
+    /** Mantener pulsado, en cualquier superficie: el menú de siempre. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) {
+            return;
+        }
+        View.OnLongClickListener pulso = v -> {
+            menu();
+            return true;
+        };
+        capa.setOnLongClickListener(pulso);
+        if (web != null) {
+            web.setOnLongClickListener(pulso);
+        }
+    }
+
+    private void menu() {
+        final String guardada = prefs().getString("url", "");
+        new AlertDialog.Builder(this)
+                .setTitle("Dónde está CORT")
+                .setMessage(guardada.isEmpty()
+                        ? "Ahora mismo vivo en este teléfono. Busco tu portátil por la "
+                        + "Wi-Fi y, si aparece, abro su cara completa."
+                        : "Conectado a " + recortar(guardada))
+                .setPositiveButton("Buscar el portátil", (d, w) -> {
+                    prefs().edit().putString("url", "").apply();
+                    montarCara();
+                    buscarATelefonoSilencio();
+                })
+                .setNeutralButton("Pegar un enlace", (d, w) -> pantallaDeConfiguracion(guardada))
+                .setNegativeButton("Salir", (d, w) -> finish())
+                .show();
     }
 
     @Override
     protected void onDestroy() {
-        grabando = false;
+        if (cara != null) {
+            cara.cerrar();
+        }
+        if (nexo != null) {
+            nexo.cerrar();
+        }
         super.onDestroy();
-        if (web != null) web.destroy();
     }
 }

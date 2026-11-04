@@ -1,27 +1,38 @@
 name: apk-movil
 
-# El APK de esta rama (la que abre el puente de la PC desde el teléfono) se
-# compila aquí, no en la Classmate: medido en esta máquina, OpenJDK 21 está sólo
-# en versión *runtime* (no hay `javac`), y no hay Gradle, ni SDK de Android, ni
-# `adb`. `apps/android/compilar.sh` usa las herramientas que el runner ya trae
-# (`aapt2`, `d8`, `zipalign`, `apksigner`) y no descarga nada de terceros.
+# El APK de esta rama (la app híbrida: cara nativa en el teléfono + ventana al
+# puente de la PC) se compila aquí, no en la Classmate: medido en esta máquina,
+# OpenJDK 21 está sólo en versión *runtime* (no hay `javac`), y no hay Gradle, ni
+# SDK de Android, ni `adb`. `apps/android/compilar.sh` usa las herramientas que
+# el runner ya trae (`aapt2`, `d8`, `zipalign`, `apksigner`).
 #
-# Las logs de Actions de un repo privado no se pueden leer desde fuera sin
-# sesión, así que si un paso falla su final se publica como **annotation del
-# check-run**, que sí es pública. Eso es lo que se mira cuando el triángulo sale
-# rojo.
+# Desde F12 este build SÍ descarga piezas de terceros: el oído local (Vosk), su
+# puente nativo (JNA) y el modelo de español viajan dentro del APK. No se descargan
+# "las que haya": `apps/android/deps.txt` fija nombre, URL y SHA-256 de cada uno, y
+# `compilar.sh` se cae si la suma no cuadra. Las licencias están en
+# `apps/android/ACREDITACION.md`, y `vendor/` está en `.gitignore` para que ningún
+# modelo de 39,8 MB entre al repositorio por descuido.
+#
+# Las logs de Actions de un repo privado no se pueden leer desde fuera sin sesión,
+# así que si un paso falla su final se publica como **annotation del check-run**,
+# que sí es pública. Eso es lo que se mira cuando el triángulo sale rojo.
 
 on:
   workflow_dispatch:
     inputs:
       version:
         description: "versión que se escribe dentro del APK (X.Y.Z)"
-        default: "0.11.0"
+        default: "0.12.0"
+      delgado:
+        description: "compilar sin oído local (apk de prueba, CORT_SIN_MOTOR=1)"
+        type: boolean
+        default: false
   push:
     branches: [web/cort-v0]
     tags: ["cort-v*"]
     paths:
       - "apps/android/**"
+      - "cort-web/**"
       - ".github/workflows/apk-movil.yml"
 
 jobs:
@@ -31,6 +42,13 @@ jobs:
       - name: código
         uses: actions/checkout@v4
 
+      - name: caché del oído (Vosk, JNA y el modelo de español)
+        uses: actions/cache@v4
+        with:
+          path: apps/android/vendor
+          key: cort-oido-${{ hashFiles('apps/android/deps.txt') }}
+          restore-keys: cort-oido-
+
       - name: qué trae el runner (medido en el log)
         run: |
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}"
@@ -38,10 +56,11 @@ jobs:
           ls "$S" 2>/dev/null || echo "(el SDK no está en esa ruta)"
           echo "plataformas:"; ls "$S/platforms" 2>/dev/null || echo "(ninguna)"
           echo "build-tools:";  ls "$S/build-tools" 2>/dev/null || echo "(ninguna)"
-          for h in aapt2 d8 zipalign apksigner javac keytool; do
-            printf "  %-10s %s\n" "$h" "$(command -v $h || ls "$S"/build-tools/*/ 2>/dev/null | head -1)"
+          for h in aapt2 d8 zipalign apksigner javac keytool unzip curl python3; do
+            printf "  %-10s %s\n" "$h" "$(command -v $h || echo '(no está)')"
           done
           java -version 2>&1 | head -2
+          echo "disco libre: $(df -h /runner 2>/dev/null | tail -1)"
 
       - name: compilar
         id: compila
@@ -55,8 +74,17 @@ jobs:
         run: |
           V="${{ github.event.inputs.version }}"
           if [ -z "$V" ]; then V="$(echo "${GITHUB_REF_NAME}" | sed 's/^cort-v//')"; fi
-          case "$V" in *[!0-9.]*) V="0.11.0";; esac
-          echo "versión: $V"
+          case "$V" in *[!0-9.]*) V="0.12.0";; esac
+          # El interruptor `delgado` llega como texto desde `workflow_dispatch`
+          # ('true'/'false') o como vacío desde un `push`. Comparar con `&&` dentro
+          # de la expresión de GitHub daría '1' hasta con la palabra 'false', que
+          # es un texto no vacío: se traduce aquí, en el shell, donde sí existe la
+          # comparación de cadenas.
+          case "${{ github.event.inputs.delgado }}" in
+              true|True|1) export CORT_SIN_MOTOR=1 ;;
+              *) export CORT_SIN_MOTOR=0 ;;
+          esac
+          echo "versión: $V · oído local: $([ "$CORT_SIN_MOTOR" = "1" ] && echo 'no (apk delgado)' || echo 'sí')"
           # `set +e` y `bash -x`, ambos medidos en la otra línea del repo (runs
           # 38677344363 y el del 2026-10-15): el shell de Actions se comporta como
           # `bash -e` y mataba el paso antes de leer el código de salida, y un
@@ -66,10 +94,10 @@ jobs:
           COD=$?
           cat /tmp/salida.log
           if [ $COD -ne 0 ]; then
-            # Los errores de `javac` PRIMERO y después el final del log: con sólo
-            # el `tail`, la lista de veinte se cortaba por caracteres y llegaba
-            # la cola del último. Cada run cuesta.
-            ERRORES="$(grep -E '\.java:[0-9]+: error:' /tmp/salida.log | head -20 | sed 's/%/%25/g')"
+            # Los errores de `javac` y de `d8` PRIMERO y después el final del log:
+            # con sólo el `tail`, la lista de veinte se cortaba por caracteres y
+            # llegaba la cola del último. Cada run cuesta.
+            ERRORES="$(grep -E '\.java:[0-9]+: error:|Error in |Uncaught class' /tmp/salida.log | head -20 | sed 's/%/%25/g')"
             echo "::error::compilar.sh cayó con código $COD"
             printf '%s\n' "${ERRORES:-sin errores .java en el log}" | head -20 | sed 's/^/::error::/'
             tail -c 900 /tmp/salida.log | tr '\n\r' '  ' | sed -e 's/%/%25/g' -e 's/^/::error::final: /'
@@ -84,4 +112,5 @@ jobs:
             apps/android/build/CORT-movil.apk
             apps/android/build/CORT-movil.apk.sha256
             apps/android/build/firma.txt
+            apps/android/build/auditoria.txt
           if-no-files-found: error

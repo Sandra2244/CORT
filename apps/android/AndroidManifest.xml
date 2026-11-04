@@ -1,28 +1,124 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  CORT en el teléfono es DOS cosas en la misma aplicación, y ésa es la idea de
+  fondo de esta rama:
+
+  * Cara nativa (`Cara.java`): oye por su propio micrófono con un modelo de
+    lenguaje que viaja **dentro del APK**, habla por su altavoz, maneja el
+    aparato (volumen, linterna, alarma, apps, temporizador) y recuerda en
+    SQLite. No necesita IP, ni portátil encendido, ni Wi-Fi.
+  * Ventana (`MainActivity` + `Nexo.java`): si el puente de la PC está publicado
+    en la red de la casa, el WebView abre esa cara — la misma interfaz del
+    orbe con sus paneles — y el teléfono se convierte en manos y oídos de la PC.
+
+  `usesCleartextTraffic="true"` es la decisión ya escrita: la LAN es `http` sin
+  TLS y no hay ningún servidor en internet. El emparejamiento con certificado y
+  token (F14) sustituirá esta bandera cuando exista.
+
+  Micrófono y cámara van `required="false"`: la cara se los pide en tiempo de
+  ejecución y si el aparato no los tiene CORT sigue funcionando por escrito.
+
+  `MODIFY_AUDIO_SETTINGS` es un permiso normal, concedido solo: lo necesita
+  `AudioManager.adjustStreamVolume` para «sube el volumen» dicho en voz alta.
+
+  `extractNativeLibs="false"` es lo que permite que `libvosk.so` y
+  `libjnidispatch.so` se carguen **desde el propio APK**, sin copiarlos a la
+  partición de datos. Es la otra mitad de que el teléfono pese lo que pesa y no
+  el doble después del primer arranque: van sin comprimir y alineados a 4 KB, y
+  `compilar.sh` se encarga de las dos condiciones.
+
+  `versionCode` y `versionName` no se escriben aquí: los pone `compilar.sh` al
+  enlazar, derivados de la etiqueta del corte.
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="dev.sandra.cort.movil">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.CAMERA"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.WAKE_LOCK"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.VIBRATE"
+                     android:required="false" />
+
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!--
+      Bloque `queries` (API 30): sin él, en Android 11 o más nuevo el
+      `PackageManager` ve CERO aplicaciones instaladas y «abre Spotify» contestaría
+      «no encontré esa app» en un teléfono lleno de apps. Es un filtro por
+      *intención* — sólo iconos de arranque —, no el permiso que castiga la tienda.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_cort"
         android:roundIcon="@mipmap/ic_cort"
         android:label="@string/app_name"
+        android:hardwareAccelerated="true"
+        android:extractNativeLibs="false"
         android:usesCleartextTraffic="true">
 
-        <!-- usesCleartextTraffic: el puente habla por http en la red local de la
-             casa. No hay servidor en internet y no se le manda nada a nadie. -->
-
+        <!-- `singleTop`: el asistente (`.Asistente`, `.Sesiones`) y el
+             reconocedor (`.Reconocimiento`) vuelven a abrir la cara que ya está
+             puesta; con la modalidad por defecto Android montaba una segunda
+             instancia de `MainActivity` encima de la primera. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden">
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+          El traje de asistente del sistema, en tres piezas. El contrato lo fija
+          AOSP (`VoiceInteractionServiceInfo`): si faltan `sessionService` o
+          `recognitionService` en `@xml/asistente`, CORT no aparece en la lista de
+          «asistente predeterminado» y no hay pantalla que avise del porqué.
+        -->
+        <service
+            android:name=".Asistente"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/asistente" />
+        </service>
+
+        <service
+            android:name=".Sesiones"
+            android:permission="android.permission.BIND_VOICE_INTERACTION"
+            android:exported="true"
+            android:label="@string/app_name" />
+
+        <service
+            android:name=".Reconocimiento"
+            android:permission="android.permission.BIND_SPEECH_RECOGNIZER"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
