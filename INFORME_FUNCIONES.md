@@ -478,7 +478,7 @@ a 48 px una palabra no se lee y el launcher recorta los bordes.
 | Archivo | cómo se obtuvo | medida |
 |---|---|---|
 | `cort.svg` | `rsvg-convert` (renderer real, no el de ImageMagick) | 13 595 bytes |
-| `cort-192.png` / `cort-512.png` | rasterizados del SVG, los dos que pide `manifest.webmanifest` | 23 767 B / 92 194 B |
+| `cort-192.png` / `cort-512.png` | rasterizados del SVG, los dos que pide `manifest.webmanifest` | 24 272 B / 89 799 B |
 | `apps/android/res/mipmap-anydpi-v26/ic_cort.xml` | icono adaptativo generado con la misma matemática (21 puntos del hemisferio delantero) | 548 B + foreground 5 172 B + background 724 B |
 
 **El icono ya está dentro del APK compilado.** Run `41803422504` del flujo `apk-movil`
