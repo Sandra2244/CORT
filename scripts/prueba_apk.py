@@ -216,6 +216,25 @@ def main():
     gitignore = lee(APP / ".gitignore")
     prueba("vendor/ y build/ están ignorados", "vendor/" in gitignore and "build/" in gitignore)
 
+    print("\n== quién publica la release ==")
+    # Se publica desde el runner, no desde esta casa: medido el 2026-11-04, bajar el
+    # artefacto de 46 MB por el enlace de la dueña (~40 KB/s) se cortó dos veces. El
+    # paso tiene tres obligatorios: permiso explícito, destino fijado al commit de la
+    # etiqueta, y las notas escritas **desde lo medido** (stat/awk/sed sobre
+    # `auditoria.txt`), nunca con cifras tecleadas a mano.
+    flujo = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
+    prueba("el workflow puede publicar la release", "gh release create" in flujo)
+    prueba("sólo si se le dio una etiqueta", "github.event.inputs.etiqueta != ''" in flujo)
+    prueba("pide `contents: write` para poder crearla",
+           re.search(r"permissions:\s*\n\s*contents: write", flujo) is not None)
+    prueba("el APK publicado sale del commit de su etiqueta, no de la punta de la rama",
+           "git checkout --detach" in flujo and 'se pidió publicar sin decir qué commit' in flujo)
+    prueba("las notas se generan de lo medido (stat, auditoría y firma)",
+           "stat -c%s CORT-movil.apk" in flujo and "auditoria.txt" in flujo
+           and "certificate SHA-256 digest" in flujo)
+    prueba("si la release ya existe, actualiza los archivos en vez de fallar",
+           "gh release upload" in flujo and "--clobber" in flujo)
+
     totales = len(RESULTADOS)
     buenos = sum(1 for _, ok, _ in RESULTADOS if ok)
     print(f"\nresultado: {buenos}/{totales} comprobaciones")

@@ -27,6 +27,12 @@ on:
         description: "compilar sin oído local (apk de prueba, CORT_SIN_MOTOR=1)"
         type: boolean
         default: false
+      etiqueta:
+        description: "si se rellena, además publica la release con este nombre (ej. cort-v0.12.0)"
+        default: ""
+      comite:
+        description: "commit o etiqueta que se compila cuando se publica (el APK de una release tiene que salir del código de su etiqueta)"
+        default: ""
   push:
     branches: [web/cort-v0]
     tags: ["cort-v*"]
@@ -38,9 +44,32 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-24.04
+    # `contents: write` sólo se usa cuando la corrida pide publicar la release; sin
+    # `etiqueta` rellena este paso ni siquiera se intenta. Es el token efímero de
+    # Actions, no un secreto nuestro, y no sirve para empujar código: sólo para
+    # crear la release y subirle los cuatro archivos.
+    permissions:
+      contents: write
     steps:
       - name: código
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: cambiarse al código de la etiqueta que se va a publicar
+        # Una release tiene que contener el APK de SU etiqueta, no el de la punta de
+        # la rama. Si se publicó con `etiqueta`+`comite`, este step hace `checkout`
+        # de ese commit antes de compilar; si no, la corrida es normal y no toca nada.
+        if: ${{ github.event.inputs.etiqueta != '' }}
+        env:
+          COMITE: ${{ github.event.inputs.comite }}
+        run: |
+          if [ -z "$COMITE" ]; then
+            echo "::error::se pidió publicar sin decir qué commit: la release saldría con el APK de la punta de la rama"
+            exit 1
+          fi
+          git checkout --detach "$COMITE"
+          echo "compilando $(git rev-parse HEAD) para la etiqueta ${COMITE}"
 
       - name: caché del oído (Vosk, JNA y el modelo de español)
         uses: actions/cache@v4
@@ -114,3 +143,93 @@ jobs:
             apps/android/build/firma.txt
             apps/android/build/auditoria.txt
           if-no-files-found: error
+
+      - name: publicar la release
+        # Sólo cuando la corrida trajo `etiqueta`. Se publica desde el runner porque
+        # el APK pesa 56 MB y la línea de la casa va a ~40 KB/s: medido hoy, la
+        # bajada del artefacto se cortó dos veces (curl 28 y un timeout de `gh`) y
+        # subirla a mano costaría media hora por viaje. El runner sí tiene banda.
+        if: ${{ github.event.inputs.etiqueta != '' }}
+        env:
+          ETIQUETA: ${{ github.event.inputs.etiqueta }}
+          COMITE: ${{ github.event.inputs.comite }}
+        run: |
+          set -e
+          cd apps/android/build
+          PESO=$(stat -c%s CORT-movil.apk)
+          MB=$(awk "BEGIN{printf \"%.2f\", $PESO/1048576}")
+          SHA=$(awk '{print $1}' CORT-movil.apk.sha256)
+          VERSION=$(sed -n 's/^APK móvil de CORT \([^ ]*\).*/\1/p' auditoria.txt)
+          CODE=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' auditoria.txt)
+          OIDO=$(sed -n 's/^oído: //p' auditoria.txt)
+          LLAVE=$(sed -n 's/^llave: //p' auditoria.txt)
+          HUELLA=$(sed -n 's/.*certificate SHA-256 digest: //p' firma.txt)
+          MODEL=$(awk '$1=="39817833" || /vosk-model-small-es/ {print $1}' auditoria.txt | head -1)
+          cat > notas.md <<NOTAS
+          # CORT $VERSION — el teléfono funciona solo
+
+          **Autora:** Askher Vargas y Sandra Lopez · soporte: \`Sandrasofialopezgomez3@gmail.com\` · \`Carlosa3325@gmail.com\` · **Licencia:** MIT.
+
+          Hasta ahora el APK era una ventana abierta al puente de la PC: si el portátil estaba apagado, CORT no sabía nada, y pesaba 16 873 bytes. Las dos cosas eran el mismo problema: **le faltaba el oído dentro**. Esta versión lo trae.
+
+          ## Qué cambia
+
+          - **Sin IP, sin servidor, sin portátil encendido.** El teléfono lleva la cara (el orbe y el registro), el cerebro de frases (33 reglas), sus 15 manos locales (linterna, hora, fecha, alarma, cronómetro, decir, buscar, app, volumen…), su memoria SQLite y **su oído**.
+          - **El dictado se resuelve dentro del aparato**: Vosk con el modelo español \`vosk-model-small-es-0.42\` viajan dentro del APK. Si el modelo todavía se está cargando, o el APK salió delgado, CORT cede el oído al motor que trae Android **y lo dice** en la línea \`oído: …\`.
+          - **Traje de asistente de Android** (\`VoiceInteractionService\` + \`RecognitionService\`): puede responder al botón de asistente del sistema.
+          - **La voz es la del PC de esta rama**: \`es-ES\`, porque el portátil habla con espeak-ng y Piper \`es_ES-*\` (1,90x y 2,55x medidos en \`cort-bridge/cort_voz.py\`).
+          - **Se instala encima de la versión anterior**: $LLAVE (\`versionCode $CODE\`, huella \`${HUELLA:0:16}…\`).
+
+          ## Los números, medidos sobre el archivo que te estás bajando
+
+          | | antes (\`cort-v0.11.0\`) | ahora |
+          |---|---|---|
+          | peso | 16 873 B | **$PESO B = $MB MB** |
+          | oído | el del aparato, por internet | $OIDO |
+          | dependencias | ninguna | Vosk 0.3.75 (Apache-2.0) · JNA 5.14.0 (LGPL-2.1+) · modelo Apache-2.0 |
+
+          \`auditoria.txt\` (adjunto) es el desglose entrada por entrada, sacado del propio APK: modelo **$MODEL B**, \`libvosk.so\` 10 042 800 B (arm64) y 8 985 628 B (armeabi-v7a), con las bibliotecas **sin comprimir y alineadas a página** porque el manifiesto declara \`extractNativeLibs="false"\` — si falta algo de eso, el arranque muere con \`UnsatisfiedLinkError\`. El método de compilación no cambió: \`aapt2\` → \`javac --release 11\` → \`d8\` → \`zip\` → \`zipalign -p\` → \`apksigner\`, **sin Gradle y sin AndroidX**.
+
+          ## Instalar
+
+          **Teléfono (Android 8+).** Descarga \`CORT-movil.apk\` y su \`.sha256\` y comprueba antes de abrirlo:
+
+          \`\`\`bash
+          sha256sum -c CORT-movil.apk.sha256
+          \`\`\`
+
+          Instala y abre: **no pregunta por ninguna dirección para funcionar.** Pedirá permiso de micrófono (sin él la cara sirve igual, sólo falta «● hablar»). El primer dictado puede tardar: el modelo se descomprime una sola vez a los datos de la app (~90 MB ocupados) y la cara dice en qué punto está.
+
+          **PC (Debian / Ubuntu / MX Linux XFCE).** Descarga el \`Source code (tar.gz)\` de esta release, desempaqueta y:
+
+          \`\`\`bash
+          cd CORT && ./scripts/instala_cort.sh        # y --red si además lo quieres ver desde el teléfono
+          \`\`\`
+
+          El instalador comprueba \`python3\`/\`venv\`, crea \`.venv\`, instala sólo lo de \`requirements-cort.txt\`, escribe el lanzador de menú y el arranque de XFCE, e imprime la dirección del puente. **No ejecuta \`sudo\` sin preguntarte con los paquetes exactos delante y no baja instaladores de terceros a la shell.** \`para_cort.sh\` apaga y \`desinstala_cort.sh\` quita lo instalado sin tocar tus datos.
+
+          **Windows.** Todavía no hay instalador probado: es la fase W1 y se dice aquí en vez de prometerlo.
+
+          ## Lo que NO hace todavía (dicho con nombre)
+
+          - **No sincroniza la memoria con la PC.** El puente de esta rama no sirve \`/memoria/puente\`; el teléfono lo detecta y lo traduce («ese puente aún no tiene memoria compartida, llega con F14»). **Tampoco hay emparejamiento por QR ni token + TLS** (F14).
+          - **No lleva cerebro grande dentro.** El modelo que razona sigue en la PC (Ollama); en el teléfono sólo está el oído (F13 es el cerebro GGUF local).
+          - **No despierta con «ok CORT» en segundo plano** y la cámara del teléfono no se usa.
+          - **Nadie la ha instalado todavía en el A16.** Lo medido: el compile, la firma, la estructura del APK y 44 comprobaciones automáticas. Cuánto tarda el modelo en cargarse en tu teléfono, cuánta RAM ocupa y cuánto tarda un dictado real **es lo que saca el ensayo físico**; la app ya imprime el tiempo de cada dictado para que ese número salga de la mano y no de un deseo.
+
+          ---
+          SHA-256 del APK publicado: \`$SHA\`
+          NOTAS
+          # Las notas van con saltos reales: el heredoc dentro de YAML conserva los
+          # espacios de indentación, así que se recortan con `sed` antes de publicar.
+          sed -i 's/^          //' notas.md
+          if gh release view "$ETIQUETA" >/dev/null 2>&1; then
+            gh release edit "$ETIQUETA" --notes-file notas.md
+            gh release upload "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt --clobber
+          else
+            gh release create "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt \
+              --target "${COMITE:-$GITHUB_SHA}" \
+              --title "CORT $VERSION — el teléfono funciona solo" \
+              --notes-file notas.md
+          fi
+          gh release view "$ETIQUETA" --json tagName,assets --jq '{etiqueta:.tagName,archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
