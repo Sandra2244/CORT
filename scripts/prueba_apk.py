@@ -20,6 +20,8 @@ Se corre sin red y sin SDK: `python3 scripts/prueba_apk.py`. Sale con código 0
 si todo cuadra y 1 si algo no, y cada línea va dicho en español.
 """
 import json
+import os
+import subprocess
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -64,6 +66,9 @@ def sin_doble_guion(texto_xml):
             malos.append(comentario.strip().splitlines()[0][:40])
     return malos
 
+
+NOTAS_PLANTILLA = APP / "NOTAS_RELEASE.md"
+notas_texto = NOTAS_PLANTILLA.read_text(encoding="utf-8") if NOTAS_PLANTILLA.is_file() else ""
 
 def main():
     if not APP.is_dir():
@@ -282,6 +287,7 @@ def main():
     # paso tiene tres obligatorios: permiso explícito, destino fijado al commit de la
     # etiqueta, y las notas escritas **desde lo medido** (stat/awk/sed sobre
     # `auditoria.txt`), nunca con cifras tecleadas a mano.
+    notas_plantilla = NOTAS_PLANTILLA
     flujo = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
     prueba("el workflow puede publicar la release", "gh release create" in flujo)
     prueba("sólo si se le dio una etiqueta", "github.event.inputs.etiqueta != ''" in flujo)
@@ -301,8 +307,45 @@ def main():
            "python3 scripts/prueba_apk.py" in flujo,
            "si la suite no se ejecuta en Actions, lo publicado no lo verificó más que esta máquina")
     prueba("las notas copian el número de comprobaciones de la suite",
-           re.search(r"\$COMPROBACIONES comprobaciones", flujo) is not None,
+           "{{CHECS}} comprobaciones" in notas_texto
+           and 'NOTAS_CHECS="$COMPROBACIONES"' in flujo,
            "el 2026-11-04 la release decía «44 comprobaciones» cuando ya eran 51: mentía sobre su prueba")
+
+    print("\n== las notas de la release no pueden contradecir al APK ==")
+    # El texto ya no vive dentro del YAML: vive en `apps/android/NOTAS_RELEASE.md` y el
+    # workflow sólo le mete los números. Así se puede comprobar lo que AFIRMA, no sólo
+    # que se publique. Nace del 2026-11-04: publicado `cort-v0.13.0`, las notas seguían
+    # diciendo lo de la 0.12.0 y negaban dos cosas que ese mismo APK ya hacía.
+    prueba("la plantilla de las notas está en el repo y el workflow la invoca",
+           notas_plantilla.is_file() and "python3 ../notas_release.py > notas.md" in flujo,
+           "con el texto pegado en el YAML, nadie se entera de que la versión cambió")
+    prueba("y las notas niegan lo que ya es falso: la ruta de memoria SÍ se sirve",
+           "/memoria/puente" in notas_texto and "no sirve" not in notas_texto,
+           "la ruta la abrió F14a en el puerto del core, detrás del token")
+    prueba("y no dicen que la cámara del teléfono no se use: F14b la usa para el QR",
+           "Escanear el QR" in notas_texto and "teléfono no se usa" not in notas_texto)
+    prueba("el hueco del título está conectado: `--title` sale de la plantilla",
+           '--title "$TITULO"' in flujo
+           and "NOTAS_RELEASE.md" in (APP / "notas_release.py").read_text(encoding="utf-8"),
+           "título y cuerpo contradictorios es una release que se desmiente sola")
+    sobrantes = sorted(set(re.findall(r"\{\{[A-Z_]+\}\}", notas_texto)))
+    sin_exportar = [h for h in sobrantes
+                    if ('NOTAS_' + h[2:-2] + '=') not in flujo.replace('-', '_')]
+    prueba("cada {{HUECO}} de la plantilla recibe su número desde el workflow",
+           not sin_exportar, ", ".join(sin_exportar) or "todos rellenados")
+    render = subprocess.run([sys.executable, str(APP / "notas_release.py")],
+                            env=dict(os.environ, **{
+                                "NOTAS_VERSION": "0", "NOTAS_CODE": "0", "NOTAS_PESO": "0",
+                                "NOTAS_MB": "0", "NOTAS_SHA": "0", "NOTAS_OIDO": "0",
+                                "NOTAS_LLAVE": "0", "NOTAS_HUELLA": "0", "NOTAS_MODEL": "0",
+                                "NOTAS_CHECS": "0"}),
+                            capture_output=True, text=True)
+    prueba("la plantilla se rellena entera y sin dejar huecos (probado aquí, a ciegas)",
+           render.returncode == 0 and "{{" not in render.stdout,
+           (render.stderr or "")[:70])
+    prueba("y si falta un número medido, el script se cae en vez de publicar un agujero",
+           subprocess.run([sys.executable, str(APP / "notas_release.py")],
+                          env={"PATH": "/usr/bin"}, capture_output=True, text=True).returncode != 0)
 
     totales = len(RESULTADOS)
     buenos = sum(1 for _, ok, _ in RESULTADOS if ok)

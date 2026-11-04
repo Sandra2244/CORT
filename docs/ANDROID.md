@@ -102,10 +102,10 @@ que lo que lees en la página sale del APK de esa misma corrida. El APK se const
 `git checkout --detach` al commit de la etiqueta, para que lo publicado salga del código que dice
 salir y no de la punta de la rama.
 
-**Peso: esta vez medido y esta vez grande.** La release `cort-v0.12.0` pesa
-**59 335 837 bytes = 56,59 MB** y su SHA-256 es la que publica su propio archivo
+**Peso: esta vez medido y esta vez grande.** La release `cort-v0.13.0` pesa
+**59 565 213 bytes = 56,81 MB** y su SHA-256 es la que publica su propio archivo
 `CORT-movil.apk.sha256` (`d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab`
-en la corrida buena, el run 41894740851). El anterior (`cort-v0.11.0`) pesaba
+en la corrida buena, el run 41906957815). El anterior (`cort-v0.11.0`) pesaba
 **16 873 bytes**: ×3 517, y la diferencia no es código, es el oído.
 
 > **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
@@ -135,7 +135,7 @@ las `.so` van **almacenadas sin comprimir** (`compress_type 0`, medido sobre el 
 Descargar y comprobar desde fuera, sin confiar en este texto:
 
 ```bash
-B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.12.0
+B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.13.0
 curl -sL -o CORT-movil.apk        $B/CORT-movil.apk
 curl -sL -o CORT-movil.apk.sha256 $B/CORT-movil.apk.sha256
 sha256sum -c CORT-movil.apk.sha256
@@ -154,7 +154,7 @@ archivo que almacena y lo expone en la API. Si las dos sumas coinciden, la relea
 autoconsistente (lo que promete el `.sha256` es lo que está guardado):
 
 ```bash
-gh api repos/Sandra2244/CORT/releases/tags/cort-v0.12.0 \
+gh api repos/Sandra2244/CORT/releases/tags/cort-v0.13.0 \
   --jq '.assets[]|select(.name=="CORT-movil.apk")|.digest'
 # sha256:d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab   ← medido hoy
 ```
@@ -197,26 +197,30 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 
 ## 6. Qué no hace todavía, dicho con nombre
 
-- **No sincroniza la memoria con la PC** (fase F14). El puente de esta rama no sirve
-  `/memoria/puente`; el teléfono lo detecta y lo dice.
-- **No hay emparejamiento por QR ni clave** (Fases F14/S3). Quien esté en tu Wi‑Fi y sepa la IP
-  puede abrir la misma página y darle órdenes al puente. Con `--red` eso es real. La puerta de
-  verdad es token + TLS local.
+- **El enlace no cifra: falta TLS.** Desde F14a la ruta `/memoria/puente` **sí** la sirve esta
+  rama, pero detrás de un token que viaja en el `?token=` dentro de la red local. Vale para tu
+  casa; no lo abras a un Wi‑Fi público ni a internet. TLS local con llave propia es lo que
+  sigue (Fase S3).
+- **Sólo viajan los recuerdos.** Preferencias, lista de tareas y notas ya están escritos en el
+  acuerdo de `cort-bridge/cort_enlace.py` y entran en el siguiente viaje (F14c).
 - **No hay cerebro grande dentro del APK** (F13). El modelo que habla y razona en la PC es
   Ollama; en el teléfono sólo hay el oído. «Ollama en Android» no se afirma sin haberlo
   compilado y medido.
 - **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa; el
   traje de asistente de Android (`Asistente`/`Sesiones`/`Reconocimiento`) está declarado y
   enruta, pero activarlo como asistente del sistema es una prueba de la dueña en el aparato.
-- **La cámara del teléfono no se usa.** La mirada (S2) corre en el PC con su cámara.
-- **Nadie la ha instalado todavía en el A16.** Lo medido hasta hoy: el compile+firma+auditoría
-  en el runner (release `cort-v0.12.0`, run 41894740851, verde, 56,59 MB), las 53 comprobaciones
-  de `scripts/prueba_apk.py` —que ahora corre el propio workflow antes de publicar—, la estructura
-  del APK (`.so` sin comprimir y
-  alineadas) y la ruta `/mic` con audio sintético (7/7). El trayecto **voz real → Vosk dentro
-  del teléfono → orbe moviéndose con el nivel del micrófono** sigue pendiente de su prueba
-  física, y ahí se verá si el botón, el permiso y el descomprimido del modelo se comportan en
-  la mano y no en la prueba.
+- **La cámara del teléfono sólo lee el cuadro del enlace** (F14b): decodifica y tira, ningún
+  fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
+  (S2) corre en el PC, con su cámara.
+- **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
+  auditoría en el runner (release `cort-v0.13.0`, run 41906957815, verde, 59 565 213 bytes =
+  56,81 MB) y las 73 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó
+  (hoy la suite va por 80, con las siete de las notas de la release). La estructura del APK está
+  comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de 756 028 B con zxing
+  dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el aparato: cuánto tarda
+  el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real y si el escáner lee la
+  pantalla de la PC a un metro — esas cuatro son el ensayo físico, no esto.
+
 
 ## 7. Dónde está cada cosa
 
@@ -229,7 +233,8 @@ apps/android/src/dev/sandra/cort/movil/   18 clases Java, 5 119 líneas. Las que
     Cara.java          el orbe, el registro y la línea «oído: …»
     Cerebro/Acciones   33 reglas y 15 manos locales desde assets/habilidades.json
     Recuerdos.java     SQLite del teléfono (cort.db)
-    Puente/Sincroniza  la ida y vuelta con el portátil (ruta aún no servida: lo dice)
+    Escaner.java       la cámara leyendo el QR del enlace: YUV -> luminancia -> zxing
+    Puente/Sincroniza  la ida y vuelta con el portátil (/memoria/puente, con token)
     Asistente/Sesiones/Reconocimiento   el traje de asistente de Android
 apps/android/AndroidManifest.xml          permisos, icono, servicios y <queries>
 apps/android/res/xml/asistente.xml        a dónde apunta el asistente del sistema

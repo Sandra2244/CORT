@@ -195,71 +195,27 @@ jobs:
           # `numfmt --grouping` depende del locale del runner y en Actions mete comas.
           PESO="$(echo "$PESO" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1 \2/;ta')"
           MODEL="$(echo "$MODEL" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1 \2/;ta')"
-          cat > notas.md <<NOTAS
-          # CORT $VERSION — el teléfono funciona solo
-
-          **Autora:** Askher Vargas y Sandra Lopez · soporte: \`Sandrasofialopezgomez3@gmail.com\` · \`Carlosa3325@gmail.com\` · **Licencia:** MIT.
-
-          Hasta ahora el APK era una ventana abierta al puente de la PC: si el portátil estaba apagado, CORT no sabía nada, y pesaba 16 873 bytes. Las dos cosas eran el mismo problema: **le faltaba el oído dentro**. Esta versión lo trae.
-
-          ## Qué cambia
-
-          - **Sin IP, sin servidor, sin portátil encendido.** El teléfono lleva la cara (el orbe y el registro), el cerebro de frases (33 reglas), sus 15 manos locales (linterna, hora, fecha, alarma, cronómetro, decir, buscar, app, volumen…), su memoria SQLite y **su oído**.
-          - **El dictado se resuelve dentro del aparato**: Vosk con el modelo español \`vosk-model-small-es-0.42\` viajan dentro del APK. Si el modelo todavía se está cargando, o el APK salió delgado, CORT cede el oído al motor que trae Android **y lo dice** en la línea \`oído: …\`.
-          - **Traje de asistente de Android** (\`VoiceInteractionService\` + \`RecognitionService\`): puede responder al botón de asistente del sistema.
-          - **La voz es la del PC de esta rama**: \`es-ES\`, porque el portátil habla con espeak-ng y Piper \`es_ES-*\` (1,90x y 2,55x medidos en \`cort-bridge/cort_voz.py\`).
-          - **Firmado:** $LLAVE — \`versionCode $CODE\`, huella del certificado \`${HUELLA:0:16}…\` (la misma de las versiones anteriores, así que no hace falta desinstalar).
-
-          ## Los números, medidos sobre el archivo que te estás bajando
-
-          | | antes (\`cort-v0.11.0\`) | ahora |
-          |---|---|---|
-          | peso | 16 873 B | **$PESO B = $MB MB** |
-          | oído | el del aparato, por internet | $OIDO |
-          | dependencias | ninguna | Vosk 0.3.75 (Apache-2.0) · JNA 5.14.0 (LGPL-2.1+) · modelo Apache-2.0 |
-
-          \`auditoria.txt\` (adjunto) es el desglose entrada por entrada, sacado del propio APK: modelo **$MODEL B**, \`libvosk.so\` 10 042 800 B (arm64) y 8 985 628 B (armeabi-v7a), con las bibliotecas **sin comprimir y alineadas a página** porque el manifiesto declara \`extractNativeLibs="false"\` — si falta algo de eso, el arranque muere con \`UnsatisfiedLinkError\`. El método de compilación no cambió: \`aapt2\` → \`javac --release 11\` → \`d8\` → \`zip\` → \`zipalign -p\` → \`apksigner\`, **sin Gradle y sin AndroidX**.
-
-          ## Instalar
-
-          **Teléfono (Android 8+).** Descarga \`CORT-movil.apk\` y su \`.sha256\` y comprueba antes de abrirlo:
-
-          \`\`\`bash
-          sha256sum -c CORT-movil.apk.sha256
-          \`\`\`
-
-          Instala y abre: **no pregunta por ninguna dirección para funcionar.** Pedirá permiso de micrófono (sin él la cara sirve igual, sólo falta «● hablar»). El primer dictado puede tardar: el modelo se descomprime una sola vez a los datos de la app (~90 MB ocupados) y la cara dice en qué punto está.
-
-          **PC (Debian / Ubuntu / MX Linux XFCE).** Descarga el \`Source code (tar.gz)\` de esta release, desempaqueta y:
-
-          \`\`\`bash
-          cd CORT && ./scripts/instala_cort.sh        # y --red si además lo quieres ver desde el teléfono
-          \`\`\`
-
-          El instalador comprueba \`python3\`/\`venv\`, crea \`.venv\`, instala sólo lo de \`requirements-cort.txt\`, escribe el lanzador de menú y el arranque de XFCE, e imprime la dirección del puente. **No ejecuta \`sudo\` sin preguntarte con los paquetes exactos delante y no baja instaladores de terceros a la shell.** \`para_cort.sh\` apaga y \`desinstala_cort.sh\` quita lo instalado sin tocar tus datos.
-
-          **Windows.** Todavía no hay instalador probado: es la fase W1 y se dice aquí en vez de prometerlo.
-
-          ## Lo que NO hace todavía (dicho con nombre)
-
-          - **No sincroniza la memoria con la PC.** El puente de esta rama no sirve \`/memoria/puente\`; el teléfono lo detecta y lo traduce («ese puente aún no tiene memoria compartida, llega con F14»). **Tampoco hay emparejamiento por QR ni token + TLS** (F14).
-          - **No lleva cerebro grande dentro.** El modelo que razona sigue en la PC (Ollama); en el teléfono sólo está el oído (F13 es el cerebro GGUF local).
-          - **No despierta con «ok CORT» en segundo plano** y la cámara del teléfono no se usa.
-          - **Nadie la ha instalado todavía en el A16.** Lo medido: el compile, la firma, la estructura del APK y las $COMPROBACIONES comprobaciones de \`scripts/prueba_apk.py\`, que esta misma corrida corrió y están en el log. Cuánto tarda el modelo en cargarse en tu teléfono, cuánta RAM ocupa y cuánto tarda un dictado real **es lo que saca el ensayo físico**; la app ya imprime el tiempo de cada dictado para que ese número salga de la mano y no de un deseo.
-
-          ---
-          SHA-256 del APK publicado: \`$SHA\`
-          NOTAS
-          # Las notas van con saltos reales: el heredoc dentro de YAML conserva los
-          # espacios de indentación, así que se recortan con `sed` antes de publicar.
-          sed -i 's/^          //' notas.md
+          # Las notas ya NO se escriben aqui dentro: salen de `apps/android/NOTAS_RELEASE.md`
+          # y aqui solo entran los numeros medidos. La razon es una mentira medida el
+          # 2026-11-04 al publicar `cort-v0.13.0`: el texto del 0.12.0 seguia diciendo que
+          # esta rama no servia `/memoria/puente` y que la camara del telefono no se usaba,
+          # y las dos cosas ya eran falsas. Un texto fijo dentro del YAML no se entera de
+          # lo que compila: un archivo de markdown del repo, si.
+          export NOTAS_VERSION="$VERSION" NOTAS_CODE="$CODE" NOTAS_PESO="$PESO" \
+                 NOTAS_MB="$MB" NOTAS_SHA="$SHA" NOTAS_OIDO="$OIDO" \
+                 NOTAS_LLAVE="$LLAVE" NOTAS_HUELLA="$HUELLA" \
+                 NOTAS_MODEL="$MODEL" NOTAS_CHECS="$COMPROBACIONES"
+          python3 ../notas_release.py > notas.md
+          TITULO="$(python3 ../notas_release.py --titulo)"
+          # Si la plantilla o el script fallan, `set -e` tira del paso antes de publicar:
+          # es mejor una corrida roja que una release con las notas a medias.
           if gh release view "$ETIQUETA" >/dev/null 2>&1; then
             gh release edit "$ETIQUETA" --notes-file notas.md --target "${COMITE:-$GITHUB_SHA}"
             gh release upload "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt --clobber
           else
             gh release create "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt \
               --target "${COMITE:-$GITHUB_SHA}" \
-              --title "CORT $VERSION — el teléfono funciona solo" \
+              --title "$TITULO" \
               --notes-file notas.md
           fi
           gh release view "$ETIQUETA" --json tagName,assets --jq '{etiqueta:.tagName,archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
