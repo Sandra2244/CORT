@@ -153,6 +153,12 @@ jobs:
         env:
           ETIQUETA: ${{ github.event.inputs.etiqueta }}
           COMITE: ${{ github.event.inputs.comite }}
+          # Medido en el run 41891940880: sin esta línea el paso se cae con
+          # «To use GitHub CLI in a GitHub Actions workflow, set the GH_TOKEN
+          # environment variable» y código de salida 4. El `GH_TOKEN` del runner
+          # existe, pero `gh` no lo adivina; y es el mismo token efímero al que se
+          # le dio `contents: write` arriba — no un secreto nuestro.
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -e
           cd apps/android/build

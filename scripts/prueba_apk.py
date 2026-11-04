@@ -234,6 +234,9 @@ def main():
            and "certificate SHA-256 digest" in flujo)
     prueba("si la release ya existe, actualiza los archivos en vez de fallar",
            "gh release upload" in flujo and "--clobber" in flujo)
+    prueba("`gh` recibe su token dentro del runner",
+           re.search(r"GH_TOKEN: \$\{\{ github\.token \}\}", flujo) is not None,
+           "sin GH_TOKEN el paso cae con «set the GH_TOKEN environment variable» (run 41891940880)")
 
     totales = len(RESULTADOS)
     buenos = sum(1 for _, ok, _ in RESULTADOS if ok)
