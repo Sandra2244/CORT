@@ -576,3 +576,20 @@ salida el número de comprobaciones — hasta hoy lo decía el texto a mano, y s
 **Un bug que te tocó a ti:** el archivo `.sha256` del artefacto decía
 `build/CORT-movil.apk`, así que `sha256sum -c` respondía *«no existe el fichero»* aunque la
 suma fuera buena. Se anotó el nombre desnudo y hay una comprobación que lo vigila.
+
+**Publicada (14:03–14:20, la parte de publicar costó tres corridas).** La release
+[`cort-v0.12.0`](https://github.com/Sandra2244/CORT/releases/tag/cort-v0.12.0) está en GitHub con
+sus cuatro archivos: `CORT-movil.apk` **59 335 837 bytes**, `CORT-movil.apk.sha256`,
+`auditoria.txt` y `firma.txt`, señalando al commit `db45adc` del que salió el binario. La creó el
+runner, no esta laptop: bajar el artefacto a casa se cortó dos veces por el enlace de ~40 KB/s.
+Las dos caídas previas fueron medidas y están dichas aquí, no borradas — el run 41891940880
+falló sólo en «publicar la release» con *«set the GH_TOKEN environment variable»* (código 4) y se
+arregló pasando `GH_TOKEN: ${{ github.token }}`, que es el token efímero del job, no un secreto
+nuestro; `contents: write` ya estaba. **Comprobado desde fuera**, sin fiarse del log:
+`sha256sum -c` contra el `.sha256` de la release da OK con el nombre desnudo, y la suma publicada
+en la página (`d4de166a…f08ab`) es la del archivo que se descarga.
+
+**Y una mentira que se cazó a sí misma:** las notas decían «44 comprobaciones automáticas» cuando
+la suite ya llevaba 51 (ahora 53). El número estaba escrito a mano en el YAML. Hoy el workflow
+corre la suite en el runner y copia el total de su salida; si la suite cae, la release no se
+publica. Dos comprobaciones nuevas vigilan eso.

@@ -87,10 +87,29 @@ es pública porque vive dentro del APK). Si algún día se quita el secreto, el 
 llave desechable y entonces sí hay que desinstalar; `firma.txt` y `auditoria.txt` de cada
 release dicen en una línea en qué caso estás, en vez de esconderte eso en el log.
 
-**Peso: esta vez medido y esta vez grande.** El run 41881069892 (`0.12.0`, versionCode 1200)
-soltó **59 335 837 bytes = 56,59 MB** con SHA-256
-`aa8dea3fd261cc3b481fb5037481eb9d1a236aefdec8b552eb93310547d5c1f4`. El anterior
-(`cort-v0.11.0`) pesaba **16 873 bytes**: ×3 517, y la diferencia no es código, es el oído.
+**Quién publica la release: el runner, no esta laptop.** Medido el 2026-11-04: con el APK ya
+compilado, bajar los 56 MB del artefacto a la casa se cortó dos veces (`curl` código 28 y un
+timeout del propio `gh`) y a ~40 KB/s cada viaje cuesta media hora. Así que el workflow crea la
+release desde dentro de Actions con `gh release create`, y lo hace **sólo si la corrida recibió
+`etiqueta`** (el botón «Run workflow» o un `push` con tag no la publican). Antes de publicar
+ejecuta `scripts/prueba_apk.py` en el runner: si la suite cae, la release no se toca. Las notas
+no se escriben a mano — se generan de `auditoria.txt`, `firma.txt` y el `stat` del archivo, así
+que lo que lees en la página sale del APK de esa misma corrida. El APK se construye tras hacer
+`git checkout --detach` al commit de la etiqueta, para que lo publicado salga del código que dice
+salir y no de la punta de la rama.
+
+**Peso: esta vez medido y esta vez grande.** La release `cort-v0.12.0` pesa
+**59 335 837 bytes = 56,59 MB** y su SHA-256 es la que publica su propio archivo
+`CORT-movil.apk.sha256` (`d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab`
+en la corrida buena, el run 41894740851). El anterior (`cort-v0.11.0`) pesaba
+**16 873 bytes**: ×3 517, y la diferencia no es código, es el oído.
+
+> **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
+> hora en las entradas de `META-INF` y de las `.so`, así que dos corridas del mismo código dan
+> archivos **del mismo tamaño pero de suma distinta**. La suma que vale es la del `.sha256` que
+> vive en la release, porque se publicó al pie del archivo que descargas; cualquier otro número
+> que este documento cite es sólo la foto de una corrida.
+
 Lo que hay dentro, sacado del propio APK con `unzip -l` y no de este texto:
 
 | archivo dentro del APK | bytes | qué es |
@@ -125,6 +144,19 @@ sha256sum -c CORT-movil.apk.sha256
 
 La comparación es contra el archivo `.sha256` de la propia release, no contra un número que
 este documento repita: si alguien sustituyó el APK, la suma ya no cuadra y el chequeo falla.
+
+Y hay una segunda comprobación que **no baja los 56 MB**: GitHub calcula él mismo el SHA-256 del
+archivo que almacena y lo expone en la API. Si las dos sumas coinciden, la release es
+autoconsistente (lo que promete el `.sha256` es lo que está guardado):
+
+```bash
+gh api repos/Sandra2244/CORT/releases/tags/cort-v0.12.0 \
+  --jq '.assets[]|select(.name=="CORT-movil.apk")|.digest'
+# sha256:d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab   ← medido hoy
+```
+
+Medido el 2026-11-04: esa suma es idéntica a la del `.sha256` publicado. Lo que este atajo
+**no** prueba es que *tu* descarga lleguen intacta; para eso está el `sha256sum -c` de arriba.
 
 ## 4. Instalarla en el Galaxy A16
 
@@ -174,7 +206,9 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   enruta, pero activarlo como asistente del sistema es una prueba de la dueña en el aparato.
 - **La cámara del teléfono no se usa.** La mirada (S2) corre en el PC con su cámara.
 - **Nadie la ha instalado todavía en el A16.** Lo medido hasta hoy: el compile+firma+auditoría
-  en el runner (run 41881069892, verde, 56,59 MB), la estructura del APK (`.so` sin comprimir y
+  en el runner (release `cort-v0.12.0`, run 41894740851, verde, 56,59 MB), las 53 comprobaciones
+  de `scripts/prueba_apk.py` —que ahora corre el propio workflow antes de publicar—, la estructura
+  del APK (`.so` sin comprimir y
   alineadas) y la ruta `/mic` con audio sintético (7/7). El trayecto **voz real → Vosk dentro
   del teléfono → orbe moviéndose con el nivel del micrófono** sigue pendiente de su prueba
   física, y ahí se verá si el botón, el permiso y el descomprimido del modelo se comportan en
