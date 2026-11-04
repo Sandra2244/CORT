@@ -119,13 +119,14 @@ public class Sincroniza {
             throw new IOException("la llave de red no vale para este portátil");
         }
         if (codigo == 404) {
-            // Medido en esta rama: `cort-bridge/cort_server.py` sólo sirve `POST /mic`
-            // y estática, así que `/memoria/puente` responde 404 y la sincronía no
-            // puede funcionar. Decirlo con palabras — y decir qué falta — es mejor
-            // que soltar «el core contestó 404», que suena a que el puente está caído.
-            throw new IOException("ese puente aún no tiene memoria compartida: la ruta "
-                    + Puente.RUTA + " llega con la fase de enlace (F14). CORT sigue "
-                    + "acordándose aquí, en el teléfono");
+            // Desde F14 el puente de esta rama sí sirve la ruta (`cort_enlace.py`), así
+            // que un 404 ya no significa «aquí no hay nada»: significa que el CORT que
+            // está encendido en casa es más viejo que el enlace. Se dice con palabras
+            // porque «el core contestó 404» suena a puente caído y la dueña apagaría lo
+            // que funciona.
+            throw new IOException("el portátil que contesta ahí es más viejo que la memoria "
+                            + "compartida: reinicia CORT en la PC (la ruta " + Puente.RUTA
+                            + " llega desde F14). CORT sigue acordándose aquí, en el teléfono");
         }
         if (codigo >= 400) {
             throw new IOException("el core contestó " + codigo);

@@ -133,6 +133,17 @@ except Exception as _e_mem:
 else:
     MEMORIA_ERROR = ""
 
+# El enlace con el teléfono (F14): la memoria viaja por `GET`/`POST /memoria/puente` en
+# el puerto del core. Sin aiohttp no se puede montar, y entonces el teléfono oye su 404
+# con frase — no un puente que finge estar enlazado.
+try:
+    import cort_enlace
+except Exception as _e_enlace:
+    cort_enlace = None
+    ENLACE_ERROR = f"{type(_e_enlace).__name__}: {_e_enlace}"
+else:
+    ENLACE_ERROR = ""
+
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
 MIC = None                                          # cort_voz.EscuchaContinua, uno solo
@@ -2751,6 +2762,15 @@ async def main():
     app_ws.router.add_get("/ws", ws_handler)
     app_ws.router.add_get("/", ws_handler)
 
+    # F14: la memoria viaja por el puerto del core (8765), que es el que el teléfono
+    # reescribe cuando pega la dirección de la interfaz. Sin llave no hay cuadro.
+    llave_enlace = ""
+    if cort_enlace is not None:
+        try:
+            llave_enlace = cort_enlace.registro(app_ws)
+        except Exception as e:
+            print(f"[CORT] el enlace de memoria no se montó ({type(e).__name__}: {e})")
+
     app_web = web.Application(client_max_size=4 * 1024 * 1024)
     app_web.router.add_get("/", lambda r: web.FileResponse(BASE / "index.html"))
 
@@ -2816,6 +2836,16 @@ async def main():
               + ("(HTTPS: se puede instalar como aplicación)" if ssl_ctx else
                  "(sin HTTPS el teléfono no instala la PWA ni da micrófono: origen no seguro)"))
     print(f"[CORT] RAM disponible ahora: {ram_disponible_mb()} MB · núcleos {os.cpu_count()}")
+    if llave_enlace:
+        host_enlace = bind
+        if bind == "0.0.0.0":
+            host_enlace = (socket.gethostbyname_ex(socket.gethostname())[2] or [bind])[0]
+        # La llave se imprime porque hay que teclearla en el teléfono (o meterla en el QR de
+        # F14b). Vive en ~/.local/share/cort/enlace.json con modo 0600; sin ella el enlace
+        # responde 401 y el teléfono sigue acordándose a sí mismo.
+        print(f"[CORT] memoria compartida (F14): "
+              f"{protocolo}://{host_enlace}:{PUERTO_WS}{cort_enlace.RUTA}?token={llave_enlace}")
+        print("[CORT]   ← eso es lo que se pega en el teléfono; el QR llega con F14b")
     vivo, modelos = ollama_vivo()
     disco = inventario_disco()
     print(f"[CORT] Ollama: {'vivo' if vivo else 'apagado'} · cargados: {list(modelos) or 'ninguno'}")

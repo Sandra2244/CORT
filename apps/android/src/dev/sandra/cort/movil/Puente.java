@@ -24,12 +24,13 @@ import org.json.JSONObject;
  * - no importa nada de `android.`, ni `SharedPreferences`, ni SQLite: el almacén
  *   llega como `Cabeza`, así que la lógica del puente se puede leer y cambiar sin
  *   tocar la base de datos;
- * - la otra mitad del acuerdo, `puente.py`, está en la otra línea del repo
- *   (`origin/main`). **En esta rama el puente todavía no sirve `/memoria/puente`**:
- *   `cort-bridge/cort_server.py` sólo tiene `POST /mic` y estática. Se dice aquí, y
- *   no se esconde, porque el teléfono sí intenta la llamada y la dueña ve un 404.
- *   `Sincroniza` lo traduce a una frase en vez de un número. Levantar esa ruta con
- *   TLS y llave es la fase de enlace (F14), no una promesa de este archivo.
+ * - la otra mitad del acuerdo vive en **esta** rama desde F14:
+ *   `cort-bridge/cort_enlace.py`, montada por `cort_server.py` en el puerto del core.
+ *   Pide la llave en el query y responde 401 sin ella. Un 404 hoy sólo significa una
+ *   cosa: el puente que está encendido en la casa es más viejo que el enlace, y hay
+ *   que reiniciar el CORT del portátil. `Sincroniza` lo traduce a una frase en vez de
+ *   dejar a la dueña con un número. (En la otra línea del repo, `origin/main`, esa
+ *   mitad se llama `cort_core/puente.py` y habla el mismo idioma.)
  *
  * Las cuatro reglas del puente son las mismas, y vienen de los cuatro modos en que
  * sincronizar sale **peor** que no sincronizar: la llave de red no viaja dentro de
