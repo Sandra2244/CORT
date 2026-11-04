@@ -489,6 +489,63 @@ recitarlos como banco local, que es la única forma honesta de «aprender de otr
 esta máquina.
 
 
+### S5 — ¿y si partes de CORT fueran en C? La respuesta medida, no opinada (`bash mediciones/s5-medida.sh`)
+
+La pregunta de la fase es legítima y se contestó escribiendo el programa, compilándolo y
+cronometrándolo en esta máquina. `mediciones/s5-ventanas.c` (34 líneas) es un ayudante de X11
+que **sólo lee** `_NET_CLIENT_LIST` y los títulos —no mueve ni activa ventanas, por eso pudo
+correrse en el equipo real sin arena.
+
+| Qué | Número | Cómo se midió |
+|---|---|---|
+| Cadena de toolchain | **gcc 14.2.0**, `g++`, `rustc 1.98.1` y `cargo` presentes; `Xlib.h` sí y **`pkg-config` de x11 no** (se enlaza `-lX11` a mano); **`javac` ausente** | `gcc --version`, `ls /usr/include/X11/Xlib.h`, `which cargo javac` |
+| Compilar el ayudante | **826 ms** (3,0 s en la primera corrida, con el disco frío) | `date +%s%N` alrededor de gcc |
+| Tamaño del binario | **16 320 bytes** | `stat -c%s` |
+| Memoria del proceso hijo | **~11 MB** de RSS, igual en C, en `wmctrl` y en `xdotool` | `ru_maxrss` de `RUSAGE_CHILDREN` |
+| Coste por orden, desde el puente **ya en marcha** | ayudante C **13,6–15,3 ms** · `xdotool getactivewindow` **12,9–17,5 ms** · `wmctrl -l` **21,8–27,4 ms** | mediana de 5–7 corridas |
+| Intérprete Python frío | **75,9–76,8 ms** (esto lo paga un script suelto, no el puente) | `python -c pass` |
+| `estado_pc()` completo | **452 ms** repartidos así: apps 380 ms · ventanas 256 ms · volumen 252 ms · brillo 3 ms (solapados en la misma llamada) | cronometrado función por función |
+
+**Lo que dicen los números.** Un ayudante en C le gana a `wmctrl` unos **8–12 ms por orden**.
+Una orden de ventana que la usuaria dice en voz alta cuesta del orden de **cientos de
+milisegundos** en el puente (leer la frase, validar, ejecutar, verificar), así que el C
+mejoraría ese trayecto en un **poco más del 2 %**. No es un cambio de producto: es una
+reescritura con su propio costo de mantenimiento, y en esta máquina cada línea extra de C es
+una línea que no cubre ninguna de las 23+16 compruebas de la suite.
+
+**Dónde sí pagaría C, y ya lo tenemos.** El bucle que sí corre por cuadro es la mirada:
+**1,9–4,6 ms por cuadro** medidos en S2 —y ese trabajo lo hace numpy, que *es* C debajo. El
+reconocimiento de voz (F3/F10) corre sobre Vosk, que también es C++. Es decir: CORT ya está
+sentado sobre C; lo que no hace falta es escribir C propio para saltar por encima de él.
+
+**Decisión de la fase:** **no entra C/C++ ni Rust en este release.** Se guarda la sonda
+(`mediciones/s5-medida.sh`) para que la decisión se pueda volver a medir en cualquier equipo
+—en una máquina con GPU y 32 GB la respuesta puede ser otra, y ahí el escáner S1 ya dirá el
+nivel—. Y aquí va la corrección de un bulto que iba a escribir en esta misma página: se iba a
+afirmar «Rust no está instalado». **Sí está** —`rustc 1.98.1`, `cargo 1.98.1` en
+`~/.cargo/bin`, y `g++` también—, así que se midió en vez de suponerlo:
+
+| Lenguaje | Compilar un programa de 2–34 líneas | Binario | Coste por corrida | Veredicto |
+|---|---|---|---|---|
+| C (`gcc -O2`, X11) | **826 ms** | **16 KB** | **13,6–15,3 ms** por orden de ventana | gana 8–12 ms a `wmctrl`; no justifica reescribir |
+| Rust (`rustc -O`) | **33,5 s** | **4,5 MB** | **11,7 ms** en la suma de 200 000 enteros, contra **96,0 ms** de Python | 8 veces más rápido que Python *en ese bucle*, pero 33 s de compilación por cada cambio en una máquina de 2 núcleos |
+| Python (lo que hay) | 0 ms (interpretado) | — | 96,0 ms en el mismo bucle | sigue siendo el idioma del puente: se cambia y corre al instante |
+| Java/Kotlin | `javac` **ausente** en este equipo | — | — | sólo en el **APK** (F7/F12), que se compila en GitHub Actions, no aquí |
+
+Lo que cada uno pediría para entrar: C, un bucle que corra **por cuadro** y no por orden (y el
+único que hay hoy —la mirada— ya lo hace numpy, que es C debajo); Rust, una prueba de que el
+ahorro de 84 ms en un bucle suelto cambia algo que la usuaria note, más un plan para pagar 33 s
+de compilación por cada cambio en esta laptop. Ninguna de las dos está en el horizonte de las
+próximas fases, y eso es lo que se deja dicho con número.
+
+
+**La medida que sí duele y queda anotada:** con el navegador del agente abierto (media de
+carga **6,5** en 2 núcleos) la misma orden `pc_estado` contestó en **6 234 ms** por WebSocket,
+contra **452 ms** con la máquina quieta. El idioma no es el problema: es la saturación. Eso
+refuerza la regla de la casa —no medir con el agente corriendo— y apunta a la optimización
+correcta (cachear `apps_disponibles`, que es lo más caro de la lista), no a reescribir en C.
+
+
 ### Lo que se deja dicho, con número, de las dos peticiones que no entran esta noche
 - **Sensores de cámara para mover ventanas del sistema**: la sonda de esta mañana corrigió el
   pronóstico. La webcam **sí da cuadros** en este equipo: 10/10 cuadros recibidos a 320×240 RGB,
