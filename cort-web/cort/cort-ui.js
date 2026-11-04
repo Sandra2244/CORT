@@ -1039,11 +1039,75 @@
     ["Plein écran vidéo", "Pantalla completa del vídeo", "Video fullscreen"]
   ];
 
+  // ---- 2a-septies. Cierre real: las 36 que quedaban con el medidor honesto --
+  // Con el clasificador anterior («esFrances» ignoraba el francés sin tilde) el
+  // panel presumía «cobertura 100 %» mientras el menú mostraba
+  // «◈ CONTROLES_SYSTEME // MENU» e «INTELLIGENCE ARTIFICIELLE» en francés.
+  // Medido tras arreglar el clasificador: 588 cadenas francesas, 555 traducidas,
+  // 36 pendientes. Estas son esas 36, tomadas de window.CORT.estado() en la arena.
+  const D_EXT6 = [
+    // Menú y rótulos de sección
+    ["◈ CONTROLES_SYSTEME // MENU", "◈ CONTROLES_SISTEMA // MENÚ", "◈ SYSTEM_CONTROLS // MENU"],
+    ["INTELLIGENCE ARTIFICIELLE", "INTELIGENCIA ARTIFICIAL", "ARTIFICIAL INTELLIGENCE"],
+    ["Outils", "Herramientas", "Tools"],
+    ["Recherche...", "Buscar...", "Search..."],
+    ["SAUVEGARDER & ENREGISTRER", "GUARDAR Y REGISTRAR", "SAVE & REGISTER"],
+    ["SUPPRIMER", "ELIMINAR", "DELETE"],
+    ["AJOUTER", "AÑADIR", "ADD"],
+    ["Carte graphique", "Tarjeta gráfica", "Graphics card"],
+
+    // Cronómetro y estado del puente
+    ["Protocol Minuteur Actif", "Protocolo de temporizador activo", "Timer protocol active"],
+    ["CONNEXION AU SERVEUR EN COURS...", "CONECTANDO AL SERVIDOR...", "CONNECTING TO SERVER..."],
+
+    // Correo
+    ["COMMUNICATION // NOUVEAU_MESSAGE", "COMUNICACIÓN // MENSAJE_NUEVO", "COMMUNICATION // NEW_MESSAGE"],
+    ["Rechercher par expéditeur, sujet ou contenu... (Entrée = recherche Gmail)",
+      "Buscar por remitente, asunto o contenido... (Enter = búsqueda de Gmail)",
+      "Search by sender, subject or content... (Enter = Gmail search)"],
+
+    // Lista de la compra
+    ["Ajouter un article...", "Añadir un artículo...", "Add an item..."],
+
+    // Impresión 3D / lithophanie
+    ["LITHOPHANIE (PHOTO)", "LITOFANÍA (FOTO)", "LITHOPHANE (PHOTO)"],
+    ["🔲 Plat (Cadre photo)", "🔲 Plano (Marco de foto)", "🔲 Flat (Photo frame)"],
+    ["📷 PHOTO HD", "📷 FOTO HD", "📷 HD PHOTO"],
+
+    // Voz local
+    ["🚀 INSTALLER & LANCER KOKORO-TTS LOCAL", "🚀 INSTALAR Y ABRIR KOKORO-TTS LOCAL", "🚀 INSTALL & LAUNCH LOCAL KOKORO-TTS"],
+    ["INSTALLER NVIDIA NEMOTRON ASR (LOCAL)", "INSTALAR NVIDIA NEMOTRON ASR (LOCAL)", "INSTALL NVIDIA NEMOTRON ASR (LOCAL)"],
+
+    // Panel de salud de la IA
+    ["B. Installer Ollama", "B. Instalar Ollama", "B. Install Ollama"],
+    ["YOUTUBE API v3 (Recherche de musique)", "API de YOUTUBE v3 (Búsqueda de música)", "YOUTUBE API v3 (Music search)"],
+    ["Lecture / Pause", "Reproducir / Pausa", "Play / Pause"],
+
+    // Catálogo de órdenes de voz: se traduce lo que CORT dice, no lo que escucha
+    ["Mets un minuteur de [X] minutes", "Pon un temporizador de [X] minutos", "Set a timer for [X] minutes"],
+    ["Lance un minuteur visuel + vocal", "Inicia un temporizador visual y por voz", "Starts a visual + spoken timer"],
+    ["Efface toute la liste", "Borra toda la lista", "Clears the whole list"],
+    ["🎵 MUSIQUE — SPOTIFY", "🎵 MÚSICA — SPOTIFY", "🎵 MUSIC — SPOTIFY"],
+    ["Mets de la musique", "Pon música", "Play some music"],
+    ["Mets en pause / Stop la musique", "Pon en pausa / Detén la música", "Pause / Stop the music"],
+    ["Remets la musique / Lecture", "Reanuda la música / Reproducir", "Resume the music / Play"],
+    ["Reprend la lecture", "Reanuda la reproducción", "Resumes playback"],
+    ["Chanson suivante / Piste suivante", "Canción siguiente / Pista siguiente", "Next song / Next track"],
+    ["Volume Spotify", "Volumen de Spotify", "Spotify volume"],
+    ["Tendances YouTube musique / gaming...", "Tendencias de YouTube música / gaming...", "YouTube music / gaming trends..."],
+    ["Ouvre mes images / photos", "Abre mis imágenes / fotos", "Open my images / photos"],
+    ["Ouvre ma musique", "Abre mi música", "Open my music"],
+    ["Analyse cette image", "Analiza esta imagen", "Analyze this image"]
+  ];
+
   // ---- 2b. Reglas para rótulos dinámicos -----------------------------------
   // El nombre de la voz llega del backend y la app le pega un sufijo francés
   // fixed, así que ninguna clave exacta del diccionario puede cubrirlo.
   // Aquí se reemplaza sólo el fragmento francés y se conserva el nombre propio.
   const REGRAS = [
+    // Contador del correo: el número llega del backend, así que la clave exacta
+    // del diccionario sólo cubriría «0 messages». Con regla queda cubierto cualquier conteo.
+    [/(?<![\p{L}])(\d+) messages(?![\p{L}])/gu, { es: "$1 mensajes", en: "$1 messages" }],
     // Panel «Configurar la IA local / Ollama»: estas cuatro etiquetas las escribe
     // el bundle en francés dentro de un nodo con más texto, así que el diccionario
     // no las alcanza. Se detectaron abriendo el panel y recorriendo sus nodos de
@@ -1097,7 +1161,7 @@
   ];
 
   const DICT = new Map();
-  for (const [fr, es, en] of D.concat(D_EXT, D_EXT2, D_EXT3, D_EXT4, D_EXT5)) DICT.set(norm(fr), { es: norm(es), fr: norm(fr), en: norm(en) });
+  for (const [fr, es, en] of D.concat(D_EXT, D_EXT2, D_EXT3, D_EXT4, D_EXT5, D_EXT6)) DICT.set(norm(fr), { es: norm(es), fr: norm(fr), en: norm(en) });
 
   let lang = localStorage.getItem("cort_lang") || "es";
 
@@ -1133,7 +1197,14 @@
   const LETRAS_FR = /[àâçèêëïîôùûüÿœæÀÂÇÈÊËÏÎÔÙÛÜŸŒÆ]/;
   // Bordes de palabra con \p{L}: sin la bandera `u`, "est" casaba dentro de
   // "esté" o "Estética" y el medidor contaba como francés lo ya traducido.
-  const PALABRAS_FR = /(?<![\p{L}])(une|des|du|au|aux|votre|vos|notre|nos|nous|vous|ils|elles|est|sont|être|été|avoir|avec|dans|sur|chez|vers|pour|mais|donc|car|quand|comment|combien|très|aussi|encore|déjà|cliquez|choisissez|activez|vérifiez|téléchargez|modèle|paramètres|dossier|fichier|écran|lumière|voix|requis|nécessaire|français|française|allez|faites|pouvez|êtes)(?![\p{L}])/iu;
+  // Palabras francesas SIN tilde también: el andamio de TechEnClair escribe
+  // «SYSTEME», «ARTIFICIELLE», «MINUTEUR» o «RECHERCHE» sin acentos en los rótulos
+  // en mayúsculas, y sin esta lista el medidor no las contaba como francesas y
+  // presumía «cobertura 100%» con texto francés visible en el menú. Quedan fuera
+  // a propósito las grafías que son palabra española igual («tres», «video»,
+  // «micro», «agenda», «carte», «liste», «listas», «tache», «retro»): un falso
+  // positivo aquí ensucia la lista de pendientes y el número deja de ser creíble.
+  const PALABRAS_FR = /(?<![\p{L}])(une|des|du|au|aux|votre|vos|notre|nos|nous|vous|ils|elles|est|sont|être|été|avoir|avec|dans|sur|chez|vers|pour|mais|donc|car|quand|comment|combien|très|aussi|encore|déjà|cliquez|choisissez|activez|vérifiez|téléchargez|modèle|paramètres|dossier|fichier|écran|lumière|voix|requis|nécessaire|français|française|allez|faites|pouvez|êtes|systeme|systemes|artificielle|intelligence|minuteur|minuteurs|recherche|recherches|supprimer|ajouter|graphique|graphiques|protocole|programme|programmes|solliciter|priorite|priorites|connexion|serveur|visionner|monde|langage|affichage|verrouillage|nettoyage|securite|enregistrer|sauvegarde|dynamique|toujours|jamais|bienvenue|boite|outils|fenetre|fenetres|message|messages|envoyer|recu|recus|correspondance|calendrier|taches|alarmes|eclairage|volume|haut|parleur|dangereux|menace|menaces|analyse|analyser|scanner|nettoyer|desinstaller|installer|mise jour|mises jour|pays|region|regions|ville|villes|mobilite|batterie|reseau|wifi|bluetooth|camera|cameras|photo|photos|musique|chanson|chansons|lecture|arret|demarrage|lancement|telechargement|telecharger|toute|toutes|certains|aucun|rien|quelque|beaucoup|peu)(?![\p{L}])/iu;
   const ELISION_FR = /(?<![\p{L}])(d|l|qu|n|s|c|j|t|il)['\u2019]\p{L}/iu;
   function esFrances(s) {
     return LETRAS_FR.test(s) || PALABRAS_FR.test(s) || ELISION_FR.test(s);
@@ -2394,7 +2465,7 @@
         pendientes_de_traducir: Array.from(pendientes)
       };
     },
-    diccionario: () => D.length + D_EXT.length + D_EXT2.length + D_EXT3.length + D_EXT4.length + D_EXT5.length,
+    diccionario: () => D.length + D_EXT.length + D_EXT2.length + D_EXT3.length + D_EXT4.length + D_EXT5.length + D_EXT6.length,
     // sonda: traduce una cadena suelta sin tocar el DOM (para depurar misses)
     prueba: s => translate(String(s)),
     esFrances: s => esFrances(String(s)),
