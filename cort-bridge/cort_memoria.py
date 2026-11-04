@@ -348,8 +348,15 @@ def resumen():
     ultimo = (d.get("hechos") or [{}])[-1].get("texto", "")
     if ultimo:
         trozos.append("último apunte: " + ultimo[:90])
-    return (f"Sé {len(trozos)} cosas de ti y tengo {n} apunte" + ("s" if n != 1 else "") + ": " +
-            "; ".join(trozos) + f". Todo dentro de {RUTA}, en este equipo.")
+    if not trozos:
+        # Con la memoria recién creada la frase salía «Sé 0 cosas de ti…: .» —un
+        # vacío con dos puntos. Sin nada guardado se dice tal cual y cómo se llena.
+        return (f"Aún no sé nada de ti: {RUTA} está vacío. "
+                "Se llena diciendo «recuerda que…» o «no me digas X, dime Y».")
+    base = f"Sé {len(trozos)} cosas de ti"
+    if n:
+        base += f" y tengo {n} apunte" + ("s" if n != 1 else "")
+    return base + ": " + "; ".join(trozos) + f". Todo dentro de {RUTA}, en este equipo."
 
 
 def contexto(texto, limite=None):
@@ -575,6 +582,16 @@ def selftest():
     z = iniciativa({"x": 1}, pendiente={"id": 1, "texto": "beber agua", "faltan_seg": 90},
                    nivel=0, ram_libre=150)
     casos.append(("no insiste a la segunda", not z))
+
+    # Memoria recién creada, que es el estado en el que arranca cualquiera: el
+    # resumen salía «Sé 0 cosas de ti…: .» con los dos puntos colgando.
+    guardado = (DATOS, RUTA)
+    vacia = arena / "vacia"
+    DATOS, RUTA = vacia, vacia / "memoria.json"
+    vacio_texto = resumen()
+    DATOS, RUTA = guardado
+    casos.append(("sin nada guardado lo dice claro, no «Sé 0 cosas…: .»",
+                  ": ." not in vacio_texto and "Aún no sé nada" in vacio_texto))
 
     ok = 0
     for nombre, bien in casos:
