@@ -1039,12 +1039,13 @@
     ["Plein écran vidéo", "Pantalla completa del vídeo", "Video fullscreen"]
   ];
 
-  // ---- 2a-septies. Cierre real: las 36 que quedaban con el medidor honesto --
-  // Con el clasificador anterior («esFrances» ignoraba el francés sin tilde) el
-  // panel presumía «cobertura 100 %» mientras el menú mostraba
-  // «◈ CONTROLES_SYSTEME // MENU» e «INTELLIGENCE ARTIFICIELLE» en francés.
-  // Medido tras arreglar el clasificador: 588 cadenas francesas, 555 traducidas,
-  // 36 pendientes. Estas son esas 36, tomadas de window.CORT.estado() en la arena.
+  // ---- 2a-septies. Cierre real: las 59 cadenas francesas que quedaban --------
+  // Con el clasificador anterior («esFrances» ignoraba el francés sin tilde y unas
+  // cuantas palabras corrientes) el panel presumía «cobertura 100 %» mientras el
+  // menú mostraba «◈ CONTROLES_SYSTEME // MENU» e «INTELLIGENCE ARTIFICIELLE».
+  // Medido paso a paso: 36 pendientes tras arreglar el clasificador y 23 más tras
+  // ampliarlo con chargement / configuration / suivant / attente / modèle / caméra.
+  // Las 59 vienen de window.CORT.estado() en la arena, no de una lista propia.
   const D_EXT6 = [
     // Menú y rótulos de sección
     ["◈ CONTROLES_SYSTEME // MENU", "◈ CONTROLES_SISTEMA // MENÚ", "◈ SYSTEM_CONTROLS // MENU"],
@@ -1097,7 +1098,35 @@
     ["Tendances YouTube musique / gaming...", "Tendencias de YouTube música / gaming...", "YouTube music / gaming trends..."],
     ["Ouvre mes images / photos", "Abre mis imágenes / fotos", "Open my images / photos"],
     ["Ouvre ma musique", "Abre mi música", "Open my music"],
-    ["Analyse cette image", "Analiza esta imagen", "Analyze this image"]
+    ["Analyse cette image", "Analiza esta imagen", "Analyze this image"],
+
+    // Segunda pasada (23 más): al ampliar el clasificador con «chargement»,
+    // «configuration», «suivant», «attente», «modèle» o «caméra» salieron estas,
+    // que estaban en paneles ocultos y el medidor viejo ni contaba.
+    ["IP : Chargement...", "IP: Cargando...", "IP: Loading..."],
+    ["Titre de la note...", "Título de la nota...", "Note title..."],
+    ["Titre", "Título", "Title"],
+    ["Titre suivant", "Título siguiente", "Next title"],
+    ["SUIVANT »", "SIGUIENTE »", "NEXT »"],
+    ["Suivant", "Siguiente", "Next"],
+    ["PRECEDENT", "ANTERIOR", "PREVIOUS"],
+    ["Précédent", "Anterior", "Previous"],
+    ["CHARGEMENT... 0%", "CARGANDO... 0%", "LOADING... 0%"],
+    ["CHARGEMENT... 100%", "CARGANDO... 100%", "LOADING... 100%"],
+    ["ERREUR DE CHARGEMENT", "ERROR DE CARGA", "LOADING ERROR"],
+    ["VIDER CACHE / RECHARGER", "VACIAR CACHÉ / RECARGAR", "CLEAR CACHE / RELOAD"],
+    ["AGENT MODELE", "MODELO DE AGENTE", "AGENT MODEL"],
+    ["CLAUDE CODE — AGENT LOCAL OPTIONNEL", "CLAUDE CODE — AGENTE LOCAL OPCIONAL", "CLAUDE CODE — OPTIONAL LOCAL AGENT"],
+    ["VERSION 10.5", "VERSIÓN 10.5", "VERSION 10.5"],
+    ["Effacer tout [Suppr]", "Borrar todo [Supr]", "Clear all [Del]"],
+    ["Chatterbox en attente...", "Chatterbox en espera...", "Chatterbox on hold..."],
+    ["◈ EN ATTENTE", "◈ EN ESPERA", "◈ ON HOLD"],
+    ["📧 GUIDE DE CONFIGURATION GMAIL", "📧 GUÍA DE CONFIGURACIÓN DE GMAIL", "📧 GMAIL SETUP GUIDE"],
+    ["🔑 CONFIGURATION API", "🔑 CONFIGURACIÓN DE LA API", "🔑 API SETUP"],
+    ["Processeur", "Procesador", "Processor"],
+    ["Efface mes notes", "Borra mis notas", "Clear my notes"],
+    ["Vide la to-do list", "Vacía la lista de tareas", "Clears the to-do list"],
+    ["Fais-moi un rap / pop / rock...", "Hazme un rap / pop / rock...", "Make me a rap / pop / rock..."]
   ];
 
   // ---- 2b. Reglas para rótulos dinámicos -----------------------------------
@@ -1105,6 +1134,17 @@
   // fixed, así que ninguna clave exacta del diccionario puede cubrirlo.
   // Aquí se reemplaza sólo el fragmento francés y se conserva el nombre propio.
   const REGRAS = [
+    // Rótulos que el bundle escribe con un sufijo dinámico pegado («Caméra (…)») o
+    // en tiempo real durante la instalación de Ollama: la clave exacta del
+    // diccionario no los alcanza, pero la palabra sí está y se sustituye suelta.
+    [/(?<![\p{L}])Caméra(?![\p{L}])/u, { es: "Cámara", en: "Camera" }],
+    [/(?<![\p{L}])Installation terminée(?![\p{L}])/u, { es: "Instalación terminada", en: "Installation complete" }],
+    [/(?<![\p{L}])Installation en cours(?![\p{L}])/u, { es: "Instalación en curso", en: "Installation in progress" }],
+    [/(?<![\p{L}])Téléchargement terminé(?![\p{L}])/u, { es: "Descarga terminada", en: "Download complete" }],
+    // Porcentaje de descarga: el número lo pone el progreso real, así que la clave
+    // exacta del diccionario sólo valdría para 0 % y 100 %.
+    [/(?<![\p{L}])CHARGEMENT\.\.\.\s*(\d+)\s*%/gu, { es: "CARGANDO... $1%", en: "LOADING... $1%" }],
+    [/(?<![\p{L}])Chargement(?![\p{L}])/u, { es: "Cargando", en: "Loading" }],
     // Contador del correo: el número llega del backend, así que la clave exacta
     // del diccionario sólo cubriría «0 messages». Con regla queda cubierto cualquier conteo.
     [/(?<![\p{L}])(\d+) messages(?![\p{L}])/gu, { es: "$1 mensajes", en: "$1 messages" }],
@@ -1194,6 +1234,10 @@
   // Para medir de forma honesta hace falta distinguir "esto está en francés"
   // de "esto ya está en español / es un nombre propio / es código".
   // Criterio: letras que el español no usa, o palabras exclusivas del francés.
+  // «é» NO entra en esta lista a propósito: el español la lleva en «café», «esté»,
+  // en el pretérito «hablé/miré» y en el voseo («encendé»), así que usarla como firma
+  // francesa habría contado como pendiente mucho texto que ya es español. Los términos
+  // franceses con tilde se reconocen uno a uno en PALABRAS_FR con la forma [eé].
   const LETRAS_FR = /[àâçèêëïîôùûüÿœæÀÂÇÈÊËÏÎÔÙÛÜŸŒÆ]/;
   // Bordes de palabra con \p{L}: sin la bandera `u`, "est" casaba dentro de
   // "esté" o "Estética" y el medidor contaba como francés lo ya traducido.
@@ -1204,7 +1248,7 @@
   // a propósito las grafías que son palabra española igual («tres», «video»,
   // «micro», «agenda», «carte», «liste», «listas», «tache», «retro»): un falso
   // positivo aquí ensucia la lista de pendientes y el número deja de ser creíble.
-  const PALABRAS_FR = /(?<![\p{L}])(une|des|du|au|aux|votre|vos|notre|nos|nous|vous|ils|elles|est|sont|être|été|avoir|avec|dans|sur|chez|vers|pour|mais|donc|car|quand|comment|combien|très|aussi|encore|déjà|cliquez|choisissez|activez|vérifiez|téléchargez|modèle|paramètres|dossier|fichier|écran|lumière|voix|requis|nécessaire|français|française|allez|faites|pouvez|êtes|systeme|systemes|artificielle|intelligence|minuteur|minuteurs|recherche|recherches|supprimer|ajouter|graphique|graphiques|protocole|programme|programmes|solliciter|priorite|priorites|connexion|serveur|visionner|monde|langage|affichage|verrouillage|nettoyage|securite|enregistrer|sauvegarde|dynamique|toujours|jamais|bienvenue|boite|outils|fenetre|fenetres|message|messages|envoyer|recu|recus|correspondance|calendrier|taches|alarmes|eclairage|volume|haut|parleur|dangereux|menace|menaces|analyse|analyser|scanner|nettoyer|desinstaller|installer|mise jour|mises jour|pays|region|regions|ville|villes|mobilite|batterie|reseau|wifi|bluetooth|camera|cameras|photo|photos|musique|chanson|chansons|lecture|arret|demarrage|lancement|telechargement|telecharger|toute|toutes|certains|aucun|rien|quelque|beaucoup|peu)(?![\p{L}])/iu;
+  const PALABRAS_FR = /(?<![\p{L}])(une|des|du|au|aux|votre|vos|notre|nos|nous|vous|ils|elles|est|sont|être|été|avoir|avec|dans|sur|chez|vers|pour|mais|donc|car|quand|comment|combien|très|aussi|encore|déjà|cliquez|choisissez|activez|vérifiez|téléchargez|modèle|paramètres|dossier|fichier|écran|lumière|voix|requis|nécessaire|français|française|allez|faites|pouvez|êtes|systeme|systemes|artificielle|intelligence|minuteur|minuteurs|recherche|recherches|supprimer|ajouter|graphique|graphiques|protocole|programme|programmes|solliciter|priorite|priorites|connexion|serveur|visionner|monde|langage|affichage|verrouillage|nettoyage|securite|enregistrer|sauvegarde|dynamique|toujours|jamais|bienvenue|boite|outils|fenetre|fenetres|message|messages|envoyer|recu|recus|correspondance|calendrier|taches|alarmes|eclairage|volume|haut|parleur|dangereux|menace|menaces|analyse|analyser|scanner|nettoyer|desinstaller|installer|mise jour|mises jour|pays|region|regions|ville|villes|mobilite|batterie|reseau|wifi|bluetooth|camera|cameras|photo|photos|musique|chanson|chansons|lecture|arret|demarrage|lancement|telechargement|telecharger|toute|toutes|certains|aucun|aucune|rien|quelque|beaucoup|peu|chargement|configuration|processeur|cam[ée]ra|cam[ée]ras|s[ée]curit[ée]|lithophanie|suivant|suivante|suivants|pr[ée]c[ée]dent|pr[ée]c[ée]dente|pr[ée]c[ée]dents|attente|mod[èe]le|mod[èe]les|titre|titres|agent|agents|efface|effacer|vide|vider|fais|faire|traitement|r[ée]glage|r[ée]glages|version|versions|identit[ée]|m[ée]moire|resultat|resultats|surbrillance|termin[ée]e|d[ée]tect[ée]e|install[ée]|d[ée]sinstall[ée]|d[ée]marrage|d[ée]connexion|deconnexion|installation|d[ée]sinstallation|desinstallation|activation|d[ée]sactivation|desactivation|danger)(?![\p{L}])/iu;
   const ELISION_FR = /(?<![\p{L}])(d|l|qu|n|s|c|j|t|il)['\u2019]\p{L}/iu;
   function esFrances(s) {
     return LETRAS_FR.test(s) || PALABRAS_FR.test(s) || ELISION_FR.test(s);
