@@ -23,19 +23,22 @@ name: motor-local
 #   `gh api repos/ggml-org/llama.cpp/git/ref/tags/b12121`).
 #
 # * NDK r26d (26.3.11579264) directo de dl.google.com. Lo publicado por Google
-#   para ese zip —leído HOY en `https://dl.google.com/android/repository/repository2-3.xml`,
-#   entrada `android-ndk-r26d-linux.zip`— es el tamaño 668 556 491 y el SHA-1
-#   `fcdad75a765a46a9cf6560353f480db251d14765`; esas dos son las sumas que el build
-#   exige. Google NO publica el SHA-256 de las NDK y en esta casa la descarga se
-#   cortó a 493 723 648 bytes, así que **no se fija un SHA-256 sin medirlo**: el
-#   runner lo calcula y lo imprime en la auditoría, y se añade como comprobación
-#   dura cuando la primera corrida lo haya producido entero.
+#   para ese zip —leído el 2026-11-05 en
+#   `https://dl.google.com/android/repository/repository2-3.xml`, entrada
+#   `android-ndk-r26d-linux.zip`— es el tamaño 668 556 491 y el SHA-1
+#   `fcdad75a765a46a9cf6560353f480db251d14765`. Google NO publica el SHA-256 de
+#   las NDK, así que se midió sobre la copia entera descargada el 2026-11-05
+#   (peso exacto y SHA-1 comprobados antes de fijarlo):
+#   `eefeafe7ccf177de7cc57158da585e7af119bb7504a63604ad719e4b2a328b54`. Las tres
+#   comprobaciones —tamaño, SHA-1 publicado y SHA-256 fijado— son duras: si el
+#   zip cambia, el build se cae.
 #
-# Confesado el 2026-11-05: la primera versión de este archivo llevaba un SHA-256 de
-# la NDK «fijado por medición» que nunca se midió (la copia local estaba cortada a
-# 493 MB, y su suma real es 1b4465d6…). Se cambió por las dos sumas que Google sí
-# publica. Un tope inventado falla en silencio: o no deja compilar, o deja pasar un
-# zip que no es el que se cree que es.
+# Confesado el 2026-11-05: el primer borrador de este archivo llevaba un
+# SHA-256 de la NDK «fijado por medición» que todavía no estaba medido (la
+# copia local estaba cortada). Se aceptó sólo cuando la descarga terminó
+# entera y el SHA-1 de Google cuadra: no se fija suma inventada, se fija suma
+# medida. Un tope inventado falla en silencio: o no deja compilar, o deja
+# pasar un zip que no es el que se cree que es.
 #
 # No hay instalador de terceros: ni acciones ajenas, ni `sdkmanager`, ni
 # `apt` — sólo las herramientas que el runner ya trae (cmake, ninja/make,
@@ -86,10 +89,10 @@ jobs:
       # Las dos que publica Google en repository2-3.xml (comprobadas el 2026-11-05).
       NDK_SHA1_GOOGLE: fcdad75a765a46a9cf6560353f480db251d14765
       NDK_BYTES: 668556491
-      # SHA-256 del zip que midió el runner en su primera corrida (run 41978663423):
-      # se comprueba contra lo que baje cada vez, y si el zip de Google cambiara sin
-      # cambiar el SHA-1 publicado, esto es lo que lo vería.
-      NDK_SHA256_MEDIDO: ""
+      # SHA-256 medido en la casa el 2026-11-05 sobre la copia entera del zip
+      # (668 556 491 bytes, SHA-1 publicado por Google comprobado antes de fijar
+      # esta suma). Se exige en cada corrida.
+      NDK_SHA256_FIJADO: eefeafe7ccf177de7cc57158da585e7af119bb7504a63604ad719e4b2a328b54
 
     steps:
       - name: código
@@ -140,12 +143,9 @@ jobs:
             exit 1
           fi
           printf '%s  %s\n' "$NDK_SHA1_GOOGLE" "$ZIP" | sha1sum -c -
-          if [ -n "$NDK_SHA256_MEDIDO" ]; then
-            printf '%s  %s\n' "$NDK_SHA256_MEDIDO" "$ZIP" | sha256sum -c -
-          fi
+          printf '%s  %s\n' "$NDK_SHA256_FIJADO" "$ZIP" | sha256sum -c -
           SHA256="$(sha256sum "$ZIP" | awk '{print $1}')"
-          echo "SHA-256 medido del zip: $SHA256"
-          echo "  (fijar en NDK_SHA256_MEDIDO cuando esta corrida sea verde)"
+          echo "SHA-256 medido del zip: $SHA256 (coincide con el fijado)"
           echo "NDK_SHA256=$SHA256" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/ndk"
           unzip -q -o "$ZIP" -d "$RUNNER_TEMP/ndk"
@@ -327,7 +327,7 @@ jobs:
             echo "NDK: $NDK_VERSION (revision $NDK_REVISION)"
             echo "  fuente: $NDK_URL"
             echo "  sha256 medido:   $NDK_SHA256"
-            echo "  sha256 fijado:   ${NDK_SHA256_MEDIDO:-sin fijar (se fija tras la primera corrida verde)}"
+            echo "  sha256 fijado:   $NDK_SHA256_FIJADO"
             echo "  sha1 publicado por Google (repository2-3.xml): $NDK_SHA1_GOOGLE"
             echo "ABIs compilados: arm64-v8a armeabi-v7a (API android-26, NEON ON, Release, BUILD_SHARED_LIBS ON)"
             echo ""
