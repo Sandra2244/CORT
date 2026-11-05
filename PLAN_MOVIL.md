@@ -46,7 +46,9 @@ empieza a hablar en cuanto tiene la primera frase, como hace la PC.
 disponible) se copian de `cort_memoria.py` para que lo que salga del móvil sea lo mismo
 que saldría del portátil.
 
-Release objetivo: `cort-v0.15.0`.
+Release objetivo: `cort-v0.16.0`. Sale después que U2 porque todavía le faltan dos piezas
+medibles: el pegamento JNI contra `libllama.so` y la SHA-256 del NDK fijada por nosotros
+(el workflow que lo descarga no ha corrido aún). U2 compila y pasa la auditoría entera hoy.
 
 ## 2. Fase U2 — que se integre en el sistema (lo del menú de WhatsApp)
 
@@ -76,7 +78,8 @@ Lo demás de la integración, en el mismo orden de valor:
   Si Samsung no lo permite, queda la baldosa, el gesto del orbe y el botón del auricular,
   que hacen el mismo servicio.
 
-Release objetivo: `cort-v0.16.0`.
+Release objetivo: `cort-v0.15.0` — **ésta es la que compila y se publica primero**, por el
+motivo escrito arriba.
 
 ## 3. Fase U3 — que se porte como una persona (iniciativa e investigar)
 
@@ -107,8 +110,9 @@ Release objetivo: `cort-v0.17.0`.
   LAN) + BIOS «encender al volver la corriente»; (c) no apagarla: suspenderla y despertarla
   desde otro aparato suyo. Sin una de estas tres, la función se queda en la lista con su
   motivo.
-* **El bolsillo (F17)** ya hecho en la rama: `GET /bolsillo` devuelve pendientes con sus
-  minutos, lista, notas y la máquina medida; falta su pantalla en el teléfono.
+* **El bolsillo (F17)** está cerrado en las dos mitades: `GET /bolsillo` devuelve
+  pendientes con sus minutos, lista, notas y la máquina medida, y `Bolsillo.java` (U2,
+  `cort-v0.15.0`) ya lo pinta en la pantalla del teléfono.
 * **Manos en el navegador (F18)** con `xdotool` (presente) y portapapeles — *medido*: en
   esta PC no hay `xsel` ni `wl-copy`, así que hay que resolver el portapapeles con
   `xdotool`/`xclip` antes de prometer copiar y pegar.

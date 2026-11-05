@@ -1,4 +1,4 @@
-# CORT {{VERSION}} — el teléfono oye, habla con la PC y ya se enlaza leyendo un QR
+# CORT {{VERSION}} — el teléfono te lee en cualquier app, sabe si llevas audífonos y saluda al encender
 
 **Autora:** Askher Vargas y Sandra Lopez · soporte: `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com` · **Licencia:** MIT.
 
@@ -36,6 +36,43 @@
   **El dictado no se guarda en ninguna parte:** se arma en memoria, se envía, y en la PC se
   borra el WAV de paso y el de voz en el mismo `finally`; lo que la PC habla por su altavoz
   caduca a los 600 s para que `/tmp` no sea un archivo de todo lo que CORT dijo.
+- **Te lee en cualquier aplicación (U2, `Lectura.java`).** Mantén pulsado un mensaje de
+  WhatsApp, un párrafo de un PDF o lo que estés escribiendo, y en el menú sale **«Leer con
+  CORT»**. No es un servicio de accesibilidad ni un modo molesto que habla solo: es la
+  intención `ACTION_PROCESS_TEXT` de Android, así que CORT sólo suelta voz cuando tú lo
+  eliges. La pantalla trocea el texto **por frases** (hasta 380 caracteres y cortando en `.`
+  `!` `?` o salto de línea), da tres pasos de lectura (normal / rápido / muy rápido), botón
+  **Parar** y botón **Copiar**. El texto se queda en memoria: no se escribe en disco en ningún
+  sitio. Con `ACTION_SEND` declarado, lo compartido desde el navegador entra por la misma cara.
+- **Sabe si llevas audífonos (U2, `Audifonos.java`).** Antes de contestar mira las salidas
+  activas del aparato (`getDevices`) y decide: con auriculares puestos la voz va **a los
+  auriculares** (y no se mete en modo de llamada, que arrastra el Bluetooth al perfil de
+  teléfono y suena peor); sin nada en la oreja va al **auricular de llamada**, pegado a la
+  oreja. La pantalla dice por dónde va a sonar: «Sale por los audífonos de cable» / «por los
+  Bluetooth» / «por el auricular del teléfono». Y si te quitas los auriculares mientras está
+  hablando, **se calla** en vez de quedarse leyendo por el altavoz de la casa. El sensor no
+  pide ningún permiso: son lecturas del propio teléfono.
+- **Saluda al encender (U2, `Arranque.java`).** `BOOT_COMPLETED` → «Buenos días / Buenas
+  tardes / Buenas noches. Soy CORT y sigo aquí, en tu teléfono, sin red.», dicho por la voz e
+  **hito** además en una notificación sin sonido, porque con la pantalla bloqueada hay motores
+  de voz que no sueltan audio. **El límite, escrito:** Samsung (One UI) cierra procesos en
+  segundo plano y puede que el saludo no llegue si CORT sigue optimizado por batería; la
+  pantalla de enlace tiene el botón «Que el teléfono no cierre CORT», que abre el ajuste del
+  sistema con esta app ya escrita. Con Android 13 además se pide el permiso de notificaciones
+  la primera vez que abres la app.
+- **Baldosa en el panel rápido (U2, `Baldosa.java`).** Bajar el panel y tocar «CORT te
+  escucha» abre la escucha directamente, sin buscar el icono entre las páginas del lanzador.
+- **El bolsillo: qué le debe la PC (F17, `Bolsillo.java`).** Con el enlace puesto, la pantalla
+  lista los recordatorios pendientes de la PC con los minutos que faltan y su fecha, los
+  vencidos, la compra y las notas, y cómo está la máquina (RAM libre, CPU, núcleos, tiempo
+  encendida). Se pide a `GET /bolsillo` en el puerto del core con el mismo `?token=` del
+  enlace; si la PC está apagada la pantalla dice **no contestó** y no inventa nada. Lo que
+  hay en esa pantalla **no se manda a ningún sitio**.
+- **«El aparato, medido» (U1, `Equipo.java`).** Una pantalla que lee en este teléfono lo que
+  decide si el cerebro local cabe: RAM total y **libre ahora** (`ActivityManager` + 
+  `/proc/meminfo`), núcleos, ABIs, almacenamiento libre frente a los 752 880 160 bytes del
+  modelo, carga de la pila y el motor de voz asignado. Todo el texto es seleccionable para
+  copiarlo. Estos números son los que se usan en el informe de la fase; no se envían a la PC.
 - **Y sigue funcionando sola, sin portátil encendido:** orbe y registro nativos, 33 reglas de
   frases, 15 manos locales (linterna, hora, fecha, alarma, cronómetro, decir, buscar, app,
   volumen…), memoria SQLite propia y dictado dentro del aparato con Vosk (modelo español

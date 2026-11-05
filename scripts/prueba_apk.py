@@ -102,8 +102,11 @@ def main():
            atrib(app_elem, "extractNativeLibs") == "false")
     prueba("el icono es la marca del orbe (F11), no el cuadrado viejo",
            atrib(app_elem, "icon") == "@mipmap/ic_cort")
-    prueba("el manifiesto declara las tres piezas del asistente",
-           len([h for h in (app_elem.iter() if app_elem is not None else []) if h.tag == "service"]) == 3)
+    servicios = {atrib(h, "name", "") for h in
+                 (app_elem.iter() if app_elem is not None else []) if h.tag == "service"}
+    prueba("el manifiesto declara las tres piezas del asistente y la baldosa del panel rápido",
+           {".Asistente", ".Sesiones", ".Reconocimiento", ".Baldosa"} <= servicios,
+           " ".join(sorted(servicios)))
 
     print("\n== las clases que el manifiesto promete ==")
     declaradas = set()
@@ -319,9 +322,11 @@ def main():
            and "url.indexOf('?')" in parl)
     puente_parl = puente[puente.index("public static String urlDelParlamento"):]
     prueba("la ruta del parlamento sale del mismo host y puerto que la memoria",
-           "urlDelPuente(enlace)" in puente_parl and "RUTA_PARLAMENTO" in puente_parl)
+           'conRuta(enlace, RUTA_PARLAMENTO)' in puente_parl
+           and "urlDelPuente(enlace)" in puente[puente.index("private static String conRuta"):]
+           and "indexOf(RUTA)" in puente[puente.index("private static String conRuta"):])
     prueba("y si el enlace no es de CORT no inventa una dirección",
-           "return null;" in puente_parl[:400])
+           "return null;" in puente[puente.index("private static String conRuta"):][:400])
     # Costura con la mitad de la PC: si `cort_parlamento.py` cambia un campo y el Java
     # sigue leyendo el viejo, el parlamento se queda mudo sin que nadie lo note.
     parl_pc = lee(RAIZ / "cort-bridge" / "cort_parlamento.py")
@@ -344,6 +349,183 @@ def main():
            int(re.search(r"LECTURA_MS = (\d+)", parl).group(1)) > 20000)
     prueba("un fallo nunca se traga en silencio: todo sale dicho en español",
            parl.count('estado.setText("') >= 8 and "loQueDice" in parl)
+
+    print("\n== U2: leer con CORT, audífonos y saludo al encender ==")
+    # Lo que la dueña pidió con el ejemplo del iPhone: mantener pulsado un mensaje y que
+    # entre las opciones salga «leer». En Android eso es `ACTION_PROCESS_TEXT`, y sólo
+    # aparece si la actividad está declarada con su filtro y con `exported="true"`: sin
+    # esas dos líneas el menú no lo ofrece y el APK compila igual de contento.
+    lectura_path = SRC / "Lectura.java"
+    lectura = lee(lectura_path)
+    prueba("Lectura.java existe (el menú de selección de cualquier app)",
+           lectura_path.is_file())
+    prueba("el manifiesto la declara con PROCESS_TEXT y con SEND sobre text/plain",
+           'android:name=".Lectura"' in manifiesto_texto
+           and manifiesto_texto.count("android.intent.action.PROCESS_TEXT") == 1
+           and "android.intent.action.SEND" in manifiesto_texto
+           and 'android:mimeType="text/plain"' in manifiesto_texto)
+    prueba("y la ofrece a otras aplicaciones: exported=true y categoria DEFAULT",
+           'android:name=".Lectura"' in manifiesto_texto
+           and 'android:exported="true"' in manifiesto_texto
+           and "android.intent.category.DEFAULT" in manifiesto_texto)
+    prueba("el rótulo que se lee en el menú es «Leer con CORT»",
+           'android:label="Leer con CORT"' in manifiesto_texto)
+    if lectura_path.is_file():
+        prueba("lee lo subrayado y, si no, lo compartido (los dos caminos del intent)",
+               "EXTRA_PROCESS_TEXT" in lectura and "EXTRA_TEXT" in lectura
+               and "EXTRA_SUBJECT" in lectura)
+        prueba("troza por frase y con techo: un motor de TTS corta líneas largas sin avisar",
+               re.search(r"TROZO_MAX = (\d+)", lectura) is not None
+               and int(re.search(r"TROZO_MAX = (\d+)", lectura).group(1)) <= 400
+               and "c == '.' || c == '!' || c == '?'" in lectura)
+        prueba("la lectura va encolada (QUEUE_ADD), no atropellándose a sí misma",
+               "boca.seguir(" in lectura and "boca.callar()" in lectura
+               and "boca.hablando()" in lectura)
+        prueba("dice el tiempo como estimación, no como promesa",
+               "estimación" in lectura and "16.0 * PASOS" in lectura)
+        prueba("no escribe el texto en disco: lo compartido se queda en memoria",
+               not any(m in lectura for m in ("FileOutputStream", "getExternalStorage",
+                                              "MediaStore", "openOutputStream",
+                                              "RandomAccessFile", "java.io.File")),
+               "el texto de la dueña no se guarda")
+        prueba("y se calla si se quita los audífonos, en vez de leer por el altavoz",
+               "cambioDeSalida" in lectura and "registerAudioDeviceCallback" in lectura
+               and "unregisterAudioDeviceCallback" in lectura)
+        prueba("retira los dos avisos con la misma instancia que registró",
+               "cambios = new Audifonos.Cambios(this)" in lectura
+               and "gestor.unregisterAudioDeviceCallback(cambios)" in lectura)
+
+    audifonos_path = SRC / "Audifonos.java"
+    audifonos = lee(audifonos_path)
+    prueba("Audifonos.java existe y lee las salidas de verdad (getDevices)",
+           audifonos_path.is_file() and "GET_DEVICES_OUTPUTS" in audifonos
+           and "TYPE_WIRED_HEADPHONES" in audifonos and "TYPE_BLUETOOTH_A2DP" in audifonos)
+    prueba("avisa del cable (BECOMING_NOISY) y del Bluetooth (AudioDeviceCallback)",
+           "ACTION_AUDIO_BECOMING_NOISY" in audifonos and "extends AudioDeviceCallback" in audifonos)
+    prueba("el sensor no pide ningún permiso: son lecturas del propio aparato",
+           not any(m in audifonos for m in ("checkSelfPermission", "requestPermissions",
+                                            "Manifest.permission")),
+           "sin BLUETOOTH CONNECT: se pregunta por las salidas activas")
+
+    parl_audifonos = [m in parl for m in ("Audifonos.hay(gestor)", "Audifonos.salida(gestor)",
+                                          "USAGE_MEDIA", "sueltaElModo()")]
+    prueba("el parlamento enruta según el sensor: modo de llamada sólo si no hay audífonos",
+           all(parl_audifonos) and "modoTocado = !auriculares" in parl,
+           str(parl_audifonos))
+    prueba("y el modo se devuelve una sola vez, por el guarda que sabe si lo tocó",
+           "private void sueltaElModo()" in parl
+           and parl.count("sueltaElModo();") >= 3 and "gestor.setMode(modoAnterior)" in parl
+           and parl.index("if (!modoTocado)") < parl.index("gestor.setMode(modoAnterior)"))
+    voz_seguir = [m in voz for m in ("public void seguir(String texto)", "QUEUE_ADD",
+                                     "public void ritmo(float factor)", "public void callar()",
+                                     "enColaLectura")]
+    prueba("la boca de Android añade trozos, cambia de paso y calla cuando le dicen",
+           all(voz_seguir), str(voz_seguir))
+    prueba("el paso se multiplica sobre la velocidad de CORT, no la pisa",
+           "boca.setSpeechRate(VELOCIDAD * factor)" in voz
+           and "boca.setSpeechRate(VELOCIDAD * pasoLectura)" in voz)
+    prueba("y callar vacía las dos colas: si no, lo encolado sale después del «Parar»",
+           "enCola = null;" in voz[voz.index("public void callar()"):]
+           and "enColaLectura.clear();" in voz[voz.index("public void callar()"):])
+
+    arranque_path = SRC / "Arranque.java"
+    arranque = lee(arranque_path)
+    prueba("Arranque.java existe y el manifiesto lo declara para BOOT_COMPLETED",
+           arranque_path.is_file() and 'android:name=".Arranque"' in manifiesto_texto
+           and "android.intent.action.BOOT_COMPLETED" in manifiesto_texto
+           and "android.permission.RECEIVE_BOOT_COMPLETED" in manifiesto_texto)
+    prueba("el saludo se dice por hora y sale por notificación ADEMÁS de por la voz",
+           "Buenos días" in arranque and "Buenas tardes" in arranque
+           and "Buenas noches" in arranque and "manager.notify(" in arranque
+           and "boca.hablar(dicho)" in arranque)
+    prueba("mantiene el receptor vivo con goAsync() y lo suelta a los 15 s",
+           "goAsync()" in arranque and "fin.finish()" in arranque
+           and re.search(r"\}, 15_000\)", arranque) is not None)
+    prueba("el canal va sin sonido de aviso: despertar a alguien con un pitido no es saludar",
+           "IMPORTANCE_LOW" in arranque and "cort-saludo" in arranque)
+    prueba("con Android 13 dice si el permiso de notificaciones falta, en la propia notificación",
+           "POST_NOTIFICATIONS" in arranque and "checkSelfPermission" in arranque)
+    prueba("y el límite está escrito en el código: One UI puede cerrar antes del saludo",
+           "One UI" in arranque and "No se promete el saludo" in arranque)
+    prueba("el icono del aviso es el orbe en silueta y el XML está sano",
+           (APP / "res" / "drawable" / "ic_cort_aviso.xml").is_file()
+           and 'getIdentifier("ic_cort_aviso", "drawable"' in arranque
+           and not sin_doble_guion(lee(APP / "res" / "drawable" / "ic_cort_aviso.xml")))
+    java_todo = "".join(lee(f) for f in SRC.glob("*.java"))
+    # Quitados los comentarios, `android.R.` incluido: la clase `R` del sistema sí existe
+    # siempre, la propia del paquete no se genera en esta cadena de compilación.
+    sin_comentarios = re.sub(r"//.*", "", re.sub(r"/\*.*?\*/", "", java_todo, flags=re.S),
+                             flags=re.M).replace("android.R.", "")
+    prueba("el Java del APK no usa una `R.` propia: sin `aapt2 link --java` esa clase no existe",
+           not re.search(r"\bR\.(drawable|string|mipmap|id|layout|xml|color)\b", sin_comentarios),
+           "los recursos se buscan con `getIdentifier` o se referencian desde el manifiesto")
+
+    baldosa_path = SRC / "Baldosa.java"
+    baldosa = lee(baldosa_path)
+    prueba("Baldosa.java existe y el manifiesto la declara con su permiso de sistema",
+           baldosa_path.is_file() and 'android:name=".Baldosa"' in manifiesto_texto
+           and "android.permission.BIND_QUICK_SETTINGS_TILE" in manifiesto_texto
+           and "android.service.quicksettings.action.QS_TILE" in manifiesto_texto)
+    prueba("la baldosa abre la escucha con la bandera que MainActivity ya entiende",
+           "MainActivity.PIDE_ESCUCHAR" in baldosa and "PIDE_ESCUCHAR" in actividad)
+    prueba("con Android 14 usa el PendingIntent: la firma vieja deja la baldosa muerta",
+           "UPSIDE_DOWN_CAKE" in baldosa and "startActivityAndCollapse(PendingIntent" in baldosa
+           and "FLAG_IMMUTABLE" in baldosa)
+
+    bolsillo_path = SRC / "Bolsillo.java"
+    bolsillo = lee(bolsillo_path)
+    prueba("Bolsillo.java existe, va declarado y se abre desde la pantalla de enlace",
+           bolsillo_path.is_file() and 'android:name=".Bolsillo"' in manifiesto_texto
+           and "startActivity(new Intent(this, Bolsillo.class))" in actividad)
+    prueba("pide /bolsillo con la llave delante y sin mostrarla nunca",
+           "Puente.urlDelBolsillo(enlace)" in bolsillo
+           and '!url.contains("?token=")' in bolsillo and '"?token=" + ' not in bolsillo)
+    cuerpo_bolsillo = puente[puente.index("public static String urlDelBolsillo"):]
+    prueba("la ruta del bolsillo se corta igual que la del parlamento (un solo tiralíneas)",
+           "conRuta(enlace, RUTA_BOLSILLO)" in cuerpo_bolsillo
+           and "/bolsillo" not in bolsillo, "no hay segunda versión del recorte")
+    prueba("el teléfono y la PC hablan las mismas claves del cuadro",
+           all(f'"{c}"' in bolsillo for c in ("pendientes", "vencidos", "compras", "notas",
+                                              "maquina", "minutos", "cuando", "origen"))
+           and all(f'"{c}"' in lee(RAIZ / "cort-bridge" / "cort_server.py")
+                   for c in ("pendientes", "vencidos", "compras", "notas", "minutos")),
+           "si la PC cambia un campo, esta línea lo avisa")
+    prueba("sin respuesta no finge: dice que la PC no contestó",
+           "no disponible" in bolsillo or "La PC no contestó" in bolsillo)
+    prueba("y el GET no congela la cara: hilo aparte, daemon, y pintado en la interfaz",
+           "hilo.setDaemon(true)" in bolsillo and "runOnUiThread" in bolsillo
+           and "cerrado" in bolsillo)
+
+    equipo_path = SRC / "Equipo.java"
+    equipo = lee(equipo_path)
+    prueba("Equipo.java existe, va declarado y se abre desde la pantalla de enlace",
+           equipo_path.is_file() and 'android:name=".Equipo"' in manifiesto_texto
+           and "startActivity(new Intent(this, Equipo.class))" in actividad)
+    prueba("la puerta del cerebro local está escrita con el número real del modelo",
+           re.search(r"MODELO_BYTES = ([\d_]+)L", equipo) is not None
+           and int(re.search(r"MODELO_BYTES = ([\d_]+)L", equipo).group(1).replace("_", ""))
+           == 752_880_160 and "MODELO_BYTES * 2" in equipo)
+    prueba("mide la RAM libre de ESTE aparato, no la del catálogo",
+           "ActivityManager.MemoryInfo" in equipo and "libre.availMem" in equipo
+           and "MemTotal:" in equipo)
+    prueba("lo medido se puede copiar: el texto es seleccionable",
+           "cifras.setTextIsSelectable(true)" in equipo)
+    prueba("y nada de eso sale del teléfono: sin red en esta pantalla",
+           "java.net" not in equipo and "HttpURL" not in equipo,
+           "los números se quedan en la pantalla")
+
+    prueba("la pantalla de enlace lleva el botón de la pila y dice el límite del WoL",
+           "pideSinOptimizacion()" in actividad
+           and "ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" in actividad
+           and "ACTION_APPLICATION_DETAILS_SETTINGS" in actividad
+           and "Wake-on" in actividad and "rtl8723be" in actividad)
+    prueba("el permiso de notificaciones se pide una sola vez y por las buenas",
+           "pideNotificaciones()" in actividad and "aviso_pedido" in actividad
+           and "android.Manifest.permission.POST_NOTIFICATIONS" in actividad)
+    prueba("el manifiesto trae los tres permisos nuevos y ninguno obligatorio de más",
+           all(m in manifiesto_texto for m in ("android.permission.RECEIVE_BOOT_COMPLETED",
+                                               "android.permission.POST_NOTIFICATIONS",
+                                               "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS")))
 
     print("\n== la tabla de frases del cerebro nativo ==")
     tabla_path = APP / "assets" / "habilidades.json"

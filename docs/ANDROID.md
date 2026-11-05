@@ -30,10 +30,31 @@ monta `GET` y `POST /memoria/puente` en el puerto del core —`8765`— detrás 
 se guarda en `~/.local/share/cort/enlace.json` con modo `0600`. El arranque de CORT imprime
 la dirección completa, y `python3 cort-bridge/cort_enlace.py --qr` dibuja encima un cuadro
 que se escanea con el teléfono; si se prefiere teclear, el plan B es pegar **esa línea
-entera** (con su `?token=`) en la pantalla de enlace de la aplicación. Lo que todavía no
-está es el escáner de cámara dentro del APK: mientras no se compile, el enlace se pega a
-mano. Y lo que llega por el puente son los recuerdos; las preferencias, la lista y las notas
-van en el siguiente viaje (F14c).
+entera** (con su `?token=`) en la pantalla de enlace de la aplicación. El escáner de cámara
+**ya está dentro del APK** desde F14b (`Escaner.java`, zxing core 3.5.3 fijado por SHA-256 en
+`apps/android/deps.txt`): decodifica y tira, ningún fotograma se guarda. Lo que llega por el
+puente son los recuerdos; las preferencias, la lista y las notas van en el siguiente viaje
+(F14c).
+
+Desde `cort-v0.15.0` (U2) el teléfono además **se integra en el sistema**, que es lo que la
+dueña pidió con el ejemplo del iPhone:
+
+```
+Lectura.java    «Leer con CORT» en el menú de selección de CUALQUIER app (ACTION_PROCESS_TEXT
+                + ACTION_SEND). Troza por frases, tres pasos, parar y copiar; el texto no se
+                escribe en disco.
+Audifonos.java  el sensor de salida (cable / Bluetooth / auricular del teléfono) con
+                `getDevices` + `AudioDeviceCallback` + `ACTION_AUDIO_BECOMING_NOISY`.
+                El parlamento y el lector preguntan aquí antes de abrir la boca, y si la
+                dueña se quita los auriculares mientras habla, CORT se calla.
+Arranque.java   el saludo al encender (`BOOT_COMPLETED`), dicho por la voz y escrito en una
+                notificación sin sonido. Con el límite delante: One UI puede cerrar antes.
+Baldosa.java    la baldosa del panel rápido (`TileService`), que abre la escucha de un toque.
+Bolsillo.java   lo pendiente de la PC (F17): `GET /bolsillo` con recordatorios, vencidos,
+                compra, notas y la máquina medida en /proc.
+Equipo.java     el aparato dicho con números — la RAM libre de ESTE teléfono, que es la que
+                decide si el cerebro local de U1 cabe. Nada de esto sale del aparato.
+```
 
 La aplicación es **híbrida de propósito**, y por eso hay dos instaladores distintos: el APK
 del teléfono y el instalador de escritorio para Linux/Windows. Los dos hablan el mismo español
@@ -206,9 +227,10 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 - **No hay cerebro grande dentro del APK** (F13). El modelo que habla y razona en la PC es
   Ollama; en el teléfono sólo hay el oído. «Ollama en Android» no se afirma sin haberlo
   compilado y medido.
-- **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa; el
-  traje de asistente de Android (`Asistente`/`Sesiones`/`Reconocimiento`) está declarado y
-  enruta, pero activarlo como asistente del sistema es una prueba de la dueña en el aparato.
+- **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa y la
+  baldosa del panel rápido también; el traje de asistente de Android
+  (`Asistente`/`Sesiones`/`Reconocimiento`) está declarado y enruta, pero activarlo como
+  asistente del sistema es una prueba de la dueña en el aparato.
 - **La cámara del teléfono sólo lee el cuadro del enlace** (F14b): decodifica y tira, ningún
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
@@ -219,25 +241,34 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   772 376 B con zxing y el parlamento dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
   aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real,
   si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas cinco son el
-  ensayo físico, no esto.
+  ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son igual de
+  físicas: **si «Leer con CORT» aparece de verdad en el menú de WhatsApp** (One UI recorta ese
+  menú y no hay forma de comprobarlo desde el PC), **si el saludo al encender sobrevive a la
+  gestión de batería de Samsung** (contando los reinicios que se prueben) y **por dónde suena
+  realmente la voz con audífonos puestos** (el `AudioTrack` con `USAGE_MEDIA` frente al
+  `MODE_IN_COMMUNICATION` que se usaba antes).
 
 - **El parlamento (F16) está publicado** en la release `cort-v0.14.0` (run 41957330147, verde):
   botón «Hablar con la PC (voz)», `Parlamento.java` con su WAV armado en memoria y su
   reproducción por el auricular — el APK se compila en el runner, en esta laptop no hay `javac`
   del SDK. Medido del lado de la PC: 3 273 ms por vuelta con el modelo cargado y 9 267 ms en la
   primera. **Lo que falta es el ensayo físico en el A16** —el de las cinco de arriba—, no el compile.
-  **No levanta la PC desde el móvil** (Wake-on-LAN) ni
-  le muestra a la dueña las tareas pendientes del portátil; tampoco llama por su cuenta: el
-  teléfono siempre inicia la vuelta.
+  **No levanta la PC desde el móvil** (Wake-on-LAN): medido el 4/11/2026 sin privilegios, el
+  puerto de red (r8169) no anunció «Supports Wake-on» y está sin cable, y el Wi-Fi (rtl8723be)
+  no trae bloque WoWLAN en `iw phy0 info`; con un cable y el permiso de red se vuelve a
+  comprobar, y mientras tanto el bolsillo pide la PC despierta. **Lo que sí hace desde
+  `cort-v0.15.0` es mostrar las tareas pendientes del portátil** (`Bolsillo.java` contra
+  `GET /bolsillo`). Tampoco llama por su cuenta: el teléfono siempre inicia la vuelta.
 
 
 ## 7. Dónde está cada cosa
 
 ```
-apps/android/src/dev/sandra/cort/movil/   20 clases Java, 6 420 líneas. Las que importan:
+apps/android/src/dev/sandra/cort/movil/   26 clases Java, 7 577 líneas. Las que importan:
     Motor.java         Vosk dentro del APK: descomprime el modelo una vez, escucha, corta a
                        los 20 s, mide el dictado y no abre ninguna conexión
-    Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos
+    Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos; encola los
+                       trozos del lector, cambia de paso y calla cuando le dicen
     MainActivity.java  permiso, cara y ajustes (donde se pega la IP, opcional)
     Cara.java          el orbe, el registro y la línea «oído: …»
     Cerebro/Acciones   33 reglas y 15 manos locales desde assets/habilidades.json
@@ -245,16 +276,24 @@ apps/android/src/dev/sandra/cort/movil/   20 clases Java, 6 420 líneas. Las que
     Escaner.java       la cámara leyendo el QR del enlace: YUV -> luminancia -> zxing
     Puente/Sincroniza  la ida y vuelta con el portátil (/memoria/puente, con token)
     Parlamento.java    la llamada: mantén pulsado, WAV armado en memoria, y la voz de la PC
-                       vuelve por el auricular (/parlamento) sin escribir audio en el aparato
+                       vuelve por la salida que diga los audífonos, sin escribir audio
+    Lectura.java       «Leer con CORT» en el menú de selección de cualquier app (U2)
+    Audifonos.java     el sensor de salida: cable, Bluetooth o el auricular del teléfono
+    Arranque.java      el saludo al encender, por voz y por notificación (con su límite escrito)
+    Baldosa.java       la baldosa del panel rápido, que abre la escucha de un toque
+    Bolsillo.java      lo pendiente de la PC, leído por el enlace (`GET /bolsillo`)
+    Equipo.java        el aparato medido: la RAM libre que decide si el cerebro local cabe
     Asistente/Sesiones/Reconocimiento   el traje de asistente de Android
-apps/android/AndroidManifest.xml          permisos, icono, servicios y <queries>
+apps/android/AndroidManifest.xml          permisos, icono, servicios, el lector, la baldosa y el receptor de arranque
+apps/android/res/drawable/ic_cort_aviso.xml  la silueta del orbe para la barra de estado y la baldosa
 apps/android/res/xml/asistente.xml        a dónde apunta el asistente del sistema
 apps/android/assets/habilidades.json      la tabla de frases del cerebro nativo
 apps/android/deps.txt                     qué se baja y con qué SHA-256
 apps/android/ACREDITACION.md              licencias pieza por pieza y qué NO va dentro
 apps/android/compilar.sh                  aapt2 + javac + d8 + zip(-0) + zipalign(-p) + apksigner
-cort-bridge/cort_server.py                `POST /mic` (dictado suelto) y `POST /parlamento`
-                                          (la llamada: oído de la PC, voz de vuelta al auricular)
+cort-bridge/cort_server.py                `POST /mic` (dictado suelto), `POST /parlamento`
+                                          (la llamada: oído de la PC, voz de vuelta al oído)
+                                          y `GET /bolsillo` (lo pendiente, con la máquina medida)
 cort-bridge/cort_voz.py                   la voz de la PC: espeak-ng y Piper es_ES (1,90× / 2,55×)
 scripts/prueba_apk.py                     comprobaciones sin red: manifiesto, Java, sums, guiones
                                           (corren en cada compilación de Actions; su número lo
