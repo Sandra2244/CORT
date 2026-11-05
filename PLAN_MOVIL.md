@@ -24,10 +24,15 @@ en el runner de Actions para `arm64-v8a` y `armeabi-v7a`, y un envoltorio JNI pr
 
 **El modelo NO va dentro del APK.** El que dio la dueña mide **752 880 160 bytes
 (718 MB)** en disco: `qwen2.5-1.5b-instruct-q2_k`. Metido en el APK, el archivo pesaría
-lo mismo que un sistema operativo y la release sería inutilizable. Viaja por el enlace:
-la PC lo sirve por HTTP local con su SHA-256 y el teléfono lo guarda en su almacenamiento
-privado, con reanudación. El APK sube sólo con el motor (~40 MB), que es lo que ella
-autorizó («no importa si pesa 100 o 200 MB»).
+lo mismo que un sistema operativo y la release sería inutilizable.
+
+**Cómo viajó al final, y por qué ya no viaja por el enlace.** Lo previsto aquí era que lo
+sirviera la PC por HTTP local; en la práctica la dueña pidió que el teléfono **descargue
+más cerebros estilo la PC**, así que U1 lo baja directamente de Hugging Face desde la
+pantalla «Almacén de cerebros», sin encender el portátil: `assets/cerebros.json` fija tres
+modelos con su peso y su SHA-256 medidos el 2026-11-05, el hilo de CORT reanada con `Range`
+y la suma se recalcula en el teléfono al terminar. El enlace de la casa sigue siendo el
+camino del oído y de la memoria compartida (F14/F16/F17), no el de los modelos.
 
 **Puerta de RAM, medida en el aparato antes de prometer.** La primera corrida de la fase
 imprime en pantalla `getMemoryInfo().availMem`, `totalMem` y núcleos del A16. Con 4 GB
@@ -46,9 +51,18 @@ empieza a hablar en cuanto tiene la primera frase, como hace la PC.
 disponible) se copian de `cort_memoria.py` para que lo que salga del móvil sea lo mismo
 que saldría del portátil.
 
-Release objetivo: `cort-v0.16.0`. Sale después que U2 porque todavía le faltan dos piezas
-medibles: el pegamento JNI contra `libllama.so` y la SHA-256 del NDK fijada por nosotros
-(el workflow que lo descarga no ha corrido aún). U2 compila y pasa la auditoría entera hoy.
+Release objetivo: `cort-v0.16.0`, **ya con las dos piezas que faltaban**: el pegamento JNI
+existe (`apps/android/jni/cort_motor.cpp`, 452 líneas sobre la API pública de `llama.h`) y
+`motor-local.yml` descarga el NDK r26d y el fuente de llama.cpp b12121 con su SHA-256 fijada
+y compilada en el runner. Una medición obligó a cambiar el enlace: `libllama.so` comparte con
+SONAME `libllama.so.0` (el `SOVERSION` que fija el propio CMake de llama.cpp), así que el
+pegamento se enlaza **estático y autocontenido** en `libcortmotor.so` y el workflow se niega
+a publicar si todavía dependiera de `libllama` o `libggml`.
+
+Lo que **todavía no está** de esta fase, dicho con nombre: los `tokens/s` y la RAM que ocupa
+en el A16 (sólo se miden en el aparato; el botón «Probar (mide tokens/s)» los imprime), y la
+respuesta **en streaming en la cara** — el nativo sí emite token a token (`nativeOir`) y el
+almacén lo muestra, pero `Cara.porNube` espera la frase entera antes de hablar.
 
 ## 2. Fase U2 — que se integre en el sistema (lo del menú de WhatsApp)
 

@@ -1,4 +1,4 @@
-# CORT {{VERSION}} — el teléfono te lee en cualquier app, sabe si llevas audífonos y saluda al encender
+# CORT {{VERSION}} — el teléfono ya piensa solo: motor GGUF, almacén de cerebros y su ruta
 
 **Autora:** Askher Vargas y Sandra Lopez · soporte: `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com` · **Licencia:** MIT.
 
@@ -68,6 +68,27 @@
   encendida). Se pide a `GET /bolsillo` en el puerto del core con el mismo `?token=` del
   enlace; si la PC está apagada la pantalla dice **no contestó** y no inventa nada. Lo que
   hay en esa pantalla **no se manda a ningún sitio**.
+- **Un cerebro GGUF dentro del teléfono (U1, `libcortmotor.so`).** CORT piensa en tu aparato
+  sin portátil y sin internet: el motor es llama.cpp b12121 cruzado con el NDK r26d de Google en
+  el runner (`.github/workflows/motor-local.yml`), enlazado **estático y autocontenido** porque
+  la biblioteca compartida sale con SONAME `libllama.so.0` y el `System.loadLibrary` del APK no
+  la encontraría. El pegamento JNI (`apps/android/jni/cort_motor.cpp`, 452 líneas) usa sólo la
+  API pública de `llama.h` y CORT lo comprueba en el workflow: 11 símbolos nativos tienen que
+  estar exportados, o la corrida se pone roja. Licencia leída antes de usarla: **MIT**.
+- **Y se pueden descargar más cerebros, estilo la PC (U1, `Cerebros.java`).** La pantalla
+  «Almacén de cerebros» ofrece tres Qwen2.5-Instruct con peso y SHA-256 **medidos el 2026-11-05**
+  contra el árbol público de Hugging Face: 0,5B q4_K_M (491 400 032 B), 1,5B q2_k
+  (752 880 160 B) y 1,5B q4_K_M (1 117 320 736 B). Bajar, **reanudar** donde se cortó (`Range`,
+  sin `DownloadManager`: un enlace con token no viaja en una notificación), y al terminar CORT
+  vuelve a calcular la suma del archivo entero en el teléfono — si no cuadra, lo borra y lo dice,
+  porque un GGUF a medias no falla: abre y contesta basura. Se abre desde el botón de la pantalla
+  de enlace o tocando el chip `◈ cerebro` de la cara. **Ningún modelo va dentro del APK**: el
+  instalador sigue pesando lo que pesa.
+- **Cómo decide a quién preguntar (U1).** Las 33 reglas de siempre van delante (son exactas y
+  contestan en milisegundos). Lo que no esté en la tabla va **al cerebro del teléfono** si el
+  modo y la RAM libre lo permiten, y si no a la PC o a la nube. Tres modos elegibles en pantalla:
+  **Automático · Teléfono · PC o nube**. La puerta es medidora, no promesa: hace falta el **doble**
+  del archivo en RAM libre, y la pantalla dice los megas que hay en este teléfono ahora.
 - **«El aparato, medido» (U1, `Equipo.java`).** Una pantalla que lee en este teléfono lo que
   decide si el cerebro local cabe: RAM total y **libre ahora** (`ActivityManager` + 
   `/proc/meminfo`), núcleos, ABIs, almacenamiento libre frente a los 752 880 160 bytes del
@@ -86,14 +107,15 @@
 |---|---|---|
 | peso | 16 873 B | **{{PESO}} B = {{MB}} MB** |
 | oído | el del aparato, por internet | {{OIDO}} |
+| cerebro | 33 reglas y la nube | **motor GGUF dentro del teléfono** + tres modelos descargables (ninguno dentro del APK) |
 | enlaces | pegar la IP a mano | QR con la cámara **o** pegar la línea, con token |
-| dependencias | ninguna | Vosk 0.3.75 (Apache-2.0) · JNA 5.14.0 (LGPL-2.1+) · modelo Apache-2.0 · zxing core 3.5.3 (Apache-2.0) |
+| dependencias | ninguna | Vosk 0.3.75 (Apache-2.0) · JNA 5.14.0 (LGPL-2.1+) · modelo Apache-2.0 · zxing core 3.5.3 (Apache-2.0) · llama.cpp b12121 (MIT) · Qwen2.5 GGUF (Apache-2.0, se bajan aparte) |
 
 **Firmado:** {{LLAVE}} — `versionCode {{CODE}}`, huella del certificado `{{HUELLA}}…` (la misma
 de las versiones anteriores, así que se instala encima: no hace falta desinstalar).
 
 `auditoria.txt` (adjunto) es el desglose entrada por entrada, sacado del propio APK: modelo
-**{{MODEL}} B**, `libvosk.so` 10 042 800 B (arm64) y 8 985 628 B (armeabi-v7a), con las
+**{{MODEL}} B**, `libvosk.so` 10 042 800 B (arm64) y 8 985 628 B (armeabi-v7a) y `libcortmotor.so` (el motor GGUF, cuyo peso exacto sale del propio `auditoria.txt` de esta release, no de aquí), con las
 bibliotecas **sin comprimir y alineadas a página** porque el manifiesto declara
 `extractNativeLibs="false"` — si falta algo de eso, el arranque muere con
 `UnsatisfiedLinkError`. El método de compilación no cambió: `aapt2` → `javac --release 11` →
@@ -135,6 +157,10 @@ exactos delante y no baja instaladores de terceros a la shell.** `para_cort.sh` 
   Vale para tu casa; no lo abras a un Wi-Fi público ni a internet.
 - **Sólo viajan los recuerdos.** Preferencias, lista de tareas y notas entran en el siguiente
   viaje (F14c).
+- **Cuánto tarda el cerebro en un teléfono real: sin medir.** El motor compila y la pantalla
+  «Probar (mide tokens/s)」saca la cifra del aparato; en el PC de desarrollo no hay NDK ni
+  `javac` del SDK, así que esa medida sólo puede darla tu Galaxy A16. El tope de 120 tokens por
+  vuelta y el botón «Interrumpir» existen precisamente porque no se ha medido todavía.
 - **El parlamento necesita el puente renovado en la PC.** `/parlamento` se sirve desde el
   `cort_server.py` de esta versión: si el CORT del portátil sigue encendido de antes, la ruta
   contesta `404` y el teléfono lo dice con palabras. Reinicia CORT en la PC y ya oye.
