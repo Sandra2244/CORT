@@ -138,8 +138,10 @@ else:
 # con frase — no un puente que finge estar enlazado.
 try:
     import cort_enlace
+    import cort_parlamento
 except Exception as _e_enlace:
     cort_enlace = None
+    cort_parlamento = None
     ENLACE_ERROR = f"{type(_e_enlace).__name__}: {_e_enlace}"
 else:
     ENLACE_ERROR = ""
@@ -1531,6 +1533,12 @@ async def vigilar_voz(ws, ident):
 async def hablar_por_el_puente(ws, texto):
     """Voz de salida para una respuesta: en hilo, con subtítulo ya enviado."""
     global VOZ_ACTIVA
+    if getattr(ws, "por_auricular", False):
+        # F16: la duena llama desde el telefono. Si sonara por los altavoces de la PC
+        # la conversacion seria un altavoz en otra habitacion; el texto se guarda y
+        # `cort_parlamento` lo sintetiza al final de la vuelta para el auricular.
+        ws.auricular_texto = texto
+        return
     if cort_voz is None or not VOZ_ACTIVA or not (texto or "").strip():
         return
     ident = cort_voz.hablar_en_hilo(texto[:400])
@@ -2770,6 +2778,19 @@ async def main():
             llave_enlace = cort_enlace.registro(app_ws)
         except Exception as e:
             print(f"[CORT] el enlace de memoria no se montó ({type(e).__name__}: {e})")
+
+    # F16: el parlamento. El telefono sube su voz, esta PC escucha con Vosk, responde
+    # por el MISMO despacho del WebSocket y devuelve la voz sintetizada en el cuerpo de
+    # la respuesta. Sin llave no hay parlamento, igual que sin llave no hay memoria.
+    if cort_enlace is not None and cort_parlamento is not None and llave_enlace:
+        try:
+            cort_parlamento.montar(
+                app_ws, llave_enlace, despacho=atender_input, voz=cort_voz,
+                transcribir=cort_voz.transcribir_wav if cort_voz else None,
+                autorizada=cort_enlace.autorizada, SALIDA=SALIDA)
+            print("[CORT] parlamento (F16): POST /parlamento en el puerto %d" % PUERTO_WS)
+        except Exception as e:
+            print("[CORT] el parlamento no arranco (%s: %s)" % (type(e).__name__, e))
 
     app_web = web.Application(client_max_size=4 * 1024 * 1024)
     app_web.router.add_get("/", lambda r: web.FileResponse(BASE / "index.html"))
