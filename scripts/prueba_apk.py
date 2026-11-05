@@ -625,23 +625,38 @@ def main():
            and "new Intent(actividad, Cerebros.class)" in lee(SRC / "Cara.java"))
     flujo_apk = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
     prueba("el build del APK busca el artefacto del motor antes de compilar",
-           "motor-local-ndk" in flujo_apk and "download-artifact" in flujo_apk)
+           "motor-local-ndk" in flujo_apk and "actions/artifacts" in flujo_apk)
     prueba("y si no existe, lo dice con un aviso en vez de romper la corrida",
-           'echo "MOTOR_ARTIFACT="' in flujo_apk)
-    prueba("la descarga del motor le dice de QUÉ corrida es (`run-id`): sin eso "
-           "download-artifact sólo mira la suya y el build se pondría rojo",
-           re.search(r"download-artifact[\s\S]{0,400}?run-id:\s*\$\{\{\s*env\.MOTOR_ARTIFACT\s*\}\}",
-                     flujo_apk) is not None,
-           "el README de la acción lo fija: por defecto sólo baja artefactos de la "
-           "corrida actual, y el motor lo sube `motor-local.yml`")
+           'echo "art_id="' in flujo_apk)
+    prueba("la descarga va por la API del artefacto con su id y el `Location` se lee "
+           "con HEAD: `gh api -i` sigue la redirección y baja los 208 MB (medido)",
+           "curl -sSI" in flujo_apk and "/zip" in flujo_apk
+           and re.search(r"gh api[\s\S]{0,120}?/zip[\s\S]{0,40}?-i", flujo_apk) is None,
+           "sonda del 2026-11-05 contra el artefacto 13414146808: `gh api … -i` se "
+           "puso a bajar el zip completo por la tubería y había que matarlo")
+    prueba("el token de Actions NO viaja al almacén: la URL firmada se baja sin "
+           "cabecera de autorización y sin `-L`",
+           re.search(r"curl -sS --fail[^\n]*-o /tmp/motor\.zip \"\$LOC\"", flujo_apk) is not None
+           and "curl -sSL" not in flujo_apk)
+    prueba("el id entra por la salida del paso, no con `env.` dentro de `with:` "
+           "(eso dejó el APK sin motor en la corrida 42104161078)",
+           "steps.busca.outputs.art_id" in flujo_apk
+           and re.search(r"uses: actions/download-artifact", flujo_apk) is None,
+           "con `run-id: ${{ env.MOTOR_ARTIFACT }}` la acción buscó en su propia "
+           "corrida y contestó «Artifact not found»; el build salió verde pero "
+           "`lib/arm64-v8a/libcortmotor.so: no está en el APK`")
     prueba("el id del artefacto sale del `--jq` con `first`, no de un `| head -1` "
            "pegado al `gh` (con pipefail la señal 141 abortaría el paso)",
-           "first // \"\"" in flujo_apk
-           and re.search(r"EXISTE=\"\$\{[\s\S]{0,400}?head", flujo_apk) is None
-           and re.search(r"EXISTE=\"\$\([\s\S]{0,400}?\|\s*head", flujo_apk) is None)
+           "first // empty" in flujo_apk
+           and re.search(r"LINEA=\"\$\([\s\S]{0,400}?\|\s*head", flujo_apk) is None)
     prueba("si la descarga falla el APK se publica igual, y `colocar` lo confiesa",
            "continue-on-error: true" in flujo_apk
            and "la descarga del motor no trajo nada" in flujo_apk)
+    prueba("compilar es tolerante pero PUBLICAR no: si el APK no lleva el motor, "
+           "la release se niega (las notas prometen el cerebro GGUF)",
+           "libcortmotor.so: no está en el APK" in flujo_apk
+           and "no se publica" in flujo_apk
+           and re.search(r"grep -q \"libcortmotor\.so: no está en el APK\" auditoria\.txt", flujo_apk) is not None)
     prueba("compilar.sh mete el motor en build/stage/lib, y SÓLO el pegamento "
            "(las otras 8 .so del artefacto ya van dentro por el enlace estático)",
            "vendor/motor/" in script
