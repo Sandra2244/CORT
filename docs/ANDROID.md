@@ -215,17 +215,27 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
   auditoría en el runner (release `cort-v0.13.0`, run 41906957815, verde, 59 565 213 bytes =
   56,81 MB) y las 73 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó
-  (hoy la suite va por 80, con las siete de las notas de la release). La estructura del APK está
-  comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de 756 028 B con zxing
-  dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el aparato: cuánto tarda
-  el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real y si el escáner lee la
-  pantalla de la PC a un metro — esas cuatro son el ensayo físico, no esto.
+  (hoy la suite va por 105, con las 20 del parlamento y las de las notas de la release). La
+  estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
+  756 028 B con zxing dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
+  aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real,
+  si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas cinco son el
+  ensayo físico, no esto.
+
+- **El parlamento (F16) no está publicado todavía: la mitad de la PC está en la rama y la del
+  teléfono sin compilar.**
+  Botón «Hablar con la PC (voz)», `Parlamento.java` con su WAV armado en memoria y su
+  reproducción por el auricular: entra en la release `cort-v0.14.0`, que se compila en el runner
+  (en esta laptop no hay `javac` del SDK). Medido del lado de la PC: 3 273 ms por vuelta con el
+  modelo cargado y 9 267 ms en la primera. **No levanta la PC desde el móvil** (Wake-on-LAN) ni
+  le muestra a la dueña las tareas pendientes del portátil; tampoco llama por su cuenta: el
+  teléfono siempre inicia la vuelta.
 
 
 ## 7. Dónde está cada cosa
 
 ```
-apps/android/src/dev/sandra/cort/movil/   18 clases Java, 5 119 líneas. Las que importan:
+apps/android/src/dev/sandra/cort/movil/   20 clases Java, 6 420 líneas. Las que importan:
     Motor.java         Vosk dentro del APK: descomprime el modelo una vez, escucha, corta a
                        los 20 s, mide el dictado y no abre ninguna conexión
     Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos
@@ -235,6 +245,8 @@ apps/android/src/dev/sandra/cort/movil/   18 clases Java, 5 119 líneas. Las que
     Recuerdos.java     SQLite del teléfono (cort.db)
     Escaner.java       la cámara leyendo el QR del enlace: YUV -> luminancia -> zxing
     Puente/Sincroniza  la ida y vuelta con el portátil (/memoria/puente, con token)
+    Parlamento.java    la llamada: mantén pulsado, WAV armado en memoria, y la voz de la PC
+                       vuelve por el auricular (/parlamento) sin escribir audio en el aparato
     Asistente/Sesiones/Reconocimiento   el traje de asistente de Android
 apps/android/AndroidManifest.xml          permisos, icono, servicios y <queries>
 apps/android/res/xml/asistente.xml        a dónde apunta el asistente del sistema
@@ -242,7 +254,8 @@ apps/android/assets/habilidades.json      la tabla de frases del cerebro nativo
 apps/android/deps.txt                     qué se baja y con qué SHA-256
 apps/android/ACREDITACION.md              licencias pieza por pieza y qué NO va dentro
 apps/android/compilar.sh                  aapt2 + javac + d8 + zip(-0) + zipalign(-p) + apksigner
-cort-bridge/cort_server.py                `POST /mic` (el teléfono también puede dictar a la PC)
+cort-bridge/cort_server.py                `POST /mic` (dictado suelto) y `POST /parlamento`
+                                          (la llamada: oído de la PC, voz de vuelta al auricular)
 cort-bridge/cort_voz.py                   la voz de la PC: espeak-ng y Piper es_ES (1,90× / 2,55×)
 scripts/prueba_apk.py                     comprobaciones sin red: manifiesto, Java, sums, guiones
                                           (corren en cada compilación de Actions; su número lo

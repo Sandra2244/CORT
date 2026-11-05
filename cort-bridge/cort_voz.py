@@ -55,6 +55,10 @@ DIR_VOZ = DATOS / "voz"
 DIR_MODELOS = DATOS / "modelos"
 DIR_VOSK = DIR_MODELOS / "vosk-es"
 TMP = Path(os.environ.get("CORT_TMP", "/tmp/cort-voz"))
+# Cuánto vive un WAV dicho por la PC. `hablar()` no puede borrar el suyo al terminar:
+# la página lo baja por `/audio/…` para que el orbe suene con su subtítulo. Sin techo,
+# /tmp se vuelve un archivo de todo lo que CORT dijo — medido: 18 WAV y 8,9 MB.
+RETENCION_TMP = 600
 
 # onnx, nombre para el usuario, factor medido (ms de CPU por segundo de audio)
 VOZES = {
@@ -209,12 +213,34 @@ def salida_por_defecto() -> str:
         return "desconocida"
 
 
+def limpiar_tmp(retencion=RETENCION_TMP) -> int:
+    """Tira los WAV de hablar/escucha más viejos que `retencion` segundos.
+
+    Devuelve cuántos quitó. Nunca toca un directorio que no existe y nunca falla hacia
+    fuera: la limpieza no puede tumbar una respuesta.
+    """
+    quitados = 0
+    try:
+        ahora = time.time()
+        for ruta in list(TMP.glob("decir-*.wav")) + list(TMP.glob("escucha-*.wav")):
+            try:
+                if ahora - ruta.stat().st_mtime > retencion:
+                    ruta.unlink()
+                    quitados += 1
+            except OSError:
+                pass
+    except OSError:
+        pass
+    return quitados
+
+
 def hablar(texto: str, reproducir: bool = True) -> dict:
     """Sintetiza (y de paso reproduce). Devuelve números, nunca promesas."""
     texto = (texto or "").strip()
     if not texto:
         return {"ok": False, "motivo": "no hay texto que decir"}
     TMP.mkdir(parents=True, exist_ok=True)
+    limpiar_tmp()
     ruta = TMP / f"decir-{int(time.time()*1000)}.wav"
     motor, ms = _sintetizar(texto, ruta)
     if not motor:
@@ -338,7 +364,13 @@ def escuchar(segundos: int = 5) -> dict:
     except Exception as e:
         return {"ok": False, "motivo": f"arecord falló: {type(e).__name__}"}
     r = transcribir_wav(ruta)
-    r["archivo"] = str(ruta)
+    r["archivo"] = Path(ruta).name
+    # Lo que ella dictó no se queda escrito: se transcribe y se tira. `archivo`
+    # sigue dicho por su nombre, para que la consola cuente qué se oyó.
+    try:
+        Path(ruta).unlink()
+    except OSError:
+        pass
     return r
 
 

@@ -1,4 +1,4 @@
-# CORT {{VERSION}} — el teléfono oye, recuerda y ya se enlaza con la PC
+# CORT {{VERSION}} — el teléfono oye, habla con la PC y ya se enlaza leyendo un QR
 
 **Autora:** Askher Vargas y Sandra Lopez · soporte: `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com` · **Licencia:** MIT.
 
@@ -20,6 +20,22 @@
   fila, 500 filas, 262 144 bytes. Las cuatro reglas —la llave nunca dentro de un recuerdo,
   fusionar no borra, el dedupe ignora espacios de sobra, los topes escritos— están en
   `cort-bridge/cort_enlace.py`.
+- **Hablarle a la PC y oírla por el auricular (F16).** Botón «Hablar con la PC (voz)» en la
+  pantalla de enlace, y también desde el pulso largo en cualquier superficie: se **mantiene
+  pulsado**, se habla, se suelta. La grabación (16 kHz mono, 16 bits) viaja a
+  `POST /parlamento` en el puerto del core —con el mismo `?token=` del enlace—, allí el oído de
+  la PC (Vosk) la convierte en texto, la frase entra por **el mismo despacho que el WebSocket**
+  y la voz sintetizada en la PC vuelve dentro de la respuesta para sonar en el **auricular** de
+  tu oreja, no por el altavoz de la casa. Medido en esta PC con habla real: un dictado de
+  2,33 s contestó en **3 273 ms** con el modelo ya cargado (la voz sintetizada en 191 ms) y en
+  **9 267 ms** en el primer turno del proceso, que paga los ~6 s de carga del modelo. La pantalla
+  imprime los cuatro tiempos de cada vuelta y cuántos caracteres le dijo la PC.
+  **El auricular no traga arengas:** dice la primera frase —techo de 90 caracteres— y el texto
+  entero queda escrito en la pantalla. Medido: la respuesta honesta de 416 caracteres sin techo
+  eran 22,8 s de voz y 1 342 768 bytes de base64; con el techo son 10,95 s y 643 640 bytes.
+  **El dictado no se guarda en ninguna parte:** se arma en memoria, se envía, y en la PC se
+  borra el WAV de paso y el de voz en el mismo `finally`; lo que la PC habla por su altavoz
+  caduca a los 600 s para que `/tmp` no sea un archivo de todo lo que CORT dijo.
 - **Y sigue funcionando sola, sin portátil encendido:** orbe y registro nativos, 33 reglas de
   frases, 15 manos locales (linterna, hora, fecha, alarma, cronómetro, decir, buscar, app,
   volumen…), memoria SQLite propia y dictado dentro del aparato con Vosk (modelo español
@@ -55,8 +71,10 @@ sha256sum -c CORT-movil.apk.sha256
 ```
 
 Instala y abre: **no pregunta por ninguna dirección para funcionar.** Pedirá permiso de
-micrófono (sin él la cara sirve igual, sólo falta «● hablar») y permiso de cámara sólo si
-pulsas «Escanear el QR». El primer dictado puede tardar: el modelo se descomprime una sola vez
+micrófono (sin él la cara sirve igual, sólo faltan «● hablar» y «Hablar con la PC (voz)») y
+permiso de cámara sólo si pulsas «Escanear el QR». En el parlamento la contesta de la PC sale
+por el **auricular de llamada**, el pegado a la oreja: no esperes sonido por el altavoz de atrás.
+El primer dictado puede tardar: el modelo se descomprime una sola vez
 a los datos de la app (~90 MB ocupados) y la cara dice en qué punto está.
 
 **PC (Debian / Ubuntu / MX Linux XFCE).** Descarga el `Source code (tar.gz)` de esta release,
@@ -80,6 +98,15 @@ exactos delante y no baja instaladores de terceros a la shell.** `para_cort.sh` 
   Vale para tu casa; no lo abras a un Wi-Fi público ni a internet.
 - **Sólo viajan los recuerdos.** Preferencias, lista de tareas y notas entran en el siguiente
   viaje (F14c).
+- **El parlamento necesita el puente renovado en la PC.** `/parlamento` se sirve desde el
+  `cort_server.py` de esta versión: si el CORT del portátil sigue encendido de antes, la ruta
+  contesta `404` y el teléfono lo dice con palabras. Reinicia CORT en la PC y ya oye.
+- **El cerebro que contesta es el que haya.** En el parlamento no hay un segundo motor: si la PC
+  no tiene Ollama respondiendo, la voz que sale por el auricular es la respuesta honesta
+  («Sin cerebro local…», con la RAM medida delante) —entera en la pantalla, por su primera
+  frase en el auricular. Sin esa respuesta no hay conversación.
+- **Todavía no levanta la PC desde el móvil** (Wake-on-LAN dentro de tu Wi-Fi) **ni le muestra
+  a la dueña las tareas pendientes del portátil.** Es lo que sigue, en ese orden.
 - **No lleva cerebro grande dentro** (F13). El modelo que razona sigue en la PC con Ollama; en
   el teléfono sólo está el oído. «Ollama en Android» no se afirma sin haberlo compilado y medido.
 - **No despierta con «ok CORT» en segundo plano.** El ● se pulsa; el traje de asistente de

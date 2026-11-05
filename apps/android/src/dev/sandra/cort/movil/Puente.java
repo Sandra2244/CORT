@@ -50,6 +50,14 @@ public class Puente {
     public static final String RUTA = "/memoria/puente";
 
     /**
+     * La ruta del parlamento (F16): el teléfono sube un WAV y baja la voz ya hecha.
+     * Vive en el MISMO puerto del core que la memoria —`cort_parlamento.py` se monta
+     * sobre `app_ws`—, así que host y token se sacan igual que arriba y sólo cambia
+     * el camino.
+     */
+    public static final String RUTA_PARLAMENTO = "/parlamento";
+
+    /**
      * El puerto del core. En esta rama `cort_server.py` abre dos: **8766** para la
      * interfaz (lo que el teléfono pega o descubre) y **8765** para el WebSocket. La
      * memoria se sirve por el del core, así que `urlDelPuente` cambia un número por
@@ -289,6 +297,33 @@ public class Puente {
         String llave = tokenDe(enlace);
         return esquema + resto.substring(0, finAutoridad) + ":" + PUERTO_CARA + "/index.html"
                 + (llave.isEmpty() ? "" : "?token=" + llave);
+    }
+
+    /**
+     * La dirección del parlamento (F16) a partir del enlace guardado. Es el mismo
+     * `host` y el mismo puerto del core que `urlDelPuente` —por eso se apoya en ella
+     * y no reinventa el corte de autoridad—, con la llave ya puesta en el query y el
+     * camino cambiado: `/memoria/puente` por `/parlamento`.
+     *
+     * El reemplazo se hace **buscando la ruta**, no con un `String.replace` de todo
+     * el enlace: si la dueña pega una dirección cuyo token contenga la palabra
+     * `/memoria/puente`, un `replace` a ciegas le cambiaría la llave por `/parlamento`
+     * y el portátil contestaría 401 sin que nadie entienda por qué.
+     *
+     * `null` = no hay enlace de CORT, y `Parlamento` lo dice con palabras en vez de
+     * abrir la boca.
+     */
+    public static String urlDelParlamento(String enlace) {
+        String delPuente = urlDelPuente(enlace);
+        if (delPuente == null) {
+            return null;
+        }
+        int donde = delPuente.indexOf(RUTA);
+        if (donde < 0) {
+            return null;
+        }
+        return delPuente.substring(0, donde) + RUTA_PARLAMENTO
+                + delPuente.substring(donde + RUTA.length());
     }
 
     /** El valor de `?token=` hasta el siguiente `&`, o vacío. */

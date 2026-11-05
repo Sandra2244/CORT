@@ -99,6 +99,20 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!--
+          El parlamento (F16): la frase se graba en el teléfono, se transcribe y se
+          responde en la PC, y la contesta suena en el auricular de este aparato.
+          `exported="false"`: nadie más que CORT lo abre, y el micrófono no se presta a
+          otra app. Pide `RECORD_AUDIO` en tiempo de ejecución y usa
+          `MODIFY_AUDIO_SETTINGS` para el modo de comunicación, que se devuelve al
+          terminar de hablar.
+        -->
+        <activity
+            android:name=".Parlamento"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
           El traje de asistente del sistema, en tres piezas. El contrato lo fija
           AOSP (`VoiceInteractionServiceInfo`): si faltan `sessionService` o
           `recognitionService` en `@xml/asistente`, CORT no aparece en la lista de

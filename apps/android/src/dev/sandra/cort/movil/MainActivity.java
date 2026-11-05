@@ -467,6 +467,20 @@ public class MainActivity extends Activity {
         leedor.topMargin = dp(10);
         pantalla.addView(escanear, leedor);
 
+        // El parlamento (F16): la frase se graba aquí, se transcribe y se responde en la
+        // PC, y la contesta llega al auricular. Es un botón más —el micrófono de la cara
+        // nativa y el del WebView siguen haciendo lo suyo— y sin enlace guardado la propia
+        // pantalla de parlamento lo dice con palabras antes de dejar pulsando a nadie.
+        Button hablar = new Button(this);
+        hablar.setText("Hablar con la PC (voz)");
+        hablar.setTextColor(Paleta.CIAN);
+        hablar.setBackgroundColor(0xFF132F3F);
+        hablar.setTextSize(15f);
+        hablar.setLetterSpacing(0.04f);
+        LinearLayout.LayoutParams parlamento = new LinearLayout.LayoutParams(-1, dp(54));
+        parlamento.topMargin = dp(10);
+        pantalla.addView(hablar, parlamento);
+
         Button volver = new Button(this);
         volver.setText("Seguir en el teléfono");
         volver.setTextColor(Paleta.SUAVE);
@@ -485,6 +499,7 @@ public class MainActivity extends Activity {
         entrar.setOnClickListener(v -> intentar(campo));
         escanear.setOnClickListener(v ->
                 startActivityForResult(new Intent(this, Escaner.class), ESCANEO));
+        hablar.setOnClickListener(v -> startActivity(new Intent(this, Parlamento.class)));
         volver.setOnClickListener(v -> montarCara());
         campo.setOnEditorActionListener((v, accion, ev) -> {
             intentar(campo);
@@ -628,6 +643,11 @@ public class MainActivity extends Activity {
                         ? "Ahora mismo vivo en este teléfono. Busco tu portátil por la "
                         + "Wi-Fi y, si aparece, abro su cara completa."
                         : "Conectado a " + recortar(guardada))
+                // El parlamento se alcanza desde cualquier superficie (nativa, embebida o
+                // WebView) con el mismo pulso largo de siempre: la lista va arriba y los
+                // tres botones de antes no cambian de sitio.
+                .setItems(new String[]{"Hablar con la PC (voz)"},
+                        (d, w) -> startActivity(new Intent(this, Parlamento.class)))
                 .setPositiveButton("Buscar el portátil", (d, w) -> {
                     prefs().edit().putString("url", "").apply();
                     montarCara();

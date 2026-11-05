@@ -61,7 +61,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| **APK nativo para el teléfono** | real medido y **publicado**: `cort-v0.13.0` (la release la crea el propio runner) | `apps/android` es **CORT nativo** (19 clases Java, 5 647 líneas: orbe, cara, cerebro de 33 reglas, 15 manos locales, SQLite y traje de asistente) **con el oído dentro**: Vosk 0.3.75 + JNA + el modelo español de 39,8 MB viajan en el APK, descargados en el pipeline con su SHA-256 fijado en `apps/android/deps.txt` y acreditados pieza por pieza en `apps/android/ACREDITACION.md`. Sin Gradle ni AndroidX: el mismo método de siempre (`aapt2` → `javac --release 11` → `d8` → `zip -0` → `zipalign -p` → `apksigner`) en `.github/workflows/apk-movil.yml`. **Medido en la release `cort-v0.13.0`** (`0.13.0`, `versionCode 1300`, run 41906957815): **59 565 213 bytes = 56,81 MB**, SHA-256 en el archivo `CORT-movil.apk.sha256` de la propia release, 16 entradas, `classes.dex` de 756 028 B (aquí entró zxing), `libvosk.so` de 10 042 800 B (arm64) y 8 985 628 B (v7a), las `.so` y `resources.arsc` **sin comprimir y alineadas a página** (`extractNativeLibs="false"` lo exige), firmado **con la llave del repo** (`faabef46…1977`, la misma de `cort-v0.11.0`: se instala encima). Antes pesaba **16 873 bytes** porque era una carcasa: la ×3 530 es el oído, no el código. Falta su prueba física en el A16 (carga del modelo, RAM y latencia real del dictado). El camino viejo sigue medido: `POST /mic` **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM en la Classmate) |
+| **APK nativo para el teléfono** | real medido y **publicado**: `cort-v0.13.0` (la release la crea el propio runner) | `apps/android` es **CORT nativo** (20 clases Java, 6 420 líneas: orbe, cara, cerebro de 33 reglas, 15 manos locales, SQLite, traje de asistente y el parlamento que habla con la PC) **con el oído dentro**: Vosk 0.3.75 + JNA + el modelo español de 39,8 MB viajan en el APK, descargados en el pipeline con su SHA-256 fijado en `apps/android/deps.txt` y acreditados pieza por pieza en `apps/android/ACREDITACION.md`. Sin Gradle ni AndroidX: el mismo método de siempre (`aapt2` → `javac --release 11` → `d8` → `zip -0` → `zipalign -p` → `apksigner`) en `.github/workflows/apk-movil.yml`. **Medido en la release `cort-v0.13.0`** (`0.13.0`, `versionCode 1300`, run 41906957815): **59 565 213 bytes = 56,81 MB**, SHA-256 en el archivo `CORT-movil.apk.sha256` de la propia release, 16 entradas, `classes.dex` de 756 028 B (aquí entró zxing), `libvosk.so` de 10 042 800 B (arm64) y 8 985 628 B (v7a), las `.so` y `resources.arsc` **sin comprimir y alineadas a página** (`extractNativeLibs="false"` lo exige), firmado **con la llave del repo** (`faabef46…1977`, la misma de `cort-v0.11.0`: se instala encima). Antes pesaba **16 873 bytes** porque era una carcasa: la ×3 530 es el oído, no el código. Falta su prueba física en el A16 (carga del modelo, RAM y latencia real del dictado). El camino viejo sigue medido: `POST /mic` **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM en la Classmate) |
 | Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
@@ -307,6 +307,29 @@ que bajaría el teléfono —máximo 300 caracteres por fila, 500 filas, 262 144
 cuatro reglas están escritas en el mismo archivo: la llave de la red nunca viaja dentro de un
 recuerdo, fusionar no borra nunca, el dedupe compara sin espacios de sobra y los topes están
 fijos. Preferencias, lista y notas entran en el siguiente viaje (F14c).
+
+**Hablarle a la PC desde el teléfono y oírla por el auricular** (F16). Con el enlace puesto,
+el botón «Hablar con la PC (voz)» abre una llamada: se **mantiene pulsado**, se habla, se
+suelta. El teléfono arma en memoria un WAV mono de 16 kHz y 16 bits —no escribe ningún
+archivo, no guarda fotograma ni segundo de audio— y lo sube a `POST /parlamento` en el puerto
+del core con el mismo `?token=` del enlace. Allí manda el oído de la PC (Vosk), la frase entra
+por **el mismo despacho que el WebSocket** —no hay un segundo cerebro que pueda mentir—, y la
+voz sintetizada en la PC vuelve dentro de la respuesta para sonar en el **auricular** del
+teléfono, no por su altavoz trasero ni por los de la casa.
+
+| lo que se midió en esta PC | número |
+|---|---|
+| vuelta con el modelo ya cargado | **3 273 ms** de total, 191 ms de voz (dictado de 2,33 s) |
+| primera vuelta del proceso | **9 267 ms** — paga los ~6 s de carga del modelo de 59 MB |
+| respuesta honesta sin cerebro (416 caracteres) | 22,8 s de voz y 1 342 768 B de base64 **sin techo** |
+| la misma dicha por el auricular | 10,95 s y 643 640 B con el techo de 90 caracteres |
+| topes del parlamento | 3 MB de cuerpo · 40 vueltas de historial · 15 min de inactividad |
+
+El auricular dice la primera frase y la pantalla tiene el texto entero; `scripts/prueba_parlamento.py`
+(49 comprobaciones) vigila el contrato byte a byte, incluida la cabecera WAV que arma Java a
+mano, y `scripts/prueba_apk.py` (105) que el teléfono no pueda escribir audio en el aparato.
+`/parlamento` necesita el `cort_server.py` de esta versión: si el CORT del portátil viene
+encendido de antes, la ruta contesta `404` hasta que se reinicie.
 
 ### Otros sistemas operativos
 

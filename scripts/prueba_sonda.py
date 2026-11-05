@@ -93,12 +93,13 @@ def main():
            "CORT_MEDICIONES": str(mediciones)}
     (arena / "datos").mkdir(parents=True)
     puente = subprocess.Popen([sys.executable, "-u", str(BRIDGE)], env=env,
-                              cwd=str(RAIZ), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              text=True)
+                              cwd=str(RAIZ),
+                              stdout=open(arena / "puente.log", "w", encoding="utf-8"),
+                              stderr=subprocess.STDOUT, text=True)
     archivo = mediciones / "medicion-cerebro.json"
     mediciones.mkdir(parents=True, exist_ok=True)
-    salida = []
     ok = False
+    porton_de_s1 = False
     try:
         limite = time.monotonic() + 45
         while time.monotonic() < limite:
@@ -122,10 +123,20 @@ def main():
             print(f"segunda vuelta: la sonda ya no se repite -> "
                   f"{'sigue habiendo un solo archivo' if len(list(mediciones.glob('*.json'))) == 1 else 'se duplicó'}")
         else:
-            for linea in (puente.stdout.read() if puente.poll() is not None else "").splitlines()[-6:]:
-                salida.append(linea)
-            print("FALLO: no apareció la medición.")
-            print("\n".join(salida))
+            lineas = (arena / "puente.log").read_text(encoding="utf-8").splitlines()
+            porton = [l for l in lineas if "auto-sonda parada sin probar" in l]
+            if porton:
+                # S1 antes de gastar el disparo: sin AVX ningún binario de llama.cpp
+                # corre aquí, y parar con el motivo medido vale más que insistir. En
+                # esta máquina (Atom sin AVX, medido) la prueba no puede más que
+                # pasar por ese portón; decirlo con su línea evita que el rojo
+                # permanente tape un fallo de verdad.
+                print(porton[-1])
+                print("la sonda no disparó porque el chip no trae AVX: portón de S1, no avería")
+                ok = porton_de_s1 = True
+            else:
+                print("FALLO: no apareció la medición.")
+                print("\n".join(lineas[-8:]))
     finally:
         puente.terminate()
         try:
@@ -134,7 +145,9 @@ def main():
             puente.kill()
         servidor.shutdown()
         shutil.rmtree(arena, ignore_errors=True)
-    print("\nTODO OK: CORT se midió sola y guardó el número." if ok else "\nHAY FALLOS.")
+    print("\nTODO OK: CORT se midió sola y guardó el número." if ok and not porton_de_s1 else
+          ("\nSIN DISPARO: el portón de S1 frenó la sonda antes de gastar el intento."
+           if porton_de_s1 else "\nHAY FALLOS."))
     return 0 if ok else 1
 
 

@@ -257,6 +257,88 @@ def main():
     prueba("el enlace sin `?token=` se avisa por escrito, no se traga en silencio",
            'contains("token=")' in actividad)
 
+    print("\n== el parlamento: hablarle a la PC y oírla por el auricular (F16) ==")
+    parl_path = SRC / "Parlamento.java"
+    parl = lee(parl_path)
+    prueba("la pantalla del parlamento existe", parl_path.is_file())
+    prueba("se lanza desde la pantalla de enlace y desde el menú del pulso largo",
+           "startActivity(new Intent(this, Parlamento.class))" in actividad)
+    prueba("va declarado en el manifiesto y nadie de fuera lo abre",
+           'android:name=".Parlamento"' in manifiesto_texto)
+    prueba("pide el micrófono en tiempo de ejecución (no se instala pidiendo permisos de más)",
+           "android.Manifest.permission.RECORD_AUDIO" in parl
+           and "requestPermissions" in parl)
+    # La regla dura: el dictado de la dueña no se queda en el teléfono. No basta con que
+    # el comentario lo diga — se comprueba que la clase que escribe archivos no aparezca.
+    prueba("el audio no toca el disco: ninguna de las cuatro formas de escribir un archivo",
+           not any(m in parl for m in ("FileOutputStream", "getExternalStorage",
+                                       "MediaStore", "openOutputStream",
+                                       "RandomAccessFile", "java.io.File")),
+           "se arma en memoria y se manda")
+    prueba("graba lo único que el oído de la PC acepta: 16 kHz, mono, 16 bits",
+           "TASA = 16000" in parl and "CHANNEL_IN_MONO" in parl
+           and "ENCODING_PCM_16BIT" in parl)
+    prueba("la cabecera WAVE se escribe en memoria (44 bytes antes del PCM)",
+           'cuatro(wav, "RIFF")' in parl and "construirWav" in parl
+           and "RIFF" in parl and "fmt " in parl)
+    # Medido: 20 s a 16 kHz mono 16-bit son 640 KB. El portátil corta el cuerpo a 3 MB,
+    # así que con este techo el teléfono siempre llega antes que el tope de la PC.
+    prueba("se corta a 20 s, y eso queda muy por debajo del tope de 3 MB del portátil",
+           "MAX_MS = 20_000" in parl and (20 * 16000 * 2) < 3 * 1024 * 1024,
+           f"{20 * 16000 * 2 // 1024} KB contra {3 * 1024 * 1024 // (1024 * 1024)} MB")
+    prueba("la voz de la PC sale por el auricular y el modo se devuelve al que había",
+           "MODE_IN_COMMUNICATION" in parl and "modoAnterior = gestor.getMode()" in parl
+           and "gestor.setMode(modoAnterior)" in parl)
+    prueba("suelta el micrófono y la pista al salir: el indicador de escucha no queda encendido",
+           "protected void onPause" in parl and "protected void onDestroy" in parl
+           and "cerrarMicrofono()" in parl)
+    # Las tres reglas de hilos de esta pantalla, cada una nacida de una forma concreta de
+    # romperse. Son la parte que un compilado no avisa: el APK entra igual y el fallo sale
+    # después, en el teléfono, cuando ya nadie puede leer el hilo que tocó la vista.
+    prueba("lo que pinta el auricular va en el hilo de la interfaz (setText desde otro hilo revienta)",
+           "runOnUiThread" in parl[parl.index("private void terminarAuricular"):
+                                  parl.index("private void terminarAuricular") + 900])
+    prueba("una respuesta que llega tarde no le habla a una pantalla que ya se fue",
+           "if (cerrado || pcm.length < 2)" in parl and "cerrado = true" in parl)
+    prueba("no le arrebata el micrófono al hilo de copia: se avisa y lo cierra él",
+           "if (!estabaGrabando)" in parl and "boolean estabaGrabando = grabando;" in parl)
+    prueba("el POST viaja como WAV y con longitud fija (el portátil rechaza el troceado)",
+           '"audio/wav"' in parl and "setFixedLengthStreamingMode" in parl)
+    prueba("la llave se comprueba pero nunca se muestra en pantalla",
+           "Puente.tokenDe(destino).isEmpty()" in parl and '"?token=" + ' not in parl)
+    prueba("el hilo de la conversación se guarda y se suelta al colgar",
+           '"parlamento_hilo"' in parl and 'remove("parlamento_hilo")' in parl)
+    prueba("el `/colgar` entra en el camino, no detrás del `?token=`",
+           'conTramo(destino, "/colgar")' in parl
+           and "url.indexOf('?')" in parl)
+    puente_parl = puente[puente.index("public static String urlDelParlamento"):]
+    prueba("la ruta del parlamento sale del mismo host y puerto que la memoria",
+           "urlDelPuente(enlace)" in puente_parl and "RUTA_PARLAMENTO" in puente_parl)
+    prueba("y si el enlace no es de CORT no inventa una dirección",
+           "return null;" in puente_parl[:400])
+    # Costura con la mitad de la PC: si `cort_parlamento.py` cambia un campo y el Java
+    # sigue leyendo el viejo, el parlamento se queda mudo sin que nadie lo note.
+    parl_pc = lee(RAIZ / "cort-bridge" / "cort_parlamento.py")
+    campos = ["oido", "respuesta", "audio", "tasa", "segundos", "ms_escucha",
+              "ms_respuesta", "ms_voz", "ms_total", "vueltas", "oido_en", "voz_en",
+              "origen", "motivo", "auricular_recortado"]
+    faltan_java = [c for c in campos if f'"{c}"' not in parl]
+    faltan_pc = [c for c in campos if f'"{c}"' not in parl_pc]
+    prueba(f"los {len(campos)} campos del contrato los hablan los dos lados",
+           not faltan_java and not faltan_pc,
+           f"faltan en Java: {faltan_java} · en la PC: {faltan_pc}")
+    # El auricular dice el principio: si la PC recorta y el teléfono no lo avisa, la
+    # dueña cree que CORT se calló a la mitad de una frase.
+    prueba("la PC pone techo al auricular y el teléfono avisa de que recortó",
+           re.search(r"AURICULAR_MAX_CARACTERES = (\d+)", parl_pc) is not None
+           and int(re.search(r"AURICULAR_MAX_CARACTERES = (\d+)", parl_pc).group(1)) <= 400
+           and "optBoolean(\"auricular_recortado\"" in parl
+           and "El auricular dijo el principio" in parl)
+    prueba("el teléfono espera más tiempo que `Sincroniza`: un parlamento tiene tres pasos",
+           int(re.search(r"LECTURA_MS = (\d+)", parl).group(1)) > 20000)
+    prueba("un fallo nunca se traga en silencio: todo sale dicho en español",
+           parl.count('estado.setText("') >= 8 and "loQueDice" in parl)
+
     print("\n== la tabla de frases del cerebro nativo ==")
     tabla_path = APP / "assets" / "habilidades.json"
     prueba("assets/habilidades.json viaja en el repo (lo lee Java con getAssets)",
@@ -324,6 +406,11 @@ def main():
            "la ruta la abrió F14a en el puerto del core, detrás del token")
     prueba("y no dicen que la cámara del teléfono no se use: F14b la usa para el QR",
            "Escanear el QR" in notas_texto and "teléfono no se usa" not in notas_texto)
+    prueba("y el parlamento no es marketing: la nota dice la ruta, el botón y lo que falta",
+           "/parlamento" in notas_texto
+           and "Hablar con la PC (voz)" in notas_texto
+           and "auricular" in notas_texto
+           and "Wake-on-LAN" in notas_texto)
     prueba("el hueco del título está conectado: `--title` sale de la plantilla",
            '--title "$TITULO"' in flujo
            and "NOTAS_RELEASE.md" in (APP / "notas_release.py").read_text(encoding="utf-8"),

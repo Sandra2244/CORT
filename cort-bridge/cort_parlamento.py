@@ -25,7 +25,8 @@ Las cuatro reglas de la casa, escritas aquí y comprobadas en
 3. **Un hilo, una vuelta a la vez.** El `candado` del historial es el mismo que usa el
    WebSocket; dos teléfonos no se pisan la conversación.
 4. **Topes por escrito:** 3 MB de cuerpo (~90 s a 16 kHz mono), 40 vueltas de
-   historial y 15 min de inactividad antes de tirar la llamada.
+   historial, 15 min de inactividad antes de tirar la llamada y 90 caracteres dichos
+   por el auricular — el texto completo siempre viaja en `respuesta` y se lee en pantalla.
 
 La voz suena en el auricular del teléfono, no por los altavoces de la PC: el canal
 falso lleva `por_auricular = True` y `hablar_por_el_puente` guarda el texto en vez de
@@ -46,7 +47,41 @@ from aiohttp import web
 MAX_CUERPO = 3 * 1024 * 1024
 HISTORIAL_MAX = 40
 VIEJO_SEGUNDOS = 15 * 60
+
+# Medido en el puente de arena con la respuesta honesta de "no hay cerebro" (416
+# caracteres): decir 220 de ellos son 22,8 s de voz por el auricular y 1 342 768 bytes
+# de base64 dentro del JSON. El techo va por debajo: el auricular dice la primera frase
+# y la pantalla del teléfono tiene el texto entero.
+AURICULAR_MAX_CARACTERES = 90
+
 HILOS = {}
+
+
+def para_el_auricular(texto):
+    """Recorta la respuesta para que el teléfono la escuche, y dice si recortó.
+
+    Devuelve `(lo_que_habla, recortado)`. Se prefiere la primera frase completa: un
+    «no puedo» de una línea suena mejor que el principio de un párrafo partido. Si no
+    cabe ninguna frase, corta en el último hueco de palabra, porque una palabra
+    partido por la mitad suena a avería y no a conversación.
+
+    El punto sólo cierra frase si le sigue un espacio y no va entre dos dígitos: la
+    respuesta honesta de arriba lleva la dirección de Ollama —`127.0.0.1:11434`— y
+    partir ahí soltaría por el auricular un «en 127.» que no dice nada.
+    """
+    if len(texto) <= AURICULAR_MAX_CARACTERES:
+        return texto, False
+    zona = texto[:AURICULAR_MAX_CARACTERES]
+    for i, letra in enumerate(zona):
+        if letra not in ".!?" or i == 0:
+            continue
+        if zona[i + 1:i + 2] not in (" ", "\n"):
+            continue      # el punto de `127.0.0.1` no va seguido de ningún espacio
+        if zona[i - 1].isdigit():
+            continue      # y un número suelto cerrado («3.») tampoco es una frase
+        return zona[:i + 1], True
+    hueco = max(zona.rfind(" "), zona.rfind("\n"))
+    return (zona[:hueco] if hueco > 40 else zona), True
 
 
 class Hilo:
@@ -194,12 +229,15 @@ def montar(app, llave, despacho, voz, transcribir, autorizada, SALIDA):
             ms_respuesta = int((time.time() - t1) * 1000)
 
             audio_b64, tasa, segundos, ms_voz = "", 0, 0.0, 0
+            recortado, dichos = False, 0
             if respuesta:
                 t2 = time.time()
                 try:
+                    dicho, recortado = para_el_auricular(
+                        canal.auricular_texto or respuesta)
+                    dichos = len(dicho)
                     hecho = await asyncio.get_event_loop().run_in_executor(
-                        None, lambda: voz.hablar(canal.auricular_texto or respuesta,
-                                                 reproducir=False))
+                        None, lambda: voz.hablar(dicho, reproducir=False))
                     sintetizada = (hecho or {}).get("archivo")
                     if sintetizada and os.path.isfile(sintetizada):
                         with open(sintetizada, "rb") as f:
@@ -221,6 +259,8 @@ def montar(app, llave, despacho, voz, transcribir, autorizada, SALIDA):
                 "ms_total": int((time.time() - t0) * 1000),
                 "motor_oido": esc.get("motor", "vosk"),
                 "oido_en": "PC (Vosk)", "voz_en": "auricular del teléfono",
+                "auricular_recortado": recortado,
+                "caracteres_auricular": dichos,
             })
         except Exception as e:
             return web.json_response({"ok": False, "origen": "no disponible",
@@ -248,7 +288,8 @@ def montar(app, llave, despacho, voz, transcribir, autorizada, SALIDA):
             "oido": transcribir.__name__ if transcribir else "sin oído",
             "boca": bool(voz),
             "topes": {"cuerpo_MB": MAX_CUERPO // (1024 * 1024),
-                      "historial": HISTORIAL_MAX, "inactividad_s": VIEJO_SEGUNDOS},
+                      "historial": HISTORIAL_MAX, "inactividad_s": VIEJO_SEGUNDOS,
+                      "auricular_caracteres": AURICULAR_MAX_CARACTERES},
         })
 
     async def colgar(request):
