@@ -59,6 +59,14 @@ SONAME `libllama.so.0` (el `SOVERSION` que fija el propio CMake de llama.cpp), a
 pegamento se enlaza **estático y autocontenido** en `libcortmotor.so` y el workflow se niega
 a publicar si todavía dependiera de `libllama` o `libggml`.
 
+Medido el 2026-11-05 en la corrida verde 42025488743: `libcortmotor.so` pesa **56 508 296
+bytes** en arm64-v8a y **46 695 488** en armeabi-v7a, y el artefacto completo del motor suma
+208 125 998 bytes repartidos en diez librerías. Dentro del APK **sólo va el pegamento**: las
+otras ocho (`libllama`, `libggml`, `libggml-base`, `libggml-cpu` por cada ABI) las produce el
+CMake de llama.cpp de paso y están ya dentro de `libcortmotor.so` por el enlace estático, así
+que copiarlas costaría ~105 MB de APK sin añadir una sola función. `compilar.sh` lo hace así y
+lo imprime con su peso.
+
 Lo que **todavía no está** de esta fase, dicho con nombre: los `tokens/s` y la RAM que ocupa
 en el A16 (sólo se miden en el aparato; el botón «Probar (mide tokens/s)» los imprime), y la
 respuesta **en streaming en la cara** — el nativo sí emite token a token (`nativeOir`) y el

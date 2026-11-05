@@ -131,7 +131,16 @@ if [ "$DELGADO" = "0" ]; then
     MOTOR_JARVIS=0
     for ABI in $ABIS; do
         mkdir -p "build/stage/lib/$ABI"
-        for FICHERO in vendor/motor/"$ABI"/*.so; do
+        # Sólo `libcortmotor.so`, no `*.so`. Medido en la corrida 42025488743 del
+        # motor: el artefacto pesa 208 125 998 bytes repartidos en 10 librerías, de
+        # las cuales 8 son las compartidas que el CMake de llama.cpp produce de
+        # paso (libllama, libggml, libggml-base, libggml-cpu por cada ABI). El
+        # pegamento de CORT va enlazado ESTÁTICO y autocontenido — `motor-local.yml`
+        # se niega a publicar si en su DT_NEEDED queda `libllama|libggml` — así que
+        # aquellas ocho sobran: meterlas costaría ~105 MB más de APK por cero
+        # funcionales. Lo que sí va es esta, con sus 56 508 296 (arm64) y
+        # 46 695 488 bytes (armeabi).
+        for FICHERO in vendor/motor/"$ABI"/libcortmotor.so; do
             [ -e "$FICHERO" ] || continue
             cp "$FICHERO" "build/stage/lib/$ABI/"
             MOTOR_JARVIS=1
@@ -139,7 +148,7 @@ if [ "$DELGADO" = "0" ]; then
         done
     done
     if [ "$MOTOR_JARVIS" = "0" ]; then
-        echo "aviso: no hay .so en vendor/motor/: este APK se compila SIN cerebro GGUF"
+        echo "aviso: no hay libcortmotor.so en vendor/motor/: este APK se compila SIN cerebro GGUF"
     fi
 
     HAY_NATIVAS=0

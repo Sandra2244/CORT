@@ -628,8 +628,25 @@ def main():
            "motor-local-ndk" in flujo_apk and "download-artifact" in flujo_apk)
     prueba("y si no existe, lo dice con un aviso en vez de romper la corrida",
            'echo "MOTOR_ARTIFACT="' in flujo_apk)
-    prueba("compilar.sh mete las .so del motor en build/stage/lib",
-           "vendor/motor/" in script)
+    prueba("la descarga del motor le dice de QUÉ corrida es (`run-id`): sin eso "
+           "download-artifact sólo mira la suya y el build se pondría rojo",
+           re.search(r"download-artifact[\s\S]{0,400}?run-id:\s*\$\{\{\s*env\.MOTOR_ARTIFACT\s*\}\}",
+                     flujo_apk) is not None,
+           "el README de la acción lo fija: por defecto sólo baja artefactos de la "
+           "corrida actual, y el motor lo sube `motor-local.yml`")
+    prueba("el id del artefacto sale del `--jq` con `first`, no de un `| head -1` "
+           "pegado al `gh` (con pipefail la señal 141 abortaría el paso)",
+           "first // \"\"" in flujo_apk
+           and re.search(r"EXISTE=\"\$\{[\s\S]{0,400}?head", flujo_apk) is None
+           and re.search(r"EXISTE=\"\$\([\s\S]{0,400}?\|\s*head", flujo_apk) is None)
+    prueba("si la descarga falla el APK se publica igual, y `colocar` lo confiesa",
+           "continue-on-error: true" in flujo_apk
+           and "la descarga del motor no trajo nada" in flujo_apk)
+    prueba("compilar.sh mete el motor en build/stage/lib, y SÓLO el pegamento "
+           "(las otras 8 .so del artefacto ya van dentro por el enlace estático)",
+           "vendor/motor/" in script
+           and re.search(r"for FICHERO in vendor/motor/\"\$ABI\"/libcortmotor\.so", script) is not None
+           and re.search(r"for FICHERO in vendor/motor/\"\$ABI\"/\*\.so", script) is None)
     prueba("sin GGUF dentro del APK: se bajan en el almacén",
            not list((APP / "assets").rglob("*.gguf")))
 

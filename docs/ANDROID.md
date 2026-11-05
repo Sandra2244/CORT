@@ -276,8 +276,12 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   acuerdo de `cort-bridge/cort_enlace.py` y entran en el siguiente viaje (F14c).
 - **El cerebro grande no viaja en el APK, y ahora tiene camino** (U1, apartado 4.1): el motor
   `libcortmotor.so` lo compila Actions con el NDK y los GGUF se bajan desde el almacén con su
-  SHA-256 comprobada. Lo que sigue **sin medir** es lo que tarda y lo que ocupa en el A16 — de
-  ahí el botón de prueba. Y una cosa que no se afirma: «Ollama en Android» no es el camino que
+  SHA-256 comprobada. Del artefacto del motor al APK **sólo entra el pegamento** — medido en la
+  corrida 42025488743: 56 508 296 bytes en arm64-v8a y 46 695 488 en armeabi-v7a — porque va
+  enlazado estático y autocontenido; las otras ocho librerías del artefacto (`libllama`,
+  `libggml`, `libggml-base`, `libggml-cpu` por ABI) ya van dentro y copiarlas sumaría ~105 MB
+  sin dar ninguna función. Lo que sigue **sin medir** es lo que tarda y lo que ocupa en el A16 —
+  de ahí el botón de prueba. Y una cosa que no se afirma: «Ollama en Android» no es el camino que
   CORT tomó; el que funciona es llama.cpp compilado a mano, medido en 177 s de runner para las
   dos ABIs.
 - **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa y la

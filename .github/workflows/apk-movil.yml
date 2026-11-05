@@ -108,12 +108,20 @@ jobs:
         # en vez de con `download-artifact` a ciegas: ese acción falla con
         # «Unable to find any artifact» si el artefacto no existe, y una compilación
         # de APK no puede ponerse roja por culpa de un trabajo que todavía no corrió.
-        # El id encontrado se deja en `MOTOR_ARTIFACT` para el paso de abajo.
+        # El id encontrado se deja en `MOTOR_ARTIFACT` para el paso de abajo, y ese
+        # paso lo reenvía con `run-id`: `download-artifact` sólo ve los artefactos
+        # de SU PROPIA corrida si no se le dice otro (el README lo fija: «By default,
+        # the permissions are scoped so they can only download Artifacts within the
+        # current workflow run»). Como el motor lo sube `motor-local.yml`, sin
+        # `run-id` diría «Unable to find any artifact» y pondría este trabajo rojo
+        # por culpa de un vecino que sí está bien.
+        # El `first` va dentro del `--jq`, no con `| head -1` pegado al `gh`: con
+        # `set -euo pipefail` un `head` que corta el pipe puede dejar a `gh` señal
+        # 141 y el paso entero se aborta — justo lo que no queremos aquí.
         run: |
           set -euo pipefail
           EXISTE="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name=="motor-local-ndk" and .expired==false) | .workflow_run.id' \
-            | head -1)"
+            --jq '[.artifacts[] | select(.name=="motor-local-ndk" and .expired==false) | .workflow_run.id] | first // ""')"
           if [ -z "$EXISTE" ]; then
             echo "::warning::no hay artefacto motor-local-ndk: el APK sale SIN cerebro GGUF (la app lo dice en pantalla)"
             echo "MOTOR_ARTIFACT=" >> "$GITHUB_ENV"
@@ -126,9 +134,14 @@ jobs:
 
       - name: bajar el motor
         if: env.MOTOR_ARTIFACT != ''
+        # `continue-on-error`: si la descarga falla (reintento de GitHub, artefacto
+        # recién caducado), el APK NO se deja de publicar — sale sin cerebro y la
+        # app lo dice en pantalla. El paso de abajo comprueba si llegó algo.
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: motor-local-ndk
+          run-id: ${{ env.MOTOR_ARTIFACT }}
           path: apps/android/vendor/motor-bajado
 
       - name: colocar las .so del motor
@@ -138,13 +151,36 @@ jobs:
           # El artefacto trae `motor/<abi>/*.so` y `auditoria-motor.txt`. `compilar.sh`
           # espera `vendor/motor/<abi>/`, que es de donde los copia a
           # `build/stage/lib/<abi>/` sin comprimir y alineados.
+          #
+          # Se busca el directorio en los dos sitios donde puede estar (la acción deja
+          # el contenido en `path/` o en `path/<nombre-artefacto>/` según la versión),
+          # y se copia SOLO `libcortmotor.so`: enlazada estática y autocontenido, las
+          # demás .so del artefacto son llama.cpp sin el pegamento y no sirven aquí.
+          if [ ! -e apps/android/vendor/motor-bajado ]; then
+            echo "::warning::la descarga del motor no trajo nada: el APK sale SIN cerebro GGUF (la app lo dice en pantalla)"
+            echo "MOTOR_ARTIFACT=" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          src=""; for c in apps/android/vendor/motor-bajado/motor apps/android/vendor/motor-bajado/motor-local-ndk/motor apps/android/vendor/motor-bajado; do
+            [ -d "$c/arm64-v8a" ] || continue
+            if [ -f "$c/arm64-v8a/libcortmotor.so" ]; then src="$c"; break; fi
+          done
+          if [ -z "$src" ]; then
+            echo "::error::el artefacto llegó pero no contiene libcortmotor.so en arm64-v8a; se ve así: $(find apps/android/vendor/motor-bajado -maxdepth 3 | tr '\n' ' ')"
+            echo "MOTOR_ARTIFACT=" >> "$GITHUB_ENV"
+            exit 0
+          fi
           mkdir -p apps/android/vendor/motor
-          cp -r apps/android/vendor/motor-bajado/motor/. apps/android/vendor/motor/
-          echo "motor bajado: $(find apps/android/vendor/motor -name '*.so' | wc -l) .so"
+          for ABI in arm64-v8a armeabi-v7a; do
+            if [ -f "$src/$ABI/libcortmotor.so" ]; then
+              mkdir -p "apps/android/vendor/motor/$ABI"
+              cp "$src/$ABI/libcortmotor.so" "apps/android/vendor/motor/$ABI/"
+            fi
+          done
+          echo "motor: $src"
           for F in apps/android/vendor/motor/*/*.so; do
             echo "  $(stat -c%s "$F") bytes · $(sha256sum "$F" | awk '{print substr($1,1,12)}') · $F"
           done
-          echo "  auditoría: $(sha256sum apps/android/vendor/motor-bajado/auditoria-motor.txt | awk '{print substr($1,1,12)}')"
 
       - name: compilar
         id: compila
