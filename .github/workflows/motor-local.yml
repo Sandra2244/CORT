@@ -44,10 +44,23 @@ name: motor-local
 # `apt` — sólo las herramientas que el runner ya trae (cmake, ninja/make,
 # unzip, curl), igual que hace `apk-movil.yml` con aapt2/d8/zipalign.
 #
-# Este archivo NO toca la release ni el APK: publica un artefacto suelto.
-# La integración dentro del APK (jniLibs + JNI + Qwen2.5-1.5B q2_k) viene
-# después, y el modelo GGUF NO se descarga aquí: viaja aparte, como ya hace
-# el oído de Vosk por deps.txt, con su nombre y su suma fijados.
+# Este archivo NO toca la release ni el APK: publica un artefacto suelto con
+# dos cosas: (1) las .so compartidas de llama.cpp y (2) `libcortmotor.so`, el
+# pegamento JNI de CORT (`apps/android/jni/cort_motor.cpp`), que es lo único que
+# el APK va a cargar con `System.loadLibrary("cortmotor")`.
+#
+# Por qué el pegamento va enlazado ESTÁTICO y no contra las .so de arriba,
+# medido el 2026-11-05 en `src/CMakeLists.txt` de b12121: el objetivo `llama`
+# lleva `VERSION ${LLAMA_VERSION_BASE}` y `SOVERSION ${LLAMA_VERSION_MAJOR}`
+# (que la raíz fija en 0, con `set()`, no editable desde la línea de CMake).
+# O sea que el SONAME real de la librería es `libllama.so.0`, y un
+# `libcortmotor.so` enlazado contra la versión compartida pediría en su
+# DT_NEEDED un archivo que en el APK se llama `libllama.so`: el enlazador de
+# Android no lo encontraría y la biblioteca nativa se caería al cargar. Con el
+# estático, `libcortmotor.so` sale autocontenida y sin deudas.
+#
+# El modelo GGUF NO se descarga aquí: viaja aparte, como ya hace el oído de
+# Vosk por deps.txt, con su nombre y su suma fijados.
 #
 # Licencia de llama.cpp: MIT (archivo LICENSE del propio etiquetado,
 # "Copyright (c) 2023-2026 The ggml authors"). Falta su línea en
@@ -250,6 +263,92 @@ jobs:
             fi
           done
 
+      - name: enlazar el pegamento JNI de CORT (statico, autocontenido)
+        run: |
+          set -euo pipefail
+          # Coste medido de la pasada compartida de arriba: 177 s para los dos ABIs
+          # (run 41974349026, 05:30:14 → 05:33:11). Una segunda pasada estática por
+          # ABI cabe de sobra en el timeout del trabajo.
+          BIN="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          for ABI in arm64-v8a armeabi-v7a; do
+            case "$ABI" in
+              arm64-v8a)   CXX="$BIN/aarch64-linux-android26-clang++" ;;
+              armeabi-v7a) CXX="$BIN/armv7a-linux-androideabi26-clang++" ;;
+            esac
+
+            echo "======== configure estático $ABI ========"
+            # Los mismos flags que la pasada compartida, con BUILD_SHARED_LIBS=OFF:
+            # así los símbolos de llama y ggml entran DENTRO de libcortmotor.so y el
+            # APK no queda dependiente de los SONAME versionados (ver cabecera).
+            cmake -S "$SRC_DIR" -B "$RUNNER_TEMP/build-estatico-$ABI" \
+              -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI="$ABI" \
+              -DANDROID_PLATFORM=android-26 \
+              -DANDROID_NATIVE_API_LEVEL=26 \
+              -DANDROID_ARM_NEON=ON \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=OFF \
+              -DLLAMA_BUILD_TESTS=OFF \
+              -DLLAMA_BUILD_EXAMPLES=OFF \
+              -DLLAMA_BUILD_SERVER=OFF \
+              -DLLAMA_BUILD_COMMON=OFF \
+              -DLLAMA_BUILD_TOOLS=OFF \
+              -DLLAMA_BUILD_APP=OFF \
+              -DLLAMA_BUILD_UI=OFF \
+              -DGGML_NATIVE=OFF \
+              -DGGML_OPENMP=OFF \
+              -DGGML_LLAMAFILE=OFF \
+              -DLLAMA_OPENSSL=OFF \
+              -DLLAMA_BUILD_NUMBER=12121 \
+              -DLLAMA_BUILD_COMMIT="$LLAMA_COMITE"
+
+            set +e
+            cmake --build "$RUNNER_TEMP/build-estatico-$ABI" --target llama -j"$(nproc)" \
+              > "/tmp/estatico-$ABI.log" 2>&1
+            COD=$?
+            set -e
+            cat "/tmp/estatico-$ABI.log"
+            if [ $COD -ne 0 ]; then
+              echo "::error::la pasada estática $ABI cayó con código $COD"
+              grep -E 'error:|fatal' "/tmp/estatico-$ABI.log" | sed 's/^/::error::/' || true
+              exit $COD
+            fi
+
+            # `--start-group` porque llama llama a ggml y ggml se registra a sí
+            # mismo: sin el grupo, el enlazador descartaría el registro de backend.
+            ARCHIVOS="$(find "$RUNNER_TEMP/build-estatico-$ABI" -name 'lib*.a' | sort | tr '\n' ' ')"
+            echo "archivos .a encontrados: $ARCHIVOS"
+            if [ -z "$(echo "$ARCHIVOS" | tr -d ' ')" ]; then
+              echo "::error::no quedó ningún .a en build-estatico-$ABI"
+              exit 1
+            fi
+            mkdir -p "motor/$ABI"
+            set +e
+            "$CXX" -std=c++17 -O2 -fPIC -shared \
+              -I "$SRC_DIR/include" -I "$SRC_DIR/ggml/include" \
+              apps/android/jni/cort_motor.cpp \
+              -Wl,--whole-archive -Wl,--start-group $ARCHIVOS -Wl,--end-group -Wl,--no-whole-archive \
+              -static-libstdc++ -lm -ldl -llog -pthread \
+              -o "motor/$ABI/libcortmotor.so" > /tmp/enlace-$ABI.log 2>&1
+            COD=$?
+            set -e
+            cat /tmp/enlace-$ABI.log
+            if [ $COD -ne 0 ]; then
+              echo "::error::el enlace de libcortmotor.so ($ABI) cayó con código $COD"
+              grep -E 'error|undefined' /tmp/enlace-$ABI.log | sed 's/^/::error::/' | head -20 || true
+              exit $COD
+            fi
+            echo "== $ABI: libcortmotor.so $(stat -c%s motor/$ABI/libcortmotor.so) bytes =="
+            # Lo que manda es la lista DEPENDENCIAS: tiene que salir vacía de
+            # libllama/libggml. Si aparece alguna, el estático no fue estático.
+            "$BIN/llvm-readelf" -d "motor/$ABI/libcortmotor.so" | grep -E 'NEEDED|SONAME' || true
+            if "$BIN/llvm-readelf" -d "motor/$ABI/libcortmotor.so" \
+                 | grep -E 'libllama|libggml' ; then
+              echo "::error::libcortmotor.so ($ABI) todavía pide libllama/libggml sueltas: se caería al cargar en el teléfono"
+              exit 1
+            fi
+          done
+
       - name: recoger las .so y medir su peso
         run: |
           set -euo pipefail
@@ -323,6 +422,43 @@ jobs:
             exit 1
           fi
 
+      - name: comprobar que el pegamento JNI exporta lo que Java va a llamar
+        # `javac` no ve los nombres nativos: si `System.loadLibrary("cortmotor")`
+        # no encuentra el símbolo, el fallo aparece en el teléfono, no en el CI.
+        # Aquí se comprueba la lista contra el `.so` con llvm-nm, que es lo mismo
+        # que va a buscar el enlazador de Android.
+        run: |
+          set -euo pipefail
+          NM="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          # Estos diez nombres tienen que coincidir BYTE A BYTE con los
+          # `native*` declarados en CerebroLocal.java (clase
+          # dev.sandra.cort.movil.CerebroLocal) y con la firma JNI de un método
+          # static: (JNIEnv*, jclass, ...). La suite `prueba_apk.py` cruza esta
+          # lista con el archivo Java, así que mover uno sin la otra se cae.
+          NATIVOS="nativeIniciar nativeSistema nativeInterrumpe nativeOir nativeAbrir nativeCerrar nativeHayCerebro nativeUltimaMedida nativePreguntar nativeAjustarMuestreo"
+          : > /tmp/jni-simbolos.txt
+          for ABI in arm64-v8a armeabi-v7a; do
+            "$NM" -D --defined-only "motor/$ABI/libcortmotor.so" > "/tmp/nmj-$ABI.txt"
+            if [ ! -s "/tmp/nmj-$ABI.txt" ]; then
+              echo "::error::libcortmotor.so ($ABI) no exporta ningún símbolo dinámico"
+              exit 1
+            fi
+            echo "== $ABI: libcortmotor.so ($(stat -c%s motor/$ABI/libcortmotor.so) bytes) ==" >> /tmp/jni-simbolos.txt
+            for N in $NATIVOS; do
+              S="Java_dev_sandra_cort_movil_CerebroLocal_$N"
+              if grep -qw "$S" "/tmp/nmj-$ABI.txt"; then
+                echo "  EXPORTADO   $N" >> /tmp/jni-simbolos.txt
+              else
+                echo "  FALTA       $N" >> /tmp/jni-simbolos.txt
+                echo "::error::el nativo $N no está exportado por libcortmotor.so ($ABI)"
+              fi
+            done
+          done
+          cat /tmp/jni-simbolos.txt
+          if grep -q "FALTA " /tmp/jni-simbolos.txt; then
+            exit 1
+          fi
+
       - name: auditoría del motor
         run: |
           set -euo pipefail
@@ -340,7 +476,9 @@ jobs:
             echo "  sha256 medido:   $NDK_SHA256"
             echo "  sha256 fijado:   $NDK_SHA256_FIJADO"
             echo "  sha1 publicado por Google (repository2-3.xml): $NDK_SHA1_GOOGLE"
-            echo "ABIs compilados: arm64-v8a armeabi-v7a (API android-26, NEON ON, Release, BUILD_SHARED_LIBS ON)"
+            echo "ABIs compilados: arm64-v8a armeabi-v7a (API android-26, NEON ON, Release)"
+            echo "  compartida: BUILD_SHARED_LIBS ON · estática: BUILD_SHARED_LIBS OFF, de ahí sale libcortmotor.so"
+            echo "  pegamento JNI: apps/android/jni/cort_motor.cpp (sólo API pública de llama.h)"
             echo ""
             echo "— librerías producidas (sin strip, copiadas tal cual con cp -L) —"
             for ABI in arm64-v8a armeabi-v7a; do
@@ -351,6 +489,9 @@ jobs:
             echo ""
             echo "— símbolos de libllama.so (llvm-nm -D --defined-only) —"
             cat /tmp/simbolos.txt
+            echo ""
+            echo "— nativos de libcortmotor.so (los que busca System.loadLibrary) —"
+            cat /tmp/jni-simbolos.txt
           } > auditoria-motor.txt
           cat auditoria-motor.txt
 
@@ -372,4 +513,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "motor $ETIQUETA listo: llama.cpp $LLAMA_ETIQUETA con NDK $NDK_VERSION, dos ABIs."
-          echo "artefacto: motor-local-ndk (las .so + auditoria-motor.txt)"
+          echo "artefacto: motor-local-ndk (las .so compartidas, libcortmotor.so y auditoria-motor.txt)"
+          for ABI in arm64-v8a armeabi-v7a; do
+            echo "  $ABI: libcortmotor.so $(stat -c%s motor/$ABI/libcortmotor.so) bytes"
+          done
