@@ -126,7 +126,7 @@ salir y no de la punta de la rama.
 **Peso: esta vez medido y esta vez grande.** La release `cort-v0.15.1` pesa
 **59 581 673 bytes = 56,82 MB** y su SHA-256 es la que publica su propio archivo
 `CORT-movil.apk.sha256` (`03b001bdfbdd89f934dcfe5f7c2e131dc6d5e12cba92db5038c7e725b31e4741`,
-run 41975870042). El anterior (`cort-v0.11.0`) pesaba
+run 41977159844). El anterior (`cort-v0.11.0`) pesaba
 **16 873 bytes**: ×3 531, y la diferencia no es código, es el oído.
 
 > **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
@@ -235,7 +235,7 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
-  auditoría en el runner (release `cort-v0.15.1`, run 41975870042, verde, 59 581 673 bytes =
+  auditoría en el runner (release `cort-v0.15.1`, run 41977159844, verde, 59 581 673 bytes =
   56,82 MB) y las 159 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
   La estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
   798 160 B con zxing, el parlamento y las pantallas de U2 dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
