@@ -1,0 +1,11 @@
+{
+  "_": "El modelo de español del oído local (Vosk). Desde `cort-v0.16.2` NO viaja dentro del APK: se baja en el Almacén con el mismo `Range` + `.part` + SHA-256 que los GGUF. El peso y la suma son los fijados en `deps.txt` y medidos contra el zip oficial de alphacephei.com; si la fila de aquí y la de `deps.txt` se separan, `scripts/prueba_apk.py` pone la suite en rojo. `licencia`: Apache-2.0, acreditada en `ACREDITACION.md`.",
+  "archivo": "vosk-model-small-es-0.42.zip",
+  "url": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+  "bytes": 39817833,
+  "sha256": "09b239888f633ef2f0b4e09736e3d9936acfd810bc65d53fad45261762c6511f",
+  "id": "small-es-0.42",
+  "carpeta": "vosk-model-small-es-0.42",
+  "nombre": "Oído en español (Vosk small-es-0.42)",
+  "nota": "sin esto el dictado cede al motor de voz de Android, que va por internet"
+}

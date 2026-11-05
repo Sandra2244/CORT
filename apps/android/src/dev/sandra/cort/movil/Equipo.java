@@ -99,7 +99,8 @@ public class Equipo extends Activity {
 
         cuadro.append("--- la boca y el oído ---\n");
         cuadro.append("motor de voz de Android: ").append(vozDelSistema()).append('\n');
-        cuadro.append("modelo de español dentro del APK: ").append(siNo(motorLocal())).append('\n');
+        cuadro.append("modelo de español montado: ").append(siNo(motorLocal()))
+              .append(motorLocal() ? "" : " (se baja en Almacén; sin él manda el motor de Android)").append('\n');
 
         ApplicationInfo info = getApplicationInfo();
         cuadro.append("\n--- la casa ---\n").append("targetSdk: ").append(info.targetSdkVersion)

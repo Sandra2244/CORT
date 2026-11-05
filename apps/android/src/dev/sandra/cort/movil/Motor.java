@@ -12,6 +12,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.security.MessageDigest;
+import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.json.JSONObject;
@@ -32,17 +36,24 @@ import org.vosk.Recognizer;
  * Aquí el audio no sale del aparato. `libvosk.so` y `libjnidispatch.so` viajan
  * dentro del APK (`compilar.sh` los saca de los AAR oficiales de Maven Central,
  * con la suma SHA-256 fijada en `deps.txt`), y el modelo español
- * `vosk-model-small-es-0.42` viaja en `assets/motor/` — 39 817 833 bytes, con
- * su suma en el mismo archivo—. Eso es lo que contesta a «el APK no pesa nada»:
- * pesa porque el oído está dentro, no porque le sobre código.
+ * `vosk-model-small-es-0.42` — 39 817 833 bytes — **se baja en el Almacén** desde
+ * `cort-v0.16.2`. La ficha de la descarga (URL, peso y suma) está en
+ * `assets/oido.json`, fijada contra el zip oficial de alphacephei.com.
  *
- * Tres decisiones escritas antes del código:
+ * Por qué el modelo salió del APK: con dos arquitecturas y las `.so` sin
+ * comprimir, el archivo entero medía 162 817 475 bytes. Bajado a ~40 KB/s en la
+ * casa de la dueña son 70 minutos, se cortó, y Samsung dijo «aplicación no
+ * instalada» — que es lo que dice de un archivo truncado, no de un archivo
+ * malo. El número de la descarga, no el del teléfono, es lo que había que bajar.
+ *
+ * Cuatro decisiones escritas antes del código:
  *
  * 1. **El modelo se descomprime la primera vez y no en cada arranque.** `assets`
- *    sólo se puede leer como corriente; Vosk necesita un *directorio* con `am/`,
- *    `conf/`, `graph/` y `rescorer/`. Se copia una vez a `filesDir/motor/` y se
- *    deja un marcador con el identificador del modelo; si el marcador falta, o
- *    el APK trae un modelo con otro identificador, se vuelve a descomprimir.
+ *    sólo se puede leer como corriente y el zip bajado vive en `filesDir`; Vosk
+ *    necesita un *directorio* con `am/`, `conf/`, `graph/` y `rescorer/`. Se
+ *    copia una vez a `filesDir/motor/` y se deja un marcador con el
+ *    identificador del modelo; si el marcador falta, o el APK trae un modelo con
+ *    otro identificador, se vuelve a descomprimir.
  *    Coste: unos segundos y ~90 MB en los datos de la app la primera vez.
  * 2. **Si el modelo no está, CORT no se queda muda: cede el oído.** El APK
  *    delgado —el que se compila sin `vendor/`— o un teléfono donde la
@@ -72,16 +83,20 @@ public final class Motor {
     private static final String ID_DEL_MODELO = "small-es-0.42";
     private static final String MARCADOR = ".instalado";
 
+    /** La ficha de la descarga: URL, peso y SHA-256 medidos, fijados en `assets/oido.json`. */
+    private static final String FICHA_DENTRO = "oido.json";
+
     /* Los estados que la cara puede enseñar, dichos en español y sin rodeos. */
     public static final int SIN_MODELO = 0;
     public static final int DESCOMPRIMIENDO = 1;
     public static final int CARGANDO = 2;
     public static final int LISTO = 3;
     public static final int ROTO = 4;
+    public static final int DESCARGANDO = 5;
 
     private static final String[] NOMBRES = {
-        "sin modelo dentro del APK", "descomprimiendo el modelo",
-        "cargando el modelo", "Vosk listo", "roto"};
+        "sin el modelo de español (se baja en Almacén)", "descomprimiendo el modelo",
+        "cargando el modelo", "Vosk listo", "roto", "descargando el modelo"};
 
     private static Motor unico;
 
@@ -98,6 +113,19 @@ public final class Motor {
     /** Duración del último dictado, medida en el teléfono: es el dato que falta. */
     public volatile long ultimoDictadoMs;
 
+    /* Lo que dice `assets/oido.json`. Se leen una vez, en el constructor: si el
+     * archivo falta (un APK armado a mano sin el asset) la cara lo confiesa con
+     * `sePuedeBajar()` en vez de abrir una conexión vacía. */
+    private volatile String urlDelModelo = "";
+    private volatile String shaDelModelo = "";
+    private volatile String archivoDelModelo = CARPETA_MODEL + ".zip";
+    private volatile String idDelFicha = ID_DEL_MODELO;
+    private volatile String carpetaDelModelo = CARPETA_MODEL;
+    private volatile long bytesDelModelo;
+
+    private volatile long hechoDescarga;
+    private volatile boolean descargaEmpezada;
+
     /** Una sola instancia: el modelo son decenas de MB y no se cargan dos veces. */
     public static Motor compartido(Context contexto) {
         synchronized (Motor.class) {
@@ -110,6 +138,29 @@ public final class Motor {
 
     private Motor(Context contexto) {
         this.contexto = contexto;
+        leeFicha();
+    }
+
+    /** Lee la ficha de la descarga; si no está o está mal, deja los valores de siempre. */
+    private void leeFicha() {
+        try (InputStream entrada = contexto.getAssets().open(FICHA_DENTRO)) {
+            byte[] b = new byte[8192];
+            java.io.ByteArrayOutputStream todo = new java.io.ByteArrayOutputStream();
+            int n;
+            while ((n = entrada.read(b)) > 0) {
+                todo.write(b, 0, n);
+            }
+            JSONObject ficha = new JSONObject(new String(todo.toByteArray(), "UTF-8"));
+            urlDelModelo = ficha.optString("url", "");
+            shaDelModelo = ficha.optString("sha256", "").toLowerCase(Locale.ROOT);
+            bytesDelModelo = ficha.optLong("bytes", 0L);
+            archivoDelModelo = ficha.optString("archivo", CARPETA_MODEL + ".zip");
+            carpetaDelModelo = ficha.optString("carpeta", CARPETA_MODEL);
+            idDelFicha = ficha.optString("id", ID_DEL_MODELO);
+        } catch (Exception noEsta) {
+            urlDelModelo = "";
+            aviso = "falta " + FICHA_DENTRO + " en el APK";
+        }
     }
 
     /* ---------------------------------------------------------------- preparación */
@@ -133,16 +184,17 @@ public final class Motor {
     }
 
     private void abrir() {
-        if (!existeModeloEnElAPK()) {
-            estado = SIN_MODELO;
-            aviso = "el APK salió sin modelo";
-            return;
-        }
-        File carpeta = new File(new File(contexto.getFilesDir(), "motor"), CARPETA_MODEL);
+        File carpeta = new File(motorDeDatos(), carpetaDelModelo);
         try {
             if (!instalado(carpeta)) {
                 estado = DESCOMPRIMIENDO;
-                descomprime(carpeta);
+                if (!montaDesdeDisco(carpeta) && !montaDesdeAssets(carpeta)) {
+                    estado = SIN_MODELO;
+                    aviso = sePuedeBajar()
+                            ? "toca «Bajar el oído» en Almacén (" + mb(bytesDelModelo) + " MB)"
+                            : "el APK salió sin modelo";
+                    return;
+                }
             }
             estado = CARGANDO;
             Model nuevo = new Model(carpeta.getAbsolutePath());
@@ -158,6 +210,185 @@ public final class Motor {
             estado = ROTO;
             aviso = detalle(caida);
         }
+    }
+
+    /** `filesDir/motor`, donde vive el modelo descomprimido y el zip descargado. */
+    private File motorDeDatos() {
+        return new File(contexto.getFilesDir(), "motor");
+    }
+
+    /** El zip ya bajado (o el que se está reanudando), en `filesDir/motor/`. */
+    public File zipDelModelo() {
+        return new File(motorDeDatos(), archivoDelModelo);
+    }
+
+    /** Cuánto hay que bajar: lo dice la ficha del APK, no un número escrito aquí. */
+    public long pesoDelModelo() {
+        return bytesDelModelo;
+    }
+
+    /** Hay ficha, o sea hay de dónde bajar el modelo. */
+    public boolean sePuedeBajar() {
+        return !urlDelModelo.isEmpty() && bytesDelModelo > 0;
+    }
+
+    public static String mb(long bytes) {
+        return String.format(Locale.ROOT, "%.1f", bytes / 1048576.0);
+    }
+
+    /**
+     * Baja el modelo si hace falta, verifica la suma y monta el oído. Se llama
+     * desde el Almacén con un botón; el progreso lo lee la pantalla de
+     * `descargaTexto()`, que es también lo que ve la cara.
+     */
+    public void bajaYMonta() {
+        if (descargaEmpezada) {
+            return;
+        }
+        descargaEmpezada = true;
+        new Thread(() -> {
+            boolean seBajo = true;
+            try {
+                if (!instalado(new File(motorDeDatos(), carpetaDelModelo))) {
+                    descarga();
+                }
+            } catch (Throwable culpa) {
+                seBajo = false;
+                estado = ROTO;
+                aviso = "la descarga falló: " + detalle(culpa)
+                        + " — lo bajado queda, se reanada";
+            } finally {
+                descargaEmpezada = false;
+            }
+            // Sólo si la descarga terminó: si no, `abrir()` pisaría el motivo del
+            // fallo con un «sin el modelo» que no dice nada de lo que pasó.
+            if (seBajo) {
+                abrir();
+            }
+        }, "cort-bajar-oido").start();
+    }
+
+    public boolean estaDescargando() {
+        return descargaEmpezada;
+    }
+
+    /** Lo que el Almacén pinta cada segundo: progreso en % o el motivo del corte. */
+    public String descargaTexto() {
+        if (descargaEmpezada) {
+            long total = bytesDelModelo > 0 ? bytesDelModelo : zipDelModelo().length();
+            return "bajando " + mb(hechoDescarga) + " de " + mb(total) + " MB ("
+                    + (total > 0 ? (100L * hechoDescarga / total) : 0) + " %)";
+        }
+        return estadoTexto();
+    }
+
+    /**
+     * Descarga con resumiendo: si quedó un `.part` de un corte anterior —y el
+     * corte de la luz es el caso real de esta casa— se pide `Range` desde donde
+     * se paró. Al terminar se calcula la SHA-256 del archivo entero y, si no
+     * cuadra, se tira: un zip truncado descomprime a medias y Vosk abre un
+     * modelo roto en vez de fallar.
+     *
+     * El enlace no lleva token ni clave: es el zip público de alphacephei.com
+     * fijado en `assets/oido.json`, y por eso puede bajarlo este hilo en vez del
+     * `DownloadManager` del sistema (cuyas notificaciones se leen con la pantalla
+     * bloqueada y, en otros modelos, llevan la URL escrita).
+     */
+    private void descarga() throws Exception {
+        File destino = zipDelModelo();
+        File parcial = new File(destino.getPath() + ".part");
+        File padre = parcial.getParentFile();
+        if (padre != null && !padre.isDirectory() && !padre.mkdirs()) {
+            throw new IOException("no se pudo crear " + padre);
+        }
+        if (destino.isFile() && destino.length() == bytesDelModelo
+                && encajaLaSuma(destino)) {
+            hechoDescarga = destino.length();
+            return;
+        }
+        long reanudado = parcial.isFile() ? parcial.length() : 0L;
+        hechoDescarga = reanudado;
+        HttpURLConnection conexion = (HttpURLConnection) new URL(urlDelModelo).openConnection();
+        conexion.setInstanceFollowRedirects(true);
+        conexion.setConnectTimeout(20_000);
+        conexion.setReadTimeout(60_000);
+        if (reanudado > 0) {
+            conexion.setRequestProperty("Range", "bytes=" + reanudado + "-");
+        }
+        estado = DESCARGANDO;
+        aviso = "";
+        try {
+            int codigo = conexion.getResponseCode();
+            if (codigo != 200 && codigo != 206) {
+                throw new IOException("el servidor respondió " + codigo);
+            }
+            if (reanudado > 0 && codigo != 206) {
+                // Sin `206` el servidor manda el archivo entero desde el byte 0:
+                // empezar el `.part` de nuevo, no pegar el resto encima.
+                reanudado = 0;
+                hechoDescarga = 0;
+            }
+            try (InputStream entrada = conexion.getInputStream();
+                 OutputStream salida = new FileOutputStream(parcial, reanudado > 0)) {
+                byte[] b = new byte[65536];
+                int n;
+                while ((n = entrada.read(b)) > 0) {
+                    salida.write(b, 0, n);
+                    hechoDescarga += n;
+                }
+            }
+        } finally {
+            conexion.disconnect();
+        }
+        if (parcial.length() != bytesDelModelo) {
+            throw new IOException("quedaron " + parcial.length() + " bytes de " + bytesDelModelo
+                    + "; se reanada al tocar otra vez");
+        }
+        String suma = hex(sumarDesde(parcial));
+        if (!shaDelModelo.isEmpty() && !shaDelModelo.equals(suma)) {
+            parcial.delete();
+            throw new IOException("la SHA-256 no cuadra (" + suma.substring(0, 12)
+                    + "…); se tiró el archivo");
+        }
+        if (!parcial.renameTo(destino) && !destino.isFile()) {
+            throw new IOException("no se pudo mover el archivo verificado");
+        }
+    }
+
+    /** El archivo que ya está en disco es el del zip fijado: tamaño y suma. */
+    private boolean encajaLaSuma(File archivo) {
+        if (shaDelModelo.isEmpty()) {
+            return true;
+        }
+        try {
+            return shaDelModelo.equals(hex(sumarDesde(archivo)));
+        } catch (Exception algo) {
+            return false;
+        }
+    }
+
+    private static byte[] sumarDesde(File archivo) throws IOException {
+        try {
+            MessageDigest digiero = MessageDigest.getInstance("SHA-256");
+            try (FileInputStream fuente = new FileInputStream(archivo)) {
+                byte[] b = new byte[65536];
+                int n;
+                while ((n = fuente.read(b)) > 0) {
+                    digiero.update(b, 0, n);
+                }
+            }
+            return digiero.digest();
+        } catch (java.security.NoSuchAlgorithmException imposible) {
+            throw new IOException("sin SHA-256 en este Android");
+        }
+    }
+
+    private static String hex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte u : bytes) {
+            sb.append(String.format("%02x", u));
+        }
+        return sb.toString();
     }
 
     public boolean listo() {
@@ -187,6 +418,40 @@ public final class Motor {
     }
 
     /**
+     * Descomprime el zip **ya bajado** en el almacén. Se comprueba la suma antes
+     * de tocarlo: un `.zip` de 39 817 833 bytes cortado en el byte 30 millones
+     * descomprime media carpeta y Vosk abre un modelo a medias en vez de fallar.
+     */
+    private boolean montaDesdeDisco(File carpetaFinal) {
+        File zip = zipDelModelo();
+        if (!zip.isFile() || (bytesDelModelo > 0 && zip.length() != bytesDelModelo)
+                || !encajaLaSuma(zip)) {
+            return false;
+        }
+        try (InputStream fuente = new FileInputStream(zip)) {
+            descomprime(fuente, carpetaFinal);
+            return true;
+        } catch (Exception algoSaloMal) {
+            aviso = "al descomprimir: " + detalle(algoSaloMal);
+            return false;
+        }
+    }
+
+    /** El camino de siempre: el `assets/motor/` de un APK compilado con `CORT_OIDO_DENTRO=1`. */
+    private boolean montaDesdeAssets(File carpetaFinal) {
+        if (!existeModeloEnElAPK()) {
+            return false;
+        }
+        try (InputStream fuente = contexto.getAssets().open(ZIP_DENTRO)) {
+            descomprime(fuente, carpetaFinal);
+            return true;
+        } catch (Exception algoSaloMal) {
+            aviso = "al descomprimir: " + detalle(algoSaloMal);
+            return false;
+        }
+    }
+
+    /**
      * Vale sólo si la carpeta existe y el marcador dice el identificador del
      * modelo que este APK espera. Así, una actualización con otro modelo se
      * descomprime sola en vez de servir el viejo.
@@ -198,7 +463,7 @@ public final class Motor {
         }
         try {
             byte[] guardado = leeArchivo(marcador);
-            return ID_DEL_MODELO.equals(new String(guardado, "UTF-8").trim());
+            return idDelFicha.equals(new String(guardado, "UTF-8").trim());
         } catch (Exception cualquierCosa) {
             return false;
         }
@@ -206,7 +471,7 @@ public final class Motor {
 
     private void escribeMarcador(File motor) {
         try {
-            escribe(new File(motor, MARCADOR), ID_DEL_MODELO.getBytes("UTF-8"));
+            escribe(new File(motor, MARCADOR), idDelFicha.getBytes("UTF-8"));
         } catch (IOException noSePudoAnotar) {
             // Sin marcador la próxima vez se vuelve a descomprimir: lento, no roto.
         }
@@ -242,15 +507,18 @@ public final class Motor {
      * un archivo llamado `../../otro/aplicacion.xml` y escribir fuera del
      * directorio de la app. El modelo de Vosk no lo hace, pero este código no lo
      * sabe: se comprueba la ruta resuelta y si sale del sitio, se aborta.
+     *
+     * Borra **sólo la carpeta del modelo**, nunca `motor/` entero: ahí vive el
+     * zip que se está descomprimiendo y, si se va, la fuente se corta a medias.
      */
-    private void descomprime(File carpetaFinal) throws IOException {
+    private void descomprime(InputStream origen, File carpetaFinal) throws IOException {
         File raizDeDatos = contexto.getFilesDir().getCanonicalFile();
         File motor = carpetaFinal.getParentFile();
-        borraArbol(motor);
+        borraArbol(carpetaFinal);
         if (!motor.mkdirs() && !motor.isDirectory()) {
             throw new IOException("no se pudo crear la carpeta del modelo");
         }
-        try (ZipInputStream zip = new ZipInputStream(contexto.getAssets().open(ZIP_DENTRO))) {
+        try (ZipInputStream zip = new ZipInputStream(origen)) {
             ZipEntry entrada;
             byte[] b = new byte[65536];
             while ((entrada = zip.getNextEntry()) != null) {
@@ -278,7 +546,7 @@ public final class Motor {
             }
         }
         if (!carpetaFinal.isDirectory()) {
-            throw new IOException("el zip no traía " + CARPETA_MODEL);
+            throw new IOException("el zip no traía " + carpetaDelModelo);
         }
         escribeMarcador(motor);
     }

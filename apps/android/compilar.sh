@@ -39,11 +39,14 @@ case "$VERSION" in
 esac
 [ "$CODE" -ge 1 ] || CODE=1
 
-# Arquitecturas que se empaquetan. `arm64-v8a` es el Galaxy A16 de la dueña;
-# `armeabi-v7a` cubre los teléfonos viejos. No se meten x86 ni x86_64: suman
-# 20 MB para un emulador que aquí no se usa, y el tamaño del APK se ve en la
-# lista de aplicaciones del teléfono.
-ABIS="${CORT_ABIS:-arm64-v8a armeabi-v7a}"
+# Arquitecturas que se empaquetan. Desde `cort-v0.16.2` el default es SÓLO
+# `arm64-v8a`, que es el Galaxy A16 de la dueña. El motivo es un número medido:
+# `libcortmotor.so` pesa 56 508 296 bytes en arm64 y 46 695 488 en armeabi-v7a,
+# así que llevar las dos costaba 46 695 488 bytes de descarga extra para un
+# teléfono que en esta casa no existe. Con `armeabi-v7a` el APK se corta al
+# bajarlo (a ~40 KB/s eran 70 minutos) y Samsung dice «aplicación no instalada».
+# Quien tenga un teléfono viejo lo compila con `CORT_ABIS="arm64-v8a armeabi-v7a"`.
+ABIS="${CORT_ABIS:-arm64-v8a}"
 
 # El `|| true` dentro de la sustitución no es decoración: con `pipefail` un `ls`
 # que no encuentra el globo devuelve 2 y `set -e` mataría el script antes de la
@@ -71,6 +74,10 @@ mkdir -p build/obj build/apk vendor build/stage build/recursos
 # no deja nunca un archivo a medio verificar dentro del APK.
 MOTOR=0
 DELGADO=0
+# Si el modelo de español viaja dentro del APK (`CORT_OIDO_DENTRO=1`) o se baja
+# en el almacén. Default: se baja. La variable se usa en la auditoría, así que
+# tiene que existir también en la compilación delgada.
+OIDO_EN_APC=0
 if [ "${CORT_SIN_MOTOR:-0}" = "1" ]; then
     DELGADO=1
     echo "CORT_SIN_MOTOR=1: se compila el APK DELGADO, sin oído local (el teléfono dictará por el motor de Android)"
@@ -81,6 +88,12 @@ fi
 while IFS='|' read -r NOMBRE SHA URL; do
     case "$NOMBRE" in ''|'#'*) continue ;; esac
     if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ]; then
+        continue
+    fi
+    # El modelo de español ya no entra en el APK por defecto, así que tampoco se
+    # baja: 39 817 833 bytes de ida y vuelta y una suma de más por corrida. Se
+    # baja sólo con `CORT_OIDO_DENTRO=1`, que es la compilación de desarrollo.
+    if [ "${CORT_OIDO_DENTRO:-0}" != "1" ] && [ "$NOMBRE" = "vosk-model-small-es-0.42.zip" ]; then
         continue
     fi
     if [ -z "$SHA" ] || [ -z "$URL" ]; then
@@ -153,15 +166,25 @@ if [ "$DELGADO" = "0" ]; then
 
     HAY_NATIVAS=0
     if [ -n "$(find build/stage/lib -name '*.so' -type f 2>/dev/null)" ]; then HAY_NATIVAS=1; fi
+    # El modelo de español (39 817 833 bytes) sale del APK por defecto desde
+    # `cort-v0.16.2`: se baja en el almacén con el mismo `Range` + `.part` +
+    # SHA-256 que los GGUF (`assets/oido.json` fija la URL, el peso y la suma;
+    # la suma es la misma `09b23988…c6511f` de `deps.txt`). `Motor.java` mira
+    # primero el archivo bajado y, si alguien compila con `CORT_OIDO_DENTRO=1`,
+    # todavía acepta el `assets/motor/` de antes.
     if [ -f vendor/vosk-android-0.3.75/classes.jar ] \
        && [ -f vendor/jna-5.14.0/classes.jar ] \
-       && [ -f vendor/vosk-model-small-es-0.42.zip ] \
        && [ "$HAY_NATIVAS" = "1" ]; then
-        mkdir -p build/recursos/assets/motor
-        cp vendor/vosk-model-small-es-0.42.zip build/recursos/assets/motor/
+        if [ "${CORT_OIDO_DENTRO:-0}" = "1" ] && [ -f vendor/vosk-model-small-es-0.42.zip ]; then
+            mkdir -p build/recursos/assets/motor
+            cp vendor/vosk-model-small-es-0.42.zip build/recursos/assets/motor/
+            OIDO_EN_APC=1
+        else
+            OIDO_EN_APC=0
+        fi
         MOTOR=1
     else
-        echo "::error::faltó algo del oído (vosk, jna, las .so o el modelo) y no se puede prometer un dictado local"
+        echo "::error::faltó algo del oído (vosk, jna o las .so) y no se puede prometer un dictado local"
         exit 1
     fi
 fi
@@ -205,18 +228,22 @@ D8_ENTRADAS="$(find build/obj -name '*.class')"
 
 (cd build/apk && zip -q -j sin-alinear.apk classes*.dex)
 
-# -- 4. Las bibliotecas nativas, sin comprimir y alineadas ---------------------
-# Con `android:extractNativeLibs="false"` el sistema carga el `.so` **desde el
-# propio APK**, sin copiarlo a datos. Para eso el archivo tiene que estar
-# almacenado (método 0, ni deflate) y alineado a página: `zip -0` y
-# `zipalign -p`. Sin una de las dos, `System.loadLibrary("vosk")` falla con
-# `UnsatisfiedLinkError` y el oído cae al motor de Android en silencio.
+# -- 4. Las bibliotecas nativas, comprimidas ----------------------------------
+# Con `android:extractNativeLibs="true"` (manifiesto) el instalador saca las
+# `.so` a `/data/app/~~…/lib` antes de cargarlas, y eso permite que viajen con
+# deflate. Antes era al revés: `false` obligaba a método 0 + `zipalign -p` y
+# por eso el APK de `cort-v0.16.1` pesaba 162 817 475 bytes casi byte por byte
+# del contenido, con 103 203 784 de los dos pegamentos GGUF sin comprimir. La
+# dueña lo bajó, quedó cortado y Samsung dijo «aplicación no instalada».
+#
+# Lo que NO cambia: el `.so` del motor sigue dentro del APK. Android 10+ (y el
+# target 34 de aquí lo hereda) se niega a cargar librerías ejecutables desde la
+# carpeta de datos de la app, así que "bajar libcortmotor.so después" no es una
+# opción disponible, por mucho que sea lo que se pediría.
 if [ -d build/stage/lib ] && [ -n "$(find build/stage/lib -name '*.so' -type f 2>/dev/null)" ]; then
-    (cd build/stage && zip -q -X -0 ../apk/sin-alinear.apk $(find lib -type f))
-    "$BT/zipalign" -f -p 4 build/apk/sin-alinear.apk build/apk/alineado.apk
-else
-    "$BT/zipalign" -f 4 build/apk/sin-alinear.apk build/apk/alineado.apk
+    (cd build/stage && zip -q -X -9 ../apk/sin-alinear.apk $(find lib -type f))
 fi
+"$BT/zipalign" -f 4 build/apk/sin-alinear.apk build/apk/alineado.apk
 
 # -- 5. La firma ---------------------------------------------------------------
 # La llave: con el secreto `CORT_APK_KEYSTORE_B64` el APK se puede actualizar
@@ -259,7 +286,11 @@ MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
     echo "APK móvil de CORT $VERSION (versionCode $CODE)"
     echo "peso: $BYTES_GRUPO bytes ($MB MB)"
     if [ "$MOTOR" = "1" ]; then
-        echo "oído: Vosk dentro del APK (modelo español pequeño, sin red)"
+        if [ "$OIDO_EN_APC" = "1" ]; then
+            echo "oído: Vosk dentro del APK (modelo español pequeño, sin red)"
+        else
+            echo "oído: Vosk con el modelo español bajado en el almacén (39 817 833 bytes fuera del APK)"
+        fi
     else
         echo "oído: el motor de voz del aparato (APK delgado, CORT_SIN_MOTOR=1)"
     fi
@@ -288,27 +319,51 @@ MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
     else
         echo "alineado a 4: FALLÓ"
     fi
-    python3 - build/CORT-movil.apk <<'PY'
+    python3 - build/CORT-movil.apk "$ABIS" <<'PY'
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
-for nombre in ("lib/arm64-v8a/libvosk.so", "lib/arm64-v8a/libjnidispatch.so",
-               "lib/arm64-v8a/libcortmotor.so", "lib/armeabi-v7a/libcortmotor.so"):
-    try:
-        info = z.getinfo(nombre)
-    except KeyError:
-        print(nombre + ": no está en el APK")
-        continue
-    print(nombre + ": %d bytes · %s" % (info.file_size,
-          "SIN COMPRIMIR (ok)" if info.compress_type == 0 else "comprimido (mal)"))
+# Las ABIs empaquetadas son las que pidió `compilar.sh`, no una lista fija: con
+# el default nuevo (`arm64-v8a`) exigir la de 32 bits daría un "no está" falso.
+for abi in sys.argv[2].split():
+    for nombre in ("libvosk.so", "libjnidispatch.so", "libcortmotor.so"):
+        ruta = "lib/%s/%s" % (abi, nombre)
+        info = z.getinfo(ruta) if ruta in z.namelist() else None
+        if info is None:
+            print(ruta + ": no está en el APK")
+            continue
+        # Con `extractNativeLibs="true"` lo bueno es que estén comprimidas: el
+        # instalador las descomprime a /data/app/…/lib y ahí el sistema las carga.
+        metodo = {0: "sin comprimir", 8: "deflate"}.get(info.compress_type, "?")
+        ahorrado = info.compress_type != 0 and info.compress_size < info.file_size
+        print("%s: %d bytes -> %d en el APK (%s%s)" % (
+            ruta, info.file_size, info.compress_size, metodo,
+            ", ok" if ahorrado else ""))
 arsc = z.getinfo("resources.arsc")
 print("resources.arsc: %d bytes · %s" % (arsc.file_size,
       "SIN COMPRIMIR (ok)" if arsc.compress_type == 0 else "comprimido (Android 11 lo pide suelto)"))
 tot = sum(i.file_size for i in z.infolist())
-print("entradas: %d · descomprimido suma %d bytes" % (len(z.infolist()), tot))
+guard = sum(i.compress_size for i in z.infolist())
+print("entradas: %d · descomprimido suma %d bytes · dentro del APK %d bytes"
+      % (len(z.infolist()), tot, guard))
 # Ningún GGUF viaja en el APK (decisión fija de U1: se baja en el almacén). Si un día
 # alguien lo mete aquí, esta línea lo grita en la auditoría antes que en el teléfono.
 gguf = [i.filename for i in z.infolist() if i.filename.lower().endswith(".gguf")]
 print("gguf dentro del APK: %s" % (", ".join(gguf) if gguf else "ninguno (ok)"))
+# El modelo de español corre la misma suerte que los GGUF desde `cort-v0.16.2`:
+# fuera del APK y bajado con `Range` + SHA-256. El número de esta línea es el que
+# lee la release (`apk-movil.yml`) para decir cuánto hay que bajar una vez.
+oido_zip = [i for i in z.infolist() if i.filename.startswith("assets/motor/")]
+oido_ficha = z.read("assets/oido.json").decode("utf-8") if "assets/oido.json" in z.namelist() else ""
+if oido_zip:
+    print("modelo de español: %d bytes DENTRO del APK (compilación con CORT_OIDO_DENTRO=1)"
+          % sum(i.file_size for i in oido_zip))
+else:
+    import json
+    peso = json.loads(oido_ficha)["bytes"] if oido_ficha else 0
+    print("modelo de español: %d bytes fuera del APK (se baja en el almacén)" % peso)
+print("assets/oido.json: %s" % ("%d bytes · el almacén sabe de dónde bajar el oído"
+                                % len(oido_ficha.encode()) if oido_ficha
+                                else "NO ESTÁ: la app no sabría de dónde bajar el oído"))
 cerebros = z.read("assets/cerebros.json").decode("utf-8") if "assets/cerebros.json" in z.namelist() else ""
 print("assets/cerebros.json: %d bytes · %d cerebros ofrecidos"
       % (len(cerebros.encode()), cerebros.count('"id"')))

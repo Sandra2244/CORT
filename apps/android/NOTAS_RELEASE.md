@@ -97,7 +97,7 @@
 - **Y sigue funcionando sola, sin portátil encendido:** orbe y registro nativos, 33 reglas de
   frases, 15 manos locales (linterna, hora, fecha, alarma, cronómetro, decir, buscar, app,
   volumen…), memoria SQLite propia y dictado dentro del aparato con Vosk (modelo español
-  `vosk-model-small-es-0.42`), sin red y sin servicios de Google.
+  `vosk-model-small-es-0.42`, que se baja una vez desde Almacén), sin red y sin servicios de Google.
 - **La voz es la de esta rama:** `es-ES`, porque el portátil habla con espeak-ng y Piper
   `es_ES-*` (1,90x y 2,55x medidos en `cort-bridge/cort_voz.py`).
 
@@ -114,12 +114,28 @@
 **Firmado:** {{LLAVE}} — `versionCode {{CODE}}`, huella del certificado `{{HUELLA}}…` (la misma
 de las versiones anteriores, así que se instala encima: no hace falta desinstalar).
 
-`auditoria.txt` (adjunto) es el desglose entrada por entrada, sacado del propio APK: modelo
-**{{MODEL}} B**, `libvosk.so` 10 042 800 B (arm64) y 8 985 628 B (armeabi-v7a) y `libcortmotor.so` (el motor GGUF, cuyo peso exacto sale del propio `auditoria.txt` de esta release, no de aquí), con las
-bibliotecas **sin comprimir y alineadas a página** porque el manifiesto declara
-`extractNativeLibs="false"` — si falta algo de eso, el arranque muere con
-`UnsatisfiedLinkError`. El método de compilación no cambió: `aapt2` → `javac --release 11` →
-`d8` → `zip` → `zipalign -p` → `apksigner`, **sin Gradle y sin AndroidX**.
+`auditoria.txt` (adjunto) es el desglose entrada por entrada, sacado del propio APK. Dos cosas
+cambiaron respecto a `cort-v0.16.1`, y las dos por el mismo motivo medido:
+
+* **El modelo de español (**{{MODEL}} B**) ya no viene dentro del APK.** Se baja una sola vez
+  desde **Almacén → «Bajar el oído»**, con `Range` (se reanuda si se corta), con la suma
+  `09b23988…c6511f` fijada en `deps.txt`, y verificada entera antes de fiarse del archivo.
+  Sin él el dictado cede al motor de voz del aparato, que va por internet; la cara lo dice.
+* **Las `.so` viajan comprimidas (`extractNativeLibs="true"`).** El instalador las saca a
+  `/data/app/…/lib` al instalar, así que `libvosk.so` (10 042 800 B en arm64) y
+  `libcortmotor.so` (el pegamento del motor GGUF, 56 508 296 B en arm64) salen con deflate en
+  vez de byte por byte. El motor **no** se baja a la carpeta de datos de la app: Android 10+
+  se niega a ejecutar librerías nativas desde ahí, así que ese `.so` tiene que seguir dentro.
+* **Una sola arquitectura: `arm64-v8a`**, la del Galaxy A16. `armeabi-v7a` (46 695 488 B más
+  de descarga) se sigue pudiendo compilar con `CORT_ABIS="arm64-v8a armeabi-v7a"`.
+
+El motivo de las tres es el mismo y no es estética: el APK de `cort-v0.16.1` medía
+162 817 475 bytes, y bajado en esta casa (~40 KB/s, 70 minutos) se cortaba. Samsung, ante un
+archivo truncado, dice **«aplicación no instalada»** — lo que la dueña leyó, y no era un
+problema de Play Protect ni de la firma.
+
+El método de compilación no cambió: `aapt2` → `javac --release 11` → `d8` → `zip` → `zipalign`
+→ `apksigner`, **sin Gradle y sin AndroidX**.
 
 ## Instalar
 
@@ -129,12 +145,23 @@ bibliotecas **sin comprimir y alineadas a página** porque el manifiesto declara
 sha256sum -c CORT-movil.apk.sha256
 ```
 
+Si el navegador corta la bajada (se nota en que el archivo pesa menos que el número de arriba,
+y entonces el instalador dice «aplicación no instalada»), reanúdala en vez de empezar de nuevo:
+
+```bash
+curl -C - -OJL https://github.com/Sandra2244/CORT/releases/download/<etiqueta>/CORT-movil.apk
+```
+
 Instala y abre: **no pregunta por ninguna dirección para funcionar.** Pedirá permiso de
 micrófono (sin él la cara sirve igual, sólo faltan «● hablar» y «Hablar con la PC (voz)») y
 permiso de cámara sólo si pulsas «Escanear el QR». En el parlamento la contesta de la PC sale
 por el **auricular de llamada**, el pegado a la oreja: no esperes sonido por el altavoz de atrás.
-El primer dictado puede tardar: el modelo se descomprime una sola vez
-a los datos de la app (~90 MB ocupados) y la cara dice en qué punto está.
+
+**Después de instalar, para que el oído sea local:** abre **Almacén** y toca **«Bajar el oído»**
+(39,8 MB una sola vez, con `Range`: si se corta la Wi-Fi, «Seguir» arranca donde se paró).
+Mientras no esté, el dictado usa el motor de voz del aparato —que manda el audio por
+internet— y la cara lo dice con esas palabras. Cuando ya está bajado, el modelo se descomprime
+una sola vez a los datos de la app (~90 MB ocupados) y la cara dice en qué punto está.
 
 **PC (Debian / Ubuntu / MX Linux XFCE).** Descarga el `Source code (tar.gz)` de esta release,
 desempaqueta y:

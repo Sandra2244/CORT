@@ -655,8 +655,9 @@ public class Cara implements Voz.AlOir {
      * de asistente o el gesto de la pantalla de bloqueo. No hay dos rutas: esto
      * llama a `escuchar()`, que es el mismo camino del botón —primero Vosk dentro
      * del teléfono (`Motor.java`) y, si el modelo aún no está o el APK salió
-     * delgado, el reconocedor que trae el aparato—. Desde `v0.12` el oído local
-     * cabe en el APK porque el modelo viaja en `assets/motor/`.
+     * delgado, el reconocedor que trae el aparato—. Desde `cort-v0.16.2` el
+     * modelo de español no viaja en el APK: se baja en Almacén, así que la primera
+     * vez el aviso honesto es «sin el modelo de español (se baja en Almacén)».
      */
     public void escucharAhora() {
         if (!escuchando) {

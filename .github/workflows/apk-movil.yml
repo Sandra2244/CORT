@@ -6,12 +6,19 @@ name: apk-movil
 # SDK de Android, ni `adb`. `apps/android/compilar.sh` usa las herramientas que
 # el runner ya trae (`aapt2`, `d8`, `zipalign`, `apksigner`).
 #
-# Desde F12 este build SÍ descarga piezas de terceros: el oído local (Vosk), su
-# puente nativo (JNA) y el modelo de español viajan dentro del APK. No se descargan
-# "las que haya": `apps/android/deps.txt` fija nombre, URL y SHA-256 de cada uno, y
-# `compilar.sh` se cae si la suma no cuadra. Las licencias están en
+# Desde F12 este build SÍ descarga piezas de terceros: el oído local (Vosk) y su
+# puente nativo (JNA) viajan dentro del APK. No se descargan "las que haya":
+# `apps/android/deps.txt` fija nombre, URL y SHA-256 de cada uno, y `compilar.sh`
+# se cae si la suma no cuadra. Las licencias están en
 # `apps/android/ACREDITACION.md`, y `vendor/` está en `.gitignore` para que ningún
 # modelo de 39,8 MB entre al repositorio por descuido.
+#
+# Desde `cort-v0.16.2` el modelo de español **ya no baja en el build ni viaja en
+# el APK**: lo descarga el teléfono desde Almacén (`assets/oido.json` lleva su
+# URL, su peso y la misma suma de `deps.txt`), y el build tampoco lo pide
+# (`CORT_OIDO_DENTRO=1` es la única forma de meterlo). Motivo medido: con las dos
+# ABIs y las `.so` sin comprimir, el APK llegaba a 162 817 475 bytes y en esta
+# casa se cortaba al bajarlo.
 #
 # Las logs de Actions de un repo privado no se pueden leer desde fuera sin sesión,
 # así que si un paso falla su final se publica como **annotation del check-run**,
@@ -82,7 +89,7 @@ jobs:
           # etiqueta, así que el SHA es lo que la release debe apuntar.
           echo "CODIGO=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-      - name: caché del oído (Vosk, JNA y el modelo de español)
+      - name: caché del oído (Vosk y JNA; el modelo ya no baja en el build)
         uses: actions/cache@v4
         with:
           path: apps/android/vendor
@@ -316,7 +323,21 @@ jobs:
             echo "::error::este APK no lleva libcortmotor.so y las notas prometen el cerebro GGUF: no se publica. Revisá el paso «bajar el motor» (falta el artefacto motor-local-ndk o se cayó la descarga) y corrido de nuevo."
             exit 1
           fi
+          # Segunda guarda, del mismo estilo: con el modelo de español fuera del
+          # APK, la app necesita `assets/oido.json` para saber de dónde bajarlo.
+          # Sin esa ficha el dictado vuelve al motor de Google en silencio.
+          if grep -q "assets/oido.json: NO ESTÁ" auditoria.txt; then
+            echo "::error::no hay assets/oido.json dentro del APK: el Almacén no tendría de dónde bajar el oído en español. No se publica."
+            exit 1
+          fi
           PESO=$(stat -c%s CORT-movil.apk)
+          # El motivo de este número es la tarde del 2026-11-05: el APK de
+          # 162 817 475 bytes se cortó al bajarlo en la casa y el teléfono dijo
+          # «aplicación no instalada». Si alguien vuelve a inflarlo por encima de
+          # 70 MB, la descarga otra vez depende de que no se corte la luz.
+          if [ "$PESO" -gt 70000000 ]; then
+            echo "::warning::el APK pesa $PESO bytes: por encima de ~70 MB la descarga de la casa se corta y Samsung lo confunde con una app mal instalada."
+          fi
           MB=$(awk "BEGIN{printf \"%.2f\", $PESO/1048576}" | tr '.' ',')
           SHA=$(awk '{print $1}' CORT-movil.apk.sha256)
           VERSION=$(sed -n 's/^APK móvil de CORT \([^ ]*\).*/\1/p' auditoria.txt)
@@ -324,7 +345,7 @@ jobs:
           OIDO=$(sed -n 's/^oído: //p' auditoria.txt)
           LLAVE=$(sed -n 's/^llave: //p' auditoria.txt)
           HUELLA=$(sed -n 's/.*certificate SHA-256 digest: //p' firma.txt)
-          MODEL=$(awk '$1=="39817833" || /vosk-model-small-es/ {print $1}' auditoria.txt | head -1)
+          MODEL=$(sed -n 's/^modelo de español: \([0-9]*\) bytes.*/\1/p' auditoria.txt)
           # El número lo dejó el paso de la suite en `$GITHUB_ENV`; el respaldo sólo
           # evita una línea vacía si alguien quita ese paso.
           COMPROBACIONES="${COMPROBACIONES:-la suite}"

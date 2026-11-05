@@ -7,9 +7,11 @@ ella quiere cumplir: descargar y correr las cosas locales en el aparato.
 
 Cada comprobación es una de esas condiciones que se rompen en silencio:
 
-* Si falta `extractNativeLibs="false"` o las `.so` viajan comprimidas, el
-  `System.loadLibrary("vosk")` falla y CORT dicta por internet creyendo que
-  dicta solo.
+* Si `extractNativeLibs` y el método de las `.so` se contradicen (manifiesto
+  `true` con `zip -0`, o `false` con deflate), el `System.loadLibrary("vosk")`
+  falla y CORT dicta por internet creyendo que dicta solo. Desde `cort-v0.16.2`
+  van `true` + comprimidas: el APK de 162 817 475 bytes se cortaba al bajarlo y
+  el teléfono decía «aplicación no instalada».
 * Si `res/xml/asistente.xml` nombra una clase que ya no existe, Android ni
   siquiera lista a CORT como asistente, sin pantalla que avise.
 * Si a `deps.txt` se le escapa una línea sin suma, el build baja lo que haya.
@@ -98,8 +100,9 @@ def main():
     prueba("hay bloque <queries> de intent MAIN/LAUNCHER (sin eso Android 11+ ve cero apps)",
            "<queries>" in manifiesto and "category.LAUNCHER" in manifiesto)
     app_elem = raiz.find("application") if raiz is not None else None
-    prueba("extractNativeLibs=false: el .so se carga desde el APK, sin copiarlo a datos",
-           atrib(app_elem, "extractNativeLibs") == "false")
+    prueba("extractNativeLibs=true: las .so van comprimidas y el instalador las saca "
+           "a /data/app/…/lib (decisión medida el 2026-11-05 contra el APK cortado)",
+           atrib(app_elem, "extractNativeLibs") == "true")
     prueba("el icono es la marca del orbe (F11), no el cuadrado viejo",
            atrib(app_elem, "icon") == "@mipmap/ic_cort")
     servicios = {atrib(h, "name", "") for h in
@@ -133,8 +136,11 @@ def main():
     motor = lee(SRC / "Motor.java")
     prueba("Motor.java existe y usa la API de Vosk",
            "import org.vosk.Model;" in motor and "new Recognizer(" in motor)
-    prueba("Motor.java no abre ninguna conexión (local por construcción)",
-           "java.net" not in motor and "HttpURL" not in motor)
+    prueba("el dictado no sale del teléfono: la única conexión de Motor es el zip fijado en la ficha",
+           "new URL(urlDelModelo)" in motor and "https://" not in motor
+           and motor.count("openConnection()") == 1,
+           "desde `cort-v0.16.2` Motor baja el modelo de español; el `AudioRecord` "
+           "seguir alimentando sólo a Vosk es lo que se comprueba aquí")
     prueba("el dictado local se corta a los 20 s (el micrófono no queda abierto)",
            "MAX_SEGUNDOS = 20" in motor)
     prueba("hay guarda contra el truco del ../ al descomprimir el modelo",
@@ -191,14 +197,86 @@ def main():
     script = lee(APP / "compilar.sh")
     prueba("baja y comprueba antes de usar (sha256sum -c)", "sha256sum -c" in script)
     prueba("mete los assets con `-A`", re.search(r"aapt2\"? link[\s\S]{0,400}?\-A ", script) is not None)
-    prueba("las .so van SIN comprimir (zip -0)", re.search(r"zip\s+-[A-Za-z0-9 -]*-0\s", script) is not None)
-    prueba("y alineadas a página (zipalign -p)", "zipalign\" -f -p 4" in script or "zipalign -f -p 4" in script)
+    prueba("las .so van comprimidas (zip -9), que es lo que permite extractNativeLibs=true",
+           re.search(r"zip\s+-[A-Za-z0-9 -]*-9\s", script) is not None
+           and re.search(r"zip\s+-[A-Za-z0-9 -]*-0\s", script) is None)
+    prueba("y el APK se alinea sin `-p` (la alineación a página sólo sirve con método 0)",
+           'zipalign" -f 4' in script or "zipalign -f 4" in script,
+           "con `-p` y `.so` comprimidas no se gana nada: `zipalign -p` alinea las "
+           "entradas SIN comprimir")
     prueba("no se firma con llave distinta sin decirlo (firma.txt y auditoría)",
            "auditoria.txt" in script and "--print-certs" in script)
     prueba("el min/target siguen en 26/34", "--min-sdk-version 26" in script and "--target-sdk-version 34" in script)
     prueba("la suma se anota con el nombre desnudo (`sha256sum -c` sirve en la release)",
            "(cd build && sha256sum CORT-movil.apk)" in script,
            "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
+
+    print("\n== el APK delgado por diseño (v0.16.2) ==")
+    # Nace de una tarde medida, no de una idea: el `cort-v0.16.1` pesaba
+    # 162 817 475 bytes, la dueña lo bajó en su casa (~40 KB/s), quedó cortado,
+    # y Samsung dijo «aplicación no instalada». Las tres palancas que sí bajan el
+    # número están aquí fijadas, cada una con su prueba.
+    prueba("una sola arquitectura por defecto (arm64-v8a, el A16), ampliable con CORT_ABIS",
+           re.search(r'ABIS="\$\{CORT_ABIS:-arm64-v8a\}"', script) is not None)
+    prueba("el modelo de español NO se copia a assets salvo pidiéndolo",
+           "CORT_OIDO_DENTRO" in script
+           and re.search(r"if \[ \"\$\{CORT_OIDO_DENTRO:-0\}\" = \"1\" \]", script) is not None)
+    prueba("y tampoco se baja en el build mientras no se pida (39 817 833 bytes de ida y vuelta)",
+           re.search(r'CORT_OIDO_DENTRO:-0\}" != "1" \] && \[ "\$NOMBRE" = '
+                     r'"vosk-model-small-es', script) is not None)
+    prueba("ningún zip de modelo quedado en los assets del repo",
+           not list((APP / "assets").rglob("*.zip")))
+
+    ficha_oido = APP / "assets" / "oido.json"
+    prueba("assets/oido.json existe: es lo que le dice al teléfono de dónde bajar el oído",
+           ficha_oido.is_file())
+    if ficha_oido.is_file():
+        datos = json.loads(lee(ficha_oido))
+        prueba("su URL es https y su peso está medido (39 817 833)",
+               str(datos.get("url", "")).startswith("https://")
+               and datos.get("bytes") == 39817833, str(datos)[:120])
+        fila_deps = [l for l in lineas if l.startswith("vosk-model-small-es")]
+        prueba("la suma de oido.json es LA MISMA que la fijada en deps.txt: sin dos versiones",
+               len(fila_deps) == 1 and datos.get("sha256") in fila_deps[0],
+               f"{datos.get('sha256', '')[:16]}… frente a {fila_deps[0][:16] if fila_deps else 'nada'}")
+        prueba("la ficha nombra el id y la carpeta que Motor espera",
+               datos.get("id") == "small-es-0.42"
+               and datos.get("carpeta") == "vosk-model-small-es-0.42")
+
+    motor = lee(SRC / "Motor.java")
+    prueba("Motor lee la ficha del APK y no tiene la URL escrita en el código",
+           '"oido.json"' in motor and "https://alphacephei" not in motor)
+    prueba("baja con Range y `.part`, y reanada donde se cortó",
+           '"Range", "bytes="' in motor and '".part"' in motor)
+    prueba("verifica la SHA-256 del archivo entero antes de fiarse, y lo tira si no cuadra",
+           "SHA-256" in motor and "parcial.delete()" in motor)
+    prueba("no descomprime un zip truncado: primero comprueba el peso anunciado",
+           "zip.length() != bytesDelModelo" in motor or "destino.length() == bytesDelModelo" in motor)
+    prueba("el `.so` del motor NO se baja a la carpeta de datos: Android 10+ no lo ejecuta ahí",
+           "System.load(" not in motor and "System.load(" not in lee(SRC / "CerebroLocal.java"),
+           "cargar desde filesDir sería la ruta fácil y está prohibida desde target 29")
+    prueba("descomprimir borra sólo la carpeta del modelo, no `motor/` entero",
+           "borraArbol(carpetaFinal)" in motor and "borraArbol(motor)" not in motor,
+           "si se borra el padre se va el zip que se está leyendo")
+    prueba("si falta el modelo lo dice con la salida, no con un «no te oí»",
+           "Bajar el oído" in motor or "se baja en Almacén" in motor)
+
+    almac = lee(SRC / "Cerebros.java")
+    prueba("el Almacén ofrece el botón del oído y repinta el progreso una vez por segundo",
+           "bajaYMonta()" in almac and 'postDelayed(repintaOido, 1000L)' in almac)
+    prueba("y quita el enhebrador antes de montar otro (dos ticks = dos pintados)",
+           "removeCallbacks(repintaOido)" in almac)
+    equipo = lee(SRC / "Equipo.java")
+    prueba("el escáner del aparato no miente: ya no dice «dentro del APK»",
+           "dentro del APK: " not in equipo and "modelo de español montado" in equipo)
+
+    flujo = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
+    prueba("la release no se publica sin la ficha del oído dentro del APK",
+           'grep -q "assets/oido.json: NO ESTÁ" auditoria.txt' in flujo)
+    prueba("el peso del modelo para las notas sale de la auditoría con `sed`, sin `| head`",
+           "sed -n 's/^modelo de español: " in flujo)
+    prueba("y hay un aviso si alguien vuelve a inflar el APK por encima de 70 MB",
+           "-gt 70000000" in flujo)
 
     print("\n== el escáner del QR del enlace (F14b) ==")
     zxing = [l for l in lineas if l.startswith("zxing-core-")]

@@ -19,6 +19,11 @@
 # y README de los modelos); JNA es LGPL-2.1 / Apache-2.0 doble. Se acreditan en
 # `apps/android/ACREDITACION.md`, que se sube junto al APK.
 #
+# `vosk-model-small-es-0.42.zip` sigue fijado aquí aunque desde `cort-v0.16.2` ya
+# no entre en el APK: esta es LA suma, y `assets/oido.json` (la que usa el
+# teléfono para bajarlo) tiene que coincidir byte por byte — `prueba_apk.py` lo
+# comprueba. Por eso `compilar.sh` no la baja salvo con `CORT_OIDO_DENTRO=1`.
+#
 # `zxing-core-3.5.3.jar` es el decodificador del QR del enlace (F14b). Se leyó antes
 # de fijarlo: 332 entradas, todas `.class` de Java —ni una `.so`, ni un recurso, ni un
 # `META-INF/services`—; el propio manifest del jar declara Apache-2.0 y exige JavaSE 1.8,

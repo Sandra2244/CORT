@@ -67,6 +67,8 @@ public class Cerebros extends Activity {
 
     private CerebroLocal cerebro;
     private TextView resumen;
+    private TextView estadoOido;
+    private Button bajarOido;
     private LinearLayout filaModos;
     private EditText pregunta;
     private TextView respuesta;
@@ -132,6 +134,26 @@ public class Cerebros extends Activity {
             pantalla.addView(fila(f), conMargen());
         }
 
+        pantalla.addView(texto("OÍDO EN ESPAÑOL (VOSK)", 12f, Paleta.AVISO), conMargen());
+        final Motor oido = Motor.compartido(this);
+        estadoOido = texto("", 13f, Paleta.SUAVE);
+        estadoOido.setLineSpacing(0f, 1.3f);
+        pantalla.addView(estadoOido, conMargen());
+        LinearLayout filaOido = new LinearLayout(this);
+        filaOido.setOrientation(LinearLayout.HORIZONTAL);
+        bajarOido = boton("Bajar el oído");
+        bajarOido.setOnClickListener(v -> {
+            oido.bajaYMonta();
+            hiloUI.postDelayed(repintaOido, 400L);
+        });
+        filaOido.addView(bajarOido, enFila(52));
+        pantalla.addView(filaOido, conMargen());
+        pantalla.addView(texto("Este es el dictado que NO sale del teléfono. Sin él, "
+                + "CORT escucha con el motor de voz de Android y el audio viaja por "
+                + "internet. Son " + Motor.mb(oido.pesoDelModelo()) + " MB una sola vez: "
+                + "se reanuda si se corta la Wi-Fi y la suma se comprueba entera antes "
+                + "de fiarse.", 12f, Paleta.SUAVE), conMargen());
+
         pantalla.addView(texto("PROBAR EL QUE ESTÉ ABIERTO", 12f, Paleta.AVISO),
                 conMargen());
         pregunta = new EditText(this);
@@ -162,11 +184,13 @@ public class Cerebros extends Activity {
         pantalla.addView(respuesta, conMargen());
 
         pantalla.addView(texto("Los archivos caen en la carpeta de datos de CORT "
-                + "(`Android/data/dev.sandra.cort.movil/files/modelos`): no los ve otra "
+                + "(`Android/data/dev.sandra.cort.movil/files/modelos`, y el oído en "
+                + "`files/motor`): no los ve otra "
                 + "app y se van si se desinstala CORT. Con la red de la casa son minutos; "
                 + "con datos del teléfono, cuenta los megas.\n\n"
-                + "Ningún GGUF viaja dentro del APK: lo que se instala pesa lo que pesa "
-                + "y no 752 MB más.", 12f, Paleta.SUAVE), conMargen());
+                + "Ningún GGUF viaja dentro del APK, y desde `cort-v0.16.2` tampoco el "
+                + "modelo de español: lo que se instala pesa decenas de MB y no 792 MB más.",
+                12f, Paleta.SUAVE), conMargen());
 
         Button volver = boton("Volver");
         volver.setOnClickListener(v -> finish());
@@ -261,6 +285,67 @@ public class Cerebros extends Activity {
         f.usar.setEnabled(false);
     }
 
+    /**
+     * El estado del oído, con su progreso. No lo pinta `Motor` (vive en otro
+     * hilo y no toca pantallas): este enhebrador lo rele cada segundo mientras
+     * haya una descarga en curso, que es cuando cambia sola.
+     */
+    private final Runnable repintaOido = new Runnable() {
+        @Override
+        public void run() {
+            pintaOido();
+            if (!cerrando && Motor.compartido(Cerebros.this).estaDescargando()) {
+                hiloUI.postDelayed(this, 1000L);
+            }
+        }
+    };
+
+    private void pintaOido() {
+        if (estadoOido == null) {
+            return;
+        }
+        Motor oido = Motor.compartido(this);
+        if (oido.listo()) {
+            estadoOido.setText("montado y listo · el dictado no sale del teléfono");
+            estadoOido.setTextColor(Paleta.CIAN);
+            bajarOido.setText("Ya está");
+            bajarOido.setEnabled(false);
+            return;
+        }
+        if (!oido.sePuedeBajar()) {
+            estadoOido.setText("sin ficha de descarga (falta `assets/oido.json` en el APK): "
+                    + "el dictado va por el motor de Android, que usa internet.");
+            estadoOido.setTextColor(Paleta.AVISO);
+            bajarOido.setEnabled(false);
+            return;
+        }
+        if (oido.estaDescargando()) {
+            estadoOido.setText(oido.descargaTexto());
+            estadoOido.setTextColor(Paleta.CIAN);
+            bajarOido.setText("Bajando…");
+            bajarOido.setEnabled(false);
+            // `removeCallbacks` antes del `postDelayed`: si no, cada repintado
+            // (cambio de modo, regreso de otra pantalla) monta un enhebrador más.
+            hiloUI.removeCallbacks(repintaOido);
+            hiloUI.postDelayed(repintaOido, 1000L);
+            return;
+        }
+        File parcial = new File(oido.zipDelModelo().getPath() + ".part");
+        if (parcial.isFile() && parcial.length() > 0) {
+            estadoOido.setText("cortado a " + Motor.mb(parcial.length()) + " de "
+                    + Motor.mb(oido.pesoDelModelo()) + " MB · toca Seguir y arranca donde se paró");
+            estadoOido.setTextColor(Paleta.AVISO);
+            bajarOido.setText("Seguir");
+            bajarOido.setEnabled(true);
+            return;
+        }
+        estadoOido.setText(oido.descargaTexto() + " · " + Motor.mb(oido.pesoDelModelo())
+                + " MB por bajar");
+        estadoOido.setTextColor(Paleta.SUAVE);
+        bajarOido.setText("Bajar");
+        bajarOido.setEnabled(true);
+    }
+
     private void pintaResumen() {
         String modo = cerebro.modo();
         String rotulo = "auto".equals(modo) ? "Automático (teléfono si cabe, si no PC/nube)"
@@ -273,6 +358,7 @@ public class Cerebros extends Activity {
         for (Fila f : filas) {
             pintaEstado(f);
         }
+        pintaOido();
     }
 
     private void pintaModos() {
