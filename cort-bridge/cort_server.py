@@ -88,6 +88,16 @@ except Exception as _e_vida:
 else:
     VIDA_ERROR = ""
 
+# Documentos (F19): el teléfono sube un PDF o un texto y esta PC le saca las letras.
+# Si poppler no está, el módulo carga igual y la respuesta dice qué falta.
+try:
+    import cort_documentos
+except Exception as _e_docs:
+    cort_documentos = None
+    DOCUMENTOS_ERROR = f"{type(_e_docs).__name__}: {_e_docs}"
+else:
+    DOCUMENTOS_ERROR = ""
+
 # La reja del núcleo (F9): recibe el plan que propuso el modelo y decide si puede
 # ejecutarse. Si este módulo no carga, el puente sigue con todo lo demás pero NINGÚN
 # plan llega al disco: sin reja no hay manos, y eso es exactamente el punto.
@@ -2766,7 +2776,14 @@ async def main():
     protocolo = "https" if ssl_ctx else "http"
     ws_protocolo = "wss" if ssl_ctx else "ws"
 
-    app_ws = web.Application()
+    # El cuerpo que entra por el puerto del core lo manda lo más grande que cabe: un
+    # dictado de 20 s (3 MB) o un PDF (8 MB). Con el tope por defecto de aiohttp —1 MB—
+    # la llamada del teléfono se corta a los ~1,5 s de hablar y el 413 viene en HTML, no
+    # en JSON: la pantalla del móvil muestra basura en vez del motivo.
+    cuerpo_maximo_ws = max(getattr(cort_parlamento, "MAX_CUERPO", 3 * 1024 * 1024),
+                           getattr(cort_documentos, "MAX_CUERPO", 0)) + 64 * 1024
+
+    app_ws = web.Application(client_max_size=cuerpo_maximo_ws)
     app_ws.router.add_get("/ws", ws_handler)
     app_ws.router.add_get("/", ws_handler)
 
@@ -2791,6 +2808,54 @@ async def main():
             print("[CORT] parlamento (F16): POST /parlamento en el puerto %d" % PUERTO_WS)
         except Exception as e:
             print("[CORT] el parlamento no arranco (%s: %s)" % (type(e).__name__, e))
+
+    # F19: los documentos. El teléfono sube el PDF o el texto, esta PC lo abre con
+    # poppler, le devuelve las letras y tira el archivo. La misma llave del enlace.
+    if cort_enlace is not None and cort_documentos is not None and llave_enlace:
+        try:
+            topes_docs = cort_documentos.montar(app_ws, llave_enlace, cort_enlace.autorizada)
+            print("[CORT] documentos (F19): POST /documentos en el puerto %d "
+                  "(%s MB, %s letras)" % (PUERTO_WS, topes_docs["max_mb"],
+                                          topes_docs["caracteres"]))
+        except Exception as e:
+            print(f"[CORT] los documentos no se montaron ({type(e).__name__}: {e})")
+
+    # F17: el bolsillo. El teléfono pregunta qué debe la PC —no los recuerdos, que eso
+    # viaja por F14— sino lo pendiente de verdad: recordatorios con el tiempo que falta,
+    # la lista de compras, los títulos de las notas y cómo está la máquina. La llave es
+    # la misma del enlace; sin ella no hay cuadro, igual que en el parlamento.
+    async def bolsillo(request):
+        if not llave_enlace or not cort_enlace.autorizada(request.query.get("token"), llave_enlace):
+            return web.json_response({"ok": False, "origen": "no disponible",
+                                      "motivo": "el ?token= no es la llave del enlace"}, status=401)
+        cuadro = {"ok": True, "origen": "real",
+                  "hora": time.strftime("%d/%m %H:%M:%S")}
+        maquina = cpu_ram_disco()
+        try:
+            maquina["despierto_s"] = int(float(Path("/proc/uptime").read_text().split()[0]))
+        except Exception as sin_proc:
+            maquina["despierto_s"] = -1
+        cuadro["maquina"] = maquina
+        if cort_vida is None:
+            cuadro["origen"] = "no disponible"
+            cuadro["motivo"] = "la vida diaria no cargó en el puente"
+            cuadro.update({"pendientes": [], "vencidos": 0, "compras": [], "notas": []})
+        else:
+            ahora = time.time()
+            pend = sorted(cort_vida.recordatorios(pendientes=True), key=lambda r: r.get("para", ahora))
+            cuadro["pendientes"] = [
+                {"texto": str(r.get("texto", ""))[:200],
+                 "tipo": r.get("tipo", "recordatorio"),
+                 "minutos": round((r.get("para", ahora) - ahora) / 60),
+                 "cuando": time.strftime("%d/%m %H:%M", time.localtime(r.get("para", ahora)))}
+                for r in pend[:40]]
+            cuadro["vencidos"] = sum(1 for r in cort_vida.recordatorios() if r.get("vencido"))
+            cuadro["compras"] = [str(x)[:200] for x in cort_vida.compras()[:30]]
+            cuadro["notas"] = [str(n.get("titulo", ""))[:120] for n in cort_vida.notas()[:20]]
+        return web.json_response(cuadro)
+
+    app_ws.router.add_get("/bolsillo", bolsillo)
+    print("[CORT] bolsillo (F17): GET /bolsillo en el puerto %d" % PUERTO_WS)
 
     app_web = web.Application(client_max_size=4 * 1024 * 1024)
     app_web.router.add_get("/", lambda r: web.FileResponse(BASE / "index.html"))
