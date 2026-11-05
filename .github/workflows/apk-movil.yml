@@ -215,13 +215,34 @@ jobs:
           TITULO="$(python3 ../notas_release.py --titulo)"
           # Si la plantilla o el script fallan, `set -e` tira del paso antes de publicar:
           # es mejor una corrida roja que una release con las notas a medias.
+          #
+          # Y aquí va el `--target` QUITADO, con su medición del 2026-11-05: la rama por
+          # defecto de este repo es hoy `v0.2-demo` — la OTRA línea de CORT, que no se
+          # toca— y un `target_commitish` que apunta a un commit de `web/cort-v0` no se
+          # resuelve desde ella. `gh release create --target 4874d4b…` contestó HTTP 404
+          # con el token de la dueña y el del runner cayó con HTTP 403 en la corrida
+          # 41974599997 (antes había caído con 422 por poner el nombre de la etiqueta:
+          # `target_commitish` no admite etiquetas). Sin `--target`, GitHub ancla la
+          # release a la etiqueta git ya empujada, que es exactamente el commit que se
+          # compiló. Eso es lo que comprueba el guarda de abajo: si la etiqueta y el
+          # código compilado no son el mismo commit, no se publica.
+          DESTINO="$(git rev-parse "refs/tags/${ETIQUETA}^{commit}" 2>/dev/null || true)"
+          if [ -z "$DESTINO" ]; then
+            echo "::error::la etiqueta $ETIQUETA no está en el repo: empujá el tag antes de publicar"
+            exit 1
+          fi
+          if [ -n "${CODIGO:-}" ] && [ "$DESTINO" != "$CODIGO" ]; then
+            echo "::error::la release mentiría: la etiqueta apunta a $DESTINO y se compiló $CODIGO"
+            exit 1
+          fi
+          echo "la release queda anclada a $DESTINO (etiqueta $ETIQUETA)"
           if gh release view "$ETIQUETA" >/dev/null 2>&1; then
-            gh release edit "$ETIQUETA" --notes-file notas.md --target "${CODIGO:-$GITHUB_SHA}"
+            gh release edit "$ETIQUETA" --notes-file notas.md --title "$TITULO"
             gh release upload "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt --clobber
           else
             gh release create "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt \
-              --target "${CODIGO:-$GITHUB_SHA}" \
               --title "$TITULO" \
               --notes-file notas.md
           fi
-          gh release view "$ETIQUETA" --json tagName,assets --jq '{etiqueta:.tagName,archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
+          gh release view "$ETIQUETA" --json tagName,targetCommitish,draft,assets \
+            --jq '{etiqueta:.tagName, anclada_a:.targetCommitish, borrador:.draft, archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
