@@ -123,11 +123,11 @@ que lo que lees en la página sale del APK de esa misma corrida. El APK se const
 `git checkout --detach` al commit de la etiqueta, para que lo publicado salga del código que dice
 salir y no de la punta de la rama.
 
-**Peso: esta vez medido y esta vez grande.** La release `cort-v0.13.0` pesa
-**59 565 213 bytes = 56,81 MB** y su SHA-256 es la que publica su propio archivo
-`CORT-movil.apk.sha256` (`d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab`
-en la corrida buena, el run 41906957815). El anterior (`cort-v0.11.0`) pesaba
-**16 873 bytes**: ×3 517, y la diferencia no es código, es el oído.
+**Peso: esta vez medido y esta vez grande.** La release `cort-v0.15.1` pesa
+**59 581 673 bytes = 56,82 MB** y su SHA-256 es la que publica su propio archivo
+`CORT-movil.apk.sha256` (`03b001bdfbdd89f934dcfe5f7c2e131dc6d5e12cba92db5038c7e725b31e4741`,
+run 41975870042). El anterior (`cort-v0.11.0`) pesaba
+**16 873 bytes**: ×3 531, y la diferencia no es código, es el oído.
 
 > **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
 > hora en las entradas de `META-INF` y de las `.so`, así que dos corridas del mismo código dan
@@ -235,10 +235,10 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
-  auditoría en el runner (release `cort-v0.14.0`, run 41957330147, verde, 59 565 213 bytes =
-  56,81 MB) y las 106 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
+  auditoría en el runner (release `cort-v0.15.1`, run 41975870042, verde, 59 581 673 bytes =
+  56,82 MB) y las 159 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
   La estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
-  772 376 B con zxing y el parlamento dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
+  798 160 B con zxing, el parlamento y las pantallas de U2 dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
   aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real,
   si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas cinco son el
   ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son igual de

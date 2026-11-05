@@ -78,10 +78,13 @@ Lo demás de la integración, en el mismo orden de valor:
   Si Samsung no lo permite, queda la baldosa, el gesto del orbe y el botón del auricular,
   que hacen el mismo servicio.
 
-Release publicada: `cort-v0.15.1`. La `cort-v0.15.0` quedó sin publicar: su árbol no
-compilaba — 8 errores de `javac` en la corrida 41971907412 por tres nombres de API
-escritos de memoria (`AudioDeviceCallback` anidado, `getTile()`,
-`getLongAvailableBytes()`). Se corrigió hacia adelante, sin mover la etiqueta.
+Release publicada: `cort-v0.15.1` — 59 581 673 bytes (56,82 MB), SHA-256
+`03b001bd…4741`, `classes.dex` de 798 160 B, 17 entradas, 159/159 comprobaciones y la
+misma firma del repo (`faabef46…1977), medida en el run 41975870042. La
+`cort-v0.15.0` quedó sin publicar: su árbol no compilaba — 8 errores de `javac` en la
+corrida 41971907412 por tres nombres de API escritos de memoria
+(`AudioDeviceCallback` anidado, `getTile()`, `getLongAvailableBytes()`). Se corrigió
+hacia adelante, sin mover la etiqueta.
 
 ## 3. Fase U3 — que se porte como una persona (iniciativa e investigar)
 

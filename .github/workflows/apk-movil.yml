@@ -226,6 +226,11 @@ jobs:
           # release a la etiqueta git ya empujada, que es exactamente el commit que se
           # compiló. Eso es lo que comprueba el guarda de abajo: si la etiqueta y el
           # código compilado no son el mismo commit, no se publica.
+          # Detalle medido y aceptado: GitHub deja escrito `target_commitish: v0.2-demo`
+          # en la release creada desde una etiqueta que ya existe. Es sólo la forma en que
+          # la API recuerda la rama por defecto; el tarball de código fuente resuelve a
+          # `refs/tags/cort-v0.15.1` (comprobado con curl -IL el 2026-11-05), así que los
+          # artefactos apuntan al commit compilado aunque el campo diga otra cosa.
           DESTINO="$(git rev-parse "refs/tags/${ETIQUETA}^{commit}" 2>/dev/null || true)"
           if [ -z "$DESTINO" ]; then
             echo "::error::la etiqueta $ETIQUETA no está en el repo: empujá el tag antes de publicar"
@@ -244,5 +249,8 @@ jobs:
               --title "$TITULO" \
               --notes-file notas.md
           fi
-          gh release view "$ETIQUETA" --json tagName,targetCommitish,draft,assets \
-            --jq '{etiqueta:.tagName, anclada_a:.targetCommitish, borrador:.draft, archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
+          # Medido en la corrida 41975870042: la release se publicó bien pero este paso
+          # cayó con exit 1 por pedir el campo `draft`, que no existe; el nombre real es
+          # `isDraft`. Un diagnóstico mal escrito no puede dejar una corrida roja.
+          gh release view "$ETIQUETA" --json tagName,targetCommitish,isDraft,isPrerelease,assets \
+            --jq '{etiqueta:.tagName, anclada_a:.targetCommitish, borrador:.isDraft, previa:.isPrerelease, archivos:[.assets[]|{nombre:.name,bytes:.size}]}'
