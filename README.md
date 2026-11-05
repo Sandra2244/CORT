@@ -327,7 +327,7 @@ teléfono, no por su altavoz trasero ni por los de la casa.
 
 El auricular dice la primera frase y la pantalla tiene el texto entero; `scripts/prueba_parlamento.py`
 (49 comprobaciones) vigila el contrato byte a byte, incluida la cabecera WAV que arma Java a
-mano, y `scripts/prueba_apk.py` (105) que el teléfono no pueda escribir audio en el aparato.
+mano, y `scripts/prueba_apk.py` (106) que el teléfono no pueda escribir audio en el aparato.
 `/parlamento` necesita el `cort_server.py` de esta versión: si el CORT del portátil viene
 encendido de antes, la ruta contesta `404` hasta que se reinicie.
 
