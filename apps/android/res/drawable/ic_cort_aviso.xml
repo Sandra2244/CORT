@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- El orbe para la barra de estado y la baldosa rápida: 24 dp, blanco y sólo
+     silueta. Android tiña el icono pequeño de la notificación y el de la baldosa
+     con el color del tema, así que los puntos de color del icono de la app
+     (`ic_cort_foreground`) se convertirían en una mancha: aquí hay un aro y un
+     núcleo, que es lo que se reconoce a 24 dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF"
+          android:pathData="M12,9.6 a2.4,2.4 0 1,0 0,4.8 a2.4,2.4 0 1,0 0,-4.8 z" />
+    <path android:strokeColor="#FFFFFFFF" android:strokeWidth="1.7"
+          android:pathData="M12,3.4 a8.6,8.6 0 1,0 0,17.2 a8.6,8.6 0 1,0 0,-17.2 z" />
+</vector>

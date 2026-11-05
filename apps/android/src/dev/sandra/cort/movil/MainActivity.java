@@ -2,10 +2,13 @@ package dev.sandra.cort.movil;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -99,8 +102,27 @@ public class MainActivity extends Activity {
         capa.setOrientation(LinearLayout.VERTICAL);
         capa.setBackgroundColor(Paleta.FONDO);
         setContentView(capa);
+        pideNotificaciones();
         mostrarOSetup();
         escuchaSiPidenDesdeFuera();
+    }
+
+    /**
+     * El saludo al encender (`Arranque.java`) sale también por notificación, porque con
+     * el teléfono bloqueado hay motores de voz que no sueltan sonido; y con Android 13
+     * esa notificación no se ve si nadie pidió `POST_NOTIFICATIONS`. Se pide una sola
+     * vez —queda escrito en las preferencias— y se pide aquí, donde la dueña acaba de
+     * abrir la app y espera que algo pase, no desde un receptor que se despierta solo.
+     */
+    private void pideNotificaciones() {
+        if (android.os.Build.VERSION.SDK_INT < 33 || prefs().getBoolean("aviso_pedido", false)) {
+            return;
+        }
+        prefs().edit().putBoolean("aviso_pedido", true).apply();
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 44);
+        }
     }
 
     @Override
@@ -481,6 +503,46 @@ public class MainActivity extends Activity {
         parlamento.topMargin = dp(10);
         pantalla.addView(hablar, parlamento);
 
+        // U2 y F17, en la misma pantalla porque las tres viven del enlace.
+        Button pendiente = new Button(this);
+        pendiente.setText("Lo pendiente en la PC");
+        pendiente.setTextColor(Paleta.CIAN);
+        pendiente.setBackgroundColor(0xFF132F3F);
+        pendiente.setTextSize(15f);
+        LinearLayout.LayoutParams cajaPendiente = new LinearLayout.LayoutParams(-1, dp(54));
+        cajaPendiente.topMargin = dp(10);
+        pantalla.addView(pendiente, cajaPendiente);
+
+        Button aparato = new Button(this);
+        aparato.setText("El aparato, medido (RAM para el cerebro local)");
+        aparato.setTextColor(Paleta.AVISO);
+        aparato.setBackgroundColor(0xFF132F3F);
+        aparato.setTextSize(15f);
+        LinearLayout.LayoutParams cajaAparato = new LinearLayout.LayoutParams(-1, dp(54));
+        cajaAparato.topMargin = dp(10);
+        pantalla.addView(aparato, cajaAparato);
+
+        Button pila = new Button(this);
+        pila.setText("Que el teléfono no cierre CORT");
+        pila.setTextColor(Paleta.SUAVE);
+        pila.setBackgroundColor(0xFF0C1F2B);
+        pila.setTextSize(14f);
+        LinearLayout.LayoutParams cajaPila = new LinearLayout.LayoutParams(-1, dp(50));
+        cajaPila.topMargin = dp(10);
+        pantalla.addView(pila, cajaPila);
+
+        TextView nota = texto("El saludo al encender y la baldosa del panel rápido sólo "
+                + "funcionan si Samsung no cierra CORT en segundo plano. Se abre el ajuste "
+                + "del sistema con esta app escrita: se confirma y ya.\n\n"
+                + "Y una cosa que no puede: levantar el portátil apagado. Medido el "
+                + "4/11/2026 sin privilegios: el puerto de red (r8169) no anunció Wake-on "
+                + "y está sin cable, y el Wi-Fi (rtl8723be) no anuncia wake inalámbrico. "
+                + "Con un cable y el permiso de red se vuelve a comprobar.", 12f, Paleta.SUAVE);
+        nota.setLineSpacing(0f, 1.3f);
+        LinearLayout.LayoutParams cajaNota = new LinearLayout.LayoutParams(-1, -2);
+        cajaNota.topMargin = dp(12);
+        pantalla.addView(nota, cajaNota);
+
         Button volver = new Button(this);
         volver.setText("Seguir en el teléfono");
         volver.setTextColor(Paleta.SUAVE);
@@ -500,6 +562,9 @@ public class MainActivity extends Activity {
         escanear.setOnClickListener(v ->
                 startActivityForResult(new Intent(this, Escaner.class), ESCANEO));
         hablar.setOnClickListener(v -> startActivity(new Intent(this, Parlamento.class)));
+        pendiente.setOnClickListener(v -> startActivity(new Intent(this, Bolsillo.class)));
+        aparato.setOnClickListener(v -> startActivity(new Intent(this, Equipo.class)));
+        pila.setOnClickListener(v -> pideSinOptimizacion());
         volver.setOnClickListener(v -> montarCara());
         campo.setOnEditorActionListener((v, accion, ev) -> {
             intentar(campo);
@@ -565,6 +630,32 @@ public class MainActivity extends Activity {
             aviso.setText(motivo);
             aviso.setVisibility(View.VISIBLE);
         }
+    }
+
+    /**
+     * El permiso de pila: sin él One UI mata el proceso y con él se van el saludo al
+     * encender y la baldosa. La intención del sistema abre el cuadro con esta app ya
+     * escrita, pero en Samsung no siempre está registrada, así que se prueba la ruta
+     * larga del listado de apps y, si tampoco, se dicen los toques a mano. En los tres
+     * casos decide la dueña: CORT no se exime de la suspensión por su cuenta.
+     */
+    private void pideSinOptimizacion() {
+        try {
+            startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName())));
+            return;
+        } catch (ActivityNotFoundException noHayCuadro) {
+            // sigue por la ruta larga
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + getPackageName())));
+            return;
+        } catch (ActivityNotFoundException tampocoAjustes) {
+            // se cuenta en pantalla
+        }
+        marcar("El teléfono no abrió el ajuste: Ajustes › Aplicaciones › CORT › Batería › "
+                + "«Sin restricciones». Sin ese toque el saludo al encender puede no llegar.");
     }
 
     private LinearLayout.LayoutParams centrado(int alto) {

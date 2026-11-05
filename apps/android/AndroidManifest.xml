@@ -44,6 +44,24 @@
                      android:required="false" />
     <uses-permission android:name="android.permission.VIBRATE"
                      android:required="false" />
+    <!--
+      U2: el saludo al encender. `RECEIVE_BOOT_COMPLETED` es lo que permite que CORT
+      despierte con el teléfono; `POST_NOTIFICATIONS` (Android 13+) es el permiso que se
+      pide a mano y sin el cual el aviso no se ve, aunque se oiga.
+      `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` abre el diálogo de exención de One UI: sin
+      eximir a CORT de la optimización de batería el sistema puede matar el proceso y el
+      saludo no llega. No se autoconcede: la pantalla de enlace lo explica y decide ella.
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+                     android:required="false" />
+
+    <!-- La baldosa del panel rápido no necesita permiso; necesita un servicio con
+         `BIND_QUICK_SETTINGS_TILE`, que está más abajo. -->
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
 
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -97,6 +115,69 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
+          U2, lo que la dueña pidió del iPhone: mantener pulsado un mensaje y que entre
+          las opciones salga «leer». En Android es `ACTION_PROCESS_TEXT`: el sistema
+          ofrece toda actividad declarada con esta intención en el menú de selección de
+          texto de CUALQUIER aplicación, sin permisos y sin servicios de accesibilidad.
+          El `android:label` es literalmente lo que se lee en ese menú. Se añade
+          `ACTION_SEND` para lo que se comparte desde el navegador.
+        -->
+        <activity
+            android:name=".Lectura"
+            android:exported="true"
+            android:label="Leer con CORT"
+            android:configChanges="orientation|screenSize|keyboardHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <!-- El bolsillo (F17): lo pendiente de la PC, leído por el enlace. -->
+        <activity
+            android:name=".Bolsillo"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- El aparato dicho con números: la RAM libre que decide si el cerebro local cabe. -->
+        <activity
+            android:name=".Equipo"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
+          El saludo al encender (U2). `BOOT_COMPLETED` es una de las emisiones que el
+          sistema sigue entregando después del arranque; One UI puede matar el proceso
+          antes, y por eso el README y la pantalla de enlace traen el paso de la
+          exención de batería en vez de prometer el saludo.
+        -->
+        <receiver
+            android:name=".Arranque"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- La baldosa del panel rápido: un toque abre la escucha, sin buscar la app. -->
+        <service
+            android:name=".Baldosa"
+            android:exported="true"
+            android:icon="@drawable/ic_cort_aviso"
+            android:label="CORT te escucha"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!--
           El parlamento (F16): la frase se graba en el teléfono, se transcribe y se

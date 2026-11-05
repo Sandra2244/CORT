@@ -53,6 +53,10 @@ public class Voz implements TextToSpeech.OnInitListener {
     private TextToSpeech boca;
     private boolean bocaLista;
     private String enCola;
+    /** Los trozos del lector que llegaron antes de que el motor contestara. */
+    private final ArrayList<String> enColaLectura = new ArrayList<>();
+    /** El paso elegido por el lector, 1,0 por defecto; se aplica encima de `VELOCIDAD`. */
+    private float pasoLectura = 1.0f;
     private SpeechRecognizer oido;
     private Motor motor;
     /** `true` si el último dictado lo resolvió Vosk dentro del teléfono. */
@@ -127,7 +131,7 @@ public class Voz implements TextToSpeech.OnInitListener {
         if (listo == TextToSpeech.LANG_MISSING_DATA || listo == TextToSpeech.LANG_NOT_SUPPORTED) {
             aviso = "este teléfono no tiene voz en español instalada";
         }
-        boca.setSpeechRate(VELOCIDAD);
+        boca.setSpeechRate(VELOCIDAD * pasoLectura);
         boca.setPitch(TONO);
         Voice mejor = mejorVoz();
         if (mejor != null) {
@@ -139,6 +143,13 @@ public class Voz implements TextToSpeech.OnInitListener {
             String pendiente = enCola;
             enCola = null;
             hablar(pendiente);
+        }
+        if (!enColaLectura.isEmpty()) {
+            ArrayList<String> pendientes = new ArrayList<>(enColaLectura);
+            enColaLectura.clear();
+            for (String trozo : pendientes) {
+                seguir(trozo);
+            }
         }
     }
 
@@ -225,6 +236,43 @@ public class Voz implements TextToSpeech.OnInitListener {
             return;
         }
         boca.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "cort");
+    }
+
+    /**
+     * Lee un trozo más sin cortar el que suena. `hablar` usa QUEUE_FLUSH —es la
+     * respuesta a una pregunta, tiene que atropellar lo anterior—; un lector de
+     * documentos dice párrafo por párrafo y necesita QUEUE_ADD entre medias.
+     */
+    public void seguir(String texto) {
+        if (texto == null || texto.trim().isEmpty()) {
+            return;
+        }
+        if (!bocaLista) {
+            // el motor todavía no ha contestado: el trozo se guarda y sale en cuanto esté
+            enColaLectura.add(texto);
+            return;
+        }
+        boca.speak(texto, boca.isSpeaking() ? TextToSpeech.QUEUE_ADD : TextToSpeech.QUEUE_FLUSH,
+                null, "cort-lector");
+    }
+
+    /** El paso de la lectura: 1,0 es el normal y 2,0 releer volando. Se mide en el aparato. */
+    public void ritmo(float factor) {
+        pasoLectura = factor;
+        if (bocaLista && boca != null) {
+            // sobre `VELOCIDAD`, no en vez de ella: el paso normal tiene que sonar igual
+            // que el resto de CORT en la PC
+            boca.setSpeechRate(VELOCIDAD * factor);
+        }
+    }
+
+    /** Callar ahora: lo que espera un lector es un botón, no esperar a que se acabe. */
+    public void callar() {
+        enCola = null;
+        enColaLectura.clear();
+        if (boca != null) {
+            boca.stop();
+        }
     }
 
     /**

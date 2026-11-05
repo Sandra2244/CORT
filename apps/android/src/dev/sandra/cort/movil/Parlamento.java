@@ -94,6 +94,8 @@ public class Parlamento extends Activity {
     private AudioRecord microfono;
     private AudioTrack pista;
     private int modoAnterior = AudioManager.MODE_NORMAL;
+    private boolean auriculares;
+    private boolean modoTocado;
     private String destino = "";
 
     @Override
@@ -528,15 +530,21 @@ public class Parlamento extends Activity {
         if (cerrado || pcm.length < 2) {
             return;      // una respuesta que llega tarde no le habla a una pantalla que ya fue
         }
-        modoAnterior = gestor.getMode();
-        // El modo de comunicación es lo que manda la voz de dos vías al receptor de la
-        // oreja. Sin esto Android saca por el altavoz trasero y CORT contesta en voz alta.
-        gestor.setMode(AudioManager.MODE_IN_COMMUNICATION);
-        estadoDesdeHilo("CORT te habla por el auricular…");
+        // El sensor manda (U2): con audífonos puestos la voz tiene que ir a los
+        // audífonos, y el modo de comunicación lo que hace ahí es arrastrar el
+        // Bluetooth al perfil de llamada, que suena peor. Sin nada en la oreja sí se
+        // pone: es lo que manda la voz al receptor del auricular en vez de al altavoz.
+        auriculares = Audifonos.hay(gestor);
+        modoTocado = !auriculares;
+        if (!auriculares) {
+            modoAnterior = gestor.getMode();
+            gestor.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        }
+        estadoDesdeHilo("CORT te habla por " + Audifonos.salida(gestor) + "…");
         int minimo = AudioTrack.getMinBufferSize(tasa, AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT);
         if (minimo <= 0) {
-            gestor.setMode(modoAnterior);
+            sueltaElModo();
             estadoDesdeHilo("La PC te contestó por escrito: el auricular no acepta "
                     + tasa + " Hz en este teléfono.");
             return;
@@ -547,7 +555,9 @@ public class Parlamento extends Activity {
         // y el modo de comunicación puesto, Android enruta al auricular.
         AudioTrack nueva = new AudioTrack.Builder()
                 .setAudioAttributes(new AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setUsage(auriculares
+                                ? AudioAttributes.USAGE_MEDIA
+                                : AudioAttributes.USAGE_VOICE_COMMUNICATION)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build())
                 .setAudioFormat(new AudioFormat.Builder()
@@ -560,7 +570,7 @@ public class Parlamento extends Activity {
                 .build();
         if (nueva.getState() != AudioTrack.STATE_INITIALIZED) {
             nueva.release();
-            gestor.setMode(modoAnterior);
+            sueltaElModo();
             estadoDesdeHilo("La PC te contestó por escrito: no pude abrir el auricular.");
             return;
         }
@@ -601,15 +611,24 @@ public class Parlamento extends Activity {
             }
             activa.release();
         }
+        sueltaElModo();
+        runOnUiThread(() -> {
+            estado.setText("Ya está: mantén pulsado para hablarle otra vez.");
+            botonHablar.setText("Mantén pulsado para hablar");
+        });
+    }
+
+    /** Devuelve el modo de audio sólo si este hilo lo tocó; si no, no lo pisa. */
+    private void sueltaElModo() {
+        if (!modoTocado) {
+            return;
+        }
+        modoTocado = false;
         try {
             gestor.setMode(modoAnterior);
         } catch (Exception sinGestor) {
             // sin gestor de audio no hay modo que restaurar, y tampoco pantalla que engañar
         }
-        runOnUiThread(() -> {
-            estado.setText("Ya está: mantén pulsado para hablarle otra vez.");
-            botonHablar.setText("Mantén pulsado para hablar");
-        });
     }
 
     /**
@@ -721,13 +740,11 @@ public class Parlamento extends Activity {
             }
             activa.release();
         }
-        if (gestor != null && gestor.getMode() != modoAnterior) {
-            try {
-                gestor.setMode(modoAnterior);
-            } catch (Exception sinGestor) {
-                // sin gestor no hay modo que devolver
-            }
-        }
+        // La red de seguridad: si la respuesta nunca volvió, el modo queda puesto y el
+        // teléfono se queda en modo de llamada. `sueltaElModo` sólo lo toca si esta
+        // pantalla lo tocó —con audífonos no se puso, y devolver un modo que no se
+        // cambió es pisar al reproductor que estaba usando el Bluetooth.
+        sueltaElModo();
         super.onDestroy();
     }
 }

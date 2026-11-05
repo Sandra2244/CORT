@@ -58,6 +58,13 @@ public class Puente {
     public static final String RUTA_PARLAMENTO = "/parlamento";
 
     /**
+     * La ruta del bolsillo (F17): qué le debe la PC —pendientes, vencidos, compras,
+     * notas— y cómo está la máquina. También vive en el puerto del core, junto al
+     * parlamento, y se corta igual.
+     */
+    public static final String RUTA_BOLSILLO = "/bolsillo";
+
+    /**
      * El puerto del core. En esta rama `cort_server.py` abre dos: **8766** para la
      * interfaz (lo que el teléfono pega o descubre) y **8765** para el WebSocket. La
      * memoria se sirve por el del core, así que `urlDelPuente` cambia un número por
@@ -314,6 +321,21 @@ public class Puente {
      * abrir la boca.
      */
     public static String urlDelParlamento(String enlace) {
+        return conRuta(enlace, RUTA_PARLAMENTO);
+    }
+
+    /** La dirección del bolsillo (F17): el mismo corte del core, otro camino. */
+    public static String urlDelBolsillo(String enlace) {
+        return conRuta(enlace, RUTA_BOLSILLO);
+    }
+
+    /**
+     * Cambia `/memoria/puente` por `ruta` dentro de la dirección del core, dejando el
+     * token intacto donde estaba. Vale para cualquier camino que el puente monte sobre
+     * `app_ws`; si el enlace no trae la ruta de CORT no hay nada que cambiar y devuelve
+     * `null` antes de tocar el query.
+     */
+    private static String conRuta(String enlace, String ruta) {
         String delPuente = urlDelPuente(enlace);
         if (delPuente == null) {
             return null;
@@ -322,8 +344,7 @@ public class Puente {
         if (donde < 0) {
             return null;
         }
-        return delPuente.substring(0, donde) + RUTA_PARLAMENTO
-                + delPuente.substring(donde + RUTA.length());
+        return delPuente.substring(0, donde) + ruta + delPuente.substring(donde + RUTA.length());
     }
 
     /** El valor de `?token=` hasta el siguiente `&`, o vacío. */
