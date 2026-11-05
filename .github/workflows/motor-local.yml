@@ -68,6 +68,17 @@ on:
         description: "nombre corto de la compilación, igual que en workflow_dispatch"
         type: string
         required: false
+  # Y este tercer disparador, con su motivo medido el 2026-11-05: `gh workflow run
+  # motor-local.yml` contestó HTTP 404. GitHub sólo da por registrado un workflow
+  # después de que haya corrido, y la búsqueda por nombre de archivo se hace en la
+  # rama por defecto —que en este repo es la OTRA línea de CORT, donde este archivo
+  # no existe y no va a existir, porque `main` no se toca. Con un `push` limitado a
+  # su propia receta el archivo se registra solo y, además, si cambia una suma fijada
+  # o un `cmake`, el motor se vuelve a cruzar: que es justo lo que se quiere.
+  push:
+    branches: [web/cort-v0]
+    paths:
+      - ".github/workflows/motor-local.yml"
 
 permissions:
   contents: read
