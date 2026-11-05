@@ -9,8 +9,8 @@
 
 **Una aplicación nativa que funciona sola.** Desde `cort-v0.12.0` el teléfono no es una
 ventana abierta al puente de la PC: lleva dentro la cara (el orbe y el registro), el cerebro
-de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk con el
-modelo español dentro del APK). Se apaga el portátil y CORT sigue hablando, dictando,
+de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk; el
+modelo español se baja una vez desde Almacén). Se apaga el portátil y CORT sigue hablando, dictando,
 acordándose y obedeciendo.
 
 ```
@@ -123,14 +123,34 @@ que lo que lees en la página sale del APK de esa misma corrida. El APK se const
 `git checkout --detach` al commit de la etiqueta, para que lo publicado salga del código que dice
 salir y no de la punta de la rama.
 
-**Peso: medido otra vez, y esta vez manda el cerebro.** La release `cort-v0.16.1` pesa
-**162 817 475 bytes = 155,27 MB** (SHA-256 `89906dfd8f69cbbcfc06a664f5dbe633871b62c4be66d4fe40db98489f4c60ae`,
-run 42106258697, 20 entradas). De eso, **103 203 784 bytes son `libcortmotor.so`** en sus dos
-ABIs (56 508 296 arm64 + 46 695 488 armeabi-v7a): el motor GGUF es la pieza gorda, no el código,
-que con `classes.dex` se queda en 822 072 bytes. La anterior `cort-v0.15.1` pesaba
-**59 581 673 bytes = 56,82 MB** sin motor, y la `cort-v0.11.0` **16 873 bytes**: ×3 531 respecto
-al oído. Es lo que se pactó («no importa si el APK pesa 100 o 200 MB»); lo que sí importa es que
-ningún GGUF viaja ahí — el cerebro de 752 880 160 bytes se baja en el almacén.
+**Peso: medido otra vez, y esta vez el peso era el problema.** La release `cort-v0.16.1` pesaba
+**162 817 475 bytes = 155,27 MB**. La dueña lo bajó en su casa, el archivo llegó más corto de lo
+que anuncia la release y Samsung dijo **«aplicación no instalada»**: ése es el mensaje que
+Samsung saca con un APK truncado (y también con uno mal firmado, que no era el caso — la firma
+`faabef46…1977` es la del repo desde `cort-v0.11.0`), así que la culpa no era del sistema ni de
+Play Protect, sino de 163 MB a ~40 KB/s: 70 minutos de descarga, y en esta casa la luz se va.
+`cort-v0.16.2` ataca el número, no el síntoma, y queda en
+**17 982 662 bytes = 17,15 MB** (SHA-256 `665bfe42eefaf127e25a338349271b96038a59d7f029ef3f5283bccbf510e7af`,
+run 42115030288, 17 entradas, `versionCode 1602`) — **9,05 veces menos**, y unos
+**7 minutos** en la misma línea en vez de 70. Las tres palancas, cada una con su medida:
+
+1. **Una sola arquitectura.** `CORT_ABIS` ahora vale `arm64-v8a` por defecto: fuera los
+   46 695 488 bytes de `libcortmotor.so` en armeabi-v7a, que en esta casa no los usa nadie.
+   Sigue compilándose para los dos con `CORT_ABIS="arm64-v8a armeabi-v7a"`.
+2. **Las `.so` comprimidas** (`extractNativeLibs="true"` + `zip -9`): `libcortmotor.so` pasa de
+   56 508 296 a **14 265 297** bytes dentro del APK, y `libvosk.so` de 10 042 800 a
+   **3 253 940**. El instalador las saca a `/data/app/…/lib` al instalar. Lo que **no** se puede
+   hacer es bajar `libcortmotor.so` después a la carpeta de datos de la app: Android 10+ (y este
+   APK apunta al 34) se niega a cargar librerías nativas ejecutables desde ahí.
+3. **El modelo de español fuera del APK** (39 817 833 bytes): se baja en el teléfono desde
+   **Almacén → «Bajar el oído»**, con `Range`, `.part` y su SHA-256 verificada entera antes de
+   descomprimir. La ficha (`assets/oido.json`) lleva la URL, el peso y la misma suma fijada en
+   `deps.txt`, y `scripts/prueba_apk.py` no deja que las dos se separen.
+
+`classes.dex` se queda en 829 588 bytes: el código nunca fue lo gordo. La anterior
+`cort-v0.15.1` pesaba **59 581 673 bytes = 56,82 MB** sin motor y la `cort-v0.11.0`
+**16 873 bytes**. Ningún GGUF viaja en el APK — el cerebro de 752 880 160 bytes se baja en el
+almacén, y ahora también el oído.
 
 > **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
 > hora en las entradas de `META-INF` y de las `.so`, así que dos corridas del mismo código dan
@@ -138,32 +158,44 @@ ningún GGUF viaja ahí — el cerebro de 752 880 160 bytes se baja en el almac�
 > vive en la release, porque se publicó al pie del archivo que descargas; cualquier otro número
 > que este documento cite es sólo la foto de una corrida.
 
-Lo que hay dentro, sacado del propio APK con `unzip -l` y no de este texto:
+Lo que hay dentro, sacado del `auditoria.txt` que la release `cort-v0.16.2` adjunta (peso real
+del archivo y peso que ocupa dentro del APK):
 
-| archivo dentro del APK | bytes | qué es |
-|---|---|---|
-| `assets/motor/vosk-model-small-es-0.42.zip` | 39 817 833 | el modelo español, con su suma verificada dos veces |
-| `lib/arm64-v8a/libvosk.so` | 10 042 800 | el reconocedor para los teléfonos modernos |
-| `lib/armeabi-v7a/libvosk.so` | 8 985 628 | el mismo para teléfonos de 32 bits |
-| `lib/arm64-v8a/libjnidispatch.so` | 168 176 | el puente JNA que llama a Vosk |
-| `lib/armeabi-v7a/libjnidispatch.so` | 122 296 | idem, 32 bits |
-| `classes.dex` | 294 056 | las 18 clases Java de CORT (5 119 líneas) |
-| `assets/habilidades.json` | 9 770 | las 33 reglas y las 15 manos del cerebro nativo |
-| **16 entradas, sin comprimir** | **59 458 359** | |
+| archivo dentro del APK | bytes reales | dentro del APK | qué es |
+|---|---|---|---|
+| `lib/arm64-v8a/libcortmotor.so` | 56 508 296 | 14 265 297 | el pegamento GGUF: llama.cpp b12121 + el envoltorio JNI, estático y autocontenido |
+| `lib/arm64-v8a/libvosk.so` | 10 042 800 | 3 253 940 | el reconocedor español |
+| `classes.dex` | 829 588 | — | las 28 clases Java de CORT |
+| `lib/arm64-v8a/libjnidispatch.so` | 168 176 | 42 418 | el puente JNA que llama a Vosk |
+| `assets/cerebros.json` | 1 891 | — | los tres GGUF ofrecidos, con peso y suma medidos |
+| `assets/oido.json` | 867 | — | la ficha de la descarga del oído: URL, 39 817 833 bytes y su SHA-256 |
+| `assets/habilidades.json` | 9 770 | — | las 33 reglas y las 15 manos del cerebro nativo |
+| **17 entradas** | **67 583 790 descomprimido** | **17 982 662 el APK** | |
 
-`extractNativeLibs="false"` exige dos cosas y `auditoria.txt` las comprueba una por una,
-porque si falta una el fallo es `UnsatisfiedLinkError` en el arranque y CORT se queda mudo:
-las `.so` van **almacenadas sin comprimir** (`compress_type 0`, medido sobre el APK del run) y
-**alineadas a página** (`zipalign -c 4` → ok). El modelo también sale sin comprimir.
+Lo que **ya no está** en esa lista es el modelo de español (39 817 833 bytes) y todo lo de
+`armeabi-v7a`: se bajan o se compilan aparte.
+
+Con `extractNativeLibs="true"` el instalador descomprime las `.so` a `/data/app/…/lib` antes de
+cargarlas, así que lo que se exige es lo contrario de antes: que **sí** vayan comprimidas
+(`zip -9`), y `auditoria.txt` lo comprueba entrada por entrada («deflate, ok»). `resources.arsc`
+sigue **sin comprimir y alineado a 4 bytes**, que es lo que Android 11+ pide para leerlo con
+`mmap`; si algo de esto se rompe, el fallo es `UnsatisfiedLinkError` en el arranque y CORT se
+queda mudo — por eso la suite lo fija.
 
 Descargar y comprobar desde fuera, sin confiar en este texto:
 
 ```bash
-B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.13.0
-curl -sL -o CORT-movil.apk        $B/CORT-movil.apk
-curl -sL -o CORT-movil.apk.sha256 $B/CORT-movil.apk.sha256
+B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.16.2
+curl -sL -o CORT-movil.apk.sha256 $B/CORT-movil.apk.sha256   # 81 bytes, primero
+curl -sL -C - -o CORT-movil.apk   $B/CORT-movil.apk          # -C -: si se corta, sigue
 sha256sum -c CORT-movil.apk.sha256
 ```
+
+El `-C -` no es adorno: es exactamente el fallo que tuvo la dueña con el APK de 155,27 MB.
+El navegador de Samsung también reanuda descargas, pero si el archivo final no mide lo que
+anuncia la release (`17 982 662` bytes en `cort-v0.16.2`) el instalador dirá «aplicación no
+instalada» **antes** de mirar la firma. En el teléfono la misma reanudación la hace CORT con
+el oído y con los GGUF (`.part` + `Range`), y en los tres casos la suma se comprueba entera.
 
 > **Arreglo del 2026-11-04, dicho aquí porque le pasó a la dueña.** Hasta este commit el
 > `.sha256` se anotaba con el nombre `build/CORT-movil.apk` (el path que usa el script), así
@@ -259,7 +291,7 @@ botón **Interrumpir** corta cuando la dueña se cansa. La primera medida real e
 | cosa | estado |
 |---|---|
 | el dictado viaja por la red de la casa y se transcribe en la Classmate (modelo de 58 MB) | medido con audio sintético y `nice -19`: **22,4 s** la primera vez (cargando) y **2,8 s** con el modelo en RAM para ~2 s de habla |
-| **el dictado dentro del teléfono (Vosk local)** | **sin medir**: exige el A16 en la mano. La cara imprime el tiempo de cada dictado (`ultimoDictadoMs`) para sacarlo de ahí, y `Motor.java` sólo promete los números de los archivos (39,8 MB el modelo, 10,0 MB la biblioteca) |
+| **el dictado dentro del teléfono (Vosk local)** | **sin medir**: exige el A16 en la mano. La cara imprime el tiempo de cada dictado (`ultimoDictadoMs`) para sacarlo de ahí, y `Motor.java` sólo promete los números de los archivos (39,8 MB el modelo, que ahora se baja, y 10,0 MB la biblioteca) |
 | transcripción hecha, la respuesta del puente con sus reglas | 3–4 ms |
 | tiempo de carga del modelo en el teléfono y RAM que ocupa | sin medir, por lo mismo |
 | **el cerebro GGUF dentro del teléfono (U1)** | **sin medir**: el motor se compila en el runner (`motor-local.yml`) y la cara lo carga con `System.loadLibrary`; el primer `tokens/s` real sale del botón «Probar (mide tokens/s)» del almacén, en el A16 |
@@ -295,11 +327,13 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
-  auditoría en el runner (release `cort-v0.16.1`, run 42106258697, verde, 162 817 475 bytes =
-  155,27 MB) y las 189 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
-  La estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
-  822 072 B con zxing, el parlamento y las pantallas de U2 dentro, modelo de español de 39 817 833 B
-  y `libcortmotor.so` de 56 508 296 B (arm64) y 46 695 488 B (v7a). Lo que falta de medir es el
+  auditoría en el runner (release `cort-v0.16.2`, run 42115030288, verde de punta a punta,
+  17 982 662 bytes = 17,15 MB) y las **210 comprobaciones** de `scripts/prueba_apk.py` que
+  **esa misma corrida** ejecutó. La estructura del APK está comprobada: `.so` comprimidas con
+  `extractNativeLibs="true"`, `resources.arsc` suelto y alineado, `classes.dex` de 829 588 B con
+  zxing, el parlamento y las pantallas de U2 dentro, la ficha `assets/oido.json` para bajar el
+  oído, y `libcortmotor.so` de 56 508 296 B arm64 (14 265 297 comprimidos). La `cort-v0.16.1`,
+  con sus 162 817 475 B y 189 comprobaciones, sigue publicada y es la que se cortó al bajarla. Lo que falta de medir es el
   aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuántos `tokens/s` da, cuánto tarda
   un dictado real, si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas
   cinco son el ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son
@@ -326,8 +360,8 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 
 ```
 apps/android/src/dev/sandra/cort/movil/   28 clases Java, 8 622 líneas. Las que importan:
-    Motor.java         Vosk dentro del APK: descomprime el modelo una vez, escucha, corta a
-                       los 20 s, mide el dictado y no abre ninguna conexión
+    Motor.java         Vosk: baja el modelo español si falta (Range + SHA-256), descomprime
+                       una vez, escucha, corta a los 20 s y mide cada dictado
     Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos; encola los
                        trozos del lector, cambia de paso y calla cuando le dicen
     MainActivity.java  permiso, cara y ajustes (donde se pega la IP, opcional)

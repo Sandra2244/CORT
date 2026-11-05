@@ -67,6 +67,16 @@ CMake de llama.cpp de paso y están ya dentro de `libcortmotor.so` por el enlace
 que copiarlas costaría ~105 MB de APK sin añadir una sola función. `compilar.sh` lo hace así y
 lo imprime con su peso.
 
+Y ese peso fue el problema que la dueña reportó: con las dos ABIs y el modelo de español dentro,
+el APK llegaba a **162 817 475 bytes** (medido en la release `cort-v0.16.1`), que por su conexión
+de 40 KB/s se cortaba a mitad y el instalador decía «aplicación no instalada». Desde `cort-v0.16.2`
+se aplican los tres recortes: `CORT_ABIS` vale **`arm64-v8a` por defecto**, las `.so` viajan
+**comprimidas** (`extractNativeLibs="true"` + `zip -9`, y `zipalign -f 4` sin `-p` porque ya no
+hay `.so` sin comprimir que alinear), y el modelo de español **no va dentro**: lo baja el teléfono
+desde Almacén con la ficha `assets/oido.json`. Medido en la corrida verde 42115030288: el APK
+pesa **17 982 662 bytes** (17,15 MB, 9,05 veces menos), `libcortmotor.so` ocupa 14 265 297 bytes
+dentro del archivo y la suite da **210/210** en ese mismo trabajo.
+
 Cómo llega ese archivo al build, escrito con los dos intentos fallidos dentro: `apk-movil.yml`
 busca el artefacto `motor-local-ndk` por la API y saca **su id** (el `first` va dentro del
 `--jq`, porque un `| head -1` pegado a `gh` con `set -uo pipefail` puede abortar el paso con
