@@ -558,6 +558,81 @@ def main():
         prueba(f"{len(tabla['patrones'])} reglas de frase, todas con respuesta en español",
                all(p.get("respuesta") for p in tabla["patrones"]))
 
+    print("\n== U1: el cerebro GGUF dentro del teléfono ==")
+    # Las tres piezas de U1 son `cort_motor.cpp` (C++ con llama.cpp),
+    # `CerebroLocal.java` (Java que la carga) y el trabajo `motor-local.yml` (quien
+    # compila la `.so`). Los tres tienen que nombrar lo MISMO: el enlace se rompe en
+    # silencio si uno de los tres cambia de parecer, y el fallo sale en el teléfono de
+    # la dueña, no en un log.
+    cpp_path = APP / "jni" / "cort_motor.cpp"
+    prueba("apps/android/jni/cort_motor.cpp existe (el pegamento JNI)", cpp_path.is_file())
+    java_local = lee(SRC / "CerebroLocal.java") if (SRC / "CerebroLocal.java").is_file() else ""
+    prueba("CerebroLocal.java carga la librería por su nombre real",
+           'System.loadLibrary("cortmotor")' in java_local,
+           "el nombre de la .so y el del loadLibrary tienen que cuadrar")
+    nativos_java = set(re.findall(r"static native [\w\[\]]+ (native\w+)\(", java_local))
+    nativos_cpp = set(re.findall(r"Java_dev_sandra_cort_movil_CerebroLocal_(native\w+)\(",
+                                 lee(cpp_path))) if cpp_path.is_file() else set()
+    puerta = re.search(r'NATIVOS="([^"]+)"', lee(RAIZ / ".github" / "workflows" / "motor-local.yml"))
+    nativos_gate = set(puerta.group(1).split()) if puerta else set()
+    prueba(f"los {len(nativos_java)} nativos que Java declara son los que el C++ exporta",
+           nativos_java and nativos_java == nativos_cpp,
+           "sólo Java: " + ", ".join(sorted(nativos_java - nativos_cpp))
+           + " · sólo C++: " + ", ".join(sorted(nativos_cpp - nativos_java)))
+    prueba("el gate del workflow comprueba esa misma lista, no otra",
+           nativos_gate and nativos_gate == nativos_cpp,
+           ", ".join(sorted(nativos_gate ^ nativos_cpp)))
+    # El SONAME medido: `libllama.so.0` contra `libllama.so` en el APK. Por eso el
+    # pegamento se enlaza ESTÁTICO y autocontenido.
+    flujo_motor = lee(RAIZ / ".github" / "workflows" / "motor-local.yml")
+    prueba("el motor se enlaza estático y autocontenido (evita el SONAME libllama.so.0)",
+           "BUILD_SHARED_LIBS=OFF" in flujo_motor and "libcortmotor.so" in flujo_motor)
+    prueba("y el workflow se niega a publicar si aún dependiera de libllama",
+           "libllama|libggml" in flujo_motor)
+    prueba("el C++ no usa ninguna API privada de llama.cpp",
+           "ggml/" in lee(cpp_path) and "llama.h" in lee(cpp_path),
+           "sólo include/ y ggml/include/")
+
+    catalogo_path = APP / "assets" / "cerebros.json"
+    prueba("assets/cerebros.json viaja en el APK (es lo que lee la pantalla)",
+           catalogo_path.is_file())
+    if catalogo_path.is_file():
+        catalogo = json.loads(lee(catalogo_path))
+        cerebros = catalogo.get("cerebros", [])
+        prueba(f"{len(cerebros)} cerebros ofrecidos, ni uno inventado", 1 <= len(cerebros) <= 6)
+        faltan = [c.get("id") for c in cerebros
+                  if not all(k in c for k in ("id", "nombre", "archivo", "url",
+                                              "bytes", "sha256", "contexto", "hilos", "nota"))]
+        prueba("cada uno con peso, URL, suma y puerta escritos", not faltan, ", ".join(map(str, faltan)))
+        prueba("todas las URLs son https (el token no viaja en claro)",
+               all(str(c.get("url", "")).startswith("https://") for c in cerebros))
+        prueba("todas las SHA-256 tienen 64 hexadecimales en minúscula",
+               all(re.fullmatch(r"[0-9a-f]{64}", str(c.get("sha256", ""))) for c in cerebros))
+        prueba("ningún cerebro del catálogo es menor de 100 MB (no son juguetes)",
+               all(int(c.get("bytes", 0)) > 100_000_000 for c in cerebros))
+        prueba("el catálogo dice de dónde salieron los números",
+               "MEDIDOS" in catalogo.get("_", "") or "medidos" in catalogo.get("_", ""))
+
+    prueba("la puerta de RAM es el doble del archivo (la regla dicha en Equipo.java)",
+           "bytesDelModelo * 2" in java_local)
+    prueba("la cara nativa pregunta al GGUF antes que a la nube",
+           "cerebroLocal.contestar(" in lee(SRC / "Cara.java"))
+    prueba("la cara del enlace (WebView) hace lo mismo",
+           "cerebroLocal.contestar(" in lee(SRC / "Nexo.java"))
+    prueba("el almacén está declarado en el manifiesto", 'android:name=".Cerebros"' in manifiesto_texto)
+    prueba("y se abre desde la pantalla de enlace y desde el chip de la cara",
+           "new Intent(this, Cerebros.class)" in lee(SRC / "MainActivity.java")
+           and "new Intent(actividad, Cerebros.class)" in lee(SRC / "Cara.java"))
+    flujo_apk = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
+    prueba("el build del APK busca el artefacto del motor antes de compilar",
+           "motor-local-ndk" in flujo_apk and "download-artifact" in flujo_apk)
+    prueba("y si no existe, lo dice con un aviso en vez de romper la corrida",
+           'echo "MOTOR_ARTIFACT="' in flujo_apk)
+    prueba("compilar.sh mete las .so del motor en build/stage/lib",
+           "vendor/motor/" in script)
+    prueba("sin GGUF dentro del APK: se bajan en el almacén",
+           not list((APP / "assets").rglob("*.gguf")))
+
     print("\n== el repo no se llena de modelos ==")
     import subprocess
     suivi = subprocess.run(["git", "-C", str(RAIZ), "ls-files", "apps/android"],
