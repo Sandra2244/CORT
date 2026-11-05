@@ -70,6 +70,12 @@ jobs:
           fi
           git checkout --detach "$COMITE"
           echo "compilando $(git rev-parse HEAD) para la etiqueta ${COMITE}"
+          # Se guarda el SHA resuelto, no el nombre: `target_commitish` de la API de
+          # releases acepta un commit o una rama, y HTTP 422 rechaza una etiqueta
+          # (medido en la corrida 41974028217: `Release.target_commitish is invalid`
+          # con `--target cort-v0.15.1`). Aquí se compila justo el commit de la
+          # etiqueta, así que el SHA es lo que la release debe apuntar.
+          echo "CODIGO=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: caché del oído (Vosk, JNA y el modelo de español)
         uses: actions/cache@v4
@@ -210,11 +216,11 @@ jobs:
           # Si la plantilla o el script fallan, `set -e` tira del paso antes de publicar:
           # es mejor una corrida roja que una release con las notas a medias.
           if gh release view "$ETIQUETA" >/dev/null 2>&1; then
-            gh release edit "$ETIQUETA" --notes-file notas.md --target "${COMITE:-$GITHUB_SHA}"
+            gh release edit "$ETIQUETA" --notes-file notas.md --target "${CODIGO:-$GITHUB_SHA}"
             gh release upload "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt --clobber
           else
             gh release create "$ETIQUETA" CORT-movil.apk CORT-movil.apk.sha256 auditoria.txt firma.txt \
-              --target "${COMITE:-$GITHUB_SHA}" \
+              --target "${CODIGO:-$GITHUB_SHA}" \
               --title "$TITULO" \
               --notes-file notas.md
           fi
