@@ -106,6 +106,7 @@ apps/android/ACREDITACION.md  licencias pieza por pieza y qué NO va dentro del 
 docs/ANDROID.md         cómo se compila el APK, cómo se instala y qué no hace todavía
 requirements-cort.txt   lo mínimo que necesita el puente, con las versiones medidas
 PLAN_NUCLEO.md          las cinco capas del núcleo y lo medido fase por fase (F9…S4)
+PLAN_MOVIL.md           el plan del teléfono: cerebro local, integración en el sistema y las fases U1–U4
 PLAN_FASES.md           las fases F1–F8 con lo cerrado y lo pendiente
 INFORME_FUNCIONES.md    censo de las 34 órdenes de lectura de la plantilla
 ```

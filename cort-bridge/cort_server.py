@@ -2776,10 +2776,11 @@ async def main():
     protocolo = "https" if ssl_ctx else "http"
     ws_protocolo = "wss" if ssl_ctx else "ws"
 
-    # El cuerpo que entra por el puerto del core lo manda lo más grande que cabe: un
-    # dictado de 20 s (3 MB) o un PDF (8 MB). Con el tope por defecto de aiohttp —1 MB—
-    # la llamada del teléfono se corta a los ~1,5 s de hablar y el 413 viene en HTML, no
-    # en JSON: la pantalla del móvil muestra basura en vez del motivo.
+    # El cuerpo que entra por el puerto del core lo manda lo más grande que cabe: un PDF
+    # de 8 MB. El tope por defecto de aiohttp es 1 MB y un dictado de 20 s son
+    # 640 044 bytes (16 kHz × 16 bits × 20 s + cabecera), así que la llamada del
+    # parlamento nunca lo rozó; lo que lo atravesaba era el documento, y el 413 viene en
+    # HTML —la pantalla del móvil mostraría basura en vez del motivo.
     cuerpo_maximo_ws = max(getattr(cort_parlamento, "MAX_CUERPO", 3 * 1024 * 1024),
                            getattr(cort_documentos, "MAX_CUERPO", 0)) + 64 * 1024
 

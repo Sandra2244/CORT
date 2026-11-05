@@ -13,7 +13,8 @@ Lo que se juega, en orden de gravedad:
 * que un PDF sin texto se diga como lo que es (imágenes, sin `tesseract`), no como un
   libro leído;
 * que el texto devuelto quepa en la pantalla: tope de caracteres dicho con número;
-* y que el teléfono pueda subir 3 MB de dictado sin que aiohttp lo corte con un 413.
+* y que por el mismo puerto quebe un cuerpo de 2 MB —el tope por defecto de aiohttp es
+  1 MB— sin que la respuesta se convierta en un 413 de HTML.
 
     python3 scripts/prueba_documentos.py
 """
@@ -162,9 +163,10 @@ def main():
         comprueba("ninguno de los dos dejó archivos",
                   not list(tmp_docs.glob("documento-*")) if tmp_docs.exists() else True)
 
-        print("\n== el puerto del core aguenta un dictado de 20 s ==")
-        # 20 s de 16 kHz mono 16 bits son 640 000 B + cabecera: con el tope por defecto
-        # de aiohttp (1 MB) el parlamento moría en HTML a los ~1,5 s de hablar.
+        print("\n== el puerto del core aguenta más de 1 MB ==")
+        # aiohttp corta por defecto a 1 MB y el 413 sale en HTML. Un dictado de 20 s son
+        # 640 044 B (no llegaba), pero un documento de varios megabytes sí atraviesa el
+        # techo, y por eso el puente declara el suyo antes de montar las rutas.
         fuente = (RAIZ / "cort-bridge" / "cort_server.py").read_text(encoding="utf-8")
         comprueba("el core declara su tope de cuerpo antes de montar las rutas",
                   "client_max_size=cuerpo_maximo_ws" in fuente and
@@ -172,6 +174,12 @@ def main():
         wav = b"RIFF" + b"\0\0\0\0" + b"WAVEfmt " + bytes(40) + b"data" + b"\0\0\0\0"
         wav += bytes(2 * 16_000 * 3)          # 3 s de silencio: 96 000 B
         p_wav = f"http://127.0.0.1:{PORT_WS}/parlamento?token={LLAVE}"
+        gordo = ("párrafo de relleno para pasar el techo de un megabyte\n" * 40_000).encode()
+        codigo_gordo, cuadro_gordo = sube(base + f"?token={LLAVE}", gordo, timeout=90)
+        comprueba(f"un cuerpo de {len(gordo) // 1024} KB entra por el puerto y sale en JSON",
+                  codigo_gordo == 200 and cuadro_gordo.get("ok") is True and
+                  "text/html" not in str(cuadro_gordo.get("motivo", "")),
+                  [codigo_gordo, len(gordo), cuadro_gordo.get("caracteres")])
         codigo, respuesta = sube(p_wav, wav, timeout=60)
         comprueba("el parlamento recibe un WAV y contesta en JSON (no en 413)",
                   codigo == 200 and isinstance(respuesta, dict) and
