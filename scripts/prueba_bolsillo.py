@@ -193,7 +193,7 @@ def main():
         if FALLOS:
             print(f"resultado: {len(FALLOS)} fallo(s) de {CONTADAS[0]} comprobaciones")
             return 1
-        print("resultado: TODO OK")
+        print(f"resultado: TODO OK ({CONTADAS[0]} comprobaciones)")
         return 0
     finally:
         puente.terminate()
