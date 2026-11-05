@@ -78,7 +78,7 @@ public class Equipo extends Activity {
 
         File datos = getDataDir();
         StatFs disco = new StatFs(datos.getPath());
-        long libreDisco = disco.getLongAvailableBytes();
+        long libreDisco = disco.getAvailableBytes();
         cuadro.append("almacenamiento de la app: ").append(mb(libreDisco))
                 .append(" MB libres\n");
 

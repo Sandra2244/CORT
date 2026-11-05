@@ -4,9 +4,9 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
-import android.media.AudioManager.AudioDeviceCallback;
 
 /**
  * El sensor de audífonos. CORT habla al oído por el receptor del teléfono, pero si

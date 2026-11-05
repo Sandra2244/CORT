@@ -36,7 +36,7 @@ entera** (con su `?token=`) en la pantalla de enlace de la aplicación. El escá
 puente son los recuerdos; las preferencias, la lista y las notas van en el siguiente viaje
 (F14c).
 
-Desde `cort-v0.15.0` (U2) el teléfono además **se integra en el sistema**, que es lo que la
+Desde `cort-v0.15.1` (U2) el teléfono además **se integra en el sistema**, que es lo que la
 dueña pidió con el ejemplo del iPhone:
 
 ```
@@ -257,7 +257,7 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   puerto de red (r8169) no anunció «Supports Wake-on» y está sin cable, y el Wi-Fi (rtl8723be)
   no trae bloque WoWLAN en `iw phy0 info`; con un cable y el permiso de red se vuelve a
   comprobar, y mientras tanto el bolsillo pide la PC despierta. **Lo que sí hace desde
-  `cort-v0.15.0` es mostrar las tareas pendientes del portátil** (`Bolsillo.java` contra
+  `cort-v0.15.1` es mostrar las tareas pendientes del portátil** (`Bolsillo.java` contra
   `GET /bolsillo`). Tampoco llama por su cuenta: el teléfono siempre inicia la vuelta.
 
 

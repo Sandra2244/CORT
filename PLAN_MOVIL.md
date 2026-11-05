@@ -78,8 +78,10 @@ Lo demás de la integración, en el mismo orden de valor:
   Si Samsung no lo permite, queda la baldosa, el gesto del orbe y el botón del auricular,
   que hacen el mismo servicio.
 
-Release objetivo: `cort-v0.15.0` — **ésta es la que compila y se publica primero**, por el
-motivo escrito arriba.
+Release publicada: `cort-v0.15.1`. La `cort-v0.15.0` quedó sin publicar: su árbol no
+compilaba — 8 errores de `javac` en la corrida 41971907412 por tres nombres de API
+escritos de memoria (`AudioDeviceCallback` anidado, `getTile()`,
+`getLongAvailableBytes()`). Se corrigió hacia adelante, sin mover la etiqueta.
 
 ## 3. Fase U3 — que se porte como una persona (iniciativa e investigar)
 
@@ -112,7 +114,7 @@ Release objetivo: `cort-v0.17.0`.
   motivo.
 * **El bolsillo (F17)** está cerrado en las dos mitades: `GET /bolsillo` devuelve
   pendientes con sus minutos, lista, notas y la máquina medida, y `Bolsillo.java` (U2,
-  `cort-v0.15.0`) ya lo pinta en la pantalla del teléfono.
+  `cort-v0.15.1`) ya lo pinta en la pantalla del teléfono.
 * **Manos en el navegador (F18)** con `xdotool` (presente) y portapapeles — *medido*: en
   esta PC no hay `xsel` ni `wl-copy`, así que hay que resolver el portapapeles con
   `xdotool`/`xclip` antes de prometer copiar y pegar.

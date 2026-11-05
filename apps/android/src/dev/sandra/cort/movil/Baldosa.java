@@ -21,7 +21,7 @@ public class Baldosa extends TileService {
     @Override
     public void onStartListening() {
         super.onStartListening();
-        Tile baldosa = getTile();
+        Tile baldosa = getQsTile();
         if (baldosa != null) {
             baldosa.setState(Tile.STATE_INACTIVE);
             baldosa.setLabel("CORT te escucha");

@@ -406,6 +406,16 @@ def main():
            not any(m in audifonos for m in ("checkSelfPermission", "requestPermissions",
                                             "Manifest.permission")),
            "sin BLUETOOTH CONNECT: se pregunta por las salidas activas")
+    # Confesado: el árbol de `cort-v0.15.0` no compilaba (corrida 41971907412, 2026-11-05,
+    # 8 errores de `javac`). Tres nombres de API se escribieron de memoria:
+    # `AudioDeviceCallback` vive en `android.media`, no anidado en `AudioManager`; el
+    # getter de la baldosa es `getQsTile()`; `StatFs` tiene `getAvailableBytes()`, no la
+    # forma «Long» que sale por analogía. Aquí no hay `javac` —el portátil no tiene JDK
+    # de desarrollo ni SDK—, así que la suite no puede typecheckear; lo que sí puede
+    # hacer es no dejar volver a escribir esos tres nombres.
+    prueba("AudioDeviceCallback se importa plano, no anidado en AudioManager",
+           "import android.media.AudioDeviceCallback;" in audifonos
+           and "AudioManager.AudioDeviceCallback" not in audifonos)
 
     parl_audifonos = [m in parl for m in ("Audifonos.hay(gestor)", "Audifonos.salida(gestor)",
                                           "USAGE_MEDIA", "sueltaElModo()")]
@@ -459,6 +469,9 @@ def main():
     prueba("el Java del APK no usa una `R.` propia: sin `aapt2 link --java` esa clase no existe",
            not re.search(r"\bR\.(drawable|string|mipmap|id|layout|xml|color)\b", sin_comentarios),
            "los recursos se buscan con `getIdentifier` o se referencian desde el manifiesto")
+    anidadados = re.findall(r"^import android\.[\w.]*[A-Z]\w*\.[A-Z]\w*;", java_todo, flags=re.M)
+    prueba("ningún `import android.` esconde una clase anidada: en Android los paquetes son planos",
+           not anidadados, str(anidadados))
 
     baldosa_path = SRC / "Baldosa.java"
     baldosa = lee(baldosa_path)
@@ -471,6 +484,8 @@ def main():
     prueba("con Android 14 usa el PendingIntent: la firma vieja deja la baldosa muerta",
            "UPSIDE_DOWN_CAKE" in baldosa and "startActivityAndCollapse(PendingIntent" in baldosa
            and "FLAG_IMMUTABLE" in baldosa)
+    prueba("la baldosa se lee con getQsTile: `getTile()` no existe en TileService",
+           "getQsTile()" in baldosa and "getTile()" not in baldosa)
 
     bolsillo_path = SRC / "Bolsillo.java"
     bolsillo = lee(bolsillo_path)
@@ -510,6 +525,8 @@ def main():
            and "MemTotal:" in equipo)
     prueba("lo medido se puede copiar: el texto es seleccionable",
            "cifras.setTextIsSelectable(true)" in equipo)
+    prueba("el disco se mide con getAvailableBytes, no con la forma «Long» inventada",
+           "getAvailableBytes()" in equipo and "getLongAvailableBytes" not in equipo)
     prueba("y nada de eso sale del teléfono: sin red en esta pantalla",
            "java.net" not in equipo and "HttpURL" not in equipo,
            "los números se quedan en la pantalla")
