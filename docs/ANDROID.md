@@ -215,7 +215,7 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
   auditoría en el runner (release `cort-v0.13.0`, run 41906957815, verde, 59 565 213 bytes =
   56,81 MB) y las 73 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó
-  (hoy la suite va por 105, con las 20 del parlamento y las de las notas de la release). La
+  (hoy la suite va por 106, con las 21 del parlamento y las de las notas de la release). La
   estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
   756 028 B con zxing dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
   aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real,

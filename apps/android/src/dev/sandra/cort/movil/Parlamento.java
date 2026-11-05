@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioRecord;
@@ -540,9 +541,23 @@ public class Parlamento extends Activity {
                     + tasa + " Hz en este teléfono.");
             return;
         }
-        AudioTrack nueva = new AudioTrack(gestor, tasa, AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT, Math.max(minimo, pcm.length),
-                AudioTrack.MODE_STATIC);
+        // `AudioTrack.Builder` en vez del constructor con `AudioManager`: el que había
+        // aquí toma un `int` de tipo de flujo, no el gestor, y el runner lo cache
+        // (`AudioManager cannot be converted to int`). Con `USAGE_VOICE_COMMUNICATION`
+        // y el modo de comunicación puesto, Android enruta al auricular.
+        AudioTrack nueva = new AudioTrack.Builder()
+                .setAudioAttributes(new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build())
+                .setAudioFormat(new AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(tasa)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build())
+                .setBufferSizeInBytes(Math.max(minimo, pcm.length))
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build();
         if (nueva.getState() != AudioTrack.STATE_INITIALIZED) {
             nueva.release();
             gestor.setMode(modoAnterior);

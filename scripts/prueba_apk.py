@@ -289,6 +289,12 @@ def main():
     prueba("la voz de la PC sale por el auricular y el modo se devuelve al que había",
            "MODE_IN_COMMUNICATION" in parl and "modoAnterior = gestor.getMode()" in parl
            and "gestor.setMode(modoAnterior)" in parl)
+    # El constructor con `AudioManager` toma un `int` de tipo de flujo: el runner lo
+    # cache en el primer compile (`AudioManager cannot be converted to int`). El
+    # `Builder` es lo que corresponde y además es el que declara el uso de llamada.
+    prueba("la pista se arma con `AudioTrack.Builder`, no con el constructor que no existe",
+           "AudioTrack.Builder()" in parl and "USAGE_VOICE_COMMUNICATION" in parl
+           and "new AudioTrack(" not in parl)
     prueba("suelta el micrófono y la pista al salir: el indicador de escucha no queda encendido",
            "protected void onPause" in parl and "protected void onDestroy" in parl
            and "cerrarMicrofono()" in parl)
