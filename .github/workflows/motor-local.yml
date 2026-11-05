@@ -1,0 +1,364 @@
+name: motor-local
+
+# ============================================================================
+# motor-local: el cerebro GGUF dentro del teléfono (fase F13)
+#
+# Compila llama.cpp con el NDK de Android para los dos ABIs que necesitamos
+# (arm64-v8a y armeabi-v7a) y publica las librerías .so como artefacto
+# `motor-local-ndk`. Ninguna de estas .so se baja hecha: se cruzan a partir
+# del código fuente de la etiqueta fijada abajo, exactamente como manda la
+# regla de la casa con las piezas ajenas (primero se lee y se comprueba,
+# después se usa; ver `apps/android/deps.txt`).
+#
+# Qué se fija y por qué:
+#
+# * llama.cpp b12121 (commit e56f006ed6b416ae8b7ccb5243b204743f09df1e), la
+#   última publicación oficial verificada el 2026-11-05. El tarball fuente
+#   lo baja GitHub del propio etiquetado; GitHub NO publica sumas de los
+#   tarballs de código fuente, así que la suma SHA-256 de abajo (0b6fbcaa...)
+#   se calculó el 2026-11-05 sobre la copia oficial descargada de
+#   github.com/ggml-org/llama.cpp (etiqueta b12121, 39 057 256 bytes) y se
+#   fija aquí: si el tarball cambia, el build se cae en vez de colarse.
+#   La etiqueta es ligera y apunta derecho al commit (comprobado con
+#   `gh api repos/ggml-org/llama.cpp/git/ref/tags/b12121`).
+#
+# * NDK r26d (26.3.11579264) directo de dl.google.com. Lo publicado por Google
+#   para ese zip —leído HOY en `https://dl.google.com/android/repository/repository2-3.xml`,
+#   entrada `android-ndk-r26d-linux.zip`— es el tamaño 668 556 491 y el SHA-1
+#   `fcdad75a765a46a9cf6560353f480db251d14765`; esas dos son las sumas que el build
+#   exige. Google NO publica el SHA-256 de las NDK y en esta casa la descarga se
+#   cortó a 493 723 648 bytes, así que **no se fija un SHA-256 sin medirlo**: el
+#   runner lo calcula y lo imprime en la auditoría, y se añade como comprobación
+#   dura cuando la primera corrida lo haya producido entero.
+#
+# Confesado el 2026-11-05: la primera versión de este archivo llevaba un SHA-256 de
+# la NDK «fijado por medición» que nunca se midió (la copia local estaba cortada a
+# 493 MB, y su suma real es 1b4465d6…). Se cambió por las dos sumas que Google sí
+# publica. Un tope inventado falla en silencio: o no deja compilar, o deja pasar un
+# zip que no es el que se cree que es.
+#
+# No hay instalador de terceros: ni acciones ajenas, ni `sdkmanager`, ni
+# `apt` — sólo las herramientas que el runner ya trae (cmake, ninja/make,
+# unzip, curl), igual que hace `apk-movil.yml` con aapt2/d8/zipalign.
+#
+# Este archivo NO toca la release ni el APK: publica un artefacto suelto.
+# La integración dentro del APK (jniLibs + JNI + Qwen2.5-1.5B q2_k) viene
+# después, y el modelo GGUF NO se descarga aquí: viaja aparte, como ya hace
+# el oído de Vosk por deps.txt, con su nombre y su suma fijados.
+#
+# Licencia de llama.cpp: MIT (archivo LICENSE del propio etiquetado,
+# "Copyright (c) 2023-2026 The ggml authors"). Falta su línea en
+# `apps/android/ACREDITACION.md` cuando el motor entre al APK.
+# ============================================================================
+
+run-name: motor-local | ${{ github.event.inputs.etiqueta || inputs.etiqueta || 'motor-llama-b12121' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: "nombre corto de esta compilación del motor (va a la auditoría y al registro; ej. motor-prueba1)"
+        default: "motor-llama-b12121"
+  workflow_call:
+    inputs:
+      etiqueta:
+        description: "nombre corto de la compilación, igual que en workflow_dispatch"
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  motor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # ---- lo fijado arriba con su suma; si cambia alguna, el build se cae ----
+      LLAMA_ETIQUETA: b12121
+      LLAMA_COMITE: e56f006ed6b416ae8b7ccb5243b204743f09df1e
+      LLAMA_URL: https://github.com/ggml-org/llama.cpp/archive/refs/tags/b12121.tar.gz
+      LLAMA_SHA256: 0b6fbcaa41a51782ccb3454ae6a1cf6b2f7d0530e8dfe6d2f9de2df8c916a33a
+      LLAMA_BYTES: 39057256
+      NDK_VERSION: r26d
+      NDK_REVISION: 26.3.11579264
+      NDK_URL: https://dl.google.com/android/repository/android-ndk-r26d-linux.zip
+      # Las dos que publica Google en repository2-3.xml (comprobadas el 2026-11-05).
+      NDK_SHA1_GOOGLE: fcdad75a765a46a9cf6560353f480db251d14765
+      NDK_BYTES: 668556491
+      # SHA-256 del zip que midió el runner en su primera corrida (run 41978663423):
+      # se comprueba contra lo que baje cada vez, y si el zip de Google cambiara sin
+      # cambiar el SHA-1 publicado, esto es lo que lo vería.
+      NDK_SHA256_MEDIDO: ""
+
+    steps:
+      - name: código
+        uses: actions/checkout@v4
+
+      - name: etiqueta de esta corrida
+        # Desde `workflow_dispatch` llega por github.event.inputs; desde
+        # `workflow_call` por inputs. Se traduce aquí y se guarda en $GITHUB_ENV
+        # para que todos los pasos vean la misma cadena.
+        run: |
+          set -euo pipefail
+          E="${{ github.event.inputs.etiqueta }}${{ inputs.etiqueta }}"
+          if [ -z "$E" ]; then E="motor-llama-b12121"; fi
+          echo "ETIQUETA=$E" >> "$GITHUB_ENV"
+          echo "etiqueta de build: $E"
+
+      - name: caché de las descargas (llama.cpp y el NDK)
+        uses: actions/cache@v4
+        with:
+          path: ~/cort-descargas
+          key: cort-motor-llama-b12121-ndk-r26d-v1
+          restore-keys: cort-motor-
+
+      - name: qué trae el runner (medido en el log)
+        run: |
+          set -euo pipefail
+          for h in cmake ninja make unzip curl sha256sum sha1sum python3; do
+            printf '  %-10s %s\n' "$h" "$(command -v $h || echo '(no está)')"
+          done
+          cmake --version
+          echo "núcleos: $(nproc)"
+          echo "disco libre: $(df -h . | awk 'NR==2{print $4}')"
+          # El runner trae NDKs r27/r29/r30 (medido en la imagen ubuntu-24.04),
+          # pero NINGUNO r26: por eso se baja el r26d con sus dos sumas.
+          ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}/ndk" 2>/dev/null || echo "(sin NDK preinstalado)"
+
+      - name: bajar y verificar el NDK r26d
+        run: |
+          set -euo pipefail
+          mkdir -p ~/cort-descargas
+          ZIP=~/cort-descargas/android-ndk-$NDK_VERSION-linux.zip
+          if [ ! -f "$ZIP" ]; then
+            curl -fSL --retry 3 -o "$ZIP" "$NDK_URL"
+          fi
+          PESO=$(stat -c%s "$ZIP")
+          if [ "$PESO" != "$NDK_BYTES" ]; then
+            echo "::error::el zip del NDK pesa $PESO y Google publica $NDK_BYTES"
+            exit 1
+          fi
+          printf '%s  %s\n' "$NDK_SHA1_GOOGLE" "$ZIP" | sha1sum -c -
+          if [ -n "$NDK_SHA256_MEDIDO" ]; then
+            printf '%s  %s\n' "$NDK_SHA256_MEDIDO" "$ZIP" | sha256sum -c -
+          fi
+          SHA256="$(sha256sum "$ZIP" | awk '{print $1}')"
+          echo "SHA-256 medido del zip: $SHA256"
+          echo "  (fijar en NDK_SHA256_MEDIDO cuando esta corrida sea verde)"
+          echo "NDK_SHA256=$SHA256" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ndk"
+          unzip -q -o "$ZIP" -d "$RUNNER_TEMP/ndk"
+          NDK_DIR="$RUNNER_TEMP/ndk/android-ndk-$NDK_VERSION"
+          REV=$(sed -n 's/^Pkg.Revision = //p' "$NDK_DIR/source.properties")
+          if [ "$REV" != "$NDK_REVISION" ]; then
+            echo "::error::source.properties dice Pkg.Revision=$REV, se esperaba $NDK_REVISION"
+            exit 1
+          fi
+          NM="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          if [ ! -x "$NM" ]; then
+            echo "::error::no está $NM en el NDK recién descomprimido"
+            exit 1
+          fi
+          "$NM" --version
+          echo "NDK_DIR=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: bajar y verificar el fuente de llama.cpp
+        run: |
+          set -euo pipefail
+          mkdir -p ~/cort-descargas
+          TGZ=~/cort-descargas/llama-$LLAMA_ETIQUETA.tar.gz
+          if [ ! -f "$TGZ" ]; then
+            curl -fSL --retry 3 -o "$TGZ" "$LLAMA_URL"
+          fi
+          printf '%s  %s\n' "$LLAMA_SHA256" "$TGZ" | sha256sum -c -
+          PESO=$(stat -c%s "$TGZ")
+          if [ "$PESO" != "$LLAMA_BYTES" ]; then
+            echo "::error::el tarball pesa $PESO y se fijó en $LLAMA_BYTES"
+            exit 1
+          fi
+          SRC="$RUNNER_TEMP/llama.cpp-$LLAMA_ETIQUETA"
+          rm -rf "$SRC"
+          tar xzf "$TGZ" -C "$RUNNER_TEMP"
+          if [ ! -f "$SRC/include/llama.h" ]; then
+            echo "::error::el tarball no trae include/llama.h donde se esperaba"
+            exit 1
+          fi
+          echo "SHA-256 medido del tarball: $(sha256sum "$TGZ" | awk '{print $1}')"
+          head -3 "$SRC/LICENSE"
+          echo "SRC_DIR=$SRC" >> "$GITHUB_ENV"
+
+      - name: compilar (arm64-v8a y armeabi-v7a)
+        run: |
+          set -euo pipefail
+          # Las flags de apagado (COMMON/TOOLS/APP/UI, GGML_*) son las que recomienda
+          # docs/android.md del propio etiquetado para cruzar con NDK: sin OpenMP ni
+          # OpenSSL (no están en las APIs nativas estables de Android) y sin
+          # GGML_NATIVE (el CPU del runner no es el CPU del teléfono).
+          # ANDROID_STL se queda con el respaldo de llama.cpp (c++_static): cada .so
+          # va autocontenida y el APK no necesita arrastrar libc++_shared.so.
+          for ABI in arm64-v8a armeabi-v7a; do
+            echo "======== configure $ABI ========"
+            cmake -S "$SRC_DIR" -B "$RUNNER_TEMP/build-$ABI" \
+              -DCMAKE_TOOLCHAIN_FILE="$NDK_DIR/build/cmake/android.toolchain.cmake" \
+              -DANDROID_ABI="$ABI" \
+              -DANDROID_PLATFORM=android-26 \
+              -DANDROID_NATIVE_API_LEVEL=26 \
+              -DANDROID_ARM_NEON=ON \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DBUILD_SHARED_LIBS=ON \
+              -DLLAMA_BUILD_TESTS=OFF \
+              -DLLAMA_BUILD_EXAMPLES=OFF \
+              -DLLAMA_BUILD_SERVER=OFF \
+              -DLLAMA_BUILD_COMMON=OFF \
+              -DLLAMA_BUILD_TOOLS=OFF \
+              -DLLAMA_BUILD_APP=OFF \
+              -DLLAMA_BUILD_UI=OFF \
+              -DGGML_NATIVE=OFF \
+              -DGGML_OPENMP=OFF \
+              -DGGML_LLAMAFILE=OFF \
+              -DLLAMA_OPENSSL=OFF \
+              -DLLAMA_BUILD_NUMBER=12121 \
+              -DLLAMA_BUILD_COMMIT="$LLAMA_COMITE"
+
+            echo "======== build $ABI ========"
+            # Como en apk-movil.yml: el shell del runner se comporta como `bash -e`
+            # y mataría el paso antes de dejar diagnosticar el fallo. Se apaga, se
+            # captura el código, se imprime el log y los errores primero, y se sale
+            # con el código verdadero.
+            set +e
+            cmake --build "$RUNNER_TEMP/build-$ABI" --config Release -j"$(nproc)" > "/tmp/salida-$ABI.log" 2>&1
+            COD=$?
+            set -e
+            cat /tmp/salida-$ABI.log
+            if [ $COD -ne 0 ]; then
+              echo "::error::la compilación $ABI cayó con código $COD"
+              grep -E 'error:|fatal' "/tmp/salida-$ABI.log" | sed 's/^/::error::/' || true
+              tail -c 900 "/tmp/salida-$ABI.log" | tr '\n\r' '  ' | sed 's/^/::error::final: /' || true
+              exit $COD
+            fi
+          done
+
+      - name: recoger las .so y medir su peso
+        run: |
+          set -euo pipefail
+          mkdir -p motor
+          for ABI in arm64-v8a armeabi-v7a; do
+            DIR="$RUNNER_TEMP/build-$ABI/bin"
+            mkdir -p "motor/$ABI"
+            # CMake deja libllama.so como enlace a libllama.so.X.Y.Z (propiedad
+            # VERSION); `cp -L` copia el archivo real, sin enlaces ni strips,
+            # que es lo que Android puede meter en jniLibs.
+            for LIB in libllama libggml libggml-base libggml-cpu; do
+              if [ ! -e "$DIR/$LIB.so" ]; then
+                echo "::error::no se produjo $DIR/$LIB.so para $ABI"
+                ls -la "$DIR" || true
+                exit 1
+              fi
+              cp -L "$DIR/$LIB.so" "motor/$ABI/$LIB.so"
+            done
+            echo "===== $ABI ====="
+            ls -la "motor/$ABI"
+            stat -c '%s bytes  %n' motor/"$ABI"/*.so
+            sha256sum motor/"$ABI"/*.so
+          done
+
+      - name: comprobar los símbolos exportados con llvm-nm
+        # La lista que pidió la dueña más las que el pegamento JNI va a llamar de
+        # verdad. Dos nombres de la lista NO existen en b12121 (medido en
+        # include/llama.h, no supuesto):
+        #   * llama_batch_add      -> eliminado del API público; hoy se llena el
+        #                             `struct llama_batch` a mano o se usa
+        #                             llama_batch_get_one (llama.h:966).
+        #   * llama_model_quantize_supported -> nunca existió; lo que hay es
+        #                             llama_model_quantize (llama.h:681) y
+        #                             llama_model_quantize_default_params (llama.h:486).
+        # La ausencia de esas dos NO rompe el build: queda registrada en la
+        # auditoría con su alternativa. La ausencia de cualquiera de las otras
+        # sí es un fallo real y el paso se cae.
+        run: |
+          set -euo pipefail
+          NM="$NDK_DIR/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          OBLIGATORIOS="llama_backend_init llama_model_default_params llama_context_default_params llama_model_load_from_file llama_init_from_model llama_model_get_vocab llama_tokenize llama_token_to_piece llama_detokenize llama_batch_get_one llama_batch_init llama_batch_free llama_decode llama_sampler_chain_default_params llama_sampler_chain_init llama_sampler_chain_add llama_sampler_sample llama_sampler_free llama_get_logits_ith llama_model_quantize llama_model_quantize_default_params llama_vocab_get_text llama_vocab_n_tokens llama_vocab_eos"
+          INFORMATIVOS="llama_batch_add llama_model_quantize_supported llama_vocab_decode"
+          : > /tmp/simbolos.txt
+          for ABI in arm64-v8a armeabi-v7a; do
+            "$NM" -D --defined-only "motor/$ABI/libllama.so" > "/tmp/nm-$ABI.txt"
+            if [ ! -s "/tmp/nm-$ABI.txt" ]; then
+              echo "::error::llvm-nm no devolvió ningún símbolo dinámico de motor/$ABI/libllama.so"
+              exit 1
+            fi
+            echo "== $ABI: libllama.so ($(stat -c%s motor/$ABI/libllama.so) bytes) ==" >> /tmp/simbolos.txt
+            for S in $OBLIGATORIOS; do
+              if grep -qw "$S" "/tmp/nm-$ABI.txt"; then
+                echo "  EXPORTADO   $S" >> /tmp/simbolos.txt
+              else
+                echo "  FALTA       $S" >> /tmp/simbolos.txt
+                echo "::error::el símbolo $S no está exportado por libllama.so ($ABI)"
+                FALTA_GRAVE=1
+              fi
+            done
+            for S in $INFORMATIVOS; do
+              if grep -qw "$S" "/tmp/nm-$ABI.txt"; then
+                echo "  EXPORTADO   $S (no se esperaba)" >> /tmp/simbolos.txt
+              else
+                echo "  NO EXISTE   $S (alternativa documentada en el comentario del paso)" >> /tmp/simbolos.txt
+              fi
+            done
+          done
+          cat /tmp/simbolos.txt
+          if [ "${FALTA_GRAVE:-0}" = "1" ]; then
+            echo "::error::faltan símbolos obligatorios del camino de inferencia"
+            exit 1
+          fi
+
+      - name: auditoría del motor
+        run: |
+          set -euo pipefail
+          {
+            echo "auditoría del motor local (llama.cpp cruzado con NDK)"
+            echo "etiqueta de build: $ETIQUETA"
+            echo "corrida: $GITHUB_RUN_ID (número $GITHUB_RUN_NUMBER, intento $GITHUB_RUN_ATTEMPT)"
+            echo "llama.cpp: $LLAMA_ETIQUETA | commit $LLAMA_COMITE"
+            echo "  fuente: $LLAMA_URL"
+            echo "  sha256 fijado:   $LLAMA_SHA256"
+            echo "  sha256 medido:   $(sha256sum ~/cort-descargas/llama-$LLAMA_ETIQUETA.tar.gz | awk '{print $1}')"
+            echo "  tamaño:          $(stat -c%s ~/cort-descargas/llama-$LLAMA_ETIQUETA.tar.gz) bytes"
+            echo "NDK: $NDK_VERSION (revision $NDK_REVISION)"
+            echo "  fuente: $NDK_URL"
+            echo "  sha256 medido:   $NDK_SHA256"
+            echo "  sha256 fijado:   ${NDK_SHA256_MEDIDO:-sin fijar (se fija tras la primera corrida verde)}"
+            echo "  sha1 publicado por Google (repository2-3.xml): $NDK_SHA1_GOOGLE"
+            echo "ABIs compilados: arm64-v8a armeabi-v7a (API android-26, NEON ON, Release, BUILD_SHARED_LIBS ON)"
+            echo ""
+            echo "— librerías producidas (sin strip, copiadas tal cual con cp -L) —"
+            for ABI in arm64-v8a armeabi-v7a; do
+              for F in motor/$ABI/*.so; do
+                echo "$(stat -c%s "$F") bytes | $(sha256sum "$F" | awk '{print $1}') | $F"
+              done
+            done
+            echo ""
+            echo "— símbolos de libllama.so (llvm-nm -D --defined-only) —"
+            cat /tmp/simbolos.txt
+          } > auditoria-motor.txt
+          cat auditoria-motor.txt
+
+      - name: publicar el artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: motor-local-ndk
+          # compression-level 0: las .so quedan almacenadas tal cual en el zip,
+          # sin recomprimir: son binarios ya compactos, la compresión no saca
+          # casi nada, y lo que se publica es byte a byte lo que salió del
+          # compilador — que es lo que pesa la auditoría de arriba.
+          compression-level: 0
+          path: |
+            motor/**
+            auditoria-motor.txt
+          if-no-files-found: error
+
+      - name: resumen
+        run: |
+          set -euo pipefail
+          echo "motor $ETIQUETA listo: llama.cpp $LLAMA_ETIQUETA con NDK $NDK_VERSION, dos ABIs."
+          echo "artefacto: motor-local-ndk (las .so + auditoria-motor.txt)"
