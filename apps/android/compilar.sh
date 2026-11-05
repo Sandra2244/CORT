@@ -123,6 +123,25 @@ if [ "$DELGADO" = "0" ]; then
             done
         done
     done
+    # U1: el cerebro GGUF. `libcortmotor.so` no se compila aquí (esta máquina y este
+    # runner no tienen NDK): la compila `motor-local.yml` con el NDK r26d de Google y
+    # su artefacto se baja a `vendor/motor/<abi>/`. Si no está, el APK sale sin motor y
+    # `CerebroLocal.hayLibreria()` lo dice en la pantalla — no se finge un cerebro que
+    # no va, y tampoco se corta una compilación por falta de una corrida ajena.
+    MOTOR_JARVIS=0
+    for ABI in $ABIS; do
+        mkdir -p "build/stage/lib/$ABI"
+        for FICHERO in vendor/motor/"$ABI"/*.so; do
+            [ -e "$FICHERO" ] || continue
+            cp "$FICHERO" "build/stage/lib/$ABI/"
+            MOTOR_JARVIS=1
+            echo "  .so del motor -> $ABI: $(basename "$FICHERO") ($(stat -c%s "$FICHERO") bytes)"
+        done
+    done
+    if [ "$MOTOR_JARVIS" = "0" ]; then
+        echo "aviso: no hay .so en vendor/motor/: este APK se compila SIN cerebro GGUF"
+    fi
+
     HAY_NATIVAS=0
     if [ -n "$(find build/stage/lib -name '*.so' -type f 2>/dev/null)" ]; then HAY_NATIVAS=1; fi
     if [ -f vendor/vosk-android-0.3.75/classes.jar ] \
@@ -263,7 +282,8 @@ MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
     python3 - build/CORT-movil.apk <<'PY'
 import sys, zipfile
 z = zipfile.ZipFile(sys.argv[1])
-for nombre in ("lib/arm64-v8a/libvosk.so", "lib/arm64-v8a/libjnidispatch.so"):
+for nombre in ("lib/arm64-v8a/libvosk.so", "lib/arm64-v8a/libjnidispatch.so",
+               "lib/arm64-v8a/libcortmotor.so", "lib/armeabi-v7a/libcortmotor.so"):
     try:
         info = z.getinfo(nombre)
     except KeyError:
@@ -276,6 +296,13 @@ print("resources.arsc: %d bytes · %s" % (arsc.file_size,
       "SIN COMPRIMIR (ok)" if arsc.compress_type == 0 else "comprimido (Android 11 lo pide suelto)"))
 tot = sum(i.file_size for i in z.infolist())
 print("entradas: %d · descomprimido suma %d bytes" % (len(z.infolist()), tot))
+# Ningún GGUF viaja en el APK (decisión fija de U1: se baja en el almacén). Si un día
+# alguien lo mete aquí, esta línea lo grita en la auditoría antes que en el teléfono.
+gguf = [i.filename for i in z.infolist() if i.filename.lower().endswith(".gguf")]
+print("gguf dentro del APK: %s" % (", ".join(gguf) if gguf else "ninguno (ok)"))
+cerebros = z.read("assets/cerebros.json").decode("utf-8") if "assets/cerebros.json" in z.namelist() else ""
+print("assets/cerebros.json: %d bytes · %d cerebros ofrecidos"
+      % (len(cerebros.encode()), cerebros.count('"id"')))
 PY
 } > build/auditoria.txt
 cat build/auditoria.txt

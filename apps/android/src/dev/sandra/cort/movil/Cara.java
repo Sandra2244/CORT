@@ -2,6 +2,7 @@ package dev.sandra.cort.movil;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.text.InputType;
@@ -48,6 +49,8 @@ public class Cara implements Voz.AlOir {
     private final Cerebro cerebro;
     private final Acciones acciones;
     private final Nube nube;
+    /** El GGUF del teléfono (U1), si está bajado y cabe: pregunta antes que la nube. */
+    private final CerebroLocal cerebroLocal;
     private final Sincroniza sincroniza;
     private final Voz voz;
 
@@ -55,6 +58,8 @@ public class Cara implements Voz.AlOir {
     private ScrollView hoja;
     private TextView estado;
     private TextView nubeChip;
+    /** El chip de abajo: qué cerebro está usando la ruta y su almacén. */
+    private TextView cerebroChip;
     private EditText campo;
     private TextView micro;
     private boolean escuchando;
@@ -82,6 +87,7 @@ public class Cara implements Voz.AlOir {
         this.cerebro = new Cerebro(actividad.getApplicationContext(), recuerdos);
         this.acciones = new Acciones(actividad, recuerdos);
         this.nube = new Nube(actividad.getApplicationContext());
+        this.cerebroLocal = new CerebroLocal(actividad.getApplicationContext());
         // El puente no decide solo: vive en la hoja de ajustes, y lee el enlace que
         // `MainActivity` ya guardó («cort» → `url`). Sin ese enlace, `hayPortatil()`
         // dice que no y la fila ni se intenta.
@@ -150,6 +156,21 @@ public class Cara implements Voz.AlOir {
         marcaChip.gravity = Gravity.CENTER_HORIZONTAL;
         cuerpo.addView(nubeChip, marcaChip);
         actualizandoChip();
+
+        // El segundo chip es la misma idea con el cerebro GGUF (U1): dice con qué
+        // está pensando CORT y, al tocarlo, abre el almacén. No es un menú escondido
+        // detrás de un gesto: en el teléfono todo lo que se puede tocar se ve.
+        cerebroChip = texto("", 12f, Paleta.SUAVE);
+        cerebroChip.setGravity(Gravity.CENTER_HORIZONTAL);
+        cerebroChip.setPadding(dp(14), dp(11), dp(14), dp(11));
+        cerebroChip.setBackgroundColor(Paleta.CAMPO);
+        cerebroChip.setOnClickListener(v ->
+                actividad.startActivity(new Intent(actividad, Cerebros.class)));
+        LinearLayout.LayoutParams cajaCerebro = new LinearLayout.LayoutParams(-2, -2);
+        cajaCerebro.gravity = Gravity.CENTER_HORIZONTAL;
+        cajaCerebro.topMargin = dp(6);
+        cuerpo.addView(cerebroChip, cajaCerebro);
+        pintaCerebroChip();
 
         registro = new LinearLayout(actividad);
         registro.setOrientation(LinearLayout.VERTICAL);
@@ -306,28 +327,35 @@ public class Cara implements Voz.AlOir {
     }
 
     /**
-     * Lo que la tabla no conoce va a la nube **en su propio hilo**: una llamada
-     * HTTPS en el hilo de la interfaz congela la cara, y una cara congelada
-     * vuelve a ser el formulario que este corte vino a quitar.
+     * Lo que la tabla de 33 reglas no conoce. El orden es el que la dueña eligió con
+     * número delante: **primero el cerebro GGUF del teléfono** si el modo y la RAM
+     * libre lo permiten (U1), después la PC/nube, y si tampoco hay respuesta, proponer
+     * aprender la frase.
+     *
+     * Las 33 reglas siguen delante de todo y eso no cambia: son exactas y contestan en
+     * milisegundos; ponerles un modelo de lenguaje delante sólo añadiría lentitud y
+     * dudas a lo que ya funciona.
+     *
+     * Todo el lazo va **en su propio hilo**: abrir 752 MB del disco y la llamada HTTPS
+     * bloquean, y una cara congelada vuelve a ser el formulario que este corte vino a
+     * quitar.
      */
     private void porNube(final String dicho) {
-        if (!nube.configurada()) {
-            proponer(dicho);
-            return;
-        }
         linea("pensando…", Paleta.SUAVE);
         if (orbe != null) {
             orbe.modo(Orbe.PENSAR);
         }
         final String memoria = recuerdos.lista(12);
         new Thread(() -> {
-            final String respuesta = nube.preguntar(dicho, memoria);
+            final String sa = cerebroLocal.contestar(dicho, memoria);
+            final String respuesta = sa != null ? sa
+                    : (nube.configurada() ? nube.preguntar(dicho, memoria) : null);
             actividad.runOnUiThread(() -> {
+                quitarUltima();
+                pintaCerebroChip();
                 if (respuesta == null) {
-                    quitarUltima();
                     proponer(dicho);
                 } else {
-                    quitarUltima();
                     contestar(respuesta);
                 }
             });
@@ -520,6 +548,19 @@ public class Cara implements Voz.AlOir {
 
     private boolean hayClave() {
         return !nube.clave().isEmpty();
+    }
+
+    /** Qué cerebro piensa ahora, en una línea que se puede leer de un golpe. */
+    private void pintaCerebroChip() {
+        if (cerebroChip == null) {
+            return;
+        }
+        String modo = cerebroLocal.modo();
+        String rotulo = "auto".equals(modo) ? "automático"
+                : "local".equals(modo) ? "sólo teléfono" : "PC o nube";
+        cerebroChip.setText(cerebroLocal.abierto()
+                ? "◈ cerebro: " + cerebroLocal.modeloActivo().getName() + " · " + rotulo
+                : "◈ cerebro local apagado (" + rotulo + ") · toca para bajar uno");
     }
 
     private void actualizandoChip() {

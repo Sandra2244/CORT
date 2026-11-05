@@ -1,0 +1,38 @@
+{
+  "_": "Catálogo de cerebros del teléfono (U1). Los tres pesos y las tres SHA-256 están MEDIDOS el 2026-11-05 contra el árbol público de Hugging Face (`GET /api/models/<repo>/tree/main?recursive=true`), que es quien registra el objeto LFS; CORT vuelve a calcular la suma en el teléfono al terminar la descarga y tira el archivo si no cuadra. Ningún GGUF viaja en el APK.",
+  "cerebros": [
+    {
+      "id": "qwen2.5-0.5b-q4_k_m",
+      "nombre": "Qwen2.5 0,5B instruct · q4_K_M",
+      "archivo": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "bytes": 491400032,
+      "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db",
+      "contexto": 2048,
+      "hilos": 2,
+      "nota": "el que casi siempre cabe: la puerta pide 983 MB libres"
+    },
+    {
+      "id": "qwen2.5-1.5b-q2_k",
+      "nombre": "Qwen2.5 1,5B instruct · q2_K",
+      "archivo": "qwen2.5-1.5b-instruct-q2_k.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q2_k.gguf",
+      "bytes": 752880160,
+      "sha256": "5ede348e91ce1e7a330926ec5b202c27b864d065149dc463257fde1f98865b3a",
+      "contexto": 3072,
+      "hilos": 4,
+      "nota": "el fijado desde U1: 752 880 160 bytes, puerta de 1506 MB libres"
+    },
+    {
+      "id": "qwen2.5-1.5b-q4_k_m",
+      "nombre": "Qwen2.5 1,5B instruct · q4_K_M",
+      "archivo": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "bytes": 1117320736,
+      "sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+      "contexto": 3072,
+      "hilos": 4,
+      "nota": "el más listo que cabe en un A16: puerta de 2235 MB libres"
+    }
+  ]
+}

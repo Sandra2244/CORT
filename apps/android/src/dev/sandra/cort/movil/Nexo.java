@@ -80,6 +80,8 @@ public class Nexo {
     private final Acciones acciones;
     private final Voz voz;
     private final Nube nube;
+    /** El GGUF del teléfono (U1): contesta antes que la nube cuando cabe. */
+    private final CerebroLocal cerebroLocal;
     private boolean pensando;
     private float nivel;
     private long ultimoNivel;
@@ -92,6 +94,7 @@ public class Nexo {
         this.acciones = new Acciones(actividad, recuerdos);
         this.voz = new Voz(actividad);
         this.nube = new Nube(actividad);
+        this.cerebroLocal = new CerebroLocal(actividad.getApplicationContext());
         // Los datos del aparato, la primera vez, sin que nadie los teclee: la
         // misma siembra de `Cara.sembrar()`, para que el teléfono que abre esta
         // cara sepa ya quién es su dueña y en qué aparato está.
@@ -248,30 +251,34 @@ public class Nexo {
     }
 
     /**
-     * Lo que la tabla no conoce va a la nube **en su propio hilo**, igual que en
-     * `Cara.porNube`: `HttpURLConnection` bloquea, y una cara congelada es peor
-     * que una cara que dice «no la conozco».
+     * Lo que la tabla de 33 reglas no conoce, con el mismo orden que en
+     * `Cara.porNube` y por las mismas razones: **el cerebro GGUF del teléfono
+     * primero** si el modo y la RAM libre dejan (U1), después la nube, y si tampoco
+     * hay respuesta lo que la cara sabe hacer.
+     *
+     * Va **en su propio hilo**, igual que antes: abrir el modelo del disco y
+     * `HttpURLConnection` bloquean, y una cara congelada es peor que una cara que
+     * dice «no la conozco».
      */
     private void porNube(final String dicho) {
-        if (!nube.configurada()) {
-            // Aquí la cara del teléfono dice lo que sabe hacer, en vez de abrir el
-            // lazo de aprender: elegir la acción nueva es una pantalla que todavía
-            // sólo existe en `Cara.java`. Está escrito en el README, no callado.
-            responde("Esa frase no la conozco sin el portátil. Sé hacer: "
-                    + String.join(", ", cerebro.acciones()) + ".");
-            thinking(false);
-            return;
-        }
         final String memoria = recuerdos.lista(12);
         new Thread(() -> {
-            final String respuesta = nube.preguntar(dicho, memoria);
+            final String sa = cerebroLocal.contestar(dicho, memoria);
+            final String respuesta = sa != null ? sa
+                    : (nube.configurada() ? nube.preguntar(dicho, memoria) : null);
+            final String culpa = sa == null && nube.configurada() ? nube.ultimoFallo() : "";
             actividad.runOnUiThread(() -> {
-                if (respuesta == null) {
-                    thinking(false);
-                    responde("La nube no respondió: " + nube.ultimoFallo());
+                if (respuesta != null) {
+                    responde(respuesta);
                     return;
                 }
-                responde(respuesta);
+                // Elegir la acción nueva es una pantalla que todavía sólo existe en
+                // `Cara.java`. Está escrito en el README, no callado.
+                responde("Esa frase no la conozco"
+                        + (cerebroLocal.modo().equals("nube") ? " sin el portátil" : "")
+                        + " (" + (culpa.isEmpty() ? cerebroLocal.porqueNoLocal() : culpa)
+                        + "). Sé hacer: "
+                        + String.join(", ", cerebro.acciones()) + ".");
             });
         }).start();
     }

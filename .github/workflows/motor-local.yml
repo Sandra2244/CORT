@@ -435,7 +435,7 @@ jobs:
           # dev.sandra.cort.movil.CerebroLocal) y con la firma JNI de un método
           # static: (JNIEnv*, jclass, ...). La suite `prueba_apk.py` cruza esta
           # lista con el archivo Java, así que mover uno sin la otra se cae.
-          NATIVOS="nativeIniciar nativeSistema nativeInterrumpe nativeOir nativeAbrir nativeCerrar nativeHayCerebro nativeUltimaMedida nativePreguntar nativeAjustarMuestreo"
+          NATIVOS="nativeIniciar nativeSistema nativeBackends nativeInterrumpe nativeOir nativeAbrir nativeCerrar nativeHayCerebro nativeUltimaMedida nativePreguntar nativeAjustarMuestreo"
           : > /tmp/jni-simbolos.txt
           for ABI in arm64-v8a armeabi-v7a; do
             "$NM" -D --defined-only "motor/$ABI/libcortmotor.so" > "/tmp/nmj-$ABI.txt"

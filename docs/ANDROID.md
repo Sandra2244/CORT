@@ -203,6 +203,54 @@ Medido el 2026-11-04: esa suma es idéntica a la del `.sha256` publicado. Lo que
    → pegar esa dirección. El teléfono escribe `:8766` si se olvida el puerto y **no exige
    ninguna llave**, porque el puente de esta rama todavía no la pide.
 
+## 4.1 El almacén de cerebros (U1): bajar el cerebro después de instalar
+
+Instalado CORT, el teléfono **no trae ningún modelo grande dentro** y no lo va a traer nunca:
+752 880 160 bytes en el APK castigarían a quien lo instala por Wi-Fi. Lo que sí trae es el
+motor (`libcortmotor.so`, llama.cpp b12121 cruzado con el NDK r26d en Actions) y una pantalla
+que baja los cerebros y los comprueba.
+
+Pasos en el teléfono:
+
+1. **Almacén de cerebros (bajar y usar)** — el botón está en la pantalla de enlace, y el chip
+   `◈ cerebro …` de la cara nativa abre la misma pantalla desde cualquier otra.
+2. Elegir uno de los tres que ofrece `assets/cerebros.json` y tocar **Bajar**. Van a
+   `Android/data/dev.sandra.cort.movil/files/modelos`, sin compresión, y se puede cerrar la
+   app: si el Wi-Fi se corta, la fila dice «a medias: X de Y MB» y **Seguir** retoma donde
+   estaba (`Range`), no desde cero.
+3. Al terminar, CORT **vuelve a calcular la SHA-256 del archivo entero** y la compara con la
+   del catálogo. Si no cuadra, borra y lo dice. Un GGUF a medias no falla al abrir: abre y
+   contesta basura, y esa es la razón de la comprobación.
+4. **Usar**. La fila cambia a «abierto: … · <backends> · ya se puede probar abajo».
+5. Escribir la pregunta de prueba y tocar **Probar (mide tokens/s)**: abajo salen las
+   palabras y, al final, la medida de esa vuelta (`tokens=…&prepar_ms=…&gen_ms=…`).
+
+Los tres ofrecidos, con el peso **medido el 2026-11-05** contra el árbol público de Hugging
+Face y su licencia leída en la propia API del repo (`license:apache-2.0` en las dos familias):
+
+| cerebro | bytes | puerta de RAM (el doble del archivo) |
+|---|---|---|
+| `qwen2.5-0.5b-instruct-q4_k_m.gguf` | 491 400 032 | 983 MB libres |
+| `qwen2.5-1.5b-instruct-q2_k.gguf` | 752 880 160 | 1 506 MB libres |
+| `qwen2.5-1.5b-instruct-q4_k_m.gguf` | 1 117 320 736 | 2 235 MB libres |
+
+Y el selector de arriba de la pantalla, que es la respuesta a «que funcione como asistente
+completo e integrado en el teléfono»:
+
+* **Automático** — piensa en el teléfono si el modelo cabe en la RAM libre de *este* momento;
+  si no, usa la PC/nube. La puerta es la misma medida que imprime «El aparato, medido».
+* **Teléfono** — sólo el GGUF. Si no cabe, la cara lo dice con los megas que faltan en vez de
+  callarse.
+* **PC o nube** — el GGUF no interviene.
+
+Las 33 reglas de `assets/habilidades.json` siguen **delante** de todo esto y eso no cambia: son
+exactas y contestan en milisegundos. El cerebro GGUF entra cuando la frase no está en la tabla,
+antes de preguntar a la nube, y si tampoco hay respuesta la cara propone aprender.
+
+Lo que no se puede prometer todavía, con nombre: **los tokens por segundo en el A16**. La
+generación va limitada a 120 tokens por vuelta para que una respuesta lenta se corte sola, y el
+botón **Interrumpir** corta cuando la dueña se cansa. La primera medida real es suya.
+
 ## 5. Lo que tarda, y qué se ha medido de verdad
 
 | cosa | estado |
@@ -211,6 +259,8 @@ Medido el 2026-11-04: esa suma es idéntica a la del `.sha256` publicado. Lo que
 | **el dictado dentro del teléfono (Vosk local)** | **sin medir**: exige el A16 en la mano. La cara imprime el tiempo de cada dictado (`ultimoDictadoMs`) para sacarlo de ahí, y `Motor.java` sólo promete los números de los archivos (39,8 MB el modelo, 10,0 MB la biblioteca) |
 | transcripción hecha, la respuesta del puente con sus reglas | 3–4 ms |
 | tiempo de carga del modelo en el teléfono y RAM que ocupa | sin medir, por lo mismo |
+| **el cerebro GGUF dentro del teléfono (U1)** | **sin medir**: el motor se compila en el runner (`motor-local.yml`) y la cara lo carga con `System.loadLibrary`; el primer `tokens/s` real sale del botón «Probar (mide tokens/s)» del almacén, en el A16 |
+| el modelo GGUF en sí | pesos y SHA-256 **medidos** el 2026-11-05 en Hugging Face (491 400 032 / 752 880 160 / 1 117 320 736 bytes) y verificados otra vez en el teléfono al terminar la descarga |
 
 El cuello de botella del camino viejo era la CPU de 2 núcleos de la Classmate, no el Wi-Fi. El
 camino nuevo no usa esa CPU: es el teléfono quien trabaja, así que se espera que sea más
@@ -224,9 +274,12 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   sigue (Fase S3).
 - **Sólo viajan los recuerdos.** Preferencias, lista de tareas y notas ya están escritos en el
   acuerdo de `cort-bridge/cort_enlace.py` y entran en el siguiente viaje (F14c).
-- **No hay cerebro grande dentro del APK** (F13). El modelo que habla y razona en la PC es
-  Ollama; en el teléfono sólo hay el oído. «Ollama en Android» no se afirma sin haberlo
-  compilado y medido.
+- **El cerebro grande no viaja en el APK, y ahora tiene camino** (U1, apartado 4.1): el motor
+  `libcortmotor.so` lo compila Actions con el NDK y los GGUF se bajan desde el almacén con su
+  SHA-256 comprobada. Lo que sigue **sin medir** es lo que tarda y lo que ocupa en el A16 — de
+  ahí el botón de prueba. Y una cosa que no se afirma: «Ollama en Android» no es el camino que
+  CORT tomó; el que funciona es llama.cpp compilado a mano, medido en 177 s de runner para las
+  dos ABIs.
 - **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa y la
   baldosa del panel rápido también; el traje de asistente de Android
   (`Asistente`/`Sesiones`/`Reconocimiento`) está declarado y enruta, pero activarlo como
@@ -264,7 +317,7 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 ## 7. Dónde está cada cosa
 
 ```
-apps/android/src/dev/sandra/cort/movil/   26 clases Java, 7 577 líneas. Las que importan:
+apps/android/src/dev/sandra/cort/movil/   28 clases Java, 8 622 líneas. Las que importan:
     Motor.java         Vosk dentro del APK: descomprime el modelo una vez, escucha, corta a
                        los 20 s, mide el dictado y no abre ninguna conexión
     Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos; encola los
@@ -283,14 +336,22 @@ apps/android/src/dev/sandra/cort/movil/   26 clases Java, 7 577 líneas. Las que
     Baldosa.java       la baldosa del panel rápido, que abre la escucha de un toque
     Bolsillo.java      lo pendiente de la PC, leído por el enlace (`GET /bolsillo`)
     Equipo.java        el aparato medido: la RAM libre que decide si el cerebro local cabe
+    CerebroLocal.java  el cerebro GGUF en Java: la puerta de RAM, el modo (auto/local/nube) y
+                       los 11 nativos que llaman a libcortmotor.so
+    Cerebros.java      el almacén: catálogo, descarga con `Range`, SHA-256 al terminar, abrir
+                       y medir tokens/s
+    jni/cort_motor.cpp 452 líneas de C++ con la API pública de llama.cpp (el otro lado de esos
+                       11 nativos)
     Asistente/Sesiones/Reconocimiento   el traje de asistente de Android
 apps/android/AndroidManifest.xml          permisos, icono, servicios, el lector, la baldosa y el receptor de arranque
 apps/android/res/drawable/ic_cort_aviso.xml  la silueta del orbe para la barra de estado y la baldosa
 apps/android/res/xml/asistente.xml        a dónde apunta el asistente del sistema
 apps/android/assets/habilidades.json      la tabla de frases del cerebro nativo
+apps/android/assets/cerebros.json         los tres GGUF ofrecidos, con su peso y su suma medidos
 apps/android/deps.txt                     qué se baja y con qué SHA-256
 apps/android/ACREDITACION.md              licencias pieza por pieza y qué NO va dentro
 apps/android/compilar.sh                  aapt2 + javac + d8 + zip(-0) + zipalign(-p) + apksigner
+.github/workflows/motor-local.yml         el motor llama.cpp/NDK, sus sumas y el gate de los 11 nativos
 cort-bridge/cort_server.py                `POST /mic` (dictado suelto), `POST /parlamento`
                                           (la llamada: oído de la PC, voz de vuelta al oído)
                                           y `GET /bolsillo` (lo pendiente, con la máquina medida)

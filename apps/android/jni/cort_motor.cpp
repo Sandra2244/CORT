@@ -25,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "ggml-backend.h"
 #include "llama.h"
 
 #define ETIQUETA "cort-motor"
@@ -145,6 +146,24 @@ Java_dev_sandra_cort_movil_CerebroLocal_nativeIniciar(JNIEnv * env, jclass) {
 JNIEXPORT jstring JNICALL
 Java_dev_sandra_cort_movil_CerebroLocal_nativeSistema(JNIEnv * env, jclass) {
     return env->NewStringUTF(llama_print_system_info());
+}
+
+// Los backends que el motor registró EN ESTE aparato, dicho con nombres. En la
+// compilación de CORT sólo va el de CPU (los demás se apagaron en motor-local.yml),
+// y por eso no se carga ningún plugin suelto: se lista lo que hay, sin prometer
+// un acelerador que el teléfono no tiene.
+JNIEXPORT jstring JNICALL
+Java_dev_sandra_cort_movil_CerebroLocal_nativeBackends(JNIEnv * env, jclass) {
+    std::string nombres;
+    for (size_t i = 0; i < ggml_backend_reg_count(); i++) {
+        const char * n = ggml_backend_reg_name(ggml_backend_reg_get(i));
+        if (!n) {
+            continue;
+        }
+        nombres += (nombres.empty() ? "" : ", ");
+        nombres += n;
+    }
+    return env->NewStringUTF(nombres.c_str());
 }
 
 JNIEXPORT void JNICALL

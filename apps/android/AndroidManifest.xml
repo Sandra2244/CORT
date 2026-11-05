@@ -154,6 +154,17 @@
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!--
+          El almacén de cerebros (U1): lista los GGUF del catálogo, los baja con `Range`
+          sobre su propio hilo, les comprueba la SHA-256 entera y deja abrir uno.
+          `exported="false"`: es la despensa de la app, no una puerta del sistema; y las
+          descargas las empieza sólo ella, tocando la pantalla.
+        -->
+        <activity
+            android:name=".Cerebros"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!--
           El saludo al encender (U2). `BOOT_COMPLETED` es una de las emisiones que el
           sistema sigue entregando después del arranque; One UI puede matar el proceso
           antes, y por eso el README y la pantalla de enlace traen el paso de la

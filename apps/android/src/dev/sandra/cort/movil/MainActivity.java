@@ -522,6 +522,18 @@ public class MainActivity extends Activity {
         cajaAparato.topMargin = dp(10);
         pantalla.addView(aparato, cajaAparato);
 
+        // U1: la despensa. Desde aquí se bajan los cerebros GGUF y se elige cuál
+        // piensa; hace falta también sin portátil encendido, pero la pantalla vive
+        // junto a la medida de RAM porque las dos se leen juntas.
+        Button almacen = new Button(this);
+        almacen.setText("Almacén de cerebros (bajar y usar)");
+        almacen.setTextColor(Paleta.CIAN);
+        almacen.setBackgroundColor(0xFF132F3F);
+        almacen.setTextSize(15f);
+        LinearLayout.LayoutParams cajaAlmacen = new LinearLayout.LayoutParams(-1, dp(54));
+        cajaAlmacen.topMargin = dp(10);
+        pantalla.addView(almacen, cajaAlmacen);
+
         Button pila = new Button(this);
         pila.setText("Que el teléfono no cierre CORT");
         pila.setTextColor(Paleta.SUAVE);
@@ -564,6 +576,7 @@ public class MainActivity extends Activity {
         hablar.setOnClickListener(v -> startActivity(new Intent(this, Parlamento.class)));
         pendiente.setOnClickListener(v -> startActivity(new Intent(this, Bolsillo.class)));
         aparato.setOnClickListener(v -> startActivity(new Intent(this, Equipo.class)));
+        almacen.setOnClickListener(v -> startActivity(new Intent(this, Cerebros.class)));
         pila.setOnClickListener(v -> pideSinOptimizacion());
         volver.setOnClickListener(v -> montarCara());
         campo.setOnEditorActionListener((v, accion, ev) -> {
