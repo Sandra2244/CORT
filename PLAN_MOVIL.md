@@ -67,6 +67,21 @@ CMake de llama.cpp de paso y están ya dentro de `libcortmotor.so` por el enlace
 que copiarlas costaría ~105 MB de APK sin añadir una sola función. `compilar.sh` lo hace así y
 lo imprime con su peso.
 
+Cómo llega ese archivo al build, escrito con los dos intentos fallidos dentro: `apk-movil.yml`
+busca el artefacto `motor-local-ndk` por la API y saca **su id** (el `first` va dentro del
+`--jq`, porque un `| head -1` pegado a `gh` con `set -uo pipefail` puede abortar el paso con
+señal 141). La descarga es `curl -sSI` contra `api.github.com` para leer el `Location` — medido
+con el artefacto 13414146808: 622 caracteres hacia el almacén de Azure, y ese enlace respeta
+`Range` (206 con 4 bytes pedidos) — y después `curl` de ese enlace firmado **sin cabecera de
+autorización**, porque un token de Actions no debe salir hacia el almacenamiento en una
+redirección. Lo que NO funciona y quedó dicho en el YAML: `actions/download-artifact@v4` con
+`run-id: ${{ env.MOTOR_ARTIFACT }}`, porque un `env.` dentro del `with:` de un `uses:` no se
+rellena y la acción buscó en su propia corrida (corrida 42104161078: build verde de punta a
+punta y `lib/arm64-v8a/libcortmotor.so: no está en el APK`), y `gh api … -i`, porque `gh` sigue
+la redirección y se pone a bajar los 208 MB por la tubería. Y el paso que publica la release se
+niega si `auditoria.txt` dice que el pegamento no entró: compilar puede ser tolerante con un
+trabajo ajeno; publicar notas que prometen el cerebro y no lo llevan, no.
+
 Lo que **todavía no está** de esta fase, dicho con nombre: los `tokens/s` y la RAM que ocupa
 en el A16 (sólo se miden en el aparato; el botón «Probar (mide tokens/s)» los imprime), y la
 respuesta **en streaming en la cara** — el nativo sí emite token a token (`nativeOir`) y el

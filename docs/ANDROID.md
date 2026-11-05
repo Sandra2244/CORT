@@ -123,11 +123,14 @@ que lo que lees en la página sale del APK de esa misma corrida. El APK se const
 `git checkout --detach` al commit de la etiqueta, para que lo publicado salga del código que dice
 salir y no de la punta de la rama.
 
-**Peso: esta vez medido y esta vez grande.** La release `cort-v0.15.1` pesa
-**59 581 673 bytes = 56,82 MB** y su SHA-256 es la que publica su propio archivo
-`CORT-movil.apk.sha256` (`03b001bdfbdd89f934dcfe5f7c2e131dc6d5e12cba92db5038c7e725b31e4741`,
-run 41977159844). El anterior (`cort-v0.11.0`) pesaba
-**16 873 bytes**: ×3 531, y la diferencia no es código, es el oído.
+**Peso: medido otra vez, y esta vez manda el cerebro.** La release `cort-v0.16.1` pesa
+**162 817 475 bytes = 155,27 MB** (SHA-256 `89906dfd8f69cbbcfc06a664f5dbe633871b62c4be66d4fe40db98489f4c60ae`,
+run 42106258697, 20 entradas). De eso, **103 203 784 bytes son `libcortmotor.so`** en sus dos
+ABIs (56 508 296 arm64 + 46 695 488 armeabi-v7a): el motor GGUF es la pieza gorda, no el código,
+que con `classes.dex` se queda en 822 072 bytes. La anterior `cort-v0.15.1` pesaba
+**59 581 673 bytes = 56,82 MB** sin motor, y la `cort-v0.11.0` **16 873 bytes**: ×3 531 respecto
+al oído. Es lo que se pactó («no importa si el APK pesa 100 o 200 MB»); lo que sí importa es que
+ningún GGUF viaja ahí — el cerebro de 752 880 160 bytes se baja en el almacén.
 
 > **Por qué la suma puede cambiar sin que cambie el APK.** El `zip` del empaquetado guarda la
 > hora en las entradas de `META-INF` y de las `.so`, así que dos corridas del mismo código dan
@@ -292,15 +295,16 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
-  auditoría en el runner (release `cort-v0.15.1`, run 41977159844, verde, 59 581 673 bytes =
-  56,82 MB) y las 159 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
+  auditoría en el runner (release `cort-v0.16.1`, run 42106258697, verde, 162 817 475 bytes =
+  155,27 MB) y las 189 comprobaciones de `scripts/prueba_apk.py` que **esa misma corrida** ejecutó.
   La estructura del APK está comprobada: `.so` sin comprimir y alineadas a página, `classes.dex` de
-  798 160 B con zxing, el parlamento y las pantallas de U2 dentro, modelo de español de 39 817 833 B. Lo que falta de medir es el
-  aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuánto tarda un dictado real,
-  si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas cinco son el
-  ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son igual de
-  físicas: **si «Leer con CORT» aparece de verdad en el menú de WhatsApp** (One UI recorta ese
-  menú y no hay forma de comprobarlo desde el PC), **si el saludo al encender sobrevive a la
+  822 072 B con zxing, el parlamento y las pantallas de U2 dentro, modelo de español de 39 817 833 B
+  y `libcortmotor.so` de 56 508 296 B (arm64) y 46 695 488 B (v7a). Lo que falta de medir es el
+  aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuántos `tokens/s` da, cuánto tarda
+  un dictado real, si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas
+  cinco son el ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son
+  igual de físicas: **si «Leer con CORT» aparece de verdad en el menú de WhatsApp** (One UI recorta
+  ese menú y no hay forma de comprobarlo desde el PC), **si el saludo al encender sobrevive a la
   gestión de batería de Samsung** (contando los reinicios que se prueben) y **por dónde suena
   realmente la voz con audífonos puestos** (el `AudioTrack` con `USAGE_MEDIA` frente al
   `MODE_IN_COMMUNICATION` que se usaba antes).
