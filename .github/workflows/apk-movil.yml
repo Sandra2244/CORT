@@ -20,7 +20,7 @@ name: apk-movil
 # ABIs y las `.so` sin comprimir, el APK llegaba a 162 817 475 bytes y en esta
 # casa se cortaba al bajarlo.
 #
-# Desde `cort-v0.16.3` el modelo **vuelve a dentro** (`CORT_OIDO_DENTRO=0` lo
+# Desde `cort-v0.17.1` el modelo **vuelve a dentro** (`CORT_OIDO_DENTRO=0` lo
 # saca) y el APK además empaqueta la cara del PC (`cort-web/` → `assets/web/`),
 # que es lo que la dueña pidió: «que sea la copia exacta de la versión de PC
 # incluyendo sus funciones». Y pesó más, con su permiso expreso: preguntada por el
@@ -362,7 +362,7 @@ jobs:
           PESO=$(stat -c%s CORT-movil.apk)
           # El motivo de este número es la tarde del 2026-11-05: el APK de
           # 162 817 475 bytes se cortó al bajarlo en la casa y el teléfono dijo
-          # «aplicación no instalada». Desde `cort-v0.16.3` la dueña pidió el
+          # «aplicación no instalada». Desde `cort-v0.17.1` la dueña pidió el
           # modelo y las dos ABIs dentro con su peso («no importa»), así que el
           # listón ya no es 70 MB sino 120: por encima de ahí se vuelve a la zona
           # donde aquella descarga se cortó, y la salida es desinstalar o compilar

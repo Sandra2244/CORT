@@ -437,7 +437,7 @@ public final class Motor {
         }
     }
 
-    /** El camino de siempre: el `assets/motor/`, que es como viene el APK desde `cort-v0.16.3`. */
+    /** El camino de siempre: el `assets/motor/`, que es como viene el APK desde `cort-v0.17.1`. */
     private boolean montaDesdeAssets(File carpetaFinal) {
         if (!existeModeloEnElAPK()) {
             return false;

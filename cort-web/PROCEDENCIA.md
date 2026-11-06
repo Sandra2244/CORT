@@ -64,7 +64,7 @@ sube sólo lo propio.
 | `cort/cort-mock.js` | **Código propio de CORT** | 100 % nuestro |
 | `cort/cort-style.css` | **Código propio de CORT** | 100 % nuestro |
 | `cort/sin-servicio.html` | **Código propio de CORT** | Página honesta "sin servicio" |
-| `cort/vendor/leaflet/*` | Leaflet 1.9.4, **BSD-2-Clause** (leído el 2026-11-05 en el `LICENSE` de la etiqueta `v1.9.4`; la copia bajada está en `cort/vendor/leaflet/LICENSE`) | Espejo local (era CDN unpkg). Desde `cort-v0.16.3` viaja también dentro del APK, en `assets/web/`. |
+| `cort/vendor/leaflet/*` | Leaflet 1.9.4, **BSD-2-Clause** (leído el 2026-11-05 en el `LICENSE` de la etiqueta `v1.9.4`; la copia bajada está en `cort/vendor/leaflet/LICENSE`) | Espejo local (era CDN unpkg). Desde `cort-v0.17.1` viaja también dentro del APK, en `assets/web/`. |
 
 ## 4. Qué se cambió exactamente en la base
 

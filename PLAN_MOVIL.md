@@ -151,8 +151,10 @@ hacia adelante, sin mover la etiqueta.
 * **El mismo CORT en los dos aparatos** (F14c): preferencias, lista y notas viajan por el
   enlace, con las cuatro reglas ya escritas (la llave nunca dentro de un recuerdo).
 
-Release objetivo: `cort-v0.17.1`. La `cort-v0.17.0` se la lleva el frente F19 de abajo
-(la cara del PC dentro del teléfono), que es lo que la dueña pidió con capturas delante.
+Release objetivo: `cort-v0.17.1`. La `cort-v0.17.0` **no se publicó y no se va a publicar**:
+esa etiqueta quedó apuntando al commit `553e1e4`, que el runner de Actions rechazó con cinco
+errores de tipos en `Nexo.java` (corrida 42137017052). La etiqueta ya estaba empujada, así que
+se corrige hacia adelante con un número nuevo en vez de mover la que existe.
 
 ## 4. Fase U4 — la PC, sin duplicar el trabajo
 
@@ -190,7 +192,8 @@ Las decisiones, tomadas con cuestionario el mismo día:
 | los paneles que no caben | aviso honesto por panel + viajan a la PC cuando esté enlazada + equivalente android donde existe + ocultar lo que no tiene sentido aquí | un panel con ceros es una mentira con número |
 | el peso | **modelo y dos ABIs dentro** («tiene que pesar más, no importa») | la escucha local no puede depender de una descarga que nadie pidió, y el GGUF tiene que servir también en un teléfono de 32 bits |
 
-Estado (release objetivo **`cort-v0.17.0`**):
+Estado (release objetivo **`cort-v0.17.1`**; la `cort-v0.17.0` quedó sin publicar por los
+cinco errores de tipos que rechazó el runner):
 
 * **F19a — cerrada.** `compilar.sh` empaqueta `cort-web/` a `assets/web/` y **se cae** si falta
   `index.html`; la auditoría lista la cara entrada por entrada sobre el APK final.

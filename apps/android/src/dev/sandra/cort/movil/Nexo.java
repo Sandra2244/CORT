@@ -14,7 +14,6 @@ import android.media.AudioManager;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.StatFs;
 import android.provider.Settings;
 import android.view.WindowManager;
@@ -1124,7 +1123,7 @@ public class Nexo {
 
     /** El `system_stats` que el puente empuja cada cuatro segundos. */
     private JSONObject sistemaStats() {
-        long[] cpu = cpuDelta();
+        double[] cpu = cpuDelta();
         double ram = -1.0;
         long libreMb = -1L;
         long totalMb = ramTotalMb();
@@ -1222,13 +1221,13 @@ public class Nexo {
     /** 0..100 de la pila. `registerReceiver(null, filtro)` lee el intent pegajoso. */
     private int nivelDePila() {
         try {
-            Bundle pila = actividad.registerReceiver(null,
+            Intent pila = actividad.registerReceiver(null,
                     new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             if (pila == null) {
                 return -1;
             }
-            int nivel = pila.getInt(BatteryManager.EXTRA_LEVEL, -1);
-            int tope = pila.getInt(BatteryManager.EXTRA_SCALE, -1);
+            int nivel = pila.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int tope = pila.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
             return nivel >= 0 && tope > 0 ? nivel * 100 / tope : -1;
         } catch (RuntimeException sinPila) {
             return -1;
@@ -1238,9 +1237,9 @@ public class Nexo {
     /** Los grados del sensor de la pila, dichos **como lo que son**. */
     private JSONObject salaTemperatura() {
         try {
-            Bundle pila = actividad.registerReceiver(null,
+            Intent pila = actividad.registerReceiver(null,
                     new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-            int decimas = pila == null ? -1 : pila.getInt(BatteryManager.EXTRA_TEMPERATURE, -1);
+            int decimas = pila == null ? -1 : pila.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
             if (decimas < 0) {
                 return cuadro("type", "sala_temperatura", "origen", "no disponible",
                         "data", cuadro("ok", false,
@@ -1379,13 +1378,13 @@ public class Nexo {
     }
 
     private double temperaturaDePila() {
-        Bundle pila;
+        Intent pila;
         try {
             pila = actividad.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
         } catch (RuntimeException sinPila) {
             return -1;
         }
-        int decimas = pila == null ? -1 : pila.getInt(BatteryManager.EXTRA_TEMPERATURE, -1);
+        int decimas = pila == null ? -1 : pila.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
         return decimas < 0 ? -1 : decimas / 10.0;
     }
 
@@ -2099,7 +2098,7 @@ public class Nexo {
             }
             return new WebResourceResponse("text/html", "utf-8",
                     new ByteArrayInputStream(cosido.getBytes(StandardCharsets.UTF_8)));
-        } catch (IOException | java.io.UnsupportedEncodingException noEsta) {
+        } catch (IOException noEsta) {
             return noExiste();
         }
     }

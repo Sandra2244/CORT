@@ -211,7 +211,7 @@ def main():
            "(cd build && sha256sum CORT-movil.apk)" in script,
            "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
 
-    print("\n== el APK completo por decisión de la dueña (v0.16.3) ==")
+    print("\n== el APK completo por decisión de la dueña (v0.17.1) ==")
     # Nace de una tarde medida y de una frase suya. Medido: el `cort-v0.16.1` con
     # las dos ABIs y las `.so` SIN comprimir pesaba 162 817 475 bytes, se cortó al
     # bajarlo en casa (~40 KB/s) y Samsung dijo «aplicación no instalada». Por eso
@@ -823,6 +823,38 @@ def main():
     prueba("la descarga de GGUF no abre notificación: el token del enlace nunca "
            "se escribe en una bandeja que se lee desde la pantalla bloqueada",
            "Notification" not in bajada and "NotificationCompat" not in bajada)
+
+    print("\n== lo que ve javac y no ve un grep (corrida 42137017052) ==")
+    # El 2026-11-05 la corrida del push cayó con CINCO errores de tipos en
+    # `Nexo.java` que ninguna de las comprobaciones de arriba advertía: el
+    # intent pegajoso de la pila se había declarado `Bundle` (vale `Intent`) y
+    # un `catch` juntaba `IOException` con su propia subclase. Aquí no hay
+    # `javac` ni SDK, así que lo que se puede comprobar es la FORMA de esos
+    # dos errores, en las 29 hojas de una vez.
+    java_todas = "\n".join(lee(h) for h in sorted(SRC.glob("*.java")))
+    prueba("el intent pegajoso de la pila se guarda como `Intent` y se lee con "
+           "`getIntExtra`: `registerReceiver(null, filtro)` devuelve un Intent",
+           re.search(r"Bundle\s+\w+\s*=\s*\w*\.registerReceiver", java_todas) is None
+           and re.search(r"Intent pila = actividad\.registerReceiver\(null,", nexo) is not None
+           and "getIntExtra(BatteryManager.EXTRA_LEVEL" in nexo
+           and "getIntExtra(BatteryManager.EXTRA_TEMPERATURE" in nexo
+           and ".getInt(BatteryManager" not in java_todas)
+    SUBDE = {"UnsupportedEncodingException": "IOException",
+             "FileNotFoundException": "IOException",
+             "NumberFormatException": "RuntimeException",
+             "IndexOutOfBoundsException": "RuntimeException",
+             "SecurityException": "RuntimeException"}
+    emparentadas = []
+    for parche in re.findall(r"catch \(([^)]*\|[^)]*)\)", java_todas):
+        nombres = [trozo.strip().split(".")[-1].split(" ")[0]
+                   for trozo in parche.split("|")]
+        for a in nombres:
+            for b in nombres:
+                if a != b and (SUBDE.get(a) == b or SUBDE.get(b) == a):
+                    emparentadas.append("%s|%s" % (a, b))
+    prueba("ningún multi-catch junta dos excepciones emparentadas (es error de "
+           "compilación, no de gusto): si hace falta una subclase se captura sola",
+           not emparentadas, ", ".join(sorted(set(emparentadas))))
 
     print("\n== el repo no se llena de modelos ==")
     import subprocess

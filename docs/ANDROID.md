@@ -10,10 +10,10 @@
 **Una aplicación nativa que funciona sola.** Desde `cort-v0.12.0` el teléfono no es una
 ventana abierta al puente de la PC: lleva dentro la cara (el orbe y el registro), el cerebro
 de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk; desde
-`cort-v0.16.3` el modelo español viaja dentro del APK, así que oye nada más instalar). Se
+`cort-v0.17.1` el modelo español viaja dentro del APK, así que oye nada más instalar). Se
 apaga el portátil y CORT sigue hablando, dictando, acordándose y obedeciendo.
 
-Y desde `cort-v0.16.3` (F19) **la cara que se ve es la del portátil**: el mismo
+Y desde `cort-v0.17.1` (F19) **la cara que se ve es la del portátil**: el mismo
 `cort-web/index.html`, el mismo orbe de three.js y los mismos paneles, empaquetados dentro
 del APK y abiertos en un `WebView` propio. La interfaz nativa (`Cara.java`) sigue ahí, como
 respaldo si el WebView del sistema no arranca. El diagrama es ahora así:
@@ -226,7 +226,7 @@ del archivo y peso que ocupa dentro del APK):
 Lo que **ya no está** en esa lista es el modelo de español (39 817 833 bytes) y todo lo de
 `armeabi-v7a`: se bajan o se compilan aparte.
 
-**`cort-v0.16.3` devuelve dos de las tres palancas, y hay que decir por qué.** Preguntada la
+**`cort-v0.17.1` devuelve dos de las tres palancas, y hay que decir por qué.** Preguntada la
 dueña por el peso con el número delante, contestó *«tiene que pesar más, no importa»* y pidió
 el modelo y las dos ABIs dentro:
 
