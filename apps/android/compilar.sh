@@ -39,7 +39,7 @@ case "$VERSION" in
 esac
 [ "$CODE" -ge 1 ] || CODE=1
 
-# Arquitecturas que se empaquetan. Desde `cort-v0.17.1` el default son LAS DOS:
+# Arquitecturas que se empaquetan. Desde `cort-v0.17.2` el default son LAS DOS:
 # `arm64-v8a` (el Galaxy A16 de la dueña) y `armeabi-v7a` (cualquier teléfono de
 # 32 bits), porque ella lo eligió con estas palabras: «tiene que pesar más, no
 # importa». El costo está medido, no estimado: `libcortmotor.so` pesa
@@ -77,7 +77,7 @@ mkdir -p build/obj build/apk vendor build/stage build/recursos
 MOTOR=0
 DELGADO=0
 # Si el modelo de español viaja dentro del APK o se baja en el almacén. Desde
-# `cort-v0.17.1` el default es DENTRO (`CORT_OIDO_DENTRO=0` lo saca). La variable
+# `cort-v0.17.2` el default es DENTRO (`CORT_OIDO_DENTRO=0` lo saca). La variable
 # se usa en la auditoría, así que tiene que existir también en la compilación delgada.
 OIDO_EN_APC=0
 if [ "${CORT_SIN_MOTOR:-0}" = "1" ]; then
@@ -92,7 +92,7 @@ while IFS='|' read -r NOMBRE SHA URL; do
     if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ]; then
         continue
     fi
-    # El modelo de español SÍ entra en el APK desde `cort-v0.17.1`, y por eso
+    # El modelo de español SÍ entra en el APK desde `cort-v0.17.2`, y por eso
     # también se baja: la cara del PC dentro del teléfono tiene que oír sin que
     # nadie pulse «Bajar el oído» primero (el servicio de escucha de F19d arranca
     # con la pantalla apagada y no tiene con quién discutir una descarga).
@@ -171,7 +171,7 @@ if [ "$DELGADO" = "0" ]; then
     HAY_NATIVAS=0
     if [ -n "$(find build/stage/lib -name '*.so' -type f 2>/dev/null)" ]; then HAY_NATIVAS=1; fi
     # El modelo de español (39 817 833 bytes) vuelve a entrar en el APK desde
-    # `cort-v0.17.1`, porque la escucha en segundo plano no puede empezar por una
+    # `cort-v0.17.2`, porque la escucha en segundo plano no puede empezar por una
     # descarga que nadie pidió. `assets/oido.json` sigue fijando URL, peso y suma
     # para el camino contrario —el del teléfono que ya lo tenía bajado de
     # `cort-v0.16.2`—, y `Motor.java` mira primero el archivo del almacén: si está
@@ -202,7 +202,7 @@ mkdir -p build/recursos/assets
 cp -a assets/. build/recursos/assets/
 
 # -- 2b. La cara de la PC dentro del teléfono ---------------------------------
-# Desde `cort-v0.17.1` el APK empaqueta `cort-web/` —el mismo `index.html`, el
+# Desde `cort-v0.17.2` el APK empaqueta `cort-web/` —el mismo `index.html`, el
 # mismo orbe de three.js y los mismos paneles que serve `cort.py --lan` en el
 # portátil— en `assets/web/`, y `Nexo.java` lo abre en un `WebView` propio con
 # `cort-android.js` como puente. La dueña lo pidió con estas palabras: «necesito
@@ -406,7 +406,7 @@ print("entradas: %d · descomprimido suma %d bytes · dentro del APK %d bytes"
 # alguien lo mete aquí, esta línea lo grita en la auditoría antes que en el teléfono.
 gguf = [i.filename for i in z.infolist() if i.filename.lower().endswith(".gguf")]
 print("gguf dentro del APK: %s" % (", ".join(gguf) if gguf else "ninguno (ok)"))
-# El modelo de español vuelve dentro del APK desde `cort-v0.17.1` (la escucha en
+# El modelo de español vuelve dentro del APK desde `cort-v0.17.2` (la escucha en
 # segundo plano no puede depender de una descarga que nadie pidió). El número de
 # esta línea es el que lee la release (`apk-movil.yml`) para decir si hace falta
 # bajar algo una vez instalado.

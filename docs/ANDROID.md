@@ -10,10 +10,10 @@
 **Una aplicación nativa que funciona sola.** Desde `cort-v0.12.0` el teléfono no es una
 ventana abierta al puente de la PC: lleva dentro la cara (el orbe y el registro), el cerebro
 de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk; desde
-`cort-v0.17.1` el modelo español viaja dentro del APK, así que oye nada más instalar). Se
+`cort-v0.17.2` el modelo español viaja dentro del APK, así que oye nada más instalar). Se
 apaga el portátil y CORT sigue hablando, dictando, acordándose y obedeciendo.
 
-Y desde `cort-v0.17.1` (F19) **la cara que se ve es la del portátil**: el mismo
+Y desde `cort-v0.17.2` (F19) **la cara que se ve es la del portátil**: el mismo
 `cort-web/index.html`, el mismo orbe de three.js y los mismos paneles, empaquetados dentro
 del APK y abiertos en un `WebView` propio. La interfaz nativa (`Cara.java`) sigue ahí, como
 respaldo si el WebView del sistema no arranca. El diagrama es ahora así:
@@ -180,7 +180,7 @@ que anuncia la release y Samsung dijo **«aplicación no instalada»**: ése es 
 Samsung saca con un APK truncado (y también con uno mal firmado, que no era el caso — la firma
 `faabef46…1977` es la del repo desde `cort-v0.11.0`), así que la culpa no era del sistema ni de
 Play Protect, sino de 163 MB a ~40 KB/s: 70 minutos de descarga, y en esta casa la luz se va.
-`cort-v0.16.2` ataca el número, no el síntoma, y queda en
+`cort-v0.16.2` atacó el número, no el síntoma, y quedó en
 **17 982 662 bytes = 17,15 MB** (SHA-256 `665bfe42eefaf127e25a338349271b96038a59d7f029ef3f5283bccbf510e7af`,
 run 42115030288, 17 entradas, `versionCode 1602`) — **9,05 veces menos**, y unos
 **7 minutos** en la misma línea en vez de 70. Las tres palancas, cada una con su medida:
@@ -198,7 +198,8 @@ run 42115030288, 17 entradas, `versionCode 1602`) — **9,05 veces menos**, y un
    descomprimir. La ficha (`assets/oido.json`) lleva la URL, el peso y la misma suma fijada en
    `deps.txt`, y `scripts/prueba_apk.py` no deja que las dos se separen.
 
-`classes.dex` se queda en 829 588 bytes: el código nunca fue lo gordo. La anterior
+`classes.dex` se queda en 829 588 bytes (873 540 en `cort-v0.17.2`, con el puente de la cara y
+la descarga de GGUF dentro): el código nunca fue lo gordo. La anterior
 `cort-v0.15.1` pesaba **59 581 673 bytes = 56,82 MB** sin motor y la `cort-v0.11.0`
 **16 873 bytes**. Ningún GGUF viaja en el APK — el cerebro de 752 880 160 bytes se baja en el
 almacén, y ahora también el oído.
@@ -209,24 +210,30 @@ almacén, y ahora también el oído.
 > vive en la release, porque se publicó al pie del archivo que descargas; cualquier otro número
 > que este documento cite es sólo la foto de una corrida.
 
-Lo que hay dentro, sacado del `auditoria.txt` que la release `cort-v0.16.2` adjunta (peso real
-del archivo y peso que ocupa dentro del APK):
+Lo que hay dentro, sacado del `auditoria.txt` que la release **`cort-v0.17.2`** adjunta (peso
+real del archivo y peso que ocupa dentro del APK; el `.so` de `armeabi-v7a` es el de un teléfono
+de 32 bits que en esta casa no existe, y viaja por si alguna vez existe):
 
 | archivo dentro del APK | bytes reales | dentro del APK | qué es |
 |---|---|---|---|
 | `lib/arm64-v8a/libcortmotor.so` | 56 508 296 | 14 265 297 | el pegamento GGUF: llama.cpp b12121 + el envoltorio JNI, estático y autocontenido |
+| `assets/motor/vosk-model-small-es-0.42.zip` | 39 817 833 | — (el `auditoria.txt` no desglosa su tamaño comprimido) | el oído español dentro: el teléfono dicta sin red ni botones |
+| `lib/armeabi-v7a/libcortmotor.so` | 46 695 488 | 13 903 079 | el mismo motor para la otra arquitectura |
 | `lib/arm64-v8a/libvosk.so` | 10 042 800 | 3 253 940 | el reconocedor español |
-| `classes.dex` | 829 588 | — | las 28 clases Java de CORT |
+| `lib/armeabi-v7a/libvosk.so` | 8 985 628 | 3 150 169 | el reconocedor en 32 bits |
+| `assets/web/…` (42 archivos) | 5 767 429 | 4 276 751 | **la cara del PC** (F19): `index.html`, `cort-ui.js`, `cort-mock.js`, `cort-orbe.js`, el bundle de React y three.js |
+| `classes.dex` | 873 540 | — | las 29 clases Java de CORT |
 | `lib/arm64-v8a/libjnidispatch.so` | 168 176 | 42 418 | el puente JNA que llama a Vosk |
 | `assets/cerebros.json` | 1 891 | — | los tres GGUF ofrecidos, con peso y suma medidos |
 | `assets/oido.json` | 867 | — | la ficha de la descarga del oído: URL, 39 817 833 bytes y su SHA-256 |
 | `assets/habilidades.json` | 9 770 | — | las 33 reglas y las 15 manos del cerebro nativo |
-| **17 entradas** | **67 583 790 descomprimido** | **17 982 662 el APK** | |
+| **63 entradas** | **169 026 380 descomprimido** | **79 205 264 el APK** | `versionCode 1702`, run 42140345851, SHA-256 `7883495f…dfbfe2` |
 
-Lo que **ya no está** en esa lista es el modelo de español (39 817 833 bytes) y todo lo de
-`armeabi-v7a`: se bajan o se compilan aparte.
+En la release `cort-v0.16.2` esa misma tabla tenía **17 entradas** y sumaba
+**67 583 790 descomprimido → 17 982 662 el APK**: lo que faltaba era el modelo de español, todo
+`armeabi-v7a` y la cara del PC.
 
-**`cort-v0.17.1` devuelve dos de las tres palancas, y hay que decir por qué.** Preguntada la
+**`cort-v0.17.2` devuelve dos de las tres palancas, y hay que decir por qué.** Preguntada la
 dueña por el peso con el número delante, contestó *«tiene que pesar más, no importa»* y pidió
 el modelo y las dos ABIs dentro:
 
@@ -237,16 +244,16 @@ el modelo y las dos ABIs dentro:
   mira primero el archivo del almacén (le comprueba la suma y no desarma el del APK otra vez),
   así que el que ya lo tenía bajado no paga dos veces.
 * **Las dos ABIs dentro** (`arm64-v8a` y `armeabi-v7a`). Lo que hace pagable la segunda es la
-  palanca que **no** se revoca: las `.so` comprimidas. Medido en la corrida 42115030288,
-  `libcortmotor.so` pasa de 56 508 296 a 14 265 297 bytes dentro del APK, así que los
-  46 695 488 bytes de armeabi-v7a entran como ~12 MB comprimidos, no como 46 MB.
-* **La cara del PC** añade sus archivos (los lista `auditoria.txt` en el bloque
-  «cara del PC», con su peso real y el que ocupa dentro del APK).
+  palanca que **no** se revoca: las `.so` comprimidas. Medido sobre el APK publicado,
+  `libcortmotor.so` pasa de 56 508 296 a 14 265 297 bytes dentro del APK en arm64 y de
+  46 695 488 a **13 903 079** en armeabi-v7a: la segunda arquitectura cuesta 13,9 MB, no 46.
+* **La cara del PC** añade sus 42 archivos: 5 767 429 bytes reales, **4 276 751 dentro del APK**.
 
-El peso resultante lo publica la release con el `stat` del archivo, y `apk-movil.yml` avisa por
-encima de ~120 MB: la descarga de esta casa se cortó a los 162 817 475 bytes de `cort-v0.16.1`.
+El peso resultante lo publica la release con el `stat` del archivo y en `cort-v0.17.2` es
+**79 205 264 bytes = 75,54 MB** (~33 minutos a los ~40 KB/s de esta casa, frente a los 70
+minutos que cortaron el APK de 155,27 MB). `apk-movil.yml` avisa por encima de ~120 MB.
 Si alguna vez vuelve a cortarse, `curl -C -` reanuda la bajada, y
-`CORT_ABIS="arm64-v8a"` devuelve el paquete de una sola arquitectura.
+`CORT_ABIS="arm64-v8a"` con `CORT_OIDO_DENTRO=0` devuelve el paquete delgado.
 
 Con `extractNativeLibs="true"` el instalador descomprime las `.so` a `/data/app/…/lib` antes de
 cargarlas, así que lo que se exige es lo contrario de antes: que **sí** vayan comprimidas
@@ -258,7 +265,7 @@ queda mudo — por eso la suite lo fija.
 Descargar y comprobar desde fuera, sin confiar en este texto:
 
 ```bash
-B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.16.2
+B=https://github.com/Sandra2244/CORT/releases/download/cort-v0.17.2
 curl -sL -o CORT-movil.apk.sha256 $B/CORT-movil.apk.sha256   # 81 bytes, primero
 curl -sL -C - -o CORT-movil.apk   $B/CORT-movil.apk          # -C -: si se corta, sigue
 sha256sum -c CORT-movil.apk.sha256
@@ -266,9 +273,10 @@ sha256sum -c CORT-movil.apk.sha256
 
 El `-C -` no es adorno: es exactamente el fallo que tuvo la dueña con el APK de 155,27 MB.
 El navegador de Samsung también reanuda descargas, pero si el archivo final no mide lo que
-anuncia la release (`17 982 662` bytes en `cort-v0.16.2`) el instalador dirá «aplicación no
-instalada» **antes** de mirar la firma. En el teléfono la misma reanudación la hace CORT con
-el oído y con los GGUF (`.part` + `Range`), y en los tres casos la suma se comprueba entera.
+anuncia la release (`79 205 264` bytes en `cort-v0.17.2`, 17 982 662 en la delgada `cort-v0.16.2`)
+el instalador dirá «aplicación no instalada» **antes** de mirar la firma. En el teléfono la misma
+reanudación la hace CORT con los GGUF (`.part` + `Range`), y en los tres casos la suma se
+comprueba entera.
 
 > **Arreglo del 2026-11-04, dicho aquí porque le pasó a la dueña.** Hasta este commit el
 > `.sha256` se anotaba con el nombre `build/CORT-movil.apk` (el path que usa el script), así
@@ -283,13 +291,14 @@ archivo que almacena y lo expone en la API. Si las dos sumas coinciden, la relea
 autoconsistente (lo que promete el `.sha256` es lo que está guardado):
 
 ```bash
-gh api repos/Sandra2244/CORT/releases/tags/cort-v0.13.0 \
+gh api repos/Sandra2244/CORT/releases/tags/cort-v0.17.2 \
   --jq '.assets[]|select(.name=="CORT-movil.apk")|.digest'
-# sha256:d4de166aae7722c5ae9d1143cb05934a81fe9c2c01eebfc711d1700a7e4f08ab   ← medido hoy
+# sha256:7883495f38cff982c9749d72a32486423011e89b06f35aa3d65283055adfbfe2   ← medido el 2026-11-06
 ```
 
-Medido el 2026-11-04: esa suma es idéntica a la del `.sha256` publicado. Lo que este atajo
-**no** prueba es que *tu* descarga lleguen intacta; para eso está el `sha256sum -c` de arriba.
+Medido el 2026-11-06 sobre `cort-v0.17.2`: esa suma es idéntica a la del `.sha256` publicado y el
+`tamaño` que reporta la API (`79 205 264`) es el mismo del `stat`. Lo que este atajo
+**no** prueba es que *tu* descarga llegue intacta; para eso está el `sha256sum -c` de arriba.
 
 ## 4. Instalarla en el Galaxy A16
 
@@ -414,21 +423,31 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
 - **Nadie lo ha instalado todavía en el A16.** Lo medido hasta hoy: el compile, la firma y la
-  auditoría en el runner (release `cort-v0.16.2`, run 42115030288, verde de punta a punta,
-  17 982 662 bytes = 17,15 MB) y las **210 comprobaciones** de `scripts/prueba_apk.py` que
+  auditoría en el runner (release **`cort-v0.17.2`**, run 42140345851, verde de punta a punta,
+  79 205 264 bytes = 75,54 MB) y las **228 comprobaciones** de `scripts/prueba_apk.py` que
   **esa misma corrida** ejecutó. La estructura del APK está comprobada: `.so` comprimidas con
-  `extractNativeLibs="true"`, `resources.arsc` suelto y alineado, `classes.dex` de 829 588 B con
-  zxing, el parlamento y las pantallas de U2 dentro, la ficha `assets/oido.json` para bajar el
-  oído, y `libcortmotor.so` de 56 508 296 B arm64 (14 265 297 comprimidos). La `cort-v0.16.1`,
-  con sus 162 817 475 B y 189 comprobaciones, sigue publicada y es la que se cortó al bajarla. Lo que falta de medir es el
-  aparato: cuánto tarda el modelo en cargarse, cuánta RAM ocupa, cuántos `tokens/s` da, cuánto tarda
+  `extractNativeLibs="true"` en las dos arquitecturas, `resources.arsc` suelto y alineado,
+  `classes.dex` de 873 540 B con zxing, el parlamento, la descarga de GGUF y las pantallas de U2
+  dentro, el modelo de español de 39 817 833 B en `assets/motor/`, `libcortmotor.so` de
+  56 508 296 B arm64 (14 265 297 comprimidos) más 46 695 488 B armeabi-v7a (13 903 079) y la
+  cara del PC en 42 archivos. Las dos etiquetas anteriores, `cort-v0.17.0` y `cort-v0.17.1`,
+  **no se publicaron**: `javac` las rechazó con cinco y un error de tipos en `Nexo.java`
+  (corridas 42137017052 y 42139614238), y en esta casa una etiqueta ya empujada no se mueve.
+  La `cort-v0.16.1`, con sus 162 817 475 B y 189 comprobaciones, sigue publicada y es la que se
+  cortó al bajarla. Lo que falta de medir es el aparato: cuánto tarda el modelo en cargarse,
+  cuánta RAM ocupa, cuántos `tokens/s` da, cuánto tarda
   un dictado real, si el escáner lee la pantalla de la PC a un metro y si el auricular se oye — esas
   cinco son el ensayo físico, no esto. A las cinco de la lista hay que añadir las tres de U2, y son
   igual de físicas: **si «Leer con CORT» aparece de verdad en el menú de WhatsApp** (One UI recorta
   ese menú y no hay forma de comprobarlo desde el PC), **si el saludo al encender sobrevive a la
   gestión de batería de Samsung** (contando los reinicios que se prueben) y **por dónde suena
   realmente la voz con audífonos puestos** (el `AudioTrack` con `USAGE_MEDIA` frente al
-  `MODE_IN_COMMUNICATION` que se usaba antes).
+  `MODE_IN_COMMUNICATION` que se usaba antes). Y desde F19 hay una sexta, que es la que la dueña
+  va a ver primero: **si la cara del portátil se dibuja entera en la pantalla del A16** —el
+  WebView es el que traiga instalado el teléfono (no sabemos cuál es, y en esta laptop no hay
+  forma de verlo), así que si algo se pinta roto ahí no hay manera de saberlo desde aquí; el
+  respaldo existe: si la página no viaja o el WebView revienta, `MainActivity` monta la cara
+  nativa `Cara.java` en vez de quedarse en negro.
 
 - **El parlamento (F16) está publicado** en la release `cort-v0.14.0` (run 41957330147, verde):
   botón «Hablar con la PC (voz)», `Parlamento.java` con su WAV armado en memoria y su
@@ -446,7 +465,7 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 ## 7. Dónde está cada cosa
 
 ```
-apps/android/src/dev/sandra/cort/movil/   29 clases Java y 10 860 líneas (medido el 2026-11-05
+apps/android/src/dev/sandra/cort/movil/   29 clases Java y 10 858 líneas (medido el 2026-11-05
                                           en esta rama; `cort-v0.16.2` tenía 28 y 8 622).
                                           Las que importan:
     Motor.java         Vosk: descomprime el modelo del APK una vez, o lo baja si falta

@@ -211,7 +211,7 @@ def main():
            "(cd build && sha256sum CORT-movil.apk)" in script,
            "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
 
-    print("\n== el APK completo por decisión de la dueña (v0.17.1) ==")
+    print("\n== el APK completo por decisión de la dueña (v0.17.2) ==")
     # Nace de una tarde medida y de una frase suya. Medido: el `cort-v0.16.1` con
     # las dos ABIs y las `.so` SIN comprimir pesaba 162 817 475 bytes, se cortó al
     # bajarlo en casa (~40 KB/s) y Samsung dijo «aplicación no instalada». Por eso

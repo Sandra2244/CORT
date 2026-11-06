@@ -61,7 +61,7 @@ sólo inspiración visual. Ver `cort-web/PROCEDENCIA.md`.
 | Carisma, memoria escrita y autocorrección | real medido | `cort-bridge/cort_memoria.py`; 23/23 en `prueba_memoria.py` y 16/16 en su `selftest`. Ciclo memoria→prompt→revisión en **1,56–3,21 ms por frase**; constitución de **786 caracteres** dentro del `system`; **0 entrenamientos de pesos** (sin AVX y con ~200 MB libres no cabe) — CORT aprende escribiendo, y lo que guarda se ve en `memoria.json` con su camino completo |
 | ¿Habría que escribir partes en C o Rust? | decidido con medida | `mediciones/s5-medida.sh`: un ayudante C de X11 (16 KB, compila en **826 ms**) gana **8–12 ms por orden** a `wmctrl`, que es ~2 % del trayecto de una orden. Rust **sí está instalado** (`rustc 1.98.1`) y su bucle corre 8 veces más rápido que Python, pero **tarda 33,5 s en compilar** tres líneas en esta laptop. No entra ninguno en el release; Java/Kotlin sólo en el APK |
 | PWA instalable (el teléfono) | real medido | service worker `activated` y `cort-v1` con las 9 piezas del programa; `CORT_BIND`/`CORT_TLS` para HTTPS en LAN |
-| **APK nativo para el teléfono** | real medido y **publicado**: `cort-v0.16.2` (la release la crea el propio runner) | `apps/android` es **CORT nativo** (29 clases Java, 10 860 líneas más 452 de C++: orbe, cara, cerebro de 33 reglas, 15 manos locales, SQLite, traje de asistente, el parlamento que habla con la PC, el lector que te lee en cualquier app, el sensor de audífonos y el almacén de cerebros GGUF) **con el oído dentro**: Vosk 0.3.75 + JNA viajan en el APK, descargados en el pipeline con su SHA-256 fijado en `apps/android/deps.txt` y acreditados pieza por pieza en `apps/android/ACREDITACION.md`; el modelo español (39 817 833 B) **viaja dentro del APK** desde `cort-v0.17.1` (`assets/motor/`), así que el teléfono oye nada más instalarse, y `Almacén → «Bajar el oído»` sigue funcionando para el aparato que ya lo tenía bajado (`Motor.java` mira primero el almacén y le comprueba la suma). Sin Gradle ni AndroidX: el mismo método de siempre (`aapt2` → `javac --release 11` → `d8` → `zip -9` → `zipalign` → `apksigner`) en `.github/workflows/apk-movil.yml`. **Medido en la release `cort-v0.16.2`** (`0.16.2`, `versionCode 1602`, run 42115030288, 210/210 comprobaciones en esa misma corrida): **17 982 662 bytes = 17,15 MB**, 17 entradas, con su SHA-256 (`665bfe42…e7af`) en el archivo `CORT-movil.apk.sha256` de la propia release, `classes.dex` de 829 588 B y **`libcortmotor.so` de 56 508 296 B descomprimido → 14 265 297 B dentro del APK** (deflate, arm64) más `libvosk.so` 10 042 800 → 3 253 940 B; la suma descomprimida de las 17 entradas es 67 583 790 B. El salto desde los 162 817 475 B (155,27 MB) de `cort-v0.16.1` —aquel APK se cortaba al bajarlo en casa y Samsung decía «aplicación no instalada»— sale de tres cosas medidas: una sola ABI (fuera `armeabi-v7a`, 46 695 488 B), `.so` comprimidas con `extractNativeLibs="true"` (el instalador las saca a `/data/app/…/lib`) y el modelo de español fuera del APK. **Dos de esas tres palancas se revocaron en `cort-v0.17.1`** por decisión de la dueña («tiene que pesar más, no importa»): vuelven el modelo dentro y las dos ABIs, y lo que hace pagable la segunda es la que no se revocó — la compresión: los 46 695 488 B de `armeabi-v7a` entran como ~12 MB comprimidos. `resources.arsc` sigue sin comprimir, y firmado **con la llave del repo** (`faabef46…1977`, la misma de `cort-v0.11.0`: se instala encima). **U1, el cerebro que se baja** (ya publicado):
+| **APK nativo para el teléfono** | real medido y **publicado**: `cort-v0.17.2` (la release la crea el propio runner) | `apps/android` es **CORT nativo** (29 clases Java, 10 858 líneas más 452 de C++: orbe, cara, cerebro de 33 reglas, 15 manos locales, SQLite, traje de asistente, el parlamento que habla con la PC, el lector que te lee en cualquier app, el sensor de audífonos y el almacén de cerebros GGUF) **con el oído dentro**: Vosk 0.3.75 + JNA viajan en el APK, descargados en el pipeline con su SHA-256 fijado en `apps/android/deps.txt` y acreditados pieza por pieza en `apps/android/ACREDITACION.md`; el modelo español (39 817 833 B) **viaja dentro del APK** desde `cort-v0.17.2` (`assets/motor/`), así que el teléfono oye nada más instalarse, y `Almacén → «Bajar el oído»` sigue funcionando para el aparato que ya lo tenía bajado (`Motor.java` mira primero el almacén y le comprueba la suma). Sin Gradle ni AndroidX: el mismo método de siempre (`aapt2` → `javac --release 11` → `d8` → `zip -9` → `zipalign` → `apksigner`) en `.github/workflows/apk-movil.yml`. **Medido en la release `cort-v0.17.2`** (`0.17.2`, `versionCode 1702`, run 42140345851, 228/228 comprobaciones en esa misma corrida): **79 205 264 bytes = 75,54 MB**, 63 entradas, con su SHA-256 (`7883495f…dfbfe2`) en el archivo `CORT-movil.apk.sha256` de la propia release, `classes.dex` de 873 540 B, **`libcortmotor.so` 56 508 296 B descomprimido → 14 265 297 B dentro del APK** (deflate, arm64) y 46 695 488 → 13 903 079 (armeabi-v7a), `libvosk.so` 10 042 800 → 3 253 940 y 8 985 628 → 3 150 169, el modelo de español **39 817 833 B dentro** y la cara del PC 5 767 429 → **4 276 751 B**; la suma descomprimida de las 63 entradas es 169 026 380 B y dentro del APK quedan 79 191 507 B. Lo que hace pagable el peso es la palanca que NO se revocó: las `.so` comprimidas con `extractNativeLibs="true"` (el instalador las saca a `/data/app/…/lib`) —sin ellas serían 169 MB— y `resources.arsc` sigue sin comprimir. Referencia histórica: los 162 817 475 B (155,27 MB) de `cort-v0.16.1` se cortaban al bajarlos en casa (~40 KB/s) y Samsung decía «aplicación no instalada»; **estos 75,54 MB son ~33 minutos** a esa misma velocidad, y `CORT_ABIS="arm64-v8a"` con `CORT_OIDO_DENTRO=0` vuelven a sacar el APK delgado (17 982 662 B, `cort-v0.16.2`, run 42115030288). Firmado **con la llave del repo** (`faabef46…1977`, la misma de `cort-v0.11.0`: se instala encima). **U1, el cerebro que se baja** (ya publicado):
 `libcortmotor.so` — llama.cpp b12121 con el NDK r26d, enlazado estático y autocontenido en
 `.github/workflows/motor-local.yml`, 177 s de runner para las dos ABIs — más
 `CerebroLocal.java`/`Cerebros.java`, que ofrecen tres Qwen2.5 GGUF en
@@ -70,7 +70,7 @@ SHA-256 medidos el 2026-11-05 en Hugging Face), los descargan al carbajo de la a
 y comprueban la suma entera antes de fiarse. Ningún GGUF viaja en el APK. La ruta es Automático
 (el teléfono si cabe en la RAM libre, con la puerta del doble del archivo) · Teléfono · PC o
 nube, y las 33 reglas siguen delante.Antes pesaba **16 873 bytes** porque era una carcasa: la ×3 530 es el oído, no el código. Falta su prueba física en el A16 (carga del modelo, RAM y latencia real del dictado). El camino viejo sigue medido: `POST /mic` **7/7** en `scripts/prueba_mic_telefono.py` (2,82 s con el modelo en RAM en la Classmate) |
-| **La cara del PC dentro del teléfono (F19)** | real medido en el build; falta la pantalla del A16 | El teléfono ya no lleva una interfaz propia de botones: se empaqueta `cort-web/` tal cual dentro del APK (`assets/web/`) y la sirve una WebView local, con `Nexo.java` haciendo de puente. El truco medido es `apps/android/web/cort-android.js`, un `WebSocket` falso con la misma interfaz que el real: el `cort-mock.js` de la cara de PC no se entera de que no hay red. La contraparte Java tiene 48 ramas de `type` (umbral que vigila `scripts/prueba_apk.py`) y los paneles que sólo existen en la PC avisan por qué no vienen y, si el enlace está vivo, viajan a contestarlos allí. Verificación estática: `226/226` en `python3 scripts/prueba_apk.py` y `node --check` limpio en las dos hojas. Lo que **no** puede afirmar esta fila: los píxeles en el A16, que es el ensayo físico |
+| **La cara del PC dentro del teléfono (F19)** | real medido y **publicado** en la release; falta la pantalla del A16 | El teléfono ya no lleva una interfaz propia de botones: se empaqueta `cort-web/` tal cual dentro del APK (`assets/web/`) y la sirve una WebView local, con `Nexo.java` haciendo de puente. Contado sobre el APK publicado: **42 archivos · 5 767 429 bytes descomprimidos · 4 276 751 dentro del APK**, con `index.html`, `cort-ui.js`, `cort-mock.js`, `cort-orbe.js` y el bundle de React entrada por entrada en `auditoria.txt`. El truco medido es `apps/android/web/cort-android.js`, un `WebSocket` falso con la misma interfaz que el real: el `cort-mock.js` de la cara de PC no se entera de que no hay red. La contraparte Java atiende el `type` de cada cuadro (48 ramas medidas; la suite vigila que no bajen de 40) y los paneles que sólo existen en la PC avisan por qué no vienen y, si el enlace está vivo, viajan a contestarlos allí. Verificación: `228/228` en `python3 scripts/prueba_apk.py` dentro de la misma corrida que publicó la release, y `node --check` limpio en las dos hojas. Lo que **no** puede afirmar esta fila: los píxeles en el A16, que es el ensayo físico |
 | Censo de las 29 órdenes de lectura | real medido | `scripts/inventario_funciones.py` contra el puente instalado: **28 de 29 contestan con `origen: real`**; la que no es `get_winget_upgrades`, que en arena contesta en 7,6 s y aquí se pasa de 20 s con el equipo al 98 % de CPU. Tabla completa en `INFORME_FUNCIONES.md` §15 |
 
 Cada mensaje del puente lleva `origen`: `"real"` o `"no disponible"`. Si algo no se
@@ -274,28 +274,35 @@ el puente al iniciar sesión. `arranca_cort.sh` no duplica: si ya hay algo en 87
 
 ### En el teléfono (Android)
 
-**El teléfono no necesita al portátil.** Desde `cort-v0.12.0` el APK es CORT nativo: orbe,
-registro, cerebro de frases, 15 manos locales, memoria SQLite propia y **oído dentro del
-aparato** (Vosk con el modelo español de 39,8 MB viajando en el APK). Se instala, se pulsa ● y
-se dicta sin IP, sin servidor y sin certificados.
+**El teléfono no necesita al portátil, y desde `cort-v0.17.2` se ve lo mismo que en la PC.** El
+APK es CORT nativo —orbe, registro, cerebro de frases, 15 manos locales, memoria SQLite propia,
+el cerebro GGUF que se baja y **el oído dentro del aparato**— y además empaqueta la cara del
+portátil: los **42 archivos** de `cort-web/` (el `index.html`, el bundle de React, el orbe de
+three.js, `cort-ui.js` y su CSS) viajan en `assets/web/` y se abren en un `WebView` propio, con
+Java haciendo de servidor donde no hay red. Se instala, se pulsa ● y se dicta sin IP, sin
+servidor y sin certificados.
 
 ```bash
-./scripts/instala_cort.sh --red      # SÓLO si quieres además la cara de la PC en el teléfono
+./scripts/instala_cort.sh --red      # SÓLO si quieres además el enlace con el portátil
 ```
 
-Instalar el `CORT-movil.apk` de la última release y abrirlo. Antes de tocarlo, comprobar su
-SHA-256 contra el `.sha256` que publica la misma release. **Y después, una vez en el teléfono,
-abrir «Almacén» y tocar «Bajar el oído»** (39 817 833 bytes, una sola vez, con reanudado por
-`Range`): ese es el modelo español de Vosk, que desde `cort-v0.16.2` no viaja en el APK para
-que la descarga no se corte. El botón «● hablar» graba con el micrófono del teléfono y lo
-resuelve **Vosk dentro del aparato**; si el modelo aún se está
-cargando —o no se ha bajado— cede el oído al motor que trae Android y **lo dice en la
-línea «oído: …»**, que es la forma honesta de que la dueña sepa si está hablando con su
-teléfono o con internet. El puente de la PC sigue pudiendo recibir WAV por `POST /mic` para
-quien quiera la cara grande. Cómo se compila (el mismo método sin Gradle, ahora con las
-descargas fijadas por SHA-256 en `apps/android/deps.txt`), qué firma lleva, **los 17,15 MB
-medidos** y qué no hace todavía (el enlace con la PC sigue sin TLS, y el cerebro GGUF se baja
-en el teléfono pero su velocidad no está medida) está en
+Bajar `CORT-movil.apk` de la última release y abrirlo. Antes de tocarlo, comprobar su SHA-256
+contra el archivo `.sha256` que publica la misma release. **El peso es real y hay que decirlo:
+79 205 264 bytes = 75,54 MB**, y a los ~40 KB/s medidos en esta casa son **unos 33 minutos** de
+descarga. Es el precio de las tres cosas que dentro viajan desde `cort-v0.17.2`: el modelo de
+español de Vosk (39 817 833 bytes), el motor `libcortmotor.so` en **las dos arquitecturas**
+(56 508 296 + 46 695 488 bytes descomprimidos, 14 265 297 + 13 903 079 comprimidos) y la cara
+completa de la PC (5 767 429 bytes descomprimidos, 4 276 751 dentro del APK). **No hace falta
+pulsar «Bajar el oído»**: el teléfono oye nada más instalarse. Ese botón sigue en «Almacén» para
+quien venía de `cort-v0.16.2` y ya tenía el modelo descargado —`Motor.java` mira primero el
+almacén y le comprueba la suma.
+
+El botón «● hablar» graba con el micrófono del teléfono y lo resuelve **Vosk dentro del
+aparato**; si el modelo aún se está cargando cede el oído al motor que trae Android y **lo dice
+en la línea «oído: …»**, que es la forma honesta de saber si está hablando con su teléfono o con
+internet. Cómo se compila (el mismo método sin Gradle, con las descargas fijadas por SHA-256 en
+`apps/android/deps.txt`), qué firma lleva y qué no hace todavía (el enlace con la PC sigue sin
+TLS, y la velocidad del cerebro GGUF en el A16 no está medida) está en
 [`docs/ANDROID.md`](docs/ANDROID.md) y en `apps/android/ACREDITACION.md`.
 
 **Enlazar el teléfono con la PC** (F14). Arrancar CORT abierto a la red —`CORT_BIND=<IP>` o
@@ -341,7 +348,7 @@ teléfono, no por su altavoz trasero ni por los de la casa.
 
 El auricular dice la primera frase y la pantalla tiene el texto entero; `scripts/prueba_parlamento.py`
 (49 comprobaciones) vigila el contrato byte a byte, incluida la cabecera WAV que arma Java a
-mano, y `scripts/prueba_apk.py` (159) que el teléfono no pueda escribir audio en el aparato.
+mano, y `scripts/prueba_apk.py` (228) que el teléfono no pueda escribir audio en el aparato.
 `/parlamento` necesita el `cort_server.py` de esta versión: si el CORT del portátil viene
 encendido de antes, la ruta contesta `404` hasta que se reinicie.
 
@@ -460,6 +467,16 @@ http://127.0.0.1:8776/index.html?puente=8775
 - **Cuánto tarda un cerebro GGUF en el teléfono**: sin medir. El motor y el almacén están
   escritos (U1) y el botón «Probar (mide tokens/s)» saca la cifra del propio A16; en esta
   laptop no hay NDK ni `javac` del SDK, así que esa medida sólo existe en el aparato.
+- **Despertar solo con la voz («Oye CORT» en segundo plano)**: no está. El teléfono oye con ●
+  pulsado y, enlazado, con el parlamento. La escucha continua es la fase F19d y sus decisiones
+  ya están escritas (Vosk dentro de un servicio en primer plano con
+  `foregroundServiceType="microphone"`, gramática `["hola cort","oye cort","[unk]"]`, corte a
+  los 5 min de silencio o al apagarse la pantalla, notificación `VISIBILITY_PRIVATE` **sin el
+  token**); falta el código y falta la batería que eso gaste, que tampoco se puede medir aquí.
+- **Los píxeles de la cara del PC en el teléfono** (`cort-v0.17.2`, F19): medidos sobre el APK —
+  42 archivos, 4 276 751 bytes dentro—, **no sobre la pantalla del A16**. Lo mismo con el peso:
+  nadie lo ha instalado todavía, así que lo que queda por comprobar es que baje entero (se
+  espera ~33 minutos a los ~40 KB/s de esta casa) y que la interfaz se vea como en el portátil.
 - **El cerebro cargado**: la puerta de RAM manda. Con la interfaz abierta ningún
   modelo de los 6 en disco cabe; `auto_sonda()` lo mide solo en el turno en que la
   máquina respire.

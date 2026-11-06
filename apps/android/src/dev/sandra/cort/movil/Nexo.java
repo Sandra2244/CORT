@@ -50,7 +50,7 @@ import org.json.JSONObject;
  * La cara del portátil dentro del teléfono, y el puente que la atiende.
  *
  * La dueña lo pidió sin margen: «necesito que sea la copia exacta de la versión de
- * PC incluyendo sus funciones». Desde `cort-v0.17.0` el APK lleva en `assets/web/`
+ * PC incluyendo sus funciones». Desde `cort-v0.17.2` el APK lleva en `assets/web/`
  * los **mismos archivos** que sirve `cort.py --lan` en el portátil —el `dist` de
  * Vite, el orbe de three.js, `cort-ui.js` con sus 2560 líneas de paneles— y esta
  * clase hace las dos mitades que faltaban:

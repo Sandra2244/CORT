@@ -151,10 +151,13 @@ hacia adelante, sin mover la etiqueta.
 * **El mismo CORT en los dos aparatos** (F14c): preferencias, lista y notas viajan por el
   enlace, con las cuatro reglas ya escritas (la llave nunca dentro de un recuerdo).
 
-Release objetivo: `cort-v0.17.1`. La `cort-v0.17.0` **no se publicó y no se va a publicar**:
-esa etiqueta quedó apuntando al commit `553e1e4`, que el runner de Actions rechazó con cinco
-errores de tipos en `Nexo.java` (corrida 42137017052). La etiqueta ya estaba empujada, así que
-se corrige hacia adelante con un número nuevo en vez de mover la que existe.
+Release publicada: **`cort-v0.17.2`** (run 42140345851, 79 205 264 bytes = 75,54 MB, SHA-256
+`7883495f…dfbfe2`, 228/228 comprobaciones en esa misma corrida). Las dos etiquetas anteriores
+**no se publicaron y no se van a publicar**: `cort-v0.17.0` (`553e1e4`) la rechazó `javac` con
+cinco errores de tipos en `Nexo.java` (corrida 42137017052) y `cort-v0.17.1` (`420222b`) con uno
+más — un `catch (JSONException)` alrededor de `JSONArray.put`, que no declara esa excepción
+(corrida 42139614238). Como las dos etiquetas ya estaban empujadas, se corrigió subiendo el
+número: en esta casa no se mueve ni se reescribe una etiqueta ya enviada.
 
 ## 4. Fase U4 — la PC, sin duplicar el trabajo
 
@@ -192,11 +195,11 @@ Las decisiones, tomadas con cuestionario el mismo día:
 | los paneles que no caben | aviso honesto por panel + viajan a la PC cuando esté enlazada + equivalente android donde existe + ocultar lo que no tiene sentido aquí | un panel con ceros es una mentira con número |
 | el peso | **modelo y dos ABIs dentro** («tiene que pesar más, no importa») | la escucha local no puede depender de una descarga que nadie pidió, y el GGUF tiene que servir también en un teléfono de 32 bits |
 
-Estado (release objetivo **`cort-v0.17.1`**; la `cort-v0.17.0` quedó sin publicar por los
-cinco errores de tipos que rechazó el runner):
+Estado (release **publicada: `cort-v0.17.2`**, 75,54 MB con la cara del PC dentro):
 
-* **F19a — cerrada.** `compilar.sh` empaqueta `cort-web/` a `assets/web/` y **se cae** si falta
-  `index.html`; la auditoría lista la cara entrada por entrada sobre el APK final.
+* **F19a — cerrada y publicada.** `compilar.sh` empaqueta `cort-web/` a `assets/web/` y **se cae**
+  si falta `index.html`; la auditoría lista la cara entrada por entrada sobre el APK final:
+  **42 archivos · 5 767 429 bytes descomprimidos · 4 276 751 bytes dentro del APK**.
 * **F19b — cerrada.** `apps/android/web/cort-android.js`: `WebSocket` sustituto abierto en el
   constructor, cola de 64, `serviceWorker` neutralizado, `CORT_esAndroid`, inyectado como
   primer `<script>`.
