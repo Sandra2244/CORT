@@ -235,6 +235,56 @@ Estado (release **publicada: `cort-v0.17.2`**, 75,54 MB con la cara del PC dentr
   con un interruptor en Ajustes en vez de prometer que no gasta nada.
 * Modelos de más de 1,5 B parámetros en el A16: no caben ni responden.
 
+## 5bis. La cola pedida el 2026-11-06 («agregale todo lo pendiente»)
+
+Ella lo dijo en una frase: la app nativa tiene que **escribir por mí, analizar,
+investigar, hablar conmigo y tener personalidad gracias a los cerebros descargables**,
+con **el GGUF bajándose solo al conectarse a internet**, y **la actualización de etiqueta
+de último** «para que no me atrase». Se convierte en tres hitos que se pueden tocar;
+debajo está el orden real de trabajo y los números que ya existen.
+
+**Hito 1 — el teléfono se despierta solo y contesta hablado.**
+`F19d` (escucha «Oye CORT» en servicio en primer plano con `foregroundServiceType
+="microphone"`, gramática `["hola cort","oye cort","[unk]"]`, corte a los 5 min de
+silencio o al apagarse la pantalla, notificación `VISIBILITY_PRIVATE` **sin el token**, y
+sólo el hilo de `Motor` abre el micrófono) + `F20d` (personalidad: la constitución y el
+carisma de la PC, historial en SQLite y **respuesta en streaming** frase a frase por el
+auricular; el tope de 120 tokens por vuelta se levanta sólo con medida real de tokens/s)
++ `F20e` (**el GGUF por defecto se baja solo**: al entrar en una red no medida —Wi-Fi de
+casa— `Bajada.java` baja qwen2.5-1,5B q2_k, 752 880 160 bytes con su suma de
+`assets/cerebros.json`, con `.part` + `Range` + SHA-256 entera antes de fiarse, puerta de
+RAM del doble del archivo y reanudación si se corta; interruptor en Almacén y
+`CORT_AUTO_CEREBRO=0` para apagarlo; sin WorkManager ni DownloadManager porque el token no
+puede aparecer en una notificación. Coste dicho con número: 753 MB a ~40 KB/s son
+**~5 horas**).
+
+**Hito 2 — hace cosas por mí.**
+`F19e` (`Pantalla.java`, servicio de accesibilidad + `res/xml/accesibilidad.xml`: lee la
+pantalla entera, no sólo la selección) + `F20b` (**«escribe por mí»**: dictado largo →
+borrador con el cerebro que haya → se inserta en el campo enfocado, o sale por
+`ACTION_SEND` a WhatsApp/correo, o queda en Notas con su origen; incluye resumir y pasar a
+limpio la selección) + `F20c` (**analiza e investiga**: entidades, fechas y acciones del
+texto o de una foto leída por OCR, propuestas a lista/notas/recordatorios con
+confirmación humana, y consultas con `origen: real` — clima, búsqueda, cercanos; lo que no
+se puede se dice con motivo y número).
+
+**Hito 3 — la PC y el teléfono son una sola cosa, y al final, la versión.**
+`F20a` (`PuenteWs.java`: cliente RFC6455 mínimo en Java, sin librerías de terceros, con
+`mobile_auth`, para que los 16 paneles que hoy avisan «no existe aquí» viajen a la PC) +
+`F21` (**TLS local** en el puente —hoy el token viaja en claro dentro del `?token=`—,
+`F14c` segundo viaje con preferencias/lista/notas, y `F17` PC dormida: medido sin
+Wake-on-LAN en esta máquina, así que se dice con la salida del equipo delante) +
+`M-FÍSICO` (las ocho medidas que sólo da el A16) + `F22` (**la actualización de etiqueta,
+de último**, como pidió: mirar `…/tags`, comparar con la versión dentro del APK y avisar
+con número y tamaño ofreciendo el enlace de la release — **nunca autoinstalarse**; antes
+hay que cerrar el frente #26, porque el canal apunta a una línea).
+
+**Aparcados con motivo** (no se tiran, se retoman cuando ella diga): `F6` mapa propio
+(Leaflet+OSM ya viaja dentro del APK, recortable por acuerdo), `S2` gestos con la cámara
+del teléfono (hace falta modelo de visión; corre mejor en el A16 que en esta laptop),
+`W1` instalador de Windows, `F15`/`F18` manos nuevas en Linux y en el navegador (son de
+PC) y la decisión `#26` de cuál es la rama oficial.
+
 ## 6. Cómo se entrega cada cosa
 
 Cada fase: código → suite en `scripts/` con salida y exit code verificados → commit en
