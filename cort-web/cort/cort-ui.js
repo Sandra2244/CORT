@@ -1457,6 +1457,14 @@
     return true;
   }
 
+  // El teléfono no tiene demonio de Ollama: allí responde `Nexo.java` con el mismo
+  // protocolo y los GGUF que carga llama.cpp dentro de la app. La bandera la pone
+  // `cort-android.js` al inyectarse. Se decide por ella y no por `online === false`,
+  // porque en la PC un Ollama apagado también da falso y allí el nombre sí es Ollama.
+  function comoSeLlamaElCerebro() {
+    return window.CORT_esAndroid ? "cerebro local" : "Ollama";
+  }
+
   function pintarFilaCerebro() {
     const fila = document.getElementById("cort-cerebro-row");
     if (!fila) return;
@@ -1475,7 +1483,8 @@
     }
 
     const libre = st.ram_disponible_mb || 0;
-    fila.appendChild(chipTexto(st.online ? "Ollama vivo" : "Ollama apagado", st.online ? "ok" : "aviso"));
+    fila.appendChild(chipTexto(comoSeLlamaElCerebro() + (st.online ? " vivo" : " apagado"),
+                               st.online ? "ok" : "aviso"));
     fila.appendChild(chipTexto(libre + " MB libres de " + (st.ram_total_mb || "?")));
     fila.appendChild(chipTexto((st.nucleos || "?") + " núcleos"));
     if (st.selected_model) {
@@ -1539,8 +1548,8 @@
     // que decir qué modelo tiene el puente, y si no tiene ninguno, decirlo.
     e.textContent = !st ? "cerebro: sin datos del puente"
       : (st.online && st.selected_model) ? `cerebro: ${st.selected_model}`
-      : st.online ? "cerebro: Ollama vivo · ningún modelo cargado"
-      : "cerebro: Ollama apagado";
+      : st.online ? `cerebro: ${comoSeLlamaElCerebro()} vivo · ningún modelo cargado`
+      : `cerebro: ${comoSeLlamaElCerebro()} apagado`;
   }
 
   // Único sitio donde se cambia de idioma durante el arranque: una esquina del
@@ -2530,6 +2539,15 @@
     document.documentElement.lang = lang;
     walk(document.body);
     buildBootChip();
+    // El botón de emparejamiento le pide un token al puente de la PC: `create_mobile_
+    // pairing` sólo lo atiende `cort_server.py`. Dentro del APK el WebSocket falso lo
+    // entregaría a Java, que no puede emitir un token de acceso, y el diálogo se
+    // quedaría en «Génération…» para siempre. El emparejamiento se hace en el
+    // portátil, así que aquí el canto no se ofrece.
+    if (window.CORT_esAndroid) {
+      const emparejar = document.getElementById("mobile-pairing-btn");
+      if (emparejar) emparejar.style.display = "none";
+    }
     asegurarFilaIdioma();
     asegurarFilaCerebro();
     // Al arrancar el websocket del puente todavía puede estar abriendo (el puente

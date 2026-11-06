@@ -39,14 +39,16 @@ case "$VERSION" in
 esac
 [ "$CODE" -ge 1 ] || CODE=1
 
-# Arquitecturas que se empaquetan. Desde `cort-v0.16.2` el default es SÓLO
-# `arm64-v8a`, que es el Galaxy A16 de la dueña. El motivo es un número medido:
-# `libcortmotor.so` pesa 56 508 296 bytes en arm64 y 46 695 488 en armeabi-v7a,
-# así que llevar las dos costaba 46 695 488 bytes de descarga extra para un
-# teléfono que en esta casa no existe. Con `armeabi-v7a` el APK se corta al
-# bajarlo (a ~40 KB/s eran 70 minutos) y Samsung dice «aplicación no instalada».
-# Quien tenga un teléfono viejo lo compila con `CORT_ABIS="arm64-v8a armeabi-v7a"`.
-ABIS="${CORT_ABIS:-arm64-v8a}"
+# Arquitecturas que se empaquetan. Desde `cort-v0.16.3` el default son LAS DOS:
+# `arm64-v8a` (el Galaxy A16 de la dueña) y `armeabi-v7a` (cualquier teléfono de
+# 32 bits), porque ella lo eligió con estas palabras: «tiene que pesar más, no
+# importa». El costo está medido, no estimado: `libcortmotor.so` pesa
+# 56 508 296 bytes en arm64 y 46 695 488 en armeabi-v7a, y con las `.so`
+# comprimidas (`extractNativeLibs="true"` + `zip -9`, medido en la corrida
+# 42115030288) la segunda añade unos 12 MB al APK.
+# Para volver al paquete de una sola ABI —el que se bajaba en ~40 KB/s sin
+# cortarse— se compila con `CORT_ABIS="arm64-v8a"`.
+ABIS="${CORT_ABIS:-arm64-v8a armeabi-v7a}"
 
 # El `|| true` dentro de la sustitución no es decoración: con `pipefail` un `ls`
 # que no encuentra el globo devuelve 2 y `set -e` mataría el script antes de la
@@ -74,9 +76,9 @@ mkdir -p build/obj build/apk vendor build/stage build/recursos
 # no deja nunca un archivo a medio verificar dentro del APK.
 MOTOR=0
 DELGADO=0
-# Si el modelo de español viaja dentro del APK (`CORT_OIDO_DENTRO=1`) o se baja
-# en el almacén. Default: se baja. La variable se usa en la auditoría, así que
-# tiene que existir también en la compilación delgada.
+# Si el modelo de español viaja dentro del APK o se baja en el almacén. Desde
+# `cort-v0.16.3` el default es DENTRO (`CORT_OIDO_DENTRO=0` lo saca). La variable
+# se usa en la auditoría, así que tiene que existir también en la compilación delgada.
 OIDO_EN_APC=0
 if [ "${CORT_SIN_MOTOR:-0}" = "1" ]; then
     DELGADO=1
@@ -90,10 +92,12 @@ while IFS='|' read -r NOMBRE SHA URL; do
     if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ]; then
         continue
     fi
-    # El modelo de español ya no entra en el APK por defecto, así que tampoco se
-    # baja: 39 817 833 bytes de ida y vuelta y una suma de más por corrida. Se
-    # baja sólo con `CORT_OIDO_DENTRO=1`, que es la compilación de desarrollo.
-    if [ "${CORT_OIDO_DENTRO:-0}" != "1" ] && [ "$NOMBRE" = "vosk-model-small-es-0.42.zip" ]; then
+    # El modelo de español SÍ entra en el APK desde `cort-v0.16.3`, y por eso
+    # también se baja: la cara del PC dentro del teléfono tiene que oír sin que
+    # nadie pulse «Bajar el oído» primero (el servicio de escucha de F19d arranca
+    # con la pantalla apagada y no tiene con quién discutir una descarga).
+    # `CORT_OIDO_DENTRO=0` devuelve el empaquetado delgado de `cort-v0.16.2`.
+    if [ "${CORT_OIDO_DENTRO:-1}" != "1" ] && [ "$NOMBRE" = "vosk-model-small-es-0.42.zip" ]; then
         continue
     fi
     if [ -z "$SHA" ] || [ -z "$URL" ]; then
@@ -166,16 +170,16 @@ if [ "$DELGADO" = "0" ]; then
 
     HAY_NATIVAS=0
     if [ -n "$(find build/stage/lib -name '*.so' -type f 2>/dev/null)" ]; then HAY_NATIVAS=1; fi
-    # El modelo de español (39 817 833 bytes) sale del APK por defecto desde
-    # `cort-v0.16.2`: se baja en el almacén con el mismo `Range` + `.part` +
-    # SHA-256 que los GGUF (`assets/oido.json` fija la URL, el peso y la suma;
-    # la suma es la misma `09b23988…c6511f` de `deps.txt`). `Motor.java` mira
-    # primero el archivo bajado y, si alguien compila con `CORT_OIDO_DENTRO=1`,
-    # todavía acepta el `assets/motor/` de antes.
+    # El modelo de español (39 817 833 bytes) vuelve a entrar en el APK desde
+    # `cort-v0.16.3`, porque la escucha en segundo plano no puede empezar por una
+    # descarga que nadie pidió. `assets/oido.json` sigue fijando URL, peso y suma
+    # para el camino contrario —el del teléfono que ya lo tenía bajado de
+    # `cort-v0.16.2`—, y `Motor.java` mira primero el archivo del almacén: si está
+    # y cuadra, no se desarma el del APK.
     if [ -f vendor/vosk-android-0.3.75/classes.jar ] \
        && [ -f vendor/jna-5.14.0/classes.jar ] \
        && [ "$HAY_NATIVAS" = "1" ]; then
-        if [ "${CORT_OIDO_DENTRO:-0}" = "1" ] && [ -f vendor/vosk-model-small-es-0.42.zip ]; then
+        if [ "${CORT_OIDO_DENTRO:-1}" = "1" ] && [ -f vendor/vosk-model-small-es-0.42.zip ]; then
             mkdir -p build/recursos/assets/motor
             cp vendor/vosk-model-small-es-0.42.zip build/recursos/assets/motor/
             OIDO_EN_APC=1
@@ -196,6 +200,58 @@ fi
 # (`assets/.`) y no la carpeta: si no, saldría `assets/assets/`.
 mkdir -p build/recursos/assets
 cp -a assets/. build/recursos/assets/
+
+# -- 2b. La cara de la PC dentro del teléfono ---------------------------------
+# Desde `cort-v0.16.3` el APK empaqueta `cort-web/` —el mismo `index.html`, el
+# mismo orbe de three.js y los mismos paneles que serve `cort.py --lan` en el
+# portátil— en `assets/web/`, y `Nexo.java` lo abre en un `WebView` propio con
+# `cort-android.js` como puente. La dueña lo pidió con estas palabras: «necesito
+# que sea la copia exacta de la versión de PC incluyendo sus funciones». No es un
+# parecido: son los mismos archivos, medidos abajo, y los mismos números.
+#
+# Qué se copia y qué no, y por qué:
+#   `index.html`, `manifest.webmanifest`, `cort-sw.js`  -> la página y su ficha
+#   `cort/`   -> la interfaz de CORT (mock, orbe, UI, estilos, vendor de Leaflet)
+#   `assets/` -> el bundle de React y su CSS, SIN los `*.orig` (copia de trabajo
+#               de una edición anterior: `main-s6G6kMTO.js.orig` pesa 453 154
+#               bytes y ningún navegador los pide nunca)
+#   `iconos/` -> el logo del manifest y del HUD
+#   `wallpapers/` -> la galería del panel de fondo (38 referencias en index.html)
+#   `demo/`, `*.md`, `index.html.orig` -> NO: desarrollo y documentación, la
+#               página no los carga y en el APK serían peso por peso.
+CARA=0
+CARA_ARCHIVOS=0
+CARA_BYTES=0
+WEB="${CORT_WEB_DIR:-../../cort-web}"
+if [ -f "$WEB/index.html" ]; then
+    mkdir -p build/recursos/assets/web
+    cp "$WEB/index.html" "$WEB/manifest.webmanifest" "$WEB/cort-sw.js" build/recursos/assets/web/
+    for D in cort assets iconos wallpapers; do
+        [ -d "$WEB/$D" ] || continue
+        mkdir -p "build/recursos/assets/web/$D"
+        cp -a "$WEB/$D/." "build/recursos/assets/web/$D/"
+    done
+    find build/recursos/assets/web -name '*.orig' -delete
+    # El puente Java viaja como primer archivo de la cara: `Nexo.java` inyecta su
+    # `<script>` justo detrás de `<head>` cuando sirve `index.html`, y tiene que
+    # ser el primero porque `cort-mock.js` guarda `window.WebSocket` en su línea 25.
+    cp web/cort-android.js build/recursos/assets/web/cort-android.js
+    CARA_ARCHIVOS="$(find build/recursos/assets/web -type f | wc -l)"
+    CARA_BYTES="$(du -sb build/recursos/assets/web | cut -f1)"
+    if [ "$CARA_ARCHIVOS" -lt 20 ]; then
+        echo "::error::la cara de la PC sale con $CARA_ARCHIVOS archivos; algo del 'cort-web' no se copió"
+        exit 1
+    fi
+    CARA=1
+    echo "cara del PC empaquetada: $CARA_ARCHIVOS archivos · $CARA_BYTES bytes"
+else
+    # Sin cara no hay release: `Nexo.hayCaraEmbebida()` mentira en el arranque y
+    # la dueña volvería a ver la `Cara.java` nativa, que es exactamente la queja
+    # que abrió esta fase. El `delgado` también la lleva: el oído no tiene nada
+    # que ver con los archivos de la interfaz.
+    echo "::error::no está $WEB/index.html: el APK saldría sin la cara del PC y el teléfono mostraría la cara nativa"
+    exit 1
+fi
 
 "$BT/aapt2" compile --dir res -o build/obj/res.zip
 "$BT/aapt2" link -o build/apk/sin-alinear.apk \
@@ -296,6 +352,7 @@ MB="$(awk "BEGIN{printf \"%.2f\", $BYTES/1048576}" | tr '.' ',')"
     fi
     echo "visor: zxing core 3.5.3 dentro del APK (escanea el QR del enlace, F14b)" \
          "— $(stat -c%s vendor/zxing-core-3.5.3.jar) bytes fijados en deps.txt"
+    echo "cara: la del PC embebida (F19) — $CARA_ARCHIVOS archivos y $(AGRUPAR "$CARA_BYTES") bytes descomprimidos en assets/web/, abiertos en el WebView por Nexo.java"
     echo "arquitecturas: $ABIS"
     if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
         echo "llave: la del repo (se instala encima de la versión anterior)"
@@ -349,13 +406,14 @@ print("entradas: %d · descomprimido suma %d bytes · dentro del APK %d bytes"
 # alguien lo mete aquí, esta línea lo grita en la auditoría antes que en el teléfono.
 gguf = [i.filename for i in z.infolist() if i.filename.lower().endswith(".gguf")]
 print("gguf dentro del APK: %s" % (", ".join(gguf) if gguf else "ninguno (ok)"))
-# El modelo de español corre la misma suerte que los GGUF desde `cort-v0.16.2`:
-# fuera del APK y bajado con `Range` + SHA-256. El número de esta línea es el que
-# lee la release (`apk-movil.yml`) para decir cuánto hay que bajar una vez.
+# El modelo de español vuelve dentro del APK desde `cort-v0.16.3` (la escucha en
+# segundo plano no puede depender de una descarga que nadie pidió). El número de
+# esta línea es el que lee la release (`apk-movil.yml`) para decir si hace falta
+# bajar algo una vez instalado.
 oido_zip = [i for i in z.infolist() if i.filename.startswith("assets/motor/")]
 oido_ficha = z.read("assets/oido.json").decode("utf-8") if "assets/oido.json" in z.namelist() else ""
 if oido_zip:
-    print("modelo de español: %d bytes DENTRO del APK (compilación con CORT_OIDO_DENTRO=1)"
+    print("modelo de español: %d bytes DENTRO del APK (el teléfono oye nada más instalar)"
           % sum(i.file_size for i in oido_zip))
 else:
     import json
@@ -367,6 +425,32 @@ print("assets/oido.json: %s" % ("%d bytes · el almacén sabe de dónde bajar el
 cerebros = z.read("assets/cerebros.json").decode("utf-8") if "assets/cerebros.json" in z.namelist() else ""
 print("assets/cerebros.json: %d bytes · %d cerebros ofrecidos"
       % (len(cerebros.encode()), cerebros.count('"id"')))
+# F19: la cara de la PC. Se comprueba contra el archivo FINAL, no contra la
+# carpeta de etapa: si el `aapt2 link` se hubiera comido `assets/web/` (con `-A`
+# mal puesto esto es exactamente lo que pasa), el teléfono abriría la cara nativa
+# y la auditoría diría "está" mirando un directorio que ya no existe.
+cara = [i for i in z.infolist() if i.filename.startswith("assets/web/")]
+if cara:
+    print("cara del PC: %d archivos · %d bytes descomprimidos · %d bytes dentro del APK"
+          % (len(cara), sum(i.file_size for i in cara), sum(i.compress_size for i in cara)))
+    for necesario in ("assets/web/index.html", "assets/web/cort-android.js",
+                      "assets/web/cort/cort-mock.js", "assets/web/cort/cort-ui.js",
+                      "assets/web/cort/cort-orbe.js", "assets/web/manifest.webmanifest"):
+        print("  %s: %s" % (necesario,
+              "está (%d bytes)" % z.getinfo(necesario).file_size
+              if necesario in z.namelist() else "NO ESTÁ"))
+    # El bundle de React va con el hash de Vite en el nombre, así que se busca por
+    # prefijo: exigir `main-s6G6kMTO.js` literal daría un "NO ESTÁ" falso la próxima
+    # vez que alguien recompila la cara.
+    for prefijo in ("assets/web/assets/main-", "assets/web/assets/three.module-"):
+        hay = [i for i in cara if i.filename.startswith(prefijo) and i.filename.endswith(".js")]
+        print("  %s*.js: %s" % (prefijo,
+              "está (%d bytes)" % hay[0].file_size if hay else "NO ESTÁ"))
+    sobrantes = [i.filename for i in cara if i.filename.endswith(".orig")]
+    print("  copias .orig dentro de la cara: %s"
+          % (", ".join(sobrantes) if sobrantes else "ninguna (ok)"))
+else:
+    print("cara del PC: NO ESTÁ en el APK — el teléfono mostraría Cara.java, no la interfaz del portátil")
 PY
 } > build/auditoria.txt
 cat build/auditoria.txt

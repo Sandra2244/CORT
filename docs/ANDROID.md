@@ -9,14 +9,21 @@
 
 **Una aplicación nativa que funciona sola.** Desde `cort-v0.12.0` el teléfono no es una
 ventana abierta al puente de la PC: lleva dentro la cara (el orbe y el registro), el cerebro
-de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk; el
-modelo español se baja una vez desde Almacén). Se apaga el portátil y CORT sigue hablando, dictando,
-acordándose y obedeciendo.
+de frases, las manos locales, su propia memoria SQLite y **su propio oído** (Vosk; desde
+`cort-v0.16.3` el modelo español viaja dentro del APK, así que oye nada más instalar). Se
+apaga el portátil y CORT sigue hablando, dictando, acordándose y obedeciendo.
+
+Y desde `cort-v0.16.3` (F19) **la cara que se ve es la del portátil**: el mismo
+`cort-web/index.html`, el mismo orbe de three.js y los mismos paneles, empaquetados dentro
+del APK y abiertos en un `WebView` propio. La interfaz nativa (`Cara.java`) sigue ahí, como
+respaldo si el WebView del sistema no arranca. El diagrama es ahora así:
 
 ```
 teléfono (app nativa, Java, sin Gradle ni AndroidX)
-   ├─ Motor.java   Vosk dentro del aparato  → el audio NO sale del teléfono
-   ├─ Voz.java     TextToSpeech (boca) + SpeechRecognizer (respaldo del oído)
+   ├─ MainActivity   decide la cara: `assets/web/` en un WebView (F19) o `Cara.java` de respaldo
+   ├─ Nexo.java      el puente: contesta el contrato del WebSocket cuadro por cuadro (F19c)
+   ├─ Motor.java     Vosk dentro del aparato  → el audio NO sale del teléfono
+   ├─ Voz.java       TextToSpeech (boca) + SpeechRecognizer (respaldo del oído)
    ├─ Cerebro/Acciones   33 reglas y 15 manos locales (linterna, hora, alarma, decir…)
    ├─ Recuerdos.java     SQLite propio (cort.db) — la memoria vive en el teléfono
    └─ Asistente/Sesiones/Reconocimiento   traje de asistente de Android
@@ -55,6 +62,50 @@ Bolsillo.java   lo pendiente de la PC (F17): `GET /bolsillo` con recordatorios, 
 Equipo.java     el aparato dicho con números — la RAM libre de ESTE teléfono, que es la que
                 decide si el cerebro local de U1 cabe. Nada de esto sale del aparato.
 ```
+
+### La cara de la PC dentro del teléfono (F19)
+
+La queja del 2026-11-05 vino con cuatro capturas del Galaxy A16 y una frase: «necesito que
+sea la copia exacta de la versión de PC incluyendo sus funciones». El teléfono mostraba
+`Cara.java` —botones hechos a mano— mientras el portátil mostraba `cort-web/index.html`. Son
+tres piezas, y cada una se comprueba en `scripts/prueba_apk.py`:
+
+1. **F19a — el empaquetado.** `apps/android/compilar.sh` copia `cort-web/` a
+   `assets/web/` dentro del APK: `index.html`, `manifest.webmanifest`, `cort-sw.js`, el
+   directorio `cort/` (mock, orbe, UI, estilos, el vendor de Leaflet), el `assets/` de React
+   y CSS **sin los `*.orig`**, `iconos/` y `wallpapers/`. `demo/` y la documentación no van:
+   la página no los pide. Si falta `index.html` el build **se cae** en vez de sacar un APK
+   que muestre la cara nativa, y `auditoria.txt` lista la cara entrada por entrada sobre el
+   archivo final (no sobre la carpeta de etapa: así se detecta un `-A` mal puesto en `aapt2`).
+2. **F19b — el WebSocket que no existe.** La cara habla por `ws://<host>:8765/ws`; dentro del
+   teléfono no hay nada escuchando, así que `apps/android/web/cort-android.js` sustituye
+   `window.WebSocket` **antes** de que `cort-mock.js` lo guarde (línea 25 del mock; por eso el
+   puente es el primer `<script>` que `Nexo.java` cose detrás de `<head>`). El sustituto abre
+   `readyState` en el constructor —la interfaz compara `=== WebSocket.OPEN` y con 0 durante un
+   tick tiraba el primer cuadro—, encola como máximo 64 mensajes para no perder lo que llega
+   antes de suscribirse, y neutraliza `navigator.serviceWorker`, que en `file://` no registra
+   nada y su fallo tapaba la cara entera. La vuelta es `window.__cortNative.emit(...)`.
+3. **F19c — el contrato.** `Nexo.java` despacha por el `type` de cada cuadro, con datos del
+   aparato: clima real (open-meteo; IP si no hay ciudad), `pc_estado`, temperatura de los
+   sensores, apps instaladas, lista, notas, pendientes, volumen, brillo, micrófono, orbe y el
+   cerebro GGUF. Tres reglas que costaron aprendizajes y están fijadas por comprobación:
+   **`get_settings` no se responde desde Java** (un `settings_data` vacío borra los campos de
+   Ajustes y deja `reminders` en cero — el mock lo contesta localmente en su línea 514);
+   **un clima que falla no sale como `weather_panel`** (el lector del bundle se lee `ville`,
+   `temperature`, `ressenti`… sin mirar `ok`, así que un panel a medias revienta la tarjeta:
+   se dice en texto, como hace `cort_server.py`); y **lo no medido viaja como
+   `JSONObject.NULL`**, no como `-1`, porque la cara muestra `?? "--"` y un `-1` se leería
+   «-1 %».
+4. **Lo que en el teléfono no hay no se simula.** `panelDe` es el equivalente android del
+   `FALTA_EN_EL_PUENTE` de `cort_server.py`: cada cuadro sin atención sale con
+   `puente_aviso` —panel, motivo concreto y qué hace falta—, y el resto de la cara lo pinta.
+   Dos rótulos se apagan con la bandera `window.CORT_esAndroid`: el nombre del cerebro (en el
+   teléfono no hay Ollama) y el botón de emparejar por QR, que sólo lo atiende `cort_server.py`.
+
+Queda pendiente y tiene fase escrita: **F19d** (escuchar «oye CORT» en segundo plano con
+Vosk dentro de un servicio, corte a los 5 min de silencio o al apagarse la pantalla) y
+**F19e** (leer la pantalla de otras apps por accesibilidad, sensores restantes y que los
+paneles que necesitan la PC viajen por el enlace con `PuenteWs.java`).
 
 La aplicación es **híbrida de propósito**, y por eso hay dos instaladores distintos: el APK
 del teléfono y el instalador de escritorio para Linux/Windows. Los dos hablan el mismo español
@@ -174,6 +225,28 @@ del archivo y peso que ocupa dentro del APK):
 
 Lo que **ya no está** en esa lista es el modelo de español (39 817 833 bytes) y todo lo de
 `armeabi-v7a`: se bajan o se compilan aparte.
+
+**`cort-v0.16.3` devuelve dos de las tres palancas, y hay que decir por qué.** Preguntada la
+dueña por el peso con el número delante, contestó *«tiene que pesar más, no importa»* y pidió
+el modelo y las dos ABIs dentro:
+
+* **El modelo de español vuelve a `assets/motor/`** (`CORT_OIDO_DENTRO=1` es el default; `=0`
+  devuelve el paquete delgado). El motivo no es estética sino de arranque: la cara del PC tiene
+  que oír desde el primer uso, y un teléfono que abre su interfaz y dicta por internet —porque
+  alguien no pulsó «Bajar el oído»— es exactamente la queja que abrió esta fase. `Motor.java`
+  mira primero el archivo del almacén (le comprueba la suma y no desarma el del APK otra vez),
+  así que el que ya lo tenía bajado no paga dos veces.
+* **Las dos ABIs dentro** (`arm64-v8a` y `armeabi-v7a`). Lo que hace pagable la segunda es la
+  palanca que **no** se revoca: las `.so` comprimidas. Medido en la corrida 42115030288,
+  `libcortmotor.so` pasa de 56 508 296 a 14 265 297 bytes dentro del APK, así que los
+  46 695 488 bytes de armeabi-v7a entran como ~12 MB comprimidos, no como 46 MB.
+* **La cara del PC** añade sus archivos (los lista `auditoria.txt` en el bloque
+  «cara del PC», con su peso real y el que ocupa dentro del APK).
+
+El peso resultante lo publica la release con el `stat` del archivo, y `apk-movil.yml` avisa por
+encima de ~120 MB: la descarga de esta casa se cortó a los 162 817 475 bytes de `cort-v0.16.1`.
+Si alguna vez vuelve a cortarse, `curl -C -` reanuda la bajada, y
+`CORT_ABIS="arm64-v8a"` devuelve el paquete de una sola arquitectura.
 
 Con `extractNativeLibs="true"` el instalador descomprime las `.so` a `/data/app/…/lib` antes de
 cargarlas, así que lo que se exige es lo contrario de antes: que **sí** vayan comprimidas
@@ -319,10 +392,24 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
   de ahí el botón de prueba. Y una cosa que no se afirma: «Ollama en Android» no es el camino que
   CORT tomó; el que funciona es llama.cpp compilado a mano, medido en 177 s de runner para las
   dos ABIs.
-- **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano. El ● se pulsa y la
-  baldosa del panel rápido también; el traje de asistente de Android
-  (`Asistente`/`Sesiones`/`Reconocimiento`) está declarado y enruta, pero activarlo como
-  asistente del sistema es una prueba de la dueña en el aparato.
+- **No habla sola desde el bolsillo**: no hay *wake word* en segundo plano todavía, y es la
+  fase **F19d** con sus decisiones ya tomadas (reconocer «oye CORT» / «hola CORT» con el mismo
+  modelo español de Vosk que ya viaja en el APK, dentro de un servicio en primer plano con su
+  notificación —sin el token delante, que nunca se escribe en una bandeja—, y corte a los 5
+  minutos de silencio o al apagarse la pantalla). El ● se pulsa y la baldosa del panel rápido
+  también; el traje de asistente de Android (`Asistente`/`Sesiones`/`Reconocimiento`) está
+  declarado y enruta, pero activarlo como asistente del sistema es una prueba de la dueña en el
+  aparato.
+- **La cara del PC depende del WebView del sistema.** Si falta o es demasiado viejo y la
+  página no arranca, `MainActivity` vuelve a `Cara.java` y lo dice: no se queda en blanco. Es
+  el navegador que trae el aparato, no algo que CORT pueda empaquetar sin subir el peso a
+  otra escala (y sin AndroidX).
+- **Leer la pantalla de otras apps y los sensores que faltan son F19e.** «Leer con CORT» hoy
+  funciona por la intención `ACTION_PROCESS_TEXT` de Android —lee lo que la dueña selecciona,
+  y eso ya está publicado en U2—; lo que no existe todavía es el **servicio de accesibilidad**
+  que lee la pantalla entera sin selección (`Pantalla.java` + `res/xml/accesibilidad.xml`), y
+  los paneles que necesitan a la PC tampoco viajan por el enlace: falta `PuenteWs.java`, el
+  cliente WebSocket mínimo con su `mobile_auth`.
 - **La cámara del teléfono sólo lee el cuadro del enlace** (F14b): decodifica y tira, ningún
   fotograma se guarda en disco y el permiso sigue sin ser obligatorio. La mirada de gestos
   (S2) corre en el PC, con su cámara.
@@ -359,13 +446,21 @@ rápido, y **eso es una expectativa, no una medida**, y se dice como tal hasta e
 ## 7. Dónde está cada cosa
 
 ```
-apps/android/src/dev/sandra/cort/movil/   28 clases Java, 8 622 líneas. Las que importan:
-    Motor.java         Vosk: baja el modelo español si falta (Range + SHA-256), descomprime
-                       una vez, escucha, corta a los 20 s y mide cada dictado
+apps/android/src/dev/sandra/cort/movil/   29 clases Java y 10 860 líneas (medido el 2026-11-05
+                                          en esta rama; `cort-v0.16.2` tenía 28 y 8 622).
+                                          Las que importan:
+    Motor.java         Vosk: descomprime el modelo del APK una vez, o lo baja si falta
+                       (Range + SHA-256), escucha, corta a los 20 s y mide cada dictado
+    Nexo.java          F19c: el puente del `WebView`. Lee el `type` de cada cuadro de la cara
+                       del PC y lo contesta con datos del teléfono; lo que no hay sale con
+                       `puente_aviso` y su motivo (equivalente android de `FALTA_EN_EL_PUENTE`)
+    Bajada.java        la descarga con `Range`, `.part` y SHA-256 que comparten el oído y los
+                       GGUF; sin `DownloadManager`, porque el token no viaja en una notificación
     Voz.java           la boca (TextToSpeech, es-ES como la PC) y los dos oídos; encola los
                        trozos del lector, cambia de paso y calla cuando le dicen
-    MainActivity.java  permiso, cara y ajustes (donde se pega la IP, opcional)
-    Cara.java          el orbe, el registro y la línea «oído: …»
+    MainActivity.java  permiso, y decide la cara: `assets/web/` en un WebView o `Cara.java`
+                       de respaldo (donde se pega la IP, opcional)
+    Cara.java          el respaldo nativo: el orbe, el registro y la línea «oído: …»
     Cerebro/Acciones   33 reglas y 15 manos locales desde assets/habilidades.json
     Recuerdos.java     SQLite del teléfono (cort.db)
     Escaner.java       la cámara leyendo el QR del enlace: YUV -> luminancia -> zxing
@@ -386,6 +481,10 @@ apps/android/src/dev/sandra/cort/movil/   28 clases Java, 8 622 líneas. Las que
                        11 nativos)
     Asistente/Sesiones/Reconocimiento   el traje de asistente de Android
 apps/android/AndroidManifest.xml          permisos, icono, servicios, el lector, la baldosa y el receptor de arranque
+apps/android/web/cort-android.js          F19b: el `WebSocket` falso que habla con `Nexo.java`, la cola de 64,
+                                          el `serviceWorker` neutralizado y la bandera `CORT_esAndroid`
+cort-web/                                 F19a: la cara del PC tal cual — el build la copia a `assets/web/` del APK,
+                                          así que en el repo hay UNA sola copia y no se desdobla
 apps/android/res/drawable/ic_cort_aviso.xml  la silueta del orbe para la barra de estado y la baldosa
 apps/android/res/xml/asistente.xml        a dónde apunta el asistente del sistema
 apps/android/assets/habilidades.json      la tabla de frases del cerebro nativo

@@ -151,7 +151,8 @@ hacia adelante, sin mover la etiqueta.
 * **El mismo CORT en los dos aparatos** (F14c): preferencias, lista y notas viajan por el
   enlace, con las cuatro reglas ya escritas (la llave nunca dentro de un recuerdo).
 
-Release objetivo: `cort-v0.17.0`.
+Release objetivo: `cort-v0.17.1`. La `cort-v0.17.0` se la lleva el frente F19 de abajo
+(la cara del PC dentro del teléfono), que es lo que la dueña pidió con capturas delante.
 
 ## 4. Fase U4 — la PC, sin duplicar el trabajo
 
@@ -172,13 +173,60 @@ Release objetivo: `cort-v0.17.0`.
 
 Release objetivo: `cort-v0.18.0`.
 
+## 4bis. Frente F19 — la copia exacta de la cara del PC dentro del teléfono (abierto el 2026-11-05)
+
+Abierto con cuatro capturas del A16 y esta frase de la dueña: «necesito que sea la copia
+exacta de la versión de PC incluyendo sus funciones y lo que me está ofreciendo… debe ser la
+adaptación del CORT de PC pero en android y le agregarás todo lo aplicado de sensores y que
+pueda leer y hablar… y el cerebro GGUF agregaselo y además puedan instalarse los de la lista
+que sale en menú para descargar modelos también en el teléfono».
+
+Las decisiones, tomadas con cuestionario el mismo día:
+
+| de qué | qué se eligió | por qué |
+|---|---|---|
+| la cara | **la del PC exacta** | `Cara.java` no era un parecido razonable: se veían menos funciones y otro orden |
+| el puente | **WebSocket falso sobre el puente Java** | dentro del teléfono no hay nada escuchando en `:8765`; un servidor real dentro de la app sería otro APK y otro riesgo |
+| los paneles que no caben | aviso honesto por panel + viajan a la PC cuando esté enlazada + equivalente android donde existe + ocultar lo que no tiene sentido aquí | un panel con ceros es una mentira con número |
+| el peso | **modelo y dos ABIs dentro** («tiene que pesar más, no importa») | la escucha local no puede depender de una descarga que nadie pidió, y el GGUF tiene que servir también en un teléfono de 32 bits |
+
+Estado (release objetivo **`cort-v0.17.0`**):
+
+* **F19a — cerrada.** `compilar.sh` empaqueta `cort-web/` a `assets/web/` y **se cae** si falta
+  `index.html`; la auditoría lista la cara entrada por entrada sobre el APK final.
+* **F19b — cerrada.** `apps/android/web/cort-android.js`: `WebSocket` sustituto abierto en el
+  constructor, cola de 64, `serviceWorker` neutralizado, `CORT_esAndroid`, inyectado como
+  primer `<script>`.
+* **F19c — cerrada.** `Nexo.java` despacha el `type` de cada cuadro con datos del aparato;
+  `get_settings` no se responde desde Java, ningún `weather_panel` sale roto, lo no medido va
+  como `JSONObject.NULL`, y `panelDe` da el motivo de cada panel ausente. La cara del PC llama
+  al cerebro «cerebro local» en Android en los tres sitios donde lo nombra, y esconde el botón
+  de emparejar.
+* **F19d — pendiente (el frente de segundo plano que ella pidió preparar).** Servicio en
+  primer plano con `foregroundServiceType="microphone"`, gramática de Vosk
+  (`hola cort` / `oye cort` / `[unk]`) sobre el modelo que ya viaja dentro del APK, notificación
+  `VISIBILITY_PRIVATE` **sin el token**, corte a los 5 min de silencio o al apagarse la
+  pantalla, y la regla de siempre: sólo el hilo de `Motor` abre el micrófono.
+* **F19e — pendiente.** `Pantalla.java` (servicio de accesibilidad + `res/xml/accesibilidad.xml`)
+  para leer la pantalla entera, los sensores que faltan y `PuenteWs.java` (cliente RFC6455
+  mínimo con `mobile_auth`) para que los paneles que necesitan la PC viajen por el enlace.
+* **F19f — en curso con esta tanda:** suite ampliada (las comprobaciones de F19a/b/c, del
+  empaquetado del oído y de las dos ABIs), `docs/ANDROID.md`, `PLAN_MOVIL.md`,
+  `ACREDITACION.md` (three.js MIT, Leaflet BSD-2-Clause con su `LICENSE` espejado, el bundle de
+  la demo) y `NOTAS_RELEASE.md` con los huecos nuevos `{{CARA}}` y `{{ABIS}}`, rellenados desde
+  `auditoria.txt`. El número de comprobaciones, el peso y la suma los publica la propia release
+  desde el runner; aquí no se teclean.
+
 ## 5. Lo que queda fuera, dicho con su motivo
 
 * Playwright/Chromium para manejar el navegador: ~300 MB contra **260 MB de RAM
   disponible medidos** en esta laptop. Se hace con teclas y portapapeles.
 * OCR de PDFs escaneados: sin `tesseract` instalado; entra sólo si ella pide el paquete.
-* Palabra de activación en segundo plano en el móvil: gasta batería y detecta de más; se
-  mide en otra fase si la quiere.
+* Palabra de activación en segundo plano en el móvil: **ya no está fuera — es F19d**, con
+  su decisión tomada (Vosk con el modelo que ya viaja dentro del APK, corte a los 5 min de
+  silencio o al apagarse la pantalla). Lo que sigue sin escribirse es el costo de batería:
+  ésa es una de las medidas del ensayo físico en el A16, y si sale caro se apaga por dentro
+  con un interruptor en Ajustes en vez de prometer que no gasta nada.
 * Modelos de más de 1,5 B parámetros en el A16: no caben ni responden.
 
 ## 6. Cómo se entrega cada cosa

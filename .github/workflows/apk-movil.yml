@@ -13,12 +13,26 @@ name: apk-movil
 # `apps/android/ACREDITACION.md`, y `vendor/` está en `.gitignore` para que ningún
 # modelo de 39,8 MB entre al repositorio por descuido.
 #
-# Desde `cort-v0.16.2` el modelo de español **ya no baja en el build ni viaja en
+# Desde `cort-v0.16.2` el modelo de español **ya no bajaba en el build ni viaja en
 # el APK**: lo descarga el teléfono desde Almacén (`assets/oido.json` lleva su
 # URL, su peso y la misma suma de `deps.txt`), y el build tampoco lo pide
-# (`CORT_OIDO_DENTRO=1` es la única forma de meterlo). Motivo medido: con las dos
+# (`CORT_OIDO_DENTRO=1` era la única forma de meterlo). Motivo medido: con las dos
 # ABIs y las `.so` sin comprimir, el APK llegaba a 162 817 475 bytes y en esta
 # casa se cortaba al bajarlo.
+#
+# Desde `cort-v0.16.3` el modelo **vuelve a dentro** (`CORT_OIDO_DENTRO=0` lo
+# saca) y el APK además empaqueta la cara del PC (`cort-web/` → `assets/web/`),
+# que es lo que la dueña pidió: «que sea la copia exacta de la versión de PC
+# incluyendo sus funciones». Y pesó más, con su permiso expreso: preguntada por el
+# tamaño, contestó «tiene que pesar más, no importa» y pidió el modelo y las dos
+# ABIs dentro. El número que hace eso posible no es un capricho sino una medida:
+# en la corrida verde de `cort-v0.16.2` el `.so` del motor comprimido ocupa
+# 14 265 297 de sus 56 508 296 bytes, así que la segunda ABI (`armeabi-v7a`) suma
+# ~12 MB y no 46. Con el oído, las dos ABIs y la cara del PC dentro el APK queda
+# en el orden de 70-90 MB: más de lo que la casa baja sin cortarse a ~40 KB/s,
+# menos de la mitad que los 162 817 475 bytes de `cort-v0.16.1` que sí se cortaron.
+# El peso real, con suma, lo publica la propia release; y si alguna vez la
+# descarga se corta, `CORT_ABIS="arm64-v8a"` devuelve el paquete de una sola ABI.
 #
 # Las logs de Actions de un repo privado no se pueden leer desde fuera sin sesión,
 # así que si un paso falla su final se publica como **annotation del check-run**,
@@ -330,13 +344,31 @@ jobs:
             echo "::error::no hay assets/oido.json dentro del APK: el Almacén no tendría de dónde bajar el oído en español. No se publica."
             exit 1
           fi
+          # Tercera guarda (F19): la cara. Sin `assets/web/` el teléfono abre la
+          # `Cara.java` nativa —el canvas de siempre— y la queja de la dueña
+          # («esto no es la versión de PC») volvería a estar publicada en una
+          # release verde. `compilar.sh` ya se cae antes, pero el `else` de la
+          # auditoría es el que prueba que el `aapt2 link -A` no se comió la carpeta.
+          if grep -q "cara del PC: NO ESTÁ" auditoria.txt; then
+            echo "::error::el APK no lleva assets/web/: el teléfono mostraría la cara nativa en vez de la interfaz del portátil. No se publica."
+            exit 1
+          fi
+          # Y los archivos sueltos: un `index.html` sin `cort-ui.js` es una pantalla
+          # en blanco, que en la práctica es el mismo fallo con otro nombre.
+          if grep -A10 "^cara del PC:" auditoria.txt | grep -q "NO ESTÁ"; then
+            echo "::error::a la cara del PC le falta algún archivo dentro del APK (ver el bloque «cara del PC» de auditoria.txt). No se publica."
+            exit 1
+          fi
           PESO=$(stat -c%s CORT-movil.apk)
           # El motivo de este número es la tarde del 2026-11-05: el APK de
           # 162 817 475 bytes se cortó al bajarlo en la casa y el teléfono dijo
-          # «aplicación no instalada». Si alguien vuelve a inflarlo por encima de
-          # 70 MB, la descarga otra vez depende de que no se corte la luz.
-          if [ "$PESO" -gt 70000000 ]; then
-            echo "::warning::el APK pesa $PESO bytes: por encima de ~70 MB la descarga de la casa se corta y Samsung lo confunde con una app mal instalada."
+          # «aplicación no instalada». Desde `cort-v0.16.3` la dueña pidió el
+          # modelo y las dos ABIs dentro con su peso («no importa»), así que el
+          # listón ya no es 70 MB sino 120: por encima de ahí se vuelve a la zona
+          # donde aquella descarga se cortó, y la salida es desinstalar o compilar
+          # con `CORT_ABIS="arm64-v8a"`.
+          if [ "$PESO" -gt 120000000 ]; then
+            echo "::warning::el APK pesa $PESO bytes: por encima de ~120 MB la descarga de la casa se corta y Samsung lo confunde con una app mal instalada; para volver al paquete de una ABI, CORT_ABIS=\"arm64-v8a\"."
           fi
           MB=$(awk "BEGIN{printf \"%.2f\", $PESO/1048576}" | tr '.' ',')
           SHA=$(awk '{print $1}' CORT-movil.apk.sha256)
@@ -346,6 +378,15 @@ jobs:
           LLAVE=$(sed -n 's/^llave: //p' auditoria.txt)
           HUELLA=$(sed -n 's/.*certificate SHA-256 digest: //p' firma.txt)
           MODEL=$(sed -n 's/^modelo de español: \([0-9]*\) bytes.*/\1/p' auditoria.txt)
+          # F19: la prueba de que la cara del PC está dentro del APK no es un
+          # adjetivo, es la línea que sacó el propio `zipfile` sobre el archivo
+          # publicado. Se copia tal cual en las notas.
+          CARA=$(sed -n 's/^cara del PC: //p' auditoria.txt)
+          # Las ABIs que de verdad viajaron, leídas de las rutas `lib/<abi>/…` de
+          # la misma auditoría: si el artefacto del motor trajera sólo arm64, aquí
+          # se ve una y las notas no pueden prometer dos.
+          ABIS=$(sed -n 's|^lib/\([^/]*\)/.*|\1|p' auditoria.txt | sort -u | tr '\n' ' ')
+
           # El número lo dejó el paso de la suite en `$GITHUB_ENV`; el respaldo sólo
           # evita una línea vacía si alguien quita ese paso.
           COMPROBACIONES="${COMPROBACIONES:-la suite}"
@@ -362,7 +403,8 @@ jobs:
           export NOTAS_VERSION="$VERSION" NOTAS_CODE="$CODE" NOTAS_PESO="$PESO" \
                  NOTAS_MB="$MB" NOTAS_SHA="$SHA" NOTAS_OIDO="$OIDO" \
                  NOTAS_LLAVE="$LLAVE" NOTAS_HUELLA="$HUELLA" \
-                 NOTAS_MODEL="$MODEL" NOTAS_CHECS="$COMPROBACIONES"
+                 NOTAS_MODEL="$MODEL" NOTAS_CHECS="$COMPROBACIONES" \
+                 NOTAS_CARA="$CARA" NOTAS_ABIS="$ABIS"
           python3 ../notas_release.py > notas.md
           TITULO="$(python3 ../notas_release.py --titulo)"
           # Si la plantilla o el script fallan, `set -e` tira del paso antes de publicar:

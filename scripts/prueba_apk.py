@@ -211,18 +211,26 @@ def main():
            "(cd build && sha256sum CORT-movil.apk)" in script,
            "con `sha256sum build/CORT-movil.apk` el -c busca build/ y falla")
 
-    print("\n== el APK delgado por diseño (v0.16.2) ==")
-    # Nace de una tarde medida, no de una idea: el `cort-v0.16.1` pesaba
-    # 162 817 475 bytes, la dueña lo bajó en su casa (~40 KB/s), quedó cortado,
-    # y Samsung dijo «aplicación no instalada». Las tres palancas que sí bajan el
-    # número están aquí fijadas, cada una con su prueba.
-    prueba("una sola arquitectura por defecto (arm64-v8a, el A16), ampliable con CORT_ABIS",
-           re.search(r'ABIS="\$\{CORT_ABIS:-arm64-v8a\}"', script) is not None)
-    prueba("el modelo de español NO se copia a assets salvo pidiéndolo",
+    print("\n== el APK completo por decisión de la dueña (v0.16.3) ==")
+    # Nace de una tarde medida y de una frase suya. Medido: el `cort-v0.16.1` con
+    # las dos ABIs y las `.so` SIN comprimir pesaba 162 817 475 bytes, se cortó al
+    # bajarlo en casa (~40 KB/s) y Samsung dijo «aplicación no instalada». Por eso
+    # la `cort-v0.16.2` salió delgada: una ABI y el modelo de español fuera.
+    # Preguntada de nuevo el 2026-11-05, ella contestó «tiene que pesar más, no
+    # importa» y eligió el paquete con el modelo y las dos ABIs dentro, porque la
+    # escucha en segundo plano (F19d) no puede depender de que nadie pulse
+    # «Bajar el oído», y porque el cerebro GGUF tiene que servir también en un
+    # teléfono de 32 bits. Las `.so` comprimidas (`extractNativeLibs="true"` +
+    # `zip -9`, medido en la corrida 42115030288: 56 508 296 -> 14 265 297 bytes)
+    # son lo que deja que esa decisión quepa en un download razonable.
+    prueba("las dos ABIs dentro por defecto (arm64-v8a + armeabi-v7a), con CORT_ABIS para quitar una",
+           re.search(r'ABIS="\$\{CORT_ABIS:-arm64-v8a armeabi-v7a\}"', script) is not None)
+    prueba("el modelo de español SÍ se copia a `assets/motor/` por defecto (39 817 833 bytes dentro)",
            "CORT_OIDO_DENTRO" in script
-           and re.search(r"if \[ \"\$\{CORT_OIDO_DENTRO:-0\}\" = \"1\" \]", script) is not None)
-    prueba("y tampoco se baja en el build mientras no se pida (39 817 833 bytes de ida y vuelta)",
-           re.search(r'CORT_OIDO_DENTRO:-0\}" != "1" \] && \[ "\$NOMBRE" = '
+           and re.search(r'if \[ "\$\{CORT_OIDO_DENTRO:-1\}" = "1" \] && \[ -f vendor/vosk-model-small-es',
+                         script) is not None)
+    prueba("y por eso el build también lo baja: `CORT_OIDO_DENTRO=0` es la única forma de sacarlo",
+           re.search(r'CORT_OIDO_DENTRO:-1\}" != "1" \] && \[ "\$NOMBRE" = '
                      r'"vosk-model-small-es', script) is not None)
     prueba("ningún zip de modelo quedado en los assets del repo",
            not list((APP / "assets").rglob("*.zip")))
@@ -275,8 +283,9 @@ def main():
            'grep -q "assets/oido.json: NO ESTÁ" auditoria.txt' in flujo)
     prueba("el peso del modelo para las notas sale de la auditoría con `sed`, sin `| head`",
            "sed -n 's/^modelo de español: " in flujo)
-    prueba("y hay un aviso si alguien vuelve a inflar el APK por encima de 70 MB",
-           "-gt 70000000" in flujo)
+    prueba("y hay un aviso si alguien vuelve a inflar el APK por encima de 120 MB "
+           "(el listón viejo era 70, y la dueña pidió el modelo y las dos ABIs dentro)",
+           "-gt 120000000" in flujo)
 
     print("\n== el escáner del QR del enlace (F14b) ==")
     zxing = [l for l in lineas if l.startswith("zxing-core-")]
@@ -743,6 +752,78 @@ def main():
     prueba("sin GGUF dentro del APK: se bajan en el almacén",
            not list((APP / "assets").rglob("*.gguf")))
 
+    print("\n== la cara del PC dentro del teléfono (F19) ==")
+    # Nace de la queja del 2026-11-05 con cuatro capturas del A16: «así se ve CORT
+    # en android, necesito que sea la copia exacta de la versión de PC incluyendo
+    # sus funciones». No era gustos: el teléfono mostraba `Cara.java` (la interfaz
+    # nativa) mientras la PC muestra `cort-web/index.html`, y las dos caras tienen
+    # contratos distintos. Las comprobaciones de abajo fijan las tres piezas que
+    # cierran esa distancia y las trampas que ya costaron una corrida:
+    #   F19a `compilar.sh` empaqueta `cort-web/` -> `assets/web/`
+    #   F19b `web/cort-android.js` hace de WebSocket donde no hay servidor
+    #   F19c `Nexo.java` contesta el contrato de la PC cuadro por cuadro
+    cara_js = lee(APP / "web" / "cort-android.js")
+    nexo = lee(SRC / "Nexo.java")
+    ui = lee(RAIZ / "cort-web" / "cort" / "cort-ui.js")
+    bajada = lee(SRC / "Bajada.java")
+
+    prueba("compilar.sh empaqueta la cara del PC y NO sale si falta: sin ella el "
+           "teléfono muestra la cara nativa, que es la queja que abrió la fase",
+           re.search(r'WEB="\$\{CORT_WEB_DIR:-\.\./\.\./cort-web\}"', script) is not None
+           and "build/recursos/assets/web" in script
+           and "el APK saldría sin la cara del PC" in script)
+    prueba("y menos de 20 archivos es un paquete roto, no un paquete delgado",
+           re.search(r'CARA_ARCHIVOS" -lt 20', script) is not None)
+    prueba("el puente Java viaja como el PRIMER script de la cara: `cort-mock.js` "
+           "guarda `window.WebSocket` en su línea 25 y si llega después ya es tarde",
+           "cp web/cort-android.js build/recursos/assets/web/cort-android.js" in script
+           and "ETIQUETA_PUENTE" in nexo and "/cort-android.js" in nexo
+           and nexo.count("ETIQUETA_PUENTE") >= 3)
+    prueba("el shim abre `readyState` en el constructor: la interfaz compara "
+           "`ws.readyState === WebSocket.OPEN` y con 0 durante un tick tira el primer cuadro",
+           re.search(r"this\.readyState = ABIERTO;", cara_js) is not None
+           and "WebSocket.OPEN" in cara_js)
+    prueba("lo que llega antes de suscribirse no se pierde, pero la cola tope es 64",
+           "cola.length > 64" in cara_js and "__cortNative" in cara_js)
+    prueba("el service worker está neutralizado: `file://` no registra sw y un "
+           "fallo ahí tapaba la cara entera",
+           "serviceWorker" in cara_js)
+    prueba("y la cara sabe que está en Android: `CORT_esAndroid` es la bandera que "
+           "apaga los rótulos que mentirían (Ollama, emparejar por QR)",
+           "window.CORT_esAndroid = true" in cara_js and "CORT_esAndroid" in ui)
+    prueba("el origen embebido es `http://cort.local`, no https: el `Yl` de la "
+           "página apaga los subtítulos en vivo y la voz por nube con https, y en "
+           "el teléfono esas dos sí funcionan",
+           '"http://cort.local"' in nexo and '"https://cort.local"' not in nexo)
+    prueba("Nexo despacha el cuadro por su `type`, que es el contrato único de la "
+           "cara del PC (el umbral es 40: la lista real la imprime el detalle)",
+           nexo.count('.equals(t)') >= 40, f"{nexo.count('.equals(t)')} ramas en Nexo.java")
+    prueba("`get_settings` NO se responde desde Java: un `settings_data` vacío "
+           "borra los campos de Ajustes y deja `reminders` en cero (cort-mock.js:514)",
+           re.search(r'"get_settings"\.equals\(t\)[\s\S]{0,400}?return;', nexo) is not None
+           and 'envia(cuadro("type", "settings_data"' not in nexo)
+    prueba("un clima que falla se dice en texto y NO sale como `weather_panel`: "
+           "`Yg()` se lee `ville/temperature/…` sin mirar `ok` y reventaba el panel",
+           nexo.count('"type", "weather_panel"') == 2
+           and "No pude leer el clima real" in nexo
+           and re.search(r'"ville", ', nexo) is not None)
+    prueba("lo que no se puede medir viaja como `JSONObject.NULL`, no como `-1`: "
+           "la cara del PC muestra `?? \"--\"` y un -1 se leería «-1 %»",
+           "JSONObject.NULL" in nexo and re.search(r"porcentaje\", brillo < 0 \? JSONObject\.NULL", nexo) is not None)
+    prueba("la cara del PC no llama «Ollama» al cerebro del teléfono",
+           "comoSeLlamaElCerebro" in ui and ui.count("comoSeLlamaElCerebro()") >= 3)
+    prueba("y oculta el botón de emparejar en Android: sólo `cort_server.py` "
+           "responde `create_mobile_pairing` y el diálogo se quedaba en «Génération…»",
+           re.search(r"CORT_esAndroid[\s\S]{0,220}mobile-pairing-btn"
+                     r"|mobile-pairing-btn[\s\S]{0,220}CORT_esAndroid", ui) is not None)
+    prueba("los GGUF de la lista se bajan en el teléfono con `Range`, `.part` y "
+           "SHA-256 (la casa corta las descargas)",
+           'setRequestProperty("Range"' in bajada and ".part" in bajada
+           and "SHA-256" in bajada)
+    prueba("la descarga de GGUF no abre notificación: el token del enlace nunca "
+           "se escribe en una bandeja que se lee desde la pantalla bloqueada",
+           "Notification" not in bajada and "NotificationCompat" not in bajada)
+
     print("\n== el repo no se llena de modelos ==")
     import subprocess
     suivi = subprocess.run(["git", "-C", str(RAIZ), "ls-files", "apps/android"],
@@ -815,7 +896,7 @@ def main():
                                 "NOTAS_VERSION": "0", "NOTAS_CODE": "0", "NOTAS_PESO": "0",
                                 "NOTAS_MB": "0", "NOTAS_SHA": "0", "NOTAS_OIDO": "0",
                                 "NOTAS_LLAVE": "0", "NOTAS_HUELLA": "0", "NOTAS_MODEL": "0",
-                                "NOTAS_CHECS": "0"}),
+                                "NOTAS_CHECS": "0", "NOTAS_CARA": "0", "NOTAS_ABIS": "0"}),
                             capture_output=True, text=True)
     prueba("la plantilla se rellena entera y sin dejar huecos (probado aquí, a ciegas)",
            render.returncode == 0 and "{{" not in render.stdout,

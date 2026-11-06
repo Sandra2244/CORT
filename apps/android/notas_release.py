@@ -32,6 +32,10 @@ VAR = {
     "HUELLA": "NOTAS_HUELLA",
     "MODEL": "NOTAS_MODEL",
     "CHECS": "NOTAS_CHECS",
+    # F19: la cara del PC embebida y las ABIs que realmente viajaron, las dos
+    # leídas del `auditoria.txt` que sacó el propio `zipfile` sobre el APK.
+    "CARA": "NOTAS_CARA",
+    "ABIS": "NOTAS_ABIS",
 }
 
 
