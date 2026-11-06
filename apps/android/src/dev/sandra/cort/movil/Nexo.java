@@ -2142,11 +2142,10 @@ public class Nexo {
     }
 
     private static JSONArray puso(JSONArray lista, Object valor) {
-        try {
-            lista.put(valor == null ? JSONObject.NULL : valor);
-        } catch (JSONException imposible) {
-            // una lista propia nunca lanza: no se devuelve null por el camino
-        }
+        // `JSONArray.put(Object)` no declara `JSONException`: envolverlo en un
+        // `try/catch` es error de compilación («never thrown»), así que la lista
+        // se llena directo y nunca se devuelve `null` por el camino.
+        lista.put(valor == null ? JSONObject.NULL : valor);
         return lista;
     }
 
