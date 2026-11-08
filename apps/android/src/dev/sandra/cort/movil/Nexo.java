@@ -266,7 +266,7 @@ public class Nexo {
     private JSONObject iniciativa() {
         String nombre = recuerdos.valor("nombre");
         CerebroLocal.Ficha ficha = cerebroLocal.elegido();
-        long libre = cerebroLocal.memoriaLibre();
+        long libre = cerebroLocal.memoriaLibre() / 1024 / 1024;
         String nota = ficha != null
                 ? "cerebro local en el teléfono: " + ficha.nombre + " · RAM libre " + libre + " MB"
                 : "sin cerebro local cargado: pregunta y uso la tabla de CORT"
@@ -502,11 +502,24 @@ public class Nexo {
             return;
         }
         if ("toggle_always_listen".equals(t)) {
-            escuchaContinua = !escuchaContinua;
-            if (escuchaContinua) {
-                escuchar();
-            } else {
-                callar();
+            // «Escucha continua» en el teléfono es la palabra de activación (F19d),
+            // no un micrófono abierto transcribiendo la casa entera: eso gastaría
+            // batería y subiría audio que nadie pidió. El interruptor de la cara
+            // manda sobre el mismo servicio que el menú de Android.
+            boolean puesto = !ServicioEscucha.encendida(actividad);
+            try {
+                ServicioEscucha.cambia(actividad, puesto);
+                escuchaContinua = puesto;
+                envia(cuadro("type", "cort_accion", "origen", "real", "ok", true,
+                        "detalle", puesto ? "«hola cort» u «oye cort» escuchándose en segundo plano"
+                                : "palabra de activación apagada"));
+            } catch (RuntimeException noDeja) {
+                // Android 14 no deja levantar un servicio con micrófono si la app no
+                // está en primer plano. Se dice el motivo en vez de fingir que quedó puesto.
+                escuchaContinua = false;
+                envia(cuadro("type", "mic_error", "origen", "real",
+                        "motivo", "el teléfono no dejó abrir el micrófono en segundo plano: "
+                                + "abre CORT y enciéndelo desde su menú"));
             }
             envia(micEstado());
             return;
@@ -731,6 +744,12 @@ public class Nexo {
      * El lazo de la cara: frase → tabla de 33 reglas → acciones, y si la tabla no
      * la conoce, el GGUF del teléfono antes que la nube (U1). Corre en su hilo
      * porque abrir el modelo desde disco y `HttpURLConnection` bloquean.
+     *
+     * Desde F20d la vuelta lleva **carácter y conversación**: el `system` lo arma
+     * `Consticion` desde `assets/consticion.json`, los turnos anteriores se leen de
+     * SQLite (`Recuerdos.turnos`) y cada pieza que genera el nativo sale como un
+     * `live_subtitles` delta — el mismo cuadro que la cara del PC ya sabe pintar, así
+     * que no hubo que tocar una línea de JavaScript para ver la respuesta escribirse.
      */
     private void conversar(String dicho) {
         envia(cuadro("state", "thinking"));
@@ -741,6 +760,7 @@ public class Nexo {
         String origenCerebro;
         String modeloUsado;
         String crudo = dicho;
+        boolean yaSubtitulado = false;
         JSONObject argumentos = new JSONObject();
         List<Cerebro.Resultado> pasos = cerebro.cadena(dicho);
         if (!pasos.isEmpty()) {
@@ -771,15 +791,34 @@ public class Nexo {
             modeloUsado = "tabla de CORT";
             origenCerebro = "tabla";
             String memoria = recuerdos.lista(12);
-            String local = cerebroLocal.contestar(dicho, memoria);
+            String sistema = Consticion.sistema(actividad, memoria);
+            List<String[]> historial = recuerdos.turnos(Consticion.turnos(actividad));
+            final String id = "cort-" + System.currentTimeMillis();
+            final boolean[] abierto = {false};
+            String local = cerebroLocal.contestar(sistema, dicho, historial, pieza -> {
+                if (pieza == null || pieza.isEmpty()) {
+                    return;
+                }
+                if (!abierto[0]) {
+                    abierto[0] = true;
+                    envia(cuadro("state", "speaking"));
+                    envia(cuadro("type", "live_subtitles", "id", id, "phase", "start"));
+                }
+                envia(cuadro("type", "live_subtitles", "id", id, "phase", "delta",
+                        "text", pieza));
+            }, Consticion.maxTokens(actividad), Consticion.temperatura(actividad));
             if (local != null) {
                 texto = local;
                 CerebroLocal.Ficha ficha = cerebroLocal.elegido();
                 modeloUsado = ficha == null ? "cerebro local" : ficha.nombre;
                 origenCerebro = "gguf del teléfono";
                 crudo = texto;
+                if (abierto[0]) {
+                    envia(cuadro("type", "live_subtitles", "id", id, "phase", "end"));
+                    yaSubtitulado = true;
+                }
             } else if (nube.configurada()) {
-                String deNube = nube.preguntar(dicho, memoria);
+                String deNube = nube.preguntar(sistema, dicho, historial);
                 texto = deNube != null ? deNube : null;
                 if (texto != null) {
                     modeloUsado = nube.modelo();
@@ -805,7 +844,26 @@ public class Nexo {
                 "motivo", motivo, "plan", cuadro("intencion", intencion, "argumentos", argumentos),
                 "detalle", texto, "crudo", crudo, "frase", dicho));
         envia(cuadro("type", "brain_used", "modelo", modeloUsado, "origen", origenCerebro));
-        dice(texto);
+        // Los turnos se guardan **después** de tener respuesta: un «user» huérfano
+        // sería una pregunta que el modelo leería como si nadie la hubiera contestado.
+        recuerdos.apuntaTurno("user", dicho);
+        recuerdos.apuntaTurno("assistant", texto);
+        dice(texto, yaSubtitulado);
+    }
+
+    /**
+     * La frase que llega del despertador en segundo plano (F19d). `MainActivity` la
+     * recibe del `ServicioEscucha` y la entrega aquí: es el mismo camino que el ● de
+     * la cara, así que «hola CORT, pon una alarma» y pulsar el botón hacen lo mismo.
+     */
+    public void recibeFrase(final String dicho) {
+        if (dicho == null || dicho.trim().isEmpty()) {
+            return;
+        }
+        escuchando = false;
+        envia(cuadro("type", "mic_texto", "texto", dicho, "origen", "real"));
+        envia(micEstado());
+        new Thread(() -> conversar(dicho.trim()), "cort-lazo").start();
     }
 
     /** `Acciones.ejecutar` mueve `startActivity`: sólo vale en la interfaz. */
@@ -843,8 +901,19 @@ public class Nexo {
      * cuadros y el mismo orden que `decir()` en `cort_server.py`, medidos allí.
      */
     private void dice(String texto) {
+        dice(texto, false);
+    }
+
+    /**
+     * `yaSubtitulado` en true cuando la respuesta salió pieza a pieza mientras el
+     * GGUF la generaba: los `live_subtitles` ya viajaron y repetirlos escribiría la
+     * frase dos veces en la consola de la cara.
+     */
+    private void dice(String texto, boolean yaSubtitulado) {
         envia(cuadro("state", "speaking"));
-        subtitulos(texto);
+        if (!yaSubtitulado) {
+            subtitulos(texto);
+        }
         envia(cuadro("type", "jarvis_text", "text", texto, "origen", "real"));
         actividad.runOnUiThread(() -> {
             if (prefs.getBoolean(CLAVE_HABLA, true)) {
@@ -892,7 +961,7 @@ public class Nexo {
                     "mb", es ? gguf.length() / 1024 / 1024 : f.bytes / 1024 / 1024,
                     "tam", "≈ " + (f.bytes / 1024 / 1024) + " MB",
                     "nota", f.nota,
-                    "ram_uso", f.bytes / 1024 / 1024 * 2,
+                    "ram_uso", CerebroLocal.puertaMB(f.bytes),
                     "origen", "disco del teléfono"));
         }
         CerebroLocal.Ficha activo = cerebroLocal.elegido();
@@ -900,7 +969,7 @@ public class Nexo {
                 "online", false,
                 "found_local_models", nuevosClaves(instalados),
                 "selected_model", activo == null ? "" : activo.nombre,
-                "ram_disponible_mb", libre,
+                "ram_disponible_mb", libre / 1024 / 1024,
                 "ram_total_mb", ramTotalMb(),
                 "nucleos", Runtime.getRuntime().availableProcessors(),
                 "en_disco", enDisco(lista),
@@ -937,7 +1006,7 @@ public class Nexo {
             File gguf = CerebroLocal.archivoDe(actividad, f.archivo);
             if (gguf.isFile()) {
                 pone(j, f.nombre, cuadro("mb", gguf.length() / 1024 / 1024,
-                        "ram_est", gguf.length() / 1024 / 1024 * 2));
+                        "ram_est", CerebroLocal.puertaMB(gguf.length())));
             }
         }
         return j;
@@ -1045,9 +1114,20 @@ public class Nexo {
             try {
                 actividad.getSharedPreferences(CerebroLocal.PREFERENCIAS, Context.MODE_PRIVATE)
                         .edit().putString(CerebroLocal.CLAVE_ACTIVO, ficha.archivo).apply();
-                if (!cerebroLocal.asegurar()) {
+                // «probar» es una orden explícita: se carga aunque la RAM vaya
+                // justa (mmap) y la verdad la dicen el código y los tokens/s.
+                // Si ya está abierto este mismo archivo, no se paga dos veces.
+                int codigo = 0;
+                if (!(cerebroLocal.abierto() && cerebroLocal.modeloActivo() != null
+                        && cerebroLocal.modeloActivo().getName().equals(ficha.archivo))) {
+                    codigo = cerebroLocal.cargar(
+                            CerebroLocal.archivoDe(actividad, ficha.archivo),
+                            ficha.contexto, ficha.hilos);
+                }
+                if (codigo != 0) {
                     envia(pone(respuesta, "ok", false, "valido", false,
-                            "motivo", cerebroLocal.porqueNoLocal()));
+                            "motivo", "no abrió (código " + codigo + "): "
+                                    + cerebroLocal.estado()));
                     return;
                 }
                 long desde = System.currentTimeMillis();
@@ -1263,7 +1343,7 @@ public class Nexo {
 
     /** El escaneo S1 del aparato, en la forma exacta que pinta `nodoPerfil`. */
     private JSONObject perfilReply() {
-        long libre = cerebroLocal.memoriaLibre();
+        long libre = cerebroLocal.memoriaLibre() / 1024 / 1024;
         long total = ramTotalMb();
         List<CerebroLocal.Ficha> lista = CerebroLocal.catalogo(actividad);
         CerebroLocal.Ficha elegido = cerebroLocal.elegido();
@@ -1279,13 +1359,15 @@ public class Nexo {
         } else if (elegido != null) {
             nivel = 3;
             nombre = "cerebro local en el teléfono";
-            motivo = elegido.nombre + " cabe: la puerta pide " + (elegido.bytes / 1024 / 1024 * 2)
-                    + " MB libres y hay " + libre;
+            motivo = elegido.nombre + ": puerta holgada " + CerebroLocal.puertaMB(elegido.bytes)
+                    + " MB, hay " + libre + " MB"
+                    + (cerebroLocal.cabe(elegido.bytes)
+                            ? " · cabe holgado" : " · va justo, se intenta con mmap");
         } else {
             nivel = 2;
             nombre = "tabla de CORT, sin GGUF cargado";
             motivo = libre + " MB libres: ninguno de los " + lista.size()
-                    + " modelos de la lista pasa la puerta del doble de su peso";
+                    + " modelos de la lista pasa el suelo de RAM para intentarlo";
         }
         JSONObject cpu = cuadro("modelo", Build.MANUFACTURER + " " + Build.MODEL,
                 "nucleos", Runtime.getRuntime().availableProcessors(),
@@ -1451,12 +1533,16 @@ public class Nexo {
     }
 
     private JSONObject micEstado() {
+        boolean despierta = ServicioEscucha.encendida(actividad);
         return cuadro("type", "mic_estado", "origen", "real",
-                "estado", escuchando ? "escuchando" : "apagado",
+                "estado", escuchando ? "escuchando" : (despierta ? "vigilando" : "apagado"),
                 "ok", true,
+                "wake", despierta,
+                "despierto", ServicioEscucha.montada(),
                 "microfonos", new JSONArray(),
                 "nota", "el micrófono es el de Android, abierto por Java; la página no usa "
-                        + "getUserMedia en este origen");
+                        + "getUserMedia en este origen. «vigilando» es la palabra de activación "
+                        + "con gramática cerrada, no un dictado abierto");
     }
 
     /** Lo que la cara lee en su tarjeta de vida: lista, notas y pendientes. */
@@ -1598,7 +1684,7 @@ public class Nexo {
                 "herramientas", herramientas,
                 "fondo", "el fondo del teléfono lo pone Android",
                 "bateria", nivelDePila(),
-                "ram_libre_mb", cerebroLocal.memoriaLibre(),
+                "ram_libre_mb", cerebroLocal.memoriaLibre() / 1024 / 1024,
                 "nota", "Android 14 no deja listar las apps en primer plano ni sus ventanas: "
                         + "los ceros de arriba son «no legible», no «no hay nada». Lo que sí "
                         + "se mide aquí es volumen, brillo, pila y RAM.");

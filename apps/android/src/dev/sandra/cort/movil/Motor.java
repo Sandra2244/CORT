@@ -78,6 +78,48 @@ public final class Motor {
     /** El dictado se corta solo: sin esto el micrófono quedaría abierto si la cara se va. */
     static final int MAX_SEGUNDOS = 20;
 
+    /**
+     * F19d — las dos frases que despiertan a CORT. Dos, y no una, porque «oye CORT»
+     * es lo que sale dicho de manera natural y «hola CORT» es lo que la dueña pidió
+     * escrito; cada palabra extra multiplica los falsos positivos, y en un teléfono
+     * que pasa el día encendido eso es batería y avisos que no tocaban.
+     */
+    public static final String[] PALABRAS = {"hola cort", "oye cort"};
+
+    /**
+     * La gramática en el formato que pide `Recognizer(Model, float, String)`: un
+     * arreglo JSON de frases con el `"[unk]"` detrás. Ese `"[unk]"` no es relleno:
+     * sin él Vosk fuerza la frase conocida más parecida y CORT se despierta con
+     * «ola, qué tal». Con él, lo que no sea la palabra sale como `[unk]` y se tira.
+     */
+    static final String GRAMATICA = armaGramatica(PALABRAS);
+
+    /** El tope de lo que se dice *después* de la palabra: 12 s y vuelve a dormir. */
+    static final int MAX_FRASE_MS = 12_000;
+
+    private static String armaGramatica(String[] frases) {
+        StringBuilder j = new StringBuilder("[");
+        for (int i = 0; i < frases.length; i++) {
+            j.append(i == 0 ? "" : ", ").append('"').append(frases[i]).append('"');
+        }
+        return j.append(", \"[unk]\"]").toString();
+    }
+
+    /**
+     * Lo que avisa el despertador (F19d). Cuatro cosas distintas porque se muestran
+     * distinto: la palabra (el orbe se despierta), la frase dicha después (va al
+     * lazo), el nivel (la animación, solo mientras se captura) y el fallo.
+     */
+    public interface AlEscucha {
+        void palabra(String dicha);
+
+        void frase(String dicho);
+
+        void nivel(float alto);
+
+        void fallo(String motivo);
+    }
+
     private static final String ZIP_DENTRO = "motor/vosk-model-small-es-0.42.zip";
     private static final String CARPETA_MODEL = "vosk-model-small-es-0.42";
     private static final String ID_DEL_MODELO = "small-es-0.42";
@@ -109,6 +151,17 @@ public final class Motor {
     private volatile boolean intentoEmpezado;
 
     private volatile boolean escuchando;
+
+    /* ---- el despertador (F19d) ----
+     * `escuchandoPalabra` es la orden de vivir del hilo `cort-despierta`;
+     * `capturaPedida` le dice que deje de vigilar la palabra y oiga la frase ahora
+     * (es el ● pulsado con el servicio puesto, para que no haya dos micrófonos);
+     * `oyentePendiente`/`medidorPendiente` son la cara que lo pulsó, si lo hizo. */
+    private volatile boolean escuchandoPalabra;
+    private volatile boolean capturaPedida;
+    private volatile AlEscucha despertador;
+    private volatile Voz.AlOir oyentePendiente;
+    private volatile Voz.AlNivel medidorPendiente;
 
     /** Duración del último dictado, medida en el teléfono: es el dato que falta. */
     public volatile long ultimoDictadoMs;
@@ -580,9 +633,24 @@ public final class Motor {
         synchronized (this) {
             modeloUsado = modelo;
         }
-        if (modeloUsado == null || escuchando) {
+        if (modeloUsado == null) {
             avisa(oyente, null, listo() ? "ya estaba escuchando"
                     : "el oído local no está listo (" + estadoTexto() + ")");
+            return;
+        }
+        // El despertador (F19d) ya tiene el micrófono abierto en `cort-despierta`, y
+        // Android no da dos lecturas simultáneas del mismo `AudioRecord`: en vez de
+        // montar un segundo hilo se le pasa la orden a ese, que suelta la frase por
+        // el oyente que acaba de pedirlo. Dos micrófonos abiertos es la forma clásica
+        // de que el teléfono se quede mudo hasta el reinicio.
+        if (escuchandoPalabra) {
+            oyentePendiente = oyente;
+            medidorPendiente = medidor;
+            capturaPedida = true;
+            return;
+        }
+        if (escuchando) {
+            avisa(oyente, null, "ya estaba escuchando");
             return;
         }
         escuchando = true;
@@ -591,10 +659,275 @@ public final class Motor {
 
     public void para() {
         escuchando = false;
+        // Si el ● se había apoyado en el despertador, retirar la orden y su oyente:
+        // dejarlos puestos es que la frase llegue a una cara que ya cerró.
+        if (escuchandoPalabra) {
+            capturaPedida = false;
+            oyentePendiente = null;
+            medidorPendiente = null;
+        }
     }
 
     public boolean estaEscuchando() {
-        return escuchando;
+        return escuchando || capturaPedida;
+    }
+
+    /* ---------------------------------------------------------------- despertador */
+
+    /**
+     * Poner a CORT a vigilar la palabra de activación (F19d). Abre el micrófono en
+     * `cort-despierta` con la gramática cerrada de `GRAMATICA` y no suelta el hilo
+     * hasta `dejaLaPalabra()`.
+     *
+     * Dos guardas escritas, porque las dos se rompen solas:
+     *
+     * * Sin el modelo español montado no hay gramática que evaluar —el APK delgado
+     *   o el teléfono donde la descarga se cortó— y eso se dice, no se calla.
+     * * Si el dictado del ● tiene el micrófono abierto, se espera a que lo suelte
+     *   antes de abrir el propio: un `AudioRecord` que no se inicializa no es un
+     *   fallo de CORT, es Android diciendo «ya lo tiene otra app».
+     */
+    public void escuchaDePalabra(AlEscucha oyente) {
+        final Model modeloUsado;
+        synchronized (this) {
+            modeloUsado = modelo;
+        }
+        if (modeloUsado == null) {
+            if (oyente != null) {
+                oyente.fallo("el oído local no está montado (" + estadoTexto() + ")");
+            }
+            return;
+        }
+        if (escuchandoPalabra) {
+            despertador = oyente;          // cambiar la cara que escucha, sin otro hilo
+            return;
+        }
+        despertador = oyente;
+        escuchandoPalabra = true;
+        new Thread(() -> vigilaPalabra(modeloUsado, oyente), "cort-despierta").start();
+    }
+
+    /** Quitar la vigilancia. El hilo se sale por su cuenta en cuanto lee el flag. */
+    public void dejaLaPalabra() {
+        escuchandoPalabra = false;
+        capturaPedida = false;
+        despertador = null;
+    }
+
+    public boolean estaEnDespertar() {
+        return escuchandoPalabra;
+    }
+
+    /** El ● pulsado con el servicio puesto: oír la frase ya, sin esperar la palabra. */
+    public void pideFrase() {
+        capturaPedida = true;
+    }
+
+    /**
+     * El ciclo del despertador. Dos estados y dos reconocedores sobre el mismo
+     * `Model` (Vosk permite compartir el modelo; el que guarda el estado de la frase
+     * es el reconocedor): **vigilia**, con la gramática cerrada —es lo que corre casi
+     * siempre y lo que cuesta batería—, y **captura**, con el modelo abierto, sólo
+     * durante los segundos que duran el mandato dicho después de la palabra.
+     *
+     * `acceptWaveForm` devuelve `true` en el corte de silencio, así que la entrega no
+     * lleva temporizador propio: lo que se dijo, se entrega. El único reloj es el
+     * techo de `MAX_FRASE_MS`, para que un ruido continuo no deje el micrófono
+     * abierto indefinidamente.
+     */
+    private void vigilaPalabra(Model modeloUsado, AlEscucha oyente) {
+        AudioRecord micro = null;
+        Recognizer vigilia = null;
+        Recognizer captura = null;
+        try {
+            int min = AudioRecord.getMinBufferSize(MUESTREO,
+                    AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+            if (min <= 0) {
+                if (oyente != null) {
+                    oyente.fallo("el micrófono de este teléfono no da 16 kHz mono");
+                }
+                return;
+            }
+            vigilia = new Recognizer(modeloUsado, MUESTREO, GRAMATICA);
+            byte[] b = new byte[min];
+            boolean capturando = false;
+            long finCaptura = 0L;
+            long inicioCaptura = 0L;
+            while (escuchandoPalabra) {
+                if (escuchando) {
+                    duerme(120);                       // el ● tiene el micrófono: se espera
+                    continue;
+                }
+                if (micro == null) {
+                    micro = new AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                            MUESTREO, AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT, min * 4);
+                    if (micro.getState() != AudioRecord.STATE_INITIALIZED) {
+                        sueltaMicro(micro);
+                        micro = null;
+                        duerme(800);                   // otra app lo tenía: se reintenta
+                        continue;
+                    }
+                    micro.startRecording();
+                }
+                int leido = micro.read(b, 0, b.length);
+                if (leido <= 0) {
+                    continue;
+                }
+                if (!capturando) {
+                    if (capturaPedida) {
+                        capturaPedida = false;
+                        capturando = true;
+                        inicioCaptura = System.currentTimeMillis();
+                        finCaptura = inicioCaptura + MAX_FRASE_MS;
+                        captura = new Recognizer(modeloUsado, MUESTREO);
+                        continue;
+                    }
+                    // Vigilia: la gramática cerrada y nada de nivel. El orbe no se
+                    // paga despierto con el silencio de la casa.
+                    if (vigilia.acceptWaveForm(b, leido)) {
+                        String dicho = textoDe(vigilia.getResult());
+                        if (contienePalabra(dicho)) {
+                            avisaPalabra(oyente, dicho);
+                            capturando = true;
+                            inicioCaptura = System.currentTimeMillis();
+                            finCaptura = inicioCaptura + MAX_FRASE_MS;
+                            captura = new Recognizer(modeloUsado, MUESTREO);
+                        }
+                    }
+                    continue;
+                }
+                // Captura: ya sonó la palabra —o la dueña pulsó el ● con el servicio
+                // puesto— y lo que se oiga es el mandato.
+                final Voz.AlNivel medidor = medidorPendiente;
+                if (medidor != null) {
+                    final float alto = nivelDe(b, leido);
+                    principal.post(() -> medidor.nivel(alto));
+                }
+                String dicho = "";
+                if (captura.acceptWaveForm(b, leido)) {
+                    dicho = textoDe(captura.getResult()).trim();
+                }
+                boolean seAcabo = System.currentTimeMillis() >= finCaptura;
+                if (dicho.isEmpty() && !seAcabo) {
+                    continue;
+                }
+                ultimoDictadoMs = System.currentTimeMillis() - inicioCaptura;
+                libera(captura);
+                captura = null;
+                capturando = false;
+                libera(vigilia);
+                vigilia = new Recognizer(modeloUsado, MUESTREO, GRAMATICA);
+                if (!dicho.isEmpty()) {
+                    entrega(oyente, dicho);
+                } else {
+                    sinFrase(oyente);
+                }
+            }
+        } catch (Throwable caida) {
+            // `Throwable`, la misma razón de `abrir()`: si la `.so` de Vosk no viajó,
+            // JNA suelta `UnsatisfiedLinkError` y es un `Error`. Que lo aguante el
+            // despertador, no el teléfono entero.
+            if (oyente != null) {
+                oyente.fallo(detalle(caida));
+            }
+        } finally {
+            sueltaMicro(micro);
+            libera(captura);
+            libera(vigilia);
+            escuchandoPalabra = false;
+            capturaPedida = false;
+            oyentePendiente = null;
+            medidorPendiente = null;
+        }
+    }
+
+    /** Si entre las palabras del modelo cerrado salió alguna de activación. */
+    static boolean contienePalabra(String dicho) {
+        String limpio = Cerebro.normaliza(dicho == null ? "" : dicho.replace("[unk]", " "));
+        if (limpio.isEmpty()) {
+            return false;
+        }
+        for (String p : PALABRAS) {
+            if (limpio.contains(p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void avisaPalabra(AlEscucha oyente, String dicho) {
+        if (oyente != null) {
+            principal.post(() -> oyente.palabra(dicho));
+        }
+    }
+
+    /** Entregando la frase: a la cara que pulsó el ● si lo hizo, si no al servicio. */
+    private void entrega(AlEscucha oyente, String frase) {
+        final Voz.AlOir pendiente = oyentePendiente;
+        oyentePendiente = null;
+        medidorPendiente = null;
+        if (pendiente != null) {
+            avisa(pendiente, frase, null);
+            return;
+        }
+        if (oyente != null) {
+            principal.post(() -> oyente.frase(frase));
+        }
+    }
+
+    /** Doce segundos de ruido y ni una palabra: se avisa a la cara y se vuelve a la vigilia. */
+    private void sinFrase(AlEscucha oyente) {
+        final Voz.AlOir pendiente = oyentePendiente;
+        oyentePendiente = null;
+        medidorPendiente = null;
+        if (pendiente != null) {
+            avisa(pendiente, null, "no te oí después de la palabra");
+            return;
+        }
+        if (oyente != null) {
+            principal.post(() -> oyente.fallo("desperté, pero no oí el mandato"));
+        }
+    }
+
+    /**
+     * Cerrar un `Recognizer`. Va aparte porque el cierre puede fallar y un cierre que
+     * falla en medio del ciclo no puede tumbar la escucha: lo que se pierde es un
+     * decodificador, no el oído.
+     */
+    private static void libera(Recognizer r) {
+        if (r == null) {
+            return;
+        }
+        try {
+            r.close();
+        } catch (Exception yaCerrado) {
+            // nada que hacer: el puntero nativo ya se fue
+        }
+    }
+
+    /** Soltar el `AudioRecord` sea cual sea el estado en que lo encuentra. */
+    private static void sueltaMicro(AudioRecord micro) {
+        if (micro == null) {
+            return;
+        }
+        try {
+            if (micro.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
+                micro.stop();
+            }
+        } catch (Exception yaParado) {
+            // no grababa: queda liberarlo igual
+        }
+        micro.release();
+    }
+
+    /** Esperar sin tumbar el hilo; el `interrupt` se re-lanza porque el sistema lo pide. */
+    private static void duerme(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException nadieDuerme) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void grabaYTranscribe(Model modeloUsado, Voz.AlOir oyente, Voz.AlNivel medidor) {
@@ -737,6 +1070,8 @@ public final class Motor {
      */
     public synchronized void cerrar() {
         escuchando = false;
+        escuchandoPalabra = false;
+        capturaPedida = false;
         if (modelo != null) {
             try {
                 modelo.close();

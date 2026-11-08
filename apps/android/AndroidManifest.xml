@@ -69,6 +69,26 @@
                      android:required="false" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
                      android:required="false" />
+    <!--
+      F19d y F20e: los tres que necesitan los servicios en primer plano.
+
+      `FOREGROUND_SERVICE` (API 28) es la entrada genérica; `FOREGROUND_SERVICE_MICROPHONE`
+      (API 34) es la que autoriza a tener el micrófono abierto con la app detrás, y sin ella
+      Android 14 corta `startForeground(..., MICROPHONE)` con una excepción.
+      `FOREGROUND_SERVICE_DATA_SYNC` es la de la descarga del cerebro, que no toca el micro.
+
+      `ACCESS_NETWORK_STATE` no estaba: es lo único que permite saber si la red de la casa
+      es sin límite antes de soltar 491 MB por Wi-Fi. No pide permiso a la dueña porque es
+      un permiso normal, concedido solo, y porque preguntar por la red no lee nada de ella.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+                     android:required="false" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"
+                     android:required="false" />
 
     <!-- La baldosa del panel rápido no necesita permiso; necesita un servicio con
          `BIND_QUICK_SETTINGS_TILE`, que está más abajo. -->
@@ -248,6 +268,56 @@
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />
             </intent-filter>
+        </service>
+
+        <!--
+          F19d: la palabra de activación en segundo plano. Sale en primer plano porque es
+          lo único que Android deja vivir con la app cerrada, y el tipo `microphone` es
+          obligatorio desde Android 14: sin él el sistema corta el micrófono a los segundos.
+          `exported="false"`: sólo CORT la enciende, nadie desde fuera —un servicio que oye
+          y no se ve es exactamente lo que un vecino querría provocar.
+          No arranca con `BOOT_COMPLETED`: un receptor de arranque está en segundo plano y
+          Android rechaza ahí un servicio con micrófono. Se enciende al abrir la app, desde
+          la baldosa o desde el menú, y la preferencia recuerda que la dueña la dejó puesta.
+        -->
+        <service
+            android:name=".ServicioEscucha"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <!--
+          F20e: la descarga del cerebro integrado cuando la red no es medida. Es el mismo
+          hilo con `Range`, `.part` y SHA-256 que ya usa el Almacén, y va en servicio porque
+          491 MB a 40 KB/s tardan más de lo que vive una actividad. `dataSync` es el tipo que
+          Android reserva para esto; `exported="false"` por la misma razón de arriba.
+        -->
+        <service
+            android:name=".ServicioBajada"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!--
+          F19e, F20b y F20c: leer la pantalla entera y escribir en el campo enfocado.
+          `BIND_ACCESSIBILITY_SERVICE` es obligatorio: sin él el sistema no enlaza el
+          servicio y CORT no aparece en la lista de accesibilidad. `exported="true"`
+          porque quien lo enlaza es el sistema, no otra app — el permiso de arriba es
+          el que impide que un vecino lo use.
+          No hay forma de autoconcederlo: lo enciende la dueña en Ajustes →
+          Accesibilidad, y `Pantalla.abreAjustes` la lleva a esa pantalla. El alcance
+          real (qué eventos, que no filtra teclas, que no hace gestos) está escrito en
+          `res/xml/accesibilidad.xml` y en el texto que ella lee antes de encenderlo.
+        -->
+        <service
+            android:name=".Pantalla"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accesibilidad" />
         </service>
     </application>
 </manifest>

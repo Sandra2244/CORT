@@ -2368,7 +2368,8 @@
     const nota = document.createElement("div");
     nota.style.cssText = "opacity:.72;margin:2px 0 8px";
     nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +
-      "sobre ese peso. «probar» no carga nada si la cuenta no cabe.";
+      "sobre ese peso. En el teléfono «probar» lo intenta aunque vaya justo (mmap); " +
+      "en la PC el puente decide con su propia cuenta.";
     panel.appendChild(nota);
     if (ultimaVersion) panel.appendChild(nodoVersion());
     const cat = s.catalogo || {};
@@ -2381,7 +2382,7 @@
         datos.innerHTML = `<b>${nombre}</b> · ` +
           (info.instalado ? `en disco ${info.mb} MB` : (info.tam || "no bajado")) +
           ` · pide ~${info.ram_uso || "?"} MB` +
-          `<span style="opacity:.6"> ${info.instalado ? (cabe ? "· cabe ahora" : "· no cabe ahora") : ""}</span>`;
+          `<span style="opacity:.6"> ${info.instalado ? (cabe ? "· cabe ahora" : "· justo de RAM") : ""}</span>`;
         fila.appendChild(datos);
         const linea = document.createElement("div");
         linea.style.cssText = "display:flex;gap:6px;margin-top:4px";

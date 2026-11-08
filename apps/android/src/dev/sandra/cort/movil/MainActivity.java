@@ -79,6 +79,13 @@ public class MainActivity extends Activity {
      */
     public static final String PIDE_ESCUCHAR = "cort-escuchar";
 
+    /**
+     * Lo que trae `ServicioEscucha` cuando la frase se oyó con la app cerrada: la
+     * palabra ya hizo su trabajo, así que la cara no vuelve a ponerse a escuchar —
+     * contesta lo que ya tiene oído.
+     */
+    public static final String PIDE_FRASE = "cort-frase";
+
     private WebView web;
     private Nexo nexo;          // la cara del PC, servida desde el propio APK
     private Cara cara;          // la superficie nativa, cuando no hay portátil
@@ -103,9 +110,36 @@ public class MainActivity extends Activity {
         capa.setBackgroundColor(Paleta.FONDO);
         setContentView(capa);
         pideNotificaciones();
+        // F19d: esta actividad es la cara viva a la que el servicio entrega la frase,
+        // y la que re-enciende el despertador si la dueña lo dejó puesto la vez pasada.
+        ServicioEscucha.registra(entregaFrase);
+        ServicioEscucha.arrancaSiTocaba(this);
         mostrarOSetup();
         escuchaSiPidenDesdeFuera();
+        // F20e: la bajada sola se comprueba al abrir CORT, que es el único momento en
+        // que Android deja levantar un servicio en primer plano. En su hilo porque
+        // lee el catálogo del disco y mide el volumen con `StatFs`; la restricción de
+        // Android 14 es sobre el estado de la app, no sobre el hilo que llama.
+        new Thread(() -> AutoCerebro.revisa(getApplicationContext()), "cort-auto-cerebro").start();
     }
+
+    /**
+     * El brazo que `ServicioEscucha` mueve cuando oyó «hola CORT» y la frase detrás.
+     * Con la cara del PC puesta, el lazo va a `Nexo` (y de ahí al puente de siempre);
+     * con la nativa, a `Cara`, que es la que pinta la línea en su registro.
+     */
+    private final ServicioEscucha.AlFrase entregaFrase = new ServicioEscucha.AlFrase() {
+        @Override
+        public void frase(final String dicho) {
+            runOnUiThread(() -> {
+                if (nexo != null) {
+                    nexo.recibeFrase(dicho);
+                } else if (cara != null) {
+                    cara.procesar(dicho);
+                }
+            });
+        }
+    };
 
     /**
      * El saludo al encender (`Arranque.java`) sale también por notificación, porque con
@@ -145,7 +179,18 @@ public class MainActivity extends Activity {
      */
     private void escuchaSiPidenDesdeFuera() {
         final Intent pedido = getIntent();
-        if (pedido == null || !pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
+        if (pedido == null) {
+            return;
+        }
+        final String dicho = pedido.getStringExtra(PIDE_FRASE);
+        if (dicho != null && !dicho.trim().isEmpty()) {
+            // El despertador ya oyó la frase: se suelta del `Intent` para que no la
+            // vuelva a procesar un `onNewIntent` posterior (One UI reutiliza la tarea).
+            pedido.removeExtra(PIDE_FRASE);
+            capa.post(() -> entregaFrase.frase(dicho.trim()));
+            return;
+        }
+        if (!pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
             return;
         }
         capa.post(() -> {
@@ -741,6 +786,7 @@ public class MainActivity extends Activity {
 
     private void menu() {
         final String guardada = prefs().getString("url", "");
+        final boolean despierta = prefs().getBoolean(ServicioEscucha.CLAVE, false);
         new AlertDialog.Builder(this)
                 .setTitle("Dónde está CORT")
                 .setMessage(guardada.isEmpty()
@@ -749,9 +795,18 @@ public class MainActivity extends Activity {
                         : "Conectado a " + recortar(guardada))
                 // El parlamento se alcanza desde cualquier superficie (nativa, embebida o
                 // WebView) con el mismo pulso largo de siempre: la lista va arriba y los
-                // tres botones de antes no cambian de sitio.
-                .setItems(new String[]{"Hablar con la PC (voz)"},
-                        (d, w) -> startActivity(new Intent(this, Parlamento.class)))
+                // tres botones de antes no cambian de sitio. El segundo es F19d, y dice
+                // el estado real (la preferencia), no «siempre» ni «nunca».
+                .setItems(new String[]{"Hablar con la PC (voz)",
+                                despierta ? "Apagar «hola CORT» en segundo plano"
+                                          : "Encender «hola CORT» en segundo plano"},
+                        (d, w) -> {
+                            if (w == 0) {
+                                startActivity(new Intent(this, Parlamento.class));
+                            } else {
+                                cambiaDespertador(w == 1 && !despierta);
+                            }
+                        })
                 .setPositiveButton("Buscar el portátil", (d, w) -> {
                     prefs().edit().putString("url", "").apply();
                     montarCara();
@@ -762,8 +817,30 @@ public class MainActivity extends Activity {
                 .show();
     }
 
+    /**
+     * Encender o apagar el despertador (F19d). La preferencia se escribe **antes** de
+     * llamar al servicio: es lo que `arrancaSiTocaba` lee la próxima vez que se abra la
+     * app, y si se escribiera después, un fallo del servicio dejaría encendida una
+     * escucha que no está.
+     */
+    private void cambiaDespertador(boolean on) {
+        prefs().edit().putBoolean(ServicioEscucha.CLAVE, on).apply();
+        try {
+            ServicioEscucha.cambia(this, on);
+        } catch (RuntimeException noDeja) {
+            prefs().edit().putBoolean(ServicioEscucha.CLAVE, false).apply();
+            avisar("El teléfono no deja abrir el micrófono desde atrás: di la palabra "
+                    + "con CORT abierto. (" + noDeja.getClass().getSimpleName() + ")");
+            return;
+        }
+        avisar(on ? "Si dices «hola CORT» u «oye CORT», contesto. Se cierra sola a los "
+                + "5 minutos de silencio o al apagar la pantalla."
+                : "Ya no escucho la palabra de activación: el micrófono se cerró.");
+    }
+
     @Override
     protected void onDestroy() {
+        ServicioEscucha.desregistra(entregaFrase);
         if (cara != null) {
             cara.cerrar();
         }

@@ -28,7 +28,14 @@ import java.util.TimeZone;
  */
 public class Recuerdos extends SQLiteOpenHelper implements Puente.Cabeza {
     private static final String NOMBRE = "cort.db";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
+
+    /**
+     * Cuántos turnos se guardan. La conversación continua (F20d) no puede crecer sin
+     * techo: cada turno es una fila y el modelo sólo lee los últimos `Consticion.turnos`.
+     * Doscientos son unas cuantas semanas de uso y caben de sobra en el carbajo.
+     */
+    private static final int MAX_TURNOS = 200;
 
     public Recuerdos(Context contexto) {
         super(contexto.getApplicationContext(), NOMBRE, null, VERSION);
@@ -36,23 +43,81 @@ public class Recuerdos extends SQLiteOpenHelper implements Puente.Cabeza {
 
     @Override
     public void onCreate(SQLiteDatabase db) {
-        db.execSQL("CREATE TABLE hechos ("
+        db.execSQL("CREATE TABLE IF NOT EXISTS hechos ("
                 + "clave TEXT PRIMARY KEY,"
                 + "valor TEXT NOT NULL,"
                 + "cuando INTEGER NOT NULL)");
-        db.execSQL("CREATE TABLE habilidades ("
+        db.execSQL("CREATE TABLE IF NOT EXISTS habilidades ("
                 + "patron TEXT PRIMARY KEY,"
                 + "accion TEXT NOT NULL,"
                 + "param TEXT,"
                 + "respuesta TEXT,"
                 + "veces INTEGER NOT NULL DEFAULT 1)");
+        db.execSQL("CREATE TABLE IF NOT EXISTS turnos ("
+                + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                + "rol TEXT NOT NULL,"
+                + "texto TEXT NOT NULL,"
+                + "cuando INTEGER NOT NULL)");
     }
 
     @Override
     public void onUpgrade(SQLiteDatabase db, int desde, int hasta) {
-        // Una sola versión por ahora. Si algún día la hay, aquí se migra y no se
-        // borra: esta tabla es la memoria de la dueña, no una caché.
+        // `IF NOT EXISTS` en las tres: la versión 1 ya tenía `hechos` y `habilidades`
+        // con la memoria de la dueña dentro, y un `CREATE TABLE` a secas reventaba
+        // con «table hechos already exists» en cuanto se subía el número. Aquí se
+        // añade lo que falta y no se borra nada: esta base es su memoria, no una caché.
         onCreate(db);
+    }
+
+    /* ---------------------------------------------------------- la conversación */
+
+    /**
+     * Un turno dicho, de ella (`user`) o de CORT (`assistant`). Se guarda **después**
+     * de contestar, no antes: si la vuelta falla no queda un «user» huérfano que el
+     * modelo leería como una pregunta sin responder.
+     */
+    public void apuntaTurno(String rol, String texto) {
+        if (texto == null || texto.trim().isEmpty()) {
+            return;
+        }
+        ContentValues fila = new ContentValues();
+        fila.put("rol", "assistant".equals(rol) ? "assistant" : "user");
+        fila.put("texto", texto.trim());
+        fila.put("cuando", System.currentTimeMillis());
+        getWritableDatabase().insert("turnos", null, fila);
+        // La poda va en la misma escritura: sin ella, un año de uso deja miles de
+        // filas que nadie lee y que hacen lento cada `SELECT`.
+        getWritableDatabase().execSQL("DELETE FROM turnos WHERE id NOT IN "
+                + "(SELECT id FROM turnos ORDER BY id DESC LIMIT " + MAX_TURNOS + ")");
+    }
+
+    /** Los últimos turnos, de viejos a nuevos: la forma que espera `CerebroLocal.preguntar`. */
+    public List<String[]> turnos(int maximo) {
+        List<String[]> salida = new ArrayList<>();
+        Cursor c = getReadableDatabase().query("turnos", new String[] {"rol", "texto"},
+                null, null, null, null, "id DESC", String.valueOf(Math.max(1, maximo)));
+        try {
+            while (c.moveToNext()) {
+                salida.add(0, new String[] {c.getString(0), c.getString(1)});
+            }
+        } finally {
+            c.close();
+        }
+        return salida;
+    }
+
+    public int cuentasDeTurnos() {
+        Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM turnos", null);
+        try {
+            return c.moveToFirst() ? c.getInt(0) : 0;
+        } finally {
+            c.close();
+        }
+    }
+
+    /** «olvida la conversación»: borra los turnos y deja los hechos y las habilidades. */
+    public void olvidaTurnos() {
+        getWritableDatabase().delete("turnos", null, null);
     }
 
     /* ---------------------------------------------------------------- hechos */

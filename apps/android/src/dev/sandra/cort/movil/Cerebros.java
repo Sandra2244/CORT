@@ -44,9 +44,10 @@ import java.util.Locale;
  * * **La suma se calcula al final, sobre el archivo entero.** Un GGUF truncado no
  *   falla al abrir: abre y contesta basura. Verificar y tirar es la única forma de
  *   que un corte de Wi-Fi no deje un cerebro mentiroso en el teléfono.
- * * **La puerta de RAM** — el doble del archivo, la medida que pinta `Equipo.java` —
- *   se escribe junto a cada modelo con los megas libres de ESTE teléfono encendido
- *   ahora, no con los que se anuncien desde un PC.
+ * * **La puerta de RAM** — la holgada pide el archivo entero más la reserva de
+ *   contexto; como el motor mapea con mmap, por debajo se puede intentar. Se escribe
+ *   junto a cada modelo con los megas libres de ESTE teléfono encendido ahora, no
+ *   con los que se anuncien desde un PC.
  */
 public class Cerebros extends Activity {
 
@@ -66,18 +67,25 @@ public class Cerebros extends Activity {
     private volatile boolean cerrando;
 
     private CerebroLocal cerebro;
+    private Recuerdos recuerdos;
     private TextView resumen;
     private TextView estadoOido;
     private Button bajarOido;
     private LinearLayout filaModos;
     private EditText pregunta;
     private TextView respuesta;
+    private TextView estadoDespertador;
+    private TextView estadoAuto;
+    private TextView estadoCaracter;
+    private Button botonDespertador;
+    private Button botonAuto;
 
     @Override
     protected void onCreate(Bundle guardado) {
         super.onCreate(guardado);
         getWindow().getDecorView().setBackgroundColor(Paleta.FONDO);
         cerebro = new CerebroLocal(this);
+        recuerdos = new Recuerdos(this);
 
         ScrollView desplazable = new ScrollView(this);
         LinearLayout pantalla = new LinearLayout(this);
@@ -153,6 +161,76 @@ public class Cerebros extends Activity {
                 + "internet. Son " + Motor.mb(oido.pesoDelModelo()) + " MB una sola vez: "
                 + "se reanuda si se corta la Wi-Fi y la suma se comprueba entera antes "
                 + "de fiarse.", 12f, Paleta.SUAVE), conMargen());
+
+        pantalla.addView(texto("PALABRA DE ACTIVACIÓN", 12f, Paleta.AVISO), conMargen());
+        estadoDespertador = texto("", 13f, Paleta.SUAVE);
+        estadoDespertador.setLineSpacing(0f, 1.3f);
+        pantalla.addView(estadoDespertador, conMargen());
+        LinearLayout filaDespertador = new LinearLayout(this);
+        filaDespertador.setOrientation(LinearLayout.HORIZONTAL);
+        botonDespertador = boton("Encender «hola CORT»");
+        botonDespertador.setOnClickListener(v -> cambiaDespertador());
+        filaDespertador.addView(botonDespertador, enFila(52));
+        pantalla.addView(filaDespertador, conMargen());
+        pantalla.addView(texto("Con Vosk y gramática cerrada: sólo «hola cort» u «oye cort», "
+                + "no la casa entera. Se apaga sola a los cinco minutos sin que nadie la "
+                + "llame y al apagar la pantalla. El aviso de la bandeja no escribe lo que "
+                + "se oyó. El gasto de batería real se mide en este aparato, no se promete.",
+                12f, Paleta.SUAVE), conMargen());
+
+        pantalla.addView(texto("CEREBRO QUE SE BAJA SOLO", 12f, Paleta.AVISO), conMargen());
+        estadoAuto = texto("", 13f, Paleta.SUAVE);
+        estadoAuto.setLineSpacing(0f, 1.3f);
+        pantalla.addView(estadoAuto, conMargen());
+        LinearLayout filaAuto = new LinearLayout(this);
+        filaAuto.setOrientation(LinearLayout.HORIZONTAL);
+        botonAuto = boton("Encender");
+        botonAuto.setOnClickListener(v -> cambiaAuto());
+        filaAuto.addView(botonAuto, enFila(52));
+        Button comprobar = boton("Comprobar ahora");
+        comprobar.setOnClickListener(v -> {
+            AutoCerebro.revisa(this);
+            pintaAuto();
+        });
+        filaAuto.addView(comprobar, enFila(52));
+        Button detener = boton("Detener");
+        detener.setOnClickListener(v -> {
+            ServicioBajada.detener(this);
+            pintaAuto();
+        });
+        filaAuto.addView(detener, enFila(52));
+        pantalla.addView(filaAuto, conMargen());
+        pantalla.addView(texto("Sólo con Wi-Fi (red sin medir), sólo si no hay ya un GGUF "
+                + "bajado, y sólo el primero del catálogo que quepa en la RAM libre y en el "
+                + "disco. A los 40 KB/s medidos en esta casa, los 491 MB del 0,5B son unas "
+                + "3 h 20 min: por eso viene apagado y el costo está escrito aquí. La bajada "
+                + "sigue aunque cierres esta pantalla, con su aviso y su botón de Detener.",
+                12f, Paleta.SUAVE), conMargen());
+
+        pantalla.addView(texto("CARÁCTER Y CONVERSACIÓN", 12f, Paleta.AVISO), conMargen());
+        estadoCaracter = texto("", 13f, Paleta.SUAVE);
+        estadoCaracter.setLineSpacing(0f, 1.3f);
+        pantalla.addView(estadoCaracter, conMargen());
+        LinearLayout filaCaracter = new LinearLayout(this);
+        filaCaracter.setOrientation(LinearLayout.HORIZONTAL);
+        Button saludar = boton("Saludo de la primera vez");
+        saludar.setOnClickListener(v -> {
+            respuesta.setText(Consticion.primerSaludo(this));
+            respuesta.setTextColor(Paleta.CLARO);
+        });
+        filaCaracter.addView(saludar, enFila(52));
+        Button olvidar = boton("Olvida la conversación");
+        olvidar.setOnClickListener(v -> {
+            recuerdos.olvidaTurnos();
+            pintaCaracter();
+        });
+        filaCaracter.addView(olvidar, enFila(52));
+        pantalla.addView(filaCaracter, conMargen());
+        pantalla.addView(texto("El carácter vive en `assets/consticion.json`, no escrito en "
+                + "Java: se puede cambiar el tono sin recompilar. Los turnos se guardan en "
+                + "la memoria del teléfono y viajan con cada pregunta; «olvida la "
+                + "conversación» borra los turnos y deja los hechos y las habilidades.",
+                12f, Paleta.SUAVE), conMargen());
 
         pantalla.addView(texto("PROBAR EL QUE ESTÉ ABIERTO", 12f, Paleta.AVISO),
                 conMargen());
@@ -246,9 +324,11 @@ public class Cerebros extends Activity {
         File gguf = finalDe(f);
         File parcial = parcialDe(f);
         String puerta = cerebro.cabe(d.bytes)
-                ? "cabe en la RAM libre"
-                : "NO cabe ahora: la puerta pide " + (d.bytes * 2) / 1024 / 1024
-                        + " MB libres y hay " + cerebro.memoriaLibre() / 1024 / 1024 + " MB";
+                ? "cabe holgado en la RAM libre"
+                : "va justo: la puerta holgada pide " + cerebro.falta(d.bytes)
+                        + " y hay " + cerebro.memoriaLibre() / 1024 / 1024 + " MB"
+                        + (cerebro.sePuedeIntentar(d.bytes)
+                                ? " · se puede intentar con mmap" : " · ni para intentarlo");
         boolean abierto = cerebro.modeloActivo() != null
                 && cerebro.modeloActivo().getName().equals(d.archivo);
 
@@ -359,6 +439,111 @@ public class Cerebros extends Activity {
             pintaEstado(f);
         }
         pintaOido();
+        pintaDespertador();
+        pintaAuto();
+        pintaCaracter();
+    }
+
+    /* ------------------------------------------- voz, bajada sola y carácter */
+
+    /**
+     * El interruptor de la palabra de activación. Se escribe la preferencia **antes**
+     * de llamar al servicio y se revierte si Android no lo deja: así la pantalla no
+     * dice «encendido» mientras el sistema lo rechazó. El `try/catch` está aquí, en
+     * la frontera con la interfaz, y no dentro de `ServicioEscucha.cambia`.
+     */
+    private void cambiaDespertador() {
+        boolean puesto = !ServicioEscucha.encendida(this);
+        prefsDespertador().edit().putBoolean(ServicioEscucha.CLAVE, puesto).apply();
+        try {
+            ServicioEscucha.cambia(this, puesto);
+        } catch (RuntimeException noDeja) {
+            prefsDespertador().edit().putBoolean(ServicioEscucha.CLAVE, false).apply();
+            estadoDespertador.setText("el teléfono no la dejó encender: "
+                    + noDeja.getMessage() + ". Ábrela desde el menú de CORT con la app "
+                    + "en primer plano.");
+            estadoDespertador.setTextColor(Paleta.AVISO);
+            return;
+        }
+        hiloUI.postDelayed(this::pintaDespertador, 700L);
+    }
+
+    private android.content.SharedPreferences prefsDespertador() {
+        return getSharedPreferences("cort", MODE_PRIVATE);
+    }
+
+    private void pintaDespertador() {
+        boolean puesta = ServicioEscucha.encendida(this);
+        boolean montada = ServicioEscucha.montada();
+        boolean oido = Motor.compartido(this).listo();
+        botonDespertador.setText(puesta ? "Apagar «hola CORT»" : "Encender «hola CORT»");
+        String linea;
+        if (!puesta) {
+            linea = "apagada · el ● de la cara sigue dictando igual";
+        } else if (!oido) {
+            linea = "encendida en los ajustes, pero sin el modelo de español no hay palabra "
+                    + "que reconocer: bájalo arriba";
+        } else if (montada) {
+            linea = "encendida y escuchando ahora mismo · se apaga a los 5 min sin que nadie "
+                    + "la llame y al apagar la pantalla";
+        } else {
+            linea = "encendida en los ajustes · Android no la deja arrancar sola desde atrás: "
+                    + "se monta al abrir CORT";
+        }
+        estadoDespertador.setText(linea);
+        estadoDespertador.setTextColor(puesta && oido ? Paleta.CIAN : Paleta.SUAVE);
+    }
+
+    private void cambiaAuto() {
+        boolean puesto = !AutoCerebro.quiere(this);
+        AutoCerebro.pon(this, puesto);
+        if (puesto) {
+            AutoCerebro.revisa(this);
+        }
+        pintaAuto();
+    }
+
+    /**
+     * La bajada sola, con su motivo escrito. El progreso se lee de las preferencias
+     * que escribe `ServicioBajada`: no hay IPC, así que esta pantalla puede montarse
+     * después de que la bajada empezara y aun así verla.
+     */
+    private void pintaAuto() {
+        boolean quiere = AutoCerebro.quiere(this);
+        botonAuto.setText(quiere ? "Apagar" : "Encender");
+        String junto = (quiere ? "encendido" : "apagado")
+                + " · " + (AutoCerebro.redSinLimite(this) ? "Wi-Fi sin medir" : "red medida o sin red")
+                + " · disco libre " + AutoCerebro.huecoLibre(this) / 1024 / 1024 + " MB"
+                + " · RAM libre " + cerebro.memoriaLibre() / 1024 / 1024 + " MB";
+        if (ServicioBajada.enCurso(this)) {
+            junto += "\n" + ServicioBajada.texto(this) + " (" + ServicioBajada.pct(this) + " %)";
+            estadoAuto.setTextColor(Paleta.CIAN);
+            hiloUI.removeCallbacks(repintaAuto);
+            hiloUI.postDelayed(repintaAuto, 1500L);
+        } else {
+            junto += "\n" + AutoCerebro.motivo(this);
+            estadoAuto.setTextColor(quiere ? Paleta.SUAVE : Paleta.AVISO);
+        }
+        estadoAuto.setText(junto);
+    }
+
+    private final Runnable repintaAuto = new Runnable() {
+        @Override
+        public void run() {
+            if (cerrando) {
+                return;
+            }
+            pintaAuto();
+        }
+    };
+
+    private void pintaCaracter() {
+        estadoCaracter.setText(Consticion.resumen(this) + "\n"
+                + recuerdos.cuentasDeTurnos() + " turnos guardados · "
+                + recuerdos.cuentasDeHechos() + " hechos · "
+                + recuerdos.cuentasDeHabilidades() + " habilidades aprendidas");
+        estadoCaracter.setTextColor(Consticion.avisoDeCarga(this).isEmpty()
+                ? Paleta.SUAVE : Paleta.AVISO);
     }
 
     private void pintaModos() {
@@ -644,6 +829,8 @@ public class Cerebros extends Activity {
     @Override
     protected void onDestroy() {
         cerrando = true;
+        hiloUI.removeCallbacks(repintaAuto);
+        hiloUI.removeCallbacks(repintaOido);
         cerebro.interrumpir();
         super.onDestroy();
     }

@@ -606,7 +606,7 @@ def main():
     prueba("la puerta del cerebro local está escrita con el número real del modelo",
            re.search(r"MODELO_BYTES = ([\d_]+)L", equipo) is not None
            and int(re.search(r"MODELO_BYTES = ([\d_]+)L", equipo).group(1).replace("_", ""))
-           == 752_880_160 and "MODELO_BYTES * 2" in equipo)
+           == 752_880_160 and "MODELO_BYTES + CerebroLocal.RESERVA_CONTEXTO" in equipo)
     prueba("mide la RAM libre de ESTE aparato, no la del catálogo",
            "ActivityManager.MemoryInfo" in equipo and "libre.availMem" in equipo
            and "MemTotal:" in equipo)
@@ -700,8 +700,9 @@ def main():
         prueba("el catálogo dice de dónde salieron los números",
                "MEDIDOS" in catalogo.get("_", "") or "medidos" in catalogo.get("_", ""))
 
-    prueba("la puerta de RAM es el doble del archivo (la regla dicha en Equipo.java)",
-           "bytesDelModelo * 2" in java_local)
+    prueba("la puerta holgada es archivo + reserva, y el intento mmap pide media puerta",
+           "bytesDelModelo + RESERVA_CONTEXTO" in java_local
+           and "bytesDelModelo / 2 + RESERVA_CONTEXTO / 2" in java_local)
     prueba("la cara nativa pregunta al GGUF antes que a la nube",
            "cerebroLocal.contestar(" in lee(SRC / "Cara.java"))
     prueba("la cara del enlace (WebView) hace lo mismo",

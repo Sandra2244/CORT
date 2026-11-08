@@ -346,10 +346,18 @@ public class Cara implements Voz.AlOir {
             orbe.modo(Orbe.PENSAR);
         }
         final String memoria = recuerdos.lista(12);
+        final String sistema = Consticion.sistema(actividad, memoria);
+        final java.util.List<String[]> historial =
+                recuerdos.turnos(Consticion.turnos(actividad));
         new Thread(() -> {
-            final String sa = cerebroLocal.contestar(dicho, memoria);
+            final String sa = cerebroLocal.contestar(sistema, dicho, historial, null,
+                    Consticion.maxTokens(actividad), Consticion.temperatura(actividad));
             final String respuesta = sa != null ? sa
-                    : (nube.configurada() ? nube.preguntar(dicho, memoria) : null);
+                    : (nube.configurada() ? nube.preguntar(sistema, dicho, historial) : null);
+            if (respuesta != null) {
+                recuerdos.apuntaTurno("user", dicho);
+                recuerdos.apuntaTurno("assistant", respuesta);
+            }
             actividad.runOnUiThread(() -> {
                 quitarUltima();
                 pintaCerebroChip();

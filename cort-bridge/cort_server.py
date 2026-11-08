@@ -29,6 +29,7 @@ libre y, si no cabe, se dice el número en vez de congelar el equipo.
 
 import asyncio
 import base64
+import ipaddress
 import json
 import os
 import re
@@ -155,6 +156,13 @@ except Exception as _e_enlace:
     ENLACE_ERROR = f"{type(_e_enlace).__name__}: {_e_enlace}"
 else:
     ENLACE_ERROR = ""
+
+# F20a: el certificado de la casa. El módulo sólo genera con el `openssl` que ya
+# esté instalado (no añade dependencias); si no carga, el puente sigue como siempre.
+try:
+    import cort_tls
+except Exception:
+    cort_tls = None
 
 VOZ_ACTIVA = os.environ.get("CORT_VOZ", "1") == "1"   # hablar en voz alta con cada respuesta
 MICRO_ACTIVO = os.environ.get("CORT_MIC", "0") == "1"  # el micro sigue apagado hasta que se pida
@@ -1398,7 +1406,7 @@ PANEL_DE_ORDEN = {
     "get_windy_webcams": "webcam-preview-panel",
     "iptv_open_file": "iptv-panel", "iptv_parse_m3u": "iptv-panel", "iptv_parse_url": "iptv-panel",
     "open_browser": "hud-browser-panel", "close_browser": "hud-browser-panel",
-    "get_https_tunnel_status": "", "mobile_auth": "",
+    "get_https_tunnel_status": "",
     "get_elevenlabs_voices": "settings-modal",
 }
 
@@ -1420,8 +1428,6 @@ FALTA_EN_EL_PUENTE = {
                                "haría caso si algún día la conectas; no se finge un hardware"),
     "get_https_tunnel_status": ("Túnel HTTPS: no se abre ningún agujero al exterior sin tu orden explícita.",
                                 "el teléfono se enlaza por red local con token (F7), sin exponer nada a internet"),
-    "mobile_auth": ("El emparejamiento con el teléfono aún no existe.",
-                    "se hace en F7 por Wi-Fi local con QR generado aquí, no con api.qrserver.com"),
     "clear_cache": ("El puente no guarda cachas propias que limpiar todavía (solo 20 s de inventario en memoria).",
                     "se dirá con cifras cuando exista algo que limpiar"),
 }
@@ -1807,8 +1813,95 @@ async def latido_clima():
         await asyncio.sleep(MINUTOS_CLIMA * 60)
 
 
+def es_de_casa(peer):
+    """¿La dirección del que llama es del propio equipo? (127.0.0.0/8 y ::1).
+
+    Se mira la IP del socket, no cabeceras: `X-Forwarded-For` la escribe quien
+    llama, y cualquiera podría ponerse la dirección de casa para saltarse la llave.
+    """
+    try:
+        ip = ipaddress.ip_address(str(peer or "").split("%", 1)[0])
+    except ValueError:
+        return False
+    # Una IPv4 vista desde un socket IPv6 (::ffff:127.0.0.1) sigue siendo de casa.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        ip = mapped
+    return ip.is_loopback
+
+
+def entrada_ws_autorizada(peer, token_pedido, llave):
+    """La puerta del /ws (F20a): la cara local entra sin llave; el resto, con ella.
+
+    La interfaz del PC (cort-web, servida en 127.0.0.1:8766) se conecta a
+    ws://127.0.0.1:8765/ws sin ?token= desde siempre y tiene que seguir funcionando:
+    viene del propio equipo. El teléfono viene por el Wi-Fi de la casa, y ahí sí se
+    pide la llave del enlace, comparada en tiempo constante como en las rutas HTTP.
+    """
+    if es_de_casa(peer):
+        return True
+    if cort_enlace is None or not llave:
+        return False
+    return cort_enlace.autorizada(token_pedido, llave)
+
+
+def capacidades_del_puente():
+    """F20a: lo que esta PC puede hacer de verdad, módulo a módulo.
+
+    Es un censo de los módulos que cargaron en ESTE proceso, no una promesa de
+    hardware: cada orden sigue diciendo su propio `origen` cuando algo falta
+    (poppler, Piper, Vosk…). El teléfono lo usa para no pedir lo que no existe.
+    """
+    censo = (("memoria", cort_memoria), ("vida_diaria", cort_vida),
+             ("acciones", cort_acciones), ("voz", cort_voz), ("vision", cort_vision),
+             ("perfil", cort_perfil), ("documentos", cort_documentos),
+             ("enlace_memoria", cort_enlace), ("parlamento", cort_parlamento))
+    return [nombre for nombre, modulo in censo if modulo is not None]
+
+
+def autenticar_movil(d):
+    """F20a: el teléfono se presenta con la llave del QR y la PC le contesta quién es.
+
+    El token se compara con `cort_enlace.autorizada` (tiempo constante) y NO vuelve
+    ni se escribe: la respuesta no lo lleva y al registro sólo llegan el nombre del
+    aparato y su versión. El nombre se persiste en `cort_state.json` —el estado que
+    ya guardan `leer_estado`/`escribir_estado`— bajo `moviles`, con su hora.
+    """
+    if cort_enlace is None:
+        return {"type": "mobile_auth_result", "ok": False,
+                "motivo": "el módulo del enlace no cargó: no hay llave que comparar"}
+    if not cort_enlace.autorizada(d.get("token"), cort_enlace.token()):
+        return {"type": "mobile_auth_result", "ok": False,
+                "motivo": "el token no es la llave del enlace: vuelve a escanear el QR del puente"}
+    # El nombre lo escribe el teléfono: fuera controles y con tope, como las filas
+    # de memoria. Lo que se guarda y se imprime es eso, nunca el token.
+    nombre = re.sub(r"[\u0000-\u001f\u007f]", " ", str(d.get("dispositivo") or "")).strip()[:80]
+    nombre = nombre or "teléfono sin nombre"
+    version = str(d.get("version") or "")[:40]
+    e = leer_estado()
+    moviles = e.get("moviles")
+    if not isinstance(moviles, dict):
+        moviles = {}
+    moviles[nombre] = {"hora": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                       "version": version}
+    e["moviles"] = moviles
+    escribir_estado(e)
+    print(f"[CORT] teléfono emparejado: {nombre} (versión {version or 'no dicha'})")
+    return {"type": "mobile_auth_result", "ok": True, "origen": "real",
+            "maquina": socket.gethostname(),
+            "perfil": perfil_equipo(),
+            "capacidades": capacidades_del_puente()}
+
+
 async def ws_handler(request):
     global VOZ_ACTIVA, MICRO_ACTIVO, WAKE
+    # F20a: fuera del propio equipo, sin llave no hay WebSocket. No se hace el
+    # upgrade: se contesta 401 con el mismo JSON que las rutas HTTP del enlace.
+    llave = cort_enlace.token() if cort_enlace is not None else ""
+    if not entrada_ws_autorizada(request.remote, request.query.get("token"), llave):
+        return web.json_response(
+            {"ok": False, "motivo": "sin llave no hay puente: fuera de casa /ws pide ?token=…"},
+            status=401)
     ws = web.WebSocketResponse(heartbeat=25)
     await ws.prepare(request)
     CONEXIONES.add(ws)
@@ -1878,6 +1971,12 @@ async def ws_handler(request):
                             "ajustes_aplicados": aplica_plan(r)})
                 if d.get("hable", "1") == "1":
                     await decir(ws, cort_perfil.resumen(r))
+
+            elif t == "mobile_auth":
+                # F20a: el emparejamiento del teléfono. En un hilo porque el perfil
+                # lee /proc y sondea Ollama, igual que la orden de arriba.
+                r = await asyncio.get_event_loop().run_in_executor(None, autenticar_movil, d)
+                enviar(ws, r)
 
             elif t == "buscar_actualizacion":
                 if cort_actualiza is None:
@@ -2765,6 +2864,11 @@ async def main():
     bind = os.environ.get("CORT_BIND", "127.0.0.1")
     ssl_ctx = None
     tls = os.environ.get("CORT_TLS", "")
+    # F20a: con CORT_TLS_AUTO=1 se usa el certificado de la casa si ya existe.
+    # El CORT_TLS explícito manda: esto sólo entra cuando nadie puso rutas, y no
+    # genera nada — generar es cosa de `python3 cort-bridge/cort_tls.py`.
+    if not tls and cort_tls is not None:
+        tls = cort_tls.rutas_auto()
     if tls:
         try:
             cert, clave = tls.split(",")

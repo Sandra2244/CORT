@@ -64,6 +64,13 @@ try:
 except Exception:
     cort_vida = None
 
+# F20a: el certificado de la casa. Sin este módulo el enlace sigue diciendo http,
+# como siempre; no es un requisito para compartir memoria.
+try:
+    import cort_tls
+except Exception:
+    cort_tls = None
+
 # --- el contrato, con los mismos números que `Puente.java` ---------------------
 VERSION = 1
 TIPO = "memoria"
@@ -295,7 +302,14 @@ def registro(app, llave=None):
             return web.json_response(
                 {"ok": False, "origen": "no disponible",
                  "motivo": "sin llave no hay memoria: el enlace pide ?token=…"}, status=401)
-        return web.json_response(cuadro(llave))
+        c = cuadro(llave)
+        # F20a: la huella del certificado viaja aquí, en el GET que el teléfono ya
+        # hace con la llave, y NO en el QR: el cuadro lleva sólo la dirección, y
+        # meterle 64 caracteres más lo haría bastante más denso y difícil de
+        # escanear. La huella no es la llave: puede salir en este cuerpo.
+        https, huella = tls_del_puente()
+        c["tls"] = {"https": https, "huella": huella}
+        return web.json_response(c)
 
     async def subir(request):
         if not autorizada(request.query.get("token"), llave):
@@ -326,12 +340,33 @@ except Exception:
     web = None
 
 
+def tls_del_puente():
+    """(https, huella) de lo que el arranque pediría, con la misma regla del puente.
+
+    `CORT_TLS` explícito manda; si no está, `CORT_TLS_AUTO=1` usa el certificado de
+    la casa cuando ya existe. Es lo que se pide, no una garantía: si el certificado
+    no carga, el puente cae a http y lo dice en su consola, como hasta ahora.
+    """
+    explicito = os.environ.get("CORT_TLS", "")
+    if explicito:
+        huella = ""
+        if cort_tls is not None:
+            try:
+                huella = cort_tls.huella(explicito.split(",")[0])
+            except Exception:
+                huella = ""
+        return True, huella
+    if cort_tls is not None and cort_tls.rutas_auto():
+        return True, cort_tls.estado().get("huella", "")
+    return False, ""
+
+
 def enlace_del_puente(bind=None, puerto=None, llave=None):
     """La dirección que ve el teléfono: host, puerto del core y llave en el query."""
     host = bind or "127.0.0.1"
     if host in ("0.0.0.0", "::"):
         host = ip_de_casa() or "127.0.0.1"
-    protocolo = "https" if os.environ.get("CORT_TLS") else "http"
+    protocolo = "https" if tls_del_puente()[0] else "http"
     puerto = puerto or 8765
     return "%s://%s:%d%s?token=%s" % (protocolo, host, puerto, RUTA, llave or token())
 

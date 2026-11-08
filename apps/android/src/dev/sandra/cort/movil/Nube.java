@@ -91,19 +91,39 @@ public class Nube {
      * motivo por el que la búsqueda por UDP no va en el hilo de la UI.
      */
     public String preguntar(String pregunta, String memoria) {
+        return preguntar(CerebroLocal.sistemaCort(memoria), pregunta, null);
+    }
+
+    /**
+     * La misma pregunta con el carácter que arma `Consticion` y los turnos ya
+     * dichos (F20d). El `sistema` se recibe en vez de escribirse aquí para que la
+     * personalidad no quede en dos archivos: la del GGUF y la de la nube tienen que
+     * ser la misma, o CORT cambia de carácter según el camino que eligió.
+     *
+     * Los hechos de la dueña siguen yendo en el `system` (punto 3 de arriba); el
+     * historial son sólo turnos de conversación, que es lo que los filtros de
+     * turnos alternantes de los proveedores esperan encontrar.
+     */
+    public String preguntar(String sistema, String pregunta, java.util.List<String[]> historial) {
         ultimoFallo = "";
         if (!configurada()) {
             ultimoFallo = "sin configurar";
             return null;
         }
-        String sistema = "Eres CORT, el asistente local de Sandra Lopez, hablando desde su "
-                + "teléfono Android. Responde en español, en dos o tres frases como mucho, "
-                + "sin markdown y sin listas. Si no sabes algo, dilo corto y no lo inventes."
-                + (memoria == null || memoria.isEmpty() ? "" : " Datos que ya conoces: " + memoria);
         try {
+            JSONArray mensajes = new JSONArray();
+            if (historial != null) {
+                for (String[] turno : historial) {
+                    if (turno == null || turno.length < 2 || turno[1].isEmpty()) {
+                        continue;
+                    }
+                    mensajes.put(new JSONObject().put("role", turno[0]).put("content", turno[1]));
+                }
+            }
+            mensajes.put(new JSONObject().put("role", "user").put("content", pregunta));
             return "openai".equals(proveedor())
-                    ? porOpenAICompatible(sistema, pregunta)
-                    : porAnthropic(sistema, pregunta);
+                    ? porOpenAICompatible(sistema, mensajes)
+                    : porAnthropic(sistema, mensajes);
         } catch (IOException red) {
             ultimoFallo = "sin internet o el servicio no contestó";
             return null;
@@ -120,14 +140,13 @@ public class Nube {
      * `unreported exception` de `javac` y un Run rojo: el coste de haberlo
      * adivinado mal se mide en minutos de pipeline, no en segundos aquí.
      */
-    private String porAnthropic(String sistema, String pregunta)
+    private String porAnthropic(String sistema, JSONArray mensajes)
             throws IOException, JSONException {
         JSONObject cuerpo = new JSONObject();
         cuerpo.put("model", modelo());
         cuerpo.put("max_tokens", 400);
         cuerpo.put("system", sistema);
-        cuerpo.put("messages", new JSONArray().put(
-                new JSONObject().put("role", "user").put("content", pregunta)));
+        cuerpo.put("messages", mensajes);
         HttpURLConnection conexion = abrir(base() + "/v1/messages");
         conexion.setRequestProperty("x-api-key", clave());
         conexion.setRequestProperty("anthropic-version", "2023-06-01");
@@ -140,13 +159,16 @@ public class Nube {
         return textoDe(contenido.getJSONObject(0).optString("text"));
     }
 
-    private String porOpenAICompatible(String sistema, String pregunta)
+    private String porOpenAICompatible(String sistema, JSONArray mensajes)
             throws IOException, JSONException {
+        JSONArray turnos = new JSONArray()
+                .put(new JSONObject().put("role", "system").put("content", sistema));
+        for (int i = 0; i < mensajes.length(); i++) {
+            turnos.put(mensajes.get(i));
+        }
         JSONObject cuerpo = new JSONObject();
         cuerpo.put("model", modelo());
-        cuerpo.put("messages", new JSONArray()
-                .put(new JSONObject().put("role", "system").put("content", sistema))
-                .put(new JSONObject().put("role", "user").put("content", pregunta)));
+        cuerpo.put("messages", turnos);
         HttpURLConnection conexion = abrir(base() + "/chat/completions");
         conexion.setRequestProperty("Authorization", "Bearer " + clave());
         JSONObject respuesta = enviar(conexion, cuerpo);

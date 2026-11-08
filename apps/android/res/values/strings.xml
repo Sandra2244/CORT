@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CORT</string>
+    <!--
+      Lo que la dueña lee en Ajustes → Accesibilidad antes de encenderlo. Tiene que
+      decir la verdad sobre el alcance: lee la ventana entera, no guarda lo leído y
+      no registra teclas. Un texto vago aquí sería pedirle un permiso a ciegas.
+    -->
+    <string name="accesibilidad_resumen">Leer la pantalla y escribir por ti</string>
+    <string name="accesibilidad_descripcion">CORT usa esto para leer en voz alta la ventana que tienes abierta, analizar lo que estás viendo y escribir el texto que le dictes en el campo que tengas enfocado. Lo que lee se queda en memoria unos 90 segundos y no se guarda en ningún archivo ni se manda a internet salvo que tú se lo pidas. Los campos de contraseña se saltan y no se registran pulsaciones de teclas. Puedes apagarlo aquí cuando quieras.</string>
 </resources>

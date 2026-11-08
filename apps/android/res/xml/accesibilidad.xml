@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Lo que Android lee para saber qué puede hacer CORT como servicio de accesibilidad
+  (F19e). Se declara en `AndroidManifest.xml` dentro del servicio `.Pantalla` con
+  `android:name="android.accessibilityservice"`, y a diferencia de `asistente.xml`
+  aquí los atributos SÍ llevan el prefijo `android:`: los lee
+  `AccessibilityServiceInfo` desde el conjunto de recursos públicos.
+
+  Tres decisiones que se pueden auditar leyendo este archivo:
+
+  * `canRetrieveWindowContent="true"` es lo que permite leer la ventana entera y
+    escribir en el campo enfocado (`ACTION_SET_TEXT`). Sin esto, «lee la pantalla»
+    y «escribe por mí» no existen.
+  * `canRequestFilterKeyEvents="false"` a propósito: CORT lee ventanas, no
+    pulsaciones. Un filtro de teclas sería un registrador de teclado y no es lo que
+    la dueña pidió.
+  * `canPerformGestures` no se declara: CORT no pulsa botones ni desliza por su
+    cuenta en otras aplicaciones. Escribe texto en el campo que ella ya enfocó.
+
+  `notificationTimeout` agrupa los eventos que llegan en rafaga; el paso de 1,2 s
+  entre capturas lo pone además `Pantalla.java`, porque una lista que se desplaza
+  emite `typeWindowContentChanged` sin parar.
+
+  Sin teléfono delante: esto está escrito contra la documentación de
+  `AccessibilityServiceInfo`, no contra un Samsung A16. El encendido real lo mide
+  el ensayo físico.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewTextSelectionChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagReportViewIds"
+    android:canRetrieveWindowContent="true"
+    android:canRequestFilterKeyEvents="false"
+    android:notificationTimeout="300"
+    android:description="@string/accesibilidad_descripcion"
+    android:summary="@string/accesibilidad_resumen"
+    android:settingsActivity="dev.sandra.cort.movil.MainActivity" />

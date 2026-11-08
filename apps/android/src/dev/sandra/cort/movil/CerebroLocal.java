@@ -28,9 +28,10 @@ import org.json.JSONObject;
  *    medido el 2026-11-05 en el árbol público de Hugging Face, `Qwen/Qwen2.5-1.5B-
  *    Instruct-GGUF`, sha256 5ede348e…5b3a) se bajan aparte, verificables por suma,
  *    y viven en el carbajo de la app. Borrar la app los borra: se avisa en la pantalla.
- * 3. **La puerta es RAM libre, no la del catálogo.** La misma regla que mide
- *    `Equipo.java`: hace falta el **doble** del archivo (pesos + caché clave-valor
- *    que crece con la conversación). Con menos, CORT no lo intenta y usa otro cerebro.
+ * 3. **La puerta es RAM libre, no la del catálogo.** `cabe` (holgada) pide el
+ *    archivo entero más una reserva de contexto; como el motor mapea el GGUF con
+ *    mmap, por debajo aún se puede intentar (`sePuedeIntentar`). La verdad la dice
+ *    el intento y la medida de tokens/s, no la estimación.
  */
 public class CerebroLocal {
 
@@ -132,6 +133,13 @@ public class CerebroLocal {
 
     // ------------------------------------------------------------------ puertas
 
+    /**
+     * Reserva estimada para la caché clave-valor y los búferes de cálculo. No es
+     * medición: el contexto de 1024-2048 tokens de estos modelos pide decenas de MB
+     * y se deja margen. Si no alcanza, `nativeAbrir` devuelve 2 y se dice.
+     */
+    public static final long RESERVA_CONTEXTO = 200L * 1024 * 1024;
+
     /** Bytes libres ahora mismo en ESTE teléfono, no los que anuncia el catálogo. */
     public long memoriaLibre() {
         ActivityManager sistema =
@@ -141,13 +149,31 @@ public class CerebroLocal {
         return libre.availMem;
     }
 
-    /** La regla de la puerta, la misma que pinta `Equipo.java`: el doble del archivo. */
+    /**
+     * Puerta holgada: el archivo entero residente más la reserva. El motor mapea
+     * con mmap (pesos = páginas desalojables), así que esto es comodidad, no un
+     * requisito físico: por debajo se puede intentar.
+     */
     public boolean cabe(long bytesDelModelo) {
-        return memoriaLibre() > bytesDelModelo * 2;
+        return memoriaLibre() > bytesDelModelo + RESERVA_CONTEXTO;
+    }
+
+    /**
+     * Suelo del intento: media puerta holgada. Con mmap el kernel desaloja lo que
+     * no cabe; por debajo de la mitad, el teléfono se arrastraría y CORT lo dice
+     * en vez de fingir.
+     */
+    public boolean sePuedeIntentar(long bytesDelModelo) {
+        return memoriaLibre() > bytesDelModelo / 2 + RESERVA_CONTEXTO / 2;
     }
 
     public String falta(long bytesDelModelo) {
-        return (bytesDelModelo * 2) / 1024 / 1024 + " MB libres";
+        return puertaMB(bytesDelModelo) + " MB libres";
+    }
+
+    /** La puerta holgada en MB binarios: el único número que pintan cara y Almacén. */
+    public static long puertaMB(long bytesDelModelo) {
+        return (bytesDelModelo + RESERVA_CONTEXTO) / 1024 / 1024;
     }
 
     /** El sitio donde viven los cerebros bajados: carbajo de la app, se borra con ella. */
@@ -217,6 +243,21 @@ public class CerebroLocal {
     }
 
     /**
+     * Si ya hay algún GGUF del catálogo bajado y entero en el teléfono. Lo pregunta
+     * `AutoCerebro` para no duplicar lo que ella ya bajó a mano: la lista del almacén
+     * es suya, y llenarle el disco con un segundo modelo «por si acaso» no es ayuda.
+     */
+    public boolean tieneAlguno() {
+        for (Ficha f : catalogo(contexto)) {
+            File archivo = archivoDe(contexto, f.archivo);
+            if (archivo.isFile() && archivo.length() == f.bytes) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * El modelo que la ruta va a usar: primero el que ella eligió y sigue en disco;
      * si no queda ninguno elegido, el **primero del catálogo que esté bajado y que
      * quepa en la RAM libre de ahora**. Si tampoco, `null` y la cara usa otro camino.
@@ -230,7 +271,7 @@ public class CerebroLocal {
             }
         }
         for (Ficha f : lista) {
-            if (archivoDe(contexto, f.archivo).isFile() && cabe(f.bytes)) {
+            if (archivoDe(contexto, f.archivo).isFile() && sePuedeIntentar(f.bytes)) {
                 return f;
             }
         }
@@ -239,8 +280,8 @@ public class CerebroLocal {
 
     /**
      * El portón de la ruta, dicho una sola vez para que `Cara` y `Nexo` no lo
-     * reescriban cada uno a su manera: con `nube` el GGUF no entra; con `auto` hace
-     * falta que el modelo quepa; con `local` se intenta aunque apriete.
+     * reescriban cada uno a su manera: con `nube` el GGUF no entra; con `auto` se
+     * intenta si hay suelo de mmap; con `local` se intenta aunque apriete.
      *
      * Bloquea (abrir 752 MB del disco tarda): sólo se llama desde un hilo.
      */
@@ -255,7 +296,7 @@ public class CerebroLocal {
         if (f == null) {
             return false;
         }
-        if ("auto".equals(modo()) && !cabe(f.bytes)) {
+        if ("auto".equals(modo()) && !sePuedeIntentar(f.bytes)) {
             return false;
         }
         return cargar(archivoDe(contexto, f.archivo), f.contexto, f.hilos) == 0;
@@ -273,13 +314,29 @@ public class CerebroLocal {
      * cierra la app. Cuánto tarda de verdad se mide en su A16 (está pendiente).
      */
     public String contestar(String dicho, String memoria) {
+        return contestar(sistemaCort(memoria), dicho, null, null, 120, 0.7f);
+    }
+
+    /**
+     * La vuelta con conversación continua (F20d): `sistema` es el carácter que arma
+     * `Consticion` desde `assets/consticion.json`, `historial` son los turnos ya
+     * dichos de viejos a nuevos, y `oyente` recibe cada pieza según el nativo la
+     * genera — es lo que permite que la cara escriba mientras CORT piensa en vez de
+     * esperar la frase entera. `null` en historial u oyente vale: sin historial es
+     * una pregunta suelta, sin oyente se devuelve el texto completo al final.
+     */
+    public String contestar(String sistema, String dicho, List<String[]> historial,
+                            Oyente oyente, int maxTokens, float temperatura) {
         try {
             if (!asegurar()) {
                 return null;
             }
             List<String[]> vueltas = new ArrayList<>();
+            if (historial != null) {
+                vueltas.addAll(historial);
+            }
             vueltas.add(new String[] {"user", dicho});
-            return preguntar(sistemaCort(memoria), vueltas, null, 120, 0.7f);
+            return preguntar(sistema, vueltas, oyente, maxTokens, temperatura);
         } catch (UnsatisfiedLinkError | RuntimeException cualquierCosa) {
             return null;
         }
@@ -296,9 +353,9 @@ public class CerebroLocal {
         if (elegido() == null) {
             return "ningún cerebro bajado en el almacén";
         }
-        if (!cabe(elegido().bytes)) {
-            return "no cabe: la puerta pide " + falta(elegido().bytes) + " y hay "
-                    + memoriaLibre() / 1024 / 1024 + " MB";
+        if (!sePuedeIntentar(elegido().bytes)) {
+            return "RAM muy justa para intentarlo: hay " + memoriaLibre() / 1024 / 1024
+                    + " MB libres";
         }
         return "el archivo no abrió";
     }
