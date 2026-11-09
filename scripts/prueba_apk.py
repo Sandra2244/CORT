@@ -792,6 +792,22 @@ def main():
     prueba("y la cara sabe que está en Android: `CORT_esAndroid` es la bandera que "
            "apaga los rótulos que mentirían (Ollama, emparejar por QR)",
            "window.CORT_esAndroid = true" in cara_js and "CORT_esAndroid" in ui)
+    estilo = lee(RAIZ / "cort-web" / "cort" / "cort-style.css")
+    prueba("P0-3: el interruptor de vista existe en el puente Java y cambia el "
+           "viewport de verdad (wide viewport + zoom sólo en escritorio)",
+           "public void fijarVista(" in nexo
+           and "setUseWideViewPort(escritorio)" in nexo
+           and "classList.add('cort-vista-movil')" in nexo)
+    prueba("P0-3: la fila del interruptor viaja en Ajustes y se repinta con el "
+           "observer, como la de idioma (si no, desaparece al re-renderizar)",
+           "function asegurarFilaVista()" in ui
+           and ui.count("asegurarFilaVista();") >= 3
+           and "window.CORT_setVista" in ui)
+    prueba("P0-3: los paneles de ancho fijo que salían cortados en el A16 "
+           "(antivirus 460 px, ajustes con padding 30) tienen regla móvil",
+           "html.cort-vista-movil .av-panel" in estilo
+           and "html.cort-vista-movil .settings-container" in estilo
+           and "calc(100vw - 16px)" in estilo)
     prueba("el origen embebido es `http://cort.local`, no https: el `Yl` de la "
            "página apaga los subtítulos en vivo y la voz por nube con https, y en "
            "el teléfono esas dos sí funcionan",

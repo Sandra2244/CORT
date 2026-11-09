@@ -474,3 +474,133 @@ body::after {
     rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);
   mix-blend-mode: screen;
 }
+
+/* ---------- P0-3: la fila del interruptor de vista (Ajustes) ----------
+   Hermana de la fila de idioma: mismo corte, misma paleta. El interruptor
+   decide si la cara se adapta al teléfono o se queda ancha como en el portátil. */
+#cort-vista-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(0, 255, 200, .26);
+  clip-path: var(--cort-corte);
+  background: rgba(3, 8, 15, .6);
+  flex-wrap: wrap;
+}
+#cort-vista-row > span {
+  font: 700 10px/1 "Courier New", monospace;
+  letter-spacing: .14em;
+  color: rgba(174, 240, 255, .75);
+}
+#cort-vista-row .cort-vista-btn {
+  padding: 5px 12px;
+  border: 1px solid rgba(34, 229, 255, .3);
+  background: transparent;
+  color: rgba(174, 240, 255, .75);
+  font: 700 10px/1 "Courier New", monospace;
+  letter-spacing: .14em;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+#cort-vista-row .cort-vista-btn:hover {
+  border-color: var(--cort-menta);
+  color: var(--cort-menta);
+}
+#cort-vista-row .cort-vista-btn[data-activo="1"] {
+  background: linear-gradient(135deg, var(--cort-menta), var(--cort-cian));
+  border-color: transparent;
+  color: var(--cort-fondo);
+  box-shadow: 0 0 12px rgba(0, 255, 200, .45);
+}
+
+/* ---------- P0-3: vista teléfono (E3 de la auditoría del 2026-11-08) ----------
+   Treinta capturas del A16 enseñaban lo mismo: paneles de la plantilla francesa
+   con ancho fijo de escritorio (460, 680, 780, 980 px) cortados a la derecha en
+   una pantalla de 360 px CSS. La clase `cort-vista-movil` la cose Java en el
+   <html> antes del primer pintado (Nexo.sirveConPuente) y el interruptor de
+   Ajustes la quita o la pone. Todo va con !important porque varios paneles traen
+   el ancho en el style del HTML. En vista escritorio no se toca nada: la cara
+   ancha de siempre, con el pellizco del WebView para hacer zoom. */
+
+html.cort-vista-movil body { overflow-x: hidden; }
+
+/* Los paneles flotantes se vuelven hojas ancladas: nada de left:200px ni
+   translate(-50%) que los saca de la pantalla. El arrastre queda desactivado
+   en esta vista a propósito: en 360 px no hay sitio a que arrastrar. */
+html.cort-vista-movil .av-panel,
+html.cort-vista-movil .aurora-panel,
+html.cort-vista-movil .aurora-video-panel,
+html.cort-vista-movil .obsidian-panel,
+html.cort-vista-movil .restaurant-panel,
+html.cort-vista-movil .img-panel,
+html.cort-vista-movil .vpn-panel,
+html.cort-vista-movil .shopping-panel,
+html.cort-vista-movil .ha-panel,
+html.cort-vista-movil .brave-panel,
+html.cort-vista-movil .print3d-panel,
+html.cort-vista-movil .email-hud-panel,
+html.cort-vista-movil .email-detail-modal,
+html.cort-vista-movil .email-compose-modal,
+html.cort-vista-movil .uninstaller-panel {
+  left: 8px !important;
+  right: auto !important;
+  width: calc(100vw - 16px) !important;
+  min-width: 0 !important;
+  max-width: calc(100vw - 16px) !important;
+  transform: none !important;
+  max-height: calc(100vh - 100px) !important;
+  overflow-y: auto !important;
+}
+/* Este centraba con top:calc(50% - 340px): en pantallas bajas salía negativo. */
+html.cort-vista-movil .email-hud-panel { top: 70px !important; }
+
+/* Ajustes y Modelo de Agente comparten .settings-container (el segundo lo trae
+   en el style del HTML): menos_padding para que el contenido respire en 360 px
+   y el pie libra la barra de navegación del teléfono. */
+html.cort-vista-movil .settings-container {
+  width: calc(100vw - 24px) !important;
+  max-width: calc(100vw - 24px) !important;
+  max-height: calc(100vh - 24px) !important;
+  padding: 16px 12px calc(16px + env(safe-area-inset-bottom)) !important;
+}
+html.cort-vista-movil .settings-header {
+  font-size: 15px !important;
+  letter-spacing: 1px !important;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+html.cort-vista-movil .settings-btn {
+  padding: 10px 12px !important;
+  letter-spacing: 1px !important;
+  white-space: normal !important;
+}
+html.cort-vista-movil .settings-app-form { flex-wrap: wrap; }
+html.cort-vista-movil .settings-app-form input { min-width: 0; flex: 1 1 140px; }
+
+/* El arranque de la plantilla medía 680 px de ancho, el doble del teléfono. */
+html.cort-vista-movil #boot-separator,
+html.cort-vista-movil #boot-modules,
+html.cort-vista-movil #boot-progress-wrap {
+  width: min(680px, calc(100vw - 32px)) !important;
+}
+
+/* Rejillas con track mínimo más ancho que la pantalla utile. */
+html.cort-vista-movil .cmd-grid { grid-template-columns: 1fr !important; }
+html.cort-vista-movil .games-toolbar { grid-template-columns: 1fr 1fr !important; }
+
+/* Modales y brindis con max-width de escritorio: tope al ancho real. */
+html.cort-vista-movil .lai-dialog,
+html.cort-vista-movil .restaurant-details-container,
+html.cort-vista-movil .ha-voice-modal-content,
+html.cort-vista-movil .wallpaper-modal-content,
+html.cort-vista-movil #nemotron-toast {
+  max-width: calc(100vw - 16px) !important;
+}
+html.cort-vista-movil .recipe-modal {
+  width: calc(100vw - 16px) !important;
+  max-width: calc(100vw - 16px) !important;
+  left: 8px !important;
+}
+html.cort-vista-movil #subtitle-hud.live-subtitles { max-width: calc(100vw - 16px) !important; }

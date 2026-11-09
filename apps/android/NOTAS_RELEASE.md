@@ -1,10 +1,33 @@
-# CORT {{VERSION}} — el oído en segundo plano, la mano en la pantalla y un cerebro que sí cabe en el A16
+# CORT {{VERSION}} — la cara cabe en el teléfono: paneles adaptados y el interruptor de vista en Ajustes
 
 **Autora:** Askher Vargas y Sandra Lopez · soporte: `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com` · **Licencia:** MIT.
 
 ## Qué trae esta versión
 
-### Lo nuevo (F20 y el P0 de la auditoría del 2026-11-08)
+### Lo nuevo (P0-3 de la auditoría del 2026-11-08)
+
+- **La cara del portátil ya no se corta en el teléfono (E3).** Treinta capturas del A16
+  enseñaban paneles con ancho fijo de escritorio (antivirus 460 px, domótica 980 px,
+  desinstalador 480 px…) partidos a la derecha en una pantalla de 360 px. Ahora la
+  **vista teléfono** —la que viene por defecto en el APK— vuelve esos paneles hojas
+  ancladas de `100vw - 16px`, recorta el padding de Ajustes y Modelo de Agente, pone
+  tope al arranque de 680 px y libra la barra de navegación con `safe-area`. Medido
+  en navegador contra la cara real: a 360 px el documento pasó de **596 px de ancho
+  (236 cortados) a 360 exactos, con cero elementos visibles cortados**; el antivirus
+  abierto mide 344 px (de 8 a 352) y Ajustes 336 px.
+- **El interruptor «VISTA // Teléfono · Escritorio», en Ajustes.** Junto a la fila de
+  idioma. Teléfono = paneles adaptados, nada cortado. Escritorio = la cara ancha de
+  siempre en el WebView con viewport ancho y pellizco para zoom (`UseWideViewPort` +
+  `OverviewMode`), para quien prefiera verla como en el portátil y acercar con los
+  dedos. La preferencia se guarda en el teléfono y la clase se cose en el `<html>`
+  antes del primer pintado: no hay un fotograma intermedio con los paneles cortados.
+  En el navegador de la PC el mismo interruptor sirve para previsualizar una u otra.
+- **Lo que la vista teléfono cambia a propósito, dicho:** el arrastre de paneles queda
+  desactivado (en 360 px no hay sitio a que arrastrar; vuelven con la vista escritorio),
+  y el zoom con pellizco también es de la vista escritorio. El puente de la cara no
+  cambia: los mismos cuadros viajan al mismo Java en las dos vistas.
+
+### Lo que trajo la 0.18.0 y sigue puesto (F20 y P0-1/P0-2)
 
 - **«Oye CORT» dicho a secas, sin abrir la app (F20, `ServicioEscucha.java`).** Un servicio
   en primer plano —lo único que Android deja vivir fuera de la pantalla— mantiene el oído
@@ -83,8 +106,9 @@
   fotograma se guarda. **La memoria del teléfono habla con la de la PC (F14a):**
   `GET`/`POST /memoria/puente` detrás del token, con topes escritos (300 caracteres por
   fila, 500 filas, 262 144 bytes).
-- **Hablarle a la PC y oírla por el auricular (F16).** Se mantiene pulsado, se habla, se
-  suelta: la grabación viaja a `POST /parlamento`, el oído de la PC la convierte, y la voz
+- **Hablarle a la PC y oírla por el auricular (F16).** El botón «Hablar con la PC (voz)»
+  (o el pulso largo en cualquier superficie): se mantiene pulsado, se habla, se suelta.
+  La grabación viaja a `POST /parlamento`, el oído de la PC la convierte, y la voz
   sintetizada vuelve para sonar en el auricular de la oreja. El auricular no traga arengas:
   dice la primera frase (techo de 90 caracteres) y el texto entero queda en pantalla. El
   dictado no se guarda en ninguna parte.
@@ -242,6 +266,11 @@ lo instalado sin tocar tus datos.
   del APK y las {{CHECS}} comprobaciones de `scripts/prueba_apk.py`, que el propio workflow
   ejecuta antes de publicar. Cuánto tarda el modelo en cargar, cuánta RAM ocupa y cómo se ve
   la cara en tu pantalla lo saca el ensayo físico.
+- **La vista teléfono se midió en navegador, no en el cristal del A16.** Geometría real a
+  360 px (el ancho CSS del A16) y a 476 px: cero elementos visibles cortados, antivirus y
+  Ajustes abiertos y medidos. El pellizco de la vista escritorio y el safe-area de la barra
+  de navegación sólo los puede confirmar el aparato; si algo baila allí, se corrige con
+  número delante, como todo lo demás.
 
 ---
 SHA-256 del APK publicado: `{{SHA}}`

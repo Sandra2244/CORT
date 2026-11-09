@@ -175,6 +175,7 @@ public class Nexo {
         // línea Android la condiciona a un dedo encima.
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        aplicaVista(s, prefs.getString("vista", "telefono"));
         // `setAllowFileAccess` se queda en su defecto: **no** se abre el disco. Lo
         // que lee esta cara es `getAssets()`, por mano propia y con la lista
         // cerrada de `rutaDe`, que es más estrecho que el permiso de archivo.
@@ -2010,6 +2011,37 @@ public class Nexo {
     }
 
     /**
+     * El interruptor de Ajustes (P0-3): «teléfono» adapta la cara al ancho del
+     * aparato; «escritorio» la deja ancha como en el portátil, con pellizco para
+     * zoom. Se guarda y se recarga: el ancho de layout del WebView no se cambia
+     * en caliente sin repintar la página entera.
+     */
+    @JavascriptInterface
+    public void fijarVista(final String modo) {
+        if (!"telefono".equals(modo) && !"escritorio".equals(modo)) {
+            return;
+        }
+        prefs.edit().putString("vista", modo).apply();
+        actividad.runOnUiThread(() -> {
+            WebView ventana = web;
+            if (ventana == null) {
+                return;
+            }
+            aplicaVista(ventana.getSettings(), modo);
+            ventana.reload();
+        });
+    }
+
+    private void aplicaVista(WebSettings s, String modo) {
+        boolean escritorio = "escritorio".equals(modo);
+        s.setUseWideViewPort(escritorio);
+        s.setLoadWithOverviewMode(escritorio);
+        s.setSupportZoom(escritorio);
+        s.setBuiltInZoomControls(escritorio);
+        s.setDisplayZoomControls(false);
+    }
+
+    /**
      * El nivel real del micrófono. No va en un cuadro —la cara de la PC no tiene
      * `state.nivel`— sino directo al orbe, que es lo que en el portátil produce el
      * analizador de audio de la página y aquí produce `onRmsChanged`.
@@ -2174,13 +2206,20 @@ public class Nexo {
                 fuera.write(trozo, 0, n);
             }
             String html = fuera.toString("UTF-8");
+            // P0-3: la clase de la vista teléfono se cose en <html> antes del
+            // primer pintado, para que la cara no salga un fotograma con los
+            // paneles de escritorio cortados. En vista escritorio no se cose
+            // nada: la página se queda como en el portátil.
+            String claseVista = "escritorio".equals(prefs.getString("vista", "telefono"))
+                    ? ""
+                    : "<script>document.documentElement.classList.add('cort-vista-movil');</script>";
             int cabe = html.toLowerCase(Locale.ROOT).indexOf("<head>");
             String cosido;
             if (cabe >= 0) {
                 int despues = cabe + "<head>".length();
-                cosido = html.substring(0, despues) + ETIQUETA_PUENTE + html.substring(despues);
+                cosido = html.substring(0, despues) + ETIQUETA_PUENTE + claseVista + html.substring(despues);
             } else {
-                cosido = ETIQUETA_PUENTE + html;
+                cosido = ETIQUETA_PUENTE + claseVista + html;
             }
             return new WebResourceResponse("text/html", "utf-8",
                     new ByteArrayInputStream(cosido.getBytes(StandardCharsets.UTF_8)));

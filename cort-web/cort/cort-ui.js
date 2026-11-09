@@ -1379,6 +1379,65 @@
     }
   }
 
+  // ---- 5a. Vista de la cara: teléfono adaptada o escritorio del portátil ----
+  // La clase va en <html> porque Java la cose ahí antes del primer pintado
+  // (Nexo.sirveConPuente): en el APK la manda el WebView, no el localStorage.
+  // En el navegador de la PC es sólo CSS y se guarda en localStorage.
+  function vistaActual() {
+    return document.documentElement.classList.contains("cort-vista-movil") ? "telefono" : "escritorio";
+  }
+
+  function setVista(modo) {
+    if (modo !== "telefono" && modo !== "escritorio") return;
+    localStorage.setItem("cort_vista", modo);
+    document.documentElement.classList.toggle("cort-vista-movil", modo === "telefono");
+    pintarFilaVista();
+    if (window.CortNative && typeof window.CortNative.fijarVista === "function") {
+      // Java guarda la preferencia, cambia el viewport y recarga: el ancho de
+      // layout no se cambia en caliente sin repintar la página entera.
+      window.CortNative.fijarVista(modo);
+    }
+  }
+  window.CORT_setVista = setVista;
+
+  function asegurarFilaVista() {
+    const panel = document.querySelector("#settings-modal .settings-container");
+    if (!panel) return false;
+    const fila = document.getElementById("cort-vista-row");
+    if (fila && panel.contains(fila)) return true;
+    const nuevo = fila || document.createElement("div");
+    nuevo.id = "cort-vista-row";
+    const idioma = document.getElementById("cort-lang-row");
+    if (idioma && idioma.parentElement === panel) panel.insertBefore(nuevo, idioma.nextSibling);
+    else {
+      const cabecera = panel.querySelector(".settings-header");
+      if (cabecera && cabecera.parentElement === panel) panel.insertBefore(nuevo, cabecera.nextSibling);
+      else panel.insertBefore(nuevo, panel.firstChild);
+    }
+    pintarFilaVista();
+    return true;
+  }
+
+  function pintarFilaVista() {
+    const fila = document.getElementById("cort-vista-row");
+    if (!fila) return;
+    fila.innerHTML = '<span>VISTA&nbsp;//</span>';
+    const actual = vistaActual();
+    for (const [modo, rotulo, titulo] of [
+      ["telefono", "Teléfono", "Paneles adaptados al ancho del aparato: nada cortado"],
+      ["escritorio", "Escritorio", "La cara ancha del portátil, con pellizco para hacer zoom"],
+    ]) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "cort-vista-btn";
+      b.textContent = rotulo;
+      b.title = titulo;
+      b.dataset.activo = modo === actual ? "1" : "0";
+      b.addEventListener("click", () => setVista(modo));
+      fila.appendChild(b);
+    }
+  }
+
   // ---- 5b. Fila del cerebro: qué modelos hay en el equipo y qué falta para usarlos
   //
   // Todo lo que pinta sale del puente (`en_disco`, `ram_disponible_mb`, `catalogo`).
@@ -2538,6 +2597,11 @@
   function start() {
     document.title = translate(document.title || "CORT");
     document.documentElement.lang = lang;
+    // En la PC no hay WebView que mande: la vista guardada se aplica aquí.
+    // En el APK la clase ya viene cosida por Java y no se toca.
+    if (!window.CORT_esAndroid && localStorage.getItem("cort_vista") === "telefono") {
+      document.documentElement.classList.add("cort-vista-movil");
+    }
     walk(document.body);
     buildBootChip();
     // El botón de emparejamiento le pide un token al puente de la PC: `create_mobile_
@@ -2550,6 +2614,7 @@
       if (emparejar) emparejar.style.display = "none";
     }
     asegurarFilaIdioma();
+    asegurarFilaVista();
     asegurarFilaCerebro();
     // Al arrancar el websocket del puente todavía puede estar abriendo (el puente
     // tarda ~2 s en levantarse). Se insiste cada 3 s hasta tener estado y luego ya
@@ -2561,12 +2626,14 @@
     const mo = new MutationObserver(muts => {
       for (const m of muts) for (const node of m.addedNodes) walk(node);
       asegurarFilaIdioma();
+      asegurarFilaVista();
       asegurarFilaCerebro();
     });
     mo.observe(document.body, { childList: true, subtree: true });
     setInterval(() => {
       walk(document.body);
       asegurarFilaIdioma();
+      asegurarFilaVista();
       asegurarFilaCerebro();
       if (typeof window.CORT_pedirEstadoCerebro !== "function") return;
       if (!estadoCerebro || ++tic % 5 === 0) window.CORT_pedirEstadoCerebro();
