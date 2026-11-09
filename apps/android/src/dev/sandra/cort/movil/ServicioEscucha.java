@@ -388,7 +388,9 @@ public class ServicioEscucha extends Service {
      */
     private int icono() {
         int numero = getResources().getIdentifier("ic_cort_aviso", "drawable", getPackageName());
-        return numero != 0 ? numero : android.R.drawable.btn_microphone;
+        // btn_microphone es un recurso oculto del SDK: javac no lo ve (corrida 42512272117).
+        // ic_btn_speak_now es el micrófono público que sí existe desde la API 1.
+        return numero != 0 ? numero : android.R.drawable.ic_btn_speak_now;
     }
 
     /** Una frase oída cabe en una línea de la bandeja; el resto no se escribe. */
