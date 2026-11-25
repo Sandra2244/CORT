@@ -227,6 +227,7 @@ La regresión del temporal fijo falló primero (**29/30**) y pasó (**30/30**) a
 - La primera corrida, [45554793292](https://github.com/Sandra2244/CORT/actions/runs/45554793292) sobre `c85931b`, falló en `compilar`: `Nexo.java` usaba `AlertDialog` sin importarlo. La suite de secretos sí pasó; no se publicó Release.
 - La corrección se hizo hacia delante en `45da233`, con una regresión estática del import.
 - La corrida [45555101269](https://github.com/Sandra2244/CORT/actions/runs/45555101269) sobre `45da233` terminó **success en 57 s**: suite de secretos, descarga y colocación del motor, compilación, suite del APK y publicación del artefacto quedaron verdes. El paso de Release quedó omitido porque no hay etiqueta.
+- La [Release `cort-v0.19.0`](https://github.com/Sandra2244/CORT/releases/tag/cort-v0.19.0) se publicó desde la corrida [45566400612](https://github.com/Sandra2244/CORT/actions/runs/45566400612), **success**, sobre el commit `37b4513`. El APK mide **79 246 441 B**, tiene `versionCode 1900`, SHA-256 `87fdc848c9f9b6cf52114e61eb72d5816ce1c5fadb6aadb705b69951636dbc4b` y conserva el certificado de `0.18.1`. La auditoría confirma `libcortmotor.so` en `arm64-v8a` y `armeabi-v7a`; las notas declaran pendiente el ensayo físico.
 
 ### Verificación física pendiente
 
