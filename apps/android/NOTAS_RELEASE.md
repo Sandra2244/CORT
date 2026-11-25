@@ -1,10 +1,32 @@
-# CORT {{VERSION}} — la cara cabe en el teléfono: paneles adaptados y el interruptor de vista en Ajustes
+# CORT {{VERSION}} — secretos protegidos y nube sólo con tu permiso
 
 **Autora:** Askher Vargas y Sandra Lopez · soporte: `Sandrasofialopezgomez3@gmail.com` · `Carlosa3325@gmail.com` · **Licencia:** MIT.
 
 ## Qué trae esta versión
 
-### Lo nuevo (P0-3 de la auditoría del 2026-11-08)
+### Lo nuevo (SEC-001, verificada en local y en CI)
+
+- **La clave de nube del teléfono queda cifrada.** `AndroidKeyStore` guarda la llave;
+  el valor de la API viaja en un sobre AES-256-GCM con IV nuevo, autenticación y
+  versión `v1`. La migración cifra, descifra y compara antes de eliminar el campo
+  plano en una sola escritura. Si algo falla, CORT no deja un respaldo en claro.
+- **La nube no se usa a escondidas.** El modo Teléfono no cae a la nube. En modo
+  Automático, el GGUF va primero; para enviar texto a un proveedor aparece una
+  confirmación que cubre **un turno**. Negar, cancelar o agotar la espera termina
+  sin envío. El análisis de pantalla no aprovecha ese permiso.
+- **La Web y el puente dejan de conservar claves.** El navegador purga el legado
+  de `localStorage`, el mock bloquea campos secretos y el puente sanea por nombre
+  antes de responder o escribir. El estado usa temporal único, sustitución atómica,
+  `flush`, `fsync` y permisos `0600`; los ajustes públicos son una allowlist.
+- **La interfaz de PC deja de prometer nube sin adaptador.** Sólo ofrece rutas
+  locales reales y explica que la nube de PC todavía no está disponible. Android
+  conserva sus proveedores existentes, ahora con clave cifrada y consentimiento.
+- **Pruebas de esta fase:** 30/30 de secretos, 237/237 estáticas del APK, 41/41 del
+  puente WebSocket, 17/17 de RAM, 12/12 de sobres, núcleo en verde y navegador con
+  cero errores de consola. La migración con una clave real y el comportamiento en
+  el A16 siguen pendientes de ensayo físico.
+
+### La cara adaptada de 0.18.1 sigue puesta (P0-3 de la auditoría del 2026-11-08)
 
 - **La cara del portátil ya no se corta en el teléfono (E3).** Treinta capturas del A16
   enseñaban paneles con ancho fijo de escritorio (antivirus 460 px, domótica 980 px,
@@ -131,11 +153,11 @@
   (415 182 688 B), 0,5B q4_K_M (491 400 032 B), 1,5B q2_k (752 880 160 B) y 1,5B q4_K_M
   (1 117 320 736 B). Bajada con reanudación (`Range`) y suma del archivo entero al terminar:
   si no cuadra, se borra y se dice, porque un GGUF a medias abre y contesta basura.
-- **Cómo decide a quién preguntar (U1).** Las 33 reglas exactas van delante (contestan en
-  milisegundos). Lo que no esté en la tabla va al cerebro del teléfono si el modo y la RAM
-  lo permiten, y si no a la PC o a la nube. Tres modos: **Automático · Teléfono · PC o nube**.
-  La puerta es la nueva: archivo más 200 MB de reserva para ir holgado, la mitad para
-  intentarlo con `mmap`, y la pantalla dice los megas que hay ahora.
+- **Cómo decide a quién preguntar (U1 + SEC-001).** Las reglas exactas van delante.
+  Lo que no esté en la tabla va al GGUF del teléfono cuando el modo y la RAM lo
+  permitan; el modo Teléfono no usa la nube. En Automático, la nube existente se
+  ofrece sólo tras confirmar ese turno. La puerta del modelo es archivo más 200 MB
+  de reserva para ir holgado, la mitad para intentarlo con `mmap`.
 - **«El aparato, medido» (U1, `Equipo.java`).** RAM total y libre ahora, núcleos, ABIs,
   almacenamiento, pila y motor de voz, con la misma puerta nueva escrita en números.
   Todo seleccionable para copiar; nada se envía a la PC.
@@ -152,7 +174,7 @@
 | oído | el del aparato, por internet | {{OIDO}} — con el modelo de {{MODEL}} B dentro |
 | cara | botones nativos | **la misma interfaz del portátil**: {{CARA}} |
 | arquitecturas | la que hubiera | **{{ABIS}}** |
-| cerebro | 33 reglas y la nube | **motor GGUF dentro del teléfono** + cuatro modelos descargables (ninguno dentro del APK) |
+| cerebro | 33 reglas y la nube | **reglas + motor GGUF local**; nube Android existente sólo con permiso, sin adaptador de nube en PC |
 | enlaces | pegar la IP a mano | QR con la cámara **o** pegar la línea, con token; WebSocket real y TLS opcional con pinning |
 | dependencias | ninguna | Vosk 0.3.75 (Apache-2.0) · JNA 5.14.0 (LGPL-2.1+) · modelo español Apache-2.0 · zxing core 3.5.3 (Apache-2.0) · llama.cpp b12121 (MIT) · three.js (MIT, con el aviso de derechos dentro del propio módulo) · Leaflet 1.9.4 (BSD-3-Clause) · Qwen2.5 GGUF (Apache-2.0, se bajan aparte) |
 
@@ -226,6 +248,14 @@ lo instalado sin tocar tus datos.
 
 ## Lo que NO hace todavía, dicho con nombre
 
+- **Todavía no sustituye a Gemini como asistente predeterminado ni abre una vista
+  previa superpuesta.** Esta release conserva el orbe, la vista adaptada y el
+  servicio de accesibilidad; registrar un asistente Android y su overlay es la
+  siguiente fase. CORT no puede hacerse pasar por Google ni saltarse el selector,
+  los permisos de superposición ni las restricciones de One UI.
+- **Todavía no ordena archivos por gusto musical, no controla específicamente Lark
+  Player y no responde notificaciones por ti.** Tampoco trae aún un adaptador de
+  Gemini para PC. Son funciones nuevas, no atajos de esta release.
 - **El «oye CORT» no sobrevive al reinicio ni a la pantalla apagada.** Android 14+ prohíbe
   arrancar el servicio de micrófono con `BOOT_COMPLETED`, y el servicio se detiene al apagarse
   la pantalla o a los cinco minutos de silencio. Tras reiniciar: abrir CORT o tocar la baldosa.
