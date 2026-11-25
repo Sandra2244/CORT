@@ -38,3 +38,26 @@ Formato: una decisión por sección. No borrar decisiones antiguas; marcarlas co
   - Publicación por fase verificada en `web/cort-v0`; sin etiqueta ni Release por defecto.
 - **Consecuencia:** primero `SPEC-SEC-001`; después los P0 de estabilidad. La construcción de proveedores queda para `SPEC-HIB-001`, sin volver a ofrecerlos como capacidades presentes.
 - **Cadencia:** cada fase nueva abre su propio cuestionario. La tanda actual se ejecuta después de las respuestas, sin volver a preguntar lo ya decidido.
+
+## ADR-004 — Asistente personal por subfases verificables
+
+- **Fecha:** 2026-11-25
+- **Estado:** Aceptada como criterio operativo, corregible
+- **Contexto:** [`CUESTIONARIO-ASISTENTE-001.md`](CUESTIONARIO-ASISTENTE-001.md). La persona usuaria pidió comenzar el desarrollo completo sin marcar las opciones; no se atribuye una respuesta textual que no dio.
+- **Decisión:** ejecutar las recomendaciones A, en este orden:
+  1. Asistente Android, enfoque del orbe, chat, escucha larga y alarmas con instrucciones.
+  2. Música, auriculares y organización de archivos con vista previa y deshacer.
+  3. Notificaciones, personalidad, voces y rutinas con frases trazables.
+  4. Router híbrido común con Gemini y degradación local.
+  5. Verificación física en el A16 y evaluación de una base 1.0.
+- **Límites:** el asistente lo selecciona Android; la superposición exige permiso; no se suplanta a Gemini, no se clonan voces, no se mueven ni borran archivos sin autorización y no se declara estabilidad sin evidencia física.
+- **Consecuencia:** [`SPEC-ASIS-001.md`](SPEC-ASIS-001.md) se cierra por subfases. Una función pendiente se muestra como pendiente, no como promesa cumplida.
+
+## ADR-005 — Un centro de acciones y chat de pantalla completa
+
+- **Fecha:** 2026-11-25
+- **Estado:** Aceptada
+- **Contexto:** la usuaria rechazó la jerarquía anterior: flechas, botones Chat/Paneles y compositores distintos abren funciones parecidas. Pidió una UI accesible, futura y ordenada, con chat completo superpuesto y la misma vista previa al invocar CORT con auriculares.
+- **Decisión:** reutilizar el menú existente como única puerta de acciones; mover Chat, Enfoque y palabra de despertar a su interior; retirar la bandeja lateral y su flecha; convertir el chat en diálogo de pantalla completa con un solo compositor; alinear la vista rápida nativa con la misma paleta y jerarquía.
+- **Referencias verificadas:** HERMES aporta el patrón de centro accesible y tacto de 44 px; OpenJARVIS aporta rutas/pantallas separadas y diálogos con fondo; LinuxJarvis respalda «un menú, distintas pantallas». Se implementan los patrones en el WebView, sin trasplantar React, Qt ni código TechEnClair sin licencia.
+- **Consecuencia:** ASIS-1.10–1.15 son bloqueantes. La evidencia anterior de chat y selector se conserva, pero no basta para cerrar la fase.

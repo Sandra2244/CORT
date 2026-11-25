@@ -79,6 +79,9 @@ public class MainActivity extends Activity {
      */
     public static final String PIDE_ESCUCHAR = "cort-escuchar";
 
+    /** La vista rápida pide el chat completo, con la frase dictada si la hubo. */
+    public static final String PIDE_CHAT = "cort-chat";
+
     /**
      * Lo que trae `ServicioEscucha` cuando la frase se oyó con la app cerrada: la
      * palabra ya hizo su trabajo, así que la cara no vuelve a ponerse a escuchar —
@@ -183,11 +186,20 @@ public class MainActivity extends Activity {
             return;
         }
         final String dicho = pedido.getStringExtra(PIDE_FRASE);
+        final boolean pideChat = pedido.getBooleanExtra(PIDE_CHAT, false);
+        pedido.removeExtra(PIDE_CHAT);
         if (dicho != null && !dicho.trim().isEmpty()) {
             // El despertador ya oyó la frase: se suelta del `Intent` para que no la
             // vuelva a procesar un `onNewIntent` posterior (One UI reutiliza la tarea).
             pedido.removeExtra(PIDE_FRASE);
-            capa.post(() -> entregaFrase.frase(dicho.trim()));
+            capa.post(() -> {
+                if (pideChat) abrirChat();
+                entregaFrase.frase(dicho.trim());
+            });
+            return;
+        }
+        if (pideChat) {
+            capa.post(this::abrirChat);
             return;
         }
         if (!pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
@@ -205,6 +217,20 @@ public class MainActivity extends Activity {
                 cara.escucharAhora();
             }
         });
+    }
+
+    private void abrirChat() {
+        if (nexo != null) {
+            nexo.mostrarChat();
+            return;
+        }
+        if (web != null) {
+            web.evaluateJavascript("window.CORT_mostrarChat && window.CORT_mostrarChat()", null);
+            return;
+        }
+        if (cara != null) {
+            cara.procesar("¿qué puedes hacer?");
+        }
     }
 
     private SharedPreferences prefs() {

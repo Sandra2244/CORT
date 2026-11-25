@@ -84,6 +84,9 @@
     ["Aucun microphone détecté", "No se detectó ningún micrófono", "No microphone detected"],
     ["Activer le microphone", "Activar el micrófono", "Enable the microphone"],
     ["Mode écoute permanente", "Modo de escucha permanente", "Always-listening mode"],
+    ["DURÉE D'ÉCOUTE", "DURACIÓN DE ESCUCHA", "LISTENING DURATION"],
+    ["DICTADO MANUAL", "DICTADO MANUAL", "MANUAL DICTATION"],
+    ["APRÈS LE MOT", "DESPUÉS DE LA PALABRA", "AFTER THE WAKE WORD"],
     ["CAMÉRA (WEB-CAM / VISION & HOLOGRAMME)", "CÁMARA (WEBCAM / VISIÓN Y HOLOGRAMA)", "CAMERA (WEBCAM / VISION & HOLOGRAM)"],
     ["📹 RETOUR CAMÉRA", "📹 VISTA DE CÁMARA", "📹 CAMERA FEED"],
     ["VILLE PAR DÉFAUT (Météo & Restaurants)", "CIUDAD POR DEFECTO (Clima y restaurantes)", "DEFAULT CITY (Weather & Restaurants)"],
@@ -1342,6 +1345,7 @@
     document.title = translate(document.title || "CORT");
     walk(document.body);
     pintarFilaIdioma();
+    pintarFilaEscucha();
     const chip = document.getElementById("cort-boot-lang");
     if (chip) chip.textContent = lang.toUpperCase();
   }
@@ -1438,7 +1442,105 @@
     }
   }
 
-  // ---- 5b. Fila del cerebro: qué modelos hay en el equipo y qué falta para usarlos
+  // ---- 5b. Duración real del oído del teléfono ------------------------------
+  const ESCUCHA_TEXTO = {
+    es: { titulo: "DURACIÓN DE ESCUCHA", dictado: "DICTADO MANUAL", frase: "DESPUÉS DE LA PALABRA" },
+    fr: { titulo: "DURÉE D'ÉCOUTE", dictado: "DICTADO MANUAL", frase: "APRÈS LE MOT" },
+    en: { titulo: "LISTENING DURATION", dictado: "MANUAL DICTATION", frase: "AFTER THE WAKE WORD" }
+  };
+  const segundosEscucha = {
+    dictado: Number(localStorage.getItem("cort_dictado_segundos")) || 60,
+    frase: Number(localStorage.getItem("cort_frase_segundos")) || 60
+  };
+
+  function limitarSegundosWeb(pedido) {
+    const n = Math.round(Number(pedido));
+    return Number.isFinite(n) ? Math.min(60, Math.max(20, n)) : 60;
+  }
+
+  function fijarDuracionEscucha(tipo, pedido) {
+    if (tipo !== "dictado" && tipo !== "frase") return;
+    const segundos = limitarSegundosWeb(pedido);
+    segundosEscucha[tipo] = segundos;
+    localStorage.setItem("cort_" + tipo + "_segundos", String(segundos));
+    const puente = window.CortNative;
+    if (tipo === "dictado" && puente && typeof puente.fijarSegundosDictado === "function") {
+      puente.fijarSegundosDictado(segundos);
+    }
+    if (tipo === "frase" && puente && typeof puente.fijarSegundosFrase === "function") {
+      puente.fijarSegundosFrase(segundos);
+    }
+  }
+
+  function selectorEscucha(tipo, rotulo) {
+    const control = document.createElement("div");
+    control.className = "cort-escucha-control";
+    const etiqueta = document.createElement("label");
+    etiqueta.htmlFor = "cort-escucha-" + tipo;
+    etiqueta.textContent = rotulo;
+    const selector = document.createElement("select");
+    selector.id = "cort-escucha-" + tipo;
+    selector.setAttribute("aria-label", rotulo);
+    for (let n = 20; n <= 60; n++) {
+      const opcion = document.createElement("option");
+      opcion.value = String(n);
+      opcion.textContent = n + " s";
+      selector.appendChild(opcion);
+    }
+    selector.addEventListener("change", () => fijarDuracionEscucha(tipo, selector.value));
+    control.append(etiqueta, selector);
+    return control;
+  }
+
+  function asegurarFilaEscucha() {
+    if (!window.CORT_esAndroid) return false;
+    const panel = document.querySelector("#settings-modal .settings-container");
+    if (!panel) return false;
+    const fila = document.getElementById("cort-escucha-row");
+    if (fila && panel.contains(fila)) return true;
+    const nuevo = document.createElement("div");
+    nuevo.id = "cort-escucha-row";
+    const vista = document.getElementById("cort-vista-row");
+    if (vista && vista.parentElement === panel) panel.insertBefore(nuevo, vista.nextSibling);
+    else {
+      const cabecera = panel.querySelector(".settings-header");
+      panel.insertBefore(nuevo, cabecera ? cabecera.nextSibling : panel.firstChild);
+    }
+    pintarFilaEscucha();
+    return true;
+  }
+
+  function pintarFilaEscucha() {
+    const fila = document.getElementById("cort-escucha-row");
+    if (!fila) return;
+    const puente = window.CortNative;
+    if (puente && typeof puente.segundosDictado === "function") {
+      segundosEscucha.dictado = limitarSegundosWeb(puente.segundosDictado());
+    }
+    if (puente && typeof puente.segundosFrase === "function") {
+      segundosEscucha.frase = limitarSegundosWeb(puente.segundosFrase());
+    }
+    const textos = ESCUCHA_TEXTO[lang] || ESCUCHA_TEXTO.es;
+    if (!fila.children.length) {
+      const titulo = document.createElement("span");
+      titulo.id = "cort-escucha-titulo";
+      fila.append(titulo,
+          selectorEscucha("dictado", textos.dictado),
+          selectorEscucha("frase", textos.frase));
+    }
+    const titulo = document.getElementById("cort-escucha-titulo");
+    if (titulo) titulo.textContent = textos.titulo + " //";
+    for (const tipo of ["dictado", "frase"]) {
+      const selector = document.getElementById("cort-escucha-" + tipo);
+      if (!selector) continue;
+      selector.value = String(limitarSegundosWeb(segundosEscucha[tipo]));
+      selector.setAttribute("aria-label", textos[tipo]);
+      const etiqueta = selector.previousElementSibling;
+      if (etiqueta) etiqueta.textContent = textos[tipo];
+    }
+  }
+
+  // ---- 5c. Fila del cerebro: qué modelos hay en el equipo y qué falta para usarlos
   //
   // Todo lo que pinta sale del puente (`en_disco`, `ram_disponible_mb`, `catalogo`).
   // Si el puente no ha contestado todavía, la fila lo dice en voz alta en vez de
@@ -1901,110 +2003,215 @@
     pintarVoz();
   };
 
-  // ---- 5c. bandeja de petición escrita (F9) con tirador lateral (D1) ---------
-  // La plantilla sólo traía órdenes de una lista fija y el micrófono. Si el cerebro
-  // entiende frases largas tiene que haber un sitio donde escribirlas: además sirve de
-  // destino al dictado, porque CORT_alVoz busca #command-input y ese es este campo.
-  // El cajón se guarda medio cerrado detrás de una flecha en el canto izquierdo: en el
-  // teléfono no tapa el orbe hasta que lo pides, y en el PC basta pasar el cursor.
-  function bandeja() {
-    let b = document.getElementById("cort-bandeja");
-    if (b) return b;
-    const abierto = localStorage.getItem("cort_bandeja") !== "cerrada";
-    b = document.createElement("form");
-    b.id = "cort-bandeja";
-    b.className = abierto ? "cort-abierta" : "";
-    b.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:9997;display:flex;gap:8px;" +
-      "width:min(520px,calc(100vw - 78px));padding:8px;border-radius:14px;" +
-      "background:rgba(8,16,28,.86);border:1px solid rgba(90,200,255,.42);" +
-      "box-shadow:0 6px 24px rgba(0,0,0,.45),0 0 18px rgba(60,180,255,.16);" +
-      "transition:transform .22s ease,opacity .22s ease";
-    const campo = document.createElement("input");
-    campo.id = "command-input";
-    campo.type = "text";
-    campo.autocomplete = "off";
-    campo.placeholder = "pide lo que sea: «mueve la carpeta proyectos a documentos»";
-    campo.style.cssText = "flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid rgba(120,200,240,.35);" +
-      "background:rgba(6,12,22,.9);color:#e9f4ff;font:14px/1.4 system-ui";
-    const boton = document.createElement("button");
-    boton.type = "submit";
-    boton.id = "cort-bandeja-pedir";
-    boton.textContent = "pedir";
-    boton.style.cssText = "padding:8px 14px;border-radius:10px;cursor:pointer;border:1px solid rgba(90,210,255,.65);" +
-      "background:rgba(40,150,220,.22);color:#bfeeff;font:14px/1.2 system-ui";
-    b.append(campo, boton);
+  // ---- ASIS-1: un centro de acciones y conversación accesible -----------------
+  function mensajeChat(rol, texto) {
+    const limpio = String(texto || "").trim();
+    if (!limpio) return;
+    const registro = document.getElementById("cort-chat-registro");
+    if (!registro) return;
+    const mensaje = document.createElement("div");
+    mensaje.className = "cort-chat-mensaje cort-chat-" + (rol === "user" ? "user" : "cort");
+    const autor = document.createElement("strong");
+    autor.textContent = rol === "user" ? "Tú" : "CORT";
+    const contenido = document.createElement("p");
+    contenido.textContent = limpio;
+    mensaje.append(autor, contenido);
+    registro.appendChild(mensaje);
+    while (registro.children.length > 100) registro.removeChild(registro.firstElementChild);
+    registro.scrollTop = registro.scrollHeight;
+  }
 
-    // F10: el candado del oído. Con la palabra encendida, CORT escucha en silencio y
-    // sólo obedece lo que va dicho después de «cort».
-    const wake = document.createElement("button");
-    wake.id = "cort-bandeja-wake";
-    wake.type = "button";
-    wake.textContent = "«cort»";
-    wake.title = "palabra de despertar: sólo obedece después de oír su nombre";
-    wake.style.cssText = "padding:8px 9px;border-radius:10px;cursor:pointer;font:13px/1.2 system-ui;" +
-      "border:1px solid rgba(90,210,255,.45);background:rgba(20,60,90,.25);color:#9fd8ef";
-    wake.addEventListener("click", () =>
-      window.CORT_enviarAlCerebro({ type: wake.dataset.on === "1" ? "wake_off" : "wake_on" }));
-    b.insertBefore(wake, boton);
-
-    const tirador = document.createElement("button");
-    tirador.id = "cort-bandeja-tirador";
-    tirador.type = "button";
-    tirador.textContent = abierto ? "‹" : "›";
-    tirador.title = "bandeja de petición";
-    tirador.setAttribute("aria-label", "abrir o cerrar la bandeja de petición");
-    (document.body || document.documentElement).append(b, tirador);
-
-    const abre = () => {
-      b.classList.add("cort-abierta");
-      b.style.transform = "translateX(0)";
-      b.style.opacity = "1";
-      b.style.pointerEvents = "auto";
-      tirador.textContent = "‹";
-      localStorage.setItem("cort_bandeja", "abierta");
-    };
-    const cierra = () => {
-      b.classList.remove("cort-abierta");
-      b.style.transform = "translateX(calc(-100% - 26px))";
-      b.style.opacity = "0";
-      b.style.pointerEvents = "none";
-      tirador.textContent = "›";
-      localStorage.setItem("cort_bandeja", "cerrada");
-    };
-    if (!abierto) cierra();
-    tirador.addEventListener("click", () => {
-      (b.classList.contains("cort-abierta") ? cierra : abre)();
-      if (b.classList.contains("cort-abierta")) campo.focus();
-    });
-    // En PC alcanza con acercar el cursor; en el teléfono el toque del tirador hace lo
-    // mismo. El hover sólo se escucha con cursor de verdad: en Android el navegador
-    // dispara mouseenter antes del click, y abrir+cerrar en el mismo toque dejaba la
-    // bandeja inutilizable.
-    if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
-      tirador.addEventListener("mouseenter", abre);
-      b.addEventListener("mouseenter", abre);
+  function fondoInerte(permitidos) {
+    const permitido = new Set(permitidos);
+    for (const elemento of document.body.children) {
+      if (!permitido.has(elemento)) elemento.inert = true;
     }
-    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cierra(); });
+  }
 
-    b.addEventListener("submit", (ev) => {
+  function fondoActivar() {
+    for (const elemento of document.body.children) elemento.inert = false;
+  }
+
+  function enfocables(contenedor) {
+    return [...contenedor.querySelectorAll(
+      'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]),' +
+      ' textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )].filter((elemento) => elemento.getClientRects().length > 0);
+  }
+
+  let retornoChat = null;
+
+  function abrirChat(enfocar = true) {
+    const chat = document.getElementById("cort-chat");
+    if (!chat) return;
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    const anterior = document.activeElement;
+    retornoChat = document.getElementById("jarvis-menu-btn") || anterior;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    chat.hidden = false;
+    document.documentElement.classList.add("cort-chat-abierto");
+    const boton = document.getElementById("cort-chat-btn");
+    if (boton) boton.setAttribute("aria-expanded", "true");
+    fondoInerte([chat]);
+    const campo = document.getElementById("cort-chat-input");
+    if (enfocar && campo) setTimeout(() => campo.focus(), 30);
+    else chat.focus();
+    const registro = document.getElementById("cort-chat-registro");
+    if (registro) registro.scrollTop = registro.scrollHeight;
+  }
+
+  function cerrarChat() {
+    const chat = document.getElementById("cort-chat");
+    if (!chat || chat.hidden) return;
+    chat.hidden = true;
+    document.documentElement.classList.remove("cort-chat-abierto");
+    const boton = document.getElementById("cort-chat-btn");
+    if (boton) boton.setAttribute("aria-expanded", "false");
+    fondoActivar();
+    if (retornoChat && retornoChat.isConnected) retornoChat.focus();
+    retornoChat = null;
+  }
+
+  function mantenerFoco(ev, contenedor) {
+    if (ev.key !== "Tab") return;
+    const elementos = enfocables(contenedor);
+    if (!elementos.length) return;
+    const primero = elementos[0];
+    const ultimo = elementos[elementos.length - 1];
+    if (ev.shiftKey && document.activeElement === primero) {
       ev.preventDefault();
-      const texto = campo.value.trim();
+      ultimo.focus();
+    } else if (!ev.shiftKey && document.activeElement === ultimo) {
+      ev.preventDefault();
+      primero.focus();
+    }
+  }
+
+  function pintarMenu(abierto, restaurar) {
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    const boton = document.getElementById("jarvis-menu-btn");
+    const fondo = document.getElementById("cort-menu-fondo");
+    if (!menu || !boton || !fondo) return;
+    boton.setAttribute("aria-expanded", abierto ? "true" : "false");
+    boton.setAttribute("aria-label", abierto ? "Cerrar acciones de CORT" : "Abrir acciones de CORT");
+    fondo.classList.toggle("hidden", !abierto);
+    document.documentElement.classList.toggle("cort-menu-abierto", abierto);
+    if (abierto) {
+      fondoInerte([boton, menu, fondo]);
+      const buscar = document.getElementById("cort-menu-buscar");
+      if (buscar && !menu.contains(document.activeElement)) setTimeout(() => buscar.focus(), 0);
+    } else {
+      const chat = document.getElementById("cort-chat");
+      if (chat && !chat.hidden) fondoInerte([chat]);
+      else fondoActivar();
+      if (restaurar && (menu.contains(document.activeElement) || document.activeElement === document.body)) {
+        boton.focus();
+      }
+    }
+  }
+
+  function sincronizarMenu() {
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    if (menu) pintarMenu(!menu.classList.contains("hidden"), false);
+  }
+
+  function cerrarMenu(restaurar = true) {
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    if (!menu) return;
+    menu.classList.add("hidden");
+    menu.classList.remove("active");
+    pintarMenu(false, restaurar);
+  }
+
+  function filtrarMenu() {
+    const buscar = document.getElementById("cort-menu-buscar");
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    if (!buscar || !menu) return;
+    const consulta = buscar.value.trim().toLowerCase();
+    let visibles = 0;
+    for (const boton of menu.querySelectorAll(".menu-action-btn")) {
+      const coincide = !consulta || boton.textContent.toLowerCase().includes(consulta)
+        || (boton.title || "").toLowerCase().includes(consulta);
+      boton.hidden = !coincide;
+      if (coincide) visibles++;
+    }
+    for (const seccion of menu.querySelectorAll(".dropdown-section")) {
+      seccion.hidden = ![...seccion.querySelectorAll(".menu-action-btn")]
+        .some((boton) => !boton.hidden);
+    }
+    const vacio = document.getElementById("cort-menu-vacio");
+    if (vacio) vacio.hidden = visibles > 0;
+  }
+
+  window.CORT_mostrarChat = abrirChat;
+  window.CORT_agregarChat = mensajeChat;
+  window.CORT_setEnfoque = (activo) => {
+    const encendido = activo !== false;
+    document.documentElement.classList.toggle("cort-enfoque", encendido);
+    localStorage.setItem("cort_enfoque", encendido ? "1" : "0");
+    const boton = document.getElementById("cort-foco-btn");
+    if (boton) {
+      boton.setAttribute("aria-pressed", encendido ? "true" : "false");
+      boton.textContent = encendido ? "Modo enfoque · activado" : "Modo enfoque · desactivado";
+    }
+  };
+
+  function prepararAsistente() {
+    window.CORT_setEnfoque(localStorage.getItem("cort_enfoque") !== "0");
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    const botonMenu = document.getElementById("jarvis-menu-btn");
+    const buscar = document.getElementById("cort-menu-buscar");
+
+    document.getElementById("cort-foco-btn")?.addEventListener("click", () => {
+      window.CORT_setEnfoque(!document.documentElement.classList.contains("cort-enfoque"));
+    });
+    document.getElementById("cort-wake-btn")?.addEventListener("click", (ev) => {
+      const boton = ev.currentTarget;
+      window.CORT_enviarAlCerebro({ type: boton.dataset.on === "1" ? "wake_off" : "wake_on" });
+    });
+    document.getElementById("cort-chat-btn")?.addEventListener("click", () => abrirChat());
+    document.getElementById("cort-chat-cerrar")?.addEventListener("click", cerrarChat);
+    document.getElementById("cort-menu-cerrar")?.addEventListener("click", () => cerrarMenu());
+    document.getElementById("cort-menu-fondo")?.addEventListener("click", () => cerrarMenu(false));
+    botonMenu?.addEventListener("click", () => setTimeout(sincronizarMenu, 0));
+    buscar?.addEventListener("input", filtrarMenu);
+    menu?.addEventListener("click", (ev) => {
+      if (ev.target.closest(".menu-action-btn")) cerrarMenu(false);
+    });
+
+    document.getElementById("cort-chat-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const campo = document.getElementById("cort-chat-input");
+      const texto = campo ? campo.value.trim() : "";
       if (!texto) return;
+      mensajeChat("user", texto);
       window.CORT_enviarAlCerebro({ type: "user_input", text: texto });
       campo.value = "";
-      flotante("pidiendo: " + texto.slice(0, 60));
     });
-    return b;
+    document.addEventListener("keydown", (ev) => {
+      const chat = document.getElementById("cort-chat");
+      if (ev.key === "Escape") {
+        if (chat && !chat.hidden) cerrarChat();
+        else if (menu && !menu.classList.contains("hidden")) cerrarMenu();
+        return;
+      }
+      if (chat && !chat.hidden) mantenerFoco(ev, chat);
+      else if (menu && !menu.classList.contains("hidden")) mantenerFoco(ev, menu);
+    });
+    if (menu && window.MutationObserver) {
+      new MutationObserver(sincronizarMenu).observe(menu, {
+        attributes: true, attributeFilter: ["class"]
+      });
+    }
   }
 
   function pintaWake(n) {
-    const w = document.getElementById("cort-bandeja-wake");
+    const w = document.getElementById("cort-wake-btn");
     if (!w) return;
     const encendido = !!n.wake;
     w.dataset.on = encendido ? "1" : "0";
-    w.textContent = encendido ? "«cort» ✓" : "«cort»";
-    w.style.background = encendido ? "rgba(0,229,255,.30)" : "rgba(20,60,90,.25)";
-    w.style.color = encendido ? "#03202e" : "#9fd8ef";
+    w.setAttribute("aria-pressed", encendido ? "true" : "false");
+    w.textContent = encendido ? "Palabra «CORT» · activada" : "Palabra «CORT» · desactivada";
   }
 
   // ---- F9: lo que el cerebro entendió y qué hizo la reja ---------------------
@@ -2494,6 +2701,9 @@
 
   window.CORT_alCerebro = (n) => {
     if (!n) return;
+    if (n.type === "plan_resultado") {
+      mensajeChat("assistant", n.decir || n.detalle || n.motivo || "No pude completar la petición.");
+    }
     if (n.type === "ollama_pull_progress") {
       progresoPull[n.model] = `${n.pct || 0}% — ${n.status || ""}${n.done ? "" : " (bajando)"}`;
       if (n.done) delete progresoPull[n.model];
@@ -2523,18 +2733,37 @@
     }
     if (n.type === "wake_estado") { pintaWake(n); return; }
     if (n.type === "voz_audio" && n.ok) sonarVoz(n);
-    if (n.type === "mic_texto") {
+    if (n.type === "mic_parcial" || n.type === "mic_texto") {
       if (n.descartado) return;   // habló otra cosa: no era para CORT
-      // Lo dictado se ve igual que lo escrito: la demo no tenía esta vía.
-      const campo = document.getElementById("command-input") ||
-                    document.querySelector("input[type=text][id*='input']");
-      if (campo && !campo.value) campo.value = n.texto || "";
+      if (n.type === "mic_parcial" || n.texto) abrirChat(false);
+      const campo = document.getElementById("cort-chat-input");
+      let limpiarDictado = false;
+      if (campo) {
+        if (n.type === "mic_parcial") {
+          campo.value = n.texto || "";
+          campo.dataset.cortParcial = "1";
+          campo.dataset.cortParcialTexto = n.texto || "";
+        } else if (!campo.value) {
+          campo.value = n.texto || "";
+          limpiarDictado = true;
+        } else if (campo.dataset.cortParcial === "1"
+                   && campo.value === campo.dataset.cortParcialTexto) {
+          campo.value = n.texto || "";
+          limpiarDictado = true;
+        }
+        if (n.type === "mic_texto") {
+          delete campo.dataset.cortParcial;
+          delete campo.dataset.cortParcialTexto;
+          if (limpiarDictado) campo.value = "";
+        }
+      }
+      if (n.type === "mic_texto" && n.texto) mensajeChat("user", n.texto);
     }
     pintarVoz();
   };
   function arrancarVoz() {
     pintarVoz();
-    bandeja();          // sin bandeja no hay cómo escribir una frase larga
+    prepararAsistente();
     chipCerebro();      // y sin este canto no hay cómo bajar ni probar un modelo
     rotuloCerebro(estadoCerebro);
     // El paquete de la maqueta se inicializa después que este archivo y escribe
@@ -2615,6 +2844,7 @@
     }
     asegurarFilaIdioma();
     asegurarFilaVista();
+    asegurarFilaEscucha();
     asegurarFilaCerebro();
     // Al arrancar el websocket del puente todavía puede estar abriendo (el puente
     // tarda ~2 s en levantarse). Se insiste cada 3 s hasta tener estado y luego ya
@@ -2627,6 +2857,7 @@
       for (const m of muts) for (const node of m.addedNodes) walk(node);
       asegurarFilaIdioma();
       asegurarFilaVista();
+      asegurarFilaEscucha();
       asegurarFilaCerebro();
     });
     mo.observe(document.body, { childList: true, subtree: true });
@@ -2634,6 +2865,7 @@
       walk(document.body);
       asegurarFilaIdioma();
       asegurarFilaVista();
+      asegurarFilaEscucha();
       asegurarFilaCerebro();
       if (typeof window.CORT_pedirEstadoCerebro !== "function") return;
       if (!estadoCerebro || ++tic % 5 === 0) window.CORT_pedirEstadoCerebro();

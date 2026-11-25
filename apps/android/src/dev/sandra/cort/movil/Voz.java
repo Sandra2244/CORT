@@ -43,6 +43,9 @@ public class Voz implements TextToSpeech.OnInitListener {
         void dijo(String texto);
 
         void fallo(String motivo);
+
+        default void parcial(String texto) {
+        }
     }
 
     /** El nivel del micrófono mientras se escucha, en 0..1, para el orbe. */
@@ -428,6 +431,14 @@ public class Voz implements TextToSpeech.OnInitListener {
 
         @Override
         public void onPartialResults(Bundle datos) {
+            if (dictadoLocal || oyente == null) {
+                return;
+            }
+            ArrayList<String> opciones =
+                    datos.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            if (opciones != null && !opciones.isEmpty() && !opciones.get(0).trim().isEmpty()) {
+                oyente.parcial(opciones.get(0));
+            }
         }
 
         @Override

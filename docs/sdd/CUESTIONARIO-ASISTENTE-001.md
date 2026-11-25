@@ -1,11 +1,11 @@
 # Cuestionario del asistente personal — CORT-ASIS-001
 
 - **Fecha:** 2026-11-25
-- **Estado:** EN ESPERA DE RESPUESTA
+- **Estado:** RECOMENDACIONES «A» ADOPTADAS COMO CRITERIO OPERATIVO; CORREGIBLES
 - **Base publicada:** `cort-v0.19.0`
 - **Objetivo:** convertir a CORT en un asistente híbrido utilizable a diario en PC y Android, con el orbe como identidad y una vista rápida superpuesta inspirada en el asistente de Galaxy.
 
-Este documento no autoriza código todavía. Cuando estén elegidas las diez opciones se registrará el ADR, la SPEC, el plan y la prueba roja.
+La persona usuaria pidió comenzar sin marcar opciones. Se adoptaron las diez recomendaciones A para ejecutar, sin atribuirle una selección textual; la decisión queda registrada en ADR-004 y puede corregirse. La SPEC y la prueba roja de la primera subfase están en `SPEC-ASIS-001.md`.
 
 ## Decisiones
 

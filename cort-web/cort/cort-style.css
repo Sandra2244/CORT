@@ -9,10 +9,14 @@
   --cort-menta: #00ffc8;
   --cort-cian: #22e5ff;
   --cort-magenta: #ff2bd6;
+  --cort-claro: #dffbff;
   --cort-violeta: #7b5cff;
   --cort-fondo: #03070d;
   --cort-corte: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%);
 }
+
+html, body { max-width: 100%; overflow-x: hidden; }
+#recipe-modal.hidden { display: none !important; }
 
 /* ---------- 1. Reloj: arriba a la derecha, compacto, cyberpunk ---------- */
 #orb-clock-hud {
@@ -98,38 +102,120 @@
   50%, 100% { opacity: 0; }
 }
 
-/* ---------- 2. Botón de menú: pastilla con corte, relleno neón ---------- */
+/* ---------- 2. Una sola puerta de acciones, al alcance del pulgar ---------- */
 #jarvis-menu-btn {
-  padding: 7px 15px 7px 11px !important;
+  position: fixed !important; top: auto !important; left: 50% !important; right: auto !important;
+  bottom: calc(14px + env(safe-area-inset-bottom)) !important;
+  transform: translateX(-50%) !important;
+  z-index: 10007 !important;
+  min-width: 148px !important; min-height: 48px !important;
+  padding: 10px 18px 10px 14px !important;
   color: var(--cort-fondo) !important;
   background: linear-gradient(135deg, var(--cort-menta), var(--cort-cian) 70%) !important;
   border: none !important;
   border-radius: 0 !important;
   clip-path: var(--cort-corte);
   box-shadow: 0 0 14px rgba(0, 255, 200, .35);
-  font-size: 10px !important;
-  letter-spacing: .22em !important;
+  font: 800 12px/1 system-ui, sans-serif !important;
+  letter-spacing: .18em !important;
   transition: box-shadow .18s ease, filter .18s ease;
 }
-
-#jarvis-menu-btn:hover {
-  filter: brightness(1.15);
-  box-shadow: 0 0 22px rgba(0, 255, 200, .6), 0 0 46px rgba(255, 43, 214, .25);
+#jarvis-menu-btn:hover,
+#jarvis-menu-btn[aria-expanded="true"] {
+  filter: brightness(1.12);
+  box-shadow: 0 0 22px rgba(0, 255, 200, .55), 0 0 46px rgba(255, 43, 214, .22);
 }
 
-/* desplegable del menú: panel angular con filete de neón */
+/* El centro se convierte en diálogo modal; el catálogo heredado conserva sus IDs. */
 #jarvis-menu-dropdown {
+  position: fixed !important; top: auto !important; left: 50% !important; right: auto !important;
+  bottom: calc(78px + env(safe-area-inset-bottom)) !important;
+  transform: translateX(-50%) !important;
+  z-index: 10006 !important;
+  width: min(560px, calc(100vw - 20px)) !important;
+  height: auto !important; max-height: calc(100dvh - 94px - env(safe-area-inset-bottom)) !important;
+  margin: 0 !important; padding: 14px !important;
   border-radius: 0 !important;
-  border: 1px solid rgba(0, 255, 200, .3) !important;
-  background: rgba(3, 8, 15, .94) !important;
-  clip-path: var(--cort-corte);
-  box-shadow: 0 0 26px rgba(0, 0, 0, .6), inset 0 0 26px rgba(0, 255, 200, .04) !important;
+  border: 1px solid rgba(0, 255, 200, .34) !important;
+  background: linear-gradient(145deg, rgba(5, 18, 27, .98), rgba(2, 6, 13, .98)) !important;
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  box-shadow: 0 0 30px rgba(0, 0, 0, .72), 0 0 26px rgba(0, 255, 200, .08),
+    inset 0 0 32px rgba(0, 255, 200, .04) !important;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-
+#jarvis-menu-dropdown.hidden { display: none !important; }
+#jarvis-menu-dropdown:not(.hidden) { display: flex !important; }
+#jarvis-menu-dropdown .dropdown-sections {
+  flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  padding: 2px 3px 8px; scrollbar-width: thin;
+  scrollbar-color: rgba(34, 229, 255, .4) transparent;
+}
+#jarvis-menu-dropdown .menu-action-btn {
+  min-height: 48px; padding: 10px 14px !important;
+  font: 700 12px/1.25 system-ui, sans-serif !important;
+  letter-spacing: .055em !important;
+}
+#jarvis-menu-dropdown .menu-action-btn:hover { padding-left: 14px !important; }
 #jarvis-menu-dropdown button:hover {
   background: linear-gradient(90deg, rgba(0, 255, 200, .16), transparent) !important;
   color: var(--cort-menta) !important;
 }
+#jarvis-menu-dropdown [hidden], #jarvis-menu-dropdown .dropdown-section[hidden] { display: none !important; }
+
+.cort-menu-cabecera {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex: 0 0 auto; padding: 2px 2px 12px;
+  border-bottom: 1px solid rgba(34, 229, 255, .18);
+}
+.cort-menu-cabecera h2 {
+  margin: 2px 0 0; color: var(--cort-claro, #dffbff);
+  font: 800 23px/1.1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase;
+}
+.cort-menu-senal {
+  color: var(--cort-menta); font: 700 9px/1 "Courier New", monospace; letter-spacing: .24em;
+}
+#cort-menu-cerrar {
+  min-width: 72px; min-height: 48px; cursor: pointer;
+  border: 1px solid rgba(34, 229, 255, .38); border-radius: 0;
+  background: rgba(34, 229, 255, .08); color: #dffbff;
+  font: 700 12px/1 system-ui, sans-serif;
+  clip-path: var(--cort-corte);
+}
+.cort-menu-buscar-etiqueta {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+#cort-menu-buscar {
+  flex: 0 0 auto; min-height: 48px; margin: 12px 0 6px; padding: 10px 12px;
+  border: 1px solid rgba(34, 229, 255, .3); border-radius: 0;
+  background: rgba(2, 8, 15, .88); color: #e9f4ff;
+  font: 15px/1.2 system-ui, sans-serif;
+}
+#cort-menu-buscar::placeholder { color: rgba(174, 240, 255, .48); }
+#cort-menu-buscar:focus-visible, #cort-menu-cerrar:focus-visible,
+#jarvis-menu-btn:focus-visible, .menu-action-btn:focus-visible {
+  outline: 2px solid var(--cort-menta); outline-offset: 3px;
+}
+#cort-menu-vacio { margin: 14px 4px; color: var(--cort-menta); font: 13px/1.4 system-ui, sans-serif; }
+#jarvis-menu-dropdown .cort-menu-principal .section-title {
+  color: var(--cort-menta) !important; text-shadow: 0 0 8px rgba(0, 255, 200, .3) !important;
+  border-bottom-color: rgba(0, 255, 200, .25) !important;
+}
+#jarvis-menu-dropdown .cort-menu-principal .menu-action-btn {
+  background: linear-gradient(90deg, rgba(0, 255, 200, .1), rgba(34, 229, 255, .03)) !important;
+  border: 1px solid rgba(0, 255, 200, .28) !important; color: #dffbff !important;
+}
+#jarvis-menu-dropdown .cort-menu-principal .menu-action-btn .btn-icon { color: var(--cort-menta) !important; }
+#jarvis-menu-dropdown .cort-menu-principal .menu-action-btn[aria-pressed="true"],
+#jarvis-menu-dropdown .cort-menu-principal .menu-action-btn.active {
+  background: rgba(0, 255, 200, .17) !important;
+  border-color: var(--cort-menta) !important; color: var(--cort-menta) !important;
+}
+#cort-menu-fondo {
+  position: fixed; inset: 0; z-index: 10005;
+  background: rgba(0, 3, 9, .62); backdrop-filter: blur(4px);
+}
+#cort-menu-fondo.hidden { display: none; }
 
 /* ---------- 3. Subtítulos / HUD de texto ---------- */
 #subtitle-hud {
@@ -436,33 +522,13 @@
   #cort-voz-badge { left: 6px; bottom: 34px; max-width: 62vw; flex-wrap: wrap; }
 }
 
-/* ---------- F9: la bandeja de petición ocupa el pie ----------
-   Medido en el navegador (525x521): la bandeja nueva caía encima del badge de
-   voz — que sí recibe clics — y de las tres líneas de estado. Se suben los
-   cuatro a la franja libre de arriba a la izquierda, despejada y sin orbe. */
+/* ---------- F9/D1: estado y micrófono despejados; la banda lateral se retira ---------- */
 #cort-voz-badge    { left: 12px !important; top: 50px !important; bottom: auto !important; right: auto !important; }
 #status-text       { left: 12px !important; top: 106px !important; bottom: auto !important; right: auto !important; transform: none !important; }
 #model-status-text { left: 12px !important; top: 122px !important; bottom: auto !important; right: auto !important; transform: none !important; }
 #assistant-label   { left: 12px !important; top: 138px !important; bottom: auto !important; right: auto !important; transform: none !important; text-align: left !important; }
 
-/* ---------- D1: CORT mira a Cortana (referencia de estilo, no activo) ----------
-   Paleta de hielo sobre azul, rejilla de scanlines fija (sin animar: en 2 núcleos
-   una capa animada cuesta FPS) y los tres botones del pie reordenados por uso:
-   micrófono primero, escucha continua después, silencio al final. */
-#cort-bandeja-tirador {
-  position: fixed; left: 0; bottom: 74px; z-index: 9999;
-  width: 34px; height: 66px; padding: 0; cursor: pointer;
-  border: 1px solid rgba(90,200,255,.5); border-left: none;
-  border-radius: 0 12px 12px 0;
-  background: linear-gradient(180deg, rgba(20,70,110,.92), rgba(8,24,44,.92));
-  color: #bfeeff; font: 700 22px/1 "Courier New", monospace;
-  box-shadow: 0 0 14px rgba(60,180,255,.22), inset 0 0 10px rgba(120,220,255,.14);
-}
-#cort-bandeja-tirador:hover { background: linear-gradient(180deg, rgba(34,104,150,.95), rgba(10,32,58,.95)); }
-#cort-bandeja.cort-abierta { transform: translateX(0); opacity: 1; }
-
 #mic-btn, #mute-button, #always-listen-btn { top: auto !important; bottom: 85px !important; right: auto !important; }
-/* La plantilla ya los centra con translateX(-50%): se mueve el centro, no la orilla. */
 #mic-btn            { left: calc(50% - 88px) !important; }
 #always-listen-btn  { left: 50% !important; }
 #mute-button        { left: calc(50% + 88px) !important; }
@@ -473,6 +539,112 @@ body::after {
     rgba(150,225,255,.05) 0px, rgba(150,225,255,.05) 1px,
     rgba(0,0,0,0) 1px, rgba(0,0,0,0) 4px);
   mix-blend-mode: screen;
+}
+
+/* ---------- ASIS-1: chat completo, superpuesto y accesible -------------------- */
+#cort-chat {
+  position: fixed; inset: 0;
+  z-index: 10020;
+  width: 100vw; height: 100dvh; max-height: none; min-height: 0;
+  transform: none; display: flex; flex-direction: column;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+  border: 0; border-radius: 0;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(3, 12, 21, .32), rgba(2, 5, 12, .74) 58%, rgba(2, 5, 12, .91) 100%);
+  color: #e9f4ff;
+  box-shadow: inset 0 0 90px rgba(0, 255, 200, .045);
+  backdrop-filter: blur(5px); overflow: hidden;
+}
+#cort-chat::before {
+  content: ""; position: absolute; top: 0; left: 8%; right: 8%; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cort-menta), var(--cort-cian), transparent);
+  box-shadow: 0 0 18px rgba(0, 255, 200, .45); pointer-events: none;
+}
+#cort-chat[hidden] { display: none; }
+#cort-chat:focus { outline: none; }
+#cort-chat header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex: 0 0 auto; width: min(960px, 100%); margin: 0 auto;
+  padding: 16px max(18px, env(safe-area-inset-right)) 16px max(18px, env(safe-area-inset-left));
+  border-bottom: 1px solid rgba(34, 229, 255, .2);
+  color: var(--cort-menta);
+}
+#cort-chat header strong {
+  display: block; margin-top: 4px;
+  font: 800 clamp(18px, 4vw, 25px)/1.15 system-ui, sans-serif; letter-spacing: .04em;
+}
+.cort-chat-canal {
+  color: rgba(174, 240, 255, .66);
+  font: 700 9px/1 "Courier New", monospace; letter-spacing: .24em;
+}
+#cort-chat header button, #cort-chat form button {
+  min-width: 48px; min-height: 48px; padding: 10px 16px; cursor: pointer;
+  border: 1px solid rgba(34, 229, 255, .42); border-radius: 0;
+  background: rgba(34, 229, 255, .1); color: #dff8ff;
+  font: 700 13px/1.2 system-ui, sans-serif;
+  clip-path: var(--cort-corte);
+}
+#cort-chat header button:hover, #cort-chat form button:hover {
+  border-color: var(--cort-menta); color: var(--cort-menta);
+  background: rgba(0, 255, 200, .12);
+}
+#cort-chat-registro {
+  flex: 1; min-height: 0; width: min(960px, 100%); margin: 0 auto;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 20px max(18px, env(safe-area-inset-right)) 20px max(18px, env(safe-area-inset-left));
+  display: flex; flex-direction: column; gap: 12px;
+  scrollbar-width: thin; scrollbar-color: rgba(34, 229, 255, .4) transparent;
+}
+.cort-chat-mensaje {
+  max-width: min(82%, 720px); padding: 12px 14px;
+  border-radius: 0; clip-path: var(--cort-corte);
+}
+.cort-chat-mensaje strong { display: block; margin-bottom: 5px; font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+.cort-chat-mensaje p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.55; }
+.cort-chat-user { align-self: flex-end; background: rgba(34, 229, 255, .13); border: 1px solid rgba(34, 229, 255, .28); }
+.cort-chat-cort { align-self: flex-start; background: rgba(0, 255, 200, .07); border: 1px solid rgba(0, 255, 200, .22); }
+#cort-chat form {
+  flex: 0 0 auto; width: min(960px, 100%); margin: 0 auto;
+  padding: 12px max(18px, env(safe-area-inset-right)) 16px max(18px, env(safe-area-inset-left));
+  border-top: 1px solid rgba(34, 229, 255, .2);
+  background: rgba(2, 8, 15, .72);
+}
+.cort-chat-etiqueta {
+  display: block; margin: 0 0 7px 2px; color: rgba(174, 240, 255, .72);
+  font: 700 10px/1.2 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase;
+}
+#cort-chat form > div { display: flex; gap: 10px; }
+#cort-chat-input {
+  flex: 1; min-width: 0; min-height: 48px; padding: 12px 13px;
+  border: 1px solid rgba(34, 229, 255, .34); border-radius: 0;
+  background: #06101b; color: #e9f4ff; font: 16px/1.3 system-ui, sans-serif;
+}
+#cort-chat-input::placeholder { color: rgba(174, 240, 255, .42); }
+#cort-chat-input:focus-visible, #cort-chat header button:focus-visible,
+#cort-chat form button:focus-visible { outline: 2px solid var(--cort-menta); outline-offset: 2px; }
+
+html.cort-enfoque { background: var(--cort-fondo); }
+html.cort-enfoque body { background: var(--cort-fondo); }
+html.cort-enfoque body > :not(#orb-canvas):not(#orb-clock-hud):not(#mic-btn):not(#mute-button):not(#always-listen-btn):not(#status-text):not(#model-status-text):not(#subtitle-hud):not(#user-speech-hud):not(#pc-lyrics-hud):not(#error-text):not(#jarvis-menu-btn):not(#jarvis-menu-dropdown):not(#cort-menu-fondo):not(#cort-chat):not(#cort-toast):not(#jarvis-wallpaper-overlay) {
+  display: none !important;
+}
+html.cort-enfoque #jarvis-wallpaper-overlay { background: rgba(0, 0, 0, .74) !important; }
+html.cort-enfoque #orb-clock-hud { opacity: .62; }
+html.cort-enfoque #cort-chat { display: flex; }
+html.cort-enfoque #cort-chat[hidden] { display: none; }
+
+@media (max-width: 420px) {
+  #cort-chat header { padding-top: 12px; padding-bottom: 12px; }
+  #cort-chat-registro { padding-top: 14px; padding-bottom: 14px; }
+  #cort-chat form { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .cort-chat-mensaje { max-width: 91%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #jarvis-menu-btn, #jarvis-menu-dropdown, #cort-menu-fondo,
+  #cort-chat, #cort-chat button, #cort-chat input {
+    transition: none !important; animation: none !important; scroll-behavior: auto !important;
+  }
 }
 
 /* ---------- P0-3: la fila del interruptor de vista (Ajustes) ----------
@@ -489,7 +661,7 @@ body::after {
   background: rgba(3, 8, 15, .6);
   flex-wrap: wrap;
 }
-#cort-vista-row > span {
+#cort-vista-row > span, #cort-escucha-row > span {
   font: 700 10px/1 "Courier New", monospace;
   letter-spacing: .14em;
   color: rgba(174, 240, 255, .75);
@@ -513,6 +685,43 @@ body::after {
   border-color: transparent;
   color: var(--cort-fondo);
   box-shadow: 0 0 12px rgba(0, 255, 200, .45);
+}
+
+#cort-escucha-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+  border: 1px solid rgba(0, 255, 200, .26);
+  clip-path: var(--cort-corte);
+  background: rgba(3, 8, 15, .6);
+  flex-wrap: wrap;
+}
+.cort-escucha-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 210px;
+  min-width: 0;
+}
+.cort-escucha-control label {
+  color: rgba(174, 240, 255, .75);
+  font: 700 10px/1.3 system-ui, sans-serif;
+}
+#cort-escucha-row select {
+  flex: 1;
+  min-width: 76px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 1px solid rgba(34, 229, 255, .3);
+  border-radius: 8px;
+  background: #06101b;
+  color: #dff8ff;
+  font: 700 14px/1 system-ui, sans-serif;
+}
+@media (max-width: 380px) {
+  .cort-escucha-control { flex-basis: 100%; }
 }
 
 /* ---------- P0-3: vista teléfono (E3 de la auditoría del 2026-11-08) ----------

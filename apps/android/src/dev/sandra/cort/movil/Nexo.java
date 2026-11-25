@@ -140,6 +140,7 @@ public class Nexo {
     private boolean escuchaContinua;
     /** Si el micrófono está abierto AHORA, medido por quien lo abrió y lo cerró. */
     private volatile boolean escuchando;
+    private boolean chatPendiente;
     private boolean pantallaCompleta;
 
     public Nexo(Activity actividad, Runnable seCayo) {
@@ -205,6 +206,7 @@ public class Nexo {
             public void onPageFinished(WebView vista, String url) {
                 if (esDeLaCara(url)) {
                     arranque();
+                    abrirChatSiCarga();
                 }
             }
 
@@ -2007,6 +2009,11 @@ public class Nexo {
                     envia(cuadro("type", "mic_error", "origen", "real", "motivo", motivo));
                     envia(cuadro("state", "idle"));
                 }
+
+                @Override
+                public void parcial(String texto) {
+                    envia(cuadro("type", "mic_parcial", "texto", texto, "origen", "real"));
+                }
             };
             Motor oido = Motor.compartido(actividad.getApplicationContext());
             if (oido.listo()) {
@@ -2039,13 +2046,28 @@ public class Nexo {
         actividad.runOnUiThread(() -> voz.hablar(texto));
     }
 
-    /**
-     * El interruptor de Ajustes (P0-3): «teléfono» adapta la cara al ancho del
-     * aparato; «escritorio» la deja ancha como en el portátil, con pellizco para
-     * zoom. Se guarda y se recarga: el ancho de layout del WebView no se cambia
-     * en caliente sin repintar la página entera.
-     */
+    /** El chat puede pedirse antes de que el WebView termine de cargar. */
     @JavascriptInterface
+    public void mostrarChat() {
+        if (actividad.isFinishing()) return;
+        actividad.runOnUiThread(() -> {
+            chatPendiente = true;
+            abrirChatSiCarga();
+        });
+    }
+
+    private void abrirChatSiCarga() {
+        if (!chatPendiente || actividad.isFinishing()) return;
+        WebView ventana = web;
+        if (ventana == null) return;
+        ventana.evaluateJavascript(
+                "(function(){if(window.CORT_mostrarChat){window.CORT_mostrarChat();return true;}"
+                        + "return false;})()",
+                listo -> {
+                    if ("true".equals(listo)) chatPendiente = false;
+                });
+    }
+
     public void fijarVista(final String modo) {
         if (!"telefono".equals(modo) && !"escritorio".equals(modo)) {
             return;
@@ -2059,6 +2081,33 @@ public class Nexo {
             aplicaVista(ventana.getSettings(), modo);
             ventana.reload();
         });
+    }
+
+    @JavascriptInterface
+    public int segundosDictado() {
+        return Motor.segundosDictado(actividad.getApplicationContext());
+    }
+
+    @JavascriptInterface
+    public int segundosFrase() {
+        int segundos = actividad.getApplicationContext()
+                .getSharedPreferences(Motor.PREFERENCIAS, Context.MODE_PRIVATE)
+                .getInt(Motor.CLAVE_FRASE, Motor.MAX_SEGUNDOS);
+        return Motor.limitarSegundos(segundos);
+    }
+
+    @JavascriptInterface
+    public void fijarSegundosDictado(final int segundos) {
+        actividad.getApplicationContext()
+                .getSharedPreferences(Motor.PREFERENCIAS, Context.MODE_PRIVATE)
+                .edit().putInt(Motor.CLAVE_DICTADO, Motor.limitarSegundos(segundos)).apply();
+    }
+
+    @JavascriptInterface
+    public void fijarSegundosFrase(final int segundos) {
+        actividad.getApplicationContext()
+                .getSharedPreferences(Motor.PREFERENCIAS, Context.MODE_PRIVATE)
+                .edit().putInt(Motor.CLAVE_FRASE, Motor.limitarSegundos(segundos)).apply();
     }
 
     private void aplicaVista(WebSettings s, String modo) {

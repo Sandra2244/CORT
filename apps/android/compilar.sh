@@ -278,9 +278,15 @@ fi
 javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
 
-javac --release 11 -classpath build/obj -d build/pruebas tests/PuertaRamTest.java tests/SecretoTest.java
-java -cp build/obj:build/pruebas dev.sandra.cort.movil.PuertaRamTest
-java -cp build/obj:build/pruebas dev.sandra.cort.movil.SecretoTest
+javac --release 11 -classpath build/obj -d build/pruebas \
+    tests/PuertaRamTest.java tests/SecretoTest.java tests/LimiteEscuchaTest.java
+PRUEBAS_CP="build/obj:build/pruebas:$PLAT/android.jar"
+for JAR in vendor/vosk-android-0.3.75/classes.jar vendor/jna-5.14.0/classes.jar; do
+    [ ! -f "$JAR" ] || PRUEBAS_CP="$PRUEBAS_CP:$JAR"
+done
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PuertaRamTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.SecretoTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.LimiteEscuchaTest
 
 D8_ENTRADAS="$(find build/obj -name '*.class')"
 "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \

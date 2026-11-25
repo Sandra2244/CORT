@@ -1,6 +1,5 @@
 package dev.sandra.cort.movil;
 
-import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -46,11 +45,11 @@ public class Acciones {
             "ocho", "nueve", "diez", "once", "doce"};
     private static final Locale ES = Locale.forLanguageTag("es-ES");
 
-    private final Activity actividad;
+    private final Context contexto;
     private final Recuerdos recuerdos;
 
-    public Acciones(Activity actividad, Recuerdos recuerdos) {
-        this.actividad = actividad;
+    public Acciones(Context contexto, Recuerdos recuerdos) {
+        this.contexto = contexto.getApplicationContext();
         this.recuerdos = recuerdos;
     }
 
@@ -102,7 +101,7 @@ public class Acciones {
      * escribir el volumen de la dueña sin querer.
      */
     private String volumen(String direccion) {
-        AudioManager audio = (AudioManager) actividad.getSystemService(Context.AUDIO_SERVICE);
+        AudioManager audio = (AudioManager) contexto.getSystemService(Context.AUDIO_SERVICE);
         if (audio == null) {
             return "No encontré el control de volumen de este teléfono.";
         }
@@ -190,7 +189,7 @@ public class Acciones {
                         + "app instalada, la abro también.";
         }
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Abriendo " + destino + ".";
         } catch (ActivityNotFoundException noHay) {
             return "Este teléfono no trae una app para " + destino + ".";
@@ -214,7 +213,7 @@ public class Acciones {
         if (vacia(nombre)) {
             return null;
         }
-        PackageManager pm = actividad.getPackageManager();
+        PackageManager pm = contexto.getPackageManager();
         if (pm == null) {
             return "Este teléfono no me deja mirar sus aplicaciones.";
         }
@@ -235,7 +234,7 @@ public class Acciones {
             }
             // Abrirse a sí misma no es abrir una app: «abre CORT» ya lo hace el
             // lanzador del sistema, y por el puente de la cara no tiene sentido.
-            if (vista.activityInfo.packageName.equals(actividad.getPackageName())) {
+            if (vista.activityInfo.packageName.equals(contexto.getPackageName())) {
                 continue;
             }
             int marcado = parecido(pm, vista, buscado);
@@ -254,7 +253,7 @@ public class Acciones {
         arranque.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         String como_se_llama = mejor.loadLabel(pm).toString();
         try {
-            actividad.startActivity(arranque);
+            contexto.startActivity(arranque);
             return "Abriendo " + como_se_llama + ".";
         } catch (ActivityNotFoundException noPuede) {
             return "Encontré " + como_se_llama + " pero este teléfono no me deja abrirla.";
@@ -316,7 +315,7 @@ public class Acciones {
         Intent intento = new Intent(Intent.ACTION_VIEW, Uri.parse(enlace))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Pongo «" + obra + "»: abro su búsqueda en internet.";
         } catch (ActivityNotFoundException noHayNavegador) {
             return "Nada en este teléfono abre un enlace. Dime «busca " + obra + "».";
@@ -348,7 +347,7 @@ public class Acciones {
                 Uri.fromParts("tel", a_quien.trim(), null))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Abro el marcador con «" + a_quien + "». Tú aprietas llamar.";
         } catch (ActivityNotFoundException noHayMarcador) {
             return "Este teléfono no tiene marcador para «" + a_quien + "».";
@@ -413,7 +412,7 @@ public class Acciones {
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Alarma puesta a las " + hm[0] + ":"
                     + String.format(Locale.ROOT, "%02d", hm[1]) + ".";
         } catch (ActivityNotFoundException noHayApp) {
@@ -439,7 +438,7 @@ public class Acciones {
                 .putExtra(AlarmClock.EXTRA_MESSAGE, "CORT")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Cronómetro de " + resto + ".";
         } catch (ActivityNotFoundException noHayApp) {
             return "La app de reloj no me dejó abrir el cronómetro.";
@@ -453,7 +452,7 @@ public class Acciones {
                 .putExtra("query", resto)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            actividad.startActivity(intento);
+            contexto.startActivity(intento);
             return "Busco «" + resto + "».";
         } catch (ActivityNotFoundException noHayBuscador) {
             return "No hay buscador en este teléfono para «" + resto + "».";

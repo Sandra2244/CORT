@@ -13,6 +13,7 @@ package dev.sandra.cort.movil;
  */
 public final class Paleta {
     public static final int FONDO = 0xFF02040C;      // --bg
+    public static final int MENTA = 0xFF00FFC8;      // --cort-menta
     public static final int CIAN = 0xFF5CE1FF;       // --tint
     public static final int VIOLETA = 0xFF8F5CFF;    // night.core
     public static final int CLARO = 0xFFDFFBFF;      // work.hot

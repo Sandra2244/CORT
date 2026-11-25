@@ -1003,11 +1003,11 @@
   <script src="cort/cort-mock.js?v=s5a"></script>
   <script type="module" crossorigin src="assets/main-s6G6kMTO.js"></script>
   <script src="cort/cort-orbe.js?v=s2"></script>
-  <script src="cort/cort-ui.js?v=s4d"></script>
+  <script src="cort/cort-ui.js?v=asis3"></script>
   <link rel="modulepreload" crossorigin href="assets/three.module-DBf_OzsH.js">
   <link rel="stylesheet" crossorigin href="assets/main-CLjAaHak.css">
   <!-- CORT — capa de rediseño propia. Reversible: quitar esta línea. -->
-  <link rel="stylesheet" href="cort/cort-style.css?v=d1">
+  <link rel="stylesheet" href="cort/cort-style.css?v=asis3">
 </head>
 
 <body>
@@ -1103,6 +1103,25 @@
     </svg>
   </button>
 
+  <section id="cort-chat" role="dialog" aria-modal="true" aria-labelledby="cort-chat-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // CANAL DIRECTO</span>
+        <strong id="cort-chat-titulo">Conversación con CORT</strong>
+      </div>
+      <button id="cort-chat-cerrar" type="button" aria-label="Cerrar el chat">Cerrar</button>
+    </header>
+    <div id="cort-chat-registro" role="log" aria-live="polite" aria-relevant="additions"></div>
+    <form id="cort-chat-form">
+      <label for="cort-chat-input" class="cort-chat-etiqueta">Escribe a CORT</label>
+      <div>
+        <input id="cort-chat-input" type="text" autocomplete="off" maxlength="4000"
+               placeholder="Pide lo que necesitas…">
+        <button id="cort-chat-enviar" type="submit">Enviar</button>
+      </div>
+    </form>
+  </section>
+
   <div id="status-text"></div>
   <div id="model-status-text"></div>
   <div id="user-tip"
@@ -1142,17 +1161,44 @@
     </svg>
   </button>
   <!-- ══ UNIFIED MENU HUD ════════════════════════════════════════ -->
-  <button id="jarvis-menu-btn" title="Menu principal J.A.R.V.I.S">◈ MENU</button>
-  <div id="jarvis-menu-dropdown" class="hidden">
+  <button id="jarvis-menu-btn" type="button" title="Centro de acciones de CORT"
+    aria-label="Abrir acciones de CORT" aria-controls="jarvis-menu-dropdown"
+    aria-expanded="false" aria-haspopup="dialog">◈ ACCIONES</button>
+  <div id="jarvis-menu-dropdown" class="hidden" role="dialog" aria-modal="true"
+    aria-labelledby="cort-menu-titulo" tabindex="-1">
     <div class="dropdown-scanlines"></div>
     <div class="dropdown-corner tl"></div>
     <div class="dropdown-corner tr"></div>
     <div class="dropdown-corner bl"></div>
     <div class="dropdown-corner br"></div>
 
-    <div class="dropdown-header">◈ CONTROLES_SYSTEME // MENU</div>
+    <header class="cort-menu-cabecera">
+      <div>
+        <span class="cort-menu-senal">CENTRO DE MANDO</span>
+        <h2 id="cort-menu-titulo">Acciones</h2>
+      </div>
+      <button id="cort-menu-cerrar" type="button" aria-label="Cerrar las acciones">Cerrar</button>
+    </header>
+    <label class="cort-menu-buscar-etiqueta" for="cort-menu-buscar">Buscar una acción</label>
+    <input id="cort-menu-buscar" type="search" autocomplete="off" placeholder="Hablar, chat, música…">
+    <p id="cort-menu-vacio" hidden>No encontré esa acción.</p>
 
     <div class="dropdown-sections">
+      <div class="dropdown-section cort-menu-principal">
+        <div class="section-title">TU ASISTENTE</div>
+        <div class="section-buttons">
+          <button id="cort-chat-btn" type="button" class="menu-action-btn" aria-controls="cort-chat" aria-expanded="false">
+            <span class="btn-icon" aria-hidden="true">◈</span> ABRIR CHAT
+          </button>
+          <button id="cort-foco-btn" type="button" class="menu-action-btn" aria-pressed="true">
+            <span class="btn-icon" aria-hidden="true">◎</span> MODO ENFOQUE
+          </button>
+          <button id="cort-wake-btn" type="button" class="menu-action-btn" aria-pressed="false">
+            <span class="btn-icon" aria-hidden="true">◉</span> PALABRA «CORT»
+          </button>
+        </div>
+      </div>
+
       <!-- Section 1: IA & Reconnaissance -->
       <div class="dropdown-section">
         <div class="section-title">INTELLIGENCE ARTIFICIELLE</div>
@@ -1272,6 +1318,7 @@
       </div>
     </div>
   </div>
+  <div id="cort-menu-fondo" class="hidden" aria-hidden="true"></div>
   <div id="nemotron-toast"></div>
   <div id="update-banner">SYSTEM_UPDATE_AVAILABLE</div>
 

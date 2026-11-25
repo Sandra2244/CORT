@@ -76,7 +76,10 @@ public final class Motor {
     static final int MUESTREO = 16000;
 
     /** El dictado se corta solo: sin esto el micrófono quedaría abierto si la cara se va. */
-    static final int MAX_SEGUNDOS = 20;
+    static final int MAX_SEGUNDOS = 60;
+    static final String PREFERENCIAS = "cort";
+    static final String CLAVE_DICTADO = "cort_escucha_segundos";
+    static final String CLAVE_FRASE = "cort_frase_segundos";
 
     /**
      * F19d — las dos frases que despiertan a CORT. Dos, y no una, porque «oye CORT»
@@ -94,8 +97,23 @@ public final class Motor {
      */
     static final String GRAMATICA = armaGramatica(PALABRAS);
 
-    /** El tope de lo que se dice *después* de la palabra: 12 s y vuelve a dormir. */
-    static final int MAX_FRASE_MS = 12_000;
+    /** El tope de lo que se dice *después* de la palabra; también es configurable. */
+    static final int MAX_FRASE_MS = 60_000;
+
+    static int limitarSegundos(int pedido) {
+        return Math.min(60, Math.max(20, pedido));
+    }
+
+    static int segundosDictado(Context contexto) {
+        return limitarSegundos(contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE)
+                .getInt(CLAVE_DICTADO, MAX_SEGUNDOS));
+    }
+
+    static int milisFrase(Context contexto) {
+        int segundos = limitarSegundos(contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE)
+                .getInt(CLAVE_FRASE, MAX_FRASE_MS / 1000));
+        return segundos * 1000;
+    }
 
     private static String armaGramatica(String[] frases) {
         StringBuilder j = new StringBuilder("[");
@@ -753,6 +771,7 @@ public final class Motor {
             boolean capturando = false;
             long finCaptura = 0L;
             long inicioCaptura = 0L;
+            long ultimoParcial = 0L;
             while (escuchandoPalabra) {
                 if (escuchando) {
                     duerme(120);                       // el ● tiene el micrófono: se espera
@@ -779,7 +798,7 @@ public final class Motor {
                         capturaPedida = false;
                         capturando = true;
                         inicioCaptura = System.currentTimeMillis();
-                        finCaptura = inicioCaptura + MAX_FRASE_MS;
+                        finCaptura = inicioCaptura + milisFrase(contexto);
                         captura = new Recognizer(modeloUsado, MUESTREO);
                         continue;
                     }
@@ -791,7 +810,7 @@ public final class Motor {
                             avisaPalabra(oyente, dicho);
                             capturando = true;
                             inicioCaptura = System.currentTimeMillis();
-                            finCaptura = inicioCaptura + MAX_FRASE_MS;
+                            finCaptura = inicioCaptura + milisFrase(contexto);
                             captura = new Recognizer(modeloUsado, MUESTREO);
                         }
                     }
@@ -803,6 +822,17 @@ public final class Motor {
                 if (medidor != null) {
                     final float alto = nivelDe(b, leido);
                     principal.post(() -> medidor.nivel(alto));
+                }
+                long ahora = System.currentTimeMillis();
+                if (ahora - ultimoParcial >= 250L) {
+                    String parcial = textoDe(captura.getPartialResult()).trim();
+                    if (!parcial.isEmpty()) {
+                        final String visto = parcial;
+                        principal.post(() -> {
+                            if (oyente != null) oyente.parcial(visto);
+                        });
+                    }
+                    ultimoParcial = ahora;
                 }
                 String dicho = "";
                 if (captura.acceptWaveForm(b, leido)) {
@@ -935,7 +965,9 @@ public final class Motor {
         Recognizer reconocedor = null;
         String dicho = "";
         boolean huboCorte = false;
+        int limite = segundosDictado(contexto);
         long inicio = System.currentTimeMillis();
+        long ultimoParcial = 0L;
         try {
             int min = AudioRecord.getMinBufferSize(MUESTREO,
                     AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
@@ -952,7 +984,8 @@ public final class Motor {
             reconocedor = new Recognizer(modeloUsado, MUESTREO);
             byte[] b = new byte[min];
             micro.startRecording();
-            while (escuchando && (System.currentTimeMillis() - inicio) < MAX_SEGUNDOS * 1000L) {
+            while (escuchando && (System.currentTimeMillis() - inicio)
+                    < limite * 1000L) {
                 int n = micro.read(b, 0, b.length);
                 if (n <= 0) {
                     continue;
@@ -960,6 +993,17 @@ public final class Motor {
                 if (medidor != null) {
                     final float nivel = nivelDe(b, n);
                     principal.post(() -> medidor.nivel(nivel));
+                }
+                long ahora = System.currentTimeMillis();
+                if (ahora - ultimoParcial >= 250L) {
+                    String parcial = textoDe(reconocedor.getPartialResult()).trim();
+                    if (!parcial.isEmpty()) {
+                        final String visto = dicho.isEmpty() ? parcial : une(dicho, parcial);
+                        principal.post(() -> {
+                            if (oyente != null) oyente.parcial(visto);
+                        });
+                    }
+                    ultimoParcial = ahora;
                 }
                 // Vosk avisa (`true`) cuando detecta silencio: ahí la frase está
                 // completa y se puede leer el resultado sin esperar al final.
@@ -973,11 +1017,11 @@ public final class Motor {
                 dicho = une(dicho, cola);
             }
             ultimoDictadoMs = System.currentTimeMillis() - inicio;
-            boolean porTiempo = (System.currentTimeMillis() - inicio) >= MAX_SEGUNDOS * 1000L;
+            boolean porTiempo = (System.currentTimeMillis() - inicio) >= limite * 1000L;
             if (dicho.trim().isEmpty()) {
                 // Los tres casos se dicen distinto porque se sienten distinto:
-                // silencio, palabras que el modelo no conoce, y el corte de 20 s.
-                avisa(oyente, null, porTiempo ? "corté el dictado a los " + MAX_SEGUNDOS + " s"
+                // silencio, palabras que el modelo no conoce, y el corte por tiempo.
+                avisa(oyente, null, porTiempo ? "corté el dictado a los " + limite + " s"
                         : (huboCorte ? "no entendí nada" : "no te oí"));
             } else {
                 avisa(oyente, dicho.trim(), null);

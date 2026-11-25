@@ -51,6 +51,12 @@
                      android:required="false" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
                      android:required="false" />
+    <!--
+      ASIS-1: la vista rápida se dibuja sobre la app que está usando la dueña.
+      El permiso se declara, pero Android lo concede desde Ajustes; CORT no puede
+      saltarse ese paso ni hacerse pasar por el asistente de Google.
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.WAKE_LOCK"
                      android:required="false" />
     <uses-permission android:name="android.permission.VIBRATE"

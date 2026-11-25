@@ -111,6 +111,117 @@ def main():
            {".Asistente", ".Sesiones", ".Reconocimiento", ".Baldosa"} <= servicios,
            " ".join(sorted(servicios)))
 
+    print("\n== ASIS-1: vista rápida, enfoque y escucha larga ==")
+    prueba("la superposición se declara, pero Android sigue teniendo que concederla",
+           permisos.get("SYSTEM_ALERT_WINDOW") == "(por defecto: sí)",
+           permisos.get("SYSTEM_ALERT_WINDOW", "no está"))
+    rapida = lee(SRC / "VistaRapida.java")
+    motor = lee(SRC / "Motor.java")
+    voz = lee(SRC / "Voz.java")
+    sesion = lee(SRC / "Sesion.java")
+    actividad = lee(SRC / "MainActivity.java")
+    prueba("existe una vista rápida propia con ventana TYPE_APPLICATION_OVERLAY",
+           "TYPE_APPLICATION_OVERLAY" in rapida and "WindowManager" in rapida)
+    prueba("la vista rápida comprueba canDrawOverlays y abre Ajustes si falta el permiso",
+           "canDrawOverlays" in rapida and "ACTION_MANAGE_OVERLAY_PERMISSION" in rapida)
+    prueba("la sesión del asistente muestra el overlay en vez de abrir siempre la actividad",
+           "VistaRapida.mostrar(" in sesion and "MainActivity.class" not in sesion)
+    prueba("el overlay reutiliza el lazo cerrado y no ejecuta comandos de shell",
+           "cerebro.cadena(" in rapida and "acciones.ejecutar(" in rapida
+           and "Runtime.exec" not in rapida)
+    prueba("el overlay puede abrir el chat o entregar una frase a la cara completa",
+           "MainActivity.PIDE_CHAT" in rapida and "MainActivity.PIDE_FRASE" in rapida)
+    prueba("la vista rápida nativa tiene una sola puerta de acciones",
+           'setText("Acciones")' in rapida and "accionesPanel" in rapida
+           and "View.GONE" in rapida and "View.VISIBLE" in rapida)
+    prueba("las acciones nativas conservan hablar, chat, música y cierre sin duplicar entradas",
+           "private void escuchar()" in rapida and "private void abrirChat(" in rapida
+           and "private void abrirMusica()" in rapida and "private void cerrar()" in rapida
+           and "new Button[] {hablar, chat, musica}" not in rapida)
+    prueba("la vista rápida usa la paleta CORT y objetivos táctiles de 48 dp",
+           "Paleta.CIAN" in rapida and "Paleta.MENTA" in rapida
+           and "setMinHeight(dp(48))" in rapida and "setMinWidth(dp(48))" in rapida)
+    prueba("MainActivity consume PIDE_CHAT sin confundirlo con PIDE_ESCUCHAR",
+           'String PIDE_CHAT = "cort-chat"' in actividad
+           and "getBooleanExtra(PIDE_CHAT" in actividad)
+    nexo = lee(SRC / "Nexo.java")
+    prueba("el chat pedido durante la carga del WebView queda pendiente",
+           "chatPendiente" in nexo and "abrirChatSiCarga" in nexo
+           and "abrirChatSiCarga()" in nexo[nexo.find("onPageFinished"):nexo.find("onReceivedError")])
+    prueba("un fallo del hilo restablece la vista rápida y no deja el botón bloqueado",
+           "catch (Exception fallo)" in rapida and "No pude completar la orden" in rapida
+           and "procesando = false" in rapida)
+    prueba("cerrar la vista rápida no cierra SQLite mientras el hilo todavía lo usa",
+           "synchronized (ciclo)" in rapida and "cerrarMemoria" in rapida
+           and "if (!cerrada || trabajando || memoriaCerrada) return;" in rapida
+           and "recuerdos.close()" not in
+           rapida[rapida.find("private void cerrar()"):rapida.find("private void cerrarMemoriaSiTermino()")])
+    prueba("el micrófono local admite 60 s y el límite es configurable y acotado",
+           "MAX_SEGUNDOS = 60" in motor
+           and "cort_escucha_segundos" in motor and "Math.min(60" in motor)
+    prueba("la frase posterior a la palabra también llega a 60 s",
+           "MAX_FRASE_MS = 60_000" in motor and "cort_frase_segundos" in motor)
+    prueba("Vosk entrega texto provisional al oyente sin esperar el final",
+           "getPartialResult()" in motor and "default void parcial(" in voz)
+    ui_asis = lee(RAIZ / "cort-web" / "cort" / "cort-ui.js")
+    html_asis = lee(RAIZ / "cort-web" / "index.html")
+    estilo_asis = lee(RAIZ / "cort-web" / "cort" / "cort-style.css")
+    prueba("la cara Web tiene un único centro de acciones con estado ARIA",
+           'id="jarvis-menu-btn"' in html_asis
+           and 'aria-controls="jarvis-menu-dropdown"' in html_asis
+           and 'aria-expanded="false"' in html_asis
+           and 'role="dialog"' in html_asis[html_asis.find('id="jarvis-menu-dropdown"'):])
+    prueba("chat, enfoque y palabra de despertar viven dentro del único centro",
+           'id="cort-chat-btn"' in html_asis[html_asis.find('id="jarvis-menu-dropdown"'):]
+           and 'id="cort-foco-btn"' in html_asis[html_asis.find('id="jarvis-menu-dropdown"'):]
+           and 'id="cort-wake-btn"' in html_asis[html_asis.find('id="jarvis-menu-dropdown"'):])
+    prueba("no quedan flechas laterales, botones Chat/Paneles ni compositores duplicados",
+           "cort-bandeja" not in ui_asis and "command-input" not in ui_asis
+           and html_asis.count('id="cort-chat-input"') == 1
+           and html_asis.count('id="cort-chat-btn"') == 1
+           and html_asis.count('id="cort-foco-btn"') == 1)
+    prueba("el centro de acciones tiene cierre, búsqueda y cierre con Escape",
+           'id="cort-menu-cerrar"' in html_asis and 'id="cort-menu-buscar"' in html_asis
+           and "function cerrarMenu" in ui_asis and "filtrarMenu" in ui_asis
+           and 'ev.key === "Escape"' in ui_asis)
+    prueba("el chat es un diálogo completo superpuesto con un solo compositor",
+           'id="cort-chat"' in html_asis and 'aria-modal="true"' in html_asis
+           and 'aria-labelledby="cort-chat-titulo"' in html_asis
+           and 'id="cort-chat-registro"' in html_asis
+           and "#cort-chat-registro" in estilo_asis
+           and "position: fixed; inset: 0" in estilo_asis)
+    prueba("abrir y cerrar el chat contiene y restaura el foco",
+           "function abrirChat" in ui_asis and "function cerrarChat" in ui_asis
+           and "fondoInerte" in ui_asis and "retornoChat" in ui_asis
+           and "Tab" in ui_asis[ui_asis.find("function abrirChat"):ui_asis.find("window.CORT_mostrarChat")])
+    prueba("el dictado provisional y final usa el compositor único del chat",
+           'getElementById("cort-chat-input")' in ui_asis
+           and "abrirChat(false)" in ui_asis
+           and "command-input" not in ui_asis)
+    prueba("el enfoque conserva orbe, micrófono, centro de acciones y chat",
+           "html.cort-enfoque" in estilo_asis and "#orb-canvas" in estilo_asis
+           and "#jarvis-menu-btn" in estilo_asis and "#jarvis-menu-dropdown" in estilo_asis)
+    prueba("los controles nuevos tienen objetivos táctiles de al menos 48 px",
+           "#jarvis-menu-btn" in estilo_asis and "min-height: 48px" in estilo_asis
+           and "min-width: 48px" in estilo_asis
+           and "min-height: 48px" in estilo_asis[
+               estilo_asis.find("#cort-escucha-row select"):
+               estilo_asis.find("@media (max-width: 380px)")]
+           and "env(safe-area-inset-bottom)" in estilo_asis)
+    prueba("el centro y el chat respetan movimiento reducido",
+           "prefers-reduced-motion" in estilo_asis)
+    prueba("el chat inserta texto con textContent, nunca como HTML",
+           "contenido.textContent = limpio" in ui_asis
+           and "autor.textContent =" in ui_asis and "innerHTML" not in
+           ui_asis[ui_asis.find("function mensajeChat"):ui_asis.find("function abrirChat")])
+    prueba("Ajustes expone duración de dictado y frase conectada al teléfono",
+           'nuevo.id = "cort-escucha-row"' in ui_asis
+           and "fijarSegundosDictado" in ui_asis and "fijarSegundosFrase" in ui_asis
+           and "Motor.CLAVE_DICTADO" in nexo and "Motor.CLAVE_FRASE" in nexo)
+    prueba("el build ejecuta la prueba conductual de los límites antes de dex",
+           "LimiteEscuchaTest.java" in lee(APP / "compilar.sh")
+           and (APP / "tests" / "LimiteEscuchaTest.java").is_file())
+
     print("\n== las clases que el manifiesto promete ==")
     declaradas = set()
     if app_elem is not None:
@@ -141,8 +252,8 @@ def main():
            and motor.count("openConnection()") == 1,
            "desde `cort-v0.16.2` Motor baja el modelo de español; el `AudioRecord` "
            "seguir alimentando sólo a Vosk es lo que se comprueba aquí")
-    prueba("el dictado local se corta a los 20 s (el micrófono no queda abierto)",
-           "MAX_SEGUNDOS = 20" in motor)
+    prueba("el dictado local se corta a los 60 s y el micrófono no queda abierto",
+           "MAX_SEGUNDOS = 60" in motor and "segundosDictado(contexto)" in motor)
     prueba("hay guarda contra el truco del ../ al descomprimir el modelo",
            "getCanonicalFile()" in motor and "fuera de la app" in motor)
     voz = lee(SRC / "Voz.java")
@@ -716,7 +827,7 @@ def main():
            and "sueloPequeno - 1" in lee(prueba_ram) and "Long.MAX_VALUE" in lee(prueba_ram))
     prueba("el build corre la prueba RAM antes de convertir el Java a dex",
            "tests/PuertaRamTest.java" in script
-           and "java -cp build/obj:build/pruebas dev.sandra.cort.movil.PuertaRamTest" in script
+           and 'java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PuertaRamTest' in script
            and script.index("dev.sandra.cort.movil.PuertaRamTest") < script.index('"$BT/d8"'))
     prueba("la cara nativa pregunta al GGUF antes que a la nube",
            "cerebroLocal.contestar(" in lee(SRC / "Cara.java"))
