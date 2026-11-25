@@ -17,3 +17,12 @@ Formato: una decisión por sección. No borrar decisiones antiguas; marcarlas co
 - **Contexto:** CORT ya tiene documentación extensa; falta trazabilidad entre necesidad, código, prueba y evidencia.
 - **Decisión:** usar archivos Markdown con identificadores estables. No instalar Spec Kit ni otra dependencia en este primer corte.
 - **Consecuencia:** el método puede aplicarse desde Sublime Text, Git y cualquier agente sin configuración adicional.
+
+## ADR-003 — Arquitectura híbrida con contratos compartidos
+
+- **Fecha:** 2026-11-24
+- **Estado:** BORRADOR; depende de [`CUESTIONARIO-HIBRIDO.md`](CUESTIONARIO-HIBRIDO.md)
+- **Contexto:** PC y Android tienen capacidades distintas; el puente duplica decisiones y los proveedores no comparten límites ni privacidad.
+- **Propuesta:** reglas deterministas primero; cerebro local cuando haya presupuesto; nube sólo con consentimiento; degradación honesta. Adaptadores de proveedor y herramientas detrás de contratos comunes.
+- **Consecuencia si se acepta:** las claves pasan a keyring/Keystore, las capacidades se declaran por plataforma y el puente deja de ser una segunda autoridad.
+- **No decide todavía:** proveedores exactos, presupuestos, sincronización ni cadencia de publicación.

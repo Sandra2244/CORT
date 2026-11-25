@@ -6,11 +6,11 @@ Los asuntos empiezan como **reportados**. **Verificado en código** significa qu
 
 | ID | Prioridad | Plataforma | Asunto | Estado | Evidencia siguiente |
 |---|---|---|---|---|---|
-| CORT-AND-001 | P0 | Android | Vista de teléfono: paneles solapados y modo escritorio incómodo | Verificado en código | `cort-style.css:532-555` adapta una lista de paneles; quedan anchos fijos. Colisiones en A16 pendientes |
+| CORT-AND-001 | P0 | Android | Vista de teléfono: paneles solapados y modo escritorio incómodo | Verificado en código | `cort-web/cort/cort-style.css:532-555` adapta una lista de paneles; uno nuevo puede quedar fuera. Colisiones en A16 pendientes |
 | CORT-AND-002 | P0 | Android | Trabas al abrir paneles o responder | Verificado en código | `cort-ui.js:2633-2640` recorre todo el cuerpo cada 3 s; `Nexo.java:311-317` despacha en UI. Costo en A16 pendiente |
-| CORT-AND-003 | P0 | Android | Escucha en segundo plano intermitente | Verificado en código | `ServicioEscucha.java:266-300` corta con pantalla apagada y a los cinco minutos; falta reproducir en A16 |
+| CORT-AND-003 | P0 | Android | Escucha en segundo plano intermitente | Verificado en código | `ServicioEscucha.java:279-324` corta con pantalla apagada y a los cinco minutos; falta reproducir en A16 |
 | CORT-AND-004 | P1 | Android | Saludo de reinicio y notificación tardíos | Verificado en código | `Arranque.java:32-47` notifica antes de TTS; canal LOW y cierre a 15 s. Demora física pendiente |
-| CORT-AND-005 | P0 | Android | GGUF descargado que no carga por RAM o error | Verificado en código | `SPEC-ANDROID-001`: puerta inclusiva y MiB, 17/17 + 237/237; build y fallo físico pendientes |
+| CORT-AND-005 | P0 | Android | GGUF descargado que no carga por RAM o error | Verificado en código | `SPEC-ANDROID-001`: puerta inclusiva y MiB, 17/17 + 237/237; CI `45516435873` verde; fallo físico pendiente |
 | CORT-AND-006 | P1 | Android | Antivirus, webcam y herramientas de PC mal presentadas | Reportado | Declarar capacidades reales por plataforma |
 | CORT-AND-007 | P1 | Android | Archivos grandes y responsabilidades mezcladas | Reportado | Medir `Nexo.java` y extraer módulos sólo con pruebas |
 | CORT-PC-001 | P0 | PC | Puente sobrecargado y respuestas tardías | Verificado en código | `cort_voz.py:108-109` hace `pactl` bloqueante con timeout de 4 s; `cort_server.py:2510` crea tareas sin registro. Carga real pendiente |
@@ -26,6 +26,20 @@ Los asuntos empiezan como **reportados**. **Verificado en código** significa qu
 5. **Limpieza documental:** CORT-DOC-001.
 
 El orden puede cambiar si la verificación demuestra que otro asunto es la causa raíz de varios síntomas.
+
+## Trabajo híbrido propuesto
+
+Estas filas **no están aceptadas**; dependen del cuestionario y no adelantan los P0.
+
+| ID | Prioridad | Plataforma | Asunto | Estado |
+|---|---|---|---|---|
+| CORT-CORE-001 | P1 | Ambas | Capacidades, permisos y errores con contrato común | Propuesto |
+| CORT-HIB-001 | P2 | Ambas | Router reglas/local/nube y adaptadores de proveedor | Propuesto |
+| CORT-SEC-001 | P1 | Ambas | Custodia de claves en keyring/Keystore | Propuesto |
+| CORT-MEM-001 | P2 | Ambas | Memoria local con procedencia y sincronización opcional | Propuesto |
+| CORT-AUTO-001 | P2 | Ambas | Automatización verificable y rutinas con confirmación | Propuesto |
+
+Detalle y dependencias: [`INFORME_HIBRIDO_PC_ANDROID.md`](INFORME_HIBRIDO_PC_ANDROID.md).
 
 ## Qué no entra en el primer corte
 

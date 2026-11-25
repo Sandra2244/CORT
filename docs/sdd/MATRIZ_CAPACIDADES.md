@@ -26,3 +26,15 @@ La misma promesa de CORT puede tener implementaciones distintas. La interfaz y e
 3. **El puente no duplica el cerebro:** recibe resultados y los reparte; no vuelve a decidir una acción que Android ya resolvió.
 4. **Lo no disponible se declara:** con motivo y alternativa, no con un panel vacío o un dato simulado.
 5. **La carga se reparte:** inferencia, visión y audio se pausan o degradan cuando el dispositivo no tiene presupuesto.
+
+## Contrato híbrido propuesto
+
+Todavía no está aceptado. Si el cuestionario lo aprueba, cada petición declarará:
+
+- intención, plataforma y permisos;
+- presupuesto de tiempo, RAM, CPU, red y tokens;
+- proveedor elegido y motivo;
+- estado `real`, `simulado` o `no disponible`;
+- resultado verificable, error legible y cancelación.
+
+El router no sustituirá silenciosamente un motor local por nube. La privacidad decide primero; el presupuesto y la disponibilidad deciden después.

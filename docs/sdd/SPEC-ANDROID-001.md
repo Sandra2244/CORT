@@ -95,7 +95,7 @@ CORT decide con bytes exactos si un modelo cabe holgado, si sólo debe intentars
 |---|---|---|---|
 | T-01 | estática | `python3 scripts/prueba_apk.py` | 234/234 antes y 237/237 después; verde |
 | T-02 | comportamiento | Compilar `PuertaRam.java` y `PuertaRamTest.java` con `java -m jdk.compiler/com.sun.tools.javac.Main -source 11 -target 11` en un directorio temporal y ejecutar `dev.sandra.cort.movil.PuertaRamTest` | roja por clase ausente; después 17/17, verde |
-| T-03 | build | `apps/android/compilar.sh` en GitHub Actions | pendiente; no hay SDK ni `javac` local |
+| T-03 | build | `apps/android/compilar.sh` en GitHub Actions | commit `6755e62`, run `45516435873`, job `138876957062`: success; 80 s; 237/237 en el runner |
 | T-04 | dispositivo | En el A16: elegir un GGUF pequeño, intentar cargarlo y registrar RAM y error nativo | pendiente; no hay `adb` ni acceso físico |
 
 ## Evidencia
@@ -108,6 +108,8 @@ CORT decide con bytes exactos si un modelo cabe holgado, si sólo debe intentars
 - Validaciones adicionales: `bash -n apps/android/compilar.sh` y `git diff --check` sin errores.
 - Selección previa: se comparó `asegurar()` con su respaldo ignorando espacios; la lógica es idéntica y sólo se normalizó la indentación.
 - Respaldo: cinco archivos copiados y verificados por SHA-256 antes de editar.
+- Publicación: commit `6755e62` en `web/cort-v0`; run de Actions `45516435873`, job `138876957062`, conclusión `success` (80 s).
+- La única anotación del runner avisa de que `actions/cache@v4`, `actions/checkout@v4` y `actions/upload-artifact@v4` usan Node.js 20, forzado a Node.js 24; no es un fallo del parche.
 - Límites de verificación: el runtime local no acepta `--release 11`; la prueba local usó `-source 11 -target 11`. CI conserva `--release 11`. No se compiló la APK localmente y no se reprodujo en el teléfono.
 
 ## Cambios de requisito
