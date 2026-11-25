@@ -136,6 +136,9 @@ public final class Motor {
         void nivel(float alto);
 
         void fallo(String motivo);
+
+        default void parcial(String texto) {
+        }
     }
 
     private static final String ZIP_DENTRO = "motor/vosk-model-small-es-0.42.zip";

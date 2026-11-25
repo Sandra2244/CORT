@@ -120,15 +120,18 @@ def main():
     voz = lee(SRC / "Voz.java")
     sesion = lee(SRC / "Sesion.java")
     actividad = lee(SRC / "MainActivity.java")
+    acciones = lee(SRC / "Acciones.java")
     prueba("existe una vista rápida propia con ventana TYPE_APPLICATION_OVERLAY",
-           "TYPE_APPLICATION_OVERLAY" in rapida and "WindowManager" in rapida)
+           "TYPE_APPLICATION_OVERLAY" in rapida and "WindowManager" in rapida
+           and "private final LinearLayout raiz" in rapida)
     prueba("la vista rápida comprueba canDrawOverlays y abre Ajustes si falta el permiso",
            "canDrawOverlays" in rapida and "ACTION_MANAGE_OVERLAY_PERMISSION" in rapida)
     prueba("la sesión del asistente muestra el overlay en vez de abrir siempre la actividad",
            "VistaRapida.mostrar(" in sesion and "MainActivity.class" not in sesion)
     prueba("el overlay reutiliza el lazo cerrado y no ejecuta comandos de shell",
            "cerebro.cadena(" in rapida and "acciones.ejecutar(" in rapida
-           and "Runtime.exec" not in rapida)
+           and "Runtime.exec" not in rapida and "private final Context contexto" in acciones
+           and "(CameraManager) actividad" not in acciones)
     prueba("el overlay puede abrir el chat o entregar una frase a la cara completa",
            "MainActivity.PIDE_CHAT" in rapida and "MainActivity.PIDE_FRASE" in rapida)
     prueba("la vista rápida nativa tiene una sola puerta de acciones",
@@ -162,7 +165,8 @@ def main():
     prueba("la frase posterior a la palabra también llega a 60 s",
            "MAX_FRASE_MS = 60_000" in motor and "cort_frase_segundos" in motor)
     prueba("Vosk entrega texto provisional al oyente sin esperar el final",
-           "getPartialResult()" in motor and "default void parcial(" in voz)
+           "getPartialResult()" in motor and "default void parcial(" in motor
+           and "default void parcial(" in voz)
     ui_asis = lee(RAIZ / "cort-web" / "cort" / "cort-ui.js")
     html_asis = lee(RAIZ / "cort-web" / "index.html")
     estilo_asis = lee(RAIZ / "cort-web" / "cort" / "cort-style.css")

@@ -32,7 +32,7 @@ public final class VistaRapida {
     private final Context contexto;
     private final Handler principal = new Handler(Looper.getMainLooper());
     private final WindowManager ventanas;
-    private final View raiz;
+    private final LinearLayout raiz;
     private final WindowManager.LayoutParams parametros;
     private final EditText entrada;
     private final TextView estado;

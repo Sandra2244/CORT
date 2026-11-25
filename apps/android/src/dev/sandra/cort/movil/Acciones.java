@@ -365,7 +365,7 @@ public class Acciones {
      */
     private String linterna(String modo) {
         boolean encendida = "enciende".equals(modo);
-        CameraManager camara = (CameraManager) actividad
+        CameraManager camara = (CameraManager) contexto
                 .getSystemService(Context.CAMERA_SERVICE);
         if (camara == null) {
             return "Este teléfono no tiene linterna controlable.";
