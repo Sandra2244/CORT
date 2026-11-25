@@ -5,11 +5,13 @@
 - **Cómo responder:** escribe, por ejemplo, `1B, 2A, 3A, 4A, 5A, 6A, 7A, 8A, 9A, 10A`.
 - **Compromiso:** después de tus respuestas se convierten en ADR y SPEC; se ejecuta la tanda acordada sin volver a preguntar lo mismo. Si una respuesta cambia durante el trabajo, se registra el cambio de requisito.
 
+**Hallazgo que cambia la prioridad:** la UI ofrece nube y Gemini, pero PC sólo ejecuta Ollama; Android no tiene adaptador Gemini. Hay claves en `localStorage` y `SharedPreferences` en claro, y el modo local puede caer a nube si GGUF falla. Por eso secreto, privacidad y verdad de capacidades entran en P0.
+
 ## 1. Prioridad
 
 ¿Qué cerramos antes de añadir capacidades?
 
-- **A. P0 primero (recomendado):** vista táctil, bloqueos de interfaz, segundo plano, puente PC y carga GGUF.
+- **A. P0 primero (recomendado):** secretos y verdad de la nube, vista táctil, bloqueos de interfaz, segundo plano, puente PC y carga GGUF.
 - **B. Híbrido primero:** router, proveedores y secretos antes de cerrar todos los P0.
 - **C. Sólo Android:** PC queda fuera hasta estabilizar el teléfono.
 
@@ -33,7 +35,7 @@
 
 ¿Qué proveedores entran en la primera versión híbrida?
 
-- **A. Gemini + OpenAI-compatible + local (recomendado):** tres adaptadores con contrato común.
+- **A. Gemini + OpenAI-compatible + local (recomendado):** tres adaptadores con contrato común; Gemini hay que construirlo, no sólo mostrarlo.
 - **B. Sólo Gemini + local:** menos superficie de integración.
 - **C. Multi-nube amplia:** Gemini, OpenAI, Anthropic y otros desde el inicio.
 
@@ -49,7 +51,7 @@
 
 ¿Qué puede salir a la nube?
 
-- **A. Texto mínimo con confirmación (recomendado):** audio, pantalla, cámara y archivos no salen sin una acción explícita; el texto sensible pide confirmación.
+- **A. Texto mínimo con confirmación (recomendado):** audio, pantalla, cámara y archivos no salen sin una acción explícita; el texto sensible pide confirmación; si el modo local falla, no pasa a nube sin permiso.
 - **B. Sólo texto:** puedes enviar conversación, pero nunca audio, imágenes ni archivos.
 - **C. Todo con permiso global:** eliges un modo que permite todos los datos y CORT lo muestra siempre.
 

@@ -9,6 +9,8 @@ La misma promesa de CORT puede tener implementaciones distintas. La interfaz y e
 | Voz | espeak-ng / Piper | TTS de Android | Texto a pronunciar | Control de audio y auriculares |
 | Reglas locales | Puente Python | Reglas Java | Intención y resultado | Una sola tabla de capacidades |
 | Cerebro local | Ollama | GGUF con llama.cpp | Pregunta, contexto y respuesta | Carga medible y error legible |
+| Nube | La UI la ofrece, pero la ruta de chat sólo usa Ollama | Anthropic y OpenAI-compatible; sin Gemini | Proveedor, consumo, latencia y error | Implementar adaptador real o declarar no disponible |
+| Secretos | Ajustes web en `localStorage`; el puente acepta campos generales | `SharedPreferences` privado en claro | Configurada / no configurada; nunca valor | Keyring en PC y Keystore en Android |
 | Archivos | Sí, con raíces permitidas | Sólo almacenamiento propio sin permisos amplios | Plan validado | No exponer acciones de PC en Android |
 | Apps y ventanas | Sí en Linux | Sólo apps propias o Intents del sistema | Resultado `real` / `no disponible` | Filtrar paneles por plataforma |
 | Memoria | JSON | SQLite | Preferencias y recuerdos | Sincronización con conflictos definidos |

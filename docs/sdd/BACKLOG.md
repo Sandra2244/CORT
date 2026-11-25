@@ -16,26 +16,29 @@ Los asuntos empiezan como **reportados**. **Verificado en código** significa qu
 | CORT-PC-001 | P0 | PC | Puente sobrecargado y respuestas tardías | Verificado en código | `cort_voz.py:108-109` hace `pactl` bloqueante con timeout de 4 s; `cort_server.py:2510` crea tareas sin registro. Carga real pendiente |
 | CORT-PC-002 | P1 | Ambas | Errores técnicos llegan a la persona usuaria | Verificado en código | `CerebroLocal.java:492-494` convierte vacío en `null`; los códigos nativos 1/2/3 no distinguen todas sus causas |
 | CORT-DOC-001 | P1 | Repo | Documentación de licencia contradictoria | Verificado | `docs/ANDROID.md` dice MIT; `LICENSE` es propia |
+| CORT-SEC-001 | P0 | Ambas | Claves en `localStorage`, `SharedPreferences` en claro y estado general | Verificado en código | `cort-mock.js:364-368,519-523`; `Nube.java:23-27,37-77`; `cort_server.py:2093-2106` |
+| CORT-HIB-001 | P0 | Ambas | UI ofrece nube/Gemini sin implementación equivalente | Verificado en código | PC sólo Ollama; `Nube.java` sólo Anthropic/OpenAI-compatible; modal WebView no alimenta la configuración nativa |
+| CORT-PC-003 | P0 | PC | Inferencia sin cancelación completa al cerrar o detener | Verificado en código | `cort_server.py:1376-1382` cancela sólo el redactor; GGUF/nube no comparten timeout y cancelación |
+| CORT-CORE-001 | P1 | Ambas | Herramientas y verificación sin paridad PC/Android | Verificado en código | PC tiene siete verbos y verificación de archivos; Android usa reglas exactas |
+| CORT-DOC-002 | P1 | Repo | Documentación funcional contradictoria | Verificado | `docs/ANDROID.md:354-369` e `INFORME_FUNCIONES.md:104` discrepan sobre ajustes |
 
 ## Orden propuesto
 
-1. **Estabilidad Android:** CORT-AND-002 y CORT-AND-005.
-2. **Interfaz usable:** CORT-AND-001 y CORT-AND-006.
-3. **Segundo plano confiable:** CORT-AND-003 y CORT-AND-004.
-4. **Puente sin bloqueos:** CORT-PC-001 y CORT-PC-002.
-5. **Limpieza documental:** CORT-DOC-001.
+1. **Privacidad y verdad de la nube:** CORT-SEC-001 y CORT-HIB-001.
+2. **Estabilidad Android:** CORT-AND-002 y CORT-AND-005.
+3. **Interfaz usable:** CORT-AND-001 y CORT-AND-006.
+4. **Segundo plano confiable:** CORT-AND-003 y CORT-AND-004.
+5. **Puente sin bloqueos ni trabajo huérfano:** CORT-PC-001, CORT-PC-003 y CORT-PC-002.
+6. **Contratos y documentación:** CORT-CORE-001, CORT-DOC-001 y CORT-DOC-002.
 
 El orden puede cambiar si la verificación demuestra que otro asunto es la causa raíz de varios síntomas.
 
-## Trabajo híbrido propuesto
+## Trabajo posterior propuesto
 
-Estas filas **no están aceptadas**; dependen del cuestionario y no adelantan los P0.
+Estas filas **no están aceptadas**; dependen del cuestionario y no adelantan los P0. Seguridad, nube y contratos ya están ordenados arriba.
 
 | ID | Prioridad | Plataforma | Asunto | Estado |
 |---|---|---|---|---|
-| CORT-CORE-001 | P1 | Ambas | Capacidades, permisos y errores con contrato común | Propuesto |
-| CORT-HIB-001 | P2 | Ambas | Router reglas/local/nube y adaptadores de proveedor | Propuesto |
-| CORT-SEC-001 | P1 | Ambas | Custodia de claves en keyring/Keystore | Propuesto |
 | CORT-MEM-001 | P2 | Ambas | Memoria local con procedencia y sincronización opcional | Propuesto |
 | CORT-AUTO-001 | P2 | Ambas | Automatización verificable y rutinas con confirmación | Propuesto |
 

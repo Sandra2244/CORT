@@ -32,6 +32,13 @@ La prioridad sigue siendo **cerrar P0 antes de expandir funciones**. El trabajo 
 | GGUF/RAM | La puerta quedó aislada y probada en `SPEC-ANDROID-001`; commit `6755e62`, run `45516435873` verde | La decisión numérica ya es reproducible; cargar el modelo en el A16 sigue pendiente |
 | Integridad GGUF | La descarga valida tamaño y SHA, pero `Bajada.esta()` sólo comprueba `isFile()` | Un archivo persistido puede presentarse como verificado sin revalidar su suma |
 | Errores nativos | `nativeAbrir` usa códigos 1/2/3 y Java convierte una respuesta vacía en `null` | La persona puede recibir un error técnico sin causa accionable |
+| Nube en PC | La UI enumera Gemini, Groq, xAI, OpenAI, Anthropic y Mistral en `cort-web/index.html:2722-2734`; la ruta real de chat usa Ollama en `cort-bridge/cort_server.py:1248-1304,2525-2598` | No hay failover ni proveedor nube real en PC; la interfaz promete más de lo que ejecuta |
+| Gemini | `Nube.java:107-181` implementa Anthropic y OpenAI-compatible, no Gemini; el modal WebView no alimenta esa configuración nativa (`Nexo.java:1929-1947`) | Una clave escrita en Ajustes no necesariamente configura el cerebro del teléfono |
+| Secretos | La web guarda `api_keys` dentro de `currentSettings` en `localStorage` (`cort-web/cort/cort-mock.js:364-368,519-523`); Android usa `SharedPreferences` en claro (`Nube.java:23-27,37-77`); el puente acepta campos arbitrarios al guardar (`cort_server.py:2093-2106`) | Hay que retirar claves de almacenamiento general y llevarlas a keyring/Keystore antes de ampliar proveedores |
+| Modo local | `Cara.java:343-356` consulta GGUF y, si devuelve `null`, usa la nube configurada | El modo «local» puede enviar texto aun cuando el motor local falle; debe respetar la privacidad elegida |
+| Cancelación | Cerrar el WebSocket sólo cancela el redactor (`cort_server.py:1376-1382`), no la inferencia; `Nube.java:184-225` no tiene cancelación y el GGUF no tiene timeout de reloj | Una petición puede seguir consumiendo recursos después de que la persona se va |
+| Paridad de herramientas | PC limita siete verbos y verifica archivos (`cort_intenciones.py:44-71,163-219`; `cort_archivos.py:163-221`); Android usa reglas exactas y no tiene herramientas LLM equivalentes | La promesa de «las mismas funciones» todavía no tiene contrato común |
+| Pruebas híbridas | `scripts/prueba_nucleo.py:152-236` cubre Ollama simulado y reja; `scripts/prueba_apk.py:649-724` cubre JNI/RAM | Faltan pruebas de nube, secretos, fallback, cancelación y rendimiento físico |
 | Puente PC | `cort-bridge/cort_voz.py:108-109` ejecuta `pactl` con bloqueo y timeout de cuatro segundos | El audio puede detener el bucle de servicio |
 | Tareas PC | `cort-bridge/cort_server.py:2510` crea tareas sin registro ni límite | No hay backpressure, cancelación ni garantía de respuesta terminal |
 | Timeouts | Android usa esperas cortas; el puente admite esperas de noventa y 180 segundos | Las dos plataformas no comparten contrato de latencia |
@@ -159,25 +166,30 @@ La meta no es que CORT hable más, sino que interrumpa menos y con mejor informa
 
 ## 5. Qué potenciar primero
 
-### P0 — Estabilidad demostrable
+### P0 — Estabilidad, privacidad y verdad de capacidades
 
-1. Vista táctil estructural y paneles con ancho adaptable.
-2. WebView y trabajo fuera del hilo de interfaz.
-3. Escucha en segundo plano con estado y permiso honestos.
-4. Puente PC con tareas registradas, colas acotadas y cancelación.
-5. Carga GGUF con integridad persistida y errores accionables.
+1. Retirar claves de `localStorage`, `SharedPreferences` en claro y estado general; definir custodia y borrado.
+2. Hacer que la UI sólo ofrezca nube cuando exista adaptador real, o marcarla claramente como no disponible.
+3. Respetar el modo local: si GGUF falla, no pasar a nube sin consentimiento.
+4. Vista táctil estructural y paneles con ancho adaptable.
+5. WebView y trabajo pesado fuera del hilo de interfaz.
+6. Escucha en segundo plano con estado y permiso honestos.
+7. Puente PC con tareas registradas, colas acotadas, timeout, cancelación y respuesta terminal.
+8. Carga GGUF con integridad persistida y errores accionables.
 
 ### P1 — Capacidades compartidas y confianza
 
 1. Registro de capacidades PC/Android.
 2. Contrato único de resultado y error.
-3. Custodia de claves por dispositivo.
-4. Auditoría local renombrada y limitada a lo que realmente puede hacer.
+3. Adaptador Gemini y política explícita de failover entre proveedores.
+4. Paridad de herramientas mediante permisos, confirmación y verificación.
+5. Auditoría local renombrada y limitada a lo que realmente puede hacer.
+6. Pruebas conductuales de nube con servidores simulados, sin usar claves reales.
 
 ### P2 — Híbrido útil
 
 1. Router reglas → local → nube consentida → degradación.
-2. Adaptadores Gemini, OpenAI-compatible, Ollama y GGUF.
+2. Adaptadores Gemini, OpenAI-compatible, Ollama y GGUF con contrato común.
 3. Presupuestos observables por petición.
 4. Evaluación offline con preguntas y acciones de arena.
 
@@ -192,12 +204,13 @@ La meta no es que CORT hable más, sino que interrumpa menos y con mejor informa
 
 | SPEC propuesta | Backlog | Resultado esperado | Depende de |
 |---|---|---|---|
+| `SPEC-SEC-001` | CORT-SEC-001 | Claves fuera de almacenamiento general, custodia por dispositivo, borrado y UI sin secretos | Decisiones 5 y 6 |
 | `SPEC-ANDROID-002` | CORT-AND-001/002 | Paneles usables a 531 px y trabajo pesado fuera de UI, con regresión automatizable | CORT-AND-005 |
 | `SPEC-ANDROID-003` | CORT-AND-003/004 | Escucha y saludo con estado real, permiso, límite y prueba de reinicio | SPEC-ANDROID-002 |
-| `SPEC-PC-001` | CORT-PC-001 | Tareas registradas, backpressure, timeout, cancelación y respuesta terminal | Contrato compartido |
-| `SPEC-CORE-001` | CORT-AND-006/CORT-PC-002 | Capacidades y errores honestos en ambas plataformas | Decisiones del cuestionario |
-| `SPEC-HIB-001` | Nueva | Router, proveedores y secretos con privacidad y presupuestos | P0 cerrado y SPEC-CORE-001 |
-| `SPEC-MEM-001` | Nueva | Memoria local, procedencia y sincronización opcional | SPEC-HIB-001 |
+| `SPEC-PC-001` | CORT-PC-001/CORT-PC-003 | Tareas registradas, backpressure, timeout, cancelación y respuesta terminal | Contrato compartido |
+| `SPEC-CORE-001` | CORT-AND-006/CORT-PC-002 | Capacidades, herramientas y errores honestos en ambas plataformas | Decisiones del cuestionario |
+| `SPEC-HIB-001` | CORT-HIB-001 | Router, proveedores reales y degradación privada con presupuestos | P0 cerrado y SPEC-CORE-001 |
+| `SPEC-MEM-001` | CORT-MEM-001 | Memoria local, procedencia y sincronización opcional | SPEC-HIB-001 |
 
 Cada SPEC debe nacer con prueba roja, criterios Dado/Cuando/Entonces y evidencia separada en estático, build y dispositivo.
 
@@ -219,7 +232,7 @@ Cada cifra debe guardar dispositivo, versión, comando o procedimiento y fecha.
 
 Las diez decisiones están en [`CUESTIONARIO-HIBRIDO.md`](CUESTIONARIO-HIBRIDO.md). La propuesta recomendada es:
 
-- cerrar P0 antes de expandir;
+- cerrar P0 antes de expandir, empezando por secretos y verdad de la nube;
 - operador y compañero equilibrados;
 - router local-first adaptativo;
 - Gemini más OpenAI-compatible y motores locales;
