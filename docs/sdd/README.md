@@ -10,7 +10,7 @@ Este SDD convierte una necesidad en una especificación, un plan pequeño, prueb
 4. [DECISIONES.md](DECISIONES.md): decisiones de arquitectura y sus motivos.
 5. [MATRIZ_CAPACIDADES.md](MATRIZ_CAPACIDADES.md): qué hace cada plataforma y dónde vive cada capacidad.
 6. [SPEC-ANDROID-001.md](SPEC-ANDROID-001.md): primer corte, puerta RAM; local y build de CI verdes, A16 pendiente.
-7. [SPEC-SEC-001.md](SPEC-SEC-001.md): segunda fase, secretos fuera del almacenamiento general y consentimiento de nube; verificada en local, A16 pendiente.
+7. [SPEC-SEC-001.md](SPEC-SEC-001.md): segunda fase, secretos fuera del almacenamiento general y consentimiento de nube; verificada en local y CI, A16 pendiente.
 8. [INFORME_HIBRIDO_PC_ANDROID.md](INFORME_HIBRIDO_PC_ANDROID.md): comparación y arquitectura objetivo.
 9. [CUESTIONARIO-HIBRIDO.md](CUESTIONARIO-HIBRIDO.md): diez decisiones respondidas y aceptadas (`1A`–`10A`).
 

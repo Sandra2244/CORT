@@ -224,7 +224,9 @@ La regresión del temporal fijo falló primero (**29/30**) y pasó (**30/30**) a
 
 ### Verificación CI
 
-Pendiente de la corrida de Actions abierta al publicar esta fase. Debe estar verde la suite de secretos y el build del APK; el resultado se registrará sin inventarlo.
+- La primera corrida, [45554793292](https://github.com/Sandra2244/CORT/actions/runs/45554793292) sobre `c85931b`, falló en `compilar`: `Nexo.java` usaba `AlertDialog` sin importarlo. La suite de secretos sí pasó; no se publicó Release.
+- La corrección se hizo hacia delante en `45da233`, con una regresión estática del import.
+- La corrida [45555101269](https://github.com/Sandra2244/CORT/actions/runs/45555101269) sobre `45da233` terminó **success en 57 s**: suite de secretos, descarga y colocación del motor, compilación, suite del APK y publicación del artefacto quedaron verdes. El paso de Release quedó omitido porque no hay etiqueta.
 
 ### Verificación física pendiente
 
