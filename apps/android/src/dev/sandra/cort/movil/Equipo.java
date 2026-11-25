@@ -88,9 +88,11 @@ public class Equipo extends Activity {
                 .append(" (sobran ").append(mb(libreDisco - MODELO_BYTES)).append(" MB)\n");
         // Puerta holgada: archivo entero residente + reserva de contexto. El motor
         // mapea con mmap, así que por debajo aún se puede intentar (lo decide CerebroLocal).
-        long haceFalta = MODELO_BYTES + CerebroLocal.RESERVA_CONTEXTO;
-        cuadro.append("RAM libre para sostenerlo holgado: ").append(haceFalta / 1024 / 1024).append(" MB\n");
-        cuadro.append("hoy cabe holgado: ").append(siNo(libre.availMem > haceFalta)).append('\n');
+        cuadro.append("RAM libre para sostenerlo holgado: ")
+                .append(PuertaRam.puertaMiB(MODELO_BYTES)).append(" MiB\n");
+        cuadro.append("hoy cabe holgado: ")
+                .append(siNo(PuertaRam.evaluar(libre.availMem, MODELO_BYTES)
+                        == PuertaRam.Decision.CABE)).append('\n');
 
         BatteryManager pila = (BatteryManager) getSystemService(Context.BATTERY_SERVICE);
         int nivel = pila.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);

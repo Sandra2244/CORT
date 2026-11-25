@@ -960,9 +960,9 @@ public class Nexo {
             pone(catalogo, f.nombre, cuadro(
                     "instalado", es,
                     "mb", es ? gguf.length() / 1024 / 1024 : f.bytes / 1024 / 1024,
-                    "tam", "≈ " + (f.bytes / 1024 / 1024) + " MB",
+                    "tam", "≈ " + (f.bytes / 1024 / 1024) + " MiB",
                     "nota", f.nota,
-                    "ram_uso", CerebroLocal.puertaMB(f.bytes),
+                    "ram_uso", CerebroLocal.puertaMiB(f.bytes),
                     "origen", "disco del teléfono"));
         }
         CerebroLocal.Ficha activo = cerebroLocal.elegido();
@@ -1007,7 +1007,7 @@ public class Nexo {
             File gguf = CerebroLocal.archivoDe(actividad, f.archivo);
             if (gguf.isFile()) {
                 pone(j, f.nombre, cuadro("mb", gguf.length() / 1024 / 1024,
-                        "ram_est", CerebroLocal.puertaMB(gguf.length())));
+                        "ram_est", CerebroLocal.puertaMiB(gguf.length())));
             }
         }
         return j;
@@ -1360,14 +1360,14 @@ public class Nexo {
         } else if (elegido != null) {
             nivel = 3;
             nombre = "cerebro local en el teléfono";
-            motivo = elegido.nombre + ": puerta holgada " + CerebroLocal.puertaMB(elegido.bytes)
-                    + " MB, hay " + libre + " MB"
+            motivo = elegido.nombre + ": puerta holgada " + CerebroLocal.puertaMiB(elegido.bytes)
+                    + " MiB, hay " + libre + " MiB"
                     + (cerebroLocal.cabe(elegido.bytes)
                             ? " · cabe holgado" : " · va justo, se intenta con mmap");
         } else {
             nivel = 2;
             nombre = "tabla de CORT, sin GGUF cargado";
-            motivo = libre + " MB libres: ninguno de los " + lista.size()
+            motivo = libre + " MiB libres: ninguno de los " + lista.size()
                     + " modelos de la lista pasa el suelo de RAM para intentarlo";
         }
         JSONObject cpu = cuadro("modelo", Build.MANUFACTURER + " " + Build.MODEL,

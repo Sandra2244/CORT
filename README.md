@@ -408,6 +408,14 @@ algo (Ollama, el modelo de Vosk), se baja, **se lee** y luego se ejecuta.
 - **CPU.** El tope de fotogramas de la interfaz en esta máquina no lo pone el orbe: lo
   pone la disputa por los 2 núcleos (medido con `load 5,9` y 1,36 GB de swap).
 
+## Desarrollo controlado (SDD)
+
+Las mejoras se especifican, prueban y documentan antes de darse por cerradas. Empieza en
+[`docs/sdd/README.md`](docs/sdd/README.md); allí están la constitución, el backlog, la plantilla
+de especificaciones y el registro de decisiones.
+
+---
+
 ## Pruebas
 
 Todo lo que toca el equipo se prueba en **arena**: `CORT_HOME` y `CORT_DATOS` apuntan a

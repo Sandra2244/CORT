@@ -68,7 +68,7 @@ command -v unzip >/dev/null || { echo "falta unzip: sin él no se abre un AAR"; 
 command -v curl  >/dev/null || { echo "falta curl: sin él no se baja el modelo"; exit 1; }
 
 rm -rf build
-mkdir -p build/obj build/apk vendor build/stage build/recursos
+mkdir -p build/obj build/apk vendor build/stage build/recursos build/pruebas
 
 # -- 1. Las dependencias, descargadas y comprobadas ----------------------------
 # Cada línea de deps.txt es `nombre|sha256|url`. Se baja a un temporal, se le
@@ -277,6 +277,9 @@ if [ "$MOTOR" = "1" ]; then
 fi
 javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
+
+javac --release 11 -classpath build/obj -d build/pruebas tests/PuertaRamTest.java
+java -cp build/obj:build/pruebas dev.sandra.cort.movil.PuertaRamTest
 
 D8_ENTRADAS="$(find build/obj -name '*.class')"
 "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \

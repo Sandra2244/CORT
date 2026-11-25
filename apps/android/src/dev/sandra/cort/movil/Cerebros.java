@@ -326,7 +326,7 @@ public class Cerebros extends Activity {
         String puerta = cerebro.cabe(d.bytes)
                 ? "cabe holgado en la RAM libre"
                 : "va justo: la puerta holgada pide " + cerebro.falta(d.bytes)
-                        + " y hay " + cerebro.memoriaLibre() / 1024 / 1024 + " MB"
+                        + " y hay " + cerebro.memoriaLibre() / 1024 / 1024 + " MiB"
                         + (cerebro.sePuedeIntentar(d.bytes)
                                 ? " · se puede intentar con mmap" : " · ni para intentarlo");
         boolean abierto = cerebro.modeloActivo() != null

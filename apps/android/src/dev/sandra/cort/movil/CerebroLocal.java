@@ -133,13 +133,6 @@ public class CerebroLocal {
 
     // ------------------------------------------------------------------ puertas
 
-    /**
-     * Reserva estimada para la caché clave-valor y los búferes de cálculo. No es
-     * medición: el contexto de 1024-2048 tokens de estos modelos pide decenas de MB
-     * y se deja margen. Si no alcanza, `nativeAbrir` devuelve 2 y se dice.
-     */
-    public static final long RESERVA_CONTEXTO = 200L * 1024 * 1024;
-
     /** Bytes libres ahora mismo en ESTE teléfono, no los que anuncia el catálogo. */
     public long memoriaLibre() {
         ActivityManager sistema =
@@ -155,7 +148,7 @@ public class CerebroLocal {
      * requisito físico: por debajo se puede intentar.
      */
     public boolean cabe(long bytesDelModelo) {
-        return memoriaLibre() > bytesDelModelo + RESERVA_CONTEXTO;
+        return PuertaRam.evaluar(memoriaLibre(), bytesDelModelo) == PuertaRam.Decision.CABE;
     }
 
     /**
@@ -164,16 +157,16 @@ public class CerebroLocal {
      * en vez de fingir.
      */
     public boolean sePuedeIntentar(long bytesDelModelo) {
-        return memoriaLibre() > bytesDelModelo / 2 + RESERVA_CONTEXTO / 2;
+        return PuertaRam.evaluar(memoriaLibre(), bytesDelModelo) != PuertaRam.Decision.NO_CABE;
     }
 
     public String falta(long bytesDelModelo) {
-        return puertaMB(bytesDelModelo) + " MB libres";
+        return puertaMiB(bytesDelModelo) + " MiB libres";
     }
 
-    /** La puerta holgada en MB binarios: el único número que pintan cara y Almacén. */
-    public static long puertaMB(long bytesDelModelo) {
-        return (bytesDelModelo + RESERVA_CONTEXTO) / 1024 / 1024;
+    /** La puerta holgada en MiB enteros: el único número que pintan cara y Almacén. */
+    public static long puertaMiB(long bytesDelModelo) {
+        return PuertaRam.puertaMiB(bytesDelModelo);
     }
 
     /** El sitio donde viven los cerebros bajados: carbajo de la app, se borra con ella. */
@@ -289,17 +282,55 @@ public class CerebroLocal {
         if (abierto()) {
             return true;
         }
-        if ("nube".equals(modo())) {
+
+        String elegidoModo = modo();
+
+        if ("nube".equals(elegidoModo)) {
             return false;
         }
+
         Ficha f = elegido();
+
         if (f == null) {
             return false;
         }
-        if ("auto".equals(modo()) && !sePuedeIntentar(f.bytes)) {
-            return false;
+
+        if ("auto".equals(elegidoModo)) {
+            File archivo = archivoDe(contexto, f.archivo);
+
+            if (!archivo.isFile()
+                    || archivo.length() != f.bytes
+                    || !sePuedeIntentar(f.bytes)) {
+
+                f = null;
+
+                for (Ficha candidato : catalogo(contexto)) {
+                    File disponible = archivoDe(contexto, candidato.archivo);
+
+                    if (!disponible.isFile()
+                            || disponible.length() != candidato.bytes) {
+                        continue;
+                    }
+
+                    if (!sePuedeIntentar(candidato.bytes)) {
+                        continue;
+                    }
+
+                    f = candidato;
+                    break;
+                }
+            }
+
+            if (f == null) {
+                return false;
+            }
         }
-        return cargar(archivoDe(contexto, f.archivo), f.contexto, f.hilos) == 0;
+
+        return cargar(
+                archivoDe(contexto, f.archivo),
+                f.contexto,
+                f.hilos
+        ) == 0;
     }
 
     /**

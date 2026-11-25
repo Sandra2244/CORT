@@ -606,7 +606,8 @@ def main():
     prueba("la puerta del cerebro local está escrita con el número real del modelo",
            re.search(r"MODELO_BYTES = ([\d_]+)L", equipo) is not None
            and int(re.search(r"MODELO_BYTES = ([\d_]+)L", equipo).group(1).replace("_", ""))
-           == 752_880_160 and "MODELO_BYTES + CerebroLocal.RESERVA_CONTEXTO" in equipo)
+           == 752_880_160 and "PuertaRam.puertaMiB(MODELO_BYTES)" in equipo
+           and "PuertaRam.evaluar(libre.availMem, MODELO_BYTES)" in equipo)
     prueba("mide la RAM libre de ESTE aparato, no la del catálogo",
            "ActivityManager.MemoryInfo" in equipo and "libre.availMem" in equipo
            and "MemTotal:" in equipo)
@@ -700,9 +701,23 @@ def main():
         prueba("el catálogo dice de dónde salieron los números",
                "MEDIDOS" in catalogo.get("_", "") or "medidos" in catalogo.get("_", ""))
 
-    prueba("la puerta holgada es archivo + reserva, y el intento mmap pide media puerta",
-           "bytesDelModelo + RESERVA_CONTEXTO" in java_local
-           and "bytesDelModelo / 2 + RESERVA_CONTEXTO / 2" in java_local)
+    puerta_ram = lee(SRC / "PuertaRam.java") if (SRC / "PuertaRam.java").is_file() else ""
+    prueba_ram = APP / "tests" / "PuertaRamTest.java"
+    prueba("la puerta RAM es pura, inclusiva y resiste la suma enorme",
+           "libre - RESERVA_CONTEXTO >= modelo" in puerta_ram
+           and "modelo / 2 + RESERVA_CONTEXTO / 2" in puerta_ram
+           and "libre < 0 || modelo <= 0" in puerta_ram)
+    prueba("CerebroLocal delega la puerta y el intento mmap en la decisión pura",
+           "PuertaRam.evaluar(memoriaLibre(), bytesDelModelo) == PuertaRam.Decision.CABE" in java_local
+           and "PuertaRam.evaluar(memoriaLibre(), bytesDelModelo) != PuertaRam.Decision.NO_CABE" in java_local
+           and "PuertaRam.puertaMiB(bytesDelModelo)" in java_local)
+    prueba("los umbrales exactos tienen una prueba Java de comportamiento",
+           prueba_ram.is_file() and "puertaPequena - 1" in lee(prueba_ram)
+           and "sueloPequeno - 1" in lee(prueba_ram) and "Long.MAX_VALUE" in lee(prueba_ram))
+    prueba("el build corre la prueba RAM antes de convertir el Java a dex",
+           "tests/PuertaRamTest.java" in script
+           and "java -cp build/obj:build/pruebas dev.sandra.cort.movil.PuertaRamTest" in script
+           and script.index("dev.sandra.cort.movil.PuertaRamTest") < script.index('"$BT/d8"'))
     prueba("la cara nativa pregunta al GGUF antes que a la nube",
            "cerebroLocal.contestar(" in lee(SRC / "Cara.java"))
     prueba("la cara del enlace (WebView) hace lo mismo",
