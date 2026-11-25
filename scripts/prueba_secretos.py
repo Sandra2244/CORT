@@ -189,6 +189,7 @@ process.stdout.write('ok');
            "pedirConsentimientoNube" in cara and "pedirConsentimientoNube" in nexo)
     prueba("SEC-11: negar, cancelar o agotar la espera no habilita la nube",
            all("decision.await(120, TimeUnit.SECONDS) && permitido[0]" in fuente
+               and "import android.app.AlertDialog;" in fuente
                and '.setNegativeButton("No, seguir local", (d, w) -> decision.countDown())' in fuente
                and ".setOnCancelListener(d -> decision.countDown())" in fuente
                for fuente in (cara, nexo)))
