@@ -1,8 +1,9 @@
 # Cuestionario de producto híbrido — CORT
 
 - **Fecha:** 2026-11-24
-- **Estado:** pendiente de respuesta
-- **Cómo responder:** escribe, por ejemplo, `1B, 2A, 3A, 4A, 5A, 6A, 7A, 8A, 9A, 10A`.
+- **Estado:** respondido y aceptado
+- **Respuesta:** `1A, 2A, 3A, 4A, 5A, 6A, 7A, 8A, 9A, 10A`
+- **Registro:** las diez decisiones están incorporadas en [`DECISIONES.md`](DECISIONES.md), ADR-003.
 - **Compromiso:** después de tus respuestas se convierten en ADR y SPEC; se ejecuta la tanda acordada sin volver a preguntar lo mismo. Si una respuesta cambia durante el trabajo, se registra el cambio de requisito.
 
 **Hallazgo que cambia la prioridad:** la UI ofrece nube y Gemini, pero PC sólo ejecuta Ollama; Android no tiene adaptador Gemini. Hay claves en `localStorage` y `SharedPreferences` en claro, y el modo local puede caer a nube si GGUF falla. Por eso secreto, privacidad y verdad de capacidades entran en P0.

@@ -193,13 +193,13 @@ public final class Investigacion {
     /**
      * Analiza un texto que ella está viendo. `deDonde` es la app o «lo seleccionado»,
      * y se dice en la respuesta para que sepa qué se analizó. El cerebro lo elige la
-     * ruta de siempre (GGUF si cabe, si no nube), y si contesta la nube se avisa que
-     * el texto salió del teléfono: eso no es una opción que se pueda esconder.
+     * ruta de siempre (GGUF si cabe). El texto de la pantalla no sale a la nube
+     * desde esta acción: para eso hace falta una confirmación específica, no el
+     * consentimiento del chat.
      */
     public static void analiza(final Context contexto, final String texto,
                                final String deDonde, final CerebroLocal cerebro,
-                               final Nube nube, final Recuerdos recuerdos,
-                               final AlTerminar oyente) {
+                               final Recuerdos recuerdos, final AlTerminar oyente) {
         final String limpio = texto == null ? "" : texto.trim();
         if (limpio.isEmpty()) {
             oyente.llega("No hay texto que analizar: " + Pantalla.motivo(),
@@ -217,26 +217,16 @@ public final class Investigacion {
             String sistema = Consticion.sistema(contexto, recuerdos.lista(12));
             String respuesta = cerebro.contestar(sistema, pregunta, null, null,
                     Consticion.maxTokens(contexto), Consticion.temperatura(contexto));
-            String aviso = "";
-            if (respuesta == null && nube != null && nube.configurada()) {
-                respuesta = nube.preguntar(sistema, pregunta, null);
-                if (respuesta != null) {
-                    aviso = "Esto lo contestó la nube: el texto de tu pantalla salió del "
-                            + "teléfono. Si no quieres que vuelva a pasar, pon el modo "
-                            + "«sólo el teléfono» en el Almacén de cerebros.";
-                }
-            }
             if (respuesta == null) {
-                oyente.llega("No pude analizarlo: no hay cerebro local abierto y la nube "
-                        + "no está configurada. Baja un GGUF en el Almacén o configura la "
-                        + "nube, y vuelve a pedírmelo.", new ArrayList<Hallazgo>());
+                oyente.llega("No pude analizarlo sin sacar el texto del teléfono. Baja un GGUF "
+                        + "en el Almacén y vuelve a pedírmelo; la pantalla no se envía a la nube "
+                        + "sin una acción explícita aparte.", new ArrayList<Hallazgo>());
                 return;
             }
             String junto = respuesta
                     + (cortado ? " (Leí los primeros " + MAX_ANALISIS
                             + " caracteres de " + limpio.length() + ": el resto no cupo en "
-                            + "el contexto del modelo.)" : "")
-                    + (aviso.isEmpty() ? "" : " " + aviso);
+                            + "el contexto del modelo.)" : "");
             oyente.llega(junto, new ArrayList<Hallazgo>());
         }, "cort-analiza").start();
     }

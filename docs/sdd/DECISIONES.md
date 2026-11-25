@@ -21,8 +21,20 @@ Formato: una decisión por sección. No borrar decisiones antiguas; marcarlas co
 ## ADR-003 — Arquitectura híbrida con contratos compartidos
 
 - **Fecha:** 2026-11-24
-- **Estado:** BORRADOR; depende de [`CUESTIONARIO-HIBRIDO.md`](CUESTIONARIO-HIBRIDO.md)
+- **Estado:** Aceptada
+- **Decisión de producto:** [`CUESTIONARIO-HIBRIDO.md`](CUESTIONARIO-HIBRIDO.md), respuestas `1A, 2A, 3A, 4A, 5A, 6A, 7A, 8A, 9A, 10A`.
 - **Contexto:** PC y Android tienen capacidades distintas; la UI ofrece nube y Gemini sin adaptador equivalente, hay claves en almacenamiento general y el modo local puede caer a nube. El puente también duplica decisiones y no comparte límites ni cancelación.
-- **Propuesta:** reglas deterministas primero; cerebro local cuando haya presupuesto; nube sólo con consentimiento; degradación honesta. Adaptadores de proveedor y herramientas detrás de contratos comunes. Secretos en keyring/Keystore y interfaz limitada a capacidades reales.
-- **Consecuencia si se acepta:** las claves pasan a keyring/Keystore, las capacidades se declaran por plataforma y el puente deja de ser una segunda autoridad.
-- **No decide todavía:** proveedores exactos, presupuestos, sincronización ni cadencia de publicación.
+- **Decisión:** reglas deterministas primero; cerebro local cuando haya presupuesto; nube sólo con consentimiento; degradación honesta. Adaptadores de proveedor y herramientas detrás de contratos comunes. Secretos en keyring/Keystore e interfaz limitada a capacidades reales.
+- **Decisiones aceptadas:**
+  - P0 antes de funciones nuevas: secretos, verdad de la nube, vista táctil, bloqueos, segundo plano, puente PC y GGUF.
+  - Personalidad equilibrada entre operador y compañero.
+  - Router local-first adaptativo: reglas → GGUF/Ollama → nube consentida → degradación.
+  - Proveedores objetivo: Gemini, OpenAI-compatible y local. Gemini debe construirse, no sólo mostrarse.
+  - Custodia por dispositivo: keyring en PC y Keystore en Android.
+  - Texto mínimo con confirmación; audio, pantalla, cámara y archivos no salen sin acción explícita; modo local sin caída a nube.
+  - Presupuestos configurables y visibles de tokens, coste, latencia, RAM, CPU y red.
+  - Después de P0: automatización verificable y memoria/proactividad.
+  - Android autónomo; la PC es opcional.
+  - Publicación por fase verificada en `web/cort-v0`; sin etiqueta ni Release por defecto.
+- **Consecuencia:** primero `SPEC-SEC-001`; después los P0 de estabilidad. La construcción de proveedores queda para `SPEC-HIB-001`, sin volver a ofrecerlos como capacidades presentes.
+- **Cadencia:** cada fase nueva abre su propio cuestionario. La tanda actual se ejecuta después de las respuestas, sin volver a preguntar lo ya decidido.

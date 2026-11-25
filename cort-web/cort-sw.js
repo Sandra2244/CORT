@@ -5,9 +5,9 @@
  * el WAV que CORT acaba de hablar) son datos de este instante: si el navegador los
  * cacheara, la pantalla mostraría un número viejo creyendo que es nuevo.
  */
-const version = "cort-v1";
+const version = "cort-v2-sec2";
 const programa = ["/", "/index.html", "/manifest.webmanifest",
-  "/cort/cort-mock.js", "/cort/cort-orbe.js", "/cort/cort-ui.js", "/cort/cort-style.css",
+  "/cort/cort-secretos.js", "/cort/cort-mock.js", "/cort/cort-orbe.js", "/cort/cort-ui.js", "/cort/cort-style.css",
   "/iconos/cort-192.png", "/iconos/cort-512.png"];
 
 self.addEventListener("install", (ev) => {

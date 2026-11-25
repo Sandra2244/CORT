@@ -364,7 +364,7 @@
   let currentSettings = Object.assign({}, defaultSettings);
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) currentSettings = Object.assign({}, defaultSettings, JSON.parse(saved));
+    if (saved) currentSettings = Object.assign({}, defaultSettings, CORTsecretos.sanear(JSON.parse(saved)));
   } catch (e) { /* almacenamiento no disponible: seguimos con los valores por defecto */ }
 
   let shoppingItems = ["Café en grano", "Filamento 3D azul", "Cable USB-C trenzado"];
@@ -479,6 +479,14 @@
       const type = msg.type;
 
       // ---- 1. Enrutador al puente real ------------------------------------
+      if (type === "update_settings" && msg.settings && CORTsecretos.tieneSecretos(msg.settings)) {
+        const limpio = CORTsecretos.sanear(msg.settings);
+        currentSettings = Object.assign({}, currentSettings, limpio);
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSettings)); } catch (e) {}
+        this.dispatchServerMessage({ type: "settings_data", data: CORTsecretos.sanear(currentSettings),
+          aviso: "no se guardaron claves: " + CORTsecretos.aviso() });
+        return;
+      }
       const vaAlPuente = REALES.has(type) || REALES_CON_ECO.has(type) || VAN_AL_PUENTE.has(type);
       if (vaAlPuente) {
         if (!PUENTE.vivo()) PUENTE.conectar();
@@ -512,14 +520,14 @@
       }
 
       if (type === "get_settings") {
-        this.dispatchServerMessage({ type: "settings_data", data: currentSettings });
+        this.dispatchServerMessage({ type: "settings_data", data: CORTsecretos.sanear(currentSettings) });
         return;
       }
 
       if (type === "update_settings" && msg.settings) {
-        currentSettings = Object.assign({}, currentSettings, msg.settings);
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSettings)); } catch (e) {}
-        this.dispatchServerMessage({ type: "settings_data", data: currentSettings });
+        currentSettings = Object.assign({}, currentSettings, CORTsecretos.sanear(msg.settings));
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(CORTsecretos.sanear(currentSettings))); } catch (e) {}
+        this.dispatchServerMessage({ type: "settings_data", data: CORTsecretos.sanear(currentSettings) });
         return;
       }
 

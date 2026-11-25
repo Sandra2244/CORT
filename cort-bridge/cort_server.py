@@ -39,6 +39,7 @@ import unicodedata
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from urllib import request as urlreq
@@ -229,18 +230,60 @@ from aiohttp import web  # presente en este equipo (verificado)
 
 
 # ---------------------------------------------------------------- utilidades
+CAMPOS_SENSIBLES = ("api_keys", "clave", "secret")
+SUFIJO_SENSIBLE = ("_api_key", "_token", "_secret", "_password")
+
+
+def campo_sensible(nombre):
+    n = str(nombre).lower()
+    return n in CAMPOS_SENSIBLES or n.endswith(SUFIJO_SENSIBLE)
+
+
+def sanear(datos):
+    """Quita secretos por nombre de campo; nunca inspecciona ni registra su valor."""
+    if isinstance(datos, list):
+        return [sanear(v) for v in datos]
+    if not isinstance(datos, dict):
+        return datos
+    return {k: sanear(v) for k, v in datos.items() if not campo_sensible(k)}
+
+
 def leer_estado():
     try:
-        return json.loads(ESTADO.read_text(encoding="utf-8"))
+        datos = json.loads(ESTADO.read_text(encoding="utf-8"))
+        limpio = sanear(datos)
+        if not isinstance(limpio, dict):
+            return {}
+        if limpio != datos:
+            escribir_estado(limpio)
+        return limpio
     except Exception:
         return {}
 
 
 def escribir_estado(d):
+    temporal = None
     try:
-        ESTADO.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+        limpio = sanear(d)
+        if not isinstance(limpio, dict):
+            return
+        ESTADO.parent.mkdir(parents=True, exist_ok=True)
+        fd, nombre = tempfile.mkstemp(prefix=ESTADO.name + ".", suffix=".tmp",
+                                      dir=ESTADO.parent)
+        temporal = Path(nombre)
+        with os.fdopen(fd, "w", encoding="utf-8") as salida:
+            json.dump(limpio, salida, ensure_ascii=False, indent=2)
+            salida.flush()
+            os.fsync(salida.fileno())
+        os.replace(temporal, ESTADO)
+        os.chmod(ESTADO, 0o600)
     except Exception as e:
-        print(f"[CORT] no se pudo guardar el estado: {e}", file=sys.stderr)
+        if temporal is not None:
+            try:
+                temporal.unlink(missing_ok=True)
+            except OSError:
+                pass
+        print(f"[CORT] no se pudo guardar el estado: {type(e).__name__}", file=sys.stderr)
 
 
 def http_json(url, datos=None, timeout=6):
@@ -2095,7 +2138,9 @@ async def ws_handler(request):
                 # sólo entendía `settings-save`: el botón llevaba todo el proyecto
                 # sin guardar nada. Los tres nombres son el mismo acto.
                 e = leer_estado()
-                for k, v in (d.get("settings") or d).items():
+                recibido = d.get("settings") or d
+                limpio = sanear(recibido)
+                for k, v in limpio.items():
                     if isinstance(v, (str, int, float, bool, list, dict)) and k not in ("type", "action"):
                         e[k] = v
                 escribir_estado(e)

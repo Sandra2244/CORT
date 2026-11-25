@@ -278,8 +278,9 @@ fi
 javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
 
-javac --release 11 -classpath build/obj -d build/pruebas tests/PuertaRamTest.java
+javac --release 11 -classpath build/obj -d build/pruebas tests/PuertaRamTest.java tests/SecretoTest.java
 java -cp build/obj:build/pruebas dev.sandra.cort.movil.PuertaRamTest
+java -cp build/obj:build/pruebas dev.sandra.cort.movil.SecretoTest
 
 D8_ENTRADAS="$(find build/obj -name '*.class')"
 "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \

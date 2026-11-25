@@ -103,6 +103,12 @@ jobs:
           # etiqueta, así que el SHA es lo que la release debe apuntar.
           echo "CODIGO=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
+      - name: suite de secretos Web, puente y Android
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'aiohttp>=3.9'
+          python3 scripts/prueba_secretos.py
+
       - name: caché del oído (Vosk y JNA; el modelo ya no baja en el build)
         uses: actions/cache@v4
         with:

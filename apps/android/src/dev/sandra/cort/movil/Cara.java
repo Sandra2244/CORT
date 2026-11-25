@@ -17,6 +17,8 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * La cara de CORT **cuando no hay portátil**. Hasta `v0.14.4` el teléfono sin
@@ -350,21 +352,25 @@ public class Cara implements Voz.AlOir {
         final java.util.List<String[]> historial =
                 recuerdos.turnos(Consticion.turnos(actividad));
         new Thread(() -> {
+            final boolean soloLocal = "local".equals(cerebroLocal.modo());
             final String sa = cerebroLocal.contestar(sistema, dicho, historial, null,
                     Consticion.maxTokens(actividad), Consticion.temperatura(actividad));
-            final String respuesta = sa != null ? sa
-                    : (nube.configurada() ? nube.preguntar(sistema, dicho, historial) : null);
-            if (respuesta != null) {
+            final String[] respuesta = {sa};
+            if (sa == null && !soloLocal && nube.configurada()
+                    && pedirConsentimientoNube()) {
+                respuesta[0] = nube.preguntar(sistema, dicho, historial);
+            }
+            if (respuesta[0] != null) {
                 recuerdos.apuntaTurno("user", dicho);
-                recuerdos.apuntaTurno("assistant", respuesta);
+                recuerdos.apuntaTurno("assistant", respuesta[0]);
             }
             actividad.runOnUiThread(() -> {
                 quitarUltima();
                 pintaCerebroChip();
-                if (respuesta == null) {
+                if (respuesta[0] == null) {
                     proponer(dicho);
                 } else {
-                    contestar(respuesta);
+                    contestar(respuesta[0]);
                 }
             });
         }).start();
@@ -434,7 +440,7 @@ public class Cara implements Voz.AlOir {
         caja.addView(texto("La nube, si quieres", 19f, Paleta.CIAN), par(-1, -2));
         TextView explic = texto("Sin clave CORT contesta con su tabla y su memoria, que es como funciona hoy. "
                 + "Con clave, las frases que no conoce se las pregunta al modelo cuando hay internet. "
-                + "La clave se queda escrita en este teléfono: no va al repositorio ni al APK.",
+                + "La clave se cifra con AndroidKeyStore: el teléfono guarda un sobre, no la clave en claro.",
                 12f, Paleta.SUAVE);
         explic.setLineSpacing(0f, 1.35f);
         caja.addView(explic, par(-1, -2));
@@ -451,7 +457,7 @@ public class Cara implements Voz.AlOir {
         final EditText base = campoDe("dirección del servicio", nube.base(), false);
         final EditText modelo = campoDe("modelo", nube.modelo(), false);
         final EditText clave = campoDe(hayClave()
-                ? "clave guardada (" + nube.clave().length() + " caracteres) — en blanco: no la cambio"
+                ? "clave protegida — en blanco: no la cambio"
                 : "clave de la API, se teclea una vez", "", true);
         caja.addView(base, par(-1, -2));
         caja.addView(modelo, par(-1, -2));
@@ -470,9 +476,11 @@ public class Cara implements Voz.AlOir {
         TextView borrar = texto("⌫  borrar la clave de este teléfono", 13f, Paleta.SUAVE);
         borrar.setPadding(0, dp(6), 0, dp(6));
         borrar.setOnClickListener(v -> {
-            nube.ajustar(modo[0], lo(base), lo(modelo), "");
+            nube.borrarClave();
             clave.setText("");
-            salida.setText("Clave borrada. CORT vuelve a su tabla local.");
+            salida.setText(nube.ultimoFallo().isEmpty()
+                    ? "Clave borrada. CORT vuelve a su tabla local."
+                    : nube.ultimoFallo());
             actualizandoChip();
         });
         caja.addView(borrar, par(-1, -2));
@@ -554,8 +562,36 @@ public class Cara implements Voz.AlOir {
         }).start();
     }
 
+    private boolean pedirConsentimientoNube() {
+        final CountDownLatch decision = new CountDownLatch(1);
+        final boolean[] permitido = {false};
+        actividad.runOnUiThread(() -> {
+            if (actividad.isFinishing() || actividad.isDestroyed()) {
+                decision.countDown();
+                return;
+            }
+            new AlertDialog.Builder(actividad)
+                    .setTitle("¿Enviar este texto a la nube?")
+                    .setMessage("Se enviaría sólo el texto necesario a " + nube.proveedor()
+                            + ". No se envía audio, pantalla ni archivos.")
+                    .setPositiveButton("Enviar una vez", (d, w) -> {
+                        permitido[0] = true;
+                        decision.countDown();
+                    })
+                    .setNegativeButton("No, seguir local", (d, w) -> decision.countDown())
+                    .setOnCancelListener(d -> decision.countDown())
+                    .show();
+        });
+        try {
+            return decision.await(120, TimeUnit.SECONDS) && permitido[0];
+        } catch (InterruptedException pausa) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     private boolean hayClave() {
-        return !nube.clave().isEmpty();
+        return nube.hayClave();
     }
 
     /** Qué cerebro piensa ahora, en una línea que se puede leer de un golpe. */

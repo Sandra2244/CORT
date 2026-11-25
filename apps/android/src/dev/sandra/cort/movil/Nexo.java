@@ -818,17 +818,17 @@ public class Nexo {
                     envia(cuadro("type", "live_subtitles", "id", id, "phase", "end"));
                     yaSubtitulado = true;
                 }
-            } else if (nube.configurada()) {
-                String deNube = nube.preguntar(sistema, dicho, historial);
-                texto = deNube != null ? deNube : null;
+            } else if (!"local".equals(cerebroLocal.modo()) && nube.configurada()) {
+                String textoNube = pedirConsentimientoNube()
+                        ? nube.preguntar(sistema, dicho, historial) : null;
+                texto = textoNube;
                 if (texto != null) {
                     modeloUsado = nube.modelo();
                     origenCerebro = "nube";
                     crudo = texto;
                 } else {
-                    texto = "Esa frase no la conozco y la nube tampoco contestó: "
-                            + nube.ultimoFallo();
-                    motivo = "fallo de la nube";
+                    texto = "No se envió a la nube o no contestó. Sigo sólo con el teléfono.";
+                    motivo = "sin consentimiento o fallo de la nube";
                     origenCerebro = "sin respuesta";
                 }
             } else {
@@ -850,6 +850,34 @@ public class Nexo {
         recuerdos.apuntaTurno("user", dicho);
         recuerdos.apuntaTurno("assistant", texto);
         dice(texto, yaSubtitulado);
+    }
+
+    private boolean pedirConsentimientoNube() {
+        final CountDownLatch decision = new CountDownLatch(1);
+        final boolean[] permitido = {false};
+        actividad.runOnUiThread(() -> {
+            if (actividad.isFinishing() || actividad.isDestroyed()) {
+                decision.countDown();
+                return;
+            }
+            new AlertDialog.Builder(actividad)
+                    .setTitle("¿Enviar este texto a la nube?")
+                    .setMessage("Se enviaría sólo el texto necesario a " + nube.proveedor()
+                            + ". No se envía audio, pantalla ni archivos.")
+                    .setPositiveButton("Enviar una vez", (d, w) -> {
+                        permitido[0] = true;
+                        decision.countDown();
+                    })
+                    .setNegativeButton("No, seguir local", (d, w) -> decision.countDown())
+                    .setOnCancelListener(d -> decision.countDown())
+                    .show();
+        });
+        try {
+            return decision.await(120, TimeUnit.SECONDS) && permitido[0];
+        } catch (InterruptedException pausa) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     /**

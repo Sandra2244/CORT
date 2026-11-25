@@ -999,7 +999,8 @@
     <!-- Injection Démo Interactive JARVIS (Simulation Virtuelle) -->
   <!-- CORT v0 — capa propia. El mock francés y el banner de marketing quedan fuera.
        Para volver atrás: restaurar index.html.orig (mock-ws.js + demo-banner.js). -->
-  <script src="cort/cort-mock.js?v=s4d"></script>
+  <script src="cort/cort-secretos.js?v=sec2"></script>
+  <script src="cort/cort-mock.js?v=s5a"></script>
   <script type="module" crossorigin src="assets/main-s6G6kMTO.js"></script>
   <script src="cort/cort-orbe.js?v=s2"></script>
   <script src="cort/cort-ui.js?v=s4d"></script>
@@ -1243,7 +1244,7 @@
             <span class="btn-icon">🌐</span> NAVIGATEUR SÉCURISÉ
           </button>
           <button id="api-keys-button" aria-pressed="false" class="menu-action-btn">
-            <span class="btn-icon">🔑</span> CONFIGURATION API
+            <span class="btn-icon">🔑</span> NUBE NO DISPONIBLE
           </button>
           <button id="menu-wallpaper-btn" aria-pressed="false" class="menu-action-btn">
             <span class="btn-icon">🖼️</span> FONDS D'ÉCRAN / ORB
@@ -2721,41 +2722,18 @@
           PREFERIDO (LLM)</label>
         <select id="settings-preferred-brain"
           style="width:100%; padding: 10px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.3); color: #00e5ff; font-family: 'Courier New', monospace; font-size: 14px; outline: none;">
-          <option value="auto">Enrutado automático (dinámico)</option>
-          <option value="gemini">Google Gemini (necesita clave, no se usa sin ella)</option>
-          <option value="local">IA local (Ollama) — modelo por defecto</option>
-          <option value="local_uncensored">🟢 IA local (Ollama) — elegir modelo en CORT</option>
-          <option value="groq">Groq (LLaMA 3)</option>
-          <option value="grok">xAI Grok (Grok AI)</option>
-          <option value="openai">OpenAI (ChatGPT)</option>
-          <option value="openai_realtime">🟣 OpenAI Realtime (voz directa por la red)</option>
-          <option value="claude">Anthropic Claude</option>
-          <option value="mistral">Mistral AI (Mistral Large)</option>
+          <option value="auto">Reglas y Ollama local — ruta disponible</option>
+          <option value="local">Ollama local — modelo por defecto</option>
+          <option value="local_uncensored">Ollama local — elegir modelo en CORT</option>
         </select>
         <div id="local-uncensored-badge"
           style="display: none; margin-top: 8px; padding: 8px 12px; background: rgba(255, 51, 102, 0.08); border: 1px solid rgba(255, 51, 102, 0.3); border-radius: 4px; font-size: 10px; color: #ff3366; font-family: monospace;">
           ⚙️ Requis : GPU NVIDIA (Ex: RTX 3060 8Go+ recommandé) + Ollama
         </div>
-        <div id="realtime-voice-selector-wrap" style="display:none; margin-top:14px; padding:12px; background:rgba(166,113,255,.08); border:1px solid rgba(166,113,255,.35); border-radius:6px;">
-          <label for="settings-realtime-model" style="display:block; margin-bottom:6px; font-size:11px; letter-spacing:2px; color:#c9a6ff;">MODÈLE OPENAI REALTIME</label>
-          <select id="settings-realtime-model" style="width:100%; padding:9px; background:rgba(0,0,0,.4); border:1px solid rgba(166,113,255,.45); color:#c9a6ff; font-family:inherit; font-size:13px; margin-bottom:12px; outline:none;">
-            <option value="gpt-realtime">gpt-realtime (Officiel / Recommandé)</option>
-          </select>
-
-          <label for="settings-realtime-voice" style="display:block; margin-bottom:6px; font-size:11px; letter-spacing:2px; color:#c9a6ff;">VOIX OPENAI REALTIME</label>
-          <select id="settings-realtime-voice" style="width:100%; padding:9px; background:rgba(0,0,0,.4); border:1px solid rgba(166,113,255,.45); color:#c9a6ff; font-family:inherit; font-size:13px; outline:none;">
-            <option value="marin">Marin — naturelle et claire</option>
-            <option value="cedar">Cedar — posée et profonde</option>
-            <option value="ballad">Ballad — douce et distinguée</option>
-            <option value="alloy">Alloy — neutre et équilibrée</option>
-            <option value="echo">Echo — chaleureuse</option>
-            <option value="shimmer">Shimmer — expressive</option>
-          </select>
-        </div>
         <p
           style="font-size: 11px; color: rgba(0, 229, 255, 0.6); margin-top: 8px; line-height: 1.4; font-family: monospace;">
-          ℹ️ Choisissez l'intelligence artificielle à solliciter en priorité lors de vos requêtes. Les autres API
-          resteront actives en secours (failover) s'il y a une panne ou un quota dépassé.
+          ℹ️ En esta versión el chat de PC usa reglas y Ollama local. La nube no está disponible
+          en el puente, así que no hay failover a otros proveedores.
         </p>
       </div>
 
@@ -2900,7 +2878,7 @@
       style="width: 90%; max-width: 520px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.3); box-shadow: 0 0 30px rgba(0, 229, 255, 0.2); border-radius: 4px; padding: 25px; font-family: 'Courier New', monospace; color: #00e5ff;">
       <div class="settings-header"
         style="font-size: 18px; font-weight: bold; letter-spacing: 3px; margin-bottom: 15px; text-transform: uppercase; border-bottom: 1px solid rgba(0, 229, 255, 0.2); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span>🎭 TON / PERSONNALITÉ DE L'AGENT</span>
+        <span>PERSONALIDAD DEL ASISTENTE</span>
         <span class="settings-close" id="agent-tone-close-btn"
           style="cursor: pointer; font-size: 14px; color: rgba(0, 229, 255, 0.5); transition: color 0.3s ease;">[ X
           ]</span>
@@ -2908,8 +2886,8 @@
 
       <div class="ha-hint"
         style="margin-bottom: 20px; font-size: 11px; line-height: 1.5; color: rgba(0, 229, 255, 0.7);">
-        Choisissez l'attitude et la personnalité de JARVIS. Le mode par défaut conserve la configuration habituelle. Les
-        modes spéciaux basculent dynamiquement sur l'API xAI (Grok).
+        Guarda una preferencia de personalidad. En esta versión no cambia el modelo, no modifica el
+        razonamiento y no activa ningún proveedor de nube.
       </div>
 
       <!-- Mode selection radio buttons -->
@@ -2935,9 +2913,9 @@
             <input type="radio" name="agent_tone_choice" value="astro" id="tone-mode-astro"
               style="margin-top: 3px; cursor: pointer;">
             <div>
-              <div style="font-weight: bold; color: #ff3366; font-size: 13px;">🔴 Trash-Talk / Astro Mode</div>
-              <div style="font-size: 10px; color: rgba(255, 255, 255, 0.6); margin-top: 2px;">Sarcastique, roaster,
-                culture Twitch/stream, sans filtre. Redirigé vers xAI Grok (Temp ~0.9).</div>
+              <div style="font-weight: bold; color: #ff3366; font-size: 13px;">🔴 Preferencia Astro</div>
+              <div style="font-size: 10px; color: rgba(255, 255, 255, 0.6); margin-top: 2px;">Marca una preferencia de tono
+                directo y sarcástico para una futura integración; hoy sólo se muestra como preferencia.</div>
             </div>
           </label>
 
@@ -2946,331 +2924,44 @@
             <input type="radio" name="agent_tone_choice" value="spicy" id="tone-mode-spicy"
               style="margin-top: 3px; cursor: pointer;">
             <div>
-              <div style="font-weight: bold; color: #ff69b4; font-size: 13px;">🔞 Unfiltered & Coquin</div>
-              <div style="font-size: 10px; color: rgba(255, 255, 255, 0.6); margin-top: 2px;">Provocateur, séducteur,
-                aucun tabou, second degré, incisif. Redirigé vers xAI Grok (Temp ~0.9).</div>
+              <div style="font-weight: bold; color: #ff69b4; font-size: 13px;">🔞 Preferencia Spicy</div>
+              <div style="font-size: 10px; color: rgba(255, 255, 255, 0.6); margin-top: 2px;">Guarda una preferencia de tono
+                informal; no envía texto a la nube ni habilita un modelo diferente.</div>
             </div>
           </label>
         </div>
       </div>
 
-      <!-- Configuration Clé API xAI (Grok) -->
-      <div class="settings-group"
-        style="margin-bottom: 20px; border-top: 1px solid rgba(0, 229, 255, 0.1); padding-top: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">CLÉ API xAI (GROK API
-            KEY)</span>
-          <a href="https://console.x.ai/" target="_blank"
-            style="color: #00e5ff; font-size: 10px; text-decoration: underline;">🔑 OBTENIR CLÉ</a>
-        </div>
-        <div style="position: relative;">
-          <input type="password" id="tone-api-xai-key" placeholder="xai-..."
-            style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none;">
-          <span class="toggle-password-eye" data-target="tone-api-xai-key"
-            style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-            title="Afficher/Masquer la clé">👁️</span>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Enregistre
-          automatiquement la clé API xAI dans votre environnement.</div>
-      </div>
 
       <button id="agent-tone-save-btn"
         style="width: 100%; padding: 12px; background: rgba(0, 229, 255, 0.1); border: 1px solid rgba(0, 229, 255, 0.5); color: #00e5ff; font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold; letter-spacing: 2px; cursor: pointer; transition: all 0.3s ease;">
-        APPLIQUER LE MODE
+        GUARDAR PREFERENCIA
       </button>
     </div>
   </div>
 
-  <!-- ══ API KEYS MODAL ══════════════════════════════════ -->
+  <!-- La nube de PC no tiene adaptador en esta fase: no se ofrecen claves aquí. -->
   <div id="api-keys-modal"
-    style="display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); align-items: center; justify-content: center;">
+    style="display: none; position: fixed; inset: 0; z-index: 1000; background: rgba(5, 5, 8, 0.85); backdrop-filter: blur(15px); align-items: center; justify-content: center;">
     <div class="settings-container"
-      style="max-height: 90vh; overflow-y: auto; width: 90%; max-width: 600px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.3); box-shadow: 0 0 30px rgba(0, 229, 255, 0.2); border-radius: 4px; padding: 30px; font-family: 'Courier New', monospace; color: #00e5ff;">
+      style="width: 90%; max-width: 600px; max-height: 85vh; overflow-y: auto; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; padding: 30px; font-family: 'Courier New', monospace; color: #00e5ff;">
       <div class="settings-header"
-        style="font-size: 20px; font-weight: bold; letter-spacing: 3px; margin-bottom: 20px; text-transform: uppercase; border-bottom: 1px solid rgba(0, 229, 255, 0.2); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span>🔑 CONFIGURATION API</span>
+        style="font-size: 18px; font-weight: bold; letter-spacing: 2px; margin-bottom: 18px; border-bottom: 1px solid rgba(0, 229, 255, 0.2); padding-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+        <span>NUBE NO DISPONIBLE</span>
         <span class="settings-close" id="api-keys-close-btn"
-          style="cursor: pointer; font-size: 14px; color: rgba(0, 229, 255, 0.5); transition: color 0.3s ease;">[ X
-          ]</span>
+          style="cursor: pointer; font-size: 14px; color: rgba(0, 229, 255, 0.5);">[ X ]</span>
       </div>
-
-      <div class="ha-hint"
-        style="margin-bottom: 20px; font-size: 11px; line-height: 1.5; color: rgba(0, 229, 255, 0.7);">
-        Activez, désactivez et configurez vos clés API pour les services connectés de JARVIS. Vos clés sont enregistrées
-        en direct dans votre fichier local <code>.env</code>.
-      </div>
-
-      <!-- API Gemini -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">GOOGLE GEMINI API
-            (Cerveau & Voix)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-gemini-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-gemini-key" placeholder="Entrez votre clé API Gemini"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-gemini-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://aistudio.google.com/" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API Gemini (AI Studio)">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Requis pour
-          l'intelligence générale de JARVIS et les voix ultra-réalistes (Fenrir, Aoede, etc.).</div>
-      </div>
-
-      <!-- API Groq -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">GROQ API (Cerveaux
-            alternatifs rapides)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-groq-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-groq-key" placeholder="Entrez votre clé API Groq"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-groq-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://console.groq.com/keys" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API Groq">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Offre un accès
-          ultra-rapide à des modèles comme LLaMA 3.</div>
-      </div>
-
-      <!-- API YouTube -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">YOUTUBE API v3
-            (Recherche de musique)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-youtube-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-youtube-key" placeholder="Entrez votre clé API YouTube"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-youtube-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank"
-            class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API YouTube (Google Cloud)">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Requis pour
-          rechercher et jouer des chansons spécifiques par leur titre via YouTube.</div>
-      </div>
-
-      <!-- API xAI (Grok) -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">XAI API (Grok
-            AI)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-grok-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-grok-key" placeholder="Entrez votre clé API xAI"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-grok-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://console.x.ai/" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API xAI (Grok)">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Permet d'utiliser
-          l'IA Grok de xAI pour des réponses alternatives.</div>
-      </div>
-
-      <!-- API OpenAI -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">OPENAI API
-            (ChatGPT)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-openai-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-openai-key" placeholder="Entrez votre clé API OpenAI"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-openai-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://platform.openai.com/api-keys" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API OpenAI">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Permet d'utiliser
-          l'IA GPT-4o de ChatGPT pour des réponses alternatives.</div>
-      </div>
-
-      <!-- API SerpAPI -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">SERPAPI (Google
-            Images)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-serpapi-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-serpapi-key" placeholder="Entrez votre clé API SerpAPI"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-serpapi-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://serpapi.com/manage-api-key" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API SerpAPI">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Utilisé pour
-          afficher des illustrations d'images sur l'écran holographique.</div>
-      </div>
-
-      <!-- API Anthropic -->
-      <div class="settings-group" style="margin-bottom: 25px; padding-bottom: 5px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">ANTHROPIC API (Claude
-            AI)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-anthropic-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-anthropic-key" placeholder="Entrez votre clé API Anthropic"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-anthropic-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://console.anthropic.com/" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API Anthropic">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Permet d'utiliser
-          Claude 3.5 Sonnet / Opus comme cerveau alternatif.</div>
-      </div>
-
-      <!-- API Mistral -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">MISTRAL API (Mistral
-            AI)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-mistral-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-mistral-key" placeholder="Entrez votre clé API Mistral"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-mistral-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://console.mistral.ai/" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API Mistral AI">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Permet d'utiliser
-          le modèle souverain français Mistral Large.</div>
-      </div>
-
-      <!-- API Windy Webcams -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">WINDY API (Webcams Live
-            du Monde)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-windy-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-windy-key" placeholder="Entrez votre clé API Windy Webcams"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-windy-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://api.windy.com/webcams" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API Windy Webcams (Gratuit)">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Requis pour
-          récupérer et visionner les webcams publiques en direct partout dans le monde sur le Globe 3D.</div>
-      </div>
-
-      <!-- API ElevenLabs (TTS Studio) -->
-      <div class="settings-group"
-        style="margin-bottom: 25px; border-bottom: 1px solid rgba(0, 229, 255, 0.1); padding-bottom: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <span style="font-weight: bold; font-size: 11px; color: #00e5ff; letter-spacing: 1px;">ELEVENLABS API (Voix Ultra-Réalistes)</span>
-          <label class="switch-container"
-            style="display: flex; align-items: center; gap: 6px; font-size: 10px; cursor: pointer; color: rgba(255,255,255,0.7); font-weight: bold; user-select: none;">
-            <input type="checkbox" id="settings-api-elevenlabs-enabled" checked style="cursor: pointer;"> ACTIVÉ
-          </label>
-        </div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <input type="password" id="settings-api-elevenlabs-key" placeholder="Entrez votre clé API ElevenLabs"
-              style="width: 100%; font-family: monospace; font-size: 11px; background: rgba(0, 229, 255, 0.05); border: 1px solid rgba(0, 229, 255, 0.2); color: #fff; padding: 8px 36px 8px 10px; border-radius: 4px; outline: none; transition: border-color 0.3s ease;">
-            <span class="toggle-password-eye" data-target="settings-api-elevenlabs-key"
-              style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 14px; user-select: none;"
-              title="Afficher/Masquer la clé">👁️</span>
-          </div>
-          <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" class="settings-btn"
-            style="text-align: center; text-decoration: none; font-size: 10px; line-height: 20px; padding: 6px 12px; border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 4px; color: #00e5ff; font-weight: bold; background: rgba(0, 229, 255, 0.02); display: inline-block; cursor: pointer;"
-            title="Obtenir une clé API ElevenLabs">🔑 OBTENIR</a>
-        </div>
-        <div class="ha-hint" style="font-size: 9px; margin-top: 5px; color: rgba(0, 229, 255, 0.5);">Permet à JARVIS de parler avec des voix studio ultra-réalistes et de charger automatiquement vos voix clonées.</div>
-      </div>
-
+      <p style="font-size: 13px; line-height: 1.6; color: rgba(255,255,255,0.78);">
+        En PC, CORT usa por ahora Ollama y sus reglas locales. Gemini, Groq, xAI, OpenAI,
+        Anthropic, Mistral y las claves de imagen o voz no tienen un adaptador real en esta versión.
+        No se guardan claves en el navegador ni en el estado del puente.
+      </p>
+      <p style="font-size: 12px; line-height: 1.6; color: #00e5ff;">
+        Android conserva Anthropic y OpenAI-compatible con consentimiento por turno y una clave
+        protegida por AndroidKeyStore. La paridad de proveedores llegará con SPEC-HIB-001.
+      </p>
       <button class="settings-btn primary" id="api-keys-save-btn"
-        style="width: 100%; padding: 12px; font-weight: bold; font-size: 11px; letter-spacing: 2px; border: 1px solid #00e5ff; background: rgba(0, 229, 255, 0.1); color: #00e5ff; cursor: pointer; border-radius: 4px; transition: all 0.3s ease;">SAUVEGARDER
-        & ENREGISTRER</button>
+        style="width: 100%; padding: 12px; font-size: 11px; border: 1px solid #00e5ff; background: rgba(0, 229, 255, 0.1); color: #00e5ff; cursor: pointer; border-radius: 4px;">ENTENDIDO</button>
     </div>
   </div>
 
