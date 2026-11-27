@@ -524,18 +524,24 @@ Esta primera tarea es pequeña, reversible y no modifica micrófono, cámara, re
 | 2026-11-26 | Se creó el plan OMNI | Convertir la visión amplia en fases pequeñas y verificables | Pendiente |
 | 2026-11-27 | Cierre intermedio `cort-v0.20.2`: fases 0–7 y router Android implementados; 8–10 y PC quedan abiertos | La usuaria autorizó publicar lo verificado y documentar el resto para continuar mañana | Autorizada por la usuaria |
 
-## 19. Cierre intermedio `cort-v0.20.2`
+## 19. Cierre publicado `cort-v0.20.2`
 
+- **Release:** [`cort-v0.20.2`](https://github.com/Sandra2244/CORT/releases/tag/cort-v0.20.2),
+  commit `449d350c6b304cd9a1ad883c90746551ceb3a3cc`.
 - **Código:** fases 0–7 implementadas; catálogo Ollama, router híbrido, proveedores
   cifrados, personalidades y planificador neural allowlisted integrados.
-- **Estático:** `scripts/prueba_apk.py` 337/337 antes de añadir la guarda de firma; el
-  workflow repite la suite sobre el APK final.
-- **JVM:** 383/383. La migración SQLite real sigue pendiente como evidencia física,
+- **Estático:** `scripts/prueba_apk.py` **337/337** sobre el APK final.
+- **JVM:** **383/383**. La migración SQLite real sigue pendiente como evidencia física,
   no como resultado inventado.
-- **Seguridad e integridad:** 40/40; la suite del APK queda 337/337 en local.
+- **Seguridad e integridad:** **40/40** en local.
 - **JavaScript:** sintaxis verde para UI, mock, orbe y puente Android.
-- **Build:** GitHub Actions con `aapt2 → javac --release 11 → d8 → zipalign → apksigner`;
-  motor nativo, oído, cara Web, alineación y certificado se comprueban antes de publicar.
+- **Build:** corrida [`45997972891`](https://github.com/Sandra2244/CORT/actions/runs/45997972891)
+  exitosa con `aapt2 → javac --release 11 → d8 → zipalign → apksigner`; motor nativo,
+  oído, cara Web, alineación y certificado se comprobaron antes de publicar.
+- **APK:** 79 365 379 bytes, `versionCode 2002`, SHA-256
+  `52d489c59e589da1bfbc12ed7876335ae698c23d494e21822f3ded333ea18a4f`.
+- **Firma:** certificado anterior conservado
+  `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`.
 - **Dispositivo:** A16 no ejecutado. No se declara 1.0 ni conversación larga verificada.
 - **Pendiente:** Fase 8, Fase 9, matriz conductual completa de Fase 10, navegador,
   rendimiento/batería/térmica del A16 y fases PC.

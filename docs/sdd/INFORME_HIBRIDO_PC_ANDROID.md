@@ -7,9 +7,10 @@
 
 ## Actualización de cierre — 2026-11-27
 
-**Candidata de release:** `cort-v0.20.2`, rama `web/cort-v0`. El detalle de esta
-actualización prevalece sobre el inventario inicial de 2026-11-24 cuando describa el
-estado actual del código. Las etiquetas `cort-v0.20.0` y `cort-v0.20.1` no llegaron a
+**Release publicada:** [`cort-v0.20.2`](https://github.com/Sandra2244/CORT/releases/tag/cort-v0.20.2),
+commit `449d350c6b304cd9a1ad883c90746551ceb3a3cc`, rama `web/cort-v0`. El detalle de
+esta actualización prevalece sobre el inventario inicial de 2026-11-24 cuando describa
+el estado actual del código. Las etiquetas `cort-v0.20.0` y `cort-v0.20.1` no llegaron a
 release: la primera falló en el guarda JNI y la segunda al compilar pruebas sin
 `android.jar`; ambas correcciones están incluidas en `cort-v0.20.2`.
 
@@ -47,18 +48,23 @@ Android sigue pendiente y no se marca como ejecutada. El total de suites JVM es 
 
 ### Evidencia y límites
 
-- `scripts/prueba_apk.py`: 337/337 antes del cierre final; el workflow la repite sobre
-  el APK y publica el resultado medido.
-- JVM: 383/383; producción Java compilada con `--release 11`.
-- Secretos, consentimiento, integridad GGUF y guardas de CI: 40/40 en local. El
+- `scripts/prueba_apk.py`: **337/337** sobre el repositorio y el APK final, medido por
+  la corrida de publicación.
+- JVM: **383/383**; producción Java compilada con `--release 11`.
+- Secretos, consentimiento, integridad GGUF y guardas de CI: **40/40** en local. El
   modo POSIX `0600` se comprueba en el runner Linux, no con el modo sintético de Windows.
 - JavaScript: sintaxis verde en `cort-ui.js`, `cort-mock.js`, `cort-orbe.js` y
   `cort-android.js` usando el runtime integrado de Qoder.
-- Certificado anterior `cort-v0.19.0`:
+- Corrida final [`45997972891`](https://github.com/Sandra2244/CORT/actions/runs/45997972891):
+  motor nativo y APK terminaron con éxito; publicación de los cuatro adjuntos verificada.
+- APK: **79 365 379 bytes (75,69 MiB)**, `versionCode 2002`, ABIs `arm64-v8a` y
+  `armeabi-v7a`, alineación a 4 correcta. SHA-256:
+  `52d489c59e589da1bfbc12ed7876335ae698c23d494e21822f3ded333ea18a4f`.
+- Certificado anterior `cort-v0.19.0` conservado:
   `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`.
-  El workflow debe bloquear la publicación si falta la clave o esta huella cambia.
-- Compilación, alineación, motor nativo, firma y pesos finales: los demuestra la
-  corrida de Actions y los adjuntos `auditoria.txt`/`firma.txt` de la release.
+  La publicación comprobó esta huella antes de crear la release.
+- Compilación, alineación, motor nativo, firma y pesos finales quedan demostrados por
+  la corrida de Actions y los adjuntos `auditoria.txt`/`firma.txt` de la release.
 - Navegador completo y Samsung A16: **no ejecutados**. Siguen pendientes RAM ocupada,
   tokens/s, conversaciones largas, térmica, batería, overlay, asistente, sensores,
   notificaciones, alarmas, migración de nube y comportamiento de One UI.
