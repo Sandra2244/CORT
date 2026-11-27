@@ -9,9 +9,8 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 
 /**
- * El sensor de audífonos. CORT habla al oído por el receptor del teléfono, pero si
- * la dueña lleva auriculares puestos la voz tiene que salir por ahí y no por el
- * auricular de la oreja ni por el altavoz de la casa.
+ * El sensor de audífonos detecta salidas compatibles. Android decide la ruta
+ * activa; con varias salidas conectadas CORT no afirma cuál está sonando.
  *
  * Se lee el estado con `getDevices` (API 23) y los cambios con `AudioDeviceCallback`,
  * que es lo único que avisa también del Bluetooth; el `ACTION_AUDIO_BECOMING_NOISY` del
@@ -54,15 +53,37 @@ public final class Audifonos {
         return estado(gestor) != SIN_AUDIFONOS;
     }
 
-    /** Dónde va a sonar la próxima frase, dicho con palabras. */
+    /** Qué salidas están detectadas, sin afirmar cuál eligió Android. */
+    public static int cantidad(AudioManager gestor) {
+        if (gestor == null) return 0;
+        int total = 0;
+        for (AudioDeviceInfo dispositivo : gestor.getDevices(AudioManager.GET_DEVICES_OUTPUTS)) {
+            switch (dispositivo.getType()) {
+                case AudioDeviceInfo.TYPE_WIRED_HEADPHONES:
+                case AudioDeviceInfo.TYPE_WIRED_HEADSET:
+                case AudioDeviceInfo.TYPE_USB_HEADSET:
+                case AudioDeviceInfo.TYPE_BLUETOOTH_A2DP:
+                case AudioDeviceInfo.TYPE_BLUETOOTH_SCO:
+                    total++;
+                    break;
+                default:
+                    break;
+            }
+        }
+        return total;
+    }
+
     public static String salida(AudioManager gestor) {
+        if (cantidad(gestor) > 1) {
+            return "varias salidas detectadas; Android no confirma la activa";
+        }
         switch (estado(gestor)) {
             case CON_CABLE:
-                return "los audífonos de cable";
+                return "audífonos de cable detectados; Android decide la ruta";
             case POR_BLUETOOTH:
-                return "los audífonos Bluetooth";
+                return "audífonos Bluetooth detectados; Android decide la ruta";
             default:
-                return "el auricular del teléfono";
+                return "sin auriculares detectados; Android decide la salida";
         }
     }
 

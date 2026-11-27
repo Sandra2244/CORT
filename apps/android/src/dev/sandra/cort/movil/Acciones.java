@@ -14,11 +14,10 @@ import android.provider.Settings;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Las manos de CORT en el teléfono. Recibe un `Cerebro.Resultado` —una acción de
@@ -37,13 +36,25 @@ import java.util.regex.Pattern;
  * portado como idea y no como código.
  */
 public class Acciones {
-    private static final Pattern HORA = Pattern.compile("(\\d{1,2})\\s*(?::|\\.)\\s*(\\d{2})");
-    private static final Pattern HORA_SOLA = Pattern.compile("(\\d{1,2})");
-    private static final Pattern DURACION = Pattern.compile(
-            "(\\d+)\\s*(hora|horas|minuto|minutos|min|segundo|segundos|s)");
-    private static final String[] NUMEROS = {"dos", "tres", "cuatro", "cinco", "seis", "siete",
-            "ocho", "nueve", "diez", "once", "doce"};
     private static final Locale ES = Locale.forLanguageTag("es-ES");
+
+    public static final class Resultado {
+        public final String texto;
+        public final boolean ok;
+
+        private Resultado(String texto, boolean ok) {
+            this.texto = texto;
+            this.ok = ok;
+        }
+
+        public static Resultado exito(String texto) {
+            return new Resultado(texto, true);
+        }
+
+        public static Resultado fallo(String texto) {
+            return new Resultado(texto, false);
+        }
+    }
 
     private final Context contexto;
     private final Recuerdos recuerdos;
@@ -54,11 +65,16 @@ public class Acciones {
     }
 
     public String ejecutar(Cerebro.Resultado r) {
+        Resultado resultado = ejecutarTipado(r);
+        return resultado == null ? null : resultado.texto;
+    }
+
+    public Resultado ejecutarTipado(Cerebro.Resultado r) {
         switch (r.accion) {
             case "hora":
             case "fecha":
             case "listar":
-                return rellena(r.plantilla, r);
+                return Resultado.exito(rellena(r.plantilla, r));
             case "volumen":
                 return volumen(r.param);
             case "abrir":
@@ -76,13 +92,16 @@ public class Acciones {
             case "cronometro":
                 return cronometro(r.resto);
             case "guardar":
-                return recuerdos.guardarFrase(r.resto);
+                String guardado = recuerdos.guardarFrase(r.resto);
+                return guardado == null ? null
+                        : guardado.startsWith("Anotado:") ? Resultado.exito(guardado)
+                        : Resultado.fallo(guardado);
             case "saber":
                 return saber(r);
             case "buscar":
                 return buscar(r.resto);
             case "decir":
-                return vacia(r.plantilla) ? null : r.plantilla;
+                return vacia(r.plantilla) ? null : Resultado.exito(r.plantilla);
             default:
                 return null;
         }
@@ -100,22 +119,22 @@ public class Acciones {
      * usa el paso (`ADJUST_RAISE`) en vez de un valor absoluto justamente para no
      * escribir el volumen de la dueña sin querer.
      */
-    private String volumen(String direccion) {
+    private Resultado volumen(String direccion) {
         AudioManager audio = (AudioManager) contexto.getSystemService(Context.AUDIO_SERVICE);
         if (audio == null) {
-            return "No encontré el control de volumen de este teléfono.";
+            return Resultado.fallo("No encontré el control de volumen de este teléfono.");
         }
         if ("silencio".equals(direccion)) {
             audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE,
                     AudioManager.FLAG_SHOW_UI);
-            return "Dejo la música en silencio.";
+            return Resultado.exito("Dejo la música en silencio.");
         }
         if ("maximo".equals(direccion)) {
             int tope = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
             for (int i = 0; i < 25 && audio.getStreamVolume(AudioManager.STREAM_MUSIC) < tope; i++) {
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, 0);
             }
-            return "Volumen al máximo.";
+            return Resultado.exito("Volumen al máximo.");
         }
         int pasos = "subir".equals(direccion) ? 3 : "bajar".equals(direccion) ? 3 : 0;
         if (pasos == 0) {
@@ -126,8 +145,8 @@ public class Acciones {
         for (int i = 0; i < pasos; i++) {
             audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, subir, AudioManager.FLAG_SHOW_UI);
         }
-        return "Volumen a " + audio.getStreamVolume(AudioManager.STREAM_MUSIC) + " de "
-                + audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) + ".";
+        return Resultado.exito("Volumen a " + audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                + " de " + audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) + ".");
     }
 
     /* ------------------------------------------------------------------ abrir */
@@ -142,7 +161,7 @@ public class Acciones {
      * manifiesto declara un `<queries>` con `MAIN`/`LAUNCHER`, que es la forma
      * estrecha y aprobada de preguntar lo mismo.
      */
-    private String abrir(String destino) {
+    private Resultado abrir(String destino) {
         Intent intento = new Intent();
         intento.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         switch (destino) {
@@ -184,15 +203,15 @@ public class Acciones {
                 intento.setAction(Intent.ACTION_DIAL);
                 break;
             default:
-                return "Puedo abrir ajustes, la red, el navegador, el reloj, la música, los "
+                return Resultado.fallo("Puedo abrir ajustes, la red, el navegador, el reloj, la música, los "
                         + "mensajes, el marcador y el teclado. Y si me dices el nombre de una "
-                        + "app instalada, la abro también.";
+                        + "app instalada, la abro también.");
         }
         try {
             contexto.startActivity(intento);
-            return "Abriendo " + destino + ".";
+            return Resultado.exito("Abriendo " + destino + ".");
         } catch (ActivityNotFoundException noHay) {
-            return "Este teléfono no trae una app para " + destino + ".";
+            return Resultado.fallo("Este teléfono no trae una app para " + destino + ".");
         }
     }
 
@@ -209,13 +228,13 @@ public class Acciones {
      * No hay shell ni comandos: se arma un `Intent` con el componente que el
      * propio sistema devolvió (regla 6 dentro del aparato).
      */
-    private String app(String nombre) {
+    private Resultado app(String nombre) {
         if (vacia(nombre)) {
             return null;
         }
         PackageManager pm = contexto.getPackageManager();
         if (pm == null) {
-            return "Este teléfono no me deja mirar sus aplicaciones.";
+            return Resultado.fallo("Este teléfono no me deja mirar sus aplicaciones.");
         }
         String buscado = Cerebro.normaliza(nombre);
         if (buscado.isEmpty()) {
@@ -244,8 +263,8 @@ public class Acciones {
             }
         }
         if (mejor == null) {
-            return "No encontré «" + nombre + "» entre las apps de este teléfono. "
-                    + "Pruébalo con el nombre exacto que ves en su icono.";
+            return Resultado.fallo("No encontré «" + nombre + "» entre las apps de este teléfono. "
+                    + "Pruébalo con el nombre exacto que ves en su icono.");
         }
         Intent arranque = new Intent(Intent.ACTION_MAIN);
         arranque.addCategory(Intent.CATEGORY_LAUNCHER);
@@ -254,11 +273,11 @@ public class Acciones {
         String como_se_llama = mejor.loadLabel(pm).toString();
         try {
             contexto.startActivity(arranque);
-            return "Abriendo " + como_se_llama + ".";
+            return Resultado.exito("Abriendo " + como_se_llama + ".");
         } catch (ActivityNotFoundException noPuede) {
-            return "Encontré " + como_se_llama + " pero este teléfono no me deja abrirla.";
+            return Resultado.fallo("Encontré " + como_se_llama + " pero este teléfono no me deja abrirla.");
         } catch (SecurityException protegida) {
-            return "Encontré " + como_se_llama + ", pero está protegida y no puedo abrirla.";
+            return Resultado.fallo("Encontré " + como_se_llama + ", pero está protegida y no puedo abrirla.");
         }
     }
 
@@ -307,7 +326,7 @@ public class Acciones {
      * de una app de terceros, y si el enlace lo abre una app distinta de la que la
      * dueña esperaba, eso se ve en la pantalla del teléfono, no en esta máquina.
      */
-    private String poner(String obra) {
+    private Resultado poner(String obra) {
         if (vacia(obra)) {
             return null;
         }
@@ -316,9 +335,9 @@ public class Acciones {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             contexto.startActivity(intento);
-            return "Pongo «" + obra + "»: abro su búsqueda en internet.";
+            return Resultado.exito("Pongo «" + obra + "»: abro su búsqueda en internet.");
         } catch (ActivityNotFoundException noHayNavegador) {
-            return "Nada en este teléfono abre un enlace. Dime «busca " + obra + "».";
+            return Resultado.fallo("Nada en este teléfono abre un enlace. Dime «busca " + obra + "».");
         }
     }
 
@@ -339,7 +358,7 @@ public class Acciones {
      * y no busca agendas: `READ_CONTACTS` tampoco. El dedo de la dueña aprieta
      * «llamar»; CORT deja el número o el nombre en la pantalla.
      */
-    private String llamar(String a_quien) {
+    private Resultado llamar(String a_quien) {
         if (vacia(a_quien)) {
             return null;
         }
@@ -348,9 +367,9 @@ public class Acciones {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             contexto.startActivity(intento);
-            return "Abro el marcador con «" + a_quien + "». Tú aprietas llamar.";
+            return Resultado.exito("Abro el marcador con «" + a_quien + "». Tú aprietas llamar.");
         } catch (ActivityNotFoundException noHayMarcador) {
-            return "Este teléfono no tiene marcador para «" + a_quien + "».";
+            return Resultado.fallo("Este teléfono no tiene marcador para «" + a_quien + "».");
         }
     }
 
@@ -363,17 +382,17 @@ public class Acciones {
      * enseñar el cuerpo 3D desde el WebView—, y si la dueña no lo ha dado aún,
      * `SecurityException` se contesta en español en vez de tumbar la app.
      */
-    private String linterna(String modo) {
+    private Resultado linterna(String modo) {
         boolean encendida = "enciende".equals(modo);
         CameraManager camara = (CameraManager) contexto
                 .getSystemService(Context.CAMERA_SERVICE);
         if (camara == null) {
-            return "Este teléfono no tiene linterna controlable.";
+            return Resultado.fallo("Este teléfono no tiene linterna controlable.");
         }
         try {
             String[] ids = camara.getCameraIdList();
             if (ids.length == 0) {
-                return "No encuentro la cámara que manda la linterna.";
+                return Resultado.fallo("No encuentro la cámara que manda la linterna.");
             }
             // La linterna suele estar en la cámara trasera —la id «0» en casi todos
             // los teléfonos—, pero se recorre la lista entera: un
@@ -382,46 +401,63 @@ public class Acciones {
             for (String id : ids) {
                 try {
                     camara.setTorchMode(id, encendida);
-                    return encendida ? "Enciendo la linterna." : "Apago la linterna.";
+                    return Resultado.exito(encendida ? "Enciendo la linterna." : "Apago la linterna.");
                 } catch (IllegalArgumentException noTorch) {
                     // sin linterna en esta cámara: sigue
                 }
             }
-            return "Las cámaras de este teléfono no traen linterna.";
+            return Resultado.fallo("Las cámaras de este teléfono no traen linterna.");
         } catch (CameraAccessException noHayAccesso) {
-            return "No pude mirar las cámaras del teléfono.";
+            return Resultado.fallo("No pude mirar las cámaras del teléfono.");
         } catch (SecurityException faltaPermiso) {
-            return "Para la linterna necesito el permiso de cámara: dámelo en ajustes.";
+            return Resultado.fallo("Para la linterna necesito el permiso de cámara: dámelo en ajustes.");
         }
     }
 
 
     /* ------------------------------------------------------------------ tiempo */
 
-    private String alarma(String resto) {
-        int[] hm = hora(resto);
-        if (hm == null) {
-            // Mejor preguntar que poner una alarma a las 0:00: un fallo así en un
-            // asistente se paga a las siete de la mañana.
+    private Resultado alarma(String resto) {
+        EspecificacionAlarma especificacion = EspecificacionAlarma.parsear(resto);
+        if (!especificacion.valida || !EspecificacionAlarma.ALARMA.equals(especificacion.tipo)) {
             return null;
         }
+        long id = recuerdos.registrarAlarma(especificacion, "voz_o_chat", "");
         Intent intento = new Intent(AlarmClock.ACTION_SET_ALARM)
-                .putExtra(AlarmClock.EXTRA_HOUR, hm[0])
-                .putExtra(AlarmClock.EXTRA_MINUTES, hm[1])
-                .putExtra(AlarmClock.EXTRA_MESSAGE, "CORT")
-                .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+                .putExtra(AlarmClock.EXTRA_HOUR, especificacion.hora)
+                .putExtra(AlarmClock.EXTRA_MINUTES, especificacion.minuto)
+                .putExtra(AlarmClock.EXTRA_MESSAGE, especificacion.etiqueta)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (especificacion.dias != 0) {
+            ArrayList<Integer> dias = new ArrayList<>();
+            for (int dia = 1; dia <= 7; dia++) {
+                if ((especificacion.dias & (1 << (dia - 1))) != 0) {
+                    dias.add(dia == 1 ? Calendar.SUNDAY : dia - 1);
+                }
+            }
+            intento.putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, dias);
+        }
         try {
             contexto.startActivity(intento);
-            return "Alarma puesta a las " + hm[0] + ":"
-                    + String.format(Locale.ROOT, "%02d", hm[1]) + ".";
+            recuerdos.marcarAlarma(id, "ENTREGADO_RELOJ");
+            return Resultado.exito("Abrí el reloj con " + especificacion.resumen()
+                    + " Confirma allí la alarma; CORT no puede leer el catálogo del sistema.");
         } catch (ActivityNotFoundException noHayApp) {
-            return "No encontré la app de reloj de este teléfono.";
+            recuerdos.marcarAlarma(id, "FALLO");
+            return Resultado.fallo("No encontré la app de reloj de este teléfono.");
+        } catch (SecurityException sinPermiso) {
+            recuerdos.marcarAlarma(id, "FALLO");
+            return Resultado.fallo("El reloj rechazó la solicitud en este teléfono.");
         }
     }
 
-    private String cronometro(String resto) {
-        long millis = duracionAMillis(resto);
+    private Resultado cronometro(String resto) {
+        EspecificacionAlarma especificacion = EspecificacionAlarma.parsear(resto);
+        if (!especificacion.valida
+                || !EspecificacionAlarma.TEMPORIZADOR.equals(especificacion.tipo)) {
+            return null;
+        }
+        long id = recuerdos.registrarAlarma(especificacion, "voz_o_chat", "");
         // `EXTRA_LENGTH` (entero, **segundos**, de 1 a 86 400) es lo que AOSP
         // define para `ACTION_SET_TIMER`. Aquí llegaron a escribirse
         // `EXTRA_TIME_IN_MILLIS` y `EXTRA_COUNTDOWN`, y los dos **no existen**:
@@ -429,42 +465,44 @@ public class Acciones {
         // verificadas está en `apps/apk/simbolos-android.json`, generada con
         // `scripts/simbolos_android.py`, y la prueba de esa costura es
         // `test_apk_cerebro.py`.
-        int segundos = (int) Math.min(86400L, Math.max(0L, millis / 1000L));
-        if (segundos < 1) {
-            return null;
-        }
         Intent intento = new Intent(AlarmClock.ACTION_SET_TIMER)
-                .putExtra(AlarmClock.EXTRA_LENGTH, segundos)
-                .putExtra(AlarmClock.EXTRA_MESSAGE, "CORT")
+                .putExtra(AlarmClock.EXTRA_LENGTH, especificacion.segundos)
+                .putExtra(AlarmClock.EXTRA_MESSAGE, especificacion.etiqueta)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             contexto.startActivity(intento);
-            return "Cronómetro de " + resto + ".";
+            recuerdos.marcarAlarma(id, "ENTREGADO_RELOJ");
+            return Resultado.exito("Abrí el reloj con " + especificacion.resumen()
+                    + " Confirma allí el temporizador.");
         } catch (ActivityNotFoundException noHayApp) {
-            return "La app de reloj no me dejó abrir el cronómetro.";
+            recuerdos.marcarAlarma(id, "FALLO");
+            return Resultado.fallo("La app de reloj no me dejó abrir el cronómetro.");
+        } catch (SecurityException sinPermiso) {
+            recuerdos.marcarAlarma(id, "FALLO");
+            return Resultado.fallo("El reloj rechazó el temporizador en este teléfono.");
         }
     }
 
     /* ------------------------------------------------------------------ memoria y nube */
 
-    private String buscar(String resto) {
+    private Resultado buscar(String resto) {
         Intent intento = new Intent(Intent.ACTION_WEB_SEARCH)
                 .putExtra("query", resto)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
             contexto.startActivity(intento);
-            return "Busco «" + resto + "».";
+            return Resultado.exito("Busco «" + resto + "».");
         } catch (ActivityNotFoundException noHayBuscador) {
-            return "No hay buscador en este teléfono para «" + resto + "».";
+            return Resultado.fallo("No hay buscador en este teléfono para «" + resto + "».");
         }
     }
 
-    private String saber(Cerebro.Resultado r) {
+    private Resultado saber(Cerebro.Resultado r) {
         String hallado = "yo".equals(r.param) ? recuerdos.quienSoy() : recuerdos.buscar(r.resto);
         if (hallado == null) {
             return null;   // la cara propone aprender, en vez de inventar
         }
-        return vacia(r.plantilla) ? hallado : rellena(r.plantilla, r, hallado);
+        return Resultado.exito(vacia(r.plantilla) ? hallado : rellena(r.plantilla, r, hallado));
     }
 
     /** Sustituye los huecos de la plantilla por lo que se sabe ahora. */
@@ -494,59 +532,14 @@ public class Acciones {
 
     /** «7:30», «las 8 y media», «siete y cuarto» → {7, 30}. `null` si no hay hora. */
     public static int[] hora(String dicho) {
-        if (dicho == null || dicho.trim().isEmpty()) {
-            return null;
-        }
-        Matcher m = HORA.matcher(dicho);
-        if (m.find()) {
-            int h = entero(m.group(1));
-            int mi = entero(m.group(2));
-            return (h > 23 || mi > 59) ? null : new int[] {h, mi};
-        }
-        Matcher suelta = HORA_SOLA.matcher(dicho);
-        if (suelta.find()) {
-            int h = entero(suelta.group(1));
-            return h > 23 ? null : new int[] {h, minutos(dicho)};
-        }
-        int h = numeroEnLetras(dicho);
-        return h > 0 ? new int[] {h, minutos(dicho)} : null;
-    }
-
-    private static int minutos(String dicho) {
-        return dicho.contains("media") ? 30 : dicho.contains("cuarto") ? 15 : 0;
+        EspecificacionAlarma especificacion = EspecificacionAlarma.parsear(dicho);
+        return especificacion.valida && EspecificacionAlarma.ALARMA.equals(especificacion.tipo)
+                ? new int[] {especificacion.hora, especificacion.minuto} : null;
     }
 
     /** «5 minutos», «30 segundos», «2 horas» → milisegundos; 0 si no se entiende. */
     public static long duracionAMillis(String dicho) {
-        Matcher m = DURACION.matcher(dicho == null ? "" : dicho);
-        if (!m.find()) {
-            return 0L;
-        }
-        long n = entero(m.group(1));
-        String unidad = m.group(2);
-        if (unidad.startsWith("h")) {
-            return n * 3600000L;
-        }
-        if (unidad.startsWith("m")) {
-            return n * 60000L;
-        }
-        return n * 1000L;
-    }
-
-    private static int numeroEnLetras(String dicho) {
-        for (int i = 0; i < NUMEROS.length; i++) {
-            if (dicho.contains(NUMEROS[i])) {
-                return i + 2;
-            }
-        }
-        return 0;
-    }
-
-    private static int entero(String texto) {
-        try {
-            return Integer.parseInt(texto);
-        } catch (NumberFormatException noEs) {
-            return 0;
-        }
+        int segundos = EspecificacionAlarma.duracionEnSegundos(Cerebro.normaliza(dicho));
+        return segundos > 0 && segundos <= 86400 ? segundos * 1000L : 0L;
     }
 }

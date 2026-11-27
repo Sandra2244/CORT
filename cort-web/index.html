@@ -1103,6 +1103,10 @@
     </svg>
   </button>
 
+  <div id="cort-estado-asistente" role="status" aria-live="polite" aria-atomic="true"
+       data-estado="reposo" hidden>CORT · En reposo</div>
+  <button id="cort-detener-btn" type="button" aria-label="Detener la voz y la escucha de CORT" hidden>Detener</button>
+
   <section id="cort-chat" role="dialog" aria-modal="true" aria-labelledby="cort-chat-titulo" tabindex="-1" hidden>
     <header>
       <div>
@@ -1120,6 +1124,215 @@
         <button id="cort-chat-enviar" type="submit">Enviar</button>
       </div>
     </form>
+  </section>
+
+  <section id="cort-medios" role="dialog" aria-modal="true" aria-labelledby="cort-medios-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // AUDIO</span>
+        <strong id="cort-medios-titulo">Voz y medios</strong>
+      </div>
+      <button id="cort-medios-cerrar" type="button" aria-label="Cerrar el panel de voz y medios">Cerrar</button>
+    </header>
+    <div class="cort-dispositivo-cuerpo">
+      <p id="cort-medios-origen" class="cort-dispositivo-nota">Controles reales de la voz de CORT en Android.</p>
+      <div class="cort-dispositivo-resumen" aria-label="Estado de la locución">
+        <div><span>Locución</span><strong id="cort-medios-estado">Sin datos</strong></div>
+        <div><span>Salida detectada</span><strong id="cort-medios-salida">Sin datos</strong></div>
+        <div><span>Control externo</span><strong id="cort-medios-externo">No disponible</strong></div>
+      </div>
+      <div class="cort-dispositivo-controles" aria-label="Transporte de la voz de CORT">
+        <button id="cort-medios-play" type="button">Reproducir</button>
+        <button id="cort-medios-pause" type="button">Pausar</button>
+        <button id="cort-medios-stop" type="button">Detener</button>
+        <button id="cort-medios-prev" type="button">Anterior</button>
+        <button id="cort-medios-next" type="button">Siguiente</button>
+        <button id="cort-medios-musica" type="button">Abrir app de música</button>
+      </div>
+      <p id="cort-medios-mensaje" role="status" aria-live="polite">Consultando el estado del audio.</p>
+      <p id="cort-medios-limite" class="cort-dispositivo-nota">Pausar detiene la locución; reproducir reinicia la última respuesta. CORT no controla aún la música de otras apps.</p>
+    </div>
+  </section>
+
+  <section id="cort-asistente" role="dialog" aria-modal="true" aria-labelledby="cort-asistente-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // ASISTENTE</span>
+        <strong id="cort-asistente-titulo">Asistente de Android</strong>
+      </div>
+      <button id="cort-asistente-cerrar" type="button" aria-label="Cerrar el panel del asistente">Cerrar</button>
+    </header>
+    <div class="cort-dispositivo-cuerpo">
+      <p class="cort-dispositivo-nota">CORT se registra como asistente y puede mostrar su vista rápida sobre otra app. La selección la haces tú en Ajustes.</p>
+      <div class="cort-dispositivo-resumen" aria-label="Estado del asistente">
+        <div><span>Registro</span><strong id="cort-asistente-registro">Sin datos</strong></div>
+        <div><span>Asistente elegido</span><strong id="cort-asistente-predeterminado">Sin datos</strong></div>
+        <div><span>Vista superpuesta</span><strong id="cort-asistente-overlay">Sin datos</strong></div>
+      </div>
+      <div class="cort-dispositivo-controles" aria-label="Configuración del asistente">
+        <button id="cort-asistente-ajustes" type="button">Elegir asistente en Ajustes</button>
+        <button id="cort-asistente-superposicion" type="button">Permiso para mostrar sobre apps</button>
+        <button id="cort-asistente-probar" type="button">Probar vista rápida</button>
+      </div>
+      <p id="cort-asistente-mensaje" role="status" aria-live="polite">Consultando el registro de CORT.</p>
+      <p id="cort-asistente-limite" class="cort-dispositivo-nota">CORT coexiste con Gemini: no lo desinstala ni lo deshabilita. Un APK normal no puede preinstalarse universalmente ni obtener privilegios del sistema.</p>
+    </div>
+  </section>
+
+  <section id="cort-vida" role="dialog" aria-modal="true" aria-labelledby="cort-vida-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // VIDA DIARIA</span>
+        <strong id="cort-vida-titulo">Memoria, alarmas y rutinas</strong>
+      </div>
+      <button id="cort-vida-cerrar" type="button" aria-label="Cerrar el panel de vida diaria">Cerrar</button>
+    </header>
+    <div class="cort-dispositivo-cuerpo">
+      <p class="cort-dispositivo-nota">Datos locales del teléfono. Nada se envía a la nube desde este panel y ninguna rutina se ejecuta sin una activación explícita.</p>
+
+      <h2 class="cort-vida-titulo">Memoria</h2>
+      <div class="cort-dispositivo-controles">
+        <button id="cort-memoria-refrescar" type="button">Actualizar recuerdos</button>
+        <button id="cort-memoria-exportar" type="button">Mostrar exportación local</button>
+      </div>
+      <p id="cort-memoria-mensaje" role="status" aria-live="polite">Consultando la memoria local.</p>
+      <form id="cort-memoria-form" class="cort-vida-form">
+        <label for="cort-memoria-clave">Clave</label>
+        <input id="cort-memoria-clave" type="text" maxlength="80" autocomplete="off" required>
+        <label for="cort-memoria-valor">Valor</label>
+        <input id="cort-memoria-valor" type="text" maxlength="2000" autocomplete="off" required>
+        <button id="cort-memoria-guardar" type="submit">Guardar cambio</button>
+      </form>
+      <div id="cort-memoria-confirmacion" class="cort-vida-confirmacion" hidden>
+        <p id="cort-memoria-plan-texto" role="status" aria-live="polite"></p>
+        <div class="cort-dispositivo-controles">
+          <button id="cort-memoria-confirmar" type="button">Confirmar una vez</button>
+          <button id="cort-memoria-cancelar" type="button">Cancelar</button>
+        </div>
+      </div>
+      <div id="cort-memoria-lista" class="cort-vida-lista" aria-label="Recuerdos locales"></div>
+      <pre id="cort-memoria-detalle" class="cort-vida-detalle" hidden></pre>
+
+      <h2 class="cort-vida-titulo">Alarmas del sistema</h2>
+      <form id="cort-alarma-form" class="cort-vida-form">
+        <label for="cort-alarma-texto">Alarma o temporizador</label>
+        <input id="cort-alarma-texto" type="text" maxlength="300" placeholder="Ej.: alarma a las 7:30 llamada despertar" required>
+        <button id="cort-alarma-enviar" type="submit">Abrir en el reloj</button>
+      </form>
+      <div class="cort-dispositivo-controles">
+        <button id="cort-alarmas-refrescar" type="button">Actualizar entregas</button>
+      </div>
+      <p id="cort-alarmas-mensaje" role="status" aria-live="polite">El reloj confirma la alarma. CORT sólo registra la entrega.</p>
+      <div id="cort-alarmas-lista" class="cort-vida-lista" aria-label="Alarmas entregadas al reloj"></div>
+
+      <h2 class="cort-vida-titulo">Rutinas</h2>
+      <form id="cort-rutina-form" class="cort-vida-form">
+        <label for="cort-rutina-nombre">Nombre</label>
+        <input id="cort-rutina-nombre" type="text" maxlength="60" required>
+        <div id="cort-rutina-constructor" class="cort-vida-constructor"></div>
+        <div class="cort-dispositivo-controles">
+          <button id="cort-rutina-paso-add" type="button">Añadir paso</button>
+          <button id="cort-rutina-crear" type="submit">Crear rutina</button>
+        </div>
+      </form>
+      <div id="cort-rutina-plan" class="cort-vida-confirmacion" hidden>
+        <p id="cort-rutina-plan-texto" role="status" aria-live="polite"></p>
+        <div id="cort-rutina-plan-pasos" class="cort-vida-lista"></div>
+        <div class="cort-dispositivo-controles">
+          <button id="cort-rutina-confirmar" type="button">Ejecutar una vez</button>
+          <button id="cort-rutina-cancelar-plan" type="button">Cancelar</button>
+        </div>
+      </div>
+      <div class="cort-dispositivo-controles">
+        <button id="cort-rutinas-refrescar" type="button">Actualizar rutinas</button>
+        <button id="cort-rutinas-historial" type="button">Mostrar historial</button>
+      </div>
+      <p id="cort-rutinas-mensaje" role="status" aria-live="polite">Las rutinas usan una lista cerrada de acciones.</p>
+      <div id="cort-rutinas-lista" class="cort-vida-lista" aria-label="Rutinas guardadas"></div>
+      <pre id="cort-rutinas-detalle" class="cort-vida-detalle" hidden></pre>
+    </div>
+  </section>
+
+  <section id="cort-avisos" role="dialog" aria-modal="true" aria-labelledby="cort-avisos-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // PRIVACIDAD</span>
+        <strong id="cort-avisos-titulo">Avisos y compartir</strong>
+      </div>
+      <button id="cort-avisos-cerrar" type="button" aria-label="Cerrar el panel de avisos y compartir">Cerrar</button>
+    </header>
+    <div class="cort-dispositivo-cuerpo">
+      <p class="cort-dispositivo-nota">Lectura bajo demanda, sólo de apps permitidas. Nada se guarda, se registra, se sube a la nube ni se comparte sin tu confirmación exacta.</p>
+      <div class="cort-dispositivo-resumen" aria-label="Estado de los avisos">
+        <div><span>Acceso</span><strong id="cort-avisos-acceso">Sin datos</strong></div>
+        <div><span>Conexión</span><strong id="cort-avisos-conexion">Sin datos</strong></div>
+        <div><span>Apps permitidas</span><strong id="cort-avisos-total">0</strong></div>
+      </div>
+      <div class="cort-dispositivo-controles">
+        <button id="cort-avisos-ajustes" type="button">Activar acceso en Ajustes</button>
+        <button id="cort-avisos-refrescar" type="button">Actualizar estado</button>
+        <button id="cort-avisos-apps" type="button">Listar apps visibles</button>
+        <button id="cort-avisos-leer" type="button">Leer avisos activos ahora</button>
+      </div>
+      <p id="cort-avisos-mensaje" role="status" aria-live="polite">El acceso está desactivado por defecto.</p>
+      <p id="cort-avisos-limite" class="cort-dispositivo-nota">Máximo 20 avisos por consulta. No se exponen acciones, imágenes ni respuestas de otras aplicaciones.</p>
+
+      <h2 class="cort-vida-titulo">Aplicaciones permitidas</h2>
+      <form id="cort-avisos-allowlist-form" class="cort-vida-form">
+        <label for="cort-avisos-paquete">Paquete manual</label>
+        <input id="cort-avisos-paquete" type="text" maxlength="160" autocomplete="off" placeholder="com.ejemplo.aplicacion">
+        <button id="cort-avisos-anadir" type="button">Añadir a la selección</button>
+        <button id="cort-avisos-guardar" type="submit">Guardar selección</button>
+      </form>
+      <div id="cort-avisos-apps-lista" class="cort-vida-lista" aria-label="Aplicaciones disponibles"></div>
+      <div id="cort-avisos-seleccion" class="cort-vida-lista" aria-label="Aplicaciones permitidas"></div>
+
+      <h2 class="cort-vida-titulo">Avisos activos</h2>
+      <div id="cort-avisos-lista" class="cort-vida-lista" aria-label="Avisos activos permitidos"></div>
+
+      <h2 class="cort-vida-titulo">Compartir texto</h2>
+      <form id="cort-compartir-form" class="cort-vida-form">
+        <label for="cort-compartir-texto">Texto exacto</label>
+        <textarea id="cort-compartir-texto" maxlength="4000" rows="5" required></textarea>
+        <button id="cort-compartir-preparar" type="submit">Preparar confirmación</button>
+      </form>
+      <div id="cort-compartir-plan" class="cort-vida-confirmacion" hidden>
+        <p id="cort-compartir-plan-texto" role="status" aria-live="polite"></p>
+        <div class="cort-dispositivo-controles">
+          <button id="cort-compartir-confirmar" type="button">Abrir selector una vez</button>
+          <button id="cort-compartir-cancelar" type="button">Cancelar</button>
+        </div>
+      </div>
+      <p id="cort-compartir-mensaje" role="status" aria-live="polite">Android decide las apps disponibles. CORT no puede confirmar que el mensaje se envió.</p>
+    </div>
+  </section>
+
+  <section id="cort-dispositivo" role="dialog" aria-modal="true" aria-labelledby="cort-dispositivo-titulo" tabindex="-1" hidden>
+    <header>
+      <div>
+        <span class="cort-chat-canal">CORT // DISPOSITIVO</span>
+        <strong id="cort-dispositivo-titulo">Sensores y equipo</strong>
+      </div>
+      <button id="cort-dispositivo-cerrar" type="button" aria-label="Cerrar el panel de dispositivo">Cerrar</button>
+    </header>
+    <div class="cort-dispositivo-cuerpo">
+      <p id="cort-dispositivo-origen" class="cort-dispositivo-nota">Lecturas reales del teléfono. Sin histórico ni datos simulados.</p>
+      <div class="cort-dispositivo-resumen" aria-label="Resumen del dispositivo">
+        <div><span>Red</span><strong id="cort-dispositivo-red">Sin datos</strong></div>
+        <div><span>RAM disponible</span><strong id="cort-dispositivo-ram">Sin datos</strong></div>
+        <div><span>Batería</span><strong id="cort-dispositivo-bateria">Sin datos</strong></div>
+      </div>
+      <div class="cort-dispositivo-controles">
+        <button id="cort-sensores-activar" type="button" aria-pressed="false">Activar lecturas</button>
+        <button id="cort-sensores-pasos" type="button" aria-pressed="false" disabled>Pasos</button>
+        <button id="cort-sensores-refrescar" type="button">Actualizar</button>
+        <button id="cort-dispositivo-ajustes" type="button">Ajustes de CORT</button>
+      </div>
+      <p id="cort-sensores-estado" role="status" aria-live="polite">El panel consulta el inventario al abrirse.</p>
+      <p id="cort-sensores-permiso" class="cort-dispositivo-nota">El permiso de actividad se solicita sólo al activar Pasos.</p>
+      <div id="cort-sensores-lista" class="cort-sensores-lista" aria-label="Inventario de sensores"></div>
+      <p class="cort-dispositivo-nota">Las lecturas se detienen al pausar o cerrar este panel. La temperatura de la batería no es temperatura ambiente. Un sensor sin lectura no se muestra como cero.</p>
+    </div>
   </section>
 
   <div id="status-text"></div>
@@ -1189,6 +1402,21 @@
         <div class="section-buttons">
           <button id="cort-chat-btn" type="button" class="menu-action-btn" aria-controls="cort-chat" aria-expanded="false">
             <span class="btn-icon" aria-hidden="true">◈</span> ABRIR CHAT
+          </button>
+          <button id="sensores-btn" type="button" class="menu-action-btn" aria-controls="cort-dispositivo" aria-expanded="false" hidden>
+            <span class="btn-icon" aria-hidden="true">◇</span> SENSORES Y DISPOSITIVO
+          </button>
+          <button id="medios-btn" type="button" class="menu-action-btn" aria-controls="cort-medios" aria-expanded="false" hidden>
+            <span class="btn-icon" aria-hidden="true">►</span> VOZ Y MEDIOS
+          </button>
+          <button id="asistente-btn" type="button" class="menu-action-btn" aria-controls="cort-asistente" aria-expanded="false" hidden>
+            <span class="btn-icon" aria-hidden="true">◉</span> ASISTENTE DE ANDROID
+          </button>
+          <button id="vida-btn" type="button" class="menu-action-btn" aria-controls="cort-vida" aria-expanded="false" hidden>
+            <span class="btn-icon" aria-hidden="true">◇</span> VIDA DIARIA
+          </button>
+          <button id="avisos-btn" type="button" class="menu-action-btn" aria-controls="cort-avisos" aria-expanded="false" hidden>
+            <span class="btn-icon" aria-hidden="true">◇</span> AVISOS Y COMPARTIR
           </button>
           <button id="cort-foco-btn" type="button" class="menu-action-btn" aria-pressed="true">
             <span class="btn-icon" aria-hidden="true">◎</span> MODO ENFOQUE

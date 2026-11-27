@@ -21,12 +21,27 @@
 (function () {
   "use strict";
 
-  const N = window.CortNative;
-  if (!N || typeof N.recibir !== "function") {
-    // No estamos dentro del APK (alguien abrió `cort-web` en un navegador de
-    // verdad): no se sustituye nada y la página habla con su puente de siempre.
+  const NATIVA = window.CortNativeNativo;
+  const token = window.__cortPuenteToken;
+  if (!NATIVA || typeof NATIVA.recibir !== "function" || !token) {
+    // No estamos en la carga confinada del APK: no se sustituye nada.
     return;
   }
+  window.CortNative = {
+    recibir(cuadro) { NATIVA.recibir(token, String(cuadro)); },
+    capacidades() { return NATIVA.capacidades(token); },
+    registroCapacidades() { return NATIVA.registroCapacidades(token); },
+    escuchar() { NATIVA.escuchar(token); },
+    callar() { NATIVA.callar(token); },
+    hablar(texto) { NATIVA.hablar(token, texto); },
+    mostrarChat() { NATIVA.mostrarChat(token); },
+    segundosDictado() { return NATIVA.segundosDictado(token); },
+    segundosFrase() { return NATIVA.segundosFrase(token); },
+    fijarSegundosDictado(segundos) { NATIVA.fijarSegundosDictado(token, segundos); },
+    fijarSegundosFrase(segundos) { NATIVA.fijarSegundosFrase(token, segundos); },
+    fijarVista(modo) { NATIVA.fijarVista(token, modo); }
+  };
+  const N = window.CortNative;
 
   /* ---------------------------------------------------------------- embudo */
   /* El único camino de vuelta. Java llama a `window.__cortNative.emit(objeto)`
@@ -163,13 +178,23 @@
   /* Lo mismo que regía en el APK viejo: se pregunta al aparato, y lo que no se
    * puede medir no se finge. Java responde un JSON con puertas; una puerta en
    * `false` es un panel que no debe ofrecer botones muertos. */
-  let puertas = null;
-  window.CORTcapaz = function (puerta) {
-    if (puertas === null) {
-      try { puertas = JSON.parse(N.capacidades() || "{}") || {}; }
-      catch (e) { puertas = {}; }
+  let capacidadesNativas = null;
+  function leerCapacidades() {
+    if (capacidadesNativas === null) {
+      try {
+        const leido = JSON.parse(N.registroCapacidades() || "[]");
+        capacidadesNativas = Array.isArray(leido) ? leido : [];
+      } catch (e) { capacidadesNativas = []; }
     }
-    return puertas[puerta] !== false;
+    return capacidadesNativas;
+  }
+  window.CORTcapacidad = function (id) {
+    return leerCapacidades().find((c) => c && c.id === id) || null;
+  };
+  window.CORTcapaz = function (id) {
+    const c = window.CORTcapacidad(id);
+    return !!c && c.viabilidad !== "D"
+      && (c.estado === "existe" || c.estado === "parcial");
   };
 
   window.CORT_esAndroid = true;

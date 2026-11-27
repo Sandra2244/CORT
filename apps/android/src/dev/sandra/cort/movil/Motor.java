@@ -172,6 +172,9 @@ public final class Motor {
     private volatile boolean intentoEmpezado;
 
     private volatile boolean escuchando;
+    private long contadorDictado;
+    private volatile long sesionDictado;
+    private volatile long sesionPendiente;
 
     /* ---- el despertador (F19d) ----
      * `escuchandoPalabra` es la orden de vivir del hilo `cort-despierta`;
@@ -180,6 +183,7 @@ public final class Motor {
      * `oyentePendiente`/`medidorPendiente` son la cara que lo pulsó, si lo hizo. */
     private volatile boolean escuchandoPalabra;
     private volatile boolean capturaPedida;
+    private volatile boolean capturaEnCurso;
     private volatile AlEscucha despertador;
     private volatile Voz.AlOir oyentePendiente;
     private volatile Voz.AlNivel medidorPendiente;
@@ -649,41 +653,66 @@ public final class Motor {
      * callback llega en el hilo de la interfaz, que es donde `Cara` toca los
      * colores del orbe y escribe en el registro.
      */
-    public void escuchar(final Voz.AlOir oyente, final Voz.AlNivel medidor) {
+    public long escuchar(final Voz.AlOir oyente, final Voz.AlNivel medidor) {
         final Model modeloUsado;
+        final long sesion;
+        final boolean ocupado;
+        final boolean inicioHilo;
         synchronized (this) {
             modeloUsado = modelo;
+            ocupado = escuchando || sesionPendiente != 0L || capturaEnCurso;
+            if (modeloUsado == null || ocupado) {
+                sesion = 0L;
+                inicioHilo = false;
+            } else {
+                sesion = ++contadorDictado;
+                sesionDictado = sesion;
+                if (escuchandoPalabra) {
+                    sesionPendiente = sesion;
+                    oyentePendiente = oyente;
+                    medidorPendiente = medidor;
+                    capturaPedida = true;
+                    inicioHilo = false;
+                } else {
+                    escuchando = true;
+                    inicioHilo = true;
+                }
+            }
         }
-        if (modeloUsado == null) {
-            avisa(oyente, null, listo() ? "ya estaba escuchando"
+        if (sesion == 0L) {
+            avisa(oyente, null, ocupado ? "ya estaba escuchando"
                     : "el oído local no está listo (" + estadoTexto() + ")");
-            return;
+            return 0L;
         }
-        // El despertador (F19d) ya tiene el micrófono abierto en `cort-despierta`, y
-        // Android no da dos lecturas simultáneas del mismo `AudioRecord`: en vez de
-        // montar un segundo hilo se le pasa la orden a ese, que suelta la frase por
-        // el oyente que acaba de pedirlo. Dos micrófonos abiertos es la forma clásica
-        // de que el teléfono se quede mudo hasta el reinicio.
-        if (escuchandoPalabra) {
-            oyentePendiente = oyente;
-            medidorPendiente = medidor;
-            capturaPedida = true;
-            return;
+        if (inicioHilo) {
+            new Thread(() -> grabaYTranscribe(modeloUsado, sesion, oyente, medidor),
+                    "cort-micro").start();
         }
-        if (escuchando) {
-            avisa(oyente, null, "ya estaba escuchando");
-            return;
+        return sesion;
+    }
+
+    public void para(long sesion) {
+        synchronized (this) {
+            if (sesion == 0L || sesion != sesionDictado) return;
+            escuchando = false;
+            if (sesionPendiente == sesion) {
+                sesionPendiente = 0L;
+                capturaPedida = false;
+                capturaEnCurso = false;
+                oyentePendiente = null;
+                medidorPendiente = null;
+            }
+            sesionDictado = 0L;
         }
-        escuchando = true;
-        new Thread(() -> grabaYTranscribe(modeloUsado, oyente, medidor), "cort-micro").start();
     }
 
     public void para() {
-        escuchando = false;
-        // Si el ● se había apoyado en el despertador, retirar la orden y su oyente:
-        // dejarlos puestos es que la frase llegue a una cara que ya cerró.
-        if (escuchandoPalabra) {
+        synchronized (this) {
+            sesionDictado = 0L;
+            sesionPendiente = 0L;
+            escuchando = false;
             capturaPedida = false;
+            capturaEnCurso = false;
             oyentePendiente = null;
             medidorPendiente = null;
         }
@@ -730,9 +759,18 @@ public final class Motor {
 
     /** Quitar la vigilancia. El hilo se sale por su cuenta en cuanto lee el flag. */
     public void dejaLaPalabra() {
-        escuchandoPalabra = false;
-        capturaPedida = false;
-        despertador = null;
+        synchronized (this) {
+            escuchandoPalabra = false;
+            capturaPedida = false;
+            capturaEnCurso = false;
+            despertador = null;
+            if (sesionPendiente != 0L) {
+                sesionPendiente = 0L;
+                sesionDictado = 0L;
+                oyentePendiente = null;
+                medidorPendiente = null;
+            }
+        }
     }
 
     public boolean estaEnDespertar() {
@@ -741,7 +779,9 @@ public final class Motor {
 
     /** El ● pulsado con el servicio puesto: oír la frase ya, sin esperar la palabra. */
     public void pideFrase() {
-        capturaPedida = true;
+        synchronized (this) {
+            if (!capturaEnCurso) capturaPedida = true;
+        }
     }
 
     /**
@@ -772,10 +812,18 @@ public final class Motor {
             vigilia = new Recognizer(modeloUsado, MUESTREO, GRAMATICA);
             byte[] b = new byte[min];
             boolean capturando = false;
+            long sesionCaptura = 0L;
             long finCaptura = 0L;
             long inicioCaptura = 0L;
             long ultimoParcial = 0L;
             while (escuchandoPalabra) {
+                if (capturando && !capturaEnCurso) {
+                    libera(captura);
+                    captura = null;
+                    capturando = false;
+                    sesionCaptura = 0L;
+                    continue;
+                }
                 if (escuchando) {
                     duerme(120);                       // el ● tiene el micrófono: se espera
                     continue;
@@ -799,7 +847,9 @@ public final class Motor {
                 if (!capturando) {
                     if (capturaPedida) {
                         capturaPedida = false;
+                        sesionCaptura = sesionPendiente;
                         capturando = true;
+                        capturaEnCurso = true;
                         inicioCaptura = System.currentTimeMillis();
                         finCaptura = inicioCaptura + milisFrase(contexto);
                         captura = new Recognizer(modeloUsado, MUESTREO);
@@ -811,7 +861,9 @@ public final class Motor {
                         String dicho = textoDe(vigilia.getResult());
                         if (contienePalabra(dicho)) {
                             avisaPalabra(oyente, dicho);
+                            sesionCaptura = sesionPendiente;
                             capturando = true;
+                            capturaEnCurso = true;
                             inicioCaptura = System.currentTimeMillis();
                             finCaptura = inicioCaptura + milisFrase(contexto);
                             captura = new Recognizer(modeloUsado, MUESTREO);
@@ -852,10 +904,12 @@ public final class Motor {
                 libera(vigilia);
                 vigilia = new Recognizer(modeloUsado, MUESTREO, GRAMATICA);
                 if (!dicho.isEmpty()) {
-                    entrega(oyente, dicho);
+                    entrega(oyente, dicho, sesionCaptura);
                 } else {
-                    sinFrase(oyente);
+                    sinFrase(oyente, sesionCaptura);
                 }
+                sesionCaptura = 0L;
+                capturaEnCurso = false;
             }
         } catch (Throwable caida) {
             // `Throwable`, la misma razón de `abrir()`: si la `.so` de Vosk no viajó,
@@ -868,10 +922,22 @@ public final class Motor {
             sueltaMicro(micro);
             libera(captura);
             libera(vigilia);
-            escuchandoPalabra = false;
-            capturaPedida = false;
-            oyentePendiente = null;
-            medidorPendiente = null;
+            Voz.AlOir pendiente = null;
+            synchronized (this) {
+                escuchandoPalabra = false;
+                capturaPedida = false;
+                capturaEnCurso = false;
+                if (sesionPendiente != 0L) {
+                    pendiente = oyentePendiente;
+                    sesionPendiente = 0L;
+                    sesionDictado = 0L;
+                }
+                oyentePendiente = null;
+                medidorPendiente = null;
+            }
+            if (pendiente != null) {
+                avisa(pendiente, null, "el oído local se detuvo antes de terminar el mandato");
+            }
         }
     }
 
@@ -895,31 +961,35 @@ public final class Motor {
         }
     }
 
-    /** Entregando la frase: a la cara que pulsó el ● si lo hizo, si no al servicio. */
-    private void entrega(AlEscucha oyente, String frase) {
-        final Voz.AlOir pendiente = oyentePendiente;
-        oyentePendiente = null;
-        medidorPendiente = null;
+    /** Entrega sólo a la sesión que capturó la frase, nunca a un oyente posterior. */
+    private void entrega(AlEscucha oyente, String frase, long sesionCaptura) {
+        Voz.AlOir pendiente = tomarPendiente(sesionCaptura);
         if (pendiente != null) {
             avisa(pendiente, frase, null);
-            return;
-        }
-        if (oyente != null) {
+        } else if (sesionCaptura == 0L && oyente != null) {
             principal.post(() -> oyente.frase(frase));
         }
     }
 
-    /** Doce segundos de ruido y ni una palabra: se avisa a la cara y se vuelve a la vigilia. */
-    private void sinFrase(AlEscucha oyente) {
-        final Voz.AlOir pendiente = oyentePendiente;
-        oyentePendiente = null;
-        medidorPendiente = null;
+    /** Doce segundos de ruido y ni una palabra: se avisa a la cara que corresponde. */
+    private void sinFrase(AlEscucha oyente, long sesionCaptura) {
+        Voz.AlOir pendiente = tomarPendiente(sesionCaptura);
         if (pendiente != null) {
             avisa(pendiente, null, "no te oí después de la palabra");
-            return;
-        }
-        if (oyente != null) {
+        } else if (sesionCaptura == 0L && oyente != null) {
             principal.post(() -> oyente.fallo("desperté, pero no oí el mandato"));
+        }
+    }
+
+    private Voz.AlOir tomarPendiente(long sesionCaptura) {
+        synchronized (this) {
+            if (sesionCaptura == 0L || sesionPendiente != sesionCaptura) return null;
+            Voz.AlOir pendiente = oyentePendiente;
+            sesionPendiente = 0L;
+            sesionDictado = 0L;
+            oyentePendiente = null;
+            medidorPendiente = null;
+            return pendiente;
         }
     }
 
@@ -963,7 +1033,8 @@ public final class Motor {
         }
     }
 
-    private void grabaYTranscribe(Model modeloUsado, Voz.AlOir oyente, Voz.AlNivel medidor) {
+    private void grabaYTranscribe(Model modeloUsado, long sesion, Voz.AlOir oyente,
+                                  Voz.AlNivel medidor) {
         AudioRecord micro = null;
         Recognizer reconocedor = null;
         String dicho = "";
@@ -987,8 +1058,8 @@ public final class Motor {
             reconocedor = new Recognizer(modeloUsado, MUESTREO);
             byte[] b = new byte[min];
             micro.startRecording();
-            while (escuchando && (System.currentTimeMillis() - inicio)
-                    < limite * 1000L) {
+            while (escuchando && sesion == sesionDictado
+                    && (System.currentTimeMillis() - inicio) < limite * 1000L) {
                 int n = micro.read(b, 0, b.length);
                 if (n <= 0) {
                     continue;
@@ -1045,7 +1116,12 @@ public final class Motor {
             if (reconocedor != null) {
                 reconocedor.close();
             }
-            escuchando = false;
+            synchronized (this) {
+                if (sesionDictado == sesion) {
+                    sesionDictado = 0L;
+                    escuchando = false;
+                }
+            }
         }
     }
 
@@ -1119,6 +1195,11 @@ public final class Motor {
         escuchando = false;
         escuchandoPalabra = false;
         capturaPedida = false;
+        capturaEnCurso = false;
+        sesionDictado = 0L;
+        sesionPendiente = 0L;
+        oyentePendiente = null;
+        medidorPendiente = null;
         if (modelo != null) {
             try {
                 modelo.close();

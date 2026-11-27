@@ -188,10 +188,10 @@ public class Cerebros extends Activity {
         botonAuto.setOnClickListener(v -> cambiaAuto());
         filaAuto.addView(botonAuto, enFila(52));
         Button comprobar = boton("Comprobar ahora");
-        comprobar.setOnClickListener(v -> {
+        comprobar.setOnClickListener(v -> new Thread(() -> {
             AutoCerebro.revisa(this);
-            pintaAuto();
-        });
+            hiloUI.post(this::pintaAuto);
+        }, "cort-comprobar-auto").start());
         filaAuto.addView(comprobar, enFila(52));
         Button detener = boton("Detener");
         detener.setOnClickListener(v -> {
@@ -323,42 +323,41 @@ public class Cerebros extends Activity {
         CerebroLocal.Ficha d = f.datos;
         File gguf = finalDe(f);
         File parcial = parcialDe(f);
-        String puerta = cerebro.cabe(d.bytes)
-                ? "cabe holgado en la RAM libre"
-                : "va justo: la puerta holgada pide " + cerebro.falta(d.bytes)
-                        + " y hay " + cerebro.memoriaLibre() / 1024 / 1024 + " MiB"
-                        + (cerebro.sePuedeIntentar(d.bytes)
-                                ? " · se puede intentar con mmap" : " · ni para intentarlo");
+        PoliticaRecursos.Resultado puerta = cerebro.puedeCargar(d.bytes, false);
+        String estadoPuerta = puerta.permitida ? "cabe según RAM, batería y temperatura"
+                : puerta.motivo;
         boolean abierto = cerebro.modeloActivo() != null
                 && cerebro.modeloActivo().getName().equals(d.archivo);
 
         if (gguf.isFile() && gguf.length() == d.bytes) {
-            f.estado.setText("bajado y verificado con su SHA-256 · " + puerta
-                    + (abierto ? " · ESTÁ ABIERTO" : ""));
+            f.estado.setText("bajado completo · «Bajar» lo revalida y lo repara si hace falta · "
+                    + estadoPuerta + (abierto ? " · ESTÁ ABIERTO" : ""));
             f.estado.setTextColor(Paleta.CIAN);
-            f.bajar.setEnabled(false);
+            f.bajar.setText("Bajar");
+            f.bajar.setEnabled(true);
             f.usar.setEnabled(true);
             return;
         }
         if (gguf.isFile()) {
             f.estado.setText("el archivo pesa " + gguf.length() + " bytes y el catálogo "
-                    + "anuncia " + d.bytes + ": no es el mismo. Bórralo.");
+                    + "anuncia " + d.bytes + ": no es el mismo. Pulsa «Bajar» para repararlo.");
             f.estado.setTextColor(Paleta.AVISO);
-            f.bajar.setEnabled(false);
+            f.bajar.setText("Bajar");
+            f.bajar.setEnabled(true);
             f.usar.setEnabled(false);
             return;
         }
         if (parcial.isFile()) {
             long hecho = parcial.length();
             f.estado.setText("a medias: " + mb(hecho) + " de " + mb(d.bytes) + " MB ("
-                    + tantoPorCiento(hecho, d.bytes) + " %) · " + puerta);
+                    + tantoPorCiento(hecho, d.bytes) + " %) · " + estadoPuerta);
             f.estado.setTextColor(Paleta.AVISO);
             f.bajar.setText("Seguir");
             f.bajar.setEnabled(true);
             f.usar.setEnabled(false);
             return;
         }
-        f.estado.setText("sin bajar · " + puerta);
+        f.estado.setText("sin bajar · " + estadoPuerta);
         f.estado.setTextColor(Paleta.SUAVE);
         f.bajar.setText("Bajar");
         f.bajar.setEnabled(true);
@@ -498,9 +497,13 @@ public class Cerebros extends Activity {
         boolean puesto = !AutoCerebro.quiere(this);
         AutoCerebro.pon(this, puesto);
         if (puesto) {
-            AutoCerebro.revisa(this);
+            new Thread(() -> {
+                AutoCerebro.revisa(this);
+                hiloUI.post(this::pintaAuto);
+            }, "cort-auto-cerebro").start();
+        } else {
+            pintaAuto();
         }
-        pintaAuto();
     }
 
     /**
@@ -585,6 +588,16 @@ public class Cerebros extends Activity {
      */
     private void descargar(Fila f) throws Exception {
         CerebroLocal.Ficha d = f.datos;
+        PoliticaRecursos.Resultado decision = cerebro.puedeDescargar(d.bytes, false);
+        if (!decision.permitida) throw new IOException(decision.motivo);
+        if (cerebro.verificar(d).isEmpty()) {
+            hiloUI.post(() -> {
+                f.estado.setText("verificado: " + d.archivo + " · no hace falta volver a bajarlo");
+                f.estado.setTextColor(Paleta.CIAN);
+                f.bajar.setEnabled(false);
+            });
+            return;
+        }
         File parcial = parcialDe(f);
         File directorio = parcial.getParentFile();
         if (directorio != null && !directorio.isDirectory() && !directorio.mkdirs()) {
@@ -685,11 +698,17 @@ public class Cerebros extends Activity {
 
     /** Abrir 752 MB de disco también va en su hilo; la cara no se congela. */
     private void usar(Fila f) {
+        PoliticaRecursos.Resultado decision = cerebro.puedeCargar(f.datos.bytes, false);
+        if (!decision.permitida) {
+            f.estado.setText(decision.motivo);
+            f.estado.setTextColor(Paleta.AVISO);
+            return;
+        }
         f.usar.setEnabled(false);
         f.estado.setText("abriendo " + f.datos.archivo + " en memoria, un momento…");
         f.estado.setTextColor(Paleta.AVISO);
         Thread trabajo = new Thread(() -> {
-            final int codigo = cerebro.cargar(finalDe(f), f.datos.contexto, f.datos.hilos);
+            final int codigo = cerebro.cargarSeguro(f.datos, false);
             hiloUI.post(() -> {
                 f.usar.setEnabled(true);
                 f.estado.setText(motivo(codigo, f));
@@ -705,10 +724,11 @@ public class Cerebros extends Activity {
         switch (codigo) {
             case 0:  return "abierto: " + f.datos.archivo + " · " + cerebro.backends()
                             + " · ya se puede probar abajo";
-            case 1:  return "el archivo no existe o está cortado";
-            case 2:  return "sin memoria para un contexto de " + f.datos.contexto
-                            + " tokens: hay " + cerebro.memoriaLibre() / 1024 / 1024
-                            + " MB libres";
+            case 1:  return cerebro.porqueNoLocal().isEmpty()
+                    ? "el archivo no existe o no está verificado" : cerebro.porqueNoLocal();
+            case 2:  return cerebro.porqueNoLocal().isEmpty()
+                    ? "la política de recursos bloqueó la carga"
+                    : cerebro.porqueNoLocal();
             case 3:  return "no es un GGUF que este motor entienda";
             default: return "sin librería nativa en este APK ("
                             + CerebroLocal.motivoSinLibreria() + ")";

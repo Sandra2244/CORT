@@ -50,9 +50,9 @@ public class Bajada {
         return new Bajada(CerebroLocal.archivoDe(contexto, ficha.archivo));
     }
 
-    /** Descarga terminada y verificada: el `.part` ya se renombró, así que basta con mirar. */
-    public boolean esta() {
-        return destino.isFile();
+    /** Descarga terminada y verificada; un archivo dañado se puede volver a bajar. */
+    public boolean esta(CerebroLocal.Ficha ficha) {
+        return ficha != null && IntegridadGguf.verificar(destino, ficha.bytes, ficha.sha256).isEmpty();
     }
 
     public File archivo() {

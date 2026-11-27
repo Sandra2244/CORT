@@ -51,6 +51,9 @@
                      android:required="false" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"
                      android:required="false" />
+    <!-- OMNI-2: sólo se solicita en tiempo de ejecución al activar pasos. -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"
+                     android:required="false" />
     <!--
       ASIS-1: la vista rápida se dibuja sobre la app que está usando la dueña.
       El permiso se declara, pero Android lo concede desde Ajustes; CORT no puede
@@ -214,6 +217,16 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <service
+            android:name=".Avisos"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <!-- La baldosa del panel rápido: un toque abre la escucha, sin buscar la app. -->
         <service

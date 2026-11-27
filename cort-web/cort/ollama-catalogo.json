@@ -1,0 +1,3362 @@
+{
+  "fuente": "https://ollama.com/library",
+  "fecha": "2026-11-27",
+  "nota": "Instantánea de la biblioteca oficial. Los tamaños son etiquetas públicas de parámetros; el peso real se consulta al servidor Ollama o al modelo descargado.",
+  "modelos": [
+    {
+      "nombre": "llama3.1",
+      "descripcion": "Llama 3.1 is a new state-of-the-art model from Meta available in 8B, 70B and 405B parameter sizes.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "8b",
+        "70b",
+        "405b"
+      ],
+      "referencia": "https://ollama.com/library/llama3.1",
+      "descargas": "121.4M"
+    },
+    {
+      "nombre": "nomic-embed-text",
+      "descripcion": "A high-performing open embedding model with a large token context window.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/nomic-embed-text",
+      "descargas": "99.5M"
+    },
+    {
+      "nombre": "deepseek-r1",
+      "descripcion": "DeepSeek-R1 is a family of open reasoning models with performance approaching that of leading models, such as O3 and Gemini 2.5 Pro.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "1.5b",
+        "7b",
+        "8b",
+        "14b",
+        "32b",
+        "70b",
+        "671b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-r1",
+      "descargas": "95.5M"
+    },
+    {
+      "nombre": "llama3.2",
+      "descripcion": "Meta's Llama 3.2 goes small with 1B and 3B models.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "1b",
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/llama3.2",
+      "descargas": "88.5M"
+    },
+    {
+      "nombre": "qwen2.5",
+      "descripcion": "Qwen2.5 models are pretrained on Alibaba's latest large-scale dataset, encompassing up to 18 trillion tokens. The model supports up to 128K tokens and has multilingual support.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "0.5b",
+        "1.5b",
+        "3b",
+        "7b",
+        "14b",
+        "32b",
+        "72b"
+      ],
+      "referencia": "https://ollama.com/library/qwen2.5",
+      "descargas": "47.3M"
+    },
+    {
+      "nombre": "qwen3",
+      "descripcion": "Qwen3 is the latest generation of large language models in Qwen series, offering a comprehensive suite of dense and mixture-of-experts (MoE) models.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "0.6b",
+        "1.7b",
+        "4b",
+        "8b",
+        "14b",
+        "30b",
+        "32b",
+        "235b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3",
+      "descargas": "44.9M"
+    },
+    {
+      "nombre": "gemma3",
+      "descripcion": "The current, most capable model that runs on a single GPU.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "270m",
+        "1b",
+        "4b",
+        "12b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/gemma3",
+      "descargas": "42.2M"
+    },
+    {
+      "nombre": "gemma2",
+      "descripcion": "Google Gemma 2 is a high-performing and efficient model available in three sizes: 2B, 9B, and 27B.",
+      "capacidades": [],
+      "tamanos": [
+        "2b",
+        "9b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/gemma2",
+      "descargas": "38.2M"
+    },
+    {
+      "nombre": "mistral",
+      "descripcion": "The 7B model released by Mistral AI, updated to version 0.3.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/mistral",
+      "descargas": "34.3M"
+    },
+    {
+      "nombre": "gemma4",
+      "descripcion": "Gemma 4 models are designed to deliver frontier-level performance at each size. They are well-suited for reasoning, agentic workflows, coding, and multimodal understanding.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "audio",
+        "cloud"
+      ],
+      "tamanos": [
+        "e2b",
+        "e4b",
+        "12b",
+        "26b",
+        "31b"
+      ],
+      "referencia": "https://ollama.com/library/gemma4",
+      "descargas": "29.9M"
+    },
+    {
+      "nombre": "qwen3.5",
+      "descripcion": "Qwen 3.5 is a family of open-source multimodal models that delivers exceptional utility and performance.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "0.8b",
+        "2b",
+        "4b",
+        "9b",
+        "27b",
+        "35b",
+        "122b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3.5",
+      "descargas": "27.6M"
+    },
+    {
+      "nombre": "llama3",
+      "descripcion": "Meta Llama 3: The most capable openly available LLM to date",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama3",
+      "descargas": "26M"
+    },
+    {
+      "nombre": "qwen2.5-coder",
+      "descripcion": "The latest series of Code-Specific Qwen models, with significant improvements in code generation, code reasoning, and code fixing.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "0.5b",
+        "1.5b",
+        "3b",
+        "7b",
+        "14b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/qwen2.5-coder",
+      "descargas": "24.3M"
+    },
+    {
+      "nombre": "phi3",
+      "descripcion": "Phi-3 is a family of lightweight 3B (Mini) and 14B (Medium) state-of-the-art open models by Microsoft.",
+      "capacidades": [],
+      "tamanos": [
+        "3.8b",
+        "14b"
+      ],
+      "referencia": "https://ollama.com/library/phi3",
+      "descargas": "18.4M"
+    },
+    {
+      "nombre": "mxbai-embed-large",
+      "descripcion": "State-of-the-art large embedding model from mixedbread.ai",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "335m"
+      ],
+      "referencia": "https://ollama.com/library/mxbai-embed-large",
+      "descargas": "17.4M"
+    },
+    {
+      "nombre": "gpt-oss",
+      "descripcion": "OpenAI’s open-weight models designed for powerful reasoning, agentic tasks, and versatile developer use cases.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [
+        "20b",
+        "120b"
+      ],
+      "referencia": "https://ollama.com/library/gpt-oss",
+      "descargas": "16M"
+    },
+    {
+      "nombre": "llava",
+      "descripcion": "🌋 LLaVA is a novel end-to-end trained large multimodal model that combines a vision encoder and Vicuna for general-purpose visual and language understanding. Updated to version 1.6.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "7b",
+        "13b",
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/llava",
+      "descargas": "15.5M"
+    },
+    {
+      "nombre": "qwen3-coder",
+      "descripcion": "Alibaba's performant long context models for agentic and coding tasks.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "30b",
+        "480b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3-coder",
+      "descargas": "11.4M"
+    },
+    {
+      "nombre": "glm-ocr",
+      "descripcion": "GLM-OCR is a multimodal OCR model for complex document understanding, built on the GLM-V encoder–decoder architecture.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/glm-ocr",
+      "descargas": "9.5M"
+    },
+    {
+      "nombre": "bge-m3",
+      "descripcion": "BGE-M3 is a new model from BAAI distinguished for its versatility in Multi-Functionality, Multi-Linguality, and Multi-Granularity.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "567m"
+      ],
+      "referencia": "https://ollama.com/library/bge-m3",
+      "descargas": "8.9M"
+    },
+    {
+      "nombre": "codellama",
+      "descripcion": "A large language model that can use text prompts to generate and discuss code.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "34b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/codellama",
+      "descargas": "8.6M"
+    },
+    {
+      "nombre": "gemma",
+      "descripcion": "Gemma is a family of lightweight, state-of-the-art open models built by Google DeepMind. Updated to version 1.1",
+      "capacidades": [],
+      "tamanos": [
+        "2b",
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/gemma",
+      "descargas": "8.5M"
+    },
+    {
+      "nombre": "qwen",
+      "descripcion": "Qwen 1.5 is a series of large language models by Alibaba Cloud spanning from 0.5B to 110B parameters",
+      "capacidades": [],
+      "tamanos": [
+        "0.5b",
+        "1.8b",
+        "4b",
+        "7b",
+        "14b",
+        "32b",
+        "72b",
+        "110b"
+      ],
+      "referencia": "https://ollama.com/library/qwen",
+      "descargas": "8.4M"
+    },
+    {
+      "nombre": "qwen3.6",
+      "descripcion": "Qwen3.6 delivers substantial upgrades in agentic coding and thinking preservation than previous Qwen models.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "27b",
+        "35b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3.6",
+      "descargas": "7.9M"
+    },
+    {
+      "nombre": "phi4",
+      "descripcion": "Phi-4 is a 14B parameter, state-of-the-art open model from Microsoft.",
+      "capacidades": [],
+      "tamanos": [
+        "14b"
+      ],
+      "referencia": "https://ollama.com/library/phi4",
+      "descargas": "7.8M"
+    },
+    {
+      "nombre": "llama2",
+      "descripcion": "Llama 2 is a collection of foundation language models ranging from 7B to 70B parameters.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama2",
+      "descargas": "7.7M"
+    },
+    {
+      "nombre": "qwen3.8",
+      "descripcion": "Qwen3.8 delivers substantial gains across coding, professional work, research, and long-horizon agentic tasks.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3.8",
+      "descargas": "7.6M"
+    },
+    {
+      "nombre": "qwen3-vl",
+      "descripcion": "The most powerful vision-language model in the Qwen model family to date.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "2b",
+        "4b",
+        "8b",
+        "30b",
+        "32b",
+        "235b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3-vl",
+      "descargas": "7.5M"
+    },
+    {
+      "nombre": "tinyllama",
+      "descripcion": "The TinyLlama project is an open endeavor to train a compact 1.1B Llama model on 3 trillion tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "1.1b"
+      ],
+      "referencia": "https://ollama.com/library/tinyllama",
+      "descargas": "6.9M"
+    },
+    {
+      "nombre": "qwen2.5vl",
+      "descripcion": "Flagship vision-language model of Qwen and also a significant leap from the previous Qwen2-VL.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "3b",
+        "7b",
+        "32b",
+        "72b"
+      ],
+      "referencia": "https://ollama.com/library/qwen2.5vl",
+      "descargas": "6.6M"
+    },
+    {
+      "nombre": "qwen2",
+      "descripcion": "Qwen2 is a new series of large language models from Alibaba group",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "0.5b",
+        "1.5b",
+        "7b",
+        "72b"
+      ],
+      "referencia": "https://ollama.com/library/qwen2",
+      "descargas": "6.4M"
+    },
+    {
+      "nombre": "mistral-nemo",
+      "descripcion": "A state-of-the-art 12B model with 128k context length, built by Mistral AI in collaboration with NVIDIA.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "12b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-nemo",
+      "descargas": "5.8M"
+    },
+    {
+      "nombre": "minicpm-v",
+      "descripcion": "A series of multimodal LLMs (MLLMs) designed for vision-language understanding.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/minicpm-v",
+      "descargas": "5.8M"
+    },
+    {
+      "nombre": "llama3.2-vision",
+      "descripcion": "Llama 3.2 Vision is a collection of instruction-tuned image reasoning generative models in 11B and 90B sizes.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "11b",
+        "90b"
+      ],
+      "referencia": "https://ollama.com/library/llama3.2-vision",
+      "descargas": "5.7M"
+    },
+    {
+      "nombre": "deepseek-coder",
+      "descripcion": "DeepSeek Coder is a capable coding model trained on two trillion code and natural language tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "1.3b",
+        "6.7b",
+        "33b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-coder",
+      "descargas": "4.9M"
+    },
+    {
+      "nombre": "qwen3-embedding",
+      "descripcion": "Building upon the foundational models of the Qwen3 series, Qwen3 Embedding provides a comprehensive range of text embeddings models in various sizes",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "0.6b",
+        "4b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3-embedding",
+      "descargas": "4.9M"
+    },
+    {
+      "nombre": "llama3.3",
+      "descripcion": "New state of the art 70B model. Llama 3.3 70B offers similar performance compared to the Llama 3.1 405B model.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama3.3",
+      "descargas": "4.5M"
+    },
+    {
+      "nombre": "dolphin3",
+      "descripcion": "Dolphin 3.0 Llama 3.1 8B 🐬 is the next generation of the Dolphin series of instruct-tuned models designed to be the ultimate general purpose local model, enabling coding, math, agentic, function calling, and general use cases.",
+      "capacidades": [],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/dolphin3",
+      "descargas": "4.3M"
+    },
+    {
+      "nombre": "smollm2",
+      "descripcion": "SmolLM2 is a family of compact language models available in three size: 135M, 360M, and 1.7B parameters.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "135m",
+        "360m",
+        "1.7b"
+      ],
+      "referencia": "https://ollama.com/library/smollm2",
+      "descargas": "4.3M"
+    },
+    {
+      "nombre": "all-minilm",
+      "descripcion": "Embedding models on very large sentence level datasets.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "22m",
+        "33m"
+      ],
+      "referencia": "https://ollama.com/library/all-minilm",
+      "descargas": "4M"
+    },
+    {
+      "nombre": "deepseek-v3",
+      "descripcion": "A strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token.",
+      "capacidades": [],
+      "tamanos": [
+        "671b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-v3",
+      "descargas": "3.9M"
+    },
+    {
+      "nombre": "olmo2",
+      "descripcion": "OLMo 2 is a new family of 7B and 13B models trained on up to 5T tokens. These models are on par with or better than equivalently sized fully open models, and competitive with open-weight models such as Llama 3.1 on English academic benchmarks.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/olmo2",
+      "descargas": "3.8M"
+    },
+    {
+      "nombre": "deepseek-coder-v2",
+      "descripcion": "An open-source Mixture-of-Experts code language model that achieves performance comparable to GPT4-Turbo in code-specific tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "16b",
+        "236b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-coder-v2",
+      "descargas": "3.4M"
+    },
+    {
+      "nombre": "codegemma",
+      "descripcion": "CodeGemma is a collection of powerful, lightweight models that can perform a variety of coding tasks like fill-in-the-middle code completion, code generation, natural language understanding, mathematical reasoning, and instruction following.",
+      "capacidades": [],
+      "tamanos": [
+        "2b",
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/codegemma",
+      "descargas": "3.4M"
+    },
+    {
+      "nombre": "snowflake-arctic-embed",
+      "descripcion": "A suite of text embedding models by Snowflake, optimized for performance.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "22m",
+        "33m",
+        "110m",
+        "137m",
+        "335m"
+      ],
+      "referencia": "https://ollama.com/library/snowflake-arctic-embed",
+      "descargas": "3.2M"
+    },
+    {
+      "nombre": "orca-mini",
+      "descripcion": "A general-purpose model ranging from 3 billion parameters to 70 billion, suitable for entry-level hardware.",
+      "capacidades": [],
+      "tamanos": [
+        "3b",
+        "7b",
+        "13b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/orca-mini",
+      "descargas": "3.2M"
+    },
+    {
+      "nombre": "mistral-small",
+      "descripcion": "Mistral Small 3 sets a new benchmark in the “small” Large Language Models category below 70B.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "22b",
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-small",
+      "descargas": "3.2M"
+    },
+    {
+      "nombre": "starcoder2",
+      "descripcion": "StarCoder2 is the next generation of transparently trained open code LLMs that comes in three sizes: 3B, 7B and 15B parameters.",
+      "capacidades": [],
+      "tamanos": [
+        "3b",
+        "7b",
+        "15b"
+      ],
+      "referencia": "https://ollama.com/library/starcoder2",
+      "descargas": "3.1M"
+    },
+    {
+      "nombre": "granite3.1-moe",
+      "descripcion": "The IBM Granite 1B and 3B models are long-context mixture of experts (MoE) Granite models from IBM designed for low latency usage.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "1b",
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/granite3.1-moe",
+      "descargas": "3.1M"
+    },
+    {
+      "nombre": "nemotron-3-super",
+      "descripcion": "NVIDIA Nemotron 3 Super is a 120B open MoE model activating just 12B parameters to deliver maximum compute efficiency and accuracy for complex multi-agent applications.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [
+        "120b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-3-super",
+      "descargas": "3.1M"
+    },
+    {
+      "nombre": "translategemma",
+      "descripcion": "A new collection of open translation models built on Gemma 3, helping people communicate across 55 languages.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "4b",
+        "12b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/translategemma",
+      "descargas": "3M"
+    },
+    {
+      "nombre": "mixtral",
+      "descripcion": "A set of Mixture of Experts (MoE) model with open weights by Mistral AI in 8x7b and 8x22b parameter sizes.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "8x7b",
+        "8x22b"
+      ],
+      "referencia": "https://ollama.com/library/mixtral",
+      "descargas": "3M"
+    },
+    {
+      "nombre": "embeddinggemma",
+      "descripcion": "EmbeddingGemma is a 300M parameter embedding model from Google.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "300m"
+      ],
+      "referencia": "https://ollama.com/library/embeddinggemma",
+      "descargas": "3M"
+    },
+    {
+      "nombre": "devstral-small-2",
+      "descripcion": "24B model that excels at using tools to explore codebases, editing multiple files and power software engineering agents.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/devstral-small-2",
+      "descargas": "2.9M"
+    },
+    {
+      "nombre": "llama2-uncensored",
+      "descripcion": "Uncensored Llama 2 model by George Sung and Jarrad Hope.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama2-uncensored",
+      "descargas": "2.8M"
+    },
+    {
+      "nombre": "falcon3",
+      "descripcion": "A family of efficient AI models under 10B parameters performant in science, math, and coding through innovative training techniques.",
+      "capacidades": [],
+      "tamanos": [
+        "1b",
+        "3b",
+        "7b",
+        "10b"
+      ],
+      "referencia": "https://ollama.com/library/falcon3",
+      "descargas": "2.7M"
+    },
+    {
+      "nombre": "gemma3n",
+      "descripcion": "Gemma 3n models are designed for efficient execution on everyday devices such as laptops, tablets or phones.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "e2b",
+        "e4b"
+      ],
+      "referencia": "https://ollama.com/library/gemma3n",
+      "descargas": "2.6M"
+    },
+    {
+      "nombre": "mistral-small3.2",
+      "descripcion": "An update to Mistral Small that improves on function calling, instruction following, and less repetition errors.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-small3.2",
+      "descargas": "2.6M"
+    },
+    {
+      "nombre": "smollm",
+      "descripcion": "🪐 A family of small models with 135M, 360M, and 1.7B parameters, trained on a new high-quality dataset.",
+      "capacidades": [],
+      "tamanos": [
+        "135m",
+        "360m",
+        "1.7b"
+      ],
+      "referencia": "https://ollama.com/library/smollm",
+      "descargas": "2.5M"
+    },
+    {
+      "nombre": "sqlcoder",
+      "descripcion": "SQLCoder is a code completion model fined-tuned on StarCoder for SQL generation tasks",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "15b"
+      ],
+      "referencia": "https://ollama.com/library/sqlcoder",
+      "descargas": "2.5M"
+    },
+    {
+      "nombre": "llava-llama3",
+      "descripcion": "A LLaVA model fine-tuned from Llama 3 Instruct with better scores in several benchmarks.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/llava-llama3",
+      "descargas": "2.3M"
+    },
+    {
+      "nombre": "qwq",
+      "descripcion": "QwQ is the reasoning model of the Qwen series.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/qwq",
+      "descargas": "2.3M"
+    },
+    {
+      "nombre": "qwen3-coder-next",
+      "descripcion": "Qwen3-Coder-Next is a coding-focused language model from Alibaba's Qwen team, optimized for agentic coding workflows and local development.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/qwen3-coder-next",
+      "descargas": "2.3M"
+    },
+    {
+      "nombre": "dolphin-llama3",
+      "descripcion": "Dolphin 2.9 is a new model with 8B and 70B sizes by Eric Hartford based on Llama 3 that has a variety of instruction, conversational, and coding skills.",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/dolphin-llama3",
+      "descargas": "2.3M"
+    },
+    {
+      "nombre": "moondream",
+      "descripcion": "moondream2 is a small vision language model designed to run efficiently on edge devices.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "1.8b"
+      ],
+      "referencia": "https://ollama.com/library/moondream",
+      "descargas": "2.3M"
+    },
+    {
+      "nombre": "glm-4.7-flash",
+      "descripcion": "As the strongest model in the 30B class, GLM-4.7-Flash offers a new option for lightweight deployment that balances performance and efficiency.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/glm-4.7-flash",
+      "descargas": "2.2M"
+    },
+    {
+      "nombre": "starcoder",
+      "descripcion": "StarCoder is a code generation model trained on 80+ programming languages.",
+      "capacidades": [],
+      "tamanos": [
+        "1b",
+        "3b",
+        "7b",
+        "15b"
+      ],
+      "referencia": "https://ollama.com/library/starcoder",
+      "descargas": "2.2M"
+    },
+    {
+      "nombre": "cogito",
+      "descripcion": "Cogito v1 Preview is a family of hybrid reasoning models by Deep Cogito that outperform the best available open models of the same size, including counterparts from LLaMA, DeepSeek, and Qwen across most standard benchmarks.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "3b",
+        "8b",
+        "14b",
+        "32b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/cogito",
+      "descargas": "2.2M"
+    },
+    {
+      "nombre": "wizardcoder",
+      "descripcion": "State-of-the-art code generation model",
+      "capacidades": [],
+      "tamanos": [
+        "33b"
+      ],
+      "referencia": "https://ollama.com/library/wizardcoder",
+      "descargas": "2.1M"
+    },
+    {
+      "nombre": "dolphin-mixtral",
+      "descripcion": "Uncensored, 8x7b and 8x22b fine-tuned models based on the Mixtral mixture of experts models that excels at coding tasks. Created by Eric Hartford.",
+      "capacidades": [],
+      "tamanos": [
+        "8x7b",
+        "8x22b"
+      ],
+      "referencia": "https://ollama.com/library/dolphin-mixtral",
+      "descargas": "2M"
+    },
+    {
+      "nombre": "openhermes",
+      "descripcion": "OpenHermes 2.5 is a 7B model fine-tuned by Teknium on Mistral with fully open datasets.",
+      "capacidades": [],
+      "tamanos": [
+        "2M",
+        "Pulls",
+        "35",
+        "Tags",
+        "Updated",
+        "2",
+        "years",
+        "ago"
+      ],
+      "referencia": "https://ollama.com/library/openhermes",
+      "descargas": "2M"
+    },
+    {
+      "nombre": "llama4",
+      "descripcion": "Meta's latest collection of multimodal models.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "16x17b",
+        "128x17b"
+      ],
+      "referencia": "https://ollama.com/library/llama4",
+      "descargas": "1.9M"
+    },
+    {
+      "nombre": "dolphin-mistral",
+      "descripcion": "The uncensored Dolphin model based on Mistral that excels at coding tasks. Updated to version 2.8.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/dolphin-mistral",
+      "descargas": "1.9M"
+    },
+    {
+      "nombre": "phi4-mini",
+      "descripcion": "Phi-4-mini brings significant enhancements in multilingual support, reasoning, and mathematics, and now, the long-awaited function calling feature is finally supported.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "3.8b"
+      ],
+      "referencia": "https://ollama.com/library/phi4-mini",
+      "descargas": "1.9M"
+    },
+    {
+      "nombre": "hermes3",
+      "descripcion": "Hermes 3 is the latest version of the flagship Hermes series of LLMs by Nous Research",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "3b",
+        "8b",
+        "70b",
+        "405b"
+      ],
+      "referencia": "https://ollama.com/library/hermes3",
+      "descargas": "1.8M"
+    },
+    {
+      "nombre": "granite-code",
+      "descripcion": "A family of open foundation models by IBM for Code Intelligence",
+      "capacidades": [],
+      "tamanos": [
+        "3b",
+        "8b",
+        "20b",
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/granite-code",
+      "descargas": "1.8M"
+    },
+    {
+      "nombre": "phi4-reasoning",
+      "descripcion": "Phi 4 reasoning and reasoning plus are 14-billion parameter open-weight reasoning models that rival much larger models on complex reasoning tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "14b"
+      ],
+      "referencia": "https://ollama.com/library/phi4-reasoning",
+      "descargas": "1.7M"
+    },
+    {
+      "nombre": "ministral-3",
+      "descripcion": "The Ministral 3 family is designed for edge deployment, capable of running on a wide range of hardware.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "3b",
+        "8b",
+        "14b"
+      ],
+      "referencia": "https://ollama.com/library/ministral-3",
+      "descargas": "1.7M"
+    },
+    {
+      "nombre": "yi",
+      "descripcion": "Yi 1.5 is a high-performing, bilingual language model.",
+      "capacidades": [],
+      "tamanos": [
+        "6b",
+        "9b",
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/yi",
+      "descargas": "1.6M"
+    },
+    {
+      "nombre": "dolphin-phi",
+      "descripcion": "2.7B uncensored Dolphin model by Eric Hartford, based on the Phi language model by Microsoft Research.",
+      "capacidades": [],
+      "tamanos": [
+        "2.7b"
+      ],
+      "referencia": "https://ollama.com/library/dolphin-phi",
+      "descargas": "1.6M"
+    },
+    {
+      "nombre": "granite4",
+      "descripcion": "Granite 4 features improved instruction following (IF) and tool-calling capabilities, making them more effective in enterprise applications.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "350m",
+        "1b",
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/granite4",
+      "descargas": "1.6M"
+    },
+    {
+      "nombre": "command-r",
+      "descripcion": "Command R is a Large Language Model optimized for conversational interaction and long context tasks.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "35b"
+      ],
+      "referencia": "https://ollama.com/library/command-r",
+      "descargas": "1.6M"
+    },
+    {
+      "nombre": "phi",
+      "descripcion": "Phi-2: a 2.7B language model by Microsoft Research that demonstrates outstanding reasoning and language understanding capabilities.",
+      "capacidades": [],
+      "tamanos": [
+        "2.7b"
+      ],
+      "referencia": "https://ollama.com/library/phi",
+      "descargas": "1.6M"
+    },
+    {
+      "nombre": "mistral-openorca",
+      "descripcion": "Mistral OpenOrca is a 7 billion parameter model, fine-tuned on top of the Mistral 7B model using the OpenOrca dataset.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-openorca",
+      "descargas": "1.5M"
+    },
+    {
+      "nombre": "magistral",
+      "descripcion": "Magistral is a small, efficient reasoning model with 24B parameters.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/magistral",
+      "descargas": "1.5M"
+    },
+    {
+      "nombre": "nomic-embed-text-v2-moe",
+      "descripcion": "nomic-embed-text-v2-moe is a multilingual MoE text embedding model that excels at multilingual retrieval.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/nomic-embed-text-v2-moe",
+      "descargas": ""
+    },
+    {
+      "nombre": "openchat",
+      "descripcion": "A family of open-source models trained on a wide variety of data, surpassing ChatGPT on various benchmarks. Updated to version 3.5-0106.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/openchat",
+      "descargas": "1.4M"
+    },
+    {
+      "nombre": "codestral",
+      "descripcion": "Codestral is Mistral AI’s first-ever code model designed for code generation tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "22b"
+      ],
+      "referencia": "https://ollama.com/library/codestral",
+      "descargas": "1.4M"
+    },
+    {
+      "nombre": "mistral-large",
+      "descripcion": "Mistral Large 2 is Mistral's new flagship model that is significantly more capable in code generation, mathematics, and reasoning with 128k context window and support for dozens of languages.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "123b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-large",
+      "descargas": "1.4M"
+    },
+    {
+      "nombre": "vicuna",
+      "descripcion": "General use chat model based on Llama and Llama 2 with 2K to 16K context sizes.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "33b"
+      ],
+      "referencia": "https://ollama.com/library/vicuna",
+      "descargas": "1.4M"
+    },
+    {
+      "nombre": "wizard-vicuna-uncensored",
+      "descripcion": "Wizard Vicuna Uncensored is a 7B, 13B, and 30B parameter model based on Llama 2 uncensored by Eric Hartford.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/wizard-vicuna-uncensored",
+      "descargas": "1.4M"
+    },
+    {
+      "nombre": "deepseek-llm",
+      "descripcion": "An advanced language model crafted with 2 trillion bilingual tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "67b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-llm",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "zephyr",
+      "descripcion": "Zephyr is a series of fine-tuned versions of the Mistral and Mixtral models that are trained to act as helpful assistants.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "141b"
+      ],
+      "referencia": "https://ollama.com/library/zephyr",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "lfm2.5-thinking",
+      "descripcion": "LFM2.5 is a new family of hybrid models designed for on-device deployment.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "1.2b"
+      ],
+      "referencia": "https://ollama.com/library/lfm2.5-thinking",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "glm4",
+      "descripcion": "A strong multi-lingual general language model with competitive performance to Llama 3.",
+      "capacidades": [],
+      "tamanos": [
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/glm4",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "falcon",
+      "descripcion": "A large language model built by the Technology Innovation Institute (TII) for use in summarization, text generation, and chat bots.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "40b",
+        "180b"
+      ],
+      "referencia": "https://ollama.com/library/falcon",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "nous-hermes",
+      "descripcion": "General use models based on Llama and Llama 2 from Nous Research.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/nous-hermes",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "deepscaler",
+      "descripcion": "A fine-tuned version of Deepseek-R1-Distilled-Qwen-1.5B that surpasses the performance of OpenAI’s o1-preview with just 1.5B parameters on popular math evaluations.",
+      "capacidades": [],
+      "tamanos": [
+        "1.5b"
+      ],
+      "referencia": "https://ollama.com/library/deepscaler",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "neural-chat",
+      "descripcion": "A fine-tuned model based on Mistral with good coverage of domain and language.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/neural-chat",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "deepseek-v2",
+      "descripcion": "A strong, economical, and efficient Mixture-of-Experts language model.",
+      "capacidades": [],
+      "tamanos": [
+        "16b",
+        "236b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-v2",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "llava-phi3",
+      "descripcion": "A new small LLaVA model fine-tuned from Phi 3 Mini.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "3.8b"
+      ],
+      "referencia": "https://ollama.com/library/llava-phi3",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "wizardlm2",
+      "descripcion": "State of the art large language model from Microsoft AI with improved performance on complex chat, multilingual, reasoning and agent use cases.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "8x22b"
+      ],
+      "referencia": "https://ollama.com/library/wizardlm2",
+      "descargas": "1.3M"
+    },
+    {
+      "nombre": "llama2-chinese",
+      "descripcion": "Llama 2 based model fine tuned to improve Chinese dialogue ability.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/llama2-chinese",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "qwen2-math",
+      "descripcion": "Qwen2 Math is a series of specialized math language models built upon the Qwen2 LLMs, which significantly outperforms the mathematical capabilities of open-source models and even closed-source models (e.g., GPT4o).",
+      "capacidades": [],
+      "tamanos": [
+        "1.5b",
+        "7b",
+        "72b"
+      ],
+      "referencia": "https://ollama.com/library/qwen2-math",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "openthinker",
+      "descripcion": "A fully open-source family of reasoning models built using a dataset derived by distilling DeepSeek-R1.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/openthinker",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "stablelm2",
+      "descripcion": "Stable LM 2 is a state-of-the-art 1.6B and 12B parameter language model trained on multilingual data in English, Spanish, German, Italian, French, Portuguese, and Dutch.",
+      "capacidades": [],
+      "tamanos": [
+        "1.6b",
+        "12b"
+      ],
+      "referencia": "https://ollama.com/library/stablelm2",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "devstral",
+      "descripcion": "Devstral: the best open source model for coding agents",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/devstral",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "granite3.3",
+      "descripcion": "IBM Granite 2B and 8B models are 128K context length language models that have been fine-tuned for improved reasoning and instruction-following capabilities.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "2b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite3.3",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "codeqwen",
+      "descripcion": "CodeQwen1.5 is a large language model pretrained on a large amount of code data.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/codeqwen",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "yi-coder",
+      "descripcion": "Yi-Coder is a series of open-source code language models that delivers state-of-the-art coding performance with fewer than 10 billion parameters.",
+      "capacidades": [],
+      "tamanos": [
+        "1.5b",
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/yi-coder",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "lfm2",
+      "descripcion": "LFM2 is a family of hybrid models designed for on-device deployment. LFM2-24B-A2B is the largest model in the family, scaling the architecture to 24 billion parameters while keeping inference efficient.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/lfm2",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "aya",
+      "descripcion": "Aya 23, released by Cohere, is a new family of state-of-the-art, multilingual models that support 23 languages.",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "35b"
+      ],
+      "referencia": "https://ollama.com/library/aya",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "nous-hermes2",
+      "descripcion": "The powerful family of models by Nous Research that excels at scientific discussion and coding tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "10.7b",
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/nous-hermes2",
+      "descargas": "1.2M"
+    },
+    {
+      "nombre": "wizard-math",
+      "descripcion": "Model focused on math and logic problems",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/wizard-math",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "stable-code",
+      "descripcion": "Stable Code 3B is a coding model with instruct and code completion variants on par with models such as Code Llama 7B that are 2.5x larger.",
+      "capacidades": [],
+      "tamanos": [
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/stable-code",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "internlm2",
+      "descripcion": "InternLM2.5 is a 7B parameter model tailored for practical scenarios with outstanding reasoning capability.",
+      "capacidades": [],
+      "tamanos": [
+        "1m",
+        "1.8b",
+        "7b",
+        "20b"
+      ],
+      "referencia": "https://ollama.com/library/internlm2",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "llama-guard3",
+      "descripcion": "Llama Guard 3 is a series of models fine-tuned for content safety classification of LLM inputs and responses.",
+      "capacidades": [],
+      "tamanos": [
+        "1b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/llama-guard3",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "aya-expanse",
+      "descripcion": "Cohere For AI's language models trained to perform well across 23 different languages.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "8b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/aya-expanse",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "xwinlm",
+      "descripcion": "Conversational model based on Llama 2 that performs competitively on various benchmarks.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/xwinlm",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "granite3.1-dense",
+      "descripcion": "The IBM Granite 2B and 8B models are text-only dense LLMs trained on over 12 trillion tokens of data, demonstrated significant improvements over their predecessors in performance and speed in IBM’s initial testing.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "2b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite3.1-dense",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "granite3-dense",
+      "descripcion": "The IBM Granite 2B and 8B models are designed to support tool-based use cases and support for retrieval augmented generation (RAG), streamlining code generation, translation and bug fixing.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "2b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite3-dense",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "dolphincoder",
+      "descripcion": "A 7B and 15B uncensored variant of the Dolphin model family that excels at coding, based on StarCoder2.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "15b"
+      ],
+      "referencia": "https://ollama.com/library/dolphincoder",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "phi3.5",
+      "descripcion": "A lightweight AI model with 3.8 billion parameters with performance overtaking similarly and larger sized models.",
+      "capacidades": [],
+      "tamanos": [
+        "3.8b"
+      ],
+      "referencia": "https://ollama.com/library/phi3.5",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "llama3-chatqa",
+      "descripcion": "A model from NVIDIA based on Llama 3 that excels at conversational question answering (QA) and retrieval-augmented generation (RAG).",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama3-chatqa",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "samantha-mistral",
+      "descripcion": "A companion assistant trained in philosophy, psychology, and personal relationships. Based on Mistral.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/samantha-mistral",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "yarn-llama2",
+      "descripcion": "An extension of Llama 2 that supports a context of up to 128k tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/yarn-llama2",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "granite3.2-vision",
+      "descripcion": "A compact and efficient vision-language model, specifically designed for visual document understanding, enabling automated content extraction from tables, charts, infographics, plots, diagrams, and more.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/granite3.2-vision",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "llama3-gradient",
+      "descripcion": "This model extends LLama-3 8B's context length from 8k to over 1m tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama3-gradient",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "llama3-groq-tool-use",
+      "descripcion": "A series of models from Groq that represent a significant advancement in open-source AI capabilities for tool use/function calling.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/llama3-groq-tool-use",
+      "descargas": "1.1M"
+    },
+    {
+      "nombre": "phind-codellama",
+      "descripcion": "Code generation model based on Code Llama.",
+      "capacidades": [],
+      "tamanos": [
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/phind-codellama",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "starling-lm",
+      "descripcion": "Starling is a large language model trained by reinforcement learning from AI feedback focused on improving chatbot helpfulness.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/starling-lm",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "nemotron-3-nano",
+      "descripcion": "Nemotron-3-Nano is a new Standard for Efficient, Open, and Intelligent Agentic Models, now updated with a 4B parameter count model.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "4b",
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-3-nano",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "granite3-moe",
+      "descripcion": "The IBM Granite 1B and 3B models are the first mixture of experts (MoE) Granite models from IBM designed for low latency usage.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "1b",
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/granite3-moe",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "solar",
+      "descripcion": "A compact, yet powerful 10.7B large language model designed for single-turn conversation.",
+      "capacidades": [],
+      "tamanos": [
+        "10.7b"
+      ],
+      "referencia": "https://ollama.com/library/solar",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "stable-beluga",
+      "descripcion": "Llama 2 based model fine tuned on an Orca-style dataset. Originally called Free Willy.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/stable-beluga",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "shieldgemma",
+      "descripcion": "ShieldGemma is set of instruction tuned models for evaluating the safety of text prompt input and text output responses against a set of defined safety policies.",
+      "capacidades": [],
+      "tamanos": [
+        "2b",
+        "9b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/shieldgemma",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "mistral-small3.1",
+      "descripcion": "Building upon Mistral Small 3, Mistral Small 3.1 (2503) adds state-of-the-art vision understanding and enhances long context capabilities up to 128k tokens without compromising text performance.",
+      "capacidades": [
+        "vision",
+        "tools"
+      ],
+      "tamanos": [
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-small3.1",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "orca2",
+      "descripcion": "Orca 2 is built by Microsoft research, and are a fine-tuned version of Meta's Llama 2 models. The model is designed to excel particularly in reasoning.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/orca2",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "deepcoder",
+      "descripcion": "DeepCoder is a fully open-Source 14B coder model at O3-mini level, with a 1.5B version also available.",
+      "capacidades": [],
+      "tamanos": [
+        "1.5b",
+        "14b"
+      ],
+      "referencia": "https://ollama.com/library/deepcoder",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "wizardlm",
+      "descripcion": "General use model based on Llama 2.",
+      "capacidades": [],
+      "tamanos": [
+        "1M",
+        "Pulls",
+        "73",
+        "Tags",
+        "Updated",
+        "3",
+        "years",
+        "ago"
+      ],
+      "referencia": "https://ollama.com/library/wizardlm",
+      "descargas": "1M"
+    },
+    {
+      "nombre": "reader-lm",
+      "descripcion": "A series of models that convert HTML content to Markdown content, which is useful for content conversion tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "0.5b",
+        "1.5b"
+      ],
+      "referencia": "https://ollama.com/library/reader-lm",
+      "descargas": "992.8K"
+    },
+    {
+      "nombre": "paraphrase-multilingual",
+      "descripcion": "Sentence-transformers model that can be used for tasks like clustering or semantic search.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "278m"
+      ],
+      "referencia": "https://ollama.com/library/paraphrase-multilingual",
+      "descargas": "977.6K"
+    },
+    {
+      "nombre": "llama-pro",
+      "descripcion": "An expansion of Llama 2 that specializes in integrating both general language understanding and domain-specific knowledge, particularly in programming and mathematics.",
+      "capacidades": [],
+      "tamanos": [
+        "968.1K",
+        "Pulls",
+        "33",
+        "Tags",
+        "Updated",
+        "2",
+        "years",
+        "ago"
+      ],
+      "referencia": "https://ollama.com/library/llama-pro",
+      "descargas": "968.1K"
+    },
+    {
+      "nombre": "yarn-mistral",
+      "descripcion": "An extension of Mistral to support context windows of 64K or 128K.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/yarn-mistral",
+      "descargas": "955.6K"
+    },
+    {
+      "nombre": "nexusraven",
+      "descripcion": "Nexus Raven is a 13B instruction tuned model for function calling tasks.",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/nexusraven",
+      "descargas": "948.7K"
+    },
+    {
+      "nombre": "meditron",
+      "descripcion": "Open-source medical large language model adapted from Llama 2 to the medical domain.",
+      "capacidades": [],
+      "tamanos": [
+        "7b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/meditron",
+      "descargas": "947K"
+    },
+    {
+      "nombre": "nemotron-3.5-lightning",
+      "descripcion": "NVIDIA Nemotron 3.5 Lightning is an open 30B mixture-of-experts (MoE) model with 3B active parameters built for always-on agents.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-3.5-lightning",
+      "descargas": "936.5K"
+    },
+    {
+      "nombre": "bakllava",
+      "descripcion": "BakLLaVA is a multimodal model consisting of the Mistral 7B base model augmented with the LLaVA architecture.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/bakllava",
+      "descargas": "934.5K"
+    },
+    {
+      "nombre": "command-r-plus",
+      "descripcion": "Command R+ is a powerful, scalable large language model purpose-built to excel at real-world enterprise use cases.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "104b"
+      ],
+      "referencia": "https://ollama.com/library/command-r-plus",
+      "descargas": "855.3K"
+    },
+    {
+      "nombre": "ornith",
+      "descripcion": "A self-improving family of open-source models for agentic coding",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "9b",
+        "35b"
+      ],
+      "referencia": "https://ollama.com/library/ornith",
+      "descargas": "811.7K"
+    },
+    {
+      "nombre": "exaone-deep",
+      "descripcion": "EXAONE Deep exhibits superior capabilities in various reasoning tasks including math and coding benchmarks, ranging from 2.4B to 32B parameters developed and released by LG AI Research.",
+      "capacidades": [],
+      "tamanos": [
+        "2.4b",
+        "7.8b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/exaone-deep",
+      "descargas": "808.3K"
+    },
+    {
+      "nombre": "tinydolphin",
+      "descripcion": "An experimental 1.1B parameter model trained on the new Dolphin 2.8 dataset by Eric Hartford and based on TinyLlama.",
+      "capacidades": [],
+      "tamanos": [
+        "1.1b"
+      ],
+      "referencia": "https://ollama.com/library/tinydolphin",
+      "descargas": "765.4K"
+    },
+    {
+      "nombre": "deepseek-v3.1",
+      "descripcion": "DeepSeek-V3.1-Terminus is a hybrid model that supports both thinking mode and non-thinking mode.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "671b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-v3.1",
+      "descargas": "765.1K"
+    },
+    {
+      "nombre": "nemotron3",
+      "descripcion": "NVIDIA Nemotron 3 Nano Omni is a multimodal large language model that unifies video, audio, image, and text understanding to support enterprise-grade Q&A, summarization, transcription, and document intelligence workflows.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "audio"
+      ],
+      "tamanos": [
+        "33b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron3",
+      "descargas": "764.8K"
+    },
+    {
+      "nombre": "medllama2",
+      "descripcion": "Fine-tuned Llama 2 model to answer medical questions based on an open source medical dataset.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/medllama2",
+      "descargas": "761.3K"
+    },
+    {
+      "nombre": "nemotron-mini",
+      "descripcion": "A commercial-friendly small language model by NVIDIA optimized for roleplay, RAG QA, and function calling.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "4b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-mini",
+      "descargas": "754.8K"
+    },
+    {
+      "nombre": "codegeex4",
+      "descripcion": "A versatile model for AI software development scenarios, including code completion.",
+      "capacidades": [],
+      "tamanos": [
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/codegeex4",
+      "descargas": "726.5K"
+    },
+    {
+      "nombre": "deepseek-ocr",
+      "descripcion": "DeepSeek-OCR is a vision-language model that can perform token-efficient OCR.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-ocr",
+      "descargas": "721K"
+    },
+    {
+      "nombre": "opencoder",
+      "descripcion": "OpenCoder is an open and reproducible code LLM family which includes 1.5B and 8B models, supporting chat in English and Chinese languages.",
+      "capacidades": [],
+      "tamanos": [
+        "1.5b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/opencoder",
+      "descargas": "709.3K"
+    },
+    {
+      "nombre": "granite4.1",
+      "descripcion": "IBM Granite Models are a family of enterprise-ready, open foundation models that support multilingual capabilities, coding, retrieval-augmented generation (RAG), tool use, and structured JSON output. Released under Apache 2.0 license.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "3b",
+        "8b",
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/granite4.1",
+      "descargas": "691.1K"
+    },
+    {
+      "nombre": "wizardlm-uncensored",
+      "descripcion": "Uncensored version of Wizard LM model",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/wizardlm-uncensored",
+      "descargas": "682.6K"
+    },
+    {
+      "nombre": "nemotron",
+      "descripcion": "Llama-3.1-Nemotron-70B-Instruct is a large language model customized by NVIDIA to improve the helpfulness of LLM generated responses to user queries.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron",
+      "descargas": "661K"
+    },
+    {
+      "nombre": "reflection",
+      "descripcion": "A high-performing model trained with a new technique called Reflection-tuning that teaches a LLM to detect mistakes in its reasoning and correct course.",
+      "capacidades": [],
+      "tamanos": [
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/reflection",
+      "descargas": "648.1K"
+    },
+    {
+      "nombre": "exaone3.5",
+      "descripcion": "EXAONE 3.5 is a collection of instruction-tuned bilingual (English and Korean) generative models ranging from 2.4B to 32B parameters, developed and released by LG AI Research.",
+      "capacidades": [],
+      "tamanos": [
+        "2.4b",
+        "7.8b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/exaone3.5",
+      "descargas": "631.1K"
+    },
+    {
+      "nombre": "codeup",
+      "descripcion": "Great code generation model based on Llama2.",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/codeup",
+      "descargas": "630.5K"
+    },
+    {
+      "nombre": "qwen3-next",
+      "descripcion": "The first installment in the Qwen3-Next series with strong performance in terms of both parameter efficiency and inference speed.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "80b"
+      ],
+      "referencia": "https://ollama.com/library/qwen3-next",
+      "descargas": "626K"
+    },
+    {
+      "nombre": "athene-v2",
+      "descripcion": "Athene-V2 is a 72B parameter model which excels at code completion, mathematics, and log extraction tasks.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "72b"
+      ],
+      "referencia": "https://ollama.com/library/athene-v2",
+      "descargas": "624.8K"
+    },
+    {
+      "nombre": "nous-hermes2-mixtral",
+      "descripcion": "The Nous Hermes 2 model from Nous Research, now trained over Mixtral.",
+      "capacidades": [],
+      "tamanos": [
+        "8x7b"
+      ],
+      "referencia": "https://ollama.com/library/nous-hermes2-mixtral",
+      "descargas": "624K"
+    },
+    {
+      "nombre": "everythinglm",
+      "descripcion": "Uncensored Llama2 based model with support for a 16K context window.",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/everythinglm",
+      "descargas": "602.4K"
+    },
+    {
+      "nombre": "megadolphin",
+      "descripcion": "MegaDolphin-2.2-120b is a transformation of Dolphin-2.2-70b created by interleaving the model with itself.",
+      "capacidades": [],
+      "tamanos": [
+        "120b"
+      ],
+      "referencia": "https://ollama.com/library/megadolphin",
+      "descargas": "602.4K"
+    },
+    {
+      "nombre": "nuextract",
+      "descripcion": "A 3.8B model fine-tuned on a private high-quality synthetic dataset for information extraction, based on Phi-3.",
+      "capacidades": [],
+      "tamanos": [
+        "3.8b"
+      ],
+      "referencia": "https://ollama.com/library/nuextract",
+      "descargas": "600.2K"
+    },
+    {
+      "nombre": "mathstral",
+      "descripcion": "MathΣtral: a 7B model designed for math reasoning and scientific discovery by Mistral AI.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/mathstral",
+      "descargas": "594.5K"
+    },
+    {
+      "nombre": "solar-pro",
+      "descripcion": "Solar Pro Preview: an advanced large language model (LLM) with 22 billion parameters designed to fit into a single GPU",
+      "capacidades": [],
+      "tamanos": [
+        "22b"
+      ],
+      "referencia": "https://ollama.com/library/solar-pro",
+      "descargas": "593.3K"
+    },
+    {
+      "nombre": "magicoder",
+      "descripcion": "🎩 Magicoder is a family of 7B parameter models trained on 75K synthetic instruction data using OSS-Instruct, a novel approach to enlightening LLMs with open-source code snippets.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/magicoder",
+      "descargas": "590.2K"
+    },
+    {
+      "nombre": "notus",
+      "descripcion": "A 7B chat model fine-tuned with high-quality data and based on Zephyr.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/notus",
+      "descargas": "576.2K"
+    },
+    {
+      "nombre": "stablelm-zephyr",
+      "descripcion": "A lightweight chat model allowing accurate, and responsive output without requiring high-end hardware.",
+      "capacidades": [],
+      "tamanos": [
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/stablelm-zephyr",
+      "descargas": "573.7K"
+    },
+    {
+      "nombre": "falcon2",
+      "descripcion": "Falcon2 is an 11B parameters causal decoder-only model built by TII and trained over 5T tokens.",
+      "capacidades": [],
+      "tamanos": [
+        "11b"
+      ],
+      "referencia": "https://ollama.com/library/falcon2",
+      "descargas": "572.6K"
+    },
+    {
+      "nombre": "notux",
+      "descripcion": "A top-performing mixture of experts model, fine-tuned with high-quality data.",
+      "capacidades": [],
+      "tamanos": [
+        "8x7b"
+      ],
+      "referencia": "https://ollama.com/library/notux",
+      "descargas": "572.1K"
+    },
+    {
+      "nombre": "bespoke-minicheck",
+      "descripcion": "A state-of-the-art fact-checking model developed by Bespoke Labs.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/bespoke-minicheck",
+      "descargas": "565.5K"
+    },
+    {
+      "nombre": "duckdb-nsql",
+      "descripcion": "7B parameter text-to-SQL model made by MotherDuck and Numbers Station.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/duckdb-nsql",
+      "descargas": "560.9K"
+    },
+    {
+      "nombre": "firefunction-v2",
+      "descripcion": "An open weights function calling model based on Llama 3, competitive with GPT-4o function calling capabilities.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/firefunction-v2",
+      "descargas": "557.1K"
+    },
+    {
+      "nombre": "mistrallite",
+      "descripcion": "MistralLite is a fine-tuned model based on Mistral with enhanced capabilities of processing long contexts.",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/mistrallite",
+      "descargas": "555.9K"
+    },
+    {
+      "nombre": "minimax-m3",
+      "descripcion": "MiniMax M3: Coding & Agentic Frontier. 1M context window. Native Multimodality.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/minimax-m3",
+      "descargas": ""
+    },
+    {
+      "nombre": "wizard-vicuna",
+      "descripcion": "Wizard Vicuna is a 13B parameter model based on Llama 2 trained by MelodysDreamj.",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/wizard-vicuna",
+      "descargas": "549.3K"
+    },
+    {
+      "nombre": "rnj-1",
+      "descripcion": "Rnj-1 is a family of 8B parameter open-weight, dense models trained from scratch by Essential AI, optimized for code and STEM with capabilities on par with SOTA open-weight models.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/rnj-1",
+      "descargas": "544.2K"
+    },
+    {
+      "nombre": "open-orca-platypus2",
+      "descripcion": "Merge of the Open Orca OpenChat model and the Garage-bAInd Platypus 2 model. Designed for chat and code generation.",
+      "capacidades": [],
+      "tamanos": [
+        "13b"
+      ],
+      "referencia": "https://ollama.com/library/open-orca-platypus2",
+      "descargas": "541.6K"
+    },
+    {
+      "nombre": "codebooga",
+      "descripcion": "A high-performing code instruct model created by merging two existing code models.",
+      "capacidades": [],
+      "tamanos": [
+        "34b"
+      ],
+      "referencia": "https://ollama.com/library/codebooga",
+      "descargas": "534K"
+    },
+    {
+      "nombre": "deepseek-v4-pro",
+      "descripcion": "DeepSeek-V4-Pro is a frontier Mixture-of-Experts model with a large context window and three reasoning modes.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/deepseek-v4-pro",
+      "descargas": "532.3K"
+    },
+    {
+      "nombre": "kimi-k2.6",
+      "descripcion": "Kimi K2.6 is an open-source, native multimodal agentic model that advances practical capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/kimi-k2.6",
+      "descargas": ""
+    },
+    {
+      "nombre": "goliath",
+      "descripcion": "A language model created by combining two fine-tuned Llama 2 70B models into one.",
+      "capacidades": [],
+      "tamanos": [
+        "518.6K",
+        "Pulls",
+        "16",
+        "Tags",
+        "Updated",
+        "3",
+        "years",
+        "ago"
+      ],
+      "referencia": "https://ollama.com/library/goliath",
+      "descargas": "518.6K"
+    },
+    {
+      "nombre": "snowflake-arctic-embed2",
+      "descripcion": "Snowflake's frontier embedding model. Arctic Embed 2.0 adds multilingual support without sacrificing English performance or scalability.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "568m"
+      ],
+      "referencia": "https://ollama.com/library/snowflake-arctic-embed2",
+      "descargas": "515.8K"
+    },
+    {
+      "nombre": "ornith-1.5",
+      "descripcion": "Chirp Chirp! 🐦 We are introducing Ornith-1.5, a major step toward building foundation models through end-to-end self-improvement.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "9b",
+        "35b",
+        "122b",
+        "397b"
+      ],
+      "referencia": "https://ollama.com/library/ornith-1.5",
+      "descargas": "511.5K"
+    },
+    {
+      "nombre": "medgemma",
+      "descripcion": "MedGemma is a collection of Gemma 3 variants that are trained for performance on medical text and image comprehension.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "4b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/medgemma",
+      "descargas": "504.5K"
+    },
+    {
+      "nombre": "olmo-3",
+      "descripcion": "Olmo is a series of Open language models designed to enable the science of language models. These models are pre-trained on the Dolma 3 dataset and post-trained on the Dolci datasets.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "7b",
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/olmo-3",
+      "descargas": "497.7K"
+    },
+    {
+      "nombre": "granite3.2",
+      "descripcion": "Granite-3.2 is a family of long-context AI models from IBM Granite fine-tuned for thinking capabilities.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "2b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite3.2",
+      "descargas": "492.1K"
+    },
+    {
+      "nombre": "muse-glimmer",
+      "descripcion": "Meta's latest open model built for always-on local agents. 30B parameters, licensed under Apache 2.0 and runs on a single GPU — tuned for tool use, long tasks, and failure recovery.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/muse-glimmer",
+      "descargas": "478.4K"
+    },
+    {
+      "nombre": "sailor2",
+      "descripcion": "Sailor2 are multilingual language models made for South-East Asia. Available in 1B, 8B, and 20B parameter sizes.",
+      "capacidades": [],
+      "tamanos": [
+        "1b",
+        "8b",
+        "20b"
+      ],
+      "referencia": "https://ollama.com/library/sailor2",
+      "descargas": "450.3K"
+    },
+    {
+      "nombre": "mistral-medium-3.5",
+      "descripcion": "Mistral Medium 3.5 is the first flagship model of Mistral AI that merged instruction-following, reasoning, and coding in a single set of 128B weights.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "128b"
+      ],
+      "referencia": "https://ollama.com/library/mistral-medium-3.5",
+      "descargas": "449.1K"
+    },
+    {
+      "nombre": "granite-embedding",
+      "descripcion": "The IBM Granite Embedding 30M and 278M models models are text-only dense biencoder embedding models, with 30M available in English only and 278M serving multilingual use cases.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "30m",
+        "278m"
+      ],
+      "referencia": "https://ollama.com/library/granite-embedding",
+      "descargas": "448.5K"
+    },
+    {
+      "nombre": "r1-1776",
+      "descripcion": "A version of the DeepSeek-R1 model that has been post trained to provide unbiased, accurate, and factual information by Perplexity.",
+      "capacidades": [],
+      "tamanos": [
+        "70b",
+        "671b"
+      ],
+      "referencia": "https://ollama.com/library/r1-1776",
+      "descargas": "444.9K"
+    },
+    {
+      "nombre": "tulu3",
+      "descripcion": "Tülu 3 is a leading instruction following model family, offering fully open-source data, code, and recipes by the The Allen Institute for AI.",
+      "capacidades": [],
+      "tamanos": [
+        "8b",
+        "70b"
+      ],
+      "referencia": "https://ollama.com/library/tulu3",
+      "descargas": "437.4K"
+    },
+    {
+      "nombre": "dbrx",
+      "descripcion": "DBRX is an open, general-purpose LLM created by Databricks.",
+      "capacidades": [],
+      "tamanos": [
+        "132b"
+      ],
+      "referencia": "https://ollama.com/library/dbrx",
+      "descargas": "394.3K"
+    },
+    {
+      "nombre": "glm-5.2",
+      "descripcion": "GLM-5.2 is Z.ai’s flagship model for the era of long-horizon tasks.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/glm-5.2",
+      "descargas": ""
+    },
+    {
+      "nombre": "devstral-2",
+      "descripcion": "123B model that excels at using tools to explore codebases, editing multiple files and power software engineering agents.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "123b"
+      ],
+      "referencia": "https://ollama.com/library/devstral-2",
+      "descargas": "390.9K"
+    },
+    {
+      "nombre": "lfm2.5",
+      "descripcion": "LFM2.5-8B-A1B, an edge model built for fast, reliable tool calling on consumer hardware.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "8b",
+        "24b"
+      ],
+      "referencia": "https://ollama.com/library/lfm2.5",
+      "descargas": "387.8K"
+    },
+    {
+      "nombre": "command-r7b",
+      "descripcion": "The smallest model in Cohere's R series delivers top-tier speed, efficiency, and quality to build powerful AI applications on commodity GPUs and edge devices.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/command-r7b",
+      "descargas": "364.9K"
+    },
+    {
+      "nombre": "granite3-guardian",
+      "descripcion": "The IBM Granite Guardian 3.0 2B and 8B models are designed to detect risks in prompts and/or responses.",
+      "capacidades": [],
+      "tamanos": [
+        "2b",
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite3-guardian",
+      "descargas": "363.2K"
+    },
+    {
+      "nombre": "alfred",
+      "descripcion": "A robust conversational model designed to be used for both chat and instruct use cases.",
+      "capacidades": [],
+      "tamanos": [
+        "40b"
+      ],
+      "referencia": "https://ollama.com/library/alfred",
+      "descargas": "358.9K"
+    },
+    {
+      "nombre": "glm-5.3",
+      "descripcion": "Z.ai's flagship model and the most capable open-weights model for coding, with major gains on long-horizon agentic tasks.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/glm-5.3",
+      "descargas": ""
+    },
+    {
+      "nombre": "phi4-mini-reasoning",
+      "descripcion": "Phi 4 mini reasoning is a lightweight open model that balances efficiency with advanced reasoning ability.",
+      "capacidades": [],
+      "tamanos": [
+        "3.8b"
+      ],
+      "referencia": "https://ollama.com/library/phi4-mini-reasoning",
+      "descargas": "338.9K"
+    },
+    {
+      "nombre": "granite4.2",
+      "descripcion": "IBM Granite Models are a family of enterprise-ready, open foundation models that support multilingual capabilities, coding, retrieval-augmented generation (RAG), tool use, thinking and structured JSON output. Released under Apache 2.0 license.",
+      "capacidades": [],
+      "tamanos": [
+        "3b",
+        "8b",
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/granite4.2",
+      "descargas": "337.3K"
+    },
+    {
+      "nombre": "olmo-3.1",
+      "descripcion": "Olmo is a series of Open language models designed to enable the science of language models. These models are pre-trained on the Dolma 3 dataset and post-trained on the Dolci datasets.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "32b"
+      ],
+      "referencia": "https://ollama.com/library/olmo-3.1",
+      "descargas": "328K"
+    },
+    {
+      "nombre": "deepseek-v2.5",
+      "descripcion": "An upgraded version of DeekSeek-V2 that integrates the general and coding abilities of both DeepSeek-V2-Chat and DeepSeek-Coder-V2-Instruct.",
+      "capacidades": [],
+      "tamanos": [
+        "236b"
+      ],
+      "referencia": "https://ollama.com/library/deepseek-v2.5",
+      "descargas": "320.2K"
+    },
+    {
+      "nombre": "bge-large",
+      "descripcion": "Embedding model from BAAI mapping texts to vectors.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "335m"
+      ],
+      "referencia": "https://ollama.com/library/bge-large",
+      "descargas": "314.9K"
+    },
+    {
+      "nombre": "deepseek-v4.1-flash",
+      "descripcion": "Designed for greater capability, faster inference, higher throughput, and scaling to larger models.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/deepseek-v4.1-flash",
+      "descargas": "304.1K"
+    },
+    {
+      "nombre": "smallthinker",
+      "descripcion": "A new small reasoning model fine-tuned from the Qwen 2.5 3B Instruct model.",
+      "capacidades": [],
+      "tamanos": [
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/smallthinker",
+      "descargas": "284.9K"
+    },
+    {
+      "nombre": "qwen3.8-flash-next",
+      "descripcion": "This experimental preview of the architecture that will underpin Qwen4.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/qwen3.8-flash-next",
+      "descargas": "270.9K"
+    },
+    {
+      "nombre": "kimi-k2.7-code",
+      "descripcion": "Kimi K2.7 Code is Moonshot AI's coding-focused agentic model built upon Kimi K2.6, with substantial improvements on real-world long-horizon coding tasks and roughly 30% lower thinking-token usage.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/kimi-k2.7-code",
+      "descargas": ""
+    },
+    {
+      "nombre": "command-a",
+      "descripcion": "111 billion parameter model optimized for demanding enterprises that require fast, secure, and high-quality AI",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "111b"
+      ],
+      "referencia": "https://ollama.com/library/command-a",
+      "descargas": "257.1K"
+    },
+    {
+      "nombre": "cogito-2.1",
+      "descripcion": "The Cogito v2.1 LLMs are instruction tuned generative models. All models are released under MIT license for commercial use.",
+      "capacidades": [],
+      "tamanos": [
+        "671b"
+      ],
+      "referencia": "https://ollama.com/library/cogito-2.1",
+      "descargas": "250.4K"
+    },
+    {
+      "nombre": "medgemma1.5",
+      "descripcion": "MedGemma 1.5 4B is an updated version of the MedGemma 4B model.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "4b"
+      ],
+      "referencia": "https://ollama.com/library/medgemma1.5",
+      "descargas": "244.4K"
+    },
+    {
+      "nombre": "glm-5.3-flash",
+      "descripcion": "Z.ai's first natively multimodal model, approaching Claude Opus 4.8 on coding and agentic benchmarks with just 18B active parameters.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/glm-5.3-flash",
+      "descargas": ""
+    },
+    {
+      "nombre": "marco-o1",
+      "descripcion": "An open large reasoning model for real-world solutions by the Alibaba International Digital Commerce Group (AIDC-AI).",
+      "capacidades": [],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/marco-o1",
+      "descargas": "236.1K"
+    },
+    {
+      "nombre": "functiongemma",
+      "descripcion": "FunctionGemma is a specialized version of Google's Gemma 3 270M model fine-tuned explicitly for function calling.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "270m"
+      ],
+      "referencia": "https://ollama.com/library/functiongemma",
+      "descargas": "233.8K"
+    },
+    {
+      "nombre": "bonsai-2",
+      "descripcion": "Bonsai 2 from Prism ML is a family of vision models built for ternary weights – smaller models with close to full-precision quality.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "2b",
+        "4b",
+        "9b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/bonsai-2",
+      "descargas": "225K"
+    },
+    {
+      "nombre": "command-r7b-arabic",
+      "descripcion": "A new state-of-the-art version of the lightweight Command R7B model that excels in advanced Arabic language capabilities for enterprises in the Middle East and Northern Africa.",
+      "capacidades": [
+        "tools"
+      ],
+      "tamanos": [
+        "7b"
+      ],
+      "referencia": "https://ollama.com/library/command-r7b-arabic",
+      "descargas": "221.4K"
+    },
+    {
+      "nombre": "embeddinggemma-2",
+      "descripcion": "EmbeddingGemma 2 is a multimodal embedding model from Google built on the Gemma 4 architecture.",
+      "capacidades": [
+        "vision",
+        "embedding",
+        "audio"
+      ],
+      "tamanos": [
+        "270m",
+        "440m",
+        "570m",
+        "740m"
+      ],
+      "referencia": "https://ollama.com/library/embeddinggemma-2",
+      "descargas": "212.4K"
+    },
+    {
+      "nombre": "laguna-s-2.1",
+      "descripcion": "Our most capable model to date, designed for long-horizon work. 70.2% on Terminal-Bench 2.1 at 118B-A8B.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/laguna-s-2.1",
+      "descargas": "207.7K"
+    },
+    {
+      "nombre": "tev1",
+      "descripcion": "A 4B decision model from Together AI for fast classification.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "decision",
+        "0.8b",
+        "4b"
+      ],
+      "referencia": "https://ollama.com/library/tev1",
+      "descargas": "191.6K"
+    },
+    {
+      "nombre": "gpt-oss-safeguard",
+      "descripcion": "gpt-oss-safeguard-20b and gpt-oss-safeguard-120b are safety reasoning models built-upon gpt-oss",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "20b",
+        "120b"
+      ],
+      "referencia": "https://ollama.com/library/gpt-oss-safeguard",
+      "descargas": "185.4K"
+    },
+    {
+      "nombre": "nemotron-cascade-2",
+      "descripcion": "An open 30B MoE model from NVIDIA with 3B activated parameters that delivers strong reasoning and agentic capabilities.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "30b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-cascade-2",
+      "descargas": "185.3K"
+    },
+    {
+      "nombre": "phonon",
+      "descripcion": "Phonon is Gradium’s text-to-speech family. It turns written text into spoken audio as it generates, making it useful for reading assistant replies, narrating passages, and adding a voice to local apps.",
+      "capacidades": [],
+      "tamanos": [
+        "175.7K",
+        "Pulls",
+        "14",
+        "Tags",
+        "Updated",
+        "1",
+        "month",
+        "ago"
+      ],
+      "referencia": "https://ollama.com/library/phonon",
+      "descargas": "175.7K"
+    },
+    {
+      "nombre": "laguna-xs-2.1",
+      "descripcion": "Laguna XS 2.1 is a 33B total parameter Mixture-of-Experts model with 3B activated parameters per token designed for agentic coding and long-horizon work on a local machine.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/laguna-xs-2.1",
+      "descargas": "165.5K"
+    },
+    {
+      "nombre": "nemotron-3-ultra",
+      "descripcion": "NVIDIA Nemotron 3 Ultra is built for high-throughput reasoning and long-running agent workflows.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/nemotron-3-ultra",
+      "descargas": ""
+    },
+    {
+      "nombre": "mimo-v2.6",
+      "descripcion": "MiMo-V2.6-Distill-Qwen-9B is Xiaomi MiMo’s 9B model for code and agent workflows",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/mimo-v2.6",
+      "descargas": "159.9K"
+    },
+    {
+      "nombre": "ripple-preview",
+      "descripcion": "65B dense model built for agentic coding, with up to 1M tokens of context.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "65b"
+      ],
+      "referencia": "https://ollama.com/library/ripple-preview",
+      "descargas": "152.7K"
+    },
+    {
+      "nombre": "d3",
+      "descripcion": "Turn text, structured data, and images into scored choices, yes/no answers, and ratings.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "2b",
+        "4b",
+        "9b",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/d3",
+      "descargas": "138K"
+    },
+    {
+      "nombre": "strands-decider",
+      "descripcion": "A 2B decision model from Strands Agents for fast classification, routing, and scoring.",
+      "capacidades": [],
+      "tamanos": [
+        "decision",
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/strands-decider",
+      "descargas": "136.9K"
+    },
+    {
+      "nombre": "clef",
+      "descripcion": "Clef is a 27B multimodal model created by Cloudflare that turns a state and a schema of typed questions into decisions.",
+      "capacidades": [
+        "vision",
+        "cloud"
+      ],
+      "tamanos": [
+        "decision",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/clef",
+      "descargas": "136.2K"
+    },
+    {
+      "nombre": "kimi-k3",
+      "descripcion": "Kimi K3 is an open-weight, native multimodal agentic model and our most capable model to date.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/kimi-k3",
+      "descargas": ""
+    },
+    {
+      "nombre": "lfm3",
+      "descripcion": "LFM3-1.7B is a tri-hybrid model for local agents and specialized applications.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "1.7b"
+      ],
+      "referencia": "https://ollama.com/library/lfm3",
+      "descargas": "127.3K"
+    },
+    {
+      "nombre": "flint",
+      "descripcion": "Flint is a 39.8 billion-parameter mixture-of-experts model from Recursive, built for coding agents.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "40b"
+      ],
+      "referencia": "https://ollama.com/library/flint",
+      "descargas": "122.6K"
+    },
+    {
+      "nombre": "inkling-2-mini",
+      "descripcion": "Thinking Machines' small open-weights model: 26B parameters, 5.4B active, with looped layers for more computation per token.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/inkling-2-mini",
+      "descargas": "122.2K"
+    },
+    {
+      "nombre": "nimble",
+      "descripcion": "A 9B decision model from Bespoke Labs for fast, typed classification.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "decision",
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/nimble",
+      "descargas": "115.5K"
+    },
+    {
+      "nombre": "minicpm-v4.6",
+      "descripcion": "A Pocket-Sized MLLM for Ultra-Efficient Image and Video Understanding on Your Phone",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "1b"
+      ],
+      "referencia": "https://ollama.com/library/minicpm-v4.6",
+      "descargas": "111.3K"
+    },
+    {
+      "nombre": "clef-flash",
+      "descripcion": "Clef-Flash is a 9B multimodal model that turns a state and a schema of typed questions into decisions.",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/clef-flash",
+      "descargas": "104.1K"
+    },
+    {
+      "nombre": "north-mini-code-1.0",
+      "descripcion": "North Mini Code is Cohere's first model for developers — a 30B Mixture-of-Experts model with 3B active parameters, built for agentic software engineering.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/north-mini-code-1.0",
+      "descargas": "99.9K"
+    },
+    {
+      "nombre": "d1",
+      "descripcion": "d1 is a 3B decision model from Liquid AI, built on LFM2.5-VL-3B",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "2b",
+        "3b"
+      ],
+      "referencia": "https://ollama.com/library/d1",
+      "descargas": "95.5K"
+    },
+    {
+      "nombre": "lfm3-omni",
+      "descripcion": "a single end-to-end model that understands text, images, video and audio, and answers in text and speech",
+      "capacidades": [
+        "vision",
+        "tools",
+        "audio"
+      ],
+      "tamanos": [
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/lfm3-omni",
+      "descargas": "92.2K"
+    },
+    {
+      "nombre": "nemotron-3.5-bolt",
+      "descripcion": "Nemotron 3.5 Bolt is NVIDIA’s compact vision-language model for local coding, reasoning, and tool use.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "audio"
+      ],
+      "tamanos": [
+        "e4b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-3.5-bolt",
+      "descargas": "89.5K"
+    },
+    {
+      "nombre": "minicpm-v4.5",
+      "descripcion": "A GPT-4o Level MLLM for Single Image, Multi Image and High-FPS Video Understanding on Your Phone",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/minicpm-v4.5",
+      "descargas": "85.9K"
+    },
+    {
+      "nombre": "beam",
+      "descripcion": "Beam is an open model by Reflection designed to deliver strong performance for areas such as agentic tool use, coding and general reasoning with an emphasis on token efficient usage.",
+      "capacidades": [
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/beam",
+      "descargas": ""
+    },
+    {
+      "nombre": "d1-omni",
+      "descripcion": "d1-omni is a multimodal 600M decision model from Liquid AI",
+      "capacidades": [
+        "vision",
+        "audio"
+      ],
+      "tamanos": [
+        "decision",
+        "600m",
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/d1-omni",
+      "descargas": "80.9K"
+    },
+    {
+      "nombre": "autotrust-jev",
+      "descripcion": "AutoTrust’s decision models return choices, yes/no probabilities, and ratings for the questions you supply",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "9b",
+        "35b"
+      ],
+      "referencia": "https://ollama.com/library/autotrust-jev",
+      "descargas": "80.8K"
+    },
+    {
+      "nombre": "lfm3-vl",
+      "descripcion": "LFM3-VL-2B is a vision-language model for on-device visual understanding.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/lfm3-vl",
+      "descargas": "73.8K"
+    },
+    {
+      "nombre": "pplx-decider-flash",
+      "descripcion": "pplx-decider-flash is a 4B decision model from Perplexity, built on Qwen3.5-4B",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "4b"
+      ],
+      "referencia": "https://ollama.com/library/pplx-decider-flash",
+      "descargas": "62.6K"
+    },
+    {
+      "nombre": "lfm3-audio",
+      "descripcion": "LFM3-Audio-2B is a compact, fully featured audio model.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "audio"
+      ],
+      "tamanos": [
+        "2b"
+      ],
+      "referencia": "https://ollama.com/library/lfm3-audio",
+      "descargas": "62K"
+    },
+    {
+      "nombre": "minimax-m3.1-flash",
+      "descripcion": "As a next-generation Flash model, M3.1 Flash delivers a generational leap in agentic tasks, coding, Computer Use and cybersecurity, while making online inference nearly three times faster and reducing usage costs by 70%.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/minimax-m3.1-flash",
+      "descargas": ""
+    },
+    {
+      "nombre": "pplx-decider",
+      "descripcion": "pplx-decider is a 27B decision model from Perplexity, fine-tuned from Qwen3.8-27B",
+      "capacidades": [
+        "vision"
+      ],
+      "tamanos": [
+        "decision",
+        "27b"
+      ],
+      "referencia": "https://ollama.com/library/pplx-decider",
+      "descargas": "58.1K"
+    },
+    {
+      "nombre": "granite4.1-guardian",
+      "descripcion": "Granite Guardian 4.1 is a specialized safety and judging model from IBM Research that evaluates whether LLM prompts and responses meet specified harm criteria.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "8b"
+      ],
+      "referencia": "https://ollama.com/library/granite4.1-guardian",
+      "descargas": "57.3K"
+    },
+    {
+      "nombre": "laguna-xs.2",
+      "descripcion": "Laguna XS.2 is a 33B total parameter Mixture-of-Experts model with 3B activated parameters per token designed for agentic coding and long-horizon work on a local machine.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/laguna-xs.2",
+      "descargas": "53.8K"
+    },
+    {
+      "nombre": "nemotron-3.5-super",
+      "descripcion": "Nemotron 3.5 Super is NVIDIA’s vision-language model for coding, reasoning, tool use, and document understanding",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "120b"
+      ],
+      "referencia": "https://ollama.com/library/nemotron-3.5-super",
+      "descargas": "49.7K"
+    },
+    {
+      "nombre": "kev",
+      "descripcion": "Kev scores answers to structured questions about a supplied text state in a single forward pass.",
+      "capacidades": [],
+      "tamanos": [
+        "decision"
+      ],
+      "referencia": "https://ollama.com/library/kev",
+      "descargas": "42.1K"
+    },
+    {
+      "nombre": "nimble-v3",
+      "descripcion": "A 9B decision model from Bespoke Labs for fast classification, routing, and scoring.",
+      "capacidades": [
+        "tools",
+        "thinking"
+      ],
+      "tamanos": [
+        "decision",
+        "9b"
+      ],
+      "referencia": "https://ollama.com/library/nimble-v3",
+      "descargas": "39.6K"
+    },
+    {
+      "nombre": "mistral-large-4",
+      "descripcion": "Mistral Large 4 is Mistral's open-weight, general-purpose multimodal model. Its granular Mixture-of-Experts design activates 52B of 1.05T total parameters, with a 1.6B vision encoder handling images.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/mistral-large-4",
+      "descargas": ""
+    },
+    {
+      "nombre": "laya",
+      "descripcion": "Laya is a 421M decision model from Convai Innovations, fine-tuned from ModernBERT-large.",
+      "capacidades": [
+        "embedding"
+      ],
+      "tamanos": [
+        "decision"
+      ],
+      "referencia": "https://ollama.com/library/laya",
+      "descargas": "38.2K"
+    },
+    {
+      "nombre": "kimi-k3.1-pro",
+      "descripcion": "Kimi K3.1 Pro is an open-weight, natively multimodal agentic model and our most capable 3T-class model to date, with a 1M-token context window and major gains in coding, 3D creation, financial research, and factual accuracy.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/kimi-k3.1-pro",
+      "descargas": ""
+    },
+    {
+      "nombre": "muse-spark-open",
+      "descripcion": "Muse Spark Open is a natively multimodal model with 816B total parameters (42B active) and a 1M-token context window. Built for coding and agentic work, it excels at long-horizon tasks, complex software engineering, and multi-step reasoning.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/muse-spark-open",
+      "descargas": ""
+    },
+    {
+      "nombre": "mimo-v2.6-flash",
+      "descripcion": "Xiaomi's efficiency-balanced MiMo-V2.6 checkpoint, with 309B total parameters, 15B active, omnimodal input, and a 1M token context.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/mimo-v2.6-flash",
+      "descargas": ""
+    },
+    {
+      "nombre": "mimo-v2.6-pro",
+      "descripcion": "Xiaomi's flagship MiMo-V2.6 checkpoint, with 1.02T total parameters, 42B active, omnimodal input, and a 1M token context.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/mimo-v2.6-pro",
+      "descargas": ""
+    },
+    {
+      "nombre": "inkling-2-small",
+      "descripcion": "594B Mixture-of-Experts model (17B active) with image input and up to 1M tokens of context, built for agentic coding and knowledge work.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/inkling-2-small",
+      "descargas": ""
+    },
+    {
+      "nombre": "hy4",
+      "descripcion": "Tencent's flagship 770B open-weight model for coding, office work and research, with a 1M-token context and image and video understanding.",
+      "capacidades": [
+        "vision",
+        "tools",
+        "thinking",
+        "cloud"
+      ],
+      "tamanos": [],
+      "referencia": "https://ollama.com/library/hy4",
+      "descargas": ""
+    }
+  ]
+}

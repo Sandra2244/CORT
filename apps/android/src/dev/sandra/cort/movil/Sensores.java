@@ -3,276 +3,383 @@ package dev.sandra.cort.movil;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.BatteryManager;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.provider.Settings;
+
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
-/**
- * Los sensores del aparato (F19e). La dueña pidió «todo lo aplicado de sensores», y
- * lo primero que hace falta es no inventarse cuáles tiene: el Galaxy A16 no es el
- * teléfono de al lado, y un sensor que se anuncia y no existe es una respuesta
- * mentirosa. Aquí se pregunta al `SensorManager` y se dice lo que contestó.
- *
- * Lo que se lee y para qué:
- *
- * * **Acelerómetro** → la sacudida. «Agita para callar» es la forma de interrumpir a
- *   CORT sin buscar el botón, y no necesita ningún permiso.
- * * **Luz y proximidad** → saber si el teléfono está en el bolsillo o boca abajo.
- *   Se informan; no se usan para apagar la pantalla por su cuenta.
- * * **Batería** → nivel, temperatura y si está cargando. La temperatura sale del
- *   `ACTION_BATTERY_CHANGED`, que es la única que Android expone sin root.
- * * **Podómetro** → si el aparato lo tiene. Muchos de gama media no lo traen y se
- *   dice «no está» en vez de contar pasos con el acelerómetro y llamarlo podómetro.
- *
- * Lo que NO hace: no guarda histórico, no manda nada a la red y no pide permisos
- * (ninguno de estos sensores los necesita en Android 14; el podómetro tampoco,
- * `ACTIVITY_RECOGNITION` es para el reconocimiento de actividad, no para el contador).
- * Las lecturas viven en memoria mientras la cara está montada.
- */
-public final class Sensores implements SensorEventListener {
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
 
-    /** Los que se piden, en el orden en que se dicen. */
-    private static final int[] TIPOS = {
+/** Lecturas acotadas al ciclo de vida de la actividad visible. */
+final class Sensores {
+    interface Entrega {
+        void estado(JSONObject estado);
+        void pasos(JSONObject pasos);
+    }
+
+    private static final String[] TIPOS = {
+            "acelerometro", "giroscopio", "magnetometro", "luz", "proximidad",
+            "presion", "temperatura_ambiente", "humedad", "pasos", "detector_pasos",
+            "bateria", "temperatura_bateria"
+    };
+    private static final String[] UNIDADES = {
+            "m/s²", "rad/s", "µT", "lx", "cm", "hPa", "°C", "%", "pasos", "pasos", "%", "°C"
+    };
+    private static final int[] CODIGOS = {
             Sensor.TYPE_ACCELEROMETER, Sensor.TYPE_GYROSCOPE, Sensor.TYPE_MAGNETIC_FIELD,
             Sensor.TYPE_LIGHT, Sensor.TYPE_PROXIMITY, Sensor.TYPE_PRESSURE,
-            Sensor.TYPE_AMBIENT_TEMPERATURE, Sensor.TYPE_STEP_COUNTER,
+            Sensor.TYPE_AMBIENT_TEMPERATURE, Sensor.TYPE_RELATIVE_HUMIDITY,
+            Sensor.TYPE_STEP_COUNTER, Sensor.TYPE_STEP_DETECTOR
     };
+    private static final long INTERVALO_MS = 2000L;
 
-    private static final String[] NOMBRES = {
-            "acelerómetro", "giróscopo", "brújula", "luz", "proximidad", "presión",
-            "temperatura ambiente", "podómetro",
-    };
-
-    /** Por encima de esto en la diferencia de magnitud, es una sacudida y no un temblor. */
-    private static final float UMBRAL_SACUDIDA = 18.0f;
-    private static final long PASO_SACUDIDA_MS = 1200L;
-
-    private static volatile Sensores compartido;
-
-    private final SensorManager manager;
     private final Context contexto;
-    private final float[] valores = new float[TIPOS.length];
-    private final boolean[] puestos = new boolean[TIPOS.length];
-    private final boolean[] tiene = new boolean[TIPOS.length];
-    private float ultimaMagnitud = -1f;
-    private long ultimaSacudida;
-    private volatile Runnable alSacudir;
-    private volatile boolean escuchando;
+    private final SensorManager gestor;
+    private final Handler hilo = new Handler(Looper.getMainLooper());
+    private final LinkedHashMap<String, LecturaSensor> ultimas = new LinkedHashMap<>();
+    private final Map<String, Sensor> hardware = new LinkedHashMap<>();
+    private final Map<String, Integer> precision = new LinkedHashMap<>();
+    private final SharedPreferences preferencias;
+    private Entrega entrega;
 
-    private Sensores(Context contexto) {
+    private boolean escuchando;
+    private boolean tienePasos;
+    private long basePasos = -1L;
+    private String fechaBase = "";
+
+    private final SensorEventListener oyente = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent evento) {
+            LecturaSensor anterior = ultimas.get(nombre(evento.sensor.getType()));
+            boolean acumulado = evento.sensor.getType() == Sensor.TYPE_STEP_COUNTER;
+            ultimas.put(nombre(evento.sensor.getType()), LecturaSensor.medida(
+                    nombre(evento.sensor.getType()), evento.sensor.getType(),
+                    unidad(evento.sensor.getType()), evento.values,
+                    evento.timestamp / 1_000_000L, evento.accuracy, acumulado));
+            if (acumulado) {
+                actualizarPasos(anterior);
+            }
+        }
+
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int exactitud) {
+            precision.put(nombre(sensor.getType()), exactitud);
+        }
+    };
+
+    Sensores(Context contexto) {
         this.contexto = contexto.getApplicationContext();
-        this.manager = (SensorManager) this.contexto.getSystemService(Context.SENSOR_SERVICE);
-    }
-
-    public static Sensores compartido(Context contexto) {
-        Sensores yo = compartido;
-        if (yo == null) {
-            synchronized (Sensores.class) {
-                if (compartido == null) {
-                    compartido = new Sensores(contexto);
-                }
-                yo = compartido;
-            }
-        }
-        return yo;
-    }
-
-    /** Lo que se hace cuando se agita el teléfono: callar la voz, lo pone quien llama. */
-    public void alSacudir(Runnable accion) {
-        this.alSacudir = accion;
-    }
-
-    /**
-     * Registra los que existan. `SENSOR_DELAY_UI` y no el más rápido: esto se lee
-     * para informarlo y para detectar una sacudida, no para medir física, y el
-     * muestreo rápido es batería que se va sin que nadie la use.
-     */
-    public void escucha() {
-        if (escuchando || manager == null) {
-            return;
+        this.gestor = (SensorManager) this.contexto.getSystemService(Context.SENSOR_SERVICE);
+        this.preferencias = this.contexto.getSharedPreferences("cort-sensores", Context.MODE_PRIVATE);
+        this.basePasos = preferencias.getLong("pasos_base", -1L);
+        this.fechaBase = preferencias.getString("pasos_fecha", "");
+        if (arranqueActual() != preferencias.getLong("pasos_arranque", -1L)) {
+            this.basePasos = -1L;
+            this.fechaBase = "";
         }
         for (int i = 0; i < TIPOS.length; i++) {
-            Sensor sensor = manager.getDefaultSensor(TIPOS[i]);
-            tiene[i] = sensor != null;
-            if (sensor == null) {
-                continue;
-            }
-            manager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_UI);
+            ultimas.put(TIPOS[i], LecturaSensor.ausente(TIPOS[i], i, UNIDADES[i]));
         }
+        if (gestor != null) {
+            for (int i = 0; i < CODIGOS.length; i++) {
+                Sensor sensor = gestor.getDefaultSensor(CODIGOS[i]);
+                hardware.put(TIPOS[i], sensor);
+                if (sensor != null) {
+                    precision.put(TIPOS[i], SensorManager.SENSOR_STATUS_NO_CONTACT);
+                }
+            }
+        }
+    }
+
+    void alEntregar(Entrega entrega) {
+        this.entrega = entrega;
+    }
+
+    boolean empezar(boolean incluirPasos) {
+        if (gestor == null) {
+            return false;
+        }
+        if (!escuchando) {
+            for (int i = 0; i < TIPOS.length; i++) {
+                ultimas.put(TIPOS[i], LecturaSensor.ausente(TIPOS[i], i, UNIDADES[i]));
+            }
+        }
+        tienePasos = incluirPasos;
         escuchando = true;
+        gestor.unregisterListener(oyente);
+        for (int i = 0; i < CODIGOS.length; i++) {
+            Sensor sensor = hardware.get(TIPOS[i]);
+            boolean esPaso = TIPOS[i].equals("pasos") || TIPOS[i].equals("detector_pasos");
+            if (sensor != null && (!esPaso || incluirPasos)) {
+                gestor.registerListener(oyente, sensor, SensorManager.SENSOR_DELAY_NORMAL);
+            }
+        }
+        hilo.removeCallbacks(latido);
+        hilo.postDelayed(latido, INTERVALO_MS);
+        publicarEstado();
+        return true;
     }
 
-    public void para() {
-        if (!escuchando || manager == null) {
-            return;
-        }
-        manager.unregisterListener(this);
+    void apagar() {
         escuchando = false;
-        for (int i = 0; i < puestos.length; i++) {
-            puestos[i] = false;
+        tienePasos = false;
+        if (gestor != null) {
+            gestor.unregisterListener(oyente);
         }
+        hilo.removeCallbacks(latido);
+        publicarEstado();
     }
 
-    @Override
-    public void onSensorChanged(SensorEvent evento) {
-        if (evento == null || evento.values.length == 0) {
-            return;
-        }
-        for (int i = 0; i < TIPOS.length; i++) {
-            if (evento.sensor.getType() == TIPOS[i]) {
-                valores[i] = evento.values[0];
-                puestos[i] = true;
-                if (TIPOS[i] == Sensor.TYPE_ACCELEROMETER) {
-                    miraSacudida(evento.values);
+    void cerrar() {
+        apagar();
+        entrega = null;
+    }
+
+    boolean activo() {
+        return escuchando;
+    }
+
+    boolean tienePasos() {
+        return tienePasos;
+    }
+
+    JSONObject estado() {
+        JSONObject raiz = cuadro("sensores_estado");
+        try {
+            raiz.put("escuchando", escuchando);
+            raiz.put("intervalo_ms", INTERVALO_MS);
+            JSONObject valores = new JSONObject();
+            JSONArray inventario = new JSONArray();
+            for (int i = 0; i < TIPOS.length; i++) {
+                String nombre = TIPOS[i];
+                LecturaSensor lectura = ultimas.get(nombre);
+                Sensor sensor = hardware.get(nombre);
+                boolean presente = !nombre.equals("bateria")
+                        && !nombre.equals("temperatura_bateria");
+                if (!presente) {
+                    lectura = LecturaSensor.medida(nombre, i, UNIDADES[i],
+                            bateria(nombre), SystemClock.elapsedRealtime(), 0,
+                            false);
                 }
+                valores.put(nombre, lecturaJson(lectura, presente));
+                inventario.put(inventarioJson(nombre, lectura, presente));
+            }
+            raiz.put("valores", valores);
+            raiz.put("inventario", inventario);
+            raiz.put("pasos", estadoPasos());
+        } catch (Exception error) {
+            try {
+                raiz.put("error", "no pude preparar las lecturas: " + error.getMessage());
+            } catch (JSONException imposible) {
+                throw new IllegalStateException(imposible);
+            }
+        }
+        return raiz;
+    }
+
+    JSONObject estadoPasos() {
+        JSONObject raiz = cuadro("sensores_pasos");
+        try {
+            raiz.put("activo", escuchando && tienePasos);
+            LecturaSensor lectura = ultimas.get("pasos");
+            if (!tienePasos()) {
+                raiz.put("estado", "inactivo");
+                raiz.put("motivo", "activa Pasos para solicitar el permiso y leer el contador");
+            } else if (!lectura.tieneLectura()) {
+                raiz.put("estado", "sin_lectura");
+                raiz.put("motivo", hardware.get("pasos") == null
+                        ? "este dispositivo no tiene contador de pasos"
+                        : "el contador aún no ha entregado una lectura");
+            } else {
+                String hoy = fechaHoy();
+                long acumulado = (long) lectura.valores()[0];
+                boolean sinBase = basePasos < 0L || !fechaBase.equals(hoy) || acumulado < basePasos;
+                LecturaSensor.ResultadoPasos resultado = LecturaSensor.pasosDelDia(
+                        acumulado, basePasos, fechaBase, hoy);
+                if (resultado.reiniciarBase) {
+                    basePasos = acumulado;
+                    fechaBase = hoy;
+                    preferencias.edit().putLong("pasos_base", basePasos)
+                            .putString("pasos_fecha", fechaBase)
+                            .putLong("pasos_arranque", arranqueActual()).apply();
+                }
+                raiz.put("estado", "listo");
+                raiz.put("ambito", sinBase ? "acumulado_disponible" : "hoy");
+                raiz.put("pasos", sinBase ? acumulado : acumulado - basePasos);
+                raiz.put("acumulado_dispositivo", acumulado);
+                raiz.put("timestamp_ms", lectura.timestampMs);
+                raiz.put("origen_conteo", "sensor del dispositivo");
+                if (sinBase) {
+                    raiz.put("aviso", "se fijó una línea base nueva; este valor es el acumulado disponible, no el total de hoy");
+                }
+            }
+        } catch (Exception error) {
+            try {
+                raiz.put("estado", "no disponible");
+                raiz.put("motivo", error.getMessage());
+            } catch (JSONException imposible) {
+                throw new IllegalStateException(imposible);
+            }
+        }
+        return raiz;
+    }
+
+    private final Runnable latido = new Runnable() {
+        @Override
+        public void run() {
+            if (!escuchando) {
                 return;
             }
+            publicarEstado();
+            hilo.postDelayed(this, INTERVALO_MS);
         }
-    }
+    };
 
-    @Override
-    public void onAccuracyChanged(Sensor sensor, int precision) {
-        // la precisión no cambia lo que se puede decir: se informa el valor tal cual
-    }
-
-    /**
-     * La sacudida se detecta por el cambio de magnitud, no por el valor absoluto:
-     * quieto sobre la mesa el acelerómetro ya marca 9,8, y ése no es un gesto.
-     */
-    private void miraSacudida(float[] v) {
-        float magnitud = (float) Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-        float antes = ultimaMagnitud;
-        ultimaMagnitud = magnitud;
-        if (antes < 0f) {
+    private void actualizarPasos(LecturaSensor anterior) {
+        if (entrega == null) {
             return;
         }
-        long ahora = System.currentTimeMillis();
-        if (Math.abs(magnitud - antes) < UMBRAL_SACUDIDA
-                || ahora - ultimaSacudida < PASO_SACUDIDA_MS) {
-            return;
-        }
-        ultimaSacudida = ahora;
-        Runnable orden = alSacudir;
-        if (orden != null) {
-            orden.run();
+        LecturaSensor actual = ultimas.get("pasos");
+        if (anterior == null || !anterior.tieneLectura()
+                || actual.valores()[0] < anterior.valores()[0]) {
+            entrega.pasos(estadoPasos());
         }
     }
 
-    /* ------------------------------------------------------------------ lectura */
+    private void publicarEstado() {
+        if (entrega != null) {
+            entrega.estado(estado());
+        }
+    }
 
-    /** La batería, leída en el momento: `null` en el receptor devuelve el último estado. */
-    public JSONObject bateria() {
+    private JSONObject lecturaJson(LecturaSensor lectura, boolean presente) {
         JSONObject j = new JSONObject();
         try {
-            Intent estado = contexto.registerReceiver(null,
-                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
-            if (estado == null) {
-                j.put("nota", "el sistema no dio el estado de la batería");
-                return j;
+            boolean disponible = lectura.tieneLectura();
+            j.put("nombre", lectura.nombre);
+            j.put("tipo", lectura.tipo);
+            j.put("unidad", lectura.unidad);
+            j.put("disponible", disponible);
+            j.put("estado", disponible ? "leido"
+                    : !presente ? "sin_lectura"
+                    : hardware.get(lectura.nombre) == null ? "ausente" : "sin_lectura");
+            j.put("valores", new JSONArray(lectura.valores()));
+            j.put("timestamp_ms", lectura.timestampMs);
+            j.put("timestamp_origen", "monotonico_desde_arranque");
+            j.put("precision", presente
+                    ? precision.getOrDefault(lectura.nombre, lectura.precision) : 0);
+            j.put("acumulado", lectura.acumulado);
+            if ("bateria".equals(lectura.nombre)) {
+                j.put("cargando", estaCargando());
             }
-            int nivel = estado.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-            int escala = estado.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-            int temperatura = estado.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
-            int enchufado = estado.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
-            j.put("porcentaje", nivel >= 0 && escala > 0 ? nivel * 100 / escala : -1);
-            j.put("temperatura_c", temperatura >= 0 ? temperatura / 10.0 : -1);
-            j.put("cargando", enchufado > 0);
-            j.put("origen", "real");
-        } catch (RuntimeException | org.json.JSONException raro) {
-            try {
-                j.put("nota", "no se pudo leer la batería: " + raro.getMessage());
-            } catch (org.json.JSONException imposible) {
-                // la clave es literal: no puede fallar
+            if (!presente && !lectura.tieneLectura()) {
+                j.put("motivo", "lectura no disponible en este dispositivo");
             }
+        } catch (Exception ignorado) {
         }
         return j;
     }
 
-    /** Qué sensores tiene ESTE teléfono, dicho por el sistema y no por una ficha. */
-    public JSONArray inventario() {
-        JSONArray filas = new JSONArray();
-        for (int i = 0; i < TIPOS.length; i++) {
-            Sensor sensor = manager == null ? null : manager.getDefaultSensor(TIPOS[i]);
-            JSONObject fila = new JSONObject();
-            try {
-                fila.put("nombre", NOMBRES[i]);
-                fila.put("esta", sensor != null);
-                fila.put("tipo", TIPOS[i]);
-                if (sensor != null) {
-                    fila.put("fabricante", sensor.getVendor());
-                    fila.put("consumo_ma", sensor.getPower());
-                }
-            } catch (org.json.JSONException imposible) {
-                // claves literales
-            }
-            filas.put(fila);
-        }
-        return filas;
-    }
-
-    /** El cuadro que viaja a la cara: valores vivos, inventario y batería. */
-    public JSONObject estado() {
+    private JSONObject inventarioJson(String nombre, LecturaSensor lectura, boolean presente) {
         JSONObject j = new JSONObject();
         try {
-            j.put("type", "sensores_estado");
-            j.put("origen", "real");
-            j.put("escuchando", escuchando);
-            JSONObject vivos = new JSONObject();
-            for (int i = 0; i < TIPOS.length; i++) {
-                if (puestos[i]) {
-                    vivos.put(NOMBRES[i], valores[i]);
-                }
+            j.put("nombre", nombre);
+            j.put("unidad", lectura.unidad);
+            j.put("presente", presente || hardware.get(nombre) != null);
+            if (nombre.equals("pasos") || nombre.equals("detector_pasos")) {
+                j.put("permiso", Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+                        ? "ACTIVITY_RECOGNITION" : "no requerido por esta versión");
             }
-            j.put("valores", vivos);
-            j.put("inventario", inventario());
-            j.put("bateria", bateria());
-            j.put("nota", "lo que no aparece en «valores» es un sensor que este teléfono "
-                    + "no tiene o que aún no mandó lectura; no se inventa un cero");
-        } catch (org.json.JSONException imposible) {
-            // claves literales
+            if (nombre.equals("temperatura_bateria")) {
+                j.put("aviso", "es temperatura de la batería, no temperatura ambiente");
+            }
+        } catch (Exception ignorado) {
         }
         return j;
     }
 
-    /** La versión hablada: corta, con unidades y sin los sensores que no están. */
-    public String resumen() {
-        List<String> dichos = new ArrayList<>();
-        JSONObject pila = bateria();
-        int pct = pila.optInt("porcentaje", -1);
-        if (pct >= 0) {
-            dichos.add("batería al " + pct + " %"
-                    + (pila.optBoolean("cargando") ? ", cargando" : ""));
+    private boolean estaCargando() {
+        Intent bateria = contexto.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        if (bateria == null) {
+            return false;
         }
-        double grados = pila.optDouble("temperatura_c", -1);
-        if (grados >= 0) {
-            dichos.add(String.format(Locale.US, "%.1f grados de batería", grados));
-        }
-        for (int i = 0; i < TIPOS.length; i++) {
-            if (!puestos[i] || TIPOS[i] == Sensor.TYPE_ACCELEROMETER
-                    || TIPOS[i] == Sensor.TYPE_GYROSCOPE
-                    || TIPOS[i] == Sensor.TYPE_MAGNETIC_FIELD
-                    || TIPOS[i] == Sensor.TYPE_STEP_COUNTER) {
-                continue;      // los tres ejes y los pasos no se leen en voz alta enteros
-            }
-            dichos.add(NOMBRES[i] + ": " + numero(valores[i]));
-        }
-        if (puestos[7]) {
-            dichos.add("pasos de hoy: " + (long) valores[7]);
-        }
-        if (dichos.isEmpty()) {
-            return "no tengo lectura de ningún sensor todavía";
-        }
-        return String.join(". ", dichos) + ".";
+        int estado = bateria.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        return estado == BatteryManager.BATTERY_STATUS_CHARGING
+                || estado == BatteryManager.BATTERY_STATUS_FULL;
     }
 
-    private static String numero(float v) {
-        return String.format(Locale.US, "%.1f", v);
+    private float[] bateria(String nombre) {
+        Intent bateria = contexto.registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        float[] valores = new float[0];
+        if (bateria == null) {
+            return valores;
+        }
+        if (nombre.equals("bateria")) {
+            int nivel = bateria.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+            int escala = bateria.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+            if (nivel >= 0 && escala > 0) {
+                valores = new float[]{nivel * 100f / escala};
+            }
+        } else {
+            int decimas = bateria.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
+            if (decimas >= 0) {
+                valores = new float[]{decimas / 10f};
+            }
+        }
+        return valores;
+    }
+
+    private JSONObject cuadro(String tipo) {
+        try {
+            return new JSONObject().put("type", tipo).put("origen", "real")
+                    .put("plataforma", "android");
+        } catch (JSONException imposible) {
+            throw new IllegalStateException(imposible);
+        }
+    }
+
+    private static String nombre(int tipo) {
+        for (int i = 0; i < CODIGOS.length; i++) {
+            if (CODIGOS[i] == tipo) {
+                return TIPOS[i];
+            }
+        }
+        return "sensor_" + tipo;
+    }
+
+    private static String unidad(int tipo) {
+        for (int i = 0; i < CODIGOS.length; i++) {
+            if (CODIGOS[i] == tipo) {
+                return UNIDADES[i];
+            }
+        }
+        return "";
+    }
+
+    private long arranqueActual() {
+        try {
+            return Settings.Global.getInt(contexto.getContentResolver(), Settings.Global.BOOT_COUNT, -1);
+        } catch (RuntimeException sinAjustes) {
+            return -1L;
+        }
+    }
+
+    private static String fechaHoy() {
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT).format(new Date());
     }
 }

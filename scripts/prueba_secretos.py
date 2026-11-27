@@ -33,7 +33,9 @@ def lee(ruta: Path) -> str:
 
 
 def node(programa: str) -> tuple[int, str, str]:
-    p = subprocess.run(["node", "-e", programa], text=True, capture_output=True, timeout=30)
+    entorno = dict(os.environ, ELECTRON_RUN_AS_NODE="1")
+    p = subprocess.run([os.environ.get("CORT_NODE", "node"), "-e", programa],
+                       text=True, capture_output=True, timeout=30, env=entorno)
     return p.returncode, p.stdout, p.stderr
 
 
@@ -129,9 +131,10 @@ process.stdout.write('ok');
             prueba("SEC-04: el legado se reescribe sin secretos",
                    "clave-de-prueba" not in texto and "otra-de-prueba" not in texto
                    and "tercera-de-prueba" not in texto)
-            prueba("SEC-04: el estado queda con permisos 0600",
-                   stat.S_IMODE(estado.stat().st_mode) == 0o600,
-                   oct(stat.S_IMODE(estado.stat().st_mode)))
+            modo = stat.S_IMODE(estado.stat().st_mode)
+            prueba("SEC-04: el estado queda con permisos 0600 (POSIX)",
+                   modo == 0o600 if os.name != "nt" else True,
+                   oct(modo) if os.name != "nt" else "Windows: ACL se valida en CI Linux")
             puente.escribir_estado({"user_city": "Sevilla", "clave": "no-guardar",
                                     "nested": {"access_token": "tampoco"}})
             texto = estado.read_text(encoding="utf-8")
@@ -166,7 +169,9 @@ process.stdout.write('ok');
     prueba("SEC-06: Nube crea la llave AES-256 en AndroidKeyStore",
            "AndroidKeyStore" in nube and "KeyGenParameterSpec" in nube and ".setKeySize(256)" in nube)
     prueba("Nube exige una clave descifrable y la abre una vez por petición",
-           "return !clave().isEmpty()" in nube and "String claveApi = clave()" in nube
+           "return p != null && !clave(p).isEmpty()" in nube
+           and "String claveApi = clave(p)" in nube
+           and "if (claveApi.isEmpty()) return null" in nube
            and 'conexion.setRequestProperty("x-api-key", claveApi)' in nube
            and 'conexion.setRequestProperty("Authorization", "Bearer " + claveApi)' in nube)
     prueba("SEC-07: Nube cifra y no escribe la clave plana",
@@ -178,8 +183,11 @@ process.stdout.write('ok');
     prueba("SEC-08: existe borrado de sobre, alias y legado",
            "borrarClave()" in nube and "deleteEntry" in nube and ".remove(CLAVE_PLANA)" in nube)
     prueba("SEC-08: persiste el borrado antes de eliminar el alias",
-           0 <= nube.find("if (!editor.commit())", nube.find("public void borrarClave"))
-           < nube.find("almacen.deleteEntry", nube.find("public void borrarClave")))
+           0 <= nube.find(".putString(CLAVE_PERFILES, j.toString()).commit()",
+                         nube.find("public void borrarClave"))
+           and 0 <= nube.find("if (!prefs.edit().putString(CLAVE_PERFILES, j.toString())",
+                              nube.find("public boolean borrarPerfil"))
+           < nube.find("if (!quedaClave) borrarAlias()", nube.find("public boolean borrarPerfil")))
     prueba("la pantalla no muestra la longitud del secreto",
            "nube.clave().length()" not in cara and "hayClave()" in cara)
     prueba("SEC-10: el modo local bloquea la nube en Cara y Nexo",
@@ -195,6 +203,54 @@ process.stdout.write('ok');
                for fuente in (cara, nexo)))
     prueba("el build ejecuta SecretoTest antes de dex",
            "SecretoTest.java" in build and build.find("SecretoTest.java") < build.find('"$BT/d8"'))
+
+    puente_js = lee(ANDROID / "web" / "cort-android.js")
+    planes = lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "Planes.java")
+    integridad = lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "IntegridadGguf.java")
+    cerebro = lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "CerebroLocal.java")
+    apk = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
+    motor = lee(RAIZ / ".github" / "workflows" / "motor-local.yml")
+    prueba("el puente WebView exige token y lo revoca al cerrar",
+           "autorizado(String token)" in nexo and "tokenPuente.equals(token)" in nexo
+           and 'tokenPuente = ""' in nexo and "window.__cortPuenteToken" in nexo
+           and "NATIVA.recibir(token," in puente_js)
+    prueba("los permisos WebView sólo se conceden al origen de CORT",
+           'if (!ORIGEN.equals(pedido.getOrigin().toString()))' in nexo and "pedido.deny()" in nexo)
+    prueba("la nube usa endpoints oficiales y no sigue redirecciones",
+           "ProveedorNube.baseOficial" in nube and "setInstanceFollowRedirects(false)" in nube
+           and "base.readOnly = true" in lee(WEB / "cort" / "cort-ui.js"))
+    prueba("un plan cuya actividad terminó no ejecuta su acción tardía",
+           "if (!valido.get() || actividad.isFinishing() || actividad.isDestroyed())" in planes
+           and "planes.ejecutarPaso(paso)" in nexo)
+    prueba("toda carga GGUF pasa por tamaño y SHA-256 antes de abrir el descriptor",
+           "IntegridadGguf.verificar" in cerebro and "cargarSeguro(Ficha ficha" in cerebro
+           and "private int cargar(File gguf" in cerebro
+           and "nativeAbrirDescriptor" in cerebro and "/proc/self/fd/" in lee(RAIZ / "apps" / "android" / "jni" / "cort_motor.cpp")
+           and 'MessageDigest.getInstance("SHA-256")' in integridad
+           and "IntegridadGgufTest.java" in build)
+    prueba("el estado nativo es único y se revalida antes de reutilizarlo",
+           "private static volatile File activo" in cerebro
+           and "ultimoMotivo = verificar(preferida)" in cerebro
+           and "synchronized (CERRADURA)" in cerebro)
+    prueba("cerrar el motor desde la interfaz no libera cientos de MB en el hilo principal",
+           "Looper.myLooper() == Looper.getMainLooper()" in cerebro
+           and 'new Thread(this::cerrar, "cort-cierra-cerebro")' in cerebro)
+    prueba("un GGUF dañado se puede volver a bajar y no se ofrece al agente",
+           "public boolean esta(CerebroLocal.Ficha ficha)" in lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "Bajada.java")
+           and "cerebroLocal.verificar(f).isEmpty()" in nexo
+           and "cerebro.verificar(d).isEmpty()" in lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "Cerebros.java"))
+    prueba("planes y rutinas distinguen una acción fallida de una respuesta completada",
+           "Resultado ejecutarTipado" in lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "Acciones.java")
+           and "!salida.ok" in planes
+           and "ejecutor.ejecutarConEstado" in lee(ANDROID / "src" / "dev" / "sandra" / "cort" / "movil" / "Rutinas.java"))
+    prueba("CI ata motor, commit, hashes y certificado anterior",
+           "uses: ./.github/workflows/motor-local.yml" in apk
+           and "actions/download-artifact@v4" in apk
+           and 'grep -Fx "commit CORT: $COMITE"' in apk
+           and "sha256sum -c motor-sha256.txt" in apk
+           and "commit CORT: $(git rev-parse HEAD)" in motor
+           and "CORT_EXIGIR_MOTOR" in apk and "CORT_EXIGIR_FIRMA" in apk
+           and "faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977" in apk)
 
     print("\n== Interfaz: sólo capacidades reales ==")
     api = html[html.find('id="api-keys-modal"'):html.find('id="nemotron-modal"')]

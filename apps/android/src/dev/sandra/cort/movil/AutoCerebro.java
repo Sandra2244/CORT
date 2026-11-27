@@ -108,14 +108,15 @@ public final class AutoCerebro {
         CerebroLocal cerebro = new CerebroLocal(contexto);
         List<CerebroLocal.Ficha> catalogo = CerebroLocal.catalogo(contexto);
         for (CerebroLocal.Ficha f : catalogo) {
-            if (CerebroLocal.archivoDe(contexto, f.archivo).isFile()) {
-                continue;                  // ya está: no se paga dos veces
+            if (CerebroLocal.archivoDe(contexto, f.archivo).isFile()
+                    && cerebro.verificar(f).isEmpty()) {
+                continue;                  // ya está verificado: no se paga dos veces
             }
-            if (!cerebro.cabe(f.bytes)) {
-                continue;                  // la puerta de RAM, la misma que usa el Almacén
+            if (!cerebro.puedeCargar(f.bytes, true).permitida) {
+                continue;                  // RAM holgada, batería y temperatura de ahora
             }
-            if (f.bytes + 64L * 1024 * 1024 > huecoLibre(contexto)) {
-                continue;                  // el disco tampoco deja
+            if (!cerebro.puedeDescargar(f.bytes, true).permitida) {
+                continue;                  // disco, cargador, pila y temperatura de ahora
             }
             return f;
         }
@@ -154,11 +155,14 @@ public final class AutoCerebro {
         }
         CerebroLocal.Ficha f = elige(contexto);
         if (f == null) {
-            anota(contexto, "ningún cerebro cabe holgado ahora: la puerta pide el archivo "
-                    + "más la reserva de contexto en RAM libre y hay "
-                    + new CerebroLocal(contexto).memoriaLibre()
-                    / 1024 / 1024 + " MB, y en disco "
-                    + huecoLibre(contexto) / 1024 / 1024 + " MB");
+            PoliticaRecursos.Estado recursos = new CerebroLocal(contexto).recursos();
+            anota(contexto, "ningún cerebro pasa ahora RAM, disco y batería: RAM "
+                    + recursos.ramLibre / 1024 / 1024 + " MB, disco "
+                    + recursos.discoLibre / 1024 / 1024 + " MB, pila "
+                    + recursos.bateria + " %, cargando " + recursos.cargando
+                    + ", batería " + recursos.temperaturaBateria + " °C. "
+                    + "Automática prueba el modelo más pequeño que pase el suelo de mmap; "
+                    + "la descarga exige 64 MiB de disco, cargador, 30 % de pila y como máximo 40 °C");
             return false;
         }
         anota(contexto, "bajando " + f.nombre + " (" + Bajada.mb(f.bytes) + " MB) por "

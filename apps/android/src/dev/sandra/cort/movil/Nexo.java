@@ -12,6 +12,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.hardware.camera2.CameraManager;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.os.BatteryManager;
 import android.os.Build;
@@ -41,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.json.JSONArray;
@@ -115,6 +119,8 @@ public class Nexo {
     static final String CLAVE_CIUDAD = "ciudad";
     static final String CLAVE_RECORDATORIOS = "recordatorios";
     static final String CLAVE_HABLA = "habla";
+    static final int PERMISO_MICROFONO = 42;
+    static final int PERMISO_PASOS = 45;
 
     private final Activity actividad;
     private final Runnable seCayo;
@@ -123,10 +129,16 @@ public class Nexo {
     private final Recuerdos recuerdos;
     private final Cerebro cerebro;
     private final Acciones acciones;
+    private final Planes planes;
+    private final Rutinas rutinas;
+    private final Aprobaciones aprobaciones;
     private final Voz voz;
+    private final Medios medios;
+    private final Medios.AlEstado oyenteMedios = estado -> envia(estado);
     private final Nube nube;
     /** El GGUF del teléfono (U1): contesta antes que la nube cuando cabe. */
     private final CerebroLocal cerebroLocal;
+    private final Sensores sensores;
 
     private volatile boolean corriendo;
     private Thread estadistas;
@@ -140,8 +152,16 @@ public class Nexo {
     private boolean escuchaContinua;
     /** Si el micrófono está abierto AHORA, medido por quien lo abrió y lo cerró. */
     private volatile boolean escuchando;
+    private volatile String tokenPuente = "";
     private boolean chatPendiente;
     private boolean pantallaCompleta;
+    private boolean sensoresDeseados;
+    private boolean pasosDeseados;
+    private boolean permisoPasosPendiente;
+    private boolean permisoMicroPendiente;
+    private boolean despertadorPendiente;
+    private final EscuchaEstadoGlobal.Oyente oyenteEscucha = (estado, motivo) -> envia(micEstado());
+    private final ServicioEscucha.AlDetener oyenteDetener = this::detenerTodo;
 
     public Nexo(Activity actividad, Runnable seCayo) {
         this.actividad = actividad;
@@ -150,9 +170,32 @@ public class Nexo {
         this.recuerdos = new Recuerdos(actividad);
         this.cerebro = new Cerebro(actividad, recuerdos);
         this.acciones = new Acciones(actividad, recuerdos);
+        this.aprobaciones = new Aprobaciones(UUID.randomUUID().toString());
+        this.planes = new Planes(actividad, acciones, aprobaciones);
+        this.rutinas = new Rutinas(recuerdos);
         this.voz = new Voz(actividad);
+        this.medios = Medios.compartido(actividad);
+        this.medios.vincular(voz, oyenteMedios);
+        this.voz.alHablar(hablando -> {
+            envia(cuadro("type", "voz_habla", "origen", "real", "hablando", hablando));
+            if (!hablando && EscuchaEstadoGlobal.estado() == EscuchaEstado.PROCESANDO) {
+                terminaConversacion();
+            }
+        });
         this.nube = new Nube(actividad);
         this.cerebroLocal = new CerebroLocal(actividad.getApplicationContext());
+        this.sensores = new Sensores(actividad);
+        this.sensores.alEntregar(new Sensores.Entrega() {
+            @Override
+            public void estado(JSONObject estado) {
+                envia(estado);
+            }
+
+            @Override
+            public void pasos(JSONObject pasos) {
+                envia(pasos);
+            }
+        });
         // Los datos del aparato, la primera vez, sin que nadie los teclee: la misma
         // siembra de `Cara.sembrar()`, para que el teléfono que abre esta cara sepa
         // ya quién es su dueña y en qué aparato está.
@@ -164,6 +207,8 @@ public class Nexo {
     /* ------------------------------------------------------------------ montar */
 
     public void montar(LinearLayout capa) {
+        EscuchaEstadoGlobal.observar(oyenteEscucha);
+        ServicioEscucha.registraDetener(oyenteDetener);
         web = new WebView(actividad);
         // Oscuro desde el primer fotograma, como la ventana del portátil.
         web.setBackgroundColor(Paleta.FONDO);
@@ -181,14 +226,17 @@ public class Nexo {
         // `setAllowFileAccess` se queda en su defecto: **no** se abre el disco. Lo
         // que lee esta cara es `getAssets()`, por mano propia y con la lista
         // cerrada de `rutaDe`, que es más estrecho que el permiso de archivo.
-        web.addJavascriptInterface(this, "CortNative");
+        web.addJavascriptInterface(new PuenteNativo(), "CortNativeNativo");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView vista,
                                                               WebResourceRequest peticion) {
                 String url = peticion.getUrl().toString();
                 if (!esDeLaCara(url)) {
-                    return null;   // no es nuestro origen: que lo resuelva Android
+                    if (url.startsWith("https://") || url.startsWith("http://")) {
+                        return null;
+                    }
+                    return noExiste();
                 }
                 String ruta = rutaDe(url);
                 if (ruta == null) {
@@ -222,10 +270,11 @@ public class Nexo {
         web.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onPermissionRequest(android.webkit.PermissionRequest pedido) {
-                // Lo pide la página; en origen `http` Chromium no concede
-                // `getUserMedia`, así que en la práctica este camino queda cerrado y
-                // el oído del teléfono es el de Java. Se deja el gesto por si el
-                // WebView de algún fabricante sí lo ofrece.
+                // Una página remota incrustada no puede pedir cámara o micrófono.
+                if (!ORIGEN.equals(pedido.getOrigin().toString())) {
+                    pedido.deny();
+                    return;
+                }
                 pedido.grant(pedido.getResources());
             }
         });
@@ -233,7 +282,10 @@ public class Nexo {
     }
 
     public void cerrar() {
+        EscuchaEstadoGlobal.desobservar(oyenteEscucha);
+        ServicioEscucha.desregistraDetener(oyenteDetener);
         corriendo = false;
+        tokenPuente = "";
         if (estadistas != null) {
             estadistas.interrupt();
             estadistas = null;
@@ -241,9 +293,162 @@ public class Nexo {
         if (bajada != null) {
             bajada.corta();
         }
+        medios.desvincular(voz, oyenteMedios);
         voz.dejarDeEscuchar();
         voz.cerrar();
+        sensores.cerrar();
+        aprobaciones.cerrar();
+        rutinas.cancelarTodas();
+        if (EscuchaEstadoGlobal.estado() == EscuchaEstado.PROCESANDO
+                || EscuchaEstadoGlobal.estado() == EscuchaEstado.ESCUCHANDO_MANDATO) {
+            terminaConversacion();
+        }
         web = null;
+    }
+
+    public void configurarSensores(boolean activar) {
+        sensoresDeseados = activar;
+        if (!activar) {
+            pasosDeseados = false;
+            permisoPasosPendiente = false;
+            sensores.apagar();
+            return;
+        }
+        iniciarSensores();
+    }
+
+    public void configurarPasos(boolean activar) {
+        if (!activar) {
+            pasosDeseados = false;
+            permisoPasosPendiente = false;
+            if (sensoresDeseados) {
+                sensores.empezar(false);
+            } else {
+                sensores.apagar();
+            }
+            envia(estadoPermisoPasos());
+            return;
+        }
+        sensoresDeseados = true;
+        if (!tienePermisoActividad()) {
+            permisoPasosPendiente = true;
+            actividad.requestPermissions(new String[]{android.Manifest.permission.ACTIVITY_RECOGNITION},
+                    PERMISO_PASOS);
+            envia(estadoPermisoPasos());
+            return;
+        }
+        pasosDeseados = true;
+        sensores.empezar(true);
+        envia(estadoPermisoPasos());
+    }
+
+    public void reanudarSensores() {
+        if (!sensoresDeseados || permisoPasosPendiente) {
+            return;
+        }
+        if (pasosDeseados && !tienePermisoActividad()) {
+            pasosDeseados = false;
+            envia(estadoPermisoPasos());
+        }
+        iniciarSensores();
+    }
+
+    public void pausarSensores() {
+        sensores.apagar();
+    }
+
+    public void permisoPasosResult(boolean concedido) {
+        permisoPasosPendiente = false;
+        pasosDeseados = concedido && sensoresDeseados;
+        if (sensoresDeseados) {
+            sensores.empezar(pasosDeseados);
+        }
+        envia(estadoPermisoPasos());
+    }
+
+    public void permisoMicroResult(boolean concedido) {
+        if (!concedido) {
+            permisoMicroPendiente = false;
+            despertadorPendiente = false;
+            prefs.edit().putBoolean(ServicioEscucha.CLAVE, false).apply();
+            EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR, "permiso de micrófono denegado");
+            envia(cuadro("type", "mic_error", "origen", "real",
+                    "motivo", "falta el permiso de micrófono"));
+            envia(micEstado());
+            return;
+        }
+        if (despertadorPendiente) {
+            despertadorPendiente = false;
+            escuchaContinua = true;
+            try {
+                ServicioEscucha.cambia(actividad, true);
+            } catch (RuntimeException noDeja) {
+                escuchaContinua = false;
+                prefs.edit().putBoolean(ServicioEscucha.CLAVE, false).apply();
+                EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR,
+                        "Android no permitió abrir el micrófono en segundo plano");
+                envia(cuadro("type", "mic_error", "origen", "real",
+                        "motivo", "Android no permitió abrir el micrófono en segundo plano"));
+            }
+            envia(micEstado());
+            return;
+        }
+        if (permisoMicroPendiente) {
+            permisoMicroPendiente = false;
+            escuchar();
+        }
+    }
+
+    private void terminaConversacion() {
+        if (ServicioEscucha.montada()) {
+            EscuchaEstadoGlobal.pon(EscuchaEstado.ESCUCHANDO_PALABRA,
+                    "vigilando «hola CORT» u «oye CORT»");
+        } else {
+            EscuchaEstadoGlobal.pon(EscuchaEstado.APAGADO, "");
+        }
+    }
+
+    private void iniciarSensores() {
+        if (!sensores.empezar(pasosDeseados)) {
+            envia(cuadro("type", "sensores_error", "origen", "real",
+                    "motivo", "este dispositivo no expone un gestor de sensores"));
+        }
+    }
+
+    private void abrirAjustesApp() {
+        try {
+            actividad.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + actividad.getPackageName())));
+        } catch (RuntimeException noHayAjustes) {
+            envia(cuadro("type", "cort_accion", "origen", "real", "ok", false,
+                    "detalle", "este teléfono no abrió los ajustes de CORT"));
+        }
+    }
+
+    private void abrirMusica() {
+        Intent intento = new Intent(Intent.ACTION_MAIN);
+        intento.addCategory(Intent.CATEGORY_APP_MUSIC);
+        try {
+            actividad.startActivity(Intent.createChooser(intento, "Abrir música con"));
+        } catch (RuntimeException sinReproductor) {
+            envia(cuadro("type", "medios_aviso", "origen", "real", "ok", false,
+                    "motivo", "este teléfono no tiene una app de música compatible"));
+        }
+    }
+
+    private boolean tienePermisoActividad() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                || actividad.checkSelfPermission(android.Manifest.permission.ACTIVITY_RECOGNITION)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private JSONObject estadoPermisoPasos() {
+        return cuadro("type", "sensores_permiso", "origen", "real",
+                "permiso", "ACTIVITY_RECOGNITION",
+                "requerido", Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q,
+                "concedido", tienePermisoActividad(),
+                "pendiente", permisoPasosPendiente,
+                "activo", pasosDeseados);
     }
 
     /**
@@ -255,6 +460,7 @@ public class Nexo {
     private void arranque() {
         envia(cuadro("type", "connected", "origen", "real",
                 "puente", "cort-puente-android v" + versionApp()));
+        envia(capacidadesInicio());
         if (!corriendo) {
             corriendo = true;
             estadistas = new Thread(this::bombea, "cort-stats");
@@ -262,6 +468,8 @@ public class Nexo {
         }
         envia(estadoCerebro());
         envia(vozEstado());
+        envia(micEstado());
+        envia(medios.estado());
         envia(perfilReply());
         envia(iniciativa());
     }
@@ -335,6 +543,8 @@ public class Nexo {
         pone(j, "micro", true);
         pone(j, "memoria", true);
         pone(j, "vida", true);
+        pone(j, "avisos", true);
+        pone(j, "compartir", true);
         pone(j, "compras", true);
         pone(j, "pc_estado", true);
         pone(j, "apps", true);
@@ -349,6 +559,84 @@ public class Nexo {
         pone(j, "actualizacion", false);
         pone(j, "vision", false);
         return j.toString();
+    }
+
+    @JavascriptInterface
+    public String registroCapacidades() {
+        return Capacidades.todas().toString();
+    }
+
+    /** El token por carga impide que un iframe remoto use el objeto inyectado. */
+    private final class PuenteNativo {
+        private boolean autorizado(String token) {
+            return !tokenPuente.isEmpty() && tokenPuente.equals(token)
+                    && !actividad.isFinishing() && !actividad.isDestroyed();
+        }
+
+        @JavascriptInterface
+        public void recibir(String token, String cuadro) {
+            if (autorizado(token)) Nexo.this.recibir(cuadro);
+        }
+
+        @JavascriptInterface
+        public String capacidades(String token) {
+            return autorizado(token) ? Nexo.this.capacidades() : "{}";
+        }
+
+        @JavascriptInterface
+        public String registroCapacidades(String token) {
+            return autorizado(token) ? Nexo.this.registroCapacidades() : "[]";
+        }
+
+        @JavascriptInterface
+        public void escuchar(String token) {
+            if (autorizado(token)) Nexo.this.escuchar();
+        }
+
+        @JavascriptInterface
+        public void callar(String token) {
+            if (autorizado(token)) Nexo.this.callar();
+        }
+
+        @JavascriptInterface
+        public void hablar(String token, String texto) {
+            if (autorizado(token)) Nexo.this.hablar(texto);
+        }
+
+        @JavascriptInterface
+        public void mostrarChat(String token) {
+            if (autorizado(token)) Nexo.this.mostrarChat();
+        }
+
+        @JavascriptInterface
+        public int segundosDictado(String token) {
+            return autorizado(token) ? Nexo.this.segundosDictado() : 0;
+        }
+
+        @JavascriptInterface
+        public int segundosFrase(String token) {
+            return autorizado(token) ? Nexo.this.segundosFrase() : 0;
+        }
+
+        @JavascriptInterface
+        public void fijarSegundosDictado(String token, int segundos) {
+            if (autorizado(token)) Nexo.this.fijarSegundosDictado(segundos);
+        }
+
+        @JavascriptInterface
+        public void fijarSegundosFrase(String token, int segundos) {
+            if (autorizado(token)) Nexo.this.fijarSegundosFrase(segundos);
+        }
+
+        @JavascriptInterface
+        public void fijarVista(String token, String modo) {
+            if (autorizado(token)) Nexo.this.fijarVista(modo);
+        }
+    }
+
+    private JSONObject capacidadesInicio() {
+        return cuadro("type", "capacidades", "origen", "real", "plataforma", "android",
+                "capacidades", Capacidades.todas());
     }
 
     /** El encaminador. Una rama por orden; lo que no la tiene se contesta en honesto. */
@@ -372,6 +660,47 @@ public class Nexo {
             envia(estadoCerebro());
             return;
         }
+        if ("cerebro_hibrido_modo".equals(t)) {
+            cerebroLocal.ponerModo(d.optString("modo", "auto"));
+            envia(estadoCerebro());
+            return;
+        }
+        if ("cerebro_hibrido_usar".equals(t)) {
+            usarModeloHibrido(d.optString("model", ""));
+            return;
+        }
+        if ("personalidad".equals(t)) {
+            boolean ok = Consticion.ponerPersonalidad(actividad, d.optString("id", ""));
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", ok,
+                    "motivo", ok ? "personalidad cambiada" : "esa personalidad no existe"));
+            envia(estadoCerebro());
+            return;
+        }
+        if ("nube_perfil_guardar".equals(t)) {
+            String id = d.optString("id", "").trim();
+            if (id.isEmpty()) id = "perfil-" + UUID.randomUUID().toString().substring(0, 8);
+            boolean ok = nube.guardarPerfil(id, d.optString("nombre", ""),
+                    d.optString("proveedor", ""), d.optString("base", ""),
+                    d.optString("modelo", ""), d.optString("clave", ""));
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", ok,
+                    "motivo", ok ? "proveedor guardado cifrado" : nube.ultimoFallo()));
+            envia(estadoCerebro());
+            return;
+        }
+        if ("nube_perfil_usar".equals(t)) {
+            boolean ok = nube.usarPerfil(d.optString("id", ""));
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", ok,
+                    "motivo", ok ? "proveedor activo" : nube.ultimoFallo()));
+            envia(estadoCerebro());
+            return;
+        }
+        if ("nube_perfil_borrar".equals(t)) {
+            boolean ok = nube.borrarPerfil(d.optString("id", ""));
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", ok,
+                    "motivo", ok ? "proveedor borrado" : "no se pudo borrar el proveedor"));
+            envia(estadoCerebro());
+            return;
+        }
         if ("pull_ollama_model".equals(t)) {
             bajar(d.optString("model", ""));
             return;
@@ -390,6 +719,53 @@ public class Nexo {
         }
         if ("perfil_equipo".equals(t)) {
             envia(perfilReply());
+            return;
+        }
+        // ---------------- medios y salida de audio ----------------
+        if ("medios_estado".equals(t)) {
+            envia(medios.estado());
+            return;
+        }
+        if ("medios_accion".equals(t)) {
+            medios.accion(d.optString("accion", ""));
+            return;
+        }
+        if ("abrir_musica".equals(t)) {
+            abrirMusica();
+            return;
+        }
+        // ---------------- asistente del sistema ----------------
+        if ("asistente_estado".equals(t)) {
+            envia(Asistente.estado(actividad));
+            return;
+        }
+        if ("asistente_ajustes".equals(t)) {
+            Asistente.abrirAjustes(actividad);
+            return;
+        }
+        if ("asistente_probar".equals(t)) {
+            Asistente.probar(actividad);
+            return;
+        }
+        if ("superposicion_ajustes".equals(t)) {
+            Asistente.abrirSuperposicion(actividad);
+            return;
+        }
+        // ---------------- sensores y aparato ----------------
+        if ("sensores_estado".equals(t)) {
+            configurarSensores(d.optBoolean("activa", true));
+            return;
+        }
+        if ("sensores_pasos".equals(t)) {
+            configurarPasos(d.optBoolean("activa", true));
+            return;
+        }
+        if ("sensores_permiso".equals(t)) {
+            envia(estadoPermisoPasos());
+            return;
+        }
+        if ("abrir_ajustes_app".equals(t)) {
+            abrirAjustesApp();
             return;
         }
         // ---------------- clima, temperatura, aparato ----------------
@@ -447,6 +823,239 @@ public class Nexo {
             envia(memoriaEstado());
             return;
         }
+        if ("memoria_listar".equals(t)) {
+            try {
+                envia(recuerdos.listarHechos(200));
+            } catch (JSONException roto) {
+                envia(errorNativo("memoria_lista", "no pude leer la memoria local"));
+            }
+            return;
+        }
+        if ("memoria_preparar".equals(t)) {
+            prepararMemoria(d);
+            return;
+        }
+        if ("memoria_cancelar".equals(t)) {
+            boolean revocada = aprobaciones.revocar(d.optString("token", ""));
+            envia(cuadro("type", "memoria_cancelacion", "origen", "real", "ok", revocada,
+                    "motivo", revocada ? "confirmación de memoria revocada"
+                            : "la confirmación ya no estaba activa"));
+            return;
+        }
+        if ("memoria_guardar".equals(t) || "memoria_editar".equals(t)
+                || "memoria_borrar".equals(t)) {
+            ejecutarMemoria(d, t);
+            return;
+        }
+        if ("memoria_historial".equals(t)) {
+            try {
+                envia(recuerdos.historialHecho(d.optString("id", "")));
+            } catch (JSONException roto) {
+                envia(errorNativo("memoria_historial", "no pude leer el historial"));
+            }
+            return;
+        }
+        if ("memoria_exportar".equals(t)) {
+            try {
+                envia(recuerdos.exportacionLocal());
+            } catch (JSONException roto) {
+                envia(errorNativo("memoria_exportacion", "no pude exportar la memoria"));
+            }
+            return;
+        }
+        if ("alarmas_estado".equals(t)) {
+            try {
+                envia(recuerdos.alarmasEntregadas(100));
+            } catch (JSONException roto) {
+                envia(errorNativo("alarmas_estado", "no pude leer el catálogo local"));
+            }
+            return;
+        }
+        if ("alarma_solicitar".equals(t)) {
+            String texto = d.optString("texto", "").trim();
+            EspecificacionAlarma especificacion = EspecificacionAlarma.parsear(texto);
+            if (!especificacion.valida) {
+                envia(errorNativo("alarmas_aviso", especificacion.motivo));
+                return;
+            }
+            String accion = EspecificacionAlarma.TEMPORIZADOR.equals(especificacion.tipo)
+                    ? "cronometro" : "alarma";
+            String salida = acciones.ejecutar(new Cerebro.Resultado("panel_vida", accion,
+                    "", "", texto));
+            envia(cuadro("type", "alarmas_aviso", "origen", "real", "ok", salida != null,
+                    "motivo", salida == null ? "no pude preparar la solicitud del reloj" : salida));
+            return;
+        }
+        if ("alarma_cancelar".equals(t)) {
+            String motivo = recuerdos.cancelarAlarmaLocal(d.optLong("id", -1L));
+            envia(cuadro("type", "alarmas_aviso", "origen", "real", "ok", motivo == null,
+                    "motivo", motivo == null ? "entrega local cancelada" : motivo));
+            return;
+        }
+        if ("abrir_reloj".equals(t)) {
+            String salida = acciones.ejecutar(new Cerebro.Resultado("panel_vida", "abrir",
+                    "reloj", "", ""));
+            envia(cuadro("type", "alarmas_aviso", "origen", "real", "ok", salida != null,
+                    "motivo", salida == null ? "no pude abrir la aplicación Reloj" : salida));
+            return;
+        }
+        if ("rutinas_estado".equals(t)) {
+            try {
+                envia(rutinas.listar());
+            } catch (JSONException roto) {
+                envia(errorNativo("rutinas_estado", "no pude leer las rutinas"));
+            }
+            return;
+        }
+        if ("rutina_crear".equals(t)) {
+            try {
+                envia(rutinas.crear(d.optString("nombre", ""), d.optJSONArray("pasos")));
+            } catch (JSONException roto) {
+                envia(errorNativo("rutina_creada", "no pude guardar la rutina"));
+            }
+            return;
+        }
+        if ("rutina_plan".equals(t)) {
+            try {
+                envia(rutinas.plan(d.optString("id", "")));
+            } catch (JSONException roto) {
+                envia(errorNativo("rutina_plan", "no pude preparar la rutina"));
+            }
+            return;
+        }
+        if ("rutina_cancelar_plan".equals(t)) {
+            boolean cancelada = rutinas.cancelarPlan(d.optString("id", ""),
+                    d.optString("token", ""));
+            envia(cuadro("type", "rutina_cancelacion", "origen", "real", "ok", cancelada,
+                    "motivo", cancelada ? "plan de rutina revocado; no se ejecutó"
+                            : "el plan ya no estaba activo"));
+            return;
+        }
+        if ("rutina_ejecutar".equals(t)) {
+            String id = d.optString("id", "");
+            String token = d.optString("token", "");
+            new Thread(() -> {
+                try {
+                    envia(rutinas.ejecutar(id, token, new Rutinas.Ejecutor() {
+                        @Override
+                        public String ejecutar(Cerebro.Resultado paso) {
+                            return ejecutaEnLaInterfaz(paso);
+                        }
+
+                        @Override
+                        public Acciones.Resultado ejecutarConEstado(Cerebro.Resultado paso) {
+                            return planes.ejecutarPasoTipado(paso);
+                        }
+
+                        @Override
+                        public void iniciada(String ejecucionId, String rutinaId) {
+                            envia(cuadro("type", "rutina_inicio", "origen", "real", "ok", true,
+                                    "ejecucion_id", ejecucionId, "rutina_id", rutinaId));
+                        }
+                    }));
+                } catch (JSONException | RuntimeException roto) {
+                    envia(errorNativo("rutina_resultado", "no pude ejecutar la rutina"));
+                }
+            }, "cort-rutina").start();
+            return;
+        }
+        if ("rutina_cancelar".equals(t)) {
+            boolean cancelada = rutinas.cancelar(d.optString("ejecucion_id", ""));
+            envia(cuadro("type", "rutina_cancelacion", "origen", "real", "ok", cancelada,
+                    "motivo", cancelada ? "cancelación solicitada" : "no hay una ejecución activa"));
+            return;
+        }
+        if ("rutinas_historial".equals(t)) {
+            try {
+                envia(rutinas.historial());
+            } catch (JSONException roto) {
+                envia(errorNativo("rutinas_historial", "no pude leer el historial"));
+            }
+            return;
+        }
+        if ("avisos_estado".equals(t)) {
+            new Thread(() -> {
+                try {
+                    envia(Avisos.estado(actividad));
+                } catch (RuntimeException roto) {
+                    envia(errorNativo("avisos_estado", "no pude consultar el estado de los avisos"));
+                }
+            }, "cort-avisos").start();
+            return;
+        }
+        if ("avisos_ajustes".equals(t)) {
+            Avisos.abrirAjustes(actividad);
+            return;
+        }
+        if ("avisos_apps".equals(t)) {
+            new Thread(() -> {
+                try {
+                    envia(Avisos.appsVisibles(actividad));
+                } catch (JSONException | RuntimeException roto) {
+                    envia(errorNativo("avisos_apps", "no pude listar las aplicaciones visibles"));
+                }
+            }, "cort-avisos-apps").start();
+            return;
+        }
+        if ("avisos_allowlist".equals(t)) {
+            JSONArray paquetes = d.optJSONArray("paquetes");
+            if (paquetes == null) {
+                envia(errorNativo("avisos_allowlist", "falta la lista de aplicaciones permitidas"));
+                return;
+            }
+            new Thread(() -> {
+                try {
+                    envia(Avisos.guardarAllowlist(actividad, paquetes));
+                } catch (JSONException | RuntimeException roto) {
+                    envia(errorNativo("avisos_allowlist", "no pude guardar las aplicaciones permitidas"));
+                }
+            }, "cort-avisos-allowlist").start();
+            return;
+        }
+        if ("avisos_leer".equals(t)) {
+            new Thread(() -> {
+                try {
+                    envia(Avisos.leer(actividad));
+                } catch (JSONException | RuntimeException roto) {
+                    envia(errorNativo("avisos_leer", "no pude leer los avisos activos permitidos"));
+                }
+            }, "cort-avisos-leer").start();
+            return;
+        }
+        if ("compartir_preparar".equals(t)) {
+            String texto = d.optString("texto", "");
+            String problema = Compartir.problema(texto);
+            if (problema != null) {
+                envia(errorNativo("compartir_plan", problema));
+                return;
+            }
+            String token = aprobaciones.preparar("compartir", "enviar", "texto", "1", texto);
+            envia(cuadro("type", "compartir_plan", "origen", "real", "ok", token != null,
+                    "token", token == null ? "" : token, "expiracion", 120,
+                    "texto", texto, "limite", "Android sólo abrirá el selector; no se enviará nada automáticamente."));
+            return;
+        }
+        if ("compartir_cancelar".equals(t)) {
+            boolean revocada = aprobaciones.revocar(d.optString("token", ""));
+            envia(cuadro("type", "compartir_cancelacion", "origen", "real", "ok", revocada,
+                    "motivo", revocada ? "borrador de compartir revocado"
+                            : "la confirmación ya no estaba activa"));
+            return;
+        }
+        if ("compartir_confirmar".equals(t)) {
+            String texto = d.optString("texto", "");
+            String token = d.optString("token", "");
+            if (!aprobaciones.consumir("compartir", "enviar", "texto", "1", texto, token)) {
+                envia(errorNativo("compartir_resultado", "la confirmación caducó o no corresponde"));
+                return;
+            }
+            boolean abierto = Compartir.abrir(actividad, texto);
+            envia(cuadro("type", "compartir_resultado", "origen", "real", "ok", abierto,
+                    "abierto", abierto, "enviado", false,
+                    "motivo", abierto ? "se abrió el selector de Android; confirma allí el destino y el envío"
+                            : "Android no encontró una aplicación para abrir el selector"));
+            return;
+        }
         if ("get_settings".equals(t)) {
             // La página la contesta sola desde su `localStorage` y el mock hace de
             // espejo: si Java respondiera un `settings_data` con un objeto vacío,
@@ -472,7 +1081,7 @@ public class Nexo {
         }
         if ("voz_off".equals(t)) {
             prefs.edit().putBoolean(CLAVE_HABLA, false).apply();
-            voz.callar();
+            medios.detener();
             envia(cuadro("type", "voz_desactivada", "origen", "real",
                     "nota", "la voz del teléfono se apaga y se calla lo que estaba hablando"));
             envia(vozEstado());
@@ -489,12 +1098,23 @@ public class Nexo {
         if ("av_speak".equals(t)) {
             String texto = d.optString("text", d.optString("mensaje", ""));
             if (!texto.trim().isEmpty()) {
-                voz.hablar(texto);
+                medios.hablar(texto);
             }
             return;
         }
         if ("stop_audio".equals(t)) {
-            voz.callar();
+            medios.detener();
+            return;
+        }
+        if ("detener".equals(t)) {
+            escuchaContinua = false;
+            try {
+                ServicioEscucha.cambia(actividad, false);
+            } catch (RuntimeException noDeja) {
+                envia(cuadro("type", "mic_error", "origen", "real",
+                        "motivo", "no pude apagar el servicio de escucha: " + noDeja.getMessage()));
+            }
+            callar();
             return;
         }
         if ("mic_on".equals(t) || "toggle_mic".equals(t)) {
@@ -511,6 +1131,21 @@ public class Nexo {
             // batería y subiría audio que nadie pidió. El interruptor de la cara
             // manda sobre el mismo servicio que el menú de Android.
             boolean puesto = !ServicioEscucha.encendida(actividad);
+            if (puesto && actividad.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permisoMicroPendiente = false;
+                despertadorPendiente = true;
+                EscuchaEstadoGlobal.pon(EscuchaEstado.PIDIENDO_PERMISO,
+                        "falta conceder el micrófono para la palabra de activación");
+                actividad.requestPermissions(
+                        new String[] {android.Manifest.permission.RECORD_AUDIO},
+                        PERMISO_MICROFONO);
+                envia(micEstado());
+                return;
+            }
+            if (!puesto) {
+                despertadorPendiente = false;
+            }
             try {
                 ServicioEscucha.cambia(actividad, puesto);
                 escuchaContinua = puesto;
@@ -521,6 +1156,9 @@ public class Nexo {
                 // Android 14 no deja levantar un servicio con micrófono si la app no
                 // está en primer plano. Se dice el motivo en vez de fingir que quedó puesto.
                 escuchaContinua = false;
+                despertadorPendiente = false;
+                EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR,
+                        "el teléfono no dejó abrir el micrófono en segundo plano");
                 envia(cuadro("type", "mic_error", "origen", "real",
                         "motivo", "el teléfono no dejó abrir el micrófono en segundo plano: "
                                 + "abre CORT y enciéndelo desde su menú"));
@@ -756,6 +1394,7 @@ public class Nexo {
      * que no hubo que tocar una línea de JavaScript para ver la respuesta escribirse.
      */
     private void conversar(String dicho) {
+        EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "pensando la respuesta");
         envia(cuadro("state", "thinking"));
         String texto;
         String intencion;
@@ -777,71 +1416,30 @@ public class Nexo {
             modeloUsado = "tabla de CORT";
             origenCerebro = "tabla";
             for (Cerebro.Resultado paso : pasos) {
-                String salida = ejecutaEnLaInterfaz(paso);
-                if (salida == null) {
+                Acciones.Resultado salida = planes.ejecutarPasoTipado(paso);
+                if (salida == null || salida.texto == null) {
                     valido = false;
                     motivo = "la regla está reconocida pero falta el dato";
                     junta.append("¿Cómo? Necesito el dato: pruébalo con «").append(pideEjemplo(paso)).append("».");
                     break;
                 }
+                if (!salida.ok) valido = false;
                 if (junta.length() > 0) {
                     junta.append(" ");
                 }
-                junta.append(salida);
+                junta.append(salida.texto);
             }
             texto = junta.toString();
         } else {
-            intencion = "respuesta";
-            modeloUsado = "tabla de CORT";
-            origenCerebro = "tabla";
-            String memoria = recuerdos.lista(12);
-            String sistema = Consticion.sistema(actividad, memoria);
-            List<String[]> historial = recuerdos.turnos(Consticion.turnos(actividad));
-            final String id = "cort-" + System.currentTimeMillis();
-            final boolean[] abierto = {false};
-            String local = cerebroLocal.contestar(sistema, dicho, historial, pieza -> {
-                if (pieza == null || pieza.isEmpty()) {
-                    return;
-                }
-                if (!abierto[0]) {
-                    abierto[0] = true;
-                    envia(cuadro("state", "speaking"));
-                    envia(cuadro("type", "live_subtitles", "id", id, "phase", "start"));
-                }
-                envia(cuadro("type", "live_subtitles", "id", id, "phase", "delta",
-                        "text", pieza));
-            }, Consticion.maxTokens(actividad), Consticion.temperatura(actividad));
-            if (local != null) {
-                texto = local;
-                CerebroLocal.Ficha ficha = cerebroLocal.elegido();
-                modeloUsado = ficha == null ? "cerebro local" : ficha.nombre;
-                origenCerebro = "gguf del teléfono";
-                crudo = texto;
-                if (abierto[0]) {
-                    envia(cuadro("type", "live_subtitles", "id", id, "phase", "end"));
-                    yaSubtitulado = true;
-                }
-            } else if (!"local".equals(cerebroLocal.modo()) && nube.configurada()) {
-                String textoNube = pedirConsentimientoNube()
-                        ? nube.preguntar(sistema, dicho, historial) : null;
-                texto = textoNube;
-                if (texto != null) {
-                    modeloUsado = nube.modelo();
-                    origenCerebro = "nube";
-                    crudo = texto;
-                } else {
-                    texto = "No se envió a la nube o no contestó. Sigo sólo con el teléfono.";
-                    motivo = "sin consentimiento o fallo de la nube";
-                    origenCerebro = "sin respuesta";
-                }
-            } else {
-                texto = "Esa frase no la conozco"
-                        + (cerebroLocal.modo().equals("nube") ? " sin el portátil" : "")
-                        + " (" + (local == null ? cerebroLocal.porqueNoLocal() : "")
-                        + "). Sé hacer: " + String.join(", ", cerebro.acciones()) + ".";
-                motivo = cerebroLocal.porqueNoLocal();
-                origenCerebro = "sin respuesta";
-            }
+            RespuestaModelo respuesta = responderConModelo(dicho);
+            texto = respuesta.texto;
+            intencion = respuesta.intencion;
+            modeloUsado = respuesta.modelo;
+            origenCerebro = respuesta.origen;
+            crudo = respuesta.crudo;
+            motivo = respuesta.motivo;
+            valido = respuesta.valida;
+            argumentos = respuesta.argumentos;
         }
         envia(cuadro("type", "plan_resultado", "origen", "real",
                 "intencion", intencion, "valido", valido, "decir", texto,
@@ -855,6 +1453,73 @@ public class Nexo {
         dice(texto, yaSubtitulado);
     }
 
+    private static final class RespuestaModelo {
+        final String texto;
+        final String intencion;
+        final String modelo;
+        final String origen;
+        final String crudo;
+        final String motivo;
+        final boolean valida;
+        final JSONObject argumentos;
+
+        RespuestaModelo(String texto, String intencion, String modelo, String origen,
+                        String crudo, String motivo, boolean valida, JSONObject argumentos) {
+            this.texto = texto;
+            this.intencion = intencion;
+            this.modelo = modelo;
+            this.origen = origen;
+            this.crudo = crudo;
+            this.motivo = motivo;
+            this.valida = valida;
+            this.argumentos = argumentos;
+        }
+    }
+
+    private RespuestaModelo responderConModelo(String dicho) {
+        String memoria = recuerdos.lista(12);
+        String sistema = PlanNeural.sistema(Consticion.sistema(actividad, memoria));
+        List<String[]> historial = recuerdos.turnos(Consticion.turnos(actividad));
+        String salida = cerebroLocal.contestar(sistema, dicho, historial, null,
+                PlanNeural.MAX_TOKENS, 0.2f);
+        String modelo = "cerebro local";
+        String origen = "gguf del teléfono";
+        if (salida != null) {
+            File activo = cerebroLocal.modeloActivo();
+            CerebroLocal.Ficha usada = activo == null ? null : buscaFicha(activo.getName());
+            modelo = usada == null ? (activo == null ? "cerebro local" : activo.getName()) : usada.nombre;
+        } else if (!"local".equals(cerebroLocal.modo()) && nube.configurada()) {
+            salida = pedirConsentimientoNube() ? nube.preguntar(sistema, dicho, historial) : null;
+            modelo = nube.modelo();
+            origen = "nube";
+        }
+        if (salida == null) {
+            String motivo = origen.equals("nube") ? "sin consentimiento o fallo de la nube"
+                    : cerebroLocal.porqueNoLocal();
+            String texto = origen.equals("nube")
+                    ? "No se envió a la nube o no contestó. Sigo sólo con el teléfono."
+                    : "Esa frase no la conozco y no tengo un cerebro disponible (" + motivo
+                            + "). Sé hacer: " + String.join(", ", cerebro.acciones()) + ".";
+            return new RespuestaModelo(texto, "respuesta", "ninguno", "sin respuesta", "",
+                    motivo, false, new JSONObject());
+        }
+        PlanNeural.Interpretacion interpretacion = PlanNeural.interpretar(salida);
+        if (!interpretacion.valida) {
+            return new RespuestaModelo("El cerebro propuso algo que no pasó la validación; no ejecuté nada.",
+                    "respuesta", modelo, origen, salida, interpretacion.motivo, false, new JSONObject());
+        }
+        if (interpretacion.plan == null) {
+            return new RespuestaModelo(interpretacion.texto, "respuesta", modelo, origen,
+                    salida, "", true, new JSONObject());
+        }
+        JSONObject argumentos = new JSONObject();
+        pone(argumentos, "accion", "plan neuronal");
+        pone(argumentos, "pasos", interpretacion.plan.resumen());
+        Planes.Resultado ejecucion = planes.ejecutar(interpretacion.plan);
+        return new RespuestaModelo(ejecucion.texto, "plan neuronal", modelo, origen,
+                salida, ejecucion.motivo, ejecucion.ok, argumentos);
+    }
+
     private boolean pedirConsentimientoNube() {
         final CountDownLatch decision = new CountDownLatch(1);
         final boolean[] permitido = {false};
@@ -866,6 +1531,7 @@ public class Nexo {
             new AlertDialog.Builder(actividad)
                     .setTitle("¿Enviar este texto a la nube?")
                     .setMessage("Se enviaría sólo el texto necesario a " + nube.proveedor()
+                            + " · modelo " + nube.modelo() + "\nEndpoint: " + nube.base()
                             + ". No se envía audio, pantalla ni archivos.")
                     .setPositiveButton("Enviar una vez", (d, w) -> {
                         permitido[0] = true;
@@ -893,6 +1559,7 @@ public class Nexo {
             return;
         }
         escuchando = false;
+        EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "mandato recibido");
         envia(cuadro("type", "mic_texto", "texto", dicho, "origen", "real"));
         envia(micEstado());
         new Thread(() -> conversar(dicho.trim()), "cort-lazo").start();
@@ -900,21 +1567,7 @@ public class Nexo {
 
     /** `Acciones.ejecutar` mueve `startActivity`: sólo vale en la interfaz. */
     private String ejecutaEnLaInterfaz(final Cerebro.Resultado paso) {
-        final String[] salida = new String[1];
-        final CountDownLatch lista = new CountDownLatch(1);
-        actividad.runOnUiThread(() -> {
-            salida[0] = acciones.ejecutar(paso);
-            lista.countDown();
-        });
-        try {
-            if (!lista.await(15, TimeUnit.SECONDS)) {
-                return null;
-            }
-        } catch (InterruptedException cortada) {
-            Thread.currentThread().interrupt();
-            return null;
-        }
-        return salida[0];
+        return planes.ejecutarPaso(paso);
     }
 
     private String pideEjemplo(Cerebro.Resultado r) {
@@ -942,19 +1595,20 @@ public class Nexo {
      * frase dos veces en la consola de la cara.
      */
     private void dice(String texto, boolean yaSubtitulado) {
-        envia(cuadro("state", "speaking"));
+        boolean habla = prefs.getBoolean(CLAVE_HABLA, true);
+        if (habla) envia(cuadro("state", "speaking"));
         if (!yaSubtitulado) {
             subtitulos(texto);
         }
         envia(cuadro("type", "jarvis_text", "text", texto, "origen", "real"));
         actividad.runOnUiThread(() -> {
-            if (prefs.getBoolean(CLAVE_HABLA, true)) {
-                voz.hablar(texto);
+            if (habla) {
+                medios.hablar(texto);
+            } else {
+                envia(cuadro("state", "idle"));
+                terminaConversacion();
             }
         });
-        double segundos = Math.min(4.0, Math.max(1.2, texto.length() * 0.03));
-        duerme((long) (segundos * 1000));
-        envia(cuadro("state", "idle"));
     }
 
     /** 26 caracteres por cuadro, con su espacio: el mismo paso del puente de Python. */
@@ -978,44 +1632,68 @@ public class Nexo {
      * libre de ahora, que es exactamente lo que la cara quiere mostrar.
      */
     private JSONObject estadoCerebro() {
-        long libre = cerebroLocal.memoriaLibre();
+        PoliticaRecursos.Estado recursos = cerebroLocal.recursos();
         JSONArray instalados = new JSONArray();
         JSONObject catalogo = new JSONObject();
+        JSONArray perfiles = new JSONArray();
         List<CerebroLocal.Ficha> lista = CerebroLocal.catalogo(actividad);
+        String recomendado = "";
         for (CerebroLocal.Ficha f : lista) {
             File gguf = CerebroLocal.archivoDe(actividad, f.archivo);
             boolean es = gguf.isFile();
-            if (es) {
-                puso(instalados, f.nombre);
+            boolean tamanoCorrecto = es && gguf.length() == f.bytes;
+            if (tamanoCorrecto) puso(instalados, f.nombre);
+            PoliticaRecursos.Resultado carga = PoliticaRecursos.carga(recursos, f.bytes, false);
+            PoliticaRecursos.Resultado descarga = PoliticaRecursos.descarga(recursos, f.bytes, false);
+            if (recomendado.isEmpty() && tamanoCorrecto
+                    && PoliticaRecursos.carga(recursos, f.bytes, true).permitida) {
+                recomendado = f.nombre;
             }
             pone(catalogo, f.nombre, cuadro(
-                    "instalado", es,
+                    "instalado", tamanoCorrecto,
+                    "integridad", tamanoCorrecto ? "SHA-256 se comprueba al abrir" : "pendiente",
                     "mb", es ? gguf.length() / 1024 / 1024 : f.bytes / 1024 / 1024,
                     "tam", "≈ " + (f.bytes / 1024 / 1024) + " MiB",
                     "nota", f.nota,
                     "ram_uso", CerebroLocal.puertaMiB(f.bytes),
+                    "cargar", carga.permitida,
+                    "motivo_carga", carga.motivo,
+                    "descargar", descarga.permitida,
+                    "motivo_descarga", descarga.motivo,
                     "origen", "disco del teléfono"));
         }
-        CerebroLocal.Ficha activo = cerebroLocal.elegido();
+        for (Nube.Perfil p : nube.perfiles()) perfiles.put(p.publico());
+        CerebroLocal.Ficha preferido = cerebroLocal.elegido();
+        File abierto = cerebroLocal.modeloActivo();
+        CerebroLocal.Ficha activo = abierto == null ? null : buscaFicha(abierto.getName());
         JSONObject estado = cuadro(
                 "online", false,
                 "found_local_models", nuevosClaves(instalados),
-                "selected_model", activo == null ? "" : activo.nombre,
-                "ram_disponible_mb", libre / 1024 / 1024,
+                "selected_model", preferido == null ? "" : preferido.nombre,
+                "modelo_activo", activo == null ? (abierto == null ? "" : abierto.getName()) : activo.nombre,
+                "recomendado", recomendado,
+                "modo", cerebroLocal.modo(),
+                "personalidad", Consticion.personalidadActual(actividad),
+                "personalidades", Consticion.listaPersonalidades(actividad),
+                "perfiles", perfiles,
+                "perfil_activo", nube.idActivo(),
+                "nube_configurada", nube.configurada(),
+                "recursos", cuadro("ram_libre_mb", recursos.ramLibre / 1024 / 1024,
+                        "disco_libre_mb", recursos.discoLibre / 1024 / 1024,
+                        "bateria", recursos.bateria, "cargando", recursos.cargando,
+                        "temperatura_bateria", recursos.temperaturaBateria),
+                "ram_disponible_mb", recursos.ramLibre / 1024 / 1024,
                 "ram_total_mb", ramTotalMb(),
                 "nucleos", Runtime.getRuntime().availableProcessors(),
                 "en_disco", enDisco(lista),
                 "catalogo", catalogo,
                 "origen", "real",
-                "nota", "el teléfono no tiene Ollama: estos son los GGUF que carga llama.cpp "
-                        + "dentro de la app, medidos en su carpeta de datos");
+                "nota", "Android no ejecuta un demonio Ollama: carga GGUF verificados con llama.cpp. "
+                        + "Con 500-600 MB libres el 0,5B q2_K puede intentarse con mmap; "
+                        + "la batería y el calor se comprueban antes de cargar o descargar");
         String aviso = CerebroLocal.avisoDeCatalogo();
-        if (!aviso.isEmpty()) {
-            pone(estado, "aviso_catalogo", aviso);
-        }
-        if (!CerebroLocal.hayLibreria()) {
-            pone(estado, "aviso_motor", CerebroLocal.motivoSinLibreria());
-        }
+        if (!aviso.isEmpty()) pone(estado, "aviso_catalogo", aviso);
+        if (!CerebroLocal.hayLibreria()) pone(estado, "aviso_motor", CerebroLocal.motivoSinLibreria());
         return cuadro("type", "ollama_status_reply", "status", estado);
     }
 
@@ -1047,9 +1725,7 @@ public class Nexo {
     private JSONObject modelosDeAgente() {
         JSONArray hay = new JSONArray();
         for (CerebroLocal.Ficha f : CerebroLocal.catalogo(actividad)) {
-            if (CerebroLocal.archivoDe(actividad, f.archivo).isFile()) {
-                puso(hay, f.nombre);
-            }
+            if (cerebroLocal.verificar(f).isEmpty()) puso(hay, f.nombre);
         }
         JSONObject cada = cuadro("principal", hay, "rapido", hay, "seguro", hay);
         return cuadro("type", "agent_models_info", "origen", "real",
@@ -1072,8 +1748,14 @@ public class Nexo {
                     "done", false, "success", true));
             return;
         }
+        PoliticaRecursos.Resultado recursos = cerebroLocal.puedeDescargar(ficha.bytes, false);
+        if (!recursos.permitida) {
+            envia(cuadro("type", "ollama_pull_progress", "model", ficha.nombre, "origen", "real",
+                    "status", recursos.motivo, "pct", 0, "done", true, "success", false));
+            return;
+        }
         final Bajada viaje = Bajada.de(actividad, ficha);
-        if (viaje.esta()) {
+        if (viaje.esta(ficha)) {
             envia(estadoCerebro());
             return;
         }
@@ -1116,9 +1798,16 @@ public class Nexo {
                     "aviso", "ese nombre no está en la lista del teléfono"));
             return;
         }
-        if (!CerebroLocal.archivoDe(actividad, ficha.archivo).isFile()) {
+        File archivo = CerebroLocal.archivoDe(actividad, ficha.archivo);
+        if (!archivo.isFile() || archivo.length() != ficha.bytes) {
             envia(cuadro("type", "local_model_set", "model", ficha.nombre, "origen", "real",
-                    "aviso", "todavía no está en disco: pulsa «descargar» primero"));
+                    "aviso", "todavía no está completo en disco: pulsa «descargar» primero"));
+            return;
+        }
+        PoliticaRecursos.Resultado recursos = cerebroLocal.puedeCargar(ficha.bytes, false);
+        if (!recursos.permitida) {
+            envia(cuadro("type", "local_model_set", "model", ficha.nombre, "origen", "real",
+                    "aviso", recursos.motivo));
             return;
         }
         actividad.getSharedPreferences(CerebroLocal.PREFERENCIAS, Context.MODE_PRIVATE)
@@ -1126,6 +1815,24 @@ public class Nexo {
         envia(cuadro("type", "local_model_set", "model", ficha.nombre, "origen", "real",
                 "aviso", "elegido: " + ficha.nombre + " · " + cerebroLocal.falta(ficha.bytes)));
         envia(estadoCerebro());
+    }
+
+    private void usarModeloHibrido(String nombre) {
+        CerebroLocal.Ficha ficha = buscaFicha(nombre);
+        if (ficha == null) {
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", false,
+                    "motivo", "ese modelo no está en la lista verificada"));
+            return;
+        }
+        new Thread(() -> {
+            cerebroLocal.ponerModo("local");
+            int codigo = cerebroLocal.cargarSeguro(ficha, false);
+            envia(cuadro("type", "cerebro_hibrido_resultado", "origen", "real", "ok", codigo == 0,
+                    "motivo", codigo == 0 ? "usando " + ficha.nombre + " sólo en el teléfono"
+                            : codigo == 2 ? cerebroLocal.porqueNoLocal()
+                            : "no abrió (código " + codigo + "): " + cerebroLocal.estado()));
+            envia(estadoCerebro());
+        }, "cort-usar-hibrido").start();
     }
 
     /** «probar el cerebro»: cargar el GGUF y decir cuántos tokens por segundo sale. */
@@ -1144,31 +1851,23 @@ public class Nexo {
             JSONObject respuesta = cuadro("type", "cerebro_prueba", "origen", "real",
                     "modelo", ficha.nombre);
             try {
-                actividad.getSharedPreferences(CerebroLocal.PREFERENCIAS, Context.MODE_PRIVATE)
-                        .edit().putString(CerebroLocal.CLAVE_ACTIVO, ficha.archivo).apply();
-                // «probar» es una orden explícita: se carga aunque la RAM vaya
-                // justa (mmap) y la verdad la dicen el código y los tokens/s.
-                // Si ya está abierto este mismo archivo, no se paga dos veces.
-                int codigo = 0;
-                if (!(cerebroLocal.abierto() && cerebroLocal.modeloActivo() != null
-                        && cerebroLocal.modeloActivo().getName().equals(ficha.archivo))) {
-                    codigo = cerebroLocal.cargar(
-                            CerebroLocal.archivoDe(actividad, ficha.archivo),
-                            ficha.contexto, ficha.hilos);
-                }
+                int codigo = cerebroLocal.cargarSeguro(ficha, false);
                 if (codigo != 0) {
                     envia(pone(respuesta, "ok", false, "valido", false,
-                            "motivo", "no abrió (código " + codigo + "): "
-                                    + cerebroLocal.estado()));
+                            "motivo", codigo == 2 ? cerebroLocal.porqueNoLocal()
+                                    : "no abrió (código " + codigo + "): " + cerebroLocal.estado()));
+                    envia(estadoCerebro());
                     return;
                 }
+                envia(estadoCerebro());
                 long desde = System.currentTimeMillis();
                 List<String[]> turno = new ArrayList<>();
                 turno.add(new String[] {"user", "Di en una frase quién eres."});
                 // `preguntar` empuja token a token; la cara no tiene dónde leerlos,
                 // pero el orbe late: se deja el oyente vacío y se toma el texto entero.
-                String dicho = cerebroLocal.preguntar(CerebroLocal.sistemaCort(null),
-                        turno, pieza -> { }, 120, 0.7f);
+                String dicho = cerebroLocal.preguntar(Consticion.sistema(actividad, null),
+                        turno, pieza -> { }, Consticion.maxTokens(actividad),
+                        Consticion.temperatura(actividad));
                 long ms = System.currentTimeMillis() - desde;
                 String medida = cerebroLocal.ultimaMedida();
                 long tokens = valorDe(medida, "tokens");
@@ -1261,7 +1960,39 @@ public class Nexo {
             pone(j, "cpu", redondea(cpu[0]));
         }
         pone(j, "bateria", nivelDePila());
+        JSONObject red = estadoRed();
+        pone(j, "red_conectada", red.optBoolean("conectada"));
+        pone(j, "red_tipo", red.optString("tipo"));
+        pone(j, "red_validada", red.optBoolean("validada"));
+        pone(j, "superposicion_concedida", Settings.canDrawOverlays(actividad));
         return j;
+    }
+
+    private JSONObject estadoRed() {
+        JSONObject red = cuadro("type", "red_estado", "conectada", false,
+                "validada", false, "tipo", "ninguna");
+        try {
+            ConnectivityManager gestor = (ConnectivityManager) actividad.getSystemService(
+                    Context.CONNECTIVITY_SERVICE);
+            Network activa = gestor.getActiveNetwork();
+            NetworkCapabilities capacidades = activa == null ? null : gestor.getNetworkCapabilities(activa);
+            if (capacidades != null) {
+                pone(red, "conectada", true);
+                pone(red, "validada", capacidades.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED));
+                if (capacidades.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    pone(red, "tipo", "wifi");
+                } else if (capacidades.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                    pone(red, "tipo", "ethernet");
+                } else if (capacidades.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                    pone(red, "tipo", "celular");
+                } else {
+                    pone(red, "tipo", "otra");
+                }
+            }
+        } catch (RuntimeException sinRed) {
+            pone(red, "tipo", "no disponible");
+        }
+        return red;
     }
 
     /**
@@ -1566,9 +2297,36 @@ public class Nexo {
 
     private JSONObject micEstado() {
         boolean despierta = ServicioEscucha.encendida(actividad);
+        EscuchaEstado nativo = EscuchaEstadoGlobal.estado();
+        String visible;
+        switch (nativo) {
+            case PIDIENDO_PERMISO:
+                visible = "pidiendo_permiso";
+                break;
+            case PREPARANDO:
+                visible = "preparando";
+                break;
+            case ESCUCHANDO_PALABRA:
+                visible = "vigilando";
+                break;
+            case ESCUCHANDO_MANDATO:
+                visible = "escuchando";
+                break;
+            case PROCESANDO:
+                visible = "procesando";
+                break;
+            case ERROR:
+                visible = "error";
+                break;
+            default:
+                visible = "apagado";
+                break;
+        }
         return cuadro("type", "mic_estado", "origen", "real",
-                "estado", escuchando ? "escuchando" : (despierta ? "vigilando" : "apagado"),
-                "ok", true,
+                "estado", visible,
+                "estado_nativo", nativo.alambre(),
+                "motivo", EscuchaEstadoGlobal.motivo(),
+                "ok", nativo != EscuchaEstado.ERROR,
                 "wake", despierta,
                 "despierto", ServicioEscucha.montada(),
                 "microfonos", new JSONArray(),
@@ -1652,6 +2410,89 @@ public class Nexo {
                 "nota", lista.length() == 0 ? "lista vacía: se guarda en este teléfono" : "");
     }
 
+    private void prepararMemoria(JSONObject pedido) {
+        String accion = pedido.optString("accion", "");
+        if (!("guardar".equals(accion) || "editar".equals(accion) || "borrar".equals(accion))) {
+            envia(errorNativo("memoria_plan", "acción de memoria no permitida"));
+            return;
+        }
+        String id = pedido.optString("id", pedido.optString("clave", "")).trim();
+        if (id.isEmpty() || id.length() > 80) {
+            envia(errorNativo("memoria_plan", "la clave debe tener entre 1 y 80 caracteres"));
+            return;
+        }
+        String valor = pedido.optString("valor", "").trim();
+        if (!"borrar".equals(accion) && (valor.isEmpty() || valor.length() > 2000)) {
+            envia(errorNativo("memoria_plan", "el valor debe tener entre 1 y 2000 caracteres"));
+            return;
+        }
+        int version = recuerdos.versionHecho(id);
+        if ("guardar".equals(accion) && version >= 0) {
+            envia(errorNativo("memoria_plan", "esa clave ya existe; prepara una edición"));
+            return;
+        }
+        if (!"guardar".equals(accion) && version < 0) {
+            envia(errorNativo("memoria_plan", "ese recuerdo ya no existe"));
+            return;
+        }
+        String versionTexto = version < 0 ? "nueva" : String.valueOf(version);
+        String token = aprobaciones.preparar("memoria", accion, id, versionTexto, valor);
+        if (token == null) {
+            envia(errorNativo("memoria_plan", "no pude preparar la confirmación"));
+            return;
+        }
+        envia(cuadro("type", "memoria_plan", "origen", "real", "ok", true,
+                "accion", accion, "id", id, "version", versionTexto, "token", token,
+                "requiere_confirmacion", true, "expira_en", 120,
+                "valor_actual", version < 0 ? "" : recuerdos.valor(id)));
+    }
+
+    private void ejecutarMemoria(JSONObject pedido, String tipo) {
+        String accion = "memoria_guardar".equals(tipo) ? "guardar"
+                : ("memoria_editar".equals(tipo) ? "editar" : "borrar");
+        String id = pedido.optString("id", pedido.optString("clave", "")).trim();
+        String version = pedido.optString("version", "");
+        String valor = pedido.optString("valor", "").trim();
+        String token = pedido.optString("token", "");
+        if (!aprobaciones.consumir("memoria", accion, id, version, valor, token)) {
+            envia(errorNativo("memoria_resultado", "la confirmación caducó o no corresponde"));
+            return;
+        }
+        int actual = recuerdos.versionHecho(id);
+        if ("nueva".equals(version)) {
+            if (actual >= 0) {
+                envia(errorNativo("memoria_resultado", "esa clave ya existe; prepara una edición"));
+                return;
+            }
+        } else {
+            try {
+                if (actual != Integer.parseInt(version)) {
+                    envia(errorNativo("memoria_resultado", "el recuerdo cambió; vuelve a confirmar"));
+                    return;
+                }
+            } catch (NumberFormatException invalida) {
+                envia(errorNativo("memoria_resultado", "la versión del recuerdo no es válida"));
+                return;
+            }
+        }
+        String motivo = null;
+        if ("guardar".equals(accion)) {
+            boolean guardado = recuerdos.guardarConfirmado(id, valor,
+                    "interfaz", token, true, "nueva".equals(version) ? Recuerdos.ESPERA_NUEVA : actual);
+            if (!guardado) motivo = "no guardé el dato: revisa la clave, el valor y las credenciales";
+        } else if ("editar".equals(accion)) {
+            motivo = recuerdos.editarHecho(id, valor, "interfaz", token, actual);
+        } else {
+            motivo = recuerdos.borrarHecho(id, "interfaz", token, actual);
+        }
+        envia(cuadro("type", "memoria_resultado", "origen", "real", "ok", motivo == null,
+                "accion", accion, "id", id, "motivo", motivo == null ? "memoria actualizada" : motivo));
+    }
+
+    private JSONObject errorNativo(String tipo, String motivo) {
+        return cuadro("type", tipo, "origen", "real", "ok", false, "motivo", motivo);
+    }
+
     /** `contexto` es literalmente lo que se le manda al modelo: la prueba de que entró. */
     private JSONObject memoriaEstado() {
         int hechos = recuerdos.cuentasDeHechos();
@@ -1665,16 +2506,16 @@ public class Nexo {
         }
         String sistema = CerebroLocal.sistemaCort(recuerdos.lista(12));
         return cuadro("type", "memoria_estado", "origen", "real",
-                "datos", cuadro("modulo", "cort-móvil", "version", 1, "origen", "teléfono",
+                "datos", cuadro("modulo", "cort-móvil", "version", 3, "origen", "teléfono",
                         "ruta", actividad.getDatabasePath("cort.db").getAbsolutePath(),
                         "existe", true,
                         "hechos", hechos,
                         "preferencias", preferencias,
-                        "correcciones", 0,
+                        "correcciones", recuerdos.cuentasDeCorrecciones(),
                         "constitucion", sistema.length()),
                 "contexto", recuerdos.lista(12),
-                "nota", "las correcciones se anotan en la PC (fase F4): en el teléfono aún no "
-                        + "hay una tabla que las guarde");
+                "nota", "cada hecho conserva procedencia, fecha, confirmación e historial; "
+                        + "las importaciones de la PC quedan sin confirmar");
     }
 
     /** Lo que la cara llama «el equipo», en versión teléfono. */
@@ -1987,17 +2828,31 @@ public class Nexo {
     @JavascriptInterface
     public void escuchar() {
         actividad.runOnUiThread(() -> {
+            medios.pausar("el dictado necesita el micrófono");
+            if (ServicioEscucha.montada()) {
+                ServicioEscucha.cambia(actividad, false);
+            }
+            despertadorPendiente = false;
+            permisoMicroPendiente = true;
             if (actividad.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                     != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                EscuchaEstadoGlobal.pon(EscuchaEstado.PIDIENDO_PERMISO,
+                        "falta conceder el micrófono");
                 actividad.requestPermissions(
-                        new String[] {android.Manifest.permission.RECORD_AUDIO}, 42);
+                        new String[] {android.Manifest.permission.RECORD_AUDIO},
+                        PERMISO_MICROFONO);
+                envia(micEstado());
                 return;
             }
+            permisoMicroPendiente = false;
+            escuchando = true;
+            EscuchaEstadoGlobal.pon(EscuchaEstado.ESCUCHANDO_MANDATO, "te escucho");
             envia(cuadro("state", "listening"));
             Voz.AlOir oyente = new Voz.AlOir() {
                 @Override
                 public void dijo(String texto) {
                     escuchando = false;
+                    EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "mandato recibido");
                     envia(cuadro("type", "mic_texto", "texto", texto, "origen", "real"));
                     envia(micEstado());
                     new Thread(() -> conversar(texto), "cort-lazo").start();
@@ -2006,8 +2861,12 @@ public class Nexo {
                 @Override
                 public void fallo(String motivo) {
                     escuchando = false;
+                    if (EscuchaEstadoGlobal.estado() != EscuchaEstado.DETENIDO) {
+                        EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR, motivo);
+                    }
                     envia(cuadro("type", "mic_error", "origen", "real", "motivo", motivo));
                     envia(cuadro("state", "idle"));
+                    envia(micEstado());
                 }
 
                 @Override
@@ -2015,24 +2874,39 @@ public class Nexo {
                     envia(cuadro("type", "mic_parcial", "texto", texto, "origen", "real"));
                 }
             };
-            Motor oido = Motor.compartido(actividad.getApplicationContext());
-            if (oido.listo()) {
-                escuchando = true;
-                oido.escuchar(oyente, alto -> midiendo(alto));
-            } else {
-                escuchando = true;
-                voz.ponerNivel(alto -> midiendo(alto));
-                voz.escuchar(actividad, oyente);
-            }
+            voz.ponerNivel(alto -> midiendo(alto));
+            voz.escuchar(actividad, oyente);
         });
     }
 
     @JavascriptInterface
     public void callar() {
         escuchaContinua = false;
+        permisoMicroPendiente = false;
+        despertadorPendiente = false;
         actividad.runOnUiThread(() -> {
+            medios.detener();
             voz.dejarDeEscuchar();
             Motor.compartido(actividad.getApplicationContext()).para();
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "detenida por la usuaria");
+            envia(cuadro("state", "idle"));
+            envia(micEstado());
+        });
+    }
+
+    private void detenerTodo() {
+        callar();
+    }
+
+    public void pausarVoz() {
+        actividad.runOnUiThread(() -> {
+            medios.pausar("actividad en segundo plano");
+            voz.dejarDeEscuchar();
+            escuchando = false;
+            if (!ServicioEscucha.montada()) {
+                EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "actividad en segundo plano");
+            }
+            envia(cuadro("state", "idle"));
             envia(micEstado());
         });
     }
@@ -2043,7 +2917,7 @@ public class Nexo {
         if (texto == null || texto.trim().isEmpty()) {
             return;
         }
-        actividad.runOnUiThread(() -> voz.hablar(texto));
+        actividad.runOnUiThread(() -> medios.hablar(texto));
     }
 
     /** El chat puede pedirse antes de que el WebView termine de cargar. */
@@ -2284,6 +3158,9 @@ public class Nexo {
                 fuera.write(trozo, 0, n);
             }
             String html = fuera.toString("UTF-8");
+            String token = UUID.randomUUID().toString();
+            tokenPuente = token;
+            String identidad = "<script>window.__cortPuenteToken=\"" + token + "\";</script>";
             // P0-3: la clase de la vista teléfono se cose en <html> antes del
             // primer pintado, para que la cara no salga un fotograma con los
             // paneles de escritorio cortados. En vista escritorio no se cose
@@ -2295,9 +3172,9 @@ public class Nexo {
             String cosido;
             if (cabe >= 0) {
                 int despues = cabe + "<head>".length();
-                cosido = html.substring(0, despues) + ETIQUETA_PUENTE + claseVista + html.substring(despues);
+                cosido = html.substring(0, despues) + identidad + ETIQUETA_PUENTE + claseVista + html.substring(despues);
             } else {
-                cosido = ETIQUETA_PUENTE + claseVista + html;
+                cosido = identidad + ETIQUETA_PUENTE + claseVista + html;
             }
             return new WebResourceResponse("text/html", "utf-8",
                     new ByteArrayInputStream(cosido.getBytes(StandardCharsets.UTF_8)));

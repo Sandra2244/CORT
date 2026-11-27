@@ -67,7 +67,15 @@
     // S4: la memoria escrita (qué hay guardado, dónde, y el resumen de lo que CORT
     // sabe de ti) la contesta el puente; si no está en la lista, la orden se queda
     // en el simulador y la tarjeta de memoria nunca se llena.
-    "memoria_estado"
+    "memoria_estado", "memoria_listar", "memoria_preparar", "memoria_guardar",
+    "memoria_editar", "memoria_borrar", "memoria_cancelar", "memoria_historial", "memoria_exportar",
+    "alarmas_estado", "alarma_solicitar", "alarma_cancelar", "abrir_reloj",
+    "rutinas_estado", "rutina_crear", "rutina_plan", "rutina_cancelar_plan", "rutina_ejecutar",
+    "rutina_cancelar", "rutinas_historial",
+    "avisos_estado", "avisos_ajustes", "avisos_apps", "avisos_allowlist", "avisos_leer",
+    "compartir_preparar", "compartir_cancelar", "compartir_confirmar",
+    "cerebro_hibrido_modo", "cerebro_hibrido_usar", "personalidad",
+    "nube_perfil_guardar", "nube_perfil_usar", "nube_perfil_borrar"
   ]);
 
   // La demo lee unas respuestas por `s.type` y otras por `s.action` (live_subtitles,

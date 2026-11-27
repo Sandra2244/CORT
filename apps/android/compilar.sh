@@ -89,7 +89,9 @@ fi
 # y un APK delgado que no sabe leer el cuadro sería dos pasos para atrás.
 while IFS='|' read -r NOMBRE SHA URL; do
     case "$NOMBRE" in ''|'#'*) continue ;; esac
-    if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ]; then
+    URL="${URL%$'\r'}"
+    if [ "$DELGADO" = "1" ] && [ "$NOMBRE" != "zxing-core-3.5.3.jar" ] \
+       && [ "$NOMBRE" != "json-20240303.jar" ]; then
         continue
     fi
     # El modelo de español SÍ entra en el APK desde `cort-v0.17.2`, y por eso
@@ -146,6 +148,8 @@ if [ "$DELGADO" = "0" ]; then
     # `CerebroLocal.hayLibreria()` lo dice en la pantalla — no se finge un cerebro que
     # no va, y tampoco se corta una compilación por falta de una corrida ajena.
     MOTOR_JARVIS=0
+    MOTOR_COMPLETO=1
+    EXIGIR_MOTOR="${CORT_EXIGIR_MOTOR:-0}"
     for ABI in $ABIS; do
         mkdir -p "build/stage/lib/$ABI"
         # Sólo `libcortmotor.so`, no `*.so`. Medido en la corrida 42025488743 del
@@ -163,7 +167,12 @@ if [ "$DELGADO" = "0" ]; then
             MOTOR_JARVIS=1
             echo "  .so del motor -> $ABI: $(basename "$FICHERO") ($(stat -c%s "$FICHERO") bytes)"
         done
+        [ -f "vendor/motor/$ABI/libcortmotor.so" ] || MOTOR_COMPLETO=0
     done
+    if [ "$EXIGIR_MOTOR" = "1" ] && [ "$MOTOR_COMPLETO" = "0" ]; then
+        echo "::error::esta compilación exige libcortmotor.so para todas las ABIs ($ABIS)"
+        exit 1
+    fi
     if [ "$MOTOR_JARVIS" = "0" ]; then
         echo "aviso: no hay libcortmotor.so en vendor/motor/: este APK se compila SIN cerebro GGUF"
     fi
@@ -279,14 +288,26 @@ javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
 
 javac --release 11 -classpath build/obj -d build/pruebas \
-    tests/PuertaRamTest.java tests/SecretoTest.java tests/LimiteEscuchaTest.java
-PRUEBAS_CP="build/obj:build/pruebas:$PLAT/android.jar"
+    tests/PuertaRamTest.java tests/SecretoTest.java tests/LimiteEscuchaTest.java \
+    tests/LecturaSensorTest.java tests/EscuchaEstadoTest.java tests/ReglasMediosTest.java \
+    tests/VidaDiariaTest.java tests/AvisosTest.java tests/PoliticaRecursosTest.java \
+    tests/ProveedorNubeTest.java tests/PlanNeuralTest.java tests/IntegridadGgufTest.java
+PRUEBAS_CP="build/obj:build/pruebas:vendor/json-20240303.jar:$PLAT/android.jar"
 for JAR in vendor/vosk-android-0.3.75/classes.jar vendor/jna-5.14.0/classes.jar; do
     [ ! -f "$JAR" ] || PRUEBAS_CP="$PRUEBAS_CP:$JAR"
 done
 java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PuertaRamTest
 java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.SecretoTest
 java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.LimiteEscuchaTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.LecturaSensorTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.EscuchaEstadoTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.ReglasMediosTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.VidaDiariaTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.AvisosTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PoliticaRecursosTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.ProveedorNubeTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PlanNeuralTest
+java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.IntegridadGgufTest
 
 D8_ENTRADAS="$(find build/obj -name '*.class')"
 "$BT/d8" --release --min-api 26 --lib "$PLAT/android.jar" --output build/apk \
@@ -324,6 +345,10 @@ if [ -n "${CORT_APK_KEYSTORE_B64:-}" ]; then
     [ -n "$KS_PASS" ] || { echo "hay keystore pero falta CORT_APK_KEYSTORE_PASS"; exit 1; }
     echo "firmando con la llave del repo"
 else
+    [ "${CORT_EXIGIR_FIRMA:-0}" = "1" ] || {
+        echo "::error::esta compilación exige el keystore persistente CORT_APK_KEYSTORE_B64"
+        exit 1
+    }
     keytool -genkeypair -keystore build/cort.keystore -alias cort \
         -keyalg RSA -keysize 2048 \
         -storepass cortapk -keypass cortapk -validity 3650 \
@@ -336,6 +361,12 @@ fi
     --ks-pass pass:"$KS_PASS" --key-pass pass:"$KS_PASS" \
     --out build/CORT-movil.apk build/apk/alineado.apk
 "$BT/apksigner" verify build/CORT-movil.apk
+HUELLA="$("$BT/apksigner" verify --print-certs build/CORT-movil.apk \
+    | sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | tr 'A-F' 'a-f')"
+if [ -n "${CORT_HUELLA_ESPERADA:-}" ] && [ "$HUELLA" != "$CORT_HUELLA_ESPERADA" ]; then
+    echo "::error::el certificado no es el anterior: esperado $CORT_HUELLA_ESPERADA, obtenido $HUELLA"
+    exit 1
+fi
 
 # -- 6. La auditoría: qué salió y cuánto pesa ---------------------------------
 # Todo lo que se afirma de este APK en el README o en la Release sale de aquí,

@@ -50,11 +50,15 @@ public class Cara implements Voz.AlOir {
     private final Recuerdos recuerdos;
     private final Cerebro cerebro;
     private final Acciones acciones;
+    private final Aprobaciones aprobaciones;
+    private final Planes planes;
     private final Nube nube;
     /** El GGUF del teléfono (U1), si está bajado y cabe: pregunta antes que la nube. */
     private final CerebroLocal cerebroLocal;
     private final Sincroniza sincroniza;
     private final Voz voz;
+    private final Medios medios;
+    private final Medios.AlEstado oyenteMedios = estado -> {};
 
     private LinearLayout registro;
     private ScrollView hoja;
@@ -65,10 +69,12 @@ public class Cara implements Voz.AlOir {
     private EditText campo;
     private TextView micro;
     private boolean escuchando;
+    private boolean permisoMicroPendiente;
     private Orbe orbe;
     private String vozElogio;
     /** El último oído anunciado, para no repetir la misma línea en cada dictado. */
     private String oidoVisto = "";
+    private final ServicioEscucha.AlDetener oyenteDetener = this::detener;
     private final Runnable hastaQueCalle = new Runnable() {
         @Override
         public void run() {
@@ -79,6 +85,10 @@ public class Cara implements Voz.AlOir {
                 micro.postDelayed(this, 180L);
             } else {
                 orbe.modo(Orbe.REPOSO);
+                if (!ServicioEscucha.montada()
+                        && EscuchaEstadoGlobal.estado() == EscuchaEstado.PROCESANDO) {
+                    EscuchaEstadoGlobal.pon(EscuchaEstado.APAGADO, "");
+                }
             }
         }
     };
@@ -88,6 +98,8 @@ public class Cara implements Voz.AlOir {
         this.recuerdos = new Recuerdos(actividad.getApplicationContext());
         this.cerebro = new Cerebro(actividad.getApplicationContext(), recuerdos);
         this.acciones = new Acciones(actividad, recuerdos);
+        this.aprobaciones = new Aprobaciones(java.util.UUID.randomUUID().toString());
+        this.planes = new Planes(actividad, acciones, aprobaciones);
         this.nube = new Nube(actividad.getApplicationContext());
         this.cerebroLocal = new CerebroLocal(actividad.getApplicationContext());
         // El puente no decide solo: vive en la hoja de ajustes, y lee el enlace que
@@ -95,6 +107,9 @@ public class Cara implements Voz.AlOir {
         // dice que no y la fila ni se intenta.
         this.sincroniza = new Sincroniza(actividad.getApplicationContext(), recuerdos);
         this.voz = new Voz(actividad.getApplicationContext());
+        this.medios = Medios.compartido(actividad.getApplicationContext());
+        this.medios.vincular(voz, oyenteMedios);
+        ServicioEscucha.registraDetener(oyenteDetener);
         // El nivel del micrófono entra al orbe **de verdad**: `Voz.Escucha` reenvía
         // `onRmsChanged(float)` de Android, y el navegador no tiene esa señal (por
         // eso la cara de PC simula el nivel con curvas). Es la única ventaja real
@@ -246,7 +261,43 @@ public class Cara implements Voz.AlOir {
         decir(texto);
     }
 
+    public void activarMedios() {
+        medios.vincular(voz, oyenteMedios);
+    }
+
+    public void desactivarMedios() {
+        medios.desvincular(voz, oyenteMedios);
+    }
+
+    public void detener() {
+        aprobaciones.cerrar();
+        actividad.runOnUiThread(() -> {
+            permisoMicroPendiente = false;
+            medios.detener();
+            voz.dejarDeEscuchar();
+            poniendoMicro(false);
+            if (micro != null) micro.removeCallbacks(hastaQueCalle);
+            if (orbe != null) orbe.modo(Orbe.REPOSO);
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "detenida por la usuaria");
+        });
+    }
+
+    public void pausarVoz() {
+        actividad.runOnUiThread(() -> {
+            medios.pausar("actividad en segundo plano");
+            voz.dejarDeEscuchar();
+            poniendoMicro(false);
+            if (micro != null) micro.removeCallbacks(hastaQueCalle);
+            if (!ServicioEscucha.montada()) {
+                EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "actividad en segundo plano");
+            }
+        });
+    }
+
     public void cerrar() {
+        aprobaciones.cerrar();
+        ServicioEscucha.desregistraDetener(oyenteDetener);
+        permisoMicroPendiente = false;
         if (micro != null) {
             micro.removeCallbacks(hastaQueCalle);
         }
@@ -254,7 +305,13 @@ public class Cara implements Voz.AlOir {
             orbe.quieto(true);
             orbe = null;
         }
+        medios.desvincular(voz, oyenteMedios);
         voz.cerrar();
+        if (!ServicioEscucha.montada()
+                && EscuchaEstadoGlobal.estado() != EscuchaEstado.APAGADO
+                && EscuchaEstadoGlobal.estado() != EscuchaEstado.ERROR) {
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "cara nativa cerrada");
+        }
     }
 
     /* ------------------------------------------------------------------ lazo */
@@ -270,6 +327,7 @@ public class Cara implements Voz.AlOir {
 
     /** El lazo completo: tabla → acción → medida → (nube) → aprender. */
     public void procesar(final String dicho) {
+        EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "procesando la orden");
         linea("«" + dicho + "»", Paleta.SUAVE);
         List<Cerebro.Resultado> pasos = cerebro.cadena(dicho);        if (pasos.size() > 1) {
             encadenar(pasos);
@@ -348,29 +406,40 @@ public class Cara implements Voz.AlOir {
             orbe.modo(Orbe.PENSAR);
         }
         final String memoria = recuerdos.lista(12);
-        final String sistema = Consticion.sistema(actividad, memoria);
+        final String sistema = PlanNeural.sistema(Consticion.sistema(actividad, memoria));
         final java.util.List<String[]> historial =
                 recuerdos.turnos(Consticion.turnos(actividad));
         new Thread(() -> {
             final boolean soloLocal = "local".equals(cerebroLocal.modo());
-            final String sa = cerebroLocal.contestar(sistema, dicho, historial, null,
-                    Consticion.maxTokens(actividad), Consticion.temperatura(actividad));
-            final String[] respuesta = {sa};
-            if (sa == null && !soloLocal && nube.configurada()
+            String salida = cerebroLocal.contestar(sistema, dicho, historial, null,
+                    PlanNeural.MAX_TOKENS, 0.2f);
+            if (salida == null && !soloLocal && nube.configurada()
                     && pedirConsentimientoNube()) {
-                respuesta[0] = nube.preguntar(sistema, dicho, historial);
+                salida = nube.preguntar(sistema, dicho, historial);
             }
-            if (respuesta[0] != null) {
+            String respuesta = salida;
+            if (salida != null) {
+                PlanNeural.Interpretacion interpretacion = PlanNeural.interpretar(salida);
+                if (!interpretacion.valida) {
+                    respuesta = "El cerebro propuso algo que no pasó la validación; no ejecuté nada.";
+                } else if (interpretacion.plan != null) {
+                    respuesta = planes.ejecutar(interpretacion.plan).texto;
+                } else {
+                    respuesta = interpretacion.texto;
+                }
+            }
+            if (respuesta != null) {
                 recuerdos.apuntaTurno("user", dicho);
-                recuerdos.apuntaTurno("assistant", respuesta[0]);
+                recuerdos.apuntaTurno("assistant", respuesta);
             }
+            final String finalRespuesta = respuesta;
             actividad.runOnUiThread(() -> {
                 quitarUltima();
                 pintaCerebroChip();
-                if (respuesta[0] == null) {
+                if (finalRespuesta == null) {
                     proponer(dicho);
                 } else {
-                    contestar(respuesta[0]);
+                    contestar(finalRespuesta);
                 }
             });
         }).start();
@@ -389,7 +458,8 @@ public class Cara implements Voz.AlOir {
      * un cálculo de duración: es la pregunta real al motor, contestada cada 180 ms.
      */
     private void decir(String texto) {
-        voz.hablar(texto);
+        EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "CORT está respondiendo");
+        medios.hablar(texto);
         if (orbe == null || micro == null) {
             return;
         }
@@ -445,16 +515,19 @@ public class Cara implements Voz.AlOir {
         explic.setLineSpacing(0f, 1.35f);
         caja.addView(explic, par(-1, -2));
 
+        final EditText base = campoDe("dirección del servicio", nube.base(), false);
         final TextView proveedor = texto("", 14f, Paleta.CLARO);
         proveedor.setText("modo: " + modo[0] + "  ·  toca para cambiar");
         proveedor.setPadding(0, dp(16), 0, dp(16));
         proveedor.setOnClickListener(v -> {
-            modo[0] = "openai".equals(modo[0]) ? "anthropic" : "openai";
+            String[] ids = ProveedorNube.ids();
+            int actual = java.util.Arrays.asList(ids).indexOf(modo[0]);
+            modo[0] = ids[(actual + 1) % ids.length];
+            base.setText(ProveedorNube.basePorDefecto(modo[0]));
             proveedor.setText("modo: " + modo[0] + "  ·  toca para cambiar");
         });
         caja.addView(proveedor, par(-1, -2));
 
-        final EditText base = campoDe("dirección del servicio", nube.base(), false);
         final EditText modelo = campoDe("modelo", nube.modelo(), false);
         final EditText clave = campoDe(hayClave()
                 ? "clave protegida — en blanco: no la cambio"
@@ -573,6 +646,7 @@ public class Cara implements Voz.AlOir {
             new AlertDialog.Builder(actividad)
                     .setTitle("¿Enviar este texto a la nube?")
                     .setMessage("Se enviaría sólo el texto necesario a " + nube.proveedor()
+                            + " · modelo " + nube.modelo()
                             + ". No se envía audio, pantalla ni archivos.")
                     .setPositiveButton("Enviar una vez", (d, w) -> {
                         permitido[0] = true;
@@ -710,18 +784,26 @@ public class Cara implements Voz.AlOir {
     }
 
     private void escuchar() {
+        medios.pausar("el dictado necesita el micrófono");
         if (escuchando) {
             voz.dejarDeEscuchar();
             poniendoMicro(false);
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "dictado detenido");
             return;
+        }
+        if (ServicioEscucha.montada()) {
+            ServicioEscucha.cambia(actividad, false);
         }
         if (actividad.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
+            permisoMicroPendiente = true;
+            EscuchaEstadoGlobal.pon(EscuchaEstado.PIDIENDO_PERMISO, "falta el permiso de micrófono");
             actividad.requestPermissions(
                     new String[] {android.Manifest.permission.RECORD_AUDIO}, 42);
             linea("Dame el permiso del micrófono y vuelve a pulsar ●.", Paleta.AVISO);
             return;
         }
+        EscuchaEstadoGlobal.pon(EscuchaEstado.ESCUCHANDO_MANDATO, "te escucho");
         poniendoMicro(true);
         voz.escuchar(actividad, this);
         // Se avisa del oído **sólo cuando cambia** (el modelo se carga en segundo
@@ -731,6 +813,18 @@ public class Cara implements Voz.AlOir {
             oidoVisto = oidoAhora;
             linea("oído: " + oidoAhora, Paleta.SUAVE);
         }
+    }
+
+    public void permisoMicroResult(boolean concedido) {
+        if (!permisoMicroPendiente) return;
+        permisoMicroPendiente = false;
+        if (!concedido) {
+            poniendoMicro(false);
+            EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR, "permiso de micrófono denegado");
+            linea("Sin micrófono no puedo escucharte. Puedes concederlo en Ajustes.", Paleta.AVISO);
+            return;
+        }
+        escuchar();
     }
 
     private void poniendoMicro(boolean activo) {
@@ -745,6 +839,7 @@ public class Cara implements Voz.AlOir {
     public void dijo(String texto) {
         actividad.runOnUiThread(() -> {
             poniendoMicro(false);
+            EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "mandato recibido");
             procesar(texto);
         });
     }
@@ -753,6 +848,9 @@ public class Cara implements Voz.AlOir {
     public void fallo(String motivo) {
         actividad.runOnUiThread(() -> {
             poniendoMicro(false);
+            if (EscuchaEstadoGlobal.estado() != EscuchaEstado.DETENIDO) {
+                EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR, motivo);
+            }
             linea("No oí: " + motivo + ".", Paleta.AVISO);
         });
     }

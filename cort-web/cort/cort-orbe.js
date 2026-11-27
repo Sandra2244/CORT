@@ -434,7 +434,11 @@
         return;
     }
     if (t === "mic_estado") {
-      window.CORT_orbe.estado(m.estado === "escuchando" ? "escuchando" : "reposo");
+      const estado = m.estado === "escuchando" ? "escuchando"
+        : (m.estado === "procesando" || m.estado === "preparando"
+          || m.estado === "pidiendo_permiso") ? "pensando"
+        : m.estado === "error" ? "alerta" : "reposo";
+      window.CORT_orbe.estado(estado);
       return;
     }
     if (t === "mic_texto") { window.CORT_orbe.estado("pensando"); window.CORT_orbe.rafaga(300); return; }

@@ -2,8 +2,14 @@ package dev.sandra.cort.movil;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.os.BatteryManager;
+import android.os.Looper;
 import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -51,8 +57,9 @@ public class CerebroLocal {
 
     private final Context contexto;
     private final SharedPreferences prefs;
-    private File activo;
-    private int codigo = -1;         // lo que devolvió nativeAbrir; -1 es «no se intentó»
+    private static volatile File activo;
+    private static volatile int codigo = -1;
+    private static volatile String ultimoMotivo = "";
 
     public CerebroLocal(Context contexto) {
         this.contexto = contexto.getApplicationContext();
@@ -92,7 +99,7 @@ public class CerebroLocal {
     private static native String nativeBackends();
     private static native void nativeInterrumpe();
     private static native void nativeOir(Object escucha);
-    private static native int nativeAbrir(String ruta, int contexto, int hilos);
+    private static native int nativeAbrirDescriptor(FileDescriptor descriptor, int contexto, int hilos);
     private static native void nativeCerrar();
     private static native int nativeHayCerebro();
     private static native String nativeUltimaMedida();
@@ -158,6 +165,67 @@ public class CerebroLocal {
      */
     public boolean sePuedeIntentar(long bytesDelModelo) {
         return PuertaRam.evaluar(memoriaLibre(), bytesDelModelo) != PuertaRam.Decision.NO_CABE;
+    }
+
+    public PoliticaRecursos.Estado recursos() {
+        int nivel = -1;
+        int estado = -1;
+        int decimas = -1;
+        try {
+            Intent pila = contexto.registerReceiver(null,
+                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (pila != null) {
+                int bruto = pila.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+                int escala = pila.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+                if (bruto >= 0 && escala > 0) nivel = bruto * 100 / escala;
+                estado = pila.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+                decimas = pila.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1);
+            }
+        } catch (RuntimeException sinPila) {
+            // -1 significa sin medición; la política automática no arriesga.
+        }
+        File almacen = carbajo(contexto);
+        long disco = almacen.isDirectory() ? almacen.getUsableSpace()
+                : (almacen.getParentFile() == null ? -1L : almacen.getParentFile().getUsableSpace());
+        return new PoliticaRecursos.Estado(memoriaLibre(), disco, nivel,
+                estado == BatteryManager.BATTERY_STATUS_CHARGING
+                        || estado == BatteryManager.BATTERY_STATUS_FULL,
+                decimas < 0 ? -1.0 : decimas / 10.0);
+    }
+
+    public PoliticaRecursos.Resultado puedeCargar(long modelo, boolean automatica) {
+        return PoliticaRecursos.carga(recursos(), modelo, automatica);
+    }
+
+    public PoliticaRecursos.Resultado puedeDescargar(long modelo, boolean automatica) {
+        return PoliticaRecursos.descarga(recursos(), modelo, automatica);
+    }
+
+    public String verificar(Ficha ficha) {
+        return ficha == null ? "el modelo no está en el catálogo"
+                : IntegridadGguf.verificar(archivoDe(contexto, ficha.archivo), ficha.bytes, ficha.sha256);
+    }
+
+    public int cargarSeguro(Ficha ficha, boolean automatica) {
+        if (ficha == null) {
+            ultimoMotivo = "el modelo no está en el catálogo";
+            return 1;
+        }
+        PoliticaRecursos.Resultado decision = puedeCargar(ficha.bytes, automatica);
+        if (!decision.permitida) {
+            ultimoMotivo = decision.motivo;
+            return 2;
+        }
+        File gguf = archivoDe(contexto, ficha.archivo);
+        try (FileInputStream abierto = new FileInputStream(gguf)) {
+            ultimoMotivo = IntegridadGguf.verificar(abierto, ficha.bytes, ficha.sha256);
+            if (!ultimoMotivo.isEmpty()) return 1;
+            ultimoMotivo = "";
+            return cargar(gguf, abierto.getFD(), ficha.contexto, ficha.hilos);
+        } catch (IOException error) {
+            ultimoMotivo = "no se pudo abrir el archivo verificado: " + error.getMessage();
+            return 1;
+        }
     }
 
     public String falta(long bytesDelModelo) {
@@ -242,10 +310,7 @@ public class CerebroLocal {
      */
     public boolean tieneAlguno() {
         for (Ficha f : catalogo(contexto)) {
-            File archivo = archivoDe(contexto, f.archivo);
-            if (archivo.isFile() && archivo.length() == f.bytes) {
-                return true;
-            }
+            if (verificar(f).isEmpty()) return true;
         }
         return false;
     }
@@ -259,14 +324,12 @@ public class CerebroLocal {
         List<Ficha> lista = catalogo(contexto);
         String guardado = prefs.getString(CLAVE_ACTIVO, "");
         for (Ficha f : lista) {
-            if (f.archivo.equals(guardado) && archivoDe(contexto, f.archivo).isFile()) {
-                return f;
-            }
+            File archivo = archivoDe(contexto, f.archivo);
+            if (f.archivo.equals(guardado) && archivo.isFile() && archivo.length() == f.bytes) return f;
         }
         for (Ficha f : lista) {
-            if (archivoDe(contexto, f.archivo).isFile() && sePuedeIntentar(f.bytes)) {
-                return f;
-            }
+            File archivo = archivoDe(contexto, f.archivo);
+            if (archivo.isFile() && archivo.length() == f.bytes && sePuedeIntentar(f.bytes)) return f;
         }
         return null;
     }
@@ -279,58 +342,53 @@ public class CerebroLocal {
      * Bloquea (abrir 752 MB del disco tarda): sólo se llama desde un hilo.
      */
     public boolean asegurar() {
+        String elegidoModo = modo();
+        if ("nube".equals(elegidoModo)) {
+            if (abierto()) cerrar();
+            ultimoMotivo = "el modo elegido es PC o nube";
+            return false;
+        }
         if (abierto()) {
-            return true;
+            File actual = modeloActivo();
+            if (actual != null) {
+                PoliticaRecursos.Resultado decision = puedeCargar(actual.length(),
+                        "auto".equals(elegidoModo));
+                if (!decision.permitida) {
+                    ultimoMotivo = decision.motivo;
+                    cerrar();
+                    return false;
+                }
+            }
+            Ficha preferida = elegido();
+            if (preferida != null && actual != null
+                    && preferida.archivo.equals(actual.getName())) {
+                ultimoMotivo = verificar(preferida);
+                if (ultimoMotivo.isEmpty()) return true;
+                cerrar();
+            } else {
+                cerrar();
+            }
         }
 
-        String elegidoModo = modo();
-
-        if ("nube".equals(elegidoModo)) {
+        if ("auto".equals(elegidoModo)) {
+            for (Ficha candidato : catalogo(contexto)) {
+                File disponible = archivoDe(contexto, candidato.archivo);
+                if (!disponible.isFile() || disponible.length() != candidato.bytes
+                        || !sePuedeIntentar(candidato.bytes)) {
+                    continue;
+                }
+                int resultado = cargarSeguro(candidato, true);
+                if (resultado == 0) return true;
+                if (resultado == 2) {
+                    ultimoMotivo = "ningún GGUF pasa la política de recursos";
+                    return false;
+                }
+            }
             return false;
         }
 
         Ficha f = elegido();
-
-        if (f == null) {
-            return false;
-        }
-
-        if ("auto".equals(elegidoModo)) {
-            File archivo = archivoDe(contexto, f.archivo);
-
-            if (!archivo.isFile()
-                    || archivo.length() != f.bytes
-                    || !sePuedeIntentar(f.bytes)) {
-
-                f = null;
-
-                for (Ficha candidato : catalogo(contexto)) {
-                    File disponible = archivoDe(contexto, candidato.archivo);
-
-                    if (!disponible.isFile()
-                            || disponible.length() != candidato.bytes) {
-                        continue;
-                    }
-
-                    if (!sePuedeIntentar(candidato.bytes)) {
-                        continue;
-                    }
-
-                    f = candidato;
-                    break;
-                }
-            }
-
-            if (f == null) {
-                return false;
-            }
-        }
-
-        return cargar(
-                archivoDe(contexto, f.archivo),
-                f.contexto,
-                f.hilos
-        ) == 0;
+        return f != null && cargarSeguro(f, false) == 0;
     }
 
     /**
@@ -375,6 +433,7 @@ public class CerebroLocal {
 
     /** Por qué la ruta no usó el teléfono, en una línea que se puede imprimir. */
     public String porqueNoLocal() {
+        if (!ultimoMotivo.isEmpty()) return ultimoMotivo;
         if (!nativaCargada) {
             return "sin librería nativa en el APK";
         }
@@ -397,19 +456,16 @@ public class CerebroLocal {
      * Abre el GGUF. Se llama desde un hilo aparte: leer 752 MB del disco y repartir
      * la caché tarda segundos, y la cara congelada es peor que una cara que avisa.
      */
-    public int cargar(File gguf, int contextoTokens, int hilos) {
+    private int cargar(File gguf, FileDescriptor descriptor, int contextoTokens, int hilos) {
         synchronized (CERRADURA) {
             if (!nativaCargada) {
                 return -1;
             }
-            if (gguf == null || !gguf.isFile()) {
+            if (gguf == null || descriptor == null || !descriptor.valid()) {
                 return 1;
             }
-            if (activo == gguf && nativeHayCerebro() == 1) {
-                return codigo;                   // ya estaba abierto: no se paga dos veces
-            }
             nativeIniciar();
-            codigo = nativeAbrir(gguf.getAbsolutePath(), contextoTokens, hilos);
+            codigo = nativeAbrirDescriptor(descriptor, contextoTokens, hilos);
             if (codigo == 0) {
                 activo = gguf;
                 prefs.edit().putString(CLAVE_ACTIVO, gguf.getName()).apply();
@@ -422,6 +478,10 @@ public class CerebroLocal {
     }
 
     public void cerrar() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            new Thread(this::cerrar, "cort-cierra-cerebro").start();
+            return;
+        }
         synchronized (CERRADURA) {
             if (nativaCargada) {
                 nativeCerrar();
@@ -496,7 +556,10 @@ public class CerebroLocal {
     }
 
     public void ponerModo(String modo) {
-        prefs.edit().putString(CLAVE_MODO, modo).apply();
+        String valido = Arrays.asList("auto", "local", "nube").contains(modo) ? modo : "auto";
+        prefs.edit().putString(CLAVE_MODO, valido).apply();
+        if ("nube".equals(valido) && abierto()) cerrar();
+        ultimoMotivo = "";
     }
 
     /** Lo que la pantalla de enlace y Ajustes imprimen sin que nadie tenga que adivinar. */
@@ -509,11 +572,10 @@ public class CerebroLocal {
             return "abierto: " + activo.getName() + " · " + backends() + " · " + ultimaMedida();
         }
         if (codigo == 1) {
-            return "el archivo " + guardado + " no abrió (¿cortado o cambiado?)";
+            return ultimoMotivo.isEmpty() ? "el archivo " + guardado + " no está verificado" : ultimoMotivo;
         }
         if (codigo == 2) {
-            return "sin memoria para el contexto: hay " + memoriaLibre() / 1024 / 1024
-                    + " MB libres y el modelo pide más";
+            return ultimoMotivo.isEmpty() ? "la política de recursos bloqueó la carga" : ultimoMotivo;
         }
         return "sin cerebro abierto (" + porqueNoLocal() + ").";
     }

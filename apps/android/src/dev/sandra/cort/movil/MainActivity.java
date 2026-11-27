@@ -205,6 +205,7 @@ public class MainActivity extends Activity {
         if (!pedido.getBooleanExtra(PIDE_ESCUCHAR, false)) {
             return;
         }
+        pedido.removeExtra(PIDE_ESCUCHAR);
         capa.post(() -> {
             if (nexo != null && web == null) {
                 // La cara embebida no tiene micrófono propio: el WebView no expone
@@ -297,6 +298,7 @@ public class MainActivity extends Activity {
             runOnUiThread(this::volverACara);
         });
         nexo.montar(capa);
+        if (cara != null) cara.desactivarMedios();
     }
 
     /** La superficie nativa, con sus datos de aparato ya sembrados. */
@@ -304,11 +306,13 @@ public class MainActivity extends Activity {
         if (cara != null) {
             capa.removeAllViews();
             cara.montar(capa);
+            cara.activarMedios();
             return;
         }
         cara = new Cara(this);
         capa.removeAllViews();
         cara.montar(capa);
+        cara.activarMedios();
     }
 
     /**
@@ -410,6 +414,11 @@ public class MainActivity extends Activity {
      * reconstruirlo sería una forma de romper un secreto.
      */
     private void abrir(String base, String token) {
+        if (nexo != null) {
+            nexo.cerrar();
+            nexo = null;
+        }
+        if (cara != null) cara.desactivarMedios();
         // El enlace que se guarda es el que imprime la PC y cabe en el QR —`…:8765/memoria/puente`—
         // y la ventana necesita la interfaz. `urlDeLaCara` cambia el puerto y la ruta
         // conservando la llave; si ya era una dirección de página, devuelve lo mismo.
@@ -862,6 +871,58 @@ public class MainActivity extends Activity {
         avisar(on ? "Si dices «hola CORT» u «oye CORT», contesto. Se cierra sola a los "
                 + "5 minutos de silencio o al apagar la pantalla."
                 : "Ya no escucho la palabra de activación: el micrófono se cerró.");
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (nexo != null) {
+            nexo.reanudarSensores();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (nexo != null) {
+            nexo.pausarSensores();
+            nexo.pausarVoz();
+        } else if (cara != null && web == null) {
+            cara.pausarVoz();
+        }
+        super.onPause();
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int peticion, String[] permisos, int[] resultados) {
+        super.onRequestPermissionsResult(peticion, permisos, resultados);
+        if (peticion != Nexo.PERMISO_PASOS && peticion != Nexo.PERMISO_MICROFONO) {
+            return;
+        }
+        if (nexo == null) {
+            if (peticion == Nexo.PERMISO_MICROFONO && cara != null) {
+                boolean concedido = false;
+                for (int resultado : resultados) {
+                    if (resultado == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        concedido = true;
+                        break;
+                    }
+                }
+                cara.permisoMicroResult(concedido);
+            }
+            return;
+        }
+        boolean concedido = false;
+        for (int resultado : resultados) {
+            if (resultado == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                concedido = true;
+                break;
+            }
+        }
+        if (peticion == Nexo.PERMISO_MICROFONO) {
+            nexo.permisoMicroResult(concedido);
+        } else {
+            nexo.permisoPasosResult(concedido);
+        }
     }
 
     @Override

@@ -191,15 +191,26 @@ Java_dev_sandra_cort_movil_CerebroLocal_nativeOir(JNIEnv * env, jclass, jobject 
 
 // 0 = abierto · 1 = no leyó el archivo · 2 = no hizo contexto · 3 = sin muestreo
 JNIEXPORT jint JNICALL
-Java_dev_sandra_cort_movil_CerebroLocal_nativeAbrir(JNIEnv * env, jclass, jstring jruta,
+Java_dev_sandra_cort_movil_CerebroLocal_nativeAbrirDescriptor(JNIEnv * env, jclass, jobject descriptor,
                                                     jint contexto, jint hilos) {
     cierra_todo(env);
-    const char * ruta = env->GetStringUTFChars(jruta, 0);
+    if (descriptor == nullptr) {
+        LOGE("no llegó el descriptor verificado del GGUF");
+        return 1;
+    }
+    jclass clase = env->GetObjectClass(descriptor);
+    jfieldID campo = env->GetFieldID(clase, "descriptor", "I");
+    if (campo == nullptr) {
+        LOGE("este runtime no expone el descriptor del archivo");
+        return 1;
+    }
+    const int fd = env->GetIntField(descriptor, campo);
+    char ruta[64];
+    snprintf(ruta, sizeof ruta, "/proc/self/fd/%d", fd);
 
     llama_model_params pm = llama_model_default_params();
     pm.n_gpu_layers = 0;                     // en el teléfono no hay GPU que valga
     g.modelo = llama_model_load_from_file(ruta, pm);
-    env->ReleaseStringUTFChars(jruta, ruta);
     if (!g.modelo) {
         LOGE("el archivo GGUF no abrió (ruta equivocada, truncado o RAM insuficiente)");
         return 1;

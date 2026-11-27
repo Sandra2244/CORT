@@ -10,86 +10,152 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-/**
- * El idioma abierto de CORT cuando el teléfono está solo: **nube opcional, con
- * la clave escrita una vez en el propio aparato**. La dueña eligió «nube si hay
- * internet, local si no», y esta clase es la mitad de nube.
- *
- * Tres cosas escritas antes de tocar el código:
- *
- * 1. **La clave no vive en el repo ni en el APK.** Se teclea una vez en el
- *    teléfono, se cifra con AES-256/GCM y la llave queda en AndroidKeyStore. El
- *    `SharedPreferences` privado sólo guarda el sobre; el campo plano se elimina
- *    en el mismo `commit()` que instala la migración verificada.
- * 2. **Nube es un añadido, nunca un requisito.** Cualquier fallo —sin internet,
- *    cuota, 401, timeout— devuelve `null` y la cara sigue respondiendo con la
- *    tabla local. Un asistente que se calla porque no hay red no es un asistente.
- * 3. **La memoria viaja en el `system`, no en el historial.** Es el bug que ya
- *    cazó el core de Python (`brain.py`): si los hechos de la usuaria entran como
- *    un mensaje más, los filtros de turnos alternantes los barren antes de llegar
- *    al modelo. Aquí no hay filtros, pero el `system` es el sitio correcto igual.
- */
 public class Nube {
     public static final String PREFERENCIAS = "cort-nube";
     private static final String CLAVE_PLANA = "clave";
     private static final String CLAVE_SOBRE = "clave_sobre_v1";
+    private static final String CLAVE_PERFILES = "perfiles_v1";
+    private static final String CLAVE_ACTIVO = "perfil_activo";
     private static final int CONEXION_MS = 12000;
     private static final int LECTURA_MS = 25000;
+    private static final int MAX_RESPUESTA = 1024 * 1024;
 
     private final SharedPreferences prefs;
     private final SobreSecreto sobre = new SobreSecreto();
-    private String ultimoFallo = "";
-    private boolean guardadoRechazado = false;
+    private volatile String ultimoFallo = "";
+    private volatile boolean guardadoRechazado = false;
 
     public Nube(Context contexto) {
         prefs = contexto.getApplicationContext()
                 .getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE);
     }
 
+    public static final class Perfil {
+        public final String id;
+        public final String nombre;
+        public final String proveedor;
+        public final String base;
+        public final String modelo;
+        public final String claveSobre;
+
+        private Perfil(String id, String nombre, String proveedor, String base,
+                       String modelo, String claveSobre) {
+            this.id = id;
+            this.nombre = nombre;
+            this.proveedor = proveedor;
+            this.base = base;
+            this.modelo = modelo;
+            this.claveSobre = claveSobre;
+        }
+
+        public boolean tieneClave() {
+            return claveSobre != null && !claveSobre.isEmpty();
+        }
+
+        public JSONObject publico() {
+            try {
+                return new JSONObject().put("id", id).put("nombre", nombre)
+                        .put("proveedor", proveedor).put("base", base)
+                        .put("modelo", modelo).put("tiene_clave", tieneClave());
+            } catch (JSONException imposible) {
+                throw new IllegalStateException(imposible);
+            }
+        }
+    }
+
+    public synchronized List<Perfil> perfiles() {
+        if (!prefs.contains(CLAVE_PERFILES)) migrarLegacy();
+        List<Perfil> lista = new ArrayList<>();
+        JSONArray j = new JSONArray();
+        try {
+            j = new JSONArray(prefs.getString(CLAVE_PERFILES, "[]"));
+        } catch (JSONException roto) {
+            ultimoFallo = "el registro de proveedores está dañado; vuelve a configurarlo";
+            return lista;
+        }
+        for (int i = 0; i < j.length(); i++) {
+            JSONObject p = j.optJSONObject(i);
+            if (p == null) continue;
+            String id = p.optString("id", "").trim();
+            String proveedor = ProveedorNube.normalizar(p.optString("proveedor", ""));
+            String base = sinBarras(p.optString("base", ""));
+            String modelo = p.optString("modelo", "").trim();
+            if (!idValido(id) || proveedor.isEmpty() || !ProveedorNube.baseOficial(proveedor, base)
+                    || !modeloValido(modelo)) continue;
+            String nombre = p.optString("nombre", proveedor).trim();
+            lista.add(new Perfil(id, nombre.length() > 60 ? nombre.substring(0, 60) : nombre,
+                    proveedor, base, modelo, p.optString("clave_sobre", "")));
+        }
+        return lista;
+    }
+
+    public Perfil activo() {
+        List<Perfil> lista = perfiles();
+        String id = prefs.getString(CLAVE_ACTIVO, "");
+        for (Perfil p : lista) if (p.id.equals(id)) return p;
+        for (Perfil p : lista) if (p.tieneClave()) return p;
+        return lista.isEmpty() ? null : lista.get(0);
+    }
+
+    public String idActivo() {
+        Perfil p = activo();
+        return p == null ? "" : p.id;
+    }
+
+    public String nombreActivo() {
+        Perfil p = activo();
+        return p == null ? "" : p.nombre;
+    }
+
     public boolean configurada() {
-        return !clave().isEmpty() && !base().isEmpty() && !modelo().isEmpty();
+        Perfil p = activo();
+        return p != null && !clave(p).isEmpty() && ProveedorNube.baseOficial(p.proveedor, p.base)
+                && modeloValido(p.modelo);
     }
 
     public String proveedor() {
-        return prefs.getString("proveedor", "anthropic");
+        Perfil p = activo();
+        return p == null ? "anthropic" : p.proveedor;
     }
 
     public String base() {
-        return prefs.getString("base", "https://api.anthropic.com");
+        Perfil p = activo();
+        return p == null ? ProveedorNube.basePorDefecto("anthropic") : p.base;
     }
 
     public String modelo() {
-        return prefs.getString("modelo", "");
+        Perfil p = activo();
+        return p == null ? "" : p.modelo;
     }
 
     public boolean hayClave() {
         if (guardadoRechazado) return false;
-        if (!prefs.contains(CLAVE_SOBRE) && !prefs.contains(CLAVE_PLANA)) return false;
-        String antigua = prefs.getString(CLAVE_PLANA, "");
-        if (!antigua.isEmpty()) {
-            if (!migrar(antigua)) {
-                ultimoFallo = "no se pudo proteger la clave; vuelve a teclearla";
-                return false;
-            }
-        }
-        return !prefs.getString(CLAVE_SOBRE, "").isEmpty();
+        Perfil p = activo();
+        return p != null && p.tieneClave();
     }
 
-    /** Sólo se usa para una petición; ninguna pantalla ni respuesta la recibe. */
     public String clave() {
-        if (!hayClave()) return "";
+        return clave(activo());
+    }
+
+    private String clave(Perfil p) {
+        if (p == null || !p.tieneClave()) return "";
         try {
-            return sobre.descifrar(prefs.getString(CLAVE_SOBRE, ""), llaveKeystore());
-        } catch (GeneralSecurityException | java.io.IOException error) {
+            return sobre.descifrar(p.claveSobre, llaveKeystore());
+        } catch (GeneralSecurityException | IOException error) {
             ultimoFallo = "no se pudo abrir la clave cifrada";
             return "";
         } catch (IllegalArgumentException error) {
@@ -103,71 +169,179 @@ public class Nube {
     }
 
     public void ajustar(String proveedor, String base, String modelo, String clave) {
-        SharedPreferences.Editor editor = prefs.edit()
-                .putString("proveedor", proveedor)
-                .putString("base", sinBarras(base))
-                .putString("modelo", modelo);
-        boolean sobreValido = true;
-        if (clave == null || clave.isEmpty()) {
-            editor.remove(CLAVE_PLANA).remove(CLAVE_SOBRE);
-        } else if (!guardarSobre(editor, clave)) {
-            editor.remove(CLAVE_PLANA).remove(CLAVE_SOBRE);
-            sobreValido = false;
-            ultimoFallo = "no se pudo guardar la clave cifrada; no se escribió en claro";
-        }
-        if (!editor.commit()) {
-            guardadoRechazado = true;
-            ultimoFallo = "no se pudieron guardar los ajustes; vuelve a intentarlo";
-            return;
-        }
-        guardadoRechazado = false;
-        ultimoFallo = sobreValido
-                ? ""
-                : "no se pudo guardar la clave cifrada; no se escribió en claro";
+        Perfil p = activo();
+        guardarPerfil(p == null ? "principal" : p.id,
+                p == null ? proveedor : p.nombre, proveedor, base, modelo, clave);
     }
 
-    public void borrarClave() {
-        SharedPreferences.Editor editor = prefs.edit().remove(CLAVE_PLANA).remove(CLAVE_SOBRE);
+    public boolean guardarPerfil(String id, String nombre, String proveedor,
+                                 String base, String modelo, String clave) {
+        String idLimpio = id == null ? "" : id.trim().toLowerCase(Locale.ROOT);
+        String proveedorLimpio = ProveedorNube.normalizar(proveedor);
+        String baseLimpia = sinBarras(base);
+        String modeloLimpio = modelo == null ? "" : modelo.trim();
+        String nombreLimpio = nombre == null ? "" : nombre.trim();
+        if (!idValido(idLimpio) || proveedorLimpio.isEmpty()
+                || !ProveedorNube.baseOficial(proveedorLimpio, baseLimpia) || !modeloValido(modeloLimpio)) {
+            ultimoFallo = "revisa el identificador, proveedor, endpoint oficial y modelo";
+            return false;
+        }
+        if (nombreLimpio.isEmpty()) nombreLimpio = proveedorLimpio;
+        List<Perfil> lista = perfiles();
+        String sobreClave = "";
+        for (Perfil p : lista) if (p.id.equals(idLimpio)) sobreClave = p.claveSobre;
+        if (clave != null && !clave.isEmpty()) {
+            try {
+                sobreClave = sobre.cifrar(clave, llaveKeystore());
+                String recuperada = sobre.descifrar(sobreClave, llaveKeystore());
+                if (!clave.equals(recuperada)) throw new GeneralSecurityException("verificación fallida");
+            } catch (GeneralSecurityException | IOException | IllegalArgumentException error) {
+                ultimoFallo = "no se pudo proteger la clave; no se escribió en claro";
+                return false;
+            }
+        }
+        JSONArray j = new JSONArray();
+        boolean puesto = false;
+        for (Perfil p : lista) {
+            if (p.id.equals(idLimpio)) {
+                j.put(registro(idLimpio, nombreLimpio, proveedorLimpio, baseLimpia,
+                        modeloLimpio, sobreClave));
+                puesto = true;
+            } else {
+                j.put(registro(p.id, p.nombre, p.proveedor, p.base, p.modelo, p.claveSobre));
+            }
+        }
+        if (!puesto) j.put(registro(idLimpio, nombreLimpio, proveedorLimpio, baseLimpia,
+                modeloLimpio, sobreClave));
+        SharedPreferences.Editor editor = prefs.edit().putString(CLAVE_PERFILES, j.toString())
+                .putString(CLAVE_ACTIVO, idLimpio).remove(CLAVE_PLANA).remove(CLAVE_SOBRE)
+                .remove("proveedor").remove("base").remove("modelo");
         if (!editor.commit()) {
             guardadoRechazado = true;
-            ultimoFallo = "no se pudo borrar la clave; vuelve a intentarlo";
-            return;
-        }
-        guardadoRechazado = false;
-        try {
-            KeyStore almacen = KeyStore.getInstance("AndroidKeyStore");
-            almacen.load(null);
-            if (almacen.containsAlias(SobreSecreto.ALIAS)) almacen.deleteEntry(SobreSecreto.ALIAS);
-            ultimoFallo = "";
-        } catch (GeneralSecurityException | java.io.IOException error) {
-            ultimoFallo = "se quitó el sobre, pero no se pudo borrar el alias";
-        }
-    }
-
-    private boolean migrar(String antigua) {
-        SharedPreferences.Editor editor = prefs.edit();
-        if (!guardarSobre(editor, antigua)) return false;
-        if (!editor.commit()) {
-            guardadoRechazado = true;
+            ultimoFallo = "no se pudieron guardar los ajustes";
             return false;
         }
         guardadoRechazado = false;
+        ultimoFallo = "";
         return true;
     }
 
-    private boolean guardarSobre(SharedPreferences.Editor editor, String texto) {
-        try {
-            String cifrado = sobre.cifrar(texto, llaveKeystore());
-            String recuperado = sobre.descifrar(cifrado, llaveKeystore());
-            if (!texto.equals(recuperado)) return false;
-            editor.putString(CLAVE_SOBRE, cifrado).remove(CLAVE_PLANA);
-            return true;
-        } catch (GeneralSecurityException | java.io.IOException | IllegalArgumentException error) {
-            return false;
+    public boolean usarPerfil(String id) {
+        for (Perfil p : perfiles()) {
+            if (p.id.equals(id)) {
+                boolean ok = prefs.edit().putString(CLAVE_ACTIVO, id).commit();
+                if (!ok) ultimoFallo = "no se pudo seleccionar el proveedor";
+                return ok;
+            }
+        }
+        ultimoFallo = "ese proveedor no está registrado";
+        return false;
+    }
+
+    public void borrarClave() {
+        Perfil p = activo();
+        if (p != null) guardarPerfil(p.id, p.nombre, p.proveedor, p.base, p.modelo, "");
+        Perfil limpio = activo();
+        if (limpio != null && !limpio.tieneClave()) {
+            List<Perfil> lista = perfiles();
+            JSONArray j = new JSONArray();
+            for (Perfil q : lista) j.put(registro(q.id, q.nombre, q.proveedor,
+                    q.base, q.modelo, ""));
+            prefs.edit().putString(CLAVE_PERFILES, j.toString()).commit();
         }
     }
 
-    private SecretKey llaveKeystore() throws GeneralSecurityException, java.io.IOException {
+    public boolean borrarPerfil(String id) {
+        List<Perfil> lista = perfiles();
+        JSONArray j = new JSONArray();
+        boolean encontrado = false;
+        boolean quedaClave = false;
+        for (Perfil p : lista) {
+            if (p.id.equals(id)) {
+                encontrado = true;
+            } else {
+                j.put(registro(p.id, p.nombre, p.proveedor, p.base, p.modelo, p.claveSobre));
+                quedaClave |= p.tieneClave();
+            }
+        }
+        if (!encontrado) return false;
+        JSONObject primero = j.optJSONObject(0);
+        String siguiente = primero == null ? "" : primero.optString("id", "");
+        if (!prefs.edit().putString(CLAVE_PERFILES, j.toString())
+                .putString(CLAVE_ACTIVO, siguiente).commit()) {
+            ultimoFallo = "no se pudo borrar el proveedor";
+            return false;
+        }
+        if (!quedaClave) borrarAlias();
+        return true;
+    }
+
+    private void migrarLegacy() {
+        boolean hay = false;
+        for (String k : new String[] {"proveedor", "base", "modelo", CLAVE_PLANA, CLAVE_SOBRE}) {
+            hay |= prefs.contains(k);
+        }
+        if (!hay) return;
+        String antigua = prefs.getString(CLAVE_PLANA, "");
+        String cifrada = prefs.getString(CLAVE_SOBRE, "");
+        try {
+            if (!antigua.isEmpty()) {
+                cifrada = sobre.cifrar(antigua, llaveKeystore());
+            }
+            if (!cifrada.isEmpty()) {
+                String comprobada = sobre.descifrar(cifrada, llaveKeystore());
+                if (comprobada.isEmpty()) throw new GeneralSecurityException("clave vacía");
+            }
+        } catch (GeneralSecurityException | IOException | IllegalArgumentException error) {
+            ultimoFallo = "la clave antigua no se pudo verificar; se conservó sin migrar";
+            return;
+        }
+        String proveedorGuardado = prefs.getString("proveedor", "anthropic");
+        String proveedor = ProveedorNube.normalizar(proveedorGuardado);
+        String base = prefs.getString("base", "");
+        String modelo = prefs.getString("modelo", "");
+        if (proveedor.isEmpty() || (base.isEmpty() && !prefs.contains("base"))) {
+            ultimoFallo = "la configuración anterior no es válida; se conservó sin migrar";
+            return;
+        }
+        if (base.isEmpty()) base = ProveedorNube.basePorDefecto(proveedor);
+        if (!ProveedorNube.baseOficial(proveedor, base) || !modeloValido(modelo)) {
+            ultimoFallo = "el endpoint o modelo anterior no es válido; se conservó sin migrar";
+            return;
+        }
+        JSONArray j = new JSONArray().put(registro("principal", "Principal", proveedor,
+                sinBarras(base), modelo, cifrada));
+        if (!prefs.edit().putString(CLAVE_PERFILES, j.toString())
+                .putString(CLAVE_ACTIVO, "principal").remove(CLAVE_PLANA).remove(CLAVE_SOBRE)
+                .remove("proveedor").remove("base").remove("modelo").commit()) {
+            ultimoFallo = "no se pudo migrar la configuración anterior";
+        }
+    }
+
+    private static JSONObject registro(String id, String nombre, String proveedor,
+                                        String base, String modelo, String claveSobre) {
+        try {
+            return new JSONObject().put("id", id).put("nombre", nombre)
+                    .put("proveedor", proveedor).put("base", base).put("modelo", modelo)
+                    .put("clave_sobre", claveSobre);
+        } catch (JSONException imposible) {
+            throw new IllegalStateException(imposible);
+        }
+    }
+
+    private static boolean idValido(String id) {
+        return id != null && id.matches("[a-z0-9][a-z0-9-]{0,39}");
+    }
+
+    private static boolean modeloValido(String modelo) {
+        if (modelo == null || modelo.isEmpty() || modelo.length() > 120) return false;
+        for (int i = 0; i < modelo.length(); i++) {
+            if (Character.isISOControl(modelo.charAt(i))) return false;
+        }
+        return true;
+    }
+
+    private SecretKey llaveKeystore() throws GeneralSecurityException, IOException {
         KeyStore almacen = KeyStore.getInstance("AndroidKeyStore");
         almacen.load(null);
         if (!almacen.containsAlias(SobreSecreto.ALIAS)) {
@@ -176,61 +350,56 @@ public class Nube {
                     KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build());
+                    .setKeySize(256).build());
             generador.generateKey();
         }
         return (SecretKey) almacen.getKey(SobreSecreto.ALIAS, null);
     }
 
+    private void borrarAlias() {
+        try {
+            KeyStore almacen = KeyStore.getInstance("AndroidKeyStore");
+            almacen.load(null);
+            if (almacen.containsAlias(SobreSecreto.ALIAS)) almacen.deleteEntry(SobreSecreto.ALIAS);
+        } catch (GeneralSecurityException | IOException error) {
+            ultimoFallo = "se quitaron los sobres, pero no se pudo borrar el alias";
+        }
+    }
+
     private static String sinBarras(String url) {
         String s = url == null ? "" : url.trim();
-        while (s.endsWith("/")) {
-            s = s.substring(0, s.length() - 1);
-        }
+        while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
         return s;
     }
 
-    /**
-     * Pregunta al modelo. **Bloqueante**: se llama desde un hilo de trabajo y el
-     * resultado se devuelve a la interfaz con `runOnUiThread`, por el mismo
-     * motivo por el que la búsqueda por UDP no va en el hilo de la UI.
-     */
     public String preguntar(String pregunta, String memoria) {
         return preguntar(CerebroLocal.sistemaCort(memoria), pregunta, null);
     }
 
-    /**
-     * La misma pregunta con el carácter que arma `Consticion` y los turnos ya
-     * dichos (F20d). El `sistema` se recibe en vez de escribirse aquí para que la
-     * personalidad no quede en dos archivos: la del GGUF y la de la nube tienen que
-     * ser la misma, o CORT cambia de carácter según el camino que eligió.
-     *
-     * Los hechos de la dueña siguen yendo en el `system` (punto 3 de arriba); el
-     * historial son sólo turnos de conversación, que es lo que los filtros de
-     * turnos alternantes de los proveedores esperan encontrar.
-     */
-    public String preguntar(String sistema, String pregunta, java.util.List<String[]> historial) {
+    public String preguntar(String sistema, String pregunta, List<String[]> historial) {
         ultimoFallo = "";
-        String claveApi = clave();
-        if (claveApi.isEmpty() || base().isEmpty() || modelo().isEmpty()) {
-            if (ultimoFallo.isEmpty()) ultimoFallo = "sin configurar";
+        Perfil p = activo();
+        if (p == null || !p.tieneClave() || !ProveedorNube.baseOficial(p.proveedor, p.base)
+                || !modeloValido(p.modelo)) {
+            ultimoFallo = "sin configurar";
             return null;
         }
+        String claveApi = clave(p);
+        if (claveApi.isEmpty()) return null;
         try {
             JSONArray mensajes = new JSONArray();
             if (historial != null) {
                 for (String[] turno : historial) {
-                    if (turno == null || turno.length < 2 || turno[1].isEmpty()) {
-                        continue;
-                    }
-                    mensajes.put(new JSONObject().put("role", turno[0]).put("content", turno[1]));
+                    if (turno == null || turno.length < 2 || turno[1].isEmpty()) continue;
+                    mensajes.put(new JSONObject().put("role", normalizarRol(turno[0], p.proveedor))
+                            .put("content", turno[1]));
                 }
             }
-            mensajes.put(new JSONObject().put("role", "user").put("content", pregunta));
-            return "openai".equals(proveedor())
-                    ? porOpenAICompatible(sistema, mensajes, claveApi)
-                    : porAnthropic(sistema, mensajes, claveApi);
+            mensajes.put(new JSONObject().put("role", normalizarRol("user", p.proveedor))
+                    .put("content", pregunta));
+            if (ProveedorNube.antropico(p.proveedor)) return porAnthropic(p, sistema, mensajes, claveApi);
+            if (ProveedorNube.gemini(p.proveedor)) return porGemini(p, sistema, mensajes, claveApi);
+            return porOpenAICompatible(p, sistema, mensajes, claveApi);
         } catch (IOException red) {
             ultimoFallo = "sin internet o el servicio no contestó";
             return null;
@@ -240,43 +409,68 @@ public class Nube {
         }
     }
 
-    /**
-     * `JSONException` va en las firmas **porque en Android es una excepción
-     * comprobada** (`org.json.JSONException extends Exception`, a diferencia de la
-     * librería `org.json` de Maven, donde es de runtime). Omitirla es un
-     * `unreported exception` de `javac` y un Run rojo: el coste de haberlo
-     * adivinado mal se mide en minutos de pipeline, no en segundos aquí.
-     */
-    private String porAnthropic(String sistema, JSONArray mensajes, String claveApi)
+    private static String normalizarRol(String rol, String proveedor) {
+        boolean asistente = "assistant".equals(rol);
+        return ProveedorNube.gemini(proveedor) && asistente ? "model" : rol;
+    }
+
+    private String porAnthropic(Perfil p, String sistema, JSONArray mensajes, String claveApi)
             throws IOException, JSONException {
-        JSONObject cuerpo = new JSONObject();
-        cuerpo.put("model", modelo());
-        cuerpo.put("max_tokens", 400);
-        cuerpo.put("system", sistema);
-        cuerpo.put("messages", mensajes);
-        HttpURLConnection conexion = abrir(base() + "/v1/messages");
+        JSONObject cuerpo = new JSONObject().put("model", p.modelo).put("max_tokens", 400)
+                .put("system", sistema).put("messages", mensajes);
+        HttpURLConnection conexion = abrir(p, "/v1/messages");
         conexion.setRequestProperty("x-api-key", claveApi);
         conexion.setRequestProperty("anthropic-version", "2023-06-01");
         JSONObject respuesta = enviar(conexion, cuerpo);
         JSONArray contenido = respuesta.optJSONArray("content");
-        if (contenido == null || contenido.length() == 0) {
+        if (contenido == null) {
             ultimoFallo = "respuesta vacía";
             return null;
         }
-        return textoDe(contenido.getJSONObject(0).optString("text"));
+        StringBuilder texto = new StringBuilder();
+        for (int i = 0; i < contenido.length(); i++) {
+            JSONObject parte = contenido.optJSONObject(i);
+            if (parte != null && "text".equals(parte.optString("type"))) {
+                texto.append(parte.optString("text"));
+            }
+        }
+        return textoDe(texto.toString());
     }
 
-    private String porOpenAICompatible(String sistema, JSONArray mensajes, String claveApi)
+    private String porGemini(Perfil p, String sistema, JSONArray mensajes, String claveApi)
             throws IOException, JSONException {
-        JSONArray turnos = new JSONArray()
-                .put(new JSONObject().put("role", "system").put("content", sistema));
-        for (int i = 0; i < mensajes.length(); i++) {
-            turnos.put(mensajes.get(i));
+        JSONObject instruccion = new JSONObject().put("parts", new JSONArray()
+                .put(new JSONObject().put("text", sistema)));
+        JSONObject cuerpo = new JSONObject().put("systemInstruction", instruccion)
+                .put("contents", mensajes).put("generationConfig",
+                        new JSONObject().put("maxOutputTokens", 400));
+        String modelo = URLEncoder.encode(p.modelo, StandardCharsets.UTF_8.name());
+        HttpURLConnection conexion = abrir(p, "/models/" + modelo + ":generateContent");
+        conexion.setRequestProperty("x-goog-api-key", claveApi);
+        JSONObject respuesta = enviar(conexion, cuerpo);
+        JSONArray candidatos = respuesta.optJSONArray("candidates");
+        if (candidatos == null || candidatos.length() == 0) {
+            ultimoFallo = "respuesta vacía";
+            return null;
         }
-        JSONObject cuerpo = new JSONObject();
-        cuerpo.put("model", modelo());
-        cuerpo.put("messages", turnos);
-        HttpURLConnection conexion = abrir(base() + "/chat/completions");
+        JSONObject contenido = candidatos.getJSONObject(0).optJSONObject("content");
+        JSONArray partes = contenido == null ? null : contenido.optJSONArray("parts");
+        if (partes == null) {
+            ultimoFallo = "respuesta sin texto";
+            return null;
+        }
+        StringBuilder texto = new StringBuilder();
+        for (int i = 0; i < partes.length(); i++) texto.append(partes.optJSONObject(i).optString("text"));
+        return textoDe(texto.toString());
+    }
+
+    private String porOpenAICompatible(Perfil p, String sistema, JSONArray mensajes, String claveApi)
+            throws IOException, JSONException {
+        JSONArray turnos = new JSONArray().put(new JSONObject().put("role", "system")
+                .put("content", sistema));
+        for (int i = 0; i < mensajes.length(); i++) turnos.put(mensajes.get(i));
+        JSONObject cuerpo = new JSONObject().put("model", p.modelo).put("messages", turnos);
+        HttpURLConnection conexion = abrir(p, "/chat/completions");
         conexion.setRequestProperty("Authorization", "Bearer " + claveApi);
         JSONObject respuesta = enviar(conexion, cuerpo);
         JSONArray opciones = respuesta.optJSONArray("choices");
@@ -284,12 +478,20 @@ public class Nube {
             ultimoFallo = "respuesta vacía";
             return null;
         }
-        return textoDe(opciones.getJSONObject(0).getJSONObject("message")
-                .optString("content"));
+        JSONObject mensaje = opciones.getJSONObject(0).optJSONObject("message");
+        return textoDe(mensaje == null ? "" : mensaje.optString("content"));
     }
 
-    private HttpURLConnection abrir(String url) throws IOException {
+    private HttpURLConnection abrir(Perfil p, String ruta) throws IOException {
+        if (p == null || !ProveedorNube.baseOficial(p.proveedor, p.base)
+                || ruta == null || !ruta.startsWith("/") || ruta.contains("?")
+                || ruta.contains("#") || ruta.contains("..") || ruta.contains("\\")) {
+            throw new IOException("la petición no corresponde al endpoint oficial");
+        }
+        String url = sinBarras(p.base) + ruta;
+        if (!ProveedorNube.baseSegura(url)) throw new IOException("la petición no es HTTPS pública");
         HttpURLConnection conexion = (HttpURLConnection) new URL(url).openConnection();
+        conexion.setInstanceFollowRedirects(false);
         conexion.setConnectTimeout(CONEXION_MS);
         conexion.setReadTimeout(LECTURA_MS);
         conexion.setRequestMethod("POST");
@@ -301,43 +503,40 @@ public class Nube {
 
     private JSONObject enviar(HttpURLConnection conexion, JSONObject cuerpo)
             throws IOException, JSONException {
-        byte[] peticion = cuerpo.toString().getBytes(StandardCharsets.UTF_8);
-        OutputStream salida = conexion.getOutputStream();
         try {
-            salida.write(peticion);
+            byte[] peticion = cuerpo.toString().getBytes(StandardCharsets.UTF_8);
+            OutputStream salida = conexion.getOutputStream();
+            try {
+                salida.write(peticion);
+            } finally {
+                salida.close();
+            }
+            int codigo = conexion.getResponseCode();
+            if (codigo >= 300 && codigo < 400) throw new IOException("la nube intentó redirigir; se rechazó");
+            String leido = lee(codigo >= 400 ? conexion.getErrorStream() : conexion.getInputStream());
+            if (codigo >= 400) throw new IOException("el servicio contestó " + codigo);
+            return new JSONObject(leido);
         } finally {
-            salida.close();
+            conexion.disconnect();
         }
-        int codigo = conexion.getResponseCode();
-        String leido = lee(codigo >= 400 ? conexion.getErrorStream() : conexion.getInputStream());
-        conexion.disconnect();
-        if (codigo >= 400) {
-            ultimoFallo = "el servicio contestó " + codigo;
-            throw new IOException(ultimoFallo);
-        }
-        return new JSONObject(leido);
     }
 
     private static String lee(InputStream entrada) throws IOException {
-        if (entrada == null) {
-            return "";
-        }
+        if (entrada == null) return "";
         ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         byte[] trozo = new byte[4096];
         int n;
         while ((n = entrada.read(trozo)) > 0) {
+            if (buffer.size() + n > MAX_RESPUESTA) throw new IOException("respuesta demasiado grande");
             buffer.write(trozo, 0, n);
         }
         entrada.close();
         return new String(buffer.toByteArray(), StandardCharsets.UTF_8);
     }
 
-    /** Recorta el texto a lo que cabe dicho en voz alta, y le quita el markdown. */
     private static String textoDe(String crudo) {
         String limpio = crudo == null ? "" : crudo.replace("*", "").replace("#", "").trim();
-        while (limpio.endsWith("\n")) {
-            limpio = limpio.substring(0, limpio.length() - 1);
-        }
+        while (limpio.endsWith("\n")) limpio = limpio.substring(0, limpio.length() - 1);
         return limpio.length() <= 600 ? limpio : limpio.substring(0, 600);
     }
 }

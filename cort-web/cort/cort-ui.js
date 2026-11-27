@@ -2004,6 +2004,945 @@
   };
 
   // ---- ASIS-1: un centro de acciones y conversación accesible -----------------
+  const NOMBRES_SENSORES = {
+    acelerometro: "Acelerómetro", giroscopio: "Giroscopio", magnetometro: "Magnetómetro",
+    luz: "Luz ambiental", proximidad: "Proximidad", presion: "Presión",
+    temperatura_ambiente: "Temperatura ambiente", humedad: "Humedad relativa",
+    pasos: "Podómetro", detector_pasos: "Detector de pasos",
+    bateria: "Batería", temperatura_bateria: "Temperatura de batería"
+  };
+  const PRECISION_SENSOR = { 0: "alta", 1: "media", 2: "baja", 3: "sin contacto" };
+  let ultimosSensores = null;
+  let ultimosPasos = null;
+  let ultimoSistema = null;
+  let permisoSensores = null;
+  let retornoDispositivo = null;
+  let ultimosMedios = null;
+  let retornoMedios = null;
+  let ultimoAsistente = null;
+  let retornoAsistente = null;
+  let retornoVida = null;
+  let memoriaPendiente = null;
+  let memoriaPlan = null;
+  let rutinaPlan = null;
+  let ejecucionVida = null;
+  let hechosVida = [];
+
+  function mediosAbiertos() {
+    const panel = document.getElementById("cort-medios");
+    return !!panel && !panel.hidden;
+  }
+
+  function abrirMedios() {
+    const panel = document.getElementById("cort-medios");
+    if (!panel) return;
+    const chat = document.getElementById("cort-chat");
+    if (chat && !chat.hidden) cerrarChat(false);
+    if (dispositivoAbierto()) cerrarDispositivo(false);
+    if (asistenteAbierto()) cerrarAsistente(false);
+    if (vidaAbierta()) cerrarVida(false);
+    if (avisosAbierto()) cerrarAvisos(false);
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    retornoMedios = document.getElementById("medios-btn") || document.activeElement;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    panel.hidden = false;
+    document.getElementById("medios-btn")?.setAttribute("aria-expanded", "true");
+    fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+      document.getElementById("cort-detener-btn")].filter(Boolean));
+    document.getElementById("cort-medios-cerrar")?.focus();
+    window.CORT_enviarAlCerebro({ type: "medios_estado" });
+    if (ultimosMedios) pintarMedios(ultimosMedios);
+  }
+
+  function cerrarMedios(restaurar = true) {
+    const panel = document.getElementById("cort-medios");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    document.getElementById("medios-btn")?.setAttribute("aria-expanded", "false");
+    fondoActivar();
+    if (restaurar && retornoMedios && retornoMedios.isConnected) retornoMedios.focus();
+    retornoMedios = null;
+  }
+
+  function pintarMedios(n) {
+    if (!n || n.type !== "medios_estado") return;
+    ultimosMedios = n;
+    const nombres = { reproduciendo: "Reproduciendo", preparando: "Preparando", pausado: "Pausado", detenido: "Detenido" };
+    const estado = document.getElementById("cort-medios-estado");
+    const salida = document.getElementById("cort-medios-salida");
+    const externo = document.getElementById("cort-medios-externo");
+    const mensaje = document.getElementById("cort-medios-mensaje");
+    const limite = document.getElementById("cort-medios-limite");
+    if (estado) estado.textContent = nombres[n.estado] || "Sin datos";
+    if (salida) salida.textContent = n.salida || "Sin datos";
+    if (externo) externo.textContent = n.control_externo === "no disponible"
+      ? "No disponible" : String(n.control_externo || "Sin datos");
+    if (mensaje) mensaje.textContent = n.mensaje || (n.estado === "reproduciendo" ? "CORT está hablando." : "Esperando una orden.");
+    if (limite) limite.textContent = n.limite || "Controla sólo la voz de CORT.";
+    const reproducir = document.getElementById("cort-medios-play");
+    const pausar = document.getElementById("cort-medios-pause");
+    const detener = document.getElementById("cort-medios-stop");
+    const anterior = document.getElementById("cort-medios-prev");
+    const siguiente = document.getElementById("cort-medios-next");
+    if (reproducir) reproducir.disabled = !n.puede_reproducir;
+    if (pausar) pausar.disabled = !["reproduciendo", "preparando"].includes(n.estado);
+    if (detener) detener.disabled = n.estado === "detenido";
+    if (anterior) anterior.disabled = !n.puede_anterior;
+    if (siguiente) siguiente.disabled = !n.puede_siguiente;
+  }
+
+  function accionMedios(accion) {
+    window.CORT_enviarAlCerebro({ type: "medios_accion", accion });
+  }
+
+  function asistenteAbierto() {
+    const panel = document.getElementById("cort-asistente");
+    return !!panel && !panel.hidden;
+  }
+
+  function abrirAsistente() {
+    const panel = document.getElementById("cort-asistente");
+    if (!panel) return;
+    const chat = document.getElementById("cort-chat");
+    if (chat && !chat.hidden) cerrarChat(false);
+    if (dispositivoAbierto()) cerrarDispositivo(false);
+    if (mediosAbiertos()) cerrarMedios(false);
+    if (vidaAbierta()) cerrarVida(false);
+    if (avisosAbierto()) cerrarAvisos(false);
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    retornoAsistente = document.getElementById("asistente-btn") || document.activeElement;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    panel.hidden = false;
+    document.getElementById("asistente-btn")?.setAttribute("aria-expanded", "true");
+    fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+      document.getElementById("cort-detener-btn")].filter(Boolean));
+    document.getElementById("cort-asistente-cerrar")?.focus();
+    window.CORT_enviarAlCerebro({ type: "asistente_estado" });
+    if (ultimoAsistente) pintarAsistente(ultimoAsistente);
+  }
+
+  function cerrarAsistente(restaurar = true) {
+    const panel = document.getElementById("cort-asistente");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    document.getElementById("asistente-btn")?.setAttribute("aria-expanded", "false");
+    fondoActivar();
+    if (restaurar && retornoAsistente && retornoAsistente.isConnected) retornoAsistente.focus();
+    retornoAsistente = null;
+  }
+
+  function pintarAsistente(n) {
+    if (!n || n.type !== "asistente_estado") return;
+    ultimoAsistente = n;
+    const registro = document.getElementById("cort-asistente-registro");
+    const predeterminado = document.getElementById("cort-asistente-predeterminado");
+    const overlay = document.getElementById("cort-asistente-overlay");
+    const mensaje = document.getElementById("cort-asistente-mensaje");
+    const limite = document.getElementById("cort-asistente-limite");
+    if (registro) registro.textContent = n.registrado ? "Declarado en el APK" : "Sin datos";
+    if (predeterminado) predeterminado.textContent = n.predeterminado === true ? "Sí"
+      : n.predeterminado === false ? "No" : String(n.predeterminado || "Sin datos");
+    if (overlay) overlay.textContent = n.superposicion ? "Permiso concedido" : "Permiso pendiente";
+    if (mensaje) mensaje.textContent = !n.superposicion
+      ? "Concede el permiso de superposición para probar la vista rápida."
+      : n.predeterminado === true ? "CORT está elegido como asistente."
+        : "CORT está listo para que lo elijas en Ajustes.";
+    if (limite) limite.textContent = n.limite || "CORT coexiste con Gemini y no lo deshabilita.";
+  }
+
+  function accionAsistente(accion) {
+    window.CORT_enviarAlCerebro({ type: accion });
+  }
+
+  function vidaAbierta() {
+    const panel = document.getElementById("cort-vida");
+    return !!panel && !panel.hidden;
+  }
+
+  function abrirVida() {
+    const panel = document.getElementById("cort-vida");
+    if (!panel) return;
+    const chat = document.getElementById("cort-chat");
+    if (chat && !chat.hidden) cerrarChat(false);
+    if (dispositivoAbierto()) cerrarDispositivo(false);
+    if (mediosAbiertos()) cerrarMedios(false);
+    if (asistenteAbierto()) cerrarAsistente(false);
+    if (avisosAbierto()) cerrarAvisos(false);
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    retornoVida = document.getElementById("vida-btn") || document.activeElement;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    panel.hidden = false;
+    document.getElementById("vida-btn")?.setAttribute("aria-expanded", "true");
+    fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+      document.getElementById("cort-detener-btn")].filter(Boolean));
+    document.getElementById("cort-vida-cerrar")?.focus();
+    if (!document.getElementById("cort-rutina-constructor")?.children.length) agregarPasoRutina();
+    refrescarVida();
+  }
+
+  function cerrarVida(restaurar = true) {
+    const panel = document.getElementById("cort-vida");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    document.getElementById("vida-btn")?.setAttribute("aria-expanded", "false");
+    cancelarPlanMemoria();
+    cancelarPlanRutina();
+    fondoActivar();
+    if (restaurar && retornoVida && retornoVida.isConnected) retornoVida.focus();
+    retornoVida = null;
+  }
+
+  function refrescarVida() {
+    window.CORT_enviarAlCerebro({ type: "memoria_listar" });
+    window.CORT_enviarAlCerebro({ type: "alarmas_estado" });
+    window.CORT_enviarAlCerebro({ type: "rutinas_estado" });
+  }
+
+  function fechaVida(valor) {
+    const ms = Number(valor);
+    return Number.isFinite(ms) && ms > 0 ? new Date(ms).toLocaleString() : "sin fecha";
+  }
+
+  function tarjetaVida(titulo, parrafos, acciones) {
+    const tarjeta = document.createElement("article");
+    tarjeta.className = "cort-vida-item";
+    const encabezado = document.createElement("h3");
+    encabezado.textContent = titulo;
+    tarjeta.appendChild(encabezado);
+    for (const texto of parrafos) {
+      if (!texto) continue;
+      const parrafo = document.createElement("p");
+      parrafo.textContent = texto;
+      tarjeta.appendChild(parrafo);
+    }
+    if (acciones && acciones.length) {
+      const controles = document.createElement("div");
+      controles.className = "cort-dispositivo-controles";
+      for (const [texto, accion] of acciones) {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.textContent = texto;
+        boton.addEventListener("click", accion);
+        controles.appendChild(boton);
+      }
+      tarjeta.appendChild(controles);
+    }
+    return tarjeta;
+  }
+
+  function mensajeVida(id, texto) {
+    const elemento = document.getElementById(id);
+    if (elemento) elemento.textContent = texto;
+  }
+
+  function detalleVida(id, datos) {
+    const elemento = document.getElementById(id);
+    if (!elemento) return;
+    elemento.hidden = false;
+    elemento.textContent = JSON.stringify(datos, null, 2);
+  }
+
+  function cancelarPlanMemoria(revocar = true) {
+    if (revocar && memoriaPlan && memoriaPlan.token) {
+      window.CORT_enviarAlCerebro({ type: "memoria_cancelar", token: memoriaPlan.token });
+    }
+    memoriaPendiente = null;
+    memoriaPlan = null;
+    const confirmacion = document.getElementById("cort-memoria-confirmacion");
+    if (confirmacion) confirmacion.hidden = true;
+    const texto = document.getElementById("cort-memoria-plan-texto");
+    if (texto) texto.textContent = "";
+  }
+
+  function prepararMemoria(accion, id, valor) {
+    const clave = String(id || "").trim();
+    const texto = String(valor || "").trim();
+    if (!clave || clave.length > 80) {
+      mensajeVida("cort-memoria-mensaje", "La clave debe tener entre 1 y 80 caracteres.");
+      return;
+    }
+    if (accion !== "borrar" && (!texto || texto.length > 2000)) {
+      mensajeVida("cort-memoria-mensaje", "El valor debe tener entre 1 y 2000 caracteres.");
+      return;
+    }
+    cancelarPlanMemoria();
+    memoriaPendiente = { accion, id: clave, valor: texto };
+    mensajeVida("cort-memoria-mensaje", "Preparando una confirmación local de un solo uso.");
+    window.CORT_enviarAlCerebro({ type: "memoria_preparar", accion, id: clave, valor: texto });
+  }
+
+  function pintarMemoriaPlan(n) {
+    if (!memoriaPendiente) return;
+    if (n.ok !== true || n.accion !== memoriaPendiente.accion || n.id !== memoriaPendiente.id) {
+      cancelarPlanMemoria();
+      mensajeVida("cort-memoria-mensaje", n.motivo || "No pude preparar el cambio de memoria.");
+      return;
+    }
+    memoriaPlan = { ...n, valor: memoriaPendiente.valor };
+    const accion = { guardar: "Guardar", editar: "Editar", borrar: "Borrar" }[n.accion] || "Cambiar";
+    const texto = document.getElementById("cort-memoria-plan-texto");
+    if (texto) {
+      texto.textContent = `${accion} «${n.id}». `
+        + (n.accion === "borrar" ? "Se ocultará el hecho del uso normal."
+          : `Valor confirmado: «${memoriaPlan.valor}».`)
+        + ` Versión ${n.version}. La autorización caduca en ${n.expira_en || 120} segundos y se consume una vez.`;
+    }
+    const confirmacion = document.getElementById("cort-memoria-confirmacion");
+    if (confirmacion) confirmacion.hidden = false;
+    document.getElementById("cort-memoria-confirmar")?.focus();
+  }
+
+  function confirmarMemoria() {
+    if (!memoriaPlan || !memoriaPlan.token) return;
+    const plan = memoriaPlan;
+    const tipo = { guardar: "memoria_guardar", editar: "memoria_editar", borrar: "memoria_borrar" }[plan.accion];
+    if (!tipo) return;
+    window.CORT_enviarAlCerebro({ type: tipo, id: plan.id, version: String(plan.version),
+      token: plan.token, valor: plan.valor });
+    cancelarPlanMemoria(false);
+    mensajeVida("cort-memoria-mensaje", "Aplicando el cambio confirmado…");
+  }
+
+  function pintarMemoriaLista(n) {
+    const lista = document.getElementById("cort-memoria-lista");
+    if (!lista) return;
+    const hechos = Array.isArray(n.hechos) ? n.hechos : [];
+    hechosVida = hechos;
+    if (!hechos.length) {
+      const vacio = tarjetaVida("Sin recuerdos confirmados", [
+        "Los datos del dispositivo y las importaciones de la PC permanecen sin confirmar hasta que los revises."
+      ]);
+      lista.replaceChildren(vacio);
+      return;
+    }
+    const tarjetas = hechos.map((hecho) => tarjetaVida(String(hecho.clave || "Recuerdo"), [
+      String(hecho.valor || ""),
+      `Origen: ${hecho.origen || "desconocido"} · ${hecho.confirmado ? "confirmado" : "sin confirmar"} · versión ${hecho.version || 1}`,
+      `Creado: ${fechaVida(hecho.creado_en)} · actualizado: ${fechaVida(hecho.actualizado_en)}`
+    ], [
+      ["Editar", () => {
+        const clave = document.getElementById("cort-memoria-clave");
+        const valor = document.getElementById("cort-memoria-valor");
+        if (clave) clave.value = hecho.clave || "";
+        if (valor) valor.value = hecho.valor || "";
+        valor?.focus();
+      }],
+      ["Historial", () => {
+        detalleVida("cort-memoria-detalle", { consultando: hecho.clave });
+        window.CORT_enviarAlCerebro({ type: "memoria_historial", id: hecho.clave });
+      }],
+      ["Borrar", () => prepararMemoria("borrar", hecho.clave, "")]
+    ]));
+    lista.replaceChildren(...tarjetas);
+  }
+
+  function resumenAlarma(alarma) {
+    if (alarma.tipo === "temporizador") return `${alarma.segundos || 0} segundos`;
+    return `${String(alarma.hora ?? 0).padStart(2, "0")}:${String(alarma.minuto ?? 0).padStart(2, "0")}`;
+  }
+
+  function pintarAlarmas(n) {
+    const lista = document.getElementById("cort-alarmas-lista");
+    if (!lista) return;
+    const alarmas = Array.isArray(n.alarmas) ? n.alarmas : [];
+    if (!alarmas.length) {
+      lista.replaceChildren(tarjetaVida("Sin entregas registradas", [
+        "CORT no lee el catálogo de alarmas de Android. Confirma siempre en la aplicación Reloj."
+      ]));
+      return;
+    }
+    const tarjetas = alarmas.map((alarma) => {
+      const acciones = [];
+      if (alarma.estado === "SOLICITADO") {
+        acciones.push(["Cancelar solicitud", () => {
+          window.CORT_enviarAlCerebro({ type: "alarma_cancelar", id: alarma.id });
+        }]);
+      } else if (alarma.estado === "ENTREGADO_RELOJ") {
+        acciones.push(["Abrir Reloj", () => {
+          window.CORT_enviarAlCerebro({ type: "abrir_reloj" });
+        }]);
+      }
+      return tarjetaVida(String(alarma.texto || resumenAlarma(alarma)), [
+        `${alarma.tipo === "temporizador" ? "Temporizador" : "Alarma"}: ${resumenAlarma(alarma)}${alarma.etiqueta ? " · " + alarma.etiqueta : ""}`,
+        `Estado local: ${alarma.estado || "desconocido"} · ${fechaVida(alarma.creado_en)}`
+      ], acciones);
+    });
+    lista.replaceChildren(...tarjetas);
+  }
+
+  function descripcionPaso(paso) {
+    const accion = String(paso.accion || "");
+    if (accion === "decir") return `Decir: ${paso.resto || paso.plantilla || "sin frase"}`;
+    if (accion === "alarma" || accion === "cronometro") {
+      return `${accion === "alarma" ? "Alarma" : "Temporizador"}: ${paso.resto || "sin especificación"}`;
+    }
+    if (accion === "abrir" || accion === "volumen" || accion === "linterna") {
+      return `${accion}: ${paso.param || "sin parámetro"}`;
+    }
+    return accion || "paso sin acción";
+  }
+
+  function controlPasoRutina(accion, valor) {
+    const opciones = {
+      abrir: ["ajustes", "teclado", "wifi", "bluetooth", "navegador", "reloj", "musica", "mensajeria"],
+      volumen: ["subir", "bajar", "silencio", "maximo"],
+      linterna: ["encender", "apagar"]
+    };
+    let control;
+    if (opciones[accion]) {
+      control = document.createElement("select");
+      for (const opcion of opciones[accion]) {
+        const elemento = document.createElement("option");
+        elemento.value = opcion;
+        elemento.textContent = opcion;
+        control.appendChild(elemento);
+      }
+      if (opciones[accion].includes(valor)) control.value = valor;
+      else control.value = opciones[accion][0];
+    } else {
+      control = document.createElement("input");
+      control.type = "text";
+      control.maxLength = accion === "decir" ? 500 : 300;
+      control.value = valor || "";
+      control.placeholder = accion === "decir" ? "Frase que dirá CORT"
+        : accion === "alarma" ? "Ej.: a las 7:30 llamada despertar"
+          : accion === "cronometro" ? "Ej.: 5 minutos" : "";
+      control.autocomplete = "off";
+    }
+    control.hidden = ["hora", "fecha", "listar"].includes(accion);
+    control.disabled = control.hidden;
+    control.setAttribute("aria-label", accion === "decir" || ["alarma", "cronometro"].includes(accion)
+      ? "Texto del paso" : "Parámetro del paso");
+    return control;
+  }
+
+  function agregarPasoRutina(accion = "decir", valor = "") {
+    const constructor = document.getElementById("cort-rutina-constructor");
+    if (!constructor || constructor.children.length >= 12) {
+      mensajeVida("cort-rutinas-mensaje", "Una rutina admite como máximo 12 pasos.");
+      return;
+    }
+    const fila = document.createElement("div");
+    fila.className = "cort-vida-paso";
+    const selector = document.createElement("select");
+    selector.setAttribute("aria-label", "Acción del paso");
+    for (const [valorAccion, etiqueta] of [
+      ["decir", "Decir una frase"], ["hora", "Consultar la hora"], ["fecha", "Consultar la fecha"],
+      ["listar", "Listar recuerdos"], ["abrir", "Abrir destino fijo"], ["volumen", "Ajustar volumen"],
+      ["linterna", "Linterna"], ["alarma", "Preparar alarma"], ["cronometro", "Preparar temporizador"]
+    ]) {
+      const opcion = document.createElement("option");
+      opcion.value = valorAccion;
+      opcion.textContent = etiqueta;
+      selector.appendChild(opcion);
+    }
+    selector.value = accion;
+    let control = controlPasoRutina(accion, valor);
+    selector.addEventListener("change", () => {
+      const anterior = control.value;
+      const nuevo = controlPasoRutina(selector.value,
+        ["abrir", "volumen", "linterna"].includes(selector.value) ? "" : anterior);
+      fila.replaceChild(nuevo, control);
+      control = nuevo;
+    });
+    const quitar = document.createElement("button");
+    quitar.type = "button";
+    quitar.textContent = "Quitar";
+    quitar.setAttribute("aria-label", "Quitar este paso");
+    quitar.addEventListener("click", () => fila.remove());
+    fila.append(selector, control, quitar);
+    constructor.appendChild(fila);
+    control.focus();
+  }
+
+  function leerPasosRutina() {
+    const pasos = [];
+    for (const fila of document.getElementById("cort-rutina-constructor")?.children || []) {
+      const accion = fila.querySelector("select")?.value || "";
+      const control = fila.querySelector("input:not([disabled]), select:not([disabled])");
+      const texto = control?.value.trim() || "";
+      if (["hora", "fecha", "listar"].includes(accion)) pasos.push({ accion });
+      else if (["decir", "alarma", "cronometro"].includes(accion)) pasos.push({ accion, resto: texto });
+      else pasos.push({ accion, param: texto });
+    }
+    return pasos;
+  }
+
+  function cancelarPlanRutina(revocar = true) {
+    if (revocar && rutinaPlan && rutinaPlan.token) {
+      window.CORT_enviarAlCerebro({ type: "rutina_cancelar_plan", id: rutinaPlan.id,
+        token: rutinaPlan.token });
+    }
+    rutinaPlan = null;
+    const plan = document.getElementById("cort-rutina-plan");
+    if (plan) plan.hidden = true;
+    const pasos = document.getElementById("cort-rutina-plan-pasos");
+    if (pasos) pasos.replaceChildren();
+  }
+
+  function pintarRutinaPlan(n) {
+    if (n.ok !== true || !n.id || !n.token) {
+      cancelarPlanRutina();
+      mensajeVida("cort-rutinas-mensaje", n.motivo || "No pude preparar la rutina.");
+      return;
+    }
+    rutinaPlan = { ...n };
+    const texto = document.getElementById("cort-rutina-plan-texto");
+    if (texto) {
+      texto.textContent = `${n.nombre} · versión ${n.version}. Revisa los pasos. `
+        + `La autorización caduca en ${n.expira_en || 120} segundos y sólo permite una ejecución.`;
+    }
+    const lista = document.getElementById("cort-rutina-plan-pasos");
+    if (lista) {
+      const pasos = Array.isArray(n.pasos) ? n.pasos : [];
+      lista.replaceChildren(...pasos.map((paso, indice) => tarjetaVida(`${indice + 1}. ${descripcionPaso(paso)}`, [
+        `Riesgo calculado por CORT: ${paso.riesgo || "no informado"} · permiso: ${paso.permiso || "ninguno"}`
+      ])));
+    }
+    const plan = document.getElementById("cort-rutina-plan");
+    if (plan) plan.hidden = false;
+    document.getElementById("cort-rutina-confirmar")?.focus();
+  }
+
+  function confirmarRutina() {
+    if (!rutinaPlan || !rutinaPlan.token) return;
+    const plan = rutinaPlan;
+    window.CORT_enviarAlCerebro({ type: "rutina_ejecutar", id: plan.id, token: plan.token });
+    cancelarPlanRutina(false);
+    mensajeVida("cort-rutinas-mensaje", "Ejecutando la rutina confirmada…");
+  }
+
+  function pintarRutinas(n) {
+    const lista = document.getElementById("cort-rutinas-lista");
+    if (!lista) return;
+    const rutinas = Array.isArray(n.rutinas) ? n.rutinas : [];
+    if (!rutinas.length) {
+      lista.replaceChildren(tarjetaVida("Sin rutinas guardadas", [
+        "Construye una rutina con acciones de la lista cerrada. Nada se ejecuta al crearla."
+      ]));
+      return;
+    }
+    const tarjetas = rutinas.map((rutina) => {
+      const activa = !!ejecucionVida && ejecucionVida.rutina_id === rutina.id;
+      const acciones = [
+        ["Ver pasos", () => detalleVida("cort-rutinas-detalle", rutina)],
+        ["Planificar", () => {
+          cancelarPlanRutina();
+          window.CORT_enviarAlCerebro({ type: "rutina_plan", id: rutina.id });
+        }]
+      ];
+      if (activa) {
+        acciones.push(["Cancelar ejecución", () => {
+          window.CORT_enviarAlCerebro({ type: "rutina_cancelar", ejecucion_id: ejecucionVida.ejecucion_id });
+        }]);
+      }
+      return tarjetaVida(String(rutina.nombre || "Rutina"), [
+        `${rutina.pasos?.length || 0} pasos · versión ${rutina.version || 1} · ${activa ? "en ejecución" : "guardada"}`,
+        `Actualizada: ${fechaVida(rutina.actualizado_en)}`
+      ], acciones);
+    });
+    lista.replaceChildren(...tarjetas);
+  }
+
+  function pintarHistorialRutinas(n) {
+    const ejecuciones = Array.isArray(n.ejecuciones) ? n.ejecuciones : [];
+    if (!ejecuciones.length) {
+      detalleVida("cort-rutinas-detalle", []);
+      mensajeVida("cort-rutinas-mensaje", "Todavía no hay ejecuciones de rutinas.");
+      return;
+    }
+    detalleVida("cort-rutinas-detalle", ejecuciones);
+  }
+
+  function pintarVida(n) {
+    if (!n) return;
+    if (n.type === "memoria_lista") pintarMemoriaLista(n);
+    else if (n.type === "memoria_plan") pintarMemoriaPlan(n);
+    else if (n.type === "memoria_cancelacion") {
+      mensajeVida("cort-memoria-mensaje", n.motivo || "Confirmación de memoria revocada.");
+    } else if (n.type === "memoria_resultado") {
+      cancelarPlanMemoria();
+      mensajeVida("cort-memoria-mensaje", n.motivo || (n.ok ? "Memoria actualizada." : "No pude actualizar la memoria."));
+      if (n.ok) {
+        const form = document.getElementById("cort-memoria-form");
+        form?.reset();
+      }
+      window.CORT_enviarAlCerebro({ type: "memoria_listar" });
+    } else if (n.type === "memoria_historial") detalleVida("cort-memoria-detalle", n);
+    else if (n.type === "memoria_exportacion") {
+      detalleVida("cort-memoria-detalle", n);
+      mensajeVida("cort-memoria-mensaje", "Exportación mostrada sólo en este panel. No se compartió ni se envió a la nube.");
+    } else if (n.type === "alarmas_estado") pintarAlarmas(n);
+    else if (n.type === "alarmas_aviso") {
+      mensajeVida("cort-alarmas-mensaje", n.motivo || (n.ok ? "Reloj actualizado." : "No pude continuar."));
+      if (n.ok) window.CORT_enviarAlCerebro({ type: "alarmas_estado" });
+    } else if (n.type === "rutinas_estado") pintarRutinas(n);
+    else if (n.type === "rutina_creada" || n.type === "rutina_crear") {
+      mensajeVida("cort-rutinas-mensaje", n.ok ? `Rutina «${n.nombre}» guardada sin ejecutarse.` : n.motivo || "No pude guardar la rutina.");
+      if (n.ok) {
+        document.getElementById("cort-rutina-form")?.reset();
+        document.getElementById("cort-rutina-constructor")?.replaceChildren();
+        agregarPasoRutina();
+      }
+      window.CORT_enviarAlCerebro({ type: "rutinas_estado" });
+    } else if (n.type === "rutina_plan") pintarRutinaPlan(n);
+    else if (n.type === "rutina_inicio") {
+      ejecucionVida = { ejecucion_id: n.ejecucion_id, rutina_id: n.rutina_id };
+      mensajeVida("cort-rutinas-mensaje", `Ejecutando «${n.nombre || "la rutina"}». Puedes solicitar cancelación entre pasos.`);
+      window.CORT_enviarAlCerebro({ type: "rutinas_estado" });
+    } else if (n.type === "rutina_resultado") {
+      if (ejecucionVida && ejecucionVida.ejecucion_id === n.ejecucion_id) ejecucionVida = null;
+      cancelarPlanRutina();
+      detalleVida("cort-rutinas-detalle", n);
+      mensajeVida("cort-rutinas-mensaje", n.detalle || n.motivo || (n.ok ? "Rutina terminada." : "La rutina no terminó."));
+      window.CORT_enviarAlCerebro({ type: "rutinas_estado" });
+    } else if (n.type === "rutina_cancelacion") {
+      mensajeVida("cort-rutinas-mensaje", n.motivo || (n.ok ? "Cancelación solicitada." : "No hay una ejecución activa."));
+    } else if (n.type === "rutinas_historial") pintarHistorialRutinas(n);
+    else if (n.ok === false && n.motivo) {
+      if (n.type.startsWith("memoria")) mensajeVida("cort-memoria-mensaje", n.motivo);
+      else if (n.type.startsWith("alarma")) mensajeVida("cort-alarmas-mensaje", n.motivo);
+      else if (n.type.startsWith("rutina")) mensajeVida("cort-rutinas-mensaje", n.motivo);
+    }
+  }
+
+  let retornoAvisos = null;
+  let appsAvisos = [];
+  let paquetesAvisos = new Set();
+  let compartirPlan = null;
+
+  function avisosAbierto() {
+    const panel = document.getElementById("cort-avisos");
+    return !!panel && !panel.hidden;
+  }
+
+  function abrirAvisos() {
+    const panel = document.getElementById("cort-avisos");
+    if (!panel) return;
+    const chat = document.getElementById("cort-chat");
+    if (chat && !chat.hidden) cerrarChat(false);
+    if (dispositivoAbierto()) cerrarDispositivo(false);
+    if (mediosAbiertos()) cerrarMedios(false);
+    if (asistenteAbierto()) cerrarAsistente(false);
+    if (vidaAbierta()) cerrarVida(false);
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    retornoAvisos = document.getElementById("avisos-btn") || document.activeElement;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    panel.hidden = false;
+    document.getElementById("avisos-btn")?.setAttribute("aria-expanded", "true");
+    fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+      document.getElementById("cort-detener-btn")].filter(Boolean));
+    document.getElementById("cort-avisos-cerrar")?.focus();
+    refrescarAvisos();
+  }
+
+  function cerrarAvisos(restaurar = true) {
+    const panel = document.getElementById("cort-avisos");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    document.getElementById("avisos-btn")?.setAttribute("aria-expanded", "false");
+    cancelarPlanCompartir();
+    document.getElementById("cort-avisos-lista")?.replaceChildren();
+    document.getElementById("cort-avisos-apps-lista")?.replaceChildren();
+    document.getElementById("cort-compartir-texto") && (document.getElementById("cort-compartir-texto").value = "");
+    appsAvisos = [];
+    fondoActivar();
+    if (restaurar && retornoAvisos && retornoAvisos.isConnected) retornoAvisos.focus();
+    retornoAvisos = null;
+  }
+
+  function refrescarAvisos() {
+    window.CORT_enviarAlCerebro({ type: "avisos_estado" });
+    window.CORT_enviarAlCerebro({ type: "avisos_apps" });
+  }
+
+  function mensajeAvisos(texto) {
+    const elemento = document.getElementById("cort-avisos-mensaje");
+    if (elemento) elemento.textContent = texto;
+  }
+
+  function pintarAvisosEstado(n) {
+    const acceso = document.getElementById("cort-avisos-acceso");
+    const conexion = document.getElementById("cort-avisos-conexion");
+    const total = document.getElementById("cort-avisos-total");
+    const limite = document.getElementById("cort-avisos-limite");
+    if (acceso) acceso.textContent = n.habilitado ? (n.bloqueado ? "Teléfono bloqueado" : "Permitido") : "Desactivado";
+    if (conexion) conexion.textContent = n.conectado ? "Conectado" : "Sin conexión";
+    if (Array.isArray(n.paquetes)) paquetesAvisos = new Set(n.paquetes.map(String));
+    if (total) total.textContent = String(paquetesAvisos.size);
+    if (limite) limite.textContent = n.limite || "Máximo 20 avisos por consulta; nada se guarda ni se envía.";
+    mensajeAvisos(n.motivo || "Lectura disponible sólo cuando la solicites.");
+    pintarAvisosSeleccion();
+  }
+
+  function pintarAvisosApps(n) {
+    appsAvisos = Array.isArray(n.apps) ? n.apps : [];
+    if (Array.isArray(n.paquetes)) paquetesAvisos = new Set(n.paquetes.map(String));
+    const lista = document.getElementById("cort-avisos-apps-lista");
+    if (!lista) return;
+    if (!appsAvisos.length) {
+      lista.replaceChildren();
+      mensajeAvisos("No se encontraron aplicaciones con icono de arranque visible.");
+      return;
+    }
+    const tarjetas = appsAvisos.map((app) => {
+      const paquete = String(app.paquete || "");
+      const elegido = paquetesAvisos.has(paquete);
+      return tarjetaVida(String(app.nombre || paquete), [paquete], [[
+        elegido ? "Quitar permiso" : "Permitir",
+        () => {
+          if (elegido) paquetesAvisos.delete(paquete);
+          else if (paquetesAvisos.size < 12) paquetesAvisos.add(paquete);
+          else mensajeAvisos("Puedes permitir como máximo 12 aplicaciones.");
+          pintarAvisosApps({ apps: appsAvisos });
+          pintarAvisosSeleccion();
+        }
+      ]]);
+    });
+    lista.replaceChildren(...tarjetas);
+    pintarAvisosSeleccion();
+  }
+
+  function pintarAvisosSeleccion() {
+    const lista = document.getElementById("cort-avisos-seleccion");
+    const total = document.getElementById("cort-avisos-total");
+    if (!lista) return;
+    if (total) total.textContent = String(paquetesAvisos.size);
+    const nombres = new Map(appsAvisos.map((app) => [String(app.paquete || ""), String(app.nombre || app.paquete || "")]));
+    const tarjetas = [...paquetesAvisos].sort().map((paquete) => tarjetaVida(
+      nombres.get(paquete) || paquete,
+      [paquete],
+      [["Quitar", () => { paquetesAvisos.delete(paquete); pintarAvisosSeleccion(); pintarAvisosApps({ apps: appsAvisos }); }]]
+    ));
+    lista.replaceChildren(...tarjetas);
+  }
+
+  function pintarAvisosLista(n) {
+    const lista = document.getElementById("cort-avisos-lista");
+    if (!lista) return;
+    const avisos = Array.isArray(n.avisos) ? n.avisos : [];
+    if (!avisos.length) {
+      lista.replaceChildren();
+      mensajeAvisos(n.ok === false ? n.motivo || "No pude leer los avisos." : "No hay avisos activos de las aplicaciones permitidas.");
+      return;
+    }
+    const tarjetas = avisos.map((aviso) => tarjetaVida(
+      String(aviso.aplicacion || aviso.paquete || "Aviso"),
+      [String(aviso.titulo || "Sin título"), String(aviso.texto || "Sin texto"),
+       `${fechaVida(aviso.momento)} · ${aviso.paquete || "paquete desconocido"}${aviso.en_curso ? " · en curso" : ""}`]
+    ));
+    lista.replaceChildren(...tarjetas);
+    mensajeAvisos(`${avisos.length} avisos leídos ahora. La lista se borra al cerrar el panel.`);
+  }
+
+  function cancelarPlanCompartir(revocar = true) {
+    if (revocar && compartirPlan && compartirPlan.token) {
+      window.CORT_enviarAlCerebro({ type: "compartir_cancelar", token: compartirPlan.token });
+    }
+    compartirPlan = null;
+    const plan = document.getElementById("cort-compartir-plan");
+    if (plan) plan.hidden = true;
+    const texto = document.getElementById("cort-compartir-plan-texto");
+    if (texto) texto.textContent = "";
+  }
+
+  function prepararCompartir(texto) {
+    cancelarPlanCompartir();
+    window.CORT_enviarAlCerebro({ type: "compartir_preparar", texto });
+  }
+
+  function pintarCompartirPlan(n) {
+    if (!n.ok || !n.token) {
+      cancelarPlanCompartir(false);
+      const mensaje = document.getElementById("cort-compartir-mensaje");
+      if (mensaje) mensaje.textContent = n.motivo || "No pude preparar el texto.";
+      return;
+    }
+    compartirPlan = { token: n.token, texto: String(n.texto || "") };
+    const plan = document.getElementById("cort-compartir-plan");
+    const texto = document.getElementById("cort-compartir-plan-texto");
+    if (plan) plan.hidden = false;
+    if (texto) texto.textContent = `Texto exacto confirmado: «${compartirPlan.texto}». La autorización caduca en ${n.expiracion || 120} segundos y se consume una vez. Android abrirá un selector; no enviará nada por ti.`;
+  }
+
+  function confirmarCompartir() {
+    if (!compartirPlan) return;
+    window.CORT_enviarAlCerebro({ type: "compartir_confirmar", token: compartirPlan.token, texto: compartirPlan.texto });
+  }
+
+  function pintarAvisos(n) {
+    if (!n) return;
+    if (n.type === "avisos_estado") pintarAvisosEstado(n);
+    else if (n.type === "avisos_apps") pintarAvisosApps(n);
+    else if (n.type === "avisos_allowlist") {
+      if (Array.isArray(n.paquetes)) paquetesAvisos = new Set(n.paquetes.map(String));
+      mensajeAvisos(n.motivo || (n.ok ? "Selección guardada." : "No pude guardar la selección."));
+      pintarAvisosSeleccion();
+      pintarAvisosApps({ apps: appsAvisos });
+    } else if (n.type === "avisos_lista") pintarAvisosLista(n);
+    else if (n.type === "compartir_plan") pintarCompartirPlan(n);
+    else if (n.type === "compartir_resultado") {
+      cancelarPlanCompartir(false);
+      const mensaje = document.getElementById("cort-compartir-mensaje");
+      if (mensaje) mensaje.textContent = n.motivo || (n.ok ? "Selector abierto; confirma el envío en Android." : "No pude abrir el selector.");
+    } else if (n.type === "compartir_cancelacion") {
+      cancelarPlanCompartir(false);
+      const mensaje = document.getElementById("cort-compartir-mensaje");
+      if (mensaje) mensaje.textContent = n.motivo || "Confirmación revocada.";
+    } else if (n.ok === false && n.motivo) {
+      if (n.type.startsWith("avisos")) mensajeAvisos(n.motivo);
+      else if (n.type.startsWith("compartir")) {
+        const mensaje = document.getElementById("cort-compartir-mensaje");
+        if (mensaje) mensaje.textContent = n.motivo;
+      }
+    }
+  }
+
+  function dispositivoAbierto() {
+    const panel = document.getElementById("cort-dispositivo");
+    return !!panel && !panel.hidden;
+  }
+
+  function abrirDispositivo() {
+    const panel = document.getElementById("cort-dispositivo");
+    if (!panel) return;
+    const chat = document.getElementById("cort-chat");
+    if (chat && !chat.hidden) cerrarChat(false);
+    if (mediosAbiertos()) cerrarMedios(false);
+    if (asistenteAbierto()) cerrarAsistente(false);
+    if (vidaAbierta()) cerrarVida(false);
+    if (avisosAbierto()) cerrarAvisos(false);
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    retornoDispositivo = document.getElementById("sensores-btn") || document.activeElement;
+    if (menu && !menu.classList.contains("hidden")) cerrarMenu(false);
+    panel.hidden = false;
+    document.getElementById("sensores-btn")?.setAttribute("aria-expanded", "true");
+    fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+      document.getElementById("cort-detener-btn")].filter(Boolean));
+    document.getElementById("cort-dispositivo-cerrar")?.focus();
+    window.CORT_enviarAlCerebro({ type: "sensores_permiso" });
+    window.CORT_enviarAlCerebro({ type: "sensores_estado", activa: true });
+    if (ultimosSensores) pintarSensores(ultimosSensores);
+    else {
+      const lista = document.getElementById("cort-sensores-lista");
+      if (lista) lista.replaceChildren();
+      const estado = document.getElementById("cort-sensores-estado");
+      if (estado) estado.textContent = "Consultando el inventario real del teléfono…";
+    }
+    pintarSistema(ultimoSistema);
+    pintarPermisoSensores(permisoSensores);
+  }
+
+  function cerrarDispositivo(restaurar = true) {
+    const panel = document.getElementById("cort-dispositivo");
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    document.getElementById("sensores-btn")?.setAttribute("aria-expanded", "false");
+    window.CORT_enviarAlCerebro({ type: "sensores_estado", activa: false });
+    fondoActivar();
+    if (restaurar && retornoDispositivo && retornoDispositivo.isConnected) retornoDispositivo.focus();
+    retornoDispositivo = null;
+  }
+
+  function valorSensor(lectura) {
+    if (!lectura || !lectura.disponible || !Array.isArray(lectura.valores)) return "—";
+    const valores = lectura.valores.filter(Number.isFinite);
+    if (!valores.length) return "—";
+    return valores.slice(0, 3).map((v) => Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2))
+      .join(" / ") + " " + String(lectura.unidad || "");
+  }
+
+  function resumenPasos(pasos) {
+    if (!pasos || pasos.estado === "inactivo") return "Pasos: inactivos";
+    if (pasos.estado === "sin_lectura") return "Pasos: " + (pasos.motivo || "sin lectura");
+    if (pasos.estado !== "listo") return "Pasos: no disponibles";
+    return pasos.ambito === "hoy"
+      ? `Pasos de hoy: ${pasos.pasos} (desde la línea base de CORT)`
+      : `Acumulado disponible: ${pasos.pasos} pasos; aún no es un total de hoy`;
+  }
+
+  function pintarSensores(n) {
+    if (!n || n.type !== "sensores_estado") return;
+    if (n.pasos) ultimosPasos = n.pasos;
+    n = { ...n, pasos: n.pasos || ultimosPasos };
+    ultimosSensores = n;
+    const activar = document.getElementById("cort-sensores-activar");
+    const pasos = document.getElementById("cort-sensores-pasos");
+    const estado = document.getElementById("cort-sensores-estado");
+    if (activar) {
+      activar.setAttribute("aria-pressed", n.escuchando ? "true" : "false");
+      activar.textContent = n.escuchando ? "Detener lecturas" : "Activar lecturas";
+    }
+    if (pasos) {
+      const activo = !!(n.pasos && n.pasos.activo === true);
+      pasos.disabled = !n.escuchando;
+      pasos.setAttribute("aria-pressed", activo ? "true" : "false");
+      pasos.textContent = activo ? "Pasos activos" : "Pasos";
+    }
+    if (estado) estado.textContent = (n.escuchando ? "Lecturas activas en foreground. " : "Lecturas detenidas. ")
+      + resumenPasos(n.pasos);
+    const origen = document.getElementById("cort-dispositivo-origen");
+    if (origen) origen.textContent = n.origen === "real"
+      ? "Procedencia real del teléfono. Sin histórico ni datos simulados."
+      : "No hay una lectura real disponible en este momento.";
+    const lista = document.getElementById("cort-sensores-lista");
+    if (!lista) return;
+    const tarjetas = [];
+    for (const ficha of Array.isArray(n.inventario) ? n.inventario : []) {
+      const nombre = String(ficha.nombre || "");
+      const lectura = n.valores && n.valores[nombre];
+      if (!nombre || !lectura) continue;
+      const estadoLectura = lectura.estado || (lectura.disponible ? "leido" : "sin_lectura");
+      const tarjeta = document.createElement("article");
+      tarjeta.className = "cort-sensor-item";
+      tarjeta.dataset.estado = estadoLectura;
+      const titulo = document.createElement("h3");
+      titulo.textContent = NOMBRES_SENSORES[nombre] || nombre.replaceAll("_", " ");
+      const valor = document.createElement("p");
+      valor.className = "cort-sensor-valor";
+      valor.textContent = estadoLectura === "leido" ? valorSensor(lectura)
+        : estadoLectura === "ausente" ? "No presente" : "Sin lectura";
+      const detalle = document.createElement("p");
+      const precision = PRECISION_SENSOR[lectura.precision] || "no informada";
+      detalle.textContent = estadoLectura === "leido"
+        ? `Precisión: ${precision} · tiempo: ${Math.round(Number(lectura.timestamp_ms || 0) / 1000)} s desde arranque`
+        : ficha.aviso || lectura.motivo || "El hardware no ha entregado un valor utilizable.";
+      tarjeta.append(titulo, valor, detalle);
+      if (nombre === "bateria" && lectura.disponible) {
+        const carga = document.createElement("p");
+        carga.textContent = lectura.cargando ? "Cargando" : "Sin carga activa";
+        tarjeta.appendChild(carga);
+      }
+      tarjetas.push(tarjeta);
+    }
+    lista.replaceChildren(...tarjetas);
+  }
+
+  function pintarPermisoSensores(n) {
+    permisoSensores = n || permisoSensores;
+    const texto = document.getElementById("cort-sensores-permiso");
+    if (!texto || !permisoSensores) return;
+    if (!permisoSensores.requerido) texto.textContent = "Esta versión de Android no exige permiso de actividad para pasos.";
+    else if (permisoSensores.pendiente) texto.textContent = "Esperando tu decisión sobre el permiso de actividad.";
+    else if (!permisoSensores.concedido) texto.textContent = "Permiso de actividad denegado. Puedes concederlo en Ajustes de CORT.";
+    else texto.textContent = "Permiso de actividad concedido. El contador sólo se activa si eliges Pasos.";
+  }
+
+  function pintarSistema(n) {
+    if (!n || n.type !== "system_stats" || n.origen !== "real") return;
+    ultimoSistema = n;
+    const red = document.getElementById("cort-dispositivo-red");
+    if (red) red.textContent = n.red_tipo === "ninguna" ? "Sin red"
+      : n.red_tipo === "no disponible" ? "No disponible"
+      : `${String(n.red_tipo || "red").toUpperCase()}${n.red_validada ? " · con internet" : " · sin validar"}`;
+    const ram = document.getElementById("cort-dispositivo-ram");
+    if (ram) ram.textContent = Number.isFinite(n.ram_disponible_mb) && n.ram_disponible_mb >= 0
+      ? `${n.ram_disponible_mb} MB de ${n.ram_total_mb > 0 ? n.ram_total_mb + " MB" : "total no medido"}` : "No medida";
+    const bateria = document.getElementById("cort-dispositivo-bateria");
+    if (bateria) bateria.textContent = Number.isFinite(n.bateria) && n.bateria >= 0
+      ? `${n.bateria}%` : "No medida";
+  }
+
   function mensajeChat(rol, texto) {
     const limpio = String(texto || "").trim();
     if (!limpio) return;
@@ -2044,6 +2983,11 @@
   function abrirChat(enfocar = true) {
     const chat = document.getElementById("cort-chat");
     if (!chat) return;
+    if (dispositivoAbierto()) cerrarDispositivo(false);
+    if (mediosAbiertos()) cerrarMedios(false);
+    if (vidaAbierta()) cerrarVida(false);
+    if (asistenteAbierto()) cerrarAsistente(false);
+    if (avisosAbierto()) cerrarAvisos(false);
     const menu = document.getElementById("jarvis-menu-dropdown");
     const anterior = document.activeElement;
     retornoChat = document.getElementById("jarvis-menu-btn") || anterior;
@@ -2060,7 +3004,7 @@
     if (registro) registro.scrollTop = registro.scrollHeight;
   }
 
-  function cerrarChat() {
+  function cerrarChat(restaurar = true) {
     const chat = document.getElementById("cort-chat");
     if (!chat || chat.hidden) return;
     chat.hidden = true;
@@ -2068,7 +3012,7 @@
     const boton = document.getElementById("cort-chat-btn");
     if (boton) boton.setAttribute("aria-expanded", "false");
     fondoActivar();
-    if (retornoChat && retornoChat.isConnected) retornoChat.focus();
+    if (restaurar && retornoChat && retornoChat.isConnected) retornoChat.focus();
     retornoChat = null;
   }
 
@@ -2102,7 +3046,11 @@
       if (buscar && !menu.contains(document.activeElement)) setTimeout(() => buscar.focus(), 0);
     } else {
       const chat = document.getElementById("cort-chat");
-      if (chat && !chat.hidden) fondoInerte([chat]);
+      const panel = document.getElementById("cort-dispositivo");
+      if (panel && !panel.hidden) {
+        fondoInerte([panel, document.getElementById("cort-estado-asistente"),
+          document.getElementById("cort-detener-btn")].filter(Boolean));
+      } else if (chat && !chat.hidden) fondoInerte([chat]);
       else fondoActivar();
       if (restaurar && (menu.contains(document.activeElement) || document.activeElement === document.body)) {
         boton.focus();
@@ -2123,6 +3071,78 @@
     pintarMenu(false, restaurar);
   }
 
+  const registroCapacidades = new Map();
+  const consultarCapacidadNativa = window.CORTcapacidad;
+  window.CORTcapacidad = function (id) {
+    if (typeof id !== "string" || !id) return null;
+    if (typeof consultarCapacidadNativa === "function") {
+      const nativa = consultarCapacidadNativa(id);
+      if (nativa) return nativa;
+    }
+    return registroCapacidades.get(id) || null;
+  };
+  window.CORTcapaz = function (id) {
+    const c = window.CORTcapacidad(id);
+    return !!c && c.viabilidad !== "D"
+      && (c.estado === "existe" || c.estado === "parcial");
+  };
+
+  function capacidadVisible(c) {
+    if (c.viabilidad === "D") return false;
+    return c.estado === "existe" || c.estado === "parcial";
+  }
+
+  function aplicarCapacidades(n) {
+    if (!n || !Array.isArray(n.capacidades)) return;
+    if (n.plataforma && n.plataforma !== "android") return;
+    const menu = document.getElementById("jarvis-menu-dropdown");
+    if (!menu) return;
+    registroCapacidades.clear();
+    for (const boton of menu.querySelectorAll(".menu-action-btn")) {
+      boton.dataset.cortVisible = "1";
+      boton.disabled = false;
+      boton.removeAttribute("data-limitado");
+      boton.querySelector(".cort-cap-motivo")?.remove();
+      boton.removeAttribute("aria-describedby");
+    }
+    for (const c of n.capacidades) {
+      if (!c || typeof c.id !== "string" || !c.id || registroCapacidades.has(c.id)) continue;
+      if (!["A", "B", "C", "D"].includes(c.viabilidad)) continue;
+      if (!["existe", "parcial", "dormido", "no implementado", "no verificado"].includes(c.estado)) continue;
+      registroCapacidades.set(c.id, c);
+      const visible = capacidadVisible(c);
+      const limitado = visible && (c.viabilidad !== "A" || c.estado !== "existe");
+      for (const id of Array.isArray(c.controles) ? c.controles : []) {
+        const boton = document.getElementById(id);
+        if (!boton || !boton.classList.contains("menu-action-btn")) continue;
+        boton.dataset.cortVisible = visible ? "1" : "0";
+        boton.dataset.cortCapacidad = c.id;
+        boton.disabled = !visible;
+        if (!visible) continue;
+        if (!Object.prototype.hasOwnProperty.call(boton.dataset, "cortTitulo")) {
+          boton.dataset.cortTitulo = boton.title || "";
+        }
+        const motivo = String(c.motivo_no_disponible || "Capacidad limitada en este dispositivo.");
+        boton.title = [boton.dataset.cortTitulo, motivo].filter(Boolean).join(" — ");
+        if (!limitado) {
+          if (!boton.dataset.cortTitulo) boton.removeAttribute("title");
+          continue;
+        }
+        boton.dataset.limitado = "1";
+        let explicacion = boton.querySelector(".cort-cap-motivo");
+        if (!explicacion) {
+          explicacion = document.createElement("span");
+          explicacion.className = "cort-sr-only cort-cap-motivo";
+          boton.appendChild(explicacion);
+        }
+        explicacion.id = "cort-cap-motivo-" + boton.id;
+        explicacion.textContent = motivo;
+        boton.setAttribute("aria-describedby", explicacion.id);
+      }
+    }
+    filtrarMenu();
+  }
+
   function filtrarMenu() {
     const buscar = document.getElementById("cort-menu-buscar");
     const menu = document.getElementById("jarvis-menu-dropdown");
@@ -2130,8 +3150,9 @@
     const consulta = buscar.value.trim().toLowerCase();
     let visibles = 0;
     for (const boton of menu.querySelectorAll(".menu-action-btn")) {
-      const coincide = !consulta || boton.textContent.toLowerCase().includes(consulta)
-        || (boton.title || "").toLowerCase().includes(consulta);
+      const permitida = boton.dataset.cortVisible !== "0";
+      const coincide = permitida && (!consulta || boton.textContent.toLowerCase().includes(consulta)
+        || (boton.title || "").toLowerCase().includes(consulta));
       boton.hidden = !coincide;
       if (coincide) visibles++;
     }
@@ -2161,6 +3182,17 @@
     const menu = document.getElementById("jarvis-menu-dropdown");
     const botonMenu = document.getElementById("jarvis-menu-btn");
     const buscar = document.getElementById("cort-menu-buscar");
+    const estado = document.getElementById("cort-estado-asistente");
+    const detener = document.getElementById("cort-detener-btn");
+    if (window.CORT_esAndroid) {
+      if (estado) estado.hidden = false;
+      if (detener) detener.hidden = false;
+    }
+    detener?.addEventListener("click", () => {
+      pintaEstadoAsistente("reposo", "Detenido");
+      window.CORT_enviarAlCerebro({ type: "detener" });
+      if (!window.CORT_esAndroid) window.CORT_enviarAlCerebro({ type: "mic_off" });
+    });
 
     document.getElementById("cort-foco-btn")?.addEventListener("click", () => {
       window.CORT_setEnfoque(!document.documentElement.classList.contains("cort-enfoque"));
@@ -2170,7 +3202,152 @@
       window.CORT_enviarAlCerebro({ type: boton.dataset.on === "1" ? "wake_off" : "wake_on" });
     });
     document.getElementById("cort-chat-btn")?.addEventListener("click", () => abrirChat());
-    document.getElementById("cort-chat-cerrar")?.addEventListener("click", cerrarChat);
+    document.getElementById("cort-chat-cerrar")?.addEventListener("click", () => cerrarChat());
+    document.getElementById("sensores-btn")?.addEventListener("click", abrirDispositivo);
+    document.getElementById("medios-btn")?.addEventListener("click", abrirMedios);
+    document.getElementById("cort-medios-cerrar")?.addEventListener("click", () => cerrarMedios());
+    document.getElementById("cort-medios-play")?.addEventListener("click", () => accionMedios("reproducir"));
+    document.getElementById("cort-medios-pause")?.addEventListener("click", () => accionMedios("pausar"));
+    document.getElementById("cort-medios-stop")?.addEventListener("click", () => accionMedios("detener"));
+    document.getElementById("cort-medios-prev")?.addEventListener("click", () => accionMedios("anterior"));
+    document.getElementById("cort-medios-next")?.addEventListener("click", () => accionMedios("siguiente"));
+    document.getElementById("cort-medios-musica")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "abrir_musica" });
+    });
+    document.getElementById("asistente-btn")?.addEventListener("click", abrirAsistente);
+    document.getElementById("cort-asistente-cerrar")?.addEventListener("click", () => cerrarAsistente());
+    document.getElementById("cort-asistente-ajustes")?.addEventListener("click", () => accionAsistente("asistente_ajustes"));
+    document.getElementById("cort-asistente-superposicion")?.addEventListener("click", () => accionAsistente("superposicion_ajustes"));
+    document.getElementById("cort-asistente-probar")?.addEventListener("click", () => {
+      cerrarAsistente(false);
+      accionAsistente("asistente_probar");
+    });
+    document.getElementById("vida-btn")?.addEventListener("click", abrirVida);
+    document.getElementById("cort-vida-cerrar")?.addEventListener("click", () => cerrarVida());
+    document.getElementById("cort-memoria-refrescar")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "memoria_listar" });
+    });
+    document.getElementById("cort-memoria-exportar")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "memoria_exportar" });
+    });
+    document.getElementById("cort-memoria-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const clave = document.getElementById("cort-memoria-clave")?.value.trim() || "";
+      const valor = document.getElementById("cort-memoria-valor")?.value.trim() || "";
+      const existe = hechosVida.some((hecho) => hecho.clave === clave);
+      prepararMemoria(existe ? "editar" : "guardar", clave, valor);
+    });
+    document.getElementById("cort-memoria-confirmar")?.addEventListener("click", confirmarMemoria);
+    document.getElementById("cort-memoria-cancelar")?.addEventListener("click", () => {
+      cancelarPlanMemoria();
+      mensajeVida("cort-memoria-mensaje", "Cambio de memoria cancelado; no se consumió la autorización.");
+    });
+    document.getElementById("cort-alarma-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const texto = document.getElementById("cort-alarma-texto")?.value.trim() || "";
+      if (!texto) return;
+      mensajeVida("cort-alarmas-mensaje", "Abriendo el reloj para confirmación visible…");
+      window.CORT_enviarAlCerebro({ type: "alarma_solicitar", texto });
+    });
+    document.getElementById("cort-alarmas-refrescar")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "alarmas_estado" });
+    });
+    document.getElementById("cort-rutina-paso-add")?.addEventListener("click", () => agregarPasoRutina());
+    document.getElementById("cort-rutina-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const nombre = document.getElementById("cort-rutina-nombre")?.value.trim() || "";
+      const pasos = leerPasosRutina();
+      if (!nombre || !pasos.length) {
+        mensajeVida("cort-rutinas-mensaje", "Escribe un nombre y añade al menos un paso.");
+        return;
+      }
+      window.CORT_enviarAlCerebro({ type: "rutina_crear", nombre, pasos });
+    });
+    document.getElementById("cort-rutina-confirmar")?.addEventListener("click", confirmarRutina);
+    document.getElementById("cort-rutina-cancelar-plan")?.addEventListener("click", () => {
+      cancelarPlanRutina();
+      mensajeVida("cort-rutinas-mensaje", "Plan de rutina cancelado; no se ejecutó ningún paso.");
+    });
+    document.getElementById("cort-rutinas-refrescar")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "rutinas_estado" });
+    });
+    document.getElementById("cort-rutinas-historial")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "rutinas_historial" });
+    });
+    document.getElementById("avisos-btn")?.addEventListener("click", abrirAvisos);
+    document.getElementById("cort-avisos-cerrar")?.addEventListener("click", () => cerrarAvisos());
+    document.getElementById("cort-avisos-ajustes")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "avisos_ajustes" });
+    });
+    document.getElementById("cort-avisos-refrescar")?.addEventListener("click", refrescarAvisos);
+    document.getElementById("cort-avisos-apps")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "avisos_apps" });
+    });
+    document.getElementById("cort-avisos-leer")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "avisos_leer" });
+      mensajeAvisos("Consultando ahora los avisos activos permitidos…");
+    });
+    function anadirPaqueteAvisos() {
+      const paquete = document.getElementById("cort-avisos-paquete")?.value.trim() || "";
+      if (!/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(paquete)) {
+        mensajeAvisos("Escribe el nombre exacto del paquete, por ejemplo com.whatsapp.");
+        return false;
+      }
+      if (paquetesAvisos.size >= 12 && !paquetesAvisos.has(paquete)) {
+        mensajeAvisos("Puedes permitir como máximo 12 aplicaciones.");
+        return false;
+      }
+      paquetesAvisos.add(paquete);
+      const campo = document.getElementById("cort-avisos-paquete");
+      if (campo) campo.value = "";
+      pintarAvisosSeleccion();
+      return true;
+    }
+    document.getElementById("cort-avisos-anadir")?.addEventListener("click", anadirPaqueteAvisos);
+    document.getElementById("cort-avisos-allowlist-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const paquete = document.getElementById("cort-avisos-paquete")?.value.trim() || "";
+      if (paquete && !anadirPaqueteAvisos()) return;
+      window.CORT_enviarAlCerebro({ type: "avisos_allowlist", paquetes: [...paquetesAvisos].sort() });
+      mensajeAvisos("Guardando la selección local…");
+    });
+    document.getElementById("cort-compartir-form")?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      const texto = document.getElementById("cort-compartir-texto")?.value || "";
+      prepararCompartir(texto);
+    });
+    document.getElementById("cort-compartir-texto")?.addEventListener("input", (ev) => {
+      if (compartirPlan && ev.currentTarget.value !== compartirPlan.texto) {
+        cancelarPlanCompartir();
+        const mensaje = document.getElementById("cort-compartir-mensaje");
+        if (mensaje) mensaje.textContent = "El texto cambió; prepara una nueva confirmación exacta.";
+      }
+    });
+    document.getElementById("cort-compartir-confirmar")?.addEventListener("click", confirmarCompartir);
+    document.getElementById("cort-compartir-cancelar")?.addEventListener("click", () => {
+      cancelarPlanCompartir();
+      const mensaje = document.getElementById("cort-compartir-mensaje");
+      if (mensaje) mensaje.textContent = "Confirmación revocada; no se abrió ningún selector.";
+    });
+    window.addEventListener("focus", () => {
+      if (asistenteAbierto()) window.CORT_enviarAlCerebro({ type: "asistente_estado" });
+    });
+    document.getElementById("cort-dispositivo-cerrar")?.addEventListener("click", () => cerrarDispositivo());
+    document.getElementById("cort-sensores-activar")?.addEventListener("click", (ev) => {
+      const activar = ev.currentTarget.getAttribute("aria-pressed") !== "true";
+      window.CORT_enviarAlCerebro({ type: "sensores_estado", activa: activar });
+    });
+    document.getElementById("cort-sensores-pasos")?.addEventListener("click", (ev) => {
+      const activar = ev.currentTarget.getAttribute("aria-pressed") !== "true";
+      window.CORT_enviarAlCerebro({ type: "sensores_pasos", activa: activar });
+    });
+    document.getElementById("cort-sensores-refrescar")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "sensores_estado", activa: true });
+      window.CORT_enviarAlCerebro({ type: "sensores_permiso" });
+    });
+    document.getElementById("cort-dispositivo-ajustes")?.addEventListener("click", () => {
+      window.CORT_enviarAlCerebro({ type: "abrir_ajustes_app" });
+    });
     document.getElementById("cort-menu-cerrar")?.addEventListener("click", () => cerrarMenu());
     document.getElementById("cort-menu-fondo")?.addEventListener("click", () => cerrarMenu(false));
     botonMenu?.addEventListener("click", () => setTimeout(sincronizarMenu, 0));
@@ -2185,17 +3362,33 @@
       const texto = campo ? campo.value.trim() : "";
       if (!texto) return;
       mensajeChat("user", texto);
+      pintaEstadoAsistente("procesando");
       window.CORT_enviarAlCerebro({ type: "user_input", text: texto });
       campo.value = "";
     });
     document.addEventListener("keydown", (ev) => {
       const chat = document.getElementById("cort-chat");
+      const panel = document.getElementById("cort-dispositivo");
+      const medios = document.getElementById("cort-medios");
+      const asistente = document.getElementById("cort-asistente");
+      const vida = document.getElementById("cort-vida");
+      const avisos = document.getElementById("cort-avisos");
       if (ev.key === "Escape") {
         if (chat && !chat.hidden) cerrarChat();
+        else if (medios && !medios.hidden) cerrarMedios();
+        else if (asistente && !asistente.hidden) cerrarAsistente();
+        else if (vida && !vida.hidden) cerrarVida();
+        else if (avisos && !avisos.hidden) cerrarAvisos();
+        else if (panel && !panel.hidden) cerrarDispositivo();
         else if (menu && !menu.classList.contains("hidden")) cerrarMenu();
         return;
       }
       if (chat && !chat.hidden) mantenerFoco(ev, chat);
+      else if (medios && !medios.hidden) mantenerFoco(ev, medios);
+      else if (asistente && !asistente.hidden) mantenerFoco(ev, asistente);
+      else if (vida && !vida.hidden) mantenerFoco(ev, vida);
+      else if (avisos && !avisos.hidden) mantenerFoco(ev, avisos);
+      else if (panel && !panel.hidden) mantenerFoco(ev, panel);
       else if (menu && !menu.classList.contains("hidden")) mantenerFoco(ev, menu);
     });
     if (menu && window.MutationObserver) {
@@ -2288,7 +3481,7 @@
   let ultimaVersion = null;    // U1: lo que dijo el canal del repo
   let ultimaPrueba = null;   // el inventario no puede borrarse el resultado de la prueba
   const progresoPull = {};
-  const BOTON_CEREBRO = "padding:3px 9px;border-radius:8px;cursor:pointer;font:11px/1.2 system-ui;" +
+  const BOTON_CEREBRO = "padding:3px 9px;min-height:48px;border-radius:8px;cursor:pointer;font:11px/1.2 system-ui;" +
     "border:1px solid rgba(90,210,255,.6);background:rgba(40,150,220,.2);color:#bfeeff";
 
   function chipCerebro() {
@@ -2297,7 +3490,9 @@
     chip.id = "cort-cerebro-chip";
     chip.type = "button";
     chip.textContent = "◉";
-    chip.title = "cerebro: modelos en disco, descargas y prueba";
+    chip.title = window.CORT_esAndroid
+      ? "cerebro híbrido: GGUF, recursos, personalidad y proveedores"
+      : "cerebro: modelos en disco, descargas y prueba";
     chip.setAttribute("aria-label", "abrir el panel del cerebro");
     const aviso = document.createElement("span");
     aviso.id = "cort-cerebro-aviso";
@@ -2320,6 +3515,7 @@
       const abierto = panel.style.display === "block";
       panel.style.display = abierto ? "none" : "block";
       if (!abierto) {
+        cargarCatalogoOllama();
         window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
         window.CORT_enviarAlCerebro({ type: "buscar_actualizacion" });
         window.CORT_enviarAlCerebro({ type: "perfil_equipo" });
@@ -2328,6 +3524,19 @@
         pintarCerebro();
       }
     });
+  }
+
+  function abrirPanelCerebro(foco) {
+    chipCerebro();
+    const panel = document.getElementById("cort-cerebro");
+    if (!panel) return;
+    panel.style.display = "block";
+    cargarCatalogoOllama();
+    window.CORT_enviarAlCerebro({ type: "check_ollama_status" });
+    window.CORT_enviarAlCerebro({ type: "perfil_equipo" });
+    window.CORT_enviarAlCerebro({ type: "memoria_estado" });
+    pintarCerebro();
+    if (foco) setTimeout(() => document.getElementById(foco)?.focus(), 60);
   }
 
   function nodoVersion() {
@@ -2607,9 +3816,316 @@
     }
   };
 
+  let catalogoOllama = null;
+  let catalogoOllamaError = "";
+  let nodoHibridoActual = null;
+  let firmaPerfilesNube = "";
+  let nodoCatalogoOllama = null;
+  const NUBE_BASES = {
+    anthropic: "https://api.anthropic.com",
+    openai: "https://api.openai.com/v1",
+    gemini: "https://generativelanguage.googleapis.com/v1beta",
+    openrouter: "https://openrouter.ai/api/v1",
+    groq: "https://api.groq.com/openai/v1",
+    mistral: "https://api.mistral.ai/v1",
+    deepseek: "https://api.deepseek.com/v1",
+    xai: "https://api.x.ai/v1"
+  };
+
+  function cargarCatalogoOllama() {
+    if (catalogoOllama || catalogoOllamaError) return;
+    fetch("/cort/ollama-catalogo.json", { cache: "no-store" })
+      .then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then((j) => {
+        catalogoOllama = Array.isArray(j.modelos) ? j.modelos : [];
+        pintarCatalogoOllama();
+      })
+      .catch(() => {
+        catalogoOllamaError = "No se pudo leer la instantánea local del catálogo Ollama.";
+        pintarCatalogoOllama();
+      });
+  }
+
+  function pintarCatalogoOllama() {
+    if (!nodoCatalogoOllama) return;
+    const lista = nodoCatalogoOllama.querySelector("#cort-ollama-lista");
+    const total = nodoCatalogoOllama.querySelector("#cort-ollama-total");
+    if (!lista || !total) return;
+    lista.replaceChildren();
+    if (catalogoOllamaError) {
+      total.textContent = catalogoOllamaError;
+      return;
+    }
+    if (!catalogoOllama) {
+      total.textContent = "Leyendo la instantánea local…";
+      return;
+    }
+    const q = nodoCatalogoOllama.querySelector("#cort-ollama-buscar")?.value.trim().toLowerCase() || "";
+    const filtrados = catalogoOllama.filter((m) => [m.nombre, m.descripcion,
+      ...(m.capacidades || []), ...(m.tamanos || [])].join(" ").toLowerCase().includes(q));
+    total.textContent = `${filtrados.length} de ${catalogoOllama.length} modelos oficiales`;
+    filtrados.slice(0, 40).forEach((m) => {
+      const fila = document.createElement("div");
+      fila.style.cssText = "padding:7px 0;border-top:1px solid rgba(120,200,240,.18)";
+      const nombre = document.createElement("div");
+      const fuerte = document.createElement("b");
+      fuerte.textContent = m.nombre || "sin nombre";
+      nombre.appendChild(fuerte);
+      nombre.append(" · tamaños " + ((m.tamanos || []).join(", ") || "sin etiqueta pública"));
+      const desc = document.createElement("div");
+      desc.style.opacity = ".72";
+      desc.textContent = m.descripcion || "";
+      fila.append(nombre, desc);
+      const pies = document.createElement("div");
+      pies.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:3px";
+      const caps = document.createElement("span");
+      caps.style.opacity = ".65";
+      caps.textContent = "capacidades: " + ((m.capacidades || []).join(", ") || "no declaradas");
+      pies.appendChild(caps);
+      try {
+        const u = new URL(m.referencia);
+        if (u.protocol === "https:" && u.hostname === "ollama.com") {
+          const enlace = document.createElement("a");
+          enlace.href = u.href;
+          enlace.target = "_blank";
+          enlace.rel = "noopener noreferrer";
+          enlace.textContent = "ficha oficial";
+          enlace.style.color = "#8fdcff";
+          pies.appendChild(enlace);
+        }
+      } catch (urlInvalida) {}
+      fila.appendChild(pies);
+      lista.appendChild(fila);
+    });
+    if (filtrados.length > 40) {
+      const limite = document.createElement("div");
+      limite.style.opacity = ".7";
+      limite.textContent = `Mostrando 40 de ${filtrados.length}. Afina la búsqueda para ver el resto.`;
+      lista.appendChild(limite);
+    }
+  }
+
+  function nodoCatalogoOllamaPanel() {
+    if (nodoCatalogoOllama) return nodoCatalogoOllama;
+    const caja = document.createElement("section");
+    caja.id = "cort-ollama-catalogo";
+    caja.style.cssText = "margin:10px 0;padding:8px;border-radius:10px;" +
+      "border:1px solid rgba(120,200,240,.3);background:rgba(16,44,68,.45)";
+    const titulo = document.createElement("h3");
+    titulo.textContent = "Catálogo Ollama completo";
+    titulo.style.cssText = "margin:0 0 5px;font:700 13px system-ui;color:#bfeeff";
+    const nota = document.createElement("p");
+    nota.style.cssText = "margin:4px 0;opacity:.75";
+    nota.textContent = "Los tamaños son etiquetas de parámetros, no bytes de descarga. " +
+      "Android no ejecuta el demonio Ollama: para bajar y usar un modelo aquí, " +
+      "elige uno de los GGUF verificados de arriba. Los modelos pesados siguen visibles.";
+    const buscar = document.createElement("input");
+    buscar.id = "cort-ollama-buscar";
+    buscar.type = "search";
+    buscar.placeholder = "Buscar nombre, tamaño o capacidad";
+    buscar.setAttribute("aria-label", "Buscar en el catálogo Ollama");
+    buscar.style.cssText = "box-sizing:border-box;width:100%;min-height:48px;padding:8px;" +
+      "border-radius:8px;border:1px solid rgba(120,200,240,.4);background:#091726;color:#e9f4ff";
+    buscar.addEventListener("input", pintarCatalogoOllama);
+    const total = document.createElement("div");
+    total.id = "cort-ollama-total";
+    total.style.cssText = "margin:5px 0;opacity:.8";
+    const lista = document.createElement("div");
+    lista.id = "cort-ollama-lista";
+    caja.append(titulo, nota, buscar, total, lista);
+    nodoCatalogoOllama = caja;
+    cargarCatalogoOllama();
+    return caja;
+  }
+
+  function nodoHibrido(s) {
+    if (!window.CORT_esAndroid) return null;
+    if (!nodoHibridoActual) {
+      const caja = document.createElement("section");
+      caja.id = "cort-cerebro-hibrido";
+      caja.style.cssText = "margin:8px 0;padding:8px;border-radius:10px;" +
+        "border:1px solid rgba(120,220,190,.4);background:rgba(14,48,44,.5)";
+      const titulo = document.createElement("h3");
+      titulo.textContent = "Cerebro híbrido del teléfono";
+      titulo.style.cssText = "margin:0 0 5px;font:700 13px system-ui;color:#c9f2e0";
+      const recursos = document.createElement("div");
+      recursos.id = "cort-hibrido-recursos";
+      recursos.style.cssText = "opacity:.85;margin-bottom:6px";
+      const modos = document.createElement("div");
+      modos.style.cssText = "display:flex;gap:6px;flex-wrap:wrap";
+      [["auto", "Automático"], ["local", "Sólo local"], ["nube", "Sólo nube"]].forEach(([id, texto]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.modo = id;
+        b.textContent = texto;
+        b.style.cssText = BOTON_CEREBRO + "min-height:48px";
+        b.addEventListener("click", () => window.CORT_enviarAlCerebro({
+          type: "cerebro_hibrido_modo", modo: id
+        }));
+        modos.appendChild(b);
+      });
+      const personalidad = document.createElement("select");
+      personalidad.id = "cort-hibrido-personalidad";
+      personalidad.setAttribute("aria-label", "Personalidad de CORT");
+      personalidad.style.cssText = "min-height:48px;max-width:100%;margin-top:7px;padding:6px;" +
+        "border-radius:8px;background:#091726;color:#e9f4ff;border:1px solid rgba(120,220,190,.4)";
+      personalidad.addEventListener("change", () => window.CORT_enviarAlCerebro({
+        type: "personalidad", id: personalidad.value
+      }));
+      const recomendado = document.createElement("div");
+      recomendado.id = "cort-hibrido-recomendado";
+      recomendado.style.cssText = "margin:5px 0;opacity:.85";
+      const perfiles = document.createElement("div");
+      perfiles.id = "cort-hibrido-perfiles";
+      const forma = document.createElement("form");
+      forma.id = "cort-nube-form";
+      forma.style.cssText = "margin-top:8px;padding-top:7px;border-top:1px solid rgba(120,220,190,.25)";
+      const campo = (id, type, placeholder, max) => {
+        const input = document.createElement("input");
+        input.id = id;
+        input.type = type;
+        input.placeholder = placeholder;
+        input.maxLength = max;
+        input.autocomplete = "off";
+        input.style.cssText = "box-sizing:border-box;width:100%;min-height:48px;padding:8px;margin-top:5px;" +
+          "border-radius:8px;border:1px solid rgba(120,220,190,.35);background:#091726;color:#e9f4ff";
+        return input;
+      };
+      const proveedor = document.createElement("select");
+      proveedor.id = "cort-nube-proveedor";
+      proveedor.style.cssText = "box-sizing:border-box;width:100%;min-height:48px;padding:8px;margin-top:5px;" +
+        "border-radius:8px;border:1px solid rgba(120,220,190,.35);background:#091726;color:#e9f4ff";
+      Object.keys(NUBE_BASES).forEach((id) => proveedor.add(new Option(id, id)));
+      proveedor.addEventListener("change", () => {
+        const base = document.getElementById("cort-nube-base");
+        const anterior = NUBE_BASES[proveedor.dataset.anterior || ""];
+        if (base && (!base.value || base.value === anterior)) base.value = NUBE_BASES[proveedor.value] || "";
+        proveedor.dataset.anterior = proveedor.value;
+      });
+      const nombre = campo("cort-nube-nombre", "text", "Nombre opcional del perfil", 60);
+      const base = campo("cort-nube-base", "url", "Endpoint oficial del proveedor", 300);
+      base.required = true;
+      base.readOnly = true;
+      base.title = "Esta versión sólo usa los endpoints HTTPS oficiales de cada proveedor.";
+      base.value = NUBE_BASES[proveedor.value] || "";
+      proveedor.dataset.anterior = proveedor.value;
+      const modelo = campo("cort-nube-modelo", "text", "Modelo exacto del proveedor", 120);
+      modelo.required = true;
+      const clave = campo("cort-nube-clave", "password", "Clave API; no se vuelve a mostrar", 1000);
+      const guardar = document.createElement("button");
+      guardar.id = "cort-nube-guardar";
+      guardar.type = "submit";
+      guardar.textContent = "Guardar proveedor cifrado";
+      guardar.style.cssText = BOTON_CEREBRO + "min-height:48px;margin-top:7px";
+      const mensaje = document.createElement("div");
+      mensaje.id = "cort-nube-mensaje";
+      mensaje.setAttribute("role", "status");
+      mensaje.style.cssText = "margin-top:5px;opacity:.85";
+      const privacidad = document.createElement("p");
+      privacidad.style.cssText = "margin:6px 0 0;opacity:.72";
+      privacidad.textContent = "La clave se cifra con AndroidKeyStore y no se guarda en la página. " +
+        "Esta versión usa sólo el endpoint HTTPS oficial del proveedor. " +
+        "CORT pedirá permiso explícito antes de cada envío a la nube.";
+      forma.append(proveedor, nombre, base, modelo, clave, guardar, mensaje, privacidad);
+      forma.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        window.CORT_enviarAlCerebro({
+          type: "nube_perfil_guardar",
+          nombre: nombre.value,
+          proveedor: proveedor.value,
+          base: base.value,
+          modelo: modelo.value,
+          clave: clave.value
+        });
+        clave.value = "";
+        mensaje.textContent = "Guardando el proveedor cifrado…";
+      });
+      caja.append(titulo, recursos, modos, personalidad, recomendado, perfiles, forma);
+      nodoHibridoActual = caja;
+    }
+    const caja = nodoHibridoActual;
+    const r = s.recursos || {};
+    const recursos = caja.querySelector("#cort-hibrido-recursos");
+    recursos.textContent = `RAM ${r.ram_libre_mb ?? "?"} MB · disco ${r.disco_libre_mb ?? "?"} MB · ` +
+      `pila ${r.bateria ?? "?"} % · cargando ${r.cargando ? "sí" : "no"} · ` +
+      `batería ${r.temperatura_bateria ?? "?"} °C`;
+    caja.querySelectorAll("[data-modo]").forEach((b) => {
+      const activo = b.dataset.modo === s.modo;
+      b.setAttribute("aria-pressed", activo ? "true" : "false");
+      b.style.opacity = activo ? "1" : ".65";
+    });
+    const personalidad = caja.querySelector("#cort-hibrido-personalidad");
+    personalidad.replaceChildren();
+    (s.personalidades || []).forEach((p) => personalidad.add(new Option(p.nombre, p.id)));
+    personalidad.value = s.personalidad || "cercana";
+    caja.querySelector("#cort-hibrido-recomendado").textContent = s.recomendado
+      ? `Recomendado ahora: ${s.recomendado}. Abierto: ${s.modelo_activo || "ninguno"}.`
+      : `Ningún GGUF verificado pasa ahora la puerta. Abierto: ${s.modelo_activo || "ninguno"}.`;
+    const firma = JSON.stringify(s.perfiles || []) + "|" + (s.perfil_activo || "");
+    if (firma !== firmaPerfilesNube) {
+      firmaPerfilesNube = firma;
+      const perfiles = caja.querySelector("#cort-hibrido-perfiles");
+      perfiles.replaceChildren();
+      (s.perfiles || []).forEach((p) => {
+        const fila = document.createElement("div");
+        fila.style.cssText = "padding:5px 0;border-top:1px solid rgba(120,220,190,.18)";
+        const texto = document.createElement("div");
+        texto.textContent = `${p.nombre || p.id} · ${p.proveedor} · ${p.modelo} · ` +
+          `${p.tiene_clave ? "clave guardada" : "sin clave"}${p.id === s.perfil_activo ? " · ACTIVO" : ""}`;
+        const botones = document.createElement("div");
+        botones.style.cssText = "display:flex;gap:6px;margin-top:4px";
+        const usar = document.createElement("button");
+        usar.type = "button";
+        usar.textContent = "Usar";
+        usar.style.cssText = BOTON_CEREBRO + "min-height:48px";
+        usar.disabled = p.id === s.perfil_activo;
+        usar.addEventListener("click", () => window.CORT_enviarAlCerebro({
+          type: "nube_perfil_usar", id: p.id
+        }));
+        const borrar = document.createElement("button");
+        borrar.type = "button";
+        borrar.textContent = "Borrar";
+        borrar.style.cssText = BOTON_CEREBRO + "min-height:48px";
+        borrar.addEventListener("click", () => {
+          if (!window.confirm(`¿Borrar el perfil ${p.nombre || p.id} y su clave de este teléfono?`)) return;
+          window.CORT_enviarAlCerebro({ type: "nube_perfil_borrar", id: p.id });
+        });
+        botones.append(usar, borrar);
+        fila.append(texto, botones);
+        perfiles.appendChild(fila);
+      });
+      if (!(s.perfiles || []).length) {
+        const vacio = document.createElement("div");
+        vacio.textContent = "Todavía no hay proveedores guardados.";
+        perfiles.appendChild(vacio);
+      }
+    }
+    return caja;
+  }
+
   function pintarCerebro() {
     const panel = document.getElementById("cort-cerebro");
     if (!panel) return;
+    const activo = document.activeElement;
+    const foco = activo && panel.contains(activo) ? {
+      id: activo.id,
+      inicio: activo.selectionStart,
+      fin: activo.selectionEnd,
+      arriba: panel.scrollTop
+    } : null;
+    const devolverFoco = () => {
+      if (!foco) return;
+      if (foco.id) {
+        const destino = document.getElementById(foco.id);
+        if (destino && panel.contains(destino)) {
+          destino.focus({ preventScroll: true });
+          if (typeof destino.setSelectionRange === "function" && foco.inicio != null) {
+            try { destino.setSelectionRange(foco.inicio, foco.fin, "backward"); } catch (sinSeleccion) {}
+          }
+        }
+      }
+      panel.scrollTop = foco.arriba;
+    };
     const s = (ultimoCerebro && ultimoCerebro.type === "ollama_status_reply") ? ultimoCerebro.status : null;
     panel.innerHTML = "";
     const titulo = document.createElement("div");
@@ -2620,12 +4136,19 @@
       if (ultimoPerfil) panel.appendChild(nodoPerfil());
       panel.appendChild(nodoMirada());
       panel.appendChild(nodoMemoria());
+      panel.appendChild(nodoCatalogoOllamaPanel());
+      devolverFoco();
       return;
     }
     const libre = s.ram_disponible_mb, nucleos = s.nucleos;
-    titulo.textContent = `cerebro · Ollama ${s.online ? "vivo" : "apagado"} · ` +
-      `RAM libre ${libre} MB · ${nucleos} núcleos`;
+    const android = !!window.CORT_esAndroid;
+    titulo.textContent = android
+      ? `cerebro híbrido · ${s.modo || "?"} · ${s.personalidad || "?"} · ` +
+        `GGUF abierto ${s.modelo_activo || "ninguno"}`
+      : `cerebro · Ollama ${s.online ? "vivo" : "apagado"} · RAM libre ${libre} MB · ${nucleos} núcleos`;
     panel.appendChild(titulo);
+    const hibrido = nodoHibrido(s);
+    if (hibrido) panel.appendChild(hibrido);
     // El escaneo va primero: es lo que decide si tiene sentido bajar un modelo, y en
     // una pantalla de 521 px lo de abajo se lee haciendo scroll.
     if (ultimoPerfil) panel.appendChild(nodoPerfil());
@@ -2633,9 +4156,11 @@
     panel.appendChild(nodoMemoria());
     const nota = document.createElement("div");
     nota.style.cssText = "opacity:.72;margin:2px 0 8px";
-    nota.textContent = "El peso está medido en disco; la RAM que hace falta es estimación " +
-      "sobre ese peso. En el teléfono «probar» lo intenta aunque vaya justo (mmap); " +
-      "en la PC el puente decide con su propia cuenta.";
+    nota.textContent = android
+      ? "Carga real con llama.cpp y mmap. La puerta comprueba RAM, disco, batería y temperatura; " +
+        "si permite INTENTAR no garantiza que el sistema no cierre el proceso."
+      : "El peso está medido en disco; la RAM que hace falta es estimación sobre ese peso. " +
+        "El puente del PC decide con su propia cuenta.";
     panel.appendChild(nota);
     if (ultimaVersion) panel.appendChild(nodoVersion());
     const cat = s.catalogo || {};
@@ -2643,27 +4168,53 @@
       .forEach(([nombre, info]) => {
         const fila = document.createElement("div");
         fila.style.cssText = "padding:6px 0;border-top:1px solid rgba(120,200,240,.18)";
-        const cabe = info.instalado && libre >= 0 && info.ram_uso <= libre;
+        const cabe = info.instalado && (android ? info.cargar !== false : libre >= 0 && info.ram_uso <= libre);
         const datos = document.createElement("div");
-        datos.innerHTML = `<b>${nombre}</b> · ` +
-          (info.instalado ? `en disco ${info.mb} MB` : (info.tam || "no bajado")) +
-          ` · pide ~${info.ram_uso || "?"} MB` +
-          `<span style="opacity:.6"> ${info.instalado ? (cabe ? "· cabe ahora" : "· justo de RAM") : ""}</span>`;
+        const fuerte = document.createElement("b");
+        fuerte.textContent = nombre;
+        datos.appendChild(fuerte);
+        datos.append(" · " + (info.instalado ? `en disco ${info.mb} MB` : (info.tam || "no bajado")) +
+          ` · pide ~${info.ram_uso || "?"} MB`);
+        const estado = document.createElement("span");
+        estado.style.opacity = ".6";
+        estado.textContent = info.instalado ? (cabe ? " · puede intentar la carga" : " · carga bloqueada") : "";
+        datos.appendChild(estado);
         fila.appendChild(datos);
+        if (android) {
+          const politica = document.createElement("div");
+          politica.style.cssText = "opacity:.78";
+          const motivos = [];
+          if (!info.cargar) motivos.push("Carga: " + (info.motivo_carga || "bloqueada"));
+          if (!info.descargar) motivos.push("Descarga: " + (info.motivo_descarga || "bloqueada"));
+          politica.textContent = motivos.join(" · ");
+          if (politica.textContent) fila.appendChild(politica);
+        }
         const linea = document.createElement("div");
-        linea.style.cssText = "display:flex;gap:6px;margin-top:4px";
+        linea.style.cssText = "display:flex;gap:6px;flex-wrap:wrap;margin-top:4px";
         if (!info.instalado) {
           const bajar = document.createElement("button");
           bajar.type = "button"; bajar.textContent = "descargar";
-          bajar.style.cssText = BOTON_CEREBRO;
+          bajar.style.cssText = BOTON_CEREBRO + ";min-height:48px";
+          bajar.disabled = android && info.descargar === false;
+          bajar.title = android && info.descargar === false
+            ? (info.motivo_descarga || "descarga bloqueada por recursos") : "";
           bajar.addEventListener("click", () =>
             window.CORT_enviarAlCerebro({ type: "pull_ollama_model", model: nombre }));
           linea.appendChild(bajar);
         }
+        if (android && info.instalado) {
+          const usar = document.createElement("button");
+          usar.type = "button"; usar.textContent = "usar";
+          usar.style.cssText = BOTON_CEREBRO + ";min-height:48px";
+          usar.disabled = info.cargar === false;
+          usar.addEventListener("click", () =>
+            window.CORT_enviarAlCerebro({ type: "cerebro_hibrido_usar", model: nombre }));
+          linea.appendChild(usar);
+        }
         const probar = document.createElement("button");
         probar.type = "button"; probar.textContent = "probar el cerebro";
-        probar.style.cssText = BOTON_CEREBRO;
-        probar.disabled = !info.instalado;
+        probar.style.cssText = BOTON_CEREBRO + ";min-height:48px";
+        probar.disabled = !info.instalado || (android && info.cargar === false);
         probar.addEventListener("click", () =>
           window.CORT_enviarAlCerebro({ type: "probar_cerebro", model: nombre }));
         linea.appendChild(probar);
@@ -2676,6 +4227,7 @@
         }
         panel.appendChild(fila);
       });
+    panel.appendChild(nodoCatalogoOllamaPanel());
     const r = ultimaPrueba;
     if (r) {
       const caja = document.createElement("div");
@@ -2687,6 +4239,7 @@
         : `prueba con ${r.modelo || "?"}: no corrió — ${r.motivo}`;
       panel.appendChild(caja);
     }
+    devolverFoco();
   }
 
   window.CORT_alVersion = (n) => {
@@ -2710,6 +4263,13 @@
       flotante(n.status || "descarga terminada", n.success !== false);
     }
     if (n.type === "ollama_status_reply") ultimoCerebro = n;
+    if (n.type === "cerebro_hibrido_resultado") {
+      flotante(n.motivo || (n.ok ? "hecho" : "no se pudo completar"), n.ok !== false);
+      const mensaje = document.getElementById("cort-nube-mensaje");
+      if (mensaje && String(n.motivo || "").includes("proveedor")) {
+        mensaje.textContent = n.ok ? "Proveedor guardado. No se muestra la clave." : n.motivo;
+      }
+    }
     if (n.type === "cerebro_prueba" && !n.empezando) ultimaPrueba = n;
     if (n.type === "cerebro_prueba" && n.empezando) {
       flotante(`probando ${n.modelo}: ${n.frase}`);
@@ -2719,14 +4279,90 @@
     pintarCerebro();
   };
 
+  const estadosAsistente = {
+    reposo: "En reposo",
+    escuchando: "Te escucho",
+    procesando: "Pensando",
+    hablando: "Hablando",
+    error: "No pude continuar"
+  };
+  const orbePorEstado = {
+    reposo: "reposo", escuchando: "escuchando", procesando: "pensando",
+    hablando: "hablando", error: "alerta"
+  };
+
+  function pintaEstadoAsistente(estado, detalle) {
+    const clave = Object.prototype.hasOwnProperty.call(estadosAsistente, estado) ? estado : "reposo";
+    const el = document.getElementById("cort-estado-asistente");
+    if (el) {
+      el.dataset.estado = clave;
+      el.textContent = "CORT · " + estadosAsistente[clave]
+        + (detalle ? " — " + String(detalle).slice(0, 180) : "");
+      el.setAttribute("aria-busy", clave === "procesando" ? "true" : "false");
+    }
+    document.documentElement.dataset.cortEstado = clave;
+    if (window.CORT_orbe && typeof window.CORT_orbe.estado === "function") {
+      window.CORT_orbe.estado(orbePorEstado[clave]);
+    }
+  }
+
+  function escucharPuenteNativo() {
+    if (!window.__cortNative || typeof window.__cortNative.on !== "function") return;
+    window.__cortNative.on((n) => {
+      if (!n) return;
+      if (n.type === "capacidades") aplicarCapacidades(n);
+      if (n.type === "medios_estado") pintarMedios(n);
+      else if (n.type === "asistente_estado") pintarAsistente(n);
+      else if (["memoria_lista", "memoria_plan", "memoria_resultado", "memoria_cancelacion", "memoria_historial",
+        "memoria_exportacion", "alarmas_estado", "alarmas_aviso", "rutinas_estado",
+        "rutina_creada", "rutina_crear", "rutina_plan", "rutina_inicio", "rutina_resultado",
+        "rutina_cancelacion", "rutinas_historial"].includes(n.type)) pintarVida(n);
+      else if (["avisos_estado", "avisos_apps", "avisos_allowlist", "avisos_lista",
+        "compartir_plan", "compartir_resultado", "compartir_cancelacion",
+        "avisos_error", "compartir_error"].includes(n.type)) pintarAvisos(n);
+      else if (n.type === "medios_aviso") flotante(n.motivo || "No pude abrir la música.", n.ok !== false);
+      else if (n.type === "sensores_estado") pintarSensores(n);
+      else if (n.type === "sensores_pasos") {
+        ultimosPasos = n;
+        if (ultimosSensores) pintarSensores({ ...ultimosSensores, pasos: n });
+      } else if (n.type === "sensores_permiso") pintarPermisoSensores(n);
+      else if (n.type === "system_stats") pintarSistema(n);
+      else if (n.type === "sensores_error") {
+        const estado = document.getElementById("cort-sensores-estado");
+        if (estado) estado.textContent = n.motivo || "Sensores no disponibles.";
+      }
+      if (n.state === "thinking") pintaEstadoAsistente("procesando");
+      else if (n.state === "speaking") pintaEstadoAsistente("hablando");
+      else if (n.state === "listening") pintaEstadoAsistente("escuchando");
+      else if (n.state === "idle") pintaEstadoAsistente("reposo");
+      else if (n.type === "voz_habla") {
+        pintaEstadoAsistente(n.hablando ? "hablando" : "reposo");
+      } else if (n.type === "mic_error") {
+        pintaEstadoAsistente("error", n.motivo || "revisa el permiso del micrófono");
+      }
+    });
+  }
+
   window.CORT_alVoz = (n) => {
     if (!n) return;
     if (n.type === "voz_estado" || n.type === "voz_activada" || n.type === "voz_motor_result") {
       ultimaVoz = n;
     }
-    if (n.type === "mic_estado") ultimoMic = n;
+    if (n.type === "mic_estado") {
+      ultimoMic = n;
+      if (n.estado === "escuchando") pintaEstadoAsistente("escuchando");
+      else if (n.estado === "procesando") pintaEstadoAsistente("procesando");
+      else if (n.estado === "preparando" || n.estado === "pidiendo_permiso") {
+        pintaEstadoAsistente("procesando", n.motivo || "Preparando el micrófono");
+      } else if (n.estado === "error") {
+        pintaEstadoAsistente("error", n.motivo || "No pude abrir el micrófono");
+      } else {
+        pintaEstadoAsistente("reposo", n.estado === "vigilando" ? "Palabra «CORT» activa" : "");
+      }
+    }
     if (n.type === "despierto") {
       // F10: el nombre ya se oyó; la ventana dice cuántos segundos queda de escucha.
+      pintaEstadoAsistente("escuchando", `${n.ventana_seg || 8} s`);
       flotante(`despierta · te escucho ${n.ventana_seg || 8} s`, true);
       pintaWake({ wake: true });
       return;
@@ -2735,6 +4371,7 @@
     if (n.type === "voz_audio" && n.ok) sonarVoz(n);
     if (n.type === "mic_parcial" || n.type === "mic_texto") {
       if (n.descartado) return;   // habló otra cosa: no era para CORT
+      pintaEstadoAsistente(n.type === "mic_parcial" ? "escuchando" : "procesando");
       if (n.type === "mic_parcial" || n.texto) abrirChat(false);
       const campo = document.getElementById("cort-chat-input");
       let limpiarDictado = false;
@@ -2762,6 +4399,8 @@
     pintarVoz();
   };
   function arrancarVoz() {
+    pintaEstadoAsistente("reposo");
+    escucharPuenteNativo();
     pintarVoz();
     prepararAsistente();
     chipCerebro();      // y sin este canto no hay cómo bajar ni probar un modelo
@@ -2841,6 +4480,17 @@
     if (window.CORT_esAndroid) {
       const emparejar = document.getElementById("mobile-pairing-btn");
       if (emparejar) emparejar.style.display = "none";
+      [["agent-modele-btn", null], ["api-keys-button", "cort-nube-clave"],
+        ["agent-tone-btn", "cort-hibrido-personalidad"]].forEach(([id, foco]) => {
+        const boton = document.getElementById(id);
+        if (!boton || boton._cortHibrido) return;
+        boton._cortHibrido = true;
+        boton.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+          abrirPanelCerebro(foco);
+        }, true);
+      });
     }
     asegurarFilaIdioma();
     asegurarFilaVista();

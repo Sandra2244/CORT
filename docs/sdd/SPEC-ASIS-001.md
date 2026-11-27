@@ -101,7 +101,9 @@ La suite APK debe fallar antes del parche por ausencia de permiso, `VistaRapida`
 - Consola del arnés aislado: sólo errores esperados de `ws://127.0.0.1:18765/ws`, porque ese servidor HTTP no implementa WebSocket; no se observaron errores JavaScript de la interfaz nueva.
 - Validaciones locales: `node --check cort-web/cort/cort-ui.js`, `bash -n apps/android/compilar.sh`, `python3 -m py_compile scripts/prueba_apk.py` y `git diff --check` en verde.
 - Suites locales en arena `CORT_HOME`/`CORT_DATOS`: seguridad Web/puente/Android `30/30`; APK/Web `266/266`.
-- Pendiente: build Android, verificación de `LimiteEscuchaTest`, actualización del servicio y prueba física en A16. No se marca VERIFICADA con sólo estática y navegador.
+- Verificación local del 2026-11-26: `scripts/prueba_apk.py` repitió el resultado estático `266/266`; `LimiteEscuchaTest.java` existe y está integrado en `apps/android/compilar.sh`, pero no se ejecutó localmente. `bash -n apps/android/compilar.sh` y `python -m py_compile scripts/prueba_apk.py` pasaron.
+- Pendiente: build Android y ejecución de `LimiteEscuchaTest` (el entorno local no tiene `ANDROID_HOME`/`ANDROID_SDK_ROOT`), actualización del servicio, verificación Web posterior a la Fase 1 y prueba física en A16. No se marca VERIFICADA con sólo estática y navegador.
+- Limitaciones visibles de la línea PC, diferidas por decisión de plataforma: `prueba_intenciones.py` mantiene 3 fallos de 18 (reproductor ausente y dos textos de rechazo sin «fuera») y `prueba_perfil.py` falla en Windows por `os.getloadavg`. `prueba_secretos.py` no pudo completarse porque `node` no está en el `PATH` del entorno. No se instala ninguna dependencia para ocultar estos resultados.
 
 ### ASIS-2 — Alarmas, frases y acompañamiento diario
 

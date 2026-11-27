@@ -27,9 +27,15 @@ import java.util.List;
 
 /** La vista inferior que Android muestra sobre otra app cuando se invoca a CORT. */
 public final class VistaRapida {
-    private static VistaRapida actual;
+    interface AlCerrar {
+        void cerrada();
+    }
+
+    private static volatile VistaRapida actual;
 
     private final Context contexto;
+    private final Object dueno;
+    private final AlCerrar alCerrar;
     private final Handler principal = new Handler(Looper.getMainLooper());
     private final WindowManager ventanas;
     private final LinearLayout raiz;
@@ -42,19 +48,33 @@ public final class VistaRapida {
     private final Cerebro cerebro;
     private final Acciones acciones;
     private final Voz voz;
+    private final Medios medios;
+    private final Medios.AlEstado oyenteMedios = estado -> {};
     private final Object ciclo = new Object();
     private volatile boolean cerrada;
     private volatile boolean procesando;
+    private long generacion;
     private boolean trabajando;
     private boolean memoriaCerrada;
+    private final ServicioEscucha.AlDetener oyenteDetener = this::detener;
 
-    private VistaRapida(Context contexto) {
+    private VistaRapida(Context contexto, Object dueno, AlCerrar alCerrar) {
         this.contexto = contexto.getApplicationContext();
+        this.dueno = dueno;
+        this.alCerrar = alCerrar;
         ventanas = (WindowManager) this.contexto.getSystemService(Context.WINDOW_SERVICE);
         recuerdos = new Recuerdos(this.contexto);
         cerebro = new Cerebro(this.contexto, recuerdos);
         acciones = new Acciones(this.contexto, recuerdos);
         voz = new Voz(this.contexto);
+        medios = Medios.compartido(this.contexto);
+        medios.vincular(voz, oyenteMedios);
+        ServicioEscucha.registraDetener(oyenteDetener);
+        voz.alHablar(hablando -> {
+            if (!hablando && EscuchaEstadoGlobal.estado() == EscuchaEstado.PROCESANDO) {
+                EscuchaEstadoGlobal.pon(EscuchaEstado.APAGADO, "");
+            }
+        });
 
         raiz = new LinearLayout(this.contexto);
         raiz.setOrientation(LinearLayout.VERTICAL);
@@ -142,16 +162,75 @@ public final class VistaRapida {
         parametros.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
     }
 
-    public static void mostrar(Context contexto) {
-        if (actual != null) {
-            actual.cerrar();
-        }
+    public static boolean mostrar(Context contexto) {
+        return mostrar(contexto, null, null);
+    }
+
+    public static boolean mostrar(Context contexto, Object dueno, AlCerrar alCerrar) {
         if (!Settings.canDrawOverlays(contexto)) {
             abrirPermisoSuperposicion(contexto);
-            return;
+            return false;
         }
-        actual = new VistaRapida(contexto);
-        actual.mostrarVentana();
+        new Handler(Looper.getMainLooper()).post(() -> {
+            if (actual != null) actual.cerrar();
+            actual = new VistaRapida(contexto, dueno, alCerrar);
+            actual.mostrarVentana();
+        });
+        return true;
+    }
+
+    public static boolean visible(Object dueno) {
+        VistaRapida vista = actual;
+        return vista != null && vista.dueno == dueno;
+    }
+
+    public static void cerrar(Object dueno) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null && vista.dueno == dueno) vista.cerrar();
+        });
+    }
+
+    public static void prepararReconocimiento(Object dueno) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null && vista.dueno == dueno) vista.voz.dejarDeEscuchar();
+        });
+    }
+
+    public static void prepararReconocimiento() {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null) vista.voz.dejarDeEscuchar();
+        });
+    }
+
+    public static void escuchar(Object dueno) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null && vista.dueno == dueno) vista.escuchar();
+        });
+    }
+
+    public static void parcial(String texto) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null) vista.pintarParcial(texto);
+        });
+    }
+
+    public static void respuesta(String texto) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null) vista.procesar(texto);
+        });
+    }
+
+    public static void error(String mensaje) {
+        new Handler(Looper.getMainLooper()).post(() -> {
+            VistaRapida vista = actual;
+            if (vista != null) vista.pintarError(mensaje);
+        });
     }
 
     private void mostrarVentana() {
@@ -207,8 +286,29 @@ public final class VistaRapida {
         return Math.round(valor * contexto.getResources().getDisplayMetrics().density);
     }
 
+    private void pintarParcial(String texto) {
+        if (cerrada) return;
+        String limpio = texto == null ? "" : texto;
+        entrada.setText(limpio);
+        estado.setText(limpio.isEmpty() ? "Escuchando…" : "Escuchando: " + limpio);
+    }
+
+    private void pintarError(String motivo) {
+        if (cerrada) return;
+        String mensaje = motivo == null || motivo.trim().isEmpty()
+                ? "No pude reconocer la voz." : motivo;
+        if (EscuchaEstadoGlobal.estado() != EscuchaEstado.DETENIDO) {
+            EscuchaEstadoGlobal.pon(EscuchaEstado.ERROR, mensaje);
+        }
+        estado.setText(mensaje);
+    }
+
     private void escuchar() {
         ocultarAcciones();
+        medios.pausar("el dictado necesita el micrófono");
+        if (ServicioEscucha.montada()) {
+            ServicioEscucha.cambia(contexto, false);
+        }
         if (contexto.checkSelfPermission(Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED) {
             estado.setText("Falta el permiso de micrófono. Te abro Ajustes.");
@@ -216,12 +316,14 @@ public final class VistaRapida {
             return;
         }
         voz.dejarDeEscuchar();
+        EscuchaEstadoGlobal.pon(EscuchaEstado.ESCUCHANDO_MANDATO, "te escucho");
         estado.setText("Escuchando… hasta " + Motor.segundosDictado(contexto) + " segundos.");
         voz.escuchar(contexto, new Voz.AlOir() {
             @Override
             public void dijo(String texto) {
                 principal.post(() -> {
                     if (cerrada) return;
+                    EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "mandato recibido");
                     entrada.setText(texto);
                     procesar(texto);
                 });
@@ -229,19 +331,12 @@ public final class VistaRapida {
 
             @Override
             public void fallo(String motivo) {
-                principal.post(() -> {
-                    if (!cerrada) estado.setText(motivo);
-                });
+                principal.post(() -> pintarError(motivo));
             }
 
             @Override
             public void parcial(String texto) {
-                principal.post(() -> {
-                    if (!cerrada) {
-                        entrada.setText(texto);
-                        estado.setText("Escuchando: " + texto);
-                    }
-                });
+                principal.post(() -> pintarParcial(texto));
             }
         });
     }
@@ -250,16 +345,21 @@ public final class VistaRapida {
         String limpio = texto == null ? "" : texto.trim();
         if (limpio.isEmpty() || cerrada || procesando) return;
         procesando = true;
+        EscuchaEstadoGlobal.pon(EscuchaEstado.PROCESANDO, "procesando la orden");
         estado.setText("Procesando…");
         synchronized (ciclo) {
             trabajando = true;
         }
+        final long turno = generacion;
         new Thread(() -> {
             String resultado;
             try {
                 List<Cerebro.Resultado> pasos = cerebro.cadena(limpio);
                 StringBuilder respuesta = new StringBuilder();
                 for (Cerebro.Resultado paso : pasos) {
+                    synchronized (ciclo) {
+                        if (cerrada || turno != generacion) return;
+                    }
                     String dicho = acciones.ejecutar(paso);
                     if (dicho != null && !dicho.trim().isEmpty()) {
                         if (respuesta.length() > 0) respuesta.append(" ");
@@ -277,7 +377,9 @@ public final class VistaRapida {
             }
             final String finalTexto = resultado;
             principal.post(() -> {
-                if (cerrada) return;
+                synchronized (ciclo) {
+                    if (cerrada || turno != generacion) return;
+                }
                 procesando = false;
                 if (finalTexto.isEmpty()) {
                     abrirChat(limpio);
@@ -286,7 +388,9 @@ public final class VistaRapida {
                 estado.setText(finalTexto);
                 if (contexto.getSharedPreferences("cort", Context.MODE_PRIVATE)
                         .getBoolean("habla", true)) {
-                    voz.hablar(finalTexto);
+                    medios.hablar(finalTexto);
+                } else {
+                    EscuchaEstadoGlobal.pon(EscuchaEstado.APAGADO, "");
                 }
             });
         }, "cort-vista-rapida").start();
@@ -344,14 +448,33 @@ public final class VistaRapida {
         }
     }
 
+    private void detener() {
+        principal.post(() -> {
+            synchronized (ciclo) {
+                generacion++;
+            }
+            voz.dejarDeEscuchar();
+            medios.detener();
+            procesando = false;
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "detenida por la usuaria");
+            estado.setText("Detenida.");
+        });
+    }
+
     private void cerrar() {
+        ServicioEscucha.desregistraDetener(oyenteDetener);
         synchronized (ciclo) {
             if (cerrada) return;
             cerrada = true;
             procesando = false;
+            generacion++;
         }
+        medios.desvincular(voz, oyenteMedios);
         voz.dejarDeEscuchar();
         voz.cerrar();
+        if (!ServicioEscucha.montada()) {
+            EscuchaEstadoGlobal.pon(EscuchaEstado.DETENIDO, "vista rápida cerrada");
+        }
         try {
             ventanas.removeView(raiz);
         } catch (Exception yaNoEstaba) {
@@ -359,6 +482,13 @@ public final class VistaRapida {
         }
         cerrarMemoriaSiTermino();
         if (actual == this) actual = null;
+        if (alCerrar != null) {
+            try {
+                alCerrar.cerrada();
+            } catch (RuntimeException fallo) {
+                // El cierre de la vista no debe reabrir una sesión anterior.
+            }
+        }
     }
 
     private void cerrarMemoriaSiTermino() {

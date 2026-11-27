@@ -63,7 +63,18 @@ on:
       - ".github/workflows/apk-movil.yml"
 
 jobs:
+  motor:
+    if: ${{ github.event.inputs.delgado != 'true' }}
+    uses: ./.github/workflows/motor-local.yml
+    with:
+      etiqueta: motor-${{ github.event.inputs.comite || github.sha }}
+      comite: ${{ github.event.inputs.comite || github.sha }}
+    permissions:
+      contents: read
+
   apk:
+    needs: motor
+    if: ${{ always() && (needs.motor.result == 'success' || needs.motor.result == 'skipped') }}
     runs-on: ubuntu-24.04
     # `contents: write` sólo se usa cuando la corrida pide publicar la release; sin
     # `etiqueta` rellena este paso ni siquiera se intenta. Es el token efímero de
@@ -129,120 +140,26 @@ jobs:
           java -version 2>&1 | head -2
           echo "disco libre: $(df -h /runner 2>/dev/null | tail -1)"
 
-      - name: buscar el artefacto del motor
-        id: busca
-        # U1: `libcortmotor.so` la compila `motor-local.yml` con el NDK, en OTRA
-        # corrida. Aquí se baja lo que esa corrida publicó, buscando el id por API.
-        #
-        # Medido en la corrida 42104161078 (2026-11-05, 20:31): con
-        # `actions/download-artifact@v4` + `run-id: ${{ env.MOTOR_ARTIFACT }}` el
-        # paso se ejecutó y contestó «Artifact not found for name: motor-local-ndk»
-        # — el `env.` dentro del `with:` de un `uses:` no llegó a rellenarse y la
-        # acción buscó en su propia corrida, que no tiene ese artefacto. El APK salió
-        # verde pero SIN motor. Se deja constancia porque es el segundo modo fallido
-        # que se prueba aquí; el que funciona es la API directa de abajo.
-        # El `first` va dentro del `--jq`, no con `| head -1` pegado al `gh`: con
-        # `set -euo pipefail` un `head` que corta la tubería puede dejar a `gh` con
-        # señal 141 y el paso entero se aborta — justo lo que no debe abortar.
-        run: |
-          set -euo pipefail
-          LINEA="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
-            --jq '[.artifacts[] | select(.name=="motor-local-ndk" and .expired==false)] | first // empty | "\(.id) \(.workflow_run.id) \(.size_in_bytes)"')"
-          if [ -z "$LINEA" ]; then
-            echo "::warning::no hay artefacto motor-local-ndk: el APK sale SIN cerebro GGUF (la app lo dice en pantalla)"
-            echo "art_id=" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          ID="${LINEA%% *}"; RESTO="${LINEA#* }"; RUNID="${RESTO%% *}"; PESO="${RESTO##* }"
-          echo "motor-local-ndk: artefacto $ID de la corrida $RUNID, $PESO bytes"
-          echo "art_id=$ID" >> "$GITHUB_OUTPUT"
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: bajar el motor compilado para este commit
+        if: ${{ github.event.inputs.delgado != 'true' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: motor-local-ndk
+          path: apps/android/vendor/motor-bajado
 
-      - name: bajar el motor
-        if: steps.busca.outputs.art_id != ''
-        # Descarga por la API del artefacto, no con `download-artifact`. La URL del
-        # zip responde 302 hacia un enlace firmado de almacenamiento.
-        #
-        # Medido el 2026-11-05 contra el artefacto 13414146808 con el token de la
-        # dueña: `gh api ... -i` NO sirve para leer la cabecera — `gh` sigue la
-        # redirección y se pone a bajar los 208 125 998 bytes por la tubería (la
-        # sonda local se tuvo que matar dos veces). Lo que sí funciona es `curl -sSI`
-        # contra `api.github.com`, que devuelve el `Location` sin cuerpo: son 622
-        # caracteres de URL firmada. Y el `curl` de esa URL firmada va SIN cabecera
-        # de autorización, a propósito — el enlace ya trae su firma y un token de
-        # Actions no debe salir hacia `*.blob.core.windows.net` en una redirección.
-        #
-        # `continue-on-error`: si esto falla el APK se publica igual, sin cerebro, y
-        # el paso de abajo lo confiesa. Una compilación de APK no se pone roja por
-        # culpa de un trabajo de otro workflow.
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: comprobar y colocar las .so del motor
+        if: ${{ github.event.inputs.delgado != 'true' }}
         run: |
           set -euo pipefail
-          ID='${{ steps.busca.outputs.art_id }}'
-          case "$ID" in
-            ''|*[!0-9]*) echo "::error::id de artefacto no numérico: '$ID'"; exit 1 ;;
-          esac
-          LOC="$(curl -sSI -H "Authorization: Bearer $GH_TOKEN" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ID/zip" \
-            | tr -d '\r' | awk 'tolower($1)=="location:"{print $2}')"
-          if [ -z "$LOC" ]; then
-            echo "::error::la API del artefacto $ID no devolvió URL firmada"
-            exit 1
-          fi
-          case "$LOC" in https://*) ;; *) echo "::error::URL firmada que no es https"; exit 1 ;; esac
-          echo "enlace firmado leído (host: $(printf '%s' "$LOC" | sed -e 's|^https://||' -e 's|/.*||'))"
-          rm -rf apps/android/vendor/motor-bajado /tmp/motor.zip
-          mkdir -p apps/android/vendor/motor-bajado
-          # SIN `-L`: si el enlace firmado re-dirigiera otra vez, el token no tiene
-          # que viajar a ningún lado. Aquí ya no hay cabecera de autorización.
-          curl -sS --fail --max-time 900 -o /tmp/motor.zip "$LOC"
-          echo "zip: $(stat -c%s /tmp/motor.zip) bytes · suma $(sha256sum /tmp/motor.zip | awk '{print substr($1,1,12)}')"
-          unzip -q /tmp/motor.zip -d apps/android/vendor/motor-bajado
-          find apps/android/vendor/motor-bajado -type f -name '*.so' | sed -e 's/^/  /'
-
-      - name: colocar las .so del motor
-        if: steps.busca.outputs.art_id != ''
-        run: |
-          set -euo pipefail
-          # El artefacto trae `motor/<abi>/*.so` y `auditoria-motor.txt`. `compilar.sh`
-          # espera `vendor/motor/<abi>/`, que es de donde los copia a
-          # `build/stage/lib/<abi>/` sin comprimir y alineados.
-          #
-          # Se busca el directorio donde haya caído `libcortmotor.so` y se copia SÓLO
-          # él: enlazado estático y autocontenido, las demás .so del artefacto son
-          # llama.cpp suelto y meterlas costaría ~105 MB de APK sin dar ninguna función.
-          if [ ! -e apps/android/vendor/motor-bajado ]; then
-            echo "::warning::la descarga del motor no trajo nada: el APK sale SIN cerebro GGUF (la app lo dice en pantalla)"
-            exit 0
-          fi
-          # Sin tuberías con `head`: el `find` se recorre entero con `while read` y
-          # se guarda el archivo del arm64. De ahí se deduce la raíz y se toman las
-          # dos ABIs.
-          arm64=""
-          while IFS= read -r F; do
-            case "$F" in
-              */arm64-v8a/libcortmotor.so) arm64="$F" ;;
-            esac
-          done < <(find apps/android/vendor/motor-bajado -type f -name libcortmotor.so)
-          if [ -z "$arm64" ]; then
-            echo "::error::el artefacto llegó pero no contiene libcortmotor.so en arm64-v8a; se ve así: $(find apps/android/vendor/motor-bajado -maxdepth 3 | tr '\n' ' ')"
-            exit 0
-          fi
-          raiz="${arm64%/arm64-v8a/libcortmotor.so}"
-          mkdir -p apps/android/vendor/motor
+          COMITE="$(git rev-parse HEAD)"
+          grep -Fx "commit CORT: $COMITE" apps/android/vendor/motor-bajado/auditoria-motor.txt
+          (cd apps/android/vendor/motor-bajado && sha256sum -c motor-sha256.txt)
           for ABI in arm64-v8a armeabi-v7a; do
-            if [ -f "$raiz/$ABI/libcortmotor.so" ]; then
-              mkdir -p "apps/android/vendor/motor/$ABI"
-              cp "$raiz/$ABI/libcortmotor.so" "apps/android/vendor/motor/$ABI/"
-            fi
-          done
-          echo "motor tomado de: $raiz"
-          for F in apps/android/vendor/motor/*/*.so; do
-            [ -e "$F" ] || continue
-            echo "  $(stat -c%s "$F") bytes · $(sha256sum "$F" | awk '{print substr($1,1,12)}') · $F"
+            F="apps/android/vendor/motor-bajado/motor/$ABI/libcortmotor.so"
+            [ -f "$F" ] || { echo "::error::falta $F"; exit 1; }
+            mkdir -p "apps/android/vendor/motor/$ABI"
+            cp "$F" "apps/android/vendor/motor/$ABI/"
+            echo "  $ABI: $(stat -c%s "$F") bytes · $(sha256sum "$F" | awk '{print $1}')"
           done
 
       - name: compilar
@@ -254,6 +171,9 @@ jobs:
           # instalando encima; sin él sale llave desechable y hay que desinstalar.
           CORT_APK_KEYSTORE_B64: ${{ secrets.CORT_APK_KEYSTORE_B64 }}
           CORT_APK_KEYSTORE_PASS: ${{ secrets.CORT_APK_KEYSTORE_PASS }}
+          CORT_EXIGIR_MOTOR: ${{ github.event.inputs.delgado != 'true' && '1' || '0' }}
+          CORT_EXIGIR_FIRMA: ${{ github.event.inputs.etiqueta != '' && '1' || '0' }}
+          CORT_HUELLA_ESPERADA: faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977
         run: |
           V="${{ github.event.inputs.version }}"
           if [ -z "$V" ]; then V="$(echo "${GITHUB_REF_NAME}" | sed 's/^cort-v//')"; fi
@@ -333,6 +253,10 @@ jobs:
         run: |
           set -e
           cd apps/android/build
+          if [ "${{ github.event.inputs.delgado }}" = "true" ]; then
+            echo "::error::una release no se publica desde el APK delgado"
+            exit 1
+          fi
           # Guarda contra la contradicción medida el 2026-11-05 en la corrida
           # 42104161078: el build salió verde de punta a punta y el APK NO llevaba
           # `libcortmotor.so` (la descarga del motor había fallado en silencio). Las
@@ -383,6 +307,10 @@ jobs:
           OIDO=$(sed -n 's/^oído: //p' auditoria.txt)
           LLAVE=$(sed -n 's/^llave: //p' auditoria.txt)
           HUELLA=$(sed -n 's/.*certificate SHA-256 digest: //p' firma.txt)
+          if [ "$HUELLA" != "faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977" ]; then
+            echo "::error::la release no conserva el certificado anterior: $HUELLA"
+            exit 1
+          fi
           MODEL=$(sed -n 's/^modelo de español: \([0-9]*\) bytes.*/\1/p' auditoria.txt)
           # F19: la prueba de que la cara del PC está dentro del APK no es un
           # adjetivo, es la línea que sacó el propio `zipfile` sobre el archivo

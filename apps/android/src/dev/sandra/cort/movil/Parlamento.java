@@ -10,6 +10,7 @@ import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaRecorder;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Base64;
 import android.view.Gravity;
@@ -64,7 +65,7 @@ import org.json.JSONObject;
  * recuento. Sin llave la PC contesta 401 y aquí eso se traduce a «vuelve a escanear el
  * cuadro», porque «error 401» no le dice a la dueña qué tiene que tocar.
  */
-public class Parlamento extends Activity {
+public class Parlamento extends Activity implements Audifonos.AlCambiar {
 
     /** Lo que escucha el oído de la PC: 16 kHz, un canal, 16 bits con signo. */
     public static final int TASA = 16000;
@@ -92,7 +93,15 @@ public class Parlamento extends Activity {
     private volatile boolean cerrado;
     private ByteArrayOutputStream audio = new ByteArrayOutputStream();
     private AudioRecord microfono;
-    private AudioTrack pista;
+    private volatile AudioTrack pista;
+    private final Object candadoAuricular = new Object();
+    private final Object focoAuricular = new Object();
+    private final FocoAudio.AlPerder alPerderAuricular = this::perdioFocoAuricular;
+    private final Audifonos.Receptor receptorRuido = new Audifonos.Receptor(this);
+    private final Audifonos.Cambios cambiosAuricular = new Audifonos.Cambios(this);
+    private FocoAudio foco;
+    private boolean focoRetenido;
+    private boolean receptoresActivos;
     private int modoAnterior = AudioManager.MODE_NORMAL;
     private boolean auriculares;
     private boolean modoTocado;
@@ -103,6 +112,7 @@ public class Parlamento extends Activity {
         super.onCreate(guardado);
         prefs = getSharedPreferences("cort", MODE_PRIVATE);
         gestor = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        foco = FocoAudio.compartido(this);
         getWindow().getDecorView().setBackgroundColor(Paleta.FONDO);
 
         ScrollView desplazable = new ScrollView(this);
@@ -527,68 +537,78 @@ public class Parlamento extends Activity {
      * ahí dentro congelaría la pantalla.
      */
     private void hablarPorElAuricular(byte[] pcm, int tasa) {
-        if (cerrado || pcm.length < 2) {
-            return;      // una respuesta que llega tarde no le habla a una pantalla que ya fue
-        }
-        // El sensor manda (U2): con audífonos puestos la voz tiene que ir a los
-        // audífonos, y el modo de comunicación lo que hace ahí es arrastrar el
-        // Bluetooth al perfil de llamada, que suena peor. Sin nada en la oreja sí se
-        // pone: es lo que manda la voz al receptor del auricular en vez de al altavoz.
-        auriculares = Audifonos.hay(gestor);
-        modoTocado = !auriculares;
-        if (!auriculares) {
-            modoAnterior = gestor.getMode();
-            gestor.setMode(AudioManager.MODE_IN_COMMUNICATION);
-        }
-        estadoDesdeHilo("CORT te habla por " + Audifonos.salida(gestor) + "…");
-        int minimo = AudioTrack.getMinBufferSize(tasa, AudioFormat.CHANNEL_OUT_MONO,
-                AudioFormat.ENCODING_PCM_16BIT);
-        if (minimo <= 0) {
-            sueltaElModo();
-            estadoDesdeHilo("La PC te contestó por escrito: el auricular no acepta "
-                    + tasa + " Hz en este teléfono.");
-            return;
-        }
-        // `AudioTrack.Builder` en vez del constructor con `AudioManager`: el que había
-        // aquí toma un `int` de tipo de flujo, no el gestor, y el runner lo cache
-        // (`AudioManager cannot be converted to int`). Con `USAGE_VOICE_COMMUNICATION`
-        // y el modo de comunicación puesto, Android enruta al auricular.
-        AudioTrack nueva = new AudioTrack.Builder()
-                .setAudioAttributes(new AudioAttributes.Builder()
-                        .setUsage(auriculares
-                                ? AudioAttributes.USAGE_MEDIA
-                                : AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build())
-                .setAudioFormat(new AudioFormat.Builder()
-                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(tasa)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build())
-                .setBufferSizeInBytes(Math.max(minimo, pcm.length))
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .build();
-        if (nueva.getState() != AudioTrack.STATE_INITIALIZED) {
-            nueva.release();
-            sueltaElModo();
-            estadoDesdeHilo("La PC te contestó por escrito: no pude abrir el auricular.");
-            return;
-        }
-        pista = nueva;
-        try {
-            nueva.write(pcm, 0, pcm.length);
-            nueva.setNotificationMarkerPosition(pcm.length / 2);   // en muestras, no en bytes
-            nueva.setPlaybackPositionUpdateListener(new AudioTrack.OnPlaybackPositionUpdateListener() {
-                @Override public void onMarkerReached(AudioTrack track) {
-                    terminarAuricular();
+        synchronized (candadoAuricular) {
+            if (cerrado || pcm.length < 2) {
+                return;
+            }
+            liberarAuricular();
+            if (!foco.retener(focoAuricular, alPerderAuricular)) {
+                estadoDesdeHilo("Otra app retiene el audio. La respuesta de la PC queda escrita.");
+                return;
+            }
+            focoRetenido = true;
+            try {
+                activarReceptoresAuricular();
+                // Con audífonos puestos no se fuerza el modo de comunicación.
+                auriculares = Audifonos.hay(gestor);
+                modoTocado = !auriculares;
+                if (!auriculares) {
+                    modoAnterior = gestor.getMode();
+                    gestor.setMode(AudioManager.MODE_IN_COMMUNICATION);
                 }
+                estadoDesdeHilo("CORT te habla por " + Audifonos.salida(gestor) + "…");
+                int minimo = AudioTrack.getMinBufferSize(tasa, AudioFormat.CHANNEL_OUT_MONO,
+                        AudioFormat.ENCODING_PCM_16BIT);
+                if (minimo <= 0) {
+                    estadoDesdeHilo("La PC te contestó por escrito: el auricular no acepta "
+                            + tasa + " Hz en este teléfono.");
+                    return;
+                }
+                AudioTrack nueva = new AudioTrack.Builder()
+                        .setAudioAttributes(new AudioAttributes.Builder()
+                                .setUsage(auriculares
+                                        ? AudioAttributes.USAGE_MEDIA
+                                        : AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build())
+                        .setAudioFormat(new AudioFormat.Builder()
+                                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                                .setSampleRate(tasa)
+                                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                                .build())
+                        .setBufferSizeInBytes(Math.max(minimo, pcm.length))
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .build();
+                if (nueva.getState() != AudioTrack.STATE_INITIALIZED) {
+                    nueva.release();
+                    estadoDesdeHilo("La PC te contestó por escrito: no pude abrir el auricular.");
+                    return;
+                }
+                pista = nueva;
+                nueva.write(pcm, 0, pcm.length);
+                nueva.setNotificationMarkerPosition(Math.max(1, pcm.length / 2 - 1));
+                nueva.setPlaybackPositionUpdateListener(new AudioTrack.OnPlaybackPositionUpdateListener() {
+                    @Override
+                    public void onMarkerReached(AudioTrack track) {
+                        synchronized (candadoAuricular) {
+                            if (pista == track) {
+                                terminarAuricular("Ya está: mantén pulsado para hablarle otra vez.");
+                            }
+                        }
+                    }
 
-                @Override public void onPeriodicNotification(AudioTrack track) {
-                }
-            });
-            nueva.play();
-        } catch (Exception seFue) {
-            terminarAuricular();
+                    @Override
+                    public void onPeriodicNotification(AudioTrack track) {
+                    }
+                });
+                nueva.play();
+            } catch (Exception seFue) {
+                liberarAuricular();
+                estadoDesdeHilo("La PC te contestó por escrito: no pude reproducir el auricular ("
+                        + loQueDice(seFue) + ").");
+            } finally {
+                if (pista == null) liberarAuricular();
+            }
         }
     }
 
@@ -600,22 +620,78 @@ public class Parlamento extends Activity {
      * tocar un `View` desde otro hilo termina en
      * «Only the original thread that created a view hierarchy can touch its views».
      */
-    private void terminarAuricular() {
+    private void terminarAuricular(String mensaje) {
+        synchronized (candadoAuricular) {
+            liberarAuricular();
+            if (!cerrado && mensaje != null) {
+                runOnUiThread(() -> {
+                    estado.setText(mensaje);
+                    botonHablar.setText("Mantén pulsado para hablar");
+                });
+            }
+        }
+    }
+
+    private void perdioFocoAuricular() {
+        synchronized (candadoAuricular) {
+            if (pista == null && !focoRetenido) return;
+            liberarAuricular();
+            if (!cerrado) {
+                estadoDesdeHilo("Otra app tomó el audio: CORT se calló sin reanudarse automáticamente.");
+            }
+        }
+    }
+
+    @Override
+    public void cambioDeSalida() {
+        synchronized (candadoAuricular) {
+            if (pista == null || Audifonos.hay(gestor)) return;
+            liberarAuricular();
+            if (!cerrado) {
+                estadoDesdeHilo("Se desconectó la salida de audio: CORT se calló en vez de "
+                        + "seguir por el altavoz.");
+            }
+        }
+    }
+
+    private void activarReceptoresAuricular() {
+        if (receptoresActivos) return;
+        receptoresActivos = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receptorRuido, Audifonos.Receptor.filtro(), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(receptorRuido, Audifonos.Receptor.filtro());
+        }
+        gestor.registerAudioDeviceCallback(cambiosAuricular, null);
+    }
+
+    private void desactivarReceptoresAuricular() {
+        if (!receptoresActivos) return;
+        receptoresActivos = false;
+        try {
+            unregisterReceiver(receptorRuido);
+        } catch (IllegalArgumentException yaFuera) {
+        }
+        gestor.unregisterAudioDeviceCallback(cambiosAuricular);
+    }
+
+    /** Requiere `candadoAuricular`: todas las salidas liberan exactamente los mismos recursos. */
+    private void liberarAuricular() {
         AudioTrack activa = pista;
         pista = null;
         if (activa != null) {
             try {
                 activa.stop();
             } catch (Exception yaAcabada) {
-                // en modo estático una pista terminada lanza al pararla: no hay nada que parar
             }
             activa.release();
         }
+        if (focoRetenido) {
+            focoRetenido = false;
+            foco.soltar(focoAuricular);
+        }
         sueltaElModo();
-        runOnUiThread(() -> {
-            estado.setText("Ya está: mantén pulsado para hablarle otra vez.");
-            botonHablar.setText("Mantén pulsado para hablar");
-        });
+        desactivarReceptoresAuricular();
     }
 
     /** Devuelve el modo de audio sólo si este hilo lo tocó; si no, no lo pisa. */
@@ -722,7 +798,7 @@ public class Parlamento extends Activity {
         if (!estabaGrabando) {
             cerrarMicrofono();
         }
-        terminarAuricular();
+        terminarAuricular(null);
     }
 
     @Override
@@ -730,21 +806,7 @@ public class Parlamento extends Activity {
         cerrado = true;
         grabando = false;
         cerrarMicrofono();
-        AudioTrack activa = pista;
-        pista = null;
-        if (activa != null) {
-            try {
-                activa.stop();
-            } catch (Exception yaAcabada) {
-                // nada que parar
-            }
-            activa.release();
-        }
-        // La red de seguridad: si la respuesta nunca volvió, el modo queda puesto y el
-        // teléfono se queda en modo de llamada. `sueltaElModo` sólo lo toca si esta
-        // pantalla lo tocó —con audífonos no se puso, y devolver un modo que no se
-        // cambió es pisar al reproductor que estaba usando el Bluetooth.
-        sueltaElModo();
+        terminarAuricular(null);
         super.onDestroy();
     }
 }

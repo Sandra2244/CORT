@@ -7,10 +7,12 @@ import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
+import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 import java.util.ArrayList;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * La boca y el oído de CORT **en el teléfono**.
@@ -53,6 +55,10 @@ public class Voz implements TextToSpeech.OnInitListener {
         void nivel(float alto);
     }
 
+    public interface AlHabla {
+        void estado(boolean hablando);
+    }
+
     private TextToSpeech boca;
     private boolean bocaLista;
     private String enCola;
@@ -65,9 +71,19 @@ public class Voz implements TextToSpeech.OnInitListener {
     /** `true` si el último dictado lo resolvió Vosk dentro del teléfono. */
     private volatile boolean dictadoLocal;
     private AlOir oyente;
+    private long sesionOido;
+    private long sesionMotorLocal;
+    private long sesionReconocedor;
+    private boolean reconocimientoActivo;
     private AlNivel medidor;
+    private final CopyOnWriteArrayList<AlHabla> oyentesHabla =
+            new CopyOnWriteArrayList<>();
     private String aviso = "";
     private String vozElegida = "";
+    private final FocoAudio foco;
+    private final Object focoHabla = new Object();
+    private final Object focoOido = new Object();
+    private final FocoAudio.AlPerder alPerderFoco = this::perdioFoco;
 
     /**
      * La voz **es la misma que la de la cara de PC**, y en esta rama se sabe cuál
@@ -108,7 +124,27 @@ public class Voz implements TextToSpeech.OnInitListener {
     }
 
     public Voz(Context contexto) {
+        foco = FocoAudio.compartido(contexto);
         boca = new TextToSpeech(contexto.getApplicationContext(), this);
+        boca.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+            @Override public void onStart(String utteranceId) { avisarHabla(true); }
+            @Override public void onDone(String utteranceId) {
+                avisarHabla(false);
+                soltarFocoHablaSiTermino();
+            }
+            @Override public void onStop(String utteranceId, boolean interrumpida) {
+                avisarHabla(false);
+                soltarFocoHablaSiTermino();
+            }
+            @Override public void onError(String utteranceId) {
+                avisarHabla(false);
+                soltarFocoHablaSiTermino();
+            }
+            @Override public void onError(String utteranceId, int errorCode) {
+                avisarHabla(false);
+                soltarFocoHablaSiTermino();
+            }
+        });
         // El oído local se prepara aquí, en segundo plano, mientras la boca
         // todavía está iniciando. Es idempotente: si la cara se monta dos veces,
         // el modelo se carga una.
@@ -120,6 +156,7 @@ public class Voz implements TextToSpeech.OnInitListener {
     public void onInit(int estado) {
         if (estado != TextToSpeech.SUCCESS) {
             aviso = "no pude encender la voz de Android";
+            foco.soltar(focoHabla);
             return;
         }
         int listo = TextToSpeech.LANG_NOT_SUPPORTED;
@@ -229,16 +266,60 @@ public class Voz implements TextToSpeech.OnInitListener {
         medidor = oyenteDelNivel;
     }
 
+    public void alHablar(AlHabla oyenteDelHabla) {
+        if (oyenteDelHabla != null && !oyentesHabla.contains(oyenteDelHabla)) {
+            oyentesHabla.add(oyenteDelHabla);
+        }
+    }
+
+    public void quitarAlHablar(AlHabla oyenteDelHabla) {
+        oyentesHabla.remove(oyenteDelHabla);
+    }
+
+    private void avisarHabla(boolean hablando) {
+        for (AlHabla oyenteActual : oyentesHabla) {
+            try {
+                oyenteActual.estado(hablando);
+            } catch (RuntimeException falloDeSuperficie) {
+                // Una vista cerrada no debe impedir que las demás reflejen la voz.
+            }
+        }
+    }
+
+    private void soltarFocoHablaSiTermino() {
+        if (boca == null || !boca.isSpeaking()) {
+            foco.soltar(focoHabla);
+        }
+    }
+
+    private void perdioFoco() {
+        callar();
+        dejarDeEscuchar();
+        AlOir oyenteActual = oyente;
+        if (oyenteActual != null) {
+            oyenteActual.fallo("otra app tomó el audio; la escucha se detuvo");
+        }
+    }
+
     /** La primera frase puede llegar antes de que el motor haya contestado: se encola. */
-    public void hablar(String texto) {
-        if (texto == null || texto.trim().isEmpty()) {
-            return;
+    public boolean hablar(String texto) {
+        if (texto == null || texto.trim().isEmpty()) return false;
+        if (!foco.retener(focoHabla, alPerderFoco)) {
+            aviso = "otra app retiene el audio; CORT no habló encima";
+            avisarHabla(false);
+            return false;
         }
         if (!bocaLista) {
             enCola = texto;
-            return;
+            return true;
         }
-        boca.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "cort");
+        int resultado = boca.speak(texto, TextToSpeech.QUEUE_FLUSH, null, "cort");
+        if (resultado == TextToSpeech.ERROR) {
+            foco.soltar(focoHabla);
+            avisarHabla(false);
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -246,17 +327,28 @@ public class Voz implements TextToSpeech.OnInitListener {
      * respuesta a una pregunta, tiene que atropellar lo anterior—; un lector de
      * documentos dice párrafo por párrafo y necesita QUEUE_ADD entre medias.
      */
-    public void seguir(String texto) {
-        if (texto == null || texto.trim().isEmpty()) {
-            return;
+    public boolean seguir(String texto) {
+        if (texto == null || texto.trim().isEmpty()) return false;
+        if (!bocaLista || !boca.isSpeaking()) {
+            if (!foco.retener(focoHabla, alPerderFoco)) {
+                aviso = "otra app retiene el audio; la lectura no empezó";
+                avisarHabla(false);
+                return false;
+            }
         }
         if (!bocaLista) {
-            // el motor todavía no ha contestado: el trozo se guarda y sale en cuanto esté
             enColaLectura.add(texto);
-            return;
+            return true;
         }
-        boca.speak(texto, boca.isSpeaking() ? TextToSpeech.QUEUE_ADD : TextToSpeech.QUEUE_FLUSH,
+        int resultado = boca.speak(texto,
+                boca.isSpeaking() ? TextToSpeech.QUEUE_ADD : TextToSpeech.QUEUE_FLUSH,
                 null, "cort-lector");
+        if (resultado == TextToSpeech.ERROR) {
+            if (!boca.isSpeaking()) foco.soltar(focoHabla);
+            avisarHabla(false);
+            return false;
+        }
+        return true;
     }
 
     /** El paso de la lectura: 1,0 es el normal y 2,0 releer volando. Se mide en el aparato. */
@@ -276,6 +368,7 @@ public class Voz implements TextToSpeech.OnInitListener {
         if (boca != null) {
             boca.stop();
         }
+        foco.soltar(focoHabla);
     }
 
     /**
@@ -298,31 +391,66 @@ public class Voz implements TextToSpeech.OnInitListener {
      * rama de Vosk abre su propio hilo y puede llamarse desde cualquiera.
      */
     public void escuchar(Context contexto, final AlOir callback) {
+        dejarDeEscuchar();
+        final long sesion = ++sesionOido;
         oyente = callback;
+        if (!foco.retener(focoOido, alPerderFoco)) {
+            callback.fallo("otra app retiene el audio; no pude abrir el micrófono");
+            return;
+        }
         if (motor != null && motor.listo()) {
             dictadoLocal = true;
-            motor.escuchar(callback, medidor);
+            sesionMotorLocal = motor.escuchar(new AlOir() {
+                @Override
+                public void dijo(String texto) {
+                    if (sesion != sesionOido) return;
+                    sesionOido++;
+                    sesionMotorLocal = 0L;
+                    foco.soltar(focoOido);
+                    callback.dijo(texto);
+                }
+
+                @Override
+                public void fallo(String motivo) {
+                    if (sesion != sesionOido) return;
+                    sesionOido++;
+                    sesionMotorLocal = 0L;
+                    foco.soltar(focoOido);
+                    callback.fallo(motivo);
+                }
+
+                @Override
+                public void parcial(String texto) {
+                    if (sesion == sesionOido) callback.parcial(texto);
+                }
+            }, medidor);
             return;
         }
         dictadoLocal = false;
-        if (oido == null) {
-            oido = SpeechRecognizer.createSpeechRecognizer(contexto.getApplicationContext());
-            oido.setRecognitionListener(new Escucha());
-        }
-        Intent intento = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
-        intento.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
-        intento.putExtra(RecognizerIntent.EXTRA_LANGUAGE, IDIOMA);
-        intento.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
-        // No se pide modo sin conexión: desde un `SpeechRecognizer` ordinario no
-        // hay forma honesta de exigirlo, y prometerlo sería mentir. Por eso el
-        // respaldo se anuncia como respaldo en `oido()`.
-        intento.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, contexto.getPackageName());
+        sesionReconocedor = sesion;
+        reconocimientoActivo = true;
         try {
+            if (oido == null) {
+                oido = SpeechRecognizer.createSpeechRecognizer(contexto.getApplicationContext());
+                oido.setRecognitionListener(new Escucha());
+            }
+            Intent intento = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intento.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intento.putExtra(RecognizerIntent.EXTRA_LANGUAGE, IDIOMA);
+            intento.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            // No se pide modo sin conexión: desde un `SpeechRecognizer` ordinario no
+            // hay forma honesta de exigirlo, y prometerlo sería mentir. Por eso el
+            // respaldo se anuncia como respaldo en `oido()`.
+            intento.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, contexto.getPackageName());
             oido.startListening(intento);
         } catch (SecurityException sinPermiso) {
+            reconocimientoActivo = false;
+            foco.soltar(focoOido);
             callback.fallo("falta el permiso de micrófono");
         } catch (Exception cualquierCosa) {
+            reconocimientoActivo = false;
+            foco.soltar(focoOido);
             callback.fallo("el reconocimiento de voz de este teléfono no respondió");
         }
     }
@@ -348,8 +476,13 @@ public class Voz implements TextToSpeech.OnInitListener {
     }
 
     public void dejarDeEscuchar() {
+        sesionOido++;
+        reconocimientoActivo = false;
+        foco.soltar(focoOido);
         if (motor != null) {
-            motor.para();
+            long sesion = sesionMotorLocal;
+            sesionMotorLocal = 0L;
+            motor.para(sesion);
         }
         if (oido != null) {
             oido.cancel();
@@ -357,10 +490,13 @@ public class Voz implements TextToSpeech.OnInitListener {
     }
 
     public void cerrar() {
+        foco.soltar(focoHabla);
+        foco.soltar(focoOido);
         if (motor != null) {
-            // Se suelta el micrófono, no el modelo: cargar 39,8 MB otra vez cada
-            // vez que la cara se remonta costaría segundos por nada.
-            motor.para();
+            // Se suelta el micrófono propio, no el del servicio ni el modelo.
+            long sesion = sesionMotorLocal;
+            sesionMotorLocal = 0L;
+            motor.para(sesion);
         }
         if (oido != null) {
             oido.destroy();
@@ -370,6 +506,9 @@ public class Voz implements TextToSpeech.OnInitListener {
             boca.shutdown();
             boca = null;
         }
+        oyente = null;
+        medidor = null;
+        oyentesHabla.clear();
     }
 
     /** Un listener que nunca lanza: un fallo del motor se cuenta, no tumba la cara. */
@@ -404,21 +543,27 @@ public class Voz implements TextToSpeech.OnInitListener {
             // Si el dictado lo está resolviendo Vosk en su propio hilo, el motor
             // de Android no tiene nada que decir: sin esta guarda la cara vería
             // dos respuestas —la buena y un «no te oí»— del mismo intento.
-            if (dictadoLocal || oyente == null) {
+            if (dictadoLocal || oyente == null || !reconocimientoActivo
+                    || sesionReconocedor != sesionOido) {
                 return;
             }
+            reconocimientoActivo = false;
+            foco.soltar(focoOido);
             oyente.fallo(motivo(codigo));
         }
 
         @Override
         public void onResults(Bundle datos) {
-            if (dictadoLocal) {
+            if (dictadoLocal || oyente == null || !reconocimientoActivo
+                    || sesionReconocedor != sesionOido) {
                 return;
             }
+            reconocimientoActivo = false;
             // `getStringArrayList` es de API 1; `getParcelableArrayList` no llegó
             // hasta API 33 y un móvil viejo se caería con un `NoSuchMethodError`.
             ArrayList<String> opciones =
                     datos.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+            foco.soltar(focoOido);
             if (oyente != null) {
                 String dicho = (opciones == null || opciones.isEmpty()) ? "" : opciones.get(0);
                 if (dicho.isEmpty()) {
@@ -431,7 +576,8 @@ public class Voz implements TextToSpeech.OnInitListener {
 
         @Override
         public void onPartialResults(Bundle datos) {
-            if (dictadoLocal || oyente == null) {
+            if (dictadoLocal || oyente == null || !reconocimientoActivo
+                    || sesionReconocedor != sesionOido) {
                 return;
             }
             ArrayList<String> opciones =

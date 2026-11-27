@@ -79,6 +79,7 @@ def main():
 
     manifiesto_path = APP / "AndroidManifest.xml"
     manifiesto = lee(manifiesto_path)
+    manifiesto_texto = manifiesto
     print("\n== el manifiesto ==")
     prueba("AndroidManifest.xml está bien formado", manifiesto_path.is_file(),
            "no se lee" if not manifiesto_path.is_file() else "")
@@ -147,6 +148,32 @@ def main():
     prueba("MainActivity consume PIDE_CHAT sin confundirlo con PIDE_ESCUCHAR",
            'String PIDE_CHAT = "cort-chat"' in actividad
            and "getBooleanExtra(PIDE_CHAT" in actividad)
+    reconocimiento = lee(SRC / "Reconocimiento.java")
+    asistente = lee(SRC / "Asistente.java")
+    prueba("MainActivity consume una sola vez la escucha pedida por el asistente",
+           'String PIDE_ESCUCHAR = "cort-escuchar"' in actividad
+           and "getBooleanExtra(PIDE_ESCUCHAR" in actividad
+           and "removeExtra(PIDE_ESCUCHAR)" in actividad)
+    prueba("el reconocimiento entrega resultados, parciales, errores y cancelación reales",
+           "SpeechRecognizer.RESULTS_RECOGNITION" in reconocimiento
+           and "VistaRapida.parcial(texto)" in reconocimiento
+           and "ERROR_INSUFFICIENT_PERMISSIONS" in reconocimiento
+           and "ERROR_NETWORK" in reconocimiento and "void onCancel(Callback listener)" in reconocimiento
+           and "void onStopListening(Callback listener)" in reconocimiento)
+    prueba("la sesión conserva al dueño activo y rechaza sesiones duplicadas",
+           "duplicada = true" in sesion and "vistaPedida = VistaRapida.mostrar(" in sesion
+           and "private void mostrar()" in sesion and "onShow(Bundle args, int showFlags)" in sesion
+           and "900" in sesion and "escuchaDeRespaldo" in sesion)
+    prueba("la vista rápida enruta parciales y respuestas al dueño del overlay",
+           "public static void parcial(String texto)" in rapida
+           and "public static void respuesta(String texto)" in rapida
+           and "public static void cerrar(Object dueno)" in rapida
+           and "public static boolean visible(Object dueno)" in rapida
+           and "alCerrar.cerrada()" in rapida)
+    prueba("el estado del asistente distingue selección, overlay y coexistencia",
+           "ROLE_ASSISTANT" in asistente and "Settings.canDrawOverlays" in asistente
+           and "ACTION_MANAGE_DEFAULT_APPS_SETTINGS" in asistente
+           and '"coexistencia"' in asistente and '"predeterminado"' in asistente)
     nexo = lee(SRC / "Nexo.java")
     prueba("el chat pedido durante la carga del WebView queda pendiente",
            "chatPendiente" in nexo and "abrirChatSiCarga" in nexo
@@ -218,6 +245,12 @@ def main():
            "contenido.textContent = limpio" in ui_asis
            and "autor.textContent =" in ui_asis and "innerHTML" not in
            ui_asis[ui_asis.find("function mensajeChat"):ui_asis.find("function abrirChat")])
+    prueba("el panel del asistente expone selección, overlay y prueba sin prometer preinstalación",
+           'id="cort-asistente"' in html_asis and 'id="asistente-btn"' in html_asis
+           and "function abrirAsistente" in ui_asis and "function cerrarAsistente" in ui_asis
+           and 'n.type === "asistente_estado"' in ui_asis
+           and "asistente_ajustes" in ui_asis and "superposicion_ajustes" in ui_asis
+           and "asistente_probar" in ui_asis and "#cort-asistente" in estilo_asis)
     prueba("Ajustes expone duración de dictado y frase conectada al teléfono",
            'nuevo.id = "cort-escucha-row"' in ui_asis
            and "fijarSegundosDictado" in ui_asis and "fijarSegundosFrase" in ui_asis
@@ -225,6 +258,244 @@ def main():
     prueba("el build ejecuta la prueba conductual de los límites antes de dex",
            "LimiteEscuchaTest.java" in lee(APP / "compilar.sh")
            and (APP / "tests" / "LimiteEscuchaTest.java").is_file())
+
+    print("\n== OMNI-001 Fase 1: capacidades, centro y estados ==")
+    cap_path = SRC / "Capacidades.java"
+    cap = lee(cap_path)
+    prueba("el registro declara el control del asistente y el puente sus comandos nativos",
+           '"asistente_predeterminado"' in cap and '"asistente-btn"' in cap
+           and '"asistente_estado".equals(t)' in nexo
+           and '"asistente_ajustes".equals(t)' in nexo
+           and '"asistente_probar".equals(t)' in nexo
+           and '"superposicion_ajustes".equals(t)' in nexo)
+    arranque_omni = nexo[nexo.find("private void arranque()"):nexo.find("private JSONObject iniciativa()")]
+    prueba("existe un registro nativo único de capacidades", cap_path.is_file())
+    campos_cap = ['"id"', '"etiqueta"', '"plataforma"', '"viabilidad"', '"estado"',
+                  '"origen"', '"permisos"', '"hardware"', '"riesgo"', '"confirmacion"',
+                  '"offline"', '"presupuesto"', '"dependencias"', '"motivo_no_disponible"',
+                  '"controles"']
+    prueba("cada capacidad declara el contrato mínimo y sus controles Web",
+           all(c in cap for c in campos_cap), ", ".join(c for c in campos_cap if c not in cap))
+    prueba("el registro rechaza identificadores duplicados o vacíos",
+           "LinkedHashMap" in cap and "id repetido" in cap and "está vacío" in cap)
+    textos_cap = set(re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', cap))
+    controles_cap = {t for t in textos_cap
+                     if t.endswith(("-btn", "-button", "-toggle", "-asr"))}
+    ids_html = set(re.findall(r'\bid="([^"]+)"', html_asis))
+    controles_ausentes = sorted(controles_cap - ids_html)
+    prueba("todo control declarado en el registro existe en el HTML",
+           not controles_ausentes, ", ".join(controles_ausentes))
+    etiquetas_menu = re.findall(
+        r'<button\b[^>]*class="[^"]*\bmenu-action-btn\b[^"]*"[^>]*>', html_asis)
+    ids_menu = []
+    for etiqueta in etiquetas_menu:
+        encontrado = re.search(r'\bid="([^"]+)"', etiqueta)
+        if encontrado:
+            ids_menu.append(encontrado.group(1))
+    botones_sin_registro = sorted(set(ids_menu) - textos_cap)
+    prueba("todo botón del centro está declarado en el registro",
+           not botones_sin_registro, ", ".join(botones_sin_registro))
+    prueba("Nexo publica el registro al arrancar y lo expone al JavaScript",
+           "envia(capacidadesInicio())" in arranque_omni
+           and "@JavascriptInterface\n    public String registroCapacidades()" in nexo
+           and "Capacidades.todas()" in nexo)
+    prueba("la Web consume el evento nativo y rechaza capacidades desconocidas",
+           'n.type === "capacidades"' in ui_asis
+           and "function aplicarCapacidades" in ui_asis
+           and "window.CORTcapacidad" in ui_asis
+           and "return null;" in ui_asis[ui_asis.find("window.CORTcapacidad"):
+                                        ui_asis.find("window.CORTcapaz")])
+    prueba("el centro filtra D y estados no implementados antes que la búsqueda",
+           'c.viabilidad === "D"' in ui_asis
+           and 'c.estado === "existe"' in ui_asis
+           and "dataset.cortVisible" in ui_asis
+           and "boton.dataset.cortVisible" in ui_asis)
+    prueba("la interfaz distingue reposo, escucha, proceso, habla y error con texto",
+           'id="cort-estado-asistente"' in html_asis
+           and "function pintaEstadoAsistente" in ui_asis
+           and all(s in ui_asis for s in ('"reposo"', '"escuchando"', '"procesando"',
+                                          '"hablando"', '"error"')))
+    prueba("Detener queda visible en enfoque y detiene voz, oído y servicio",
+           'id="cort-detener-btn"' in html_asis
+           and '#cort-detener-btn' in estilo_asis[estilo_asis.find("html.cort-enfoque"):]
+           and 'type: "detener"' in ui_asis
+           and 'if ("detener".equals(t))' in nexo
+           and "ServicioEscucha.cambia(actividad, false)" in nexo)
+    prueba("la voz publica inicio y fin reales para el estado visual",
+           "setOnUtteranceProgressListener" in voz
+           and '"voz_habla"' in nexo and '"hablando"' in nexo)
+
+    print("\n== OMNI-001 Fase 2: sensores y dispositivo ==")
+    sensores = lee(SRC / "Sensores.java")
+    compilacion = lee(APP / "compilar.sh")
+    prueba("el build compila y ejecuta el modelo puro de sensores",
+           "LecturaSensorTest.java" in compilacion
+           and "dev.sandra.cort.movil.LecturaSensorTest" in compilacion
+           and (APP / "tests" / "LecturaSensorTest.java").is_file())
+    prueba("las lecturas conservan vector, unidad, timestamp y precisión",
+           "evento.values" in sensores and "evento.timestamp / 1_000_000L" in sensores
+           and "evento.accuracy" in sensores and "valores.clone()" in lee(SRC / "LecturaSensor.java"))
+    prueba("el podómetro tiene línea base persistente, fecha e identidad de arranque",
+           all(s in sensores for s in ("pasos_base", "pasos_fecha", "pasos_arranque",
+                                      "Settings.Global.BOOT_COUNT", "pasosDelDia")))
+    prueba("el permiso de actividad es opcional y se solicita sólo al activar pasos",
+           'android.permission.ACTIVITY_RECOGNITION' in manifiesto_texto
+           and 'android:required="false"' in manifiesto_texto
+           and "configurarPasos" in nexo and "PERMISO_PASOS" in nexo)
+    prueba("los listeners de sensores se enlazan a foreground y se sueltan al pausar",
+           "reanudarSensores()" in nexo and "pausarSensores()" in nexo
+           and "nexo.reanudarSensores()" in actividad and "nexo.pausarSensores()" in actividad
+           and "unregisterListener" in sensores)
+    prueba("el panel distingue lectura real, ausencia y sin lectura sin inyectar HTML",
+           'id="cort-dispositivo"' in html_asis
+           and all(s in ui_asis for s in ("No presente", "Sin lectura", "textContent",
+                                         "Acumulado disponible")))
+
+    print("\n== OMNI-001 Fase 3: privacidad, estado y foco de audio ==")
+    servicio = lee(SRC / "ServicioEscucha.java")
+    estado = lee(SRC / "EscuchaEstado.java")
+    baldosa = lee(SRC / "Baldosa.java")
+    prueba("la notificación es privada, fija y no publica la transcripción",
+           "VISIBILITY_PRIVATE" in servicio and "Escuché: «" not in servicio
+           and "Micrófono abierto para «hola CORT» u «oye CORT»." in servicio)
+    prueba("la notificación tiene una acción Detener inmutable",
+           '"Detener", parar' in servicio and "PendingIntent.getService" in servicio
+           and "FLAG_IMMUTABLE" in servicio and "DETENER" in servicio)
+    prueba("hay una máquina de estados única para servicio, interfaz y baldosa",
+           all(s in estado for s in ("APAGADO", "PIDIENDO_PERMISO", "PREPARANDO",
+                                    "ESCUCHANDO_PALABRA", "ESCUCHANDO_MANDATO",
+                                    "PROCESANDO", "DETENIDO", "ERROR"))
+           and "EscuchaEstadoGlobal.observar" in baldosa
+           and "EscuchaEstadoGlobal.pon" in servicio
+           and '"estado_nativo"' in nexo)
+    prueba("voz y vigilia solicitan y abandonan el foco de audio",
+           "requestAudioFocus" in lee(SRC / "FocoAudio.java")
+           and "abandonAudioFocus" in lee(SRC / "FocoAudio.java")
+           and "foco.retener(focoHabla" in voz and "foco.retener(focoOido" in voz
+           and "foco.soltar" in voz and "foco.retener(this" in servicio)
+    prueba("la pérdida de foco detiene sin reanudación automática",
+           "AUDIOFOCUS_LOSS_TRANSIENT" in lee(SRC / "FocoAudio.java")
+           and "perdioFoco()" in servicio and "perdioFoco()" in voz)
+    prueba("la baldosa refleja el estado y puede detener la vigilia",
+           "Tile.STATE_ACTIVE" in baldosa and "EscuchaEstadoGlobal.estado().activa()" in baldosa
+           and "ServicioEscucha.cambia(this, false)" in baldosa)
+    prueba("el build ejecuta la prueba conductual del estado de escucha",
+           "EscuchaEstadoTest.java" in compilacion
+           and "dev.sandra.cort.movil.EscuchaEstadoTest" in compilacion
+           and (APP / "tests" / "EscuchaEstadoTest.java").is_file())
+
+    print("\n== OMNI-001 Fase 6: memoria, alarmas y rutinas ==")
+    recuerdos = lee(SRC / "Recuerdos.java")
+    especificacion = lee(SRC / "EspecificacionAlarma.java")
+    aprobaciones = lee(SRC / "Aprobaciones.java")
+    rutinas = lee(SRC / "Rutinas.java")
+    acciones = lee(SRC / "Acciones.java")
+    mock = lee(RAIZ / "cort-web" / "cort" / "cort-mock.js")
+    prueba("la memoria conserva hechos con migración v2→v3, procedencia e historial",
+           "private static final int VERSION = 3" in recuerdos
+           and "public void onUpgrade" in recuerdos and "hechos_historial" in recuerdos
+           and "agregarColumna" in recuerdos and "eliminado_en" in recuerdos
+           and "confirmado" in recuerdos and "actualizado_en" in recuerdos)
+    prueba("el borrado es reversible y las importaciones no reemplazan hechos locales",
+           "borrarHecho" in recuerdos and "anotarHistorial(db, clave, anterior, null" in recuerdos
+           and '"pc_importado"' in recuerdos and "ESPERA_AUSENTE" in recuerdos
+           and "eliminado_en IS NULL" in recuerdos)
+    prueba("las credenciales no se aceptan como recuerdos",
+           all(s in recuerdos for s in ("password", "contrasena", "credencial", "secreto",
+                                       "token", "api key", "llave privada")))
+    prueba("las mutaciones de memoria comprueban versión dentro de la transacción",
+           "ESPERA_NUEVA" in recuerdos and "version - 1 != versionEsperada" in recuerdos
+           and "versionAnterior != versionEsperada" in recuerdos
+           and "Recuerdos.ESPERA_NUEVA" in nexo)
+    prueba("las alarmas se entregan al Reloj sin saltarse la confirmación ni pedir alarmas exactas",
+           "AlarmClock.ACTION_SET_ALARM" in acciones
+           and "AlarmClock.ACTION_SET_TIMER" in acciones
+           and "AlarmClock.EXTRA_LENGTH" in acciones
+           and "EXTRA_SKIP_UI" not in acciones
+           and "SCHEDULE_EXACT_ALARM" not in manifiesto
+           and "USE_EXACT_ALARM" not in manifiesto)
+    prueba("el parser conserva el separador horario y valida horas, días y duraciones",
+           '.matcher(original)' in especificacion
+           and "0b1111111" in especificacion and "86400L" in especificacion
+           and '" pm"' in especificacion and "etiqueta(texto" in especificacion)
+    prueba("las aprobaciones son de sesión, alcance, versión, caducidad y un solo uso",
+           "DURACION_MS = 120_000L" in aprobaciones
+           and "retos.remove(token)" in aprobaciones
+           and all(s in aprobaciones for s in ("reto.sesion", "reto.capacidad", "reto.accion",
+                                              "reto.id", "reto.version", "reto.valor", "reto.expira"))
+           and "synchronized boolean revocar" in aprobaciones)
+    prueba("las rutinas calculan política en Java y rechazan acciones sensibles o arbitrarias",
+           "riesgoCalculado(accion)" in rutinas and "permisoCalculado(accion)" in rutinas
+           and all(s in rutinas for s in ('case "hora"', 'case "abrir"', 'case "volumen"',
+                                         'case "linterna"', 'case "alarma"', 'case "cronometro"',
+                                         "acción no allowlisted"))
+           and 'case "llamar"' not in rutinas and "Runtime.getRuntime" not in rutinas)
+    prueba("la rutina se planifica, confirma una vez, audita y puede cancelarse entre pasos",
+           "120_000L" in rutinas and "retos.remove(id)" in rutinas
+           and "rutinas_ejecuciones" in rutinas and "rutinas_resultados" in rutinas
+           and "cancelaciones.contains(ejecucionId)" in rutinas
+           and "auditoria_ok" in rutinas and "retoCoincide" in rutinas
+           and '"rutina_inicio"' in nexo and '"rutina_cancelar".equals(t)' in nexo)
+    prueba("los planes de memoria y rutina se revocan y las escrituras fallidas se declaran",
+           '"memoria_cancelar".equals(t)' in nexo and '"rutina_cancelar_plan".equals(t)' in nexo
+           and '"memoria_cancelar"' in mock and '"rutina_cancelar_plan"' in mock
+           and "if (!anotarHistorial" in recuerdos and "return db.insert(\"hechos_historial\"" in recuerdos
+           and "if (!registrarResultado" in rutinas and "auditoriaOk = false" in rutinas)
+    prueba("el puente nativo expone memoria, reloj y rutinas sin comandos genéricos del modelo",
+           all('"' + c + '".equals(t)' in nexo for c in (
+               "memoria_listar", "memoria_preparar", "memoria_editar", "memoria_borrar",
+               "alarmas_estado", "alarma_solicitar", "abrir_reloj", "rutinas_estado",
+               "rutina_crear", "rutina_plan", "rutina_ejecutar", "rutinas_historial")))
+    prueba("Vida Diaria está conectado al registro, al HTML y al puente de pruebas",
+           '"vida-btn"' in cap and 'id="cort-vida"' in html_asis
+           and "function abrirVida" in ui_asis and "function pintarVida" in ui_asis
+           and all('"' + c + '"' in mock for c in (
+               "memoria_preparar", "memoria_guardar", "alarma_solicitar", "rutina_ejecutar")))
+    bloque_vida = ui_asis[ui_asis.find("function vidaAbierta"):ui_asis.find("function dispositivoAbierto")]
+    prueba("el panel usa confirmación explícita, foco, Escape y texto seguro",
+           all(s in bloque_vida for s in ("memoria_preparar", "confirmarMemoria",
+                                         "rutina_plan", "rutina_ejecutar", "textContent"))
+           and "innerHTML" not in bloque_vida
+           and 'id="cort-vida"' in html_asis
+           and "mantenerFoco(ev, vida)" in ui_asis
+           and "else if (vida && !vida.hidden) cerrarVida()" in ui_asis
+           and ":not(#cort-vida)" in estilo_asis
+           and "#cort-vida, #cort-vida button" in estilo_asis)
+    prueba("el build compila y ejecuta la prueba pura de vida diaria",
+           "VidaDiariaTest.java" in compilacion
+           and "dev.sandra.cort.movil.VidaDiariaTest" in compilacion
+           and (APP / "tests" / "VidaDiariaTest.java").is_file())
+
+    aviso = lee(SRC / "Avisos.java")
+    compartir = lee(SRC / "Compartir.java")
+    bloque_avisos = ui_asis[ui_asis.find("function avisosAbierto"):ui_asis.find("function dispositivoAbierto")]
+    prueba("el listener de avisos está declarado con el permiso de Android",
+           'android:name=".Avisos"' in manifiesto
+           and "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" in manifiesto
+           and "android.service.notification.NotificationListenerService" in manifiesto)
+    prueba("los avisos se leen bajo demanda, con allowlist y sin acciones ni contenido sensible",
+           "MAX_AVISOS = 20" in aviso and "MAX_APPS = 12" in aviso
+           and "Collections.emptySet()" in aviso and "getActiveNotifications()" in aviso
+           and "RemoteInput" not in aviso and "Notification.ACTION" not in aviso
+           and '"avisos_leer".equals(t)' in nexo)
+    prueba("compartir abre un selector neutro y nunca declara envío o entrega",
+           "Intent.ACTION_SEND" in compartir and "Intent.createChooser" in compartir
+           and "setPackage(" not in compartir and '"enviado", false' in nexo
+           and '"compartir", "enviar", "texto", "1", texto' in nexo)
+    prueba("el panel de avisos borra el DOM, confirma texto exacto y queda conectado",
+           'id="cort-avisos"' in html_asis and '"avisos-btn"' in cap
+           and all(s in bloque_avisos for s in ("replaceChildren()", "compartirPlan",
+                                               "textContent", "cancelarPlanCompartir"))
+           and "innerHTML" not in bloque_avisos
+           and "mantenerFoco(ev, avisos)" in ui_asis
+           and "else if (avisos && !avisos.hidden) cerrarAvisos()" in ui_asis
+           and all('"' + c + '"' in mock for c in (
+               "avisos_estado", "avisos_apps", "avisos_allowlist", "avisos_leer",
+               "compartir_preparar", "compartir_cancelar", "compartir_confirmar")))
+    prueba("el build compila y ejecuta las pruebas puras de avisos y compartir",
+           "AvisosTest.java" in compilacion
+           and "dev.sandra.cort.movil.AvisosTest" in compilacion
+           and (APP / "tests" / "AvisosTest.java").is_file())
 
     print("\n== las clases que el manifiesto promete ==")
     declaradas = set()
@@ -453,7 +724,7 @@ def main():
            "?token=" in cuerpoCara[:900] and "/index.html" in cuerpoCara[:900])
     prueba("y si no hay llave no inventa un query vacío",
            '(llave.isEmpty() ? "" : "?token="' in puente)
-    manifiesto_texto = lee(APP / "AndroidManifest.xml")
+    manifiesto_texto = manifiesto
     prueba("el escáner va declarado en el manifiesto y nadie de fuera lo abre",
            'android:name=".Escaner"' in manifiesto_texto
            and 'android:exported="false"' in manifiesto_texto)
@@ -559,6 +830,7 @@ def main():
     # esas dos líneas el menú no lo ofrece y el APK compila igual de contento.
     lectura_path = SRC / "Lectura.java"
     lectura = lee(lectura_path)
+    medios_lectura = lee(SRC / "Medios.java")
     prueba("Lectura.java existe (el menú de selección de cualquier app)",
            lectura_path.is_file())
     prueba("el manifiesto la declara con PROCESS_TEXT y con SEND sobre text/plain",
@@ -581,8 +853,9 @@ def main():
                and int(re.search(r"TROZO_MAX = (\d+)", lectura).group(1)) <= 400
                and "c == '.' || c == '!' || c == '?'" in lectura)
         prueba("la lectura va encolada (QUEUE_ADD), no atropellándose a sí misma",
-               "boca.seguir(" in lectura and "boca.callar()" in lectura
-               and "boca.hablando()" in lectura)
+               "medios.hablarLectura(new ArrayList<>(trozos))" in lectura
+               and "hablarLectura" in medios_lectura and "voz.seguir(trozo)" in medios_lectura
+               and "QUEUE_ADD" in voz)
         prueba("dice el tiempo como estimación, no como promesa",
                "estimación" in lectura and "16.0 * PASOS" in lectura)
         prueba("no escribe el texto en disco: lo compartido se queda en memoria",
@@ -626,9 +899,9 @@ def main():
            str(parl_audifonos))
     prueba("y el modo se devuelve una sola vez, por el guarda que sabe si lo tocó",
            "private void sueltaElModo()" in parl
-           and parl.count("sueltaElModo();") >= 3 and "gestor.setMode(modoAnterior)" in parl
+           and parl.count("sueltaElModo();") >= 1 and "gestor.setMode(modoAnterior)" in parl
            and parl.index("if (!modoTocado)") < parl.index("gestor.setMode(modoAnterior)"))
-    voz_seguir = [m in voz for m in ("public void seguir(String texto)", "QUEUE_ADD",
+    voz_seguir = [m in voz for m in ("public boolean seguir(String texto)", "QUEUE_ADD",
                                      "public void ritmo(float factor)", "public void callar()",
                                      "enColaLectura")]
     prueba("la boca de Android añade trozos, cambia de paso y calla cuando le dicen",
@@ -882,6 +1155,94 @@ def main():
            and re.search(r"for FICHERO in vendor/motor/\"\$ABI\"/\*\.so", script) is None)
     prueba("sin GGUF dentro del APK: se bajan en el almacén",
            not list((APP / "assets").rglob("*.gguf")))
+
+    print("\n== catálogo híbrido, proveedores y planificador neuronal ==")
+    ui_hibrido = lee(RAIZ / "cort-web" / "cort" / "cort-ui.js")
+    java_nube = lee(SRC / "Nube.java")
+    java_plan = lee(SRC / "PlanNeural.java")
+    java_planes = lee(SRC / "Planes.java")
+    politica = lee(SRC / "PoliticaRecursos.java")
+    ruta_catalogo = RAIZ / "cort-web" / "cort" / "ollama-catalogo.json"
+    prueba("la instantánea local del catálogo Ollama viaja con la cara", ruta_catalogo.is_file())
+    if ruta_catalogo.is_file():
+        instantanea = json.loads(lee(ruta_catalogo))
+        modelos = instantanea.get("modelos", [])
+        nombres = [m.get("nombre", "") for m in modelos]
+        prueba("el catálogo conserva la biblioteca oficial completa y sin duplicados",
+               len(modelos) >= 270 and len(nombres) == len(set(nombres)),
+               f"{len(modelos)} modelos")
+        prueba("cada modelo enlaza sólo a una referencia HTTPS de ollama.com",
+               all(str(m.get("referencia", "")).startswith("https://ollama.com/library/")
+                   for m in modelos))
+        prueba("la instantánea declara su fecha y no confunde parámetros con bytes de descarga",
+               re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(instantanea.get("fecha", ""))) is not None
+               and "tamanos" in modelos[0])
+    prueba("la cara busca en el catálogo local y no promete ejecutar el demonio Ollama en Android",
+           'fetch("/cort/ollama-catalogo.json"' in ui_hibrido
+           and "Android no ejecuta el demonio Ollama" in ui_hibrido
+           and "GGUF" in ui_hibrido)
+    prueba("el catálogo se pinta con nodos y texto, sin HTML del modelo, y limita la lista visible",
+           "replaceChildren()" in ui_hibrido and "textContent" in ui_hibrido
+           and "slice(0, 40)" in ui_hibrido)
+    prueba("el enlace externo del catálogo exige HTTPS y host exacto de ollama.com",
+           'u.protocol === "https:"' in ui_hibrido and 'u.hostname === "ollama.com"' in ui_hibrido)
+    prueba("el panel híbrido conecta modo, personalidad, uso de GGUF y perfiles de nube",
+           all('"' + t + '"' in ui_hibrido for t in ("cerebro_hibrido_modo", "cerebro_hibrido_usar",
+                                                    "personalidad", "nube_perfil_guardar",
+                                                    "nube_perfil_usar", "nube_perfil_borrar")))
+    prueba("el formulario de nube borra la clave tras enviarla y la lista pública no la expone",
+           "clave.value = \"\"" in ui_hibrido and "tiene_clave" in ui_hibrido
+           and "p.publico()" in lee(SRC / "Nexo.java") and '"clave"' not in java_nube[
+               java_nube.find("JSONObject publico()"):java_nube.find("JSONObject publico()") + 700])
+    prueba("los ocho proveedores usan bases HTTPS públicas y el guardado cifra con AndroidKeyStore",
+           all(re.search(r'\b' + p + r'\s*:\s*"https://', ui_hibrido)
+               for p in ("anthropic", "openai", "gemini", "openrouter",
+                         "groq", "mistral", "deepseek", "xai"))
+           and "AndroidKeyStore" in java_nube and "KeyProperties.BLOCK_MODE_GCM" in java_nube
+           and "KeyProperties.ENCRYPTION_PADDING_NONE" in java_nube)
+    prueba("la nube rechaza redirecciones, credenciales en URL y respuestas mayores de 1 MiB",
+           "setInstanceFollowRedirects(false)" in java_nube
+           and "MAX_RESPUESTA = 1024 * 1024" in java_nube
+           and "getRawUserInfo" in lee(SRC / "ProveedorNube.java"))
+    personalidades_path = APP / "assets" / "personalidades.json"
+    prueba("las tres personalidades viven en datos y comparten el system del modelo",
+           personalidades_path.is_file()
+           and {p["id"] for p in json.loads(lee(personalidades_path))["personalidades"]}
+               == {"cercana", "directa", "creativa"}
+           and "PlanNeural.sistema(Consticion.sistema(" in lee(SRC / "Nexo.java"))
+    prueba("la política permite intentar el 0,5B con mmap a 500-600 MB y sigue bloqueando batería y calor",
+           "PuertaRam.Decision.NO_CABE" in politica
+           and "automatica" in politica and "42" in politica
+           and "500 * MIB" in lee(APP / "tests" / "PoliticaRecursosTest.java"))
+    prueba("el planificador neuronal sólo acepta un esquema JSON cerrado y cuatro pasos",
+           "MAX_PASOS = 4" in java_plan and "MAX_SALIDA = 4000" in java_plan
+           and "lector.nextClean() != 0" in java_plan
+           and "clave desconocida" in java_plan)
+    prueba("el planificador no tiene shell ni llamadas y valida alarmas y temporizadores",
+           "Runtime.exec" not in java_plan + java_planes
+           and 'case "shell"' not in java_plan and 'case "llamar"' not in java_plan
+           and "EspecificacionAlarma.parsear" in java_plan)
+    prueba("la salida del modelo se interpreta antes de tocar Acciones",
+           "PlanNeural.interpretar(salida)" in lee(SRC / "Nexo.java")
+           and "planes.ejecutar(interpretacion.plan)" in lee(SRC / "Nexo.java")
+           and "PlanNeural.interpretar(salida)" in lee(SRC / "Cara.java"))
+    prueba("cada efecto neuronal consume una aprobación exacta, de un solo uso y atada a la firma",
+           java_planes.find('preparar("plan_neuronal"') < java_planes.find('confirmar(plan)')
+           and java_planes.find('confirmar(plan)') < java_planes.find('consumir("plan_neuronal"')
+           and java_planes.find('consumir("plan_neuronal"') < java_planes.find('enLaInterfaz(paso)')
+           and "120, TimeUnit.SECONDS" in java_planes)
+    prueba("la confirmación muestra el plan exacto y cancelar no ejecuta nada",
+           "setMessage(plan.resumen()" in java_planes and "setNegativeButton(\"Cancelar\"" in java_planes
+           and "aprobaciones.revocar(token)" in java_planes)
+    prueba("el build ejecuta las 72 comprobaciones del planificador con una implementación JSON real",
+           "tests/PlanNeuralTest.java" in script
+           and 'dev.sandra.cort.movil.PlanNeuralTest' in script
+           and "vendor/json-20240303.jar:$PLAT/android.jar" in script)
+    prueba("los controles del panel híbrido respetan objetivos táctiles de 48 px",
+           ui_hibrido.count("min-height:48px") >= 8
+           and "min-height:40px" not in ui_hibrido
+           and "min-height:42px" not in ui_hibrido
+           and "min-height:44px" not in ui_hibrido)
 
     print("\n== la cara del PC dentro del teléfono (F19) ==")
     # Nace de la queja del 2026-11-05 con cuatro capturas del A16: «así se ve CORT

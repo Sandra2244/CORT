@@ -1,34 +1,80 @@
 package dev.sandra.cort.movil;
 
+import android.app.ActivityOptions;
 import android.content.Context;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.service.voice.VoiceInteractionSession;
 
-/**
- * La sesión del asistente: lo que Android abre cuando la dueña pulsa la tecla de
- * asistente con la pantalla bloqueada, o hace el gesto de inicio.
- *
- * Muestra la vista rápida sobre la app actual y termina. Si falta el permiso de
- * superposición, `VistaRapida` abre Ajustes en vez de fingir que la dibujó.
- * `finish()` evita dejar una sesión del sistema esperando texto que nunca llegará.
- *
- * La firma de `onShow` es la de AOSP main: `public void onShow(@Nullable Bundle
- * args, int showFlags)`. La versión antigua, con `ActivityOptions` de tercer
- * parámetro, murió en Android 12; el suelo de este APK es API 26 y su destino
- * medido es un Samsung A16 moderno, así que se firma la nueva. Sin teléfono
- * delante, la comprobación real la hace `javac` en el runner: un `@Override` con
- * una firma que no existe no compila.
- */
+/** La sesión que Android conserva mientras CORT atiende una invocación del asistente. */
 public class Sesion extends VoiceInteractionSession {
+    private static volatile Sesion actual;
+
+    private final Handler principal = new Handler(Looper.getMainLooper());
+    private final Runnable escuchaDeRespaldo = () -> {
+        if (actual == this && VistaRapida.visible(this) && !Reconocimiento.activa()) {
+            VistaRapida.escuchar(this);
+        }
+    };
+    private boolean vistaPedida;
+    private boolean duplicada;
 
     public Sesion(Context contexto) {
         super(contexto);
+        synchronized (Sesion.class) {
+            if (actual != null && actual != this) {
+                duplicada = true;
+                principal.post(this::finish);
+            } else {
+                actual = this;
+            }
+        }
     }
 
     @Override
     public void onShow(Bundle args, int showFlags) {
         super.onShow(args, showFlags);
-        VistaRapida.mostrar(getContext());
+        mostrar();
+    }
+
+    // Android 26–28 conserva esta firma, ausente del SDK actual.
+    @Deprecated
+    public void onShow(Bundle args, ActivityOptions options) {
+        mostrar();
+    }
+
+    private void mostrar() {
+        principal.removeCallbacks(escuchaDeRespaldo);
+        if (duplicada || actual != this || vistaPedida) return;
+        vistaPedida = VistaRapida.mostrar(getContext(), this, this::finish);
+        if (vistaPedida) {
+            principal.postDelayed(escuchaDeRespaldo, 900);
+        } else {
+            finish();
+        }
+    }
+
+    @Override
+    public void onHide() {
+        super.onHide();
+        principal.removeCallbacks(escuchaDeRespaldo);
+        if (actual == this) Reconocimiento.cancelar();
         finish();
+    }
+
+    @Override
+    public void onDestroy() {
+        principal.removeCallbacks(escuchaDeRespaldo);
+        if (actual == this) Reconocimiento.cancelar();
+        VistaRapida.cerrar(this);
+        synchronized (Sesion.class) {
+            if (actual == this) actual = null;
+        }
+        super.onDestroy();
+    }
+
+    static boolean activa() {
+        return actual != null;
     }
 }

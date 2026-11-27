@@ -31,9 +31,13 @@ import org.json.JSONObject;
  */
 public final class Consticion {
 
+    public static final String PREFERENCIAS = "cort-personalidad";
+    public static final String CLAVE = "activa";
     private static final Object CERRADURA = new Object();
     private static JSONObject tabla;
+    private static JSONObject tablaPersonalidades;
     private static String aviso = "";
+    private static String avisoPersonalidades = "";
 
     private Consticion() {
     }
@@ -74,7 +78,10 @@ public final class Consticion {
     }
 
     private static String lista(Context contexto, String clave) {
-        JSONObject j = tabla(contexto);
+        return lista(tabla(contexto), clave);
+    }
+
+    private static String lista(JSONObject j, String clave) {
         JSONArray filas = j == null ? null : j.optJSONArray(clave);
         if (filas == null || filas.length() == 0) {
             return "";
@@ -101,6 +108,89 @@ public final class Consticion {
      * un carácter que no se puede leer no puede dejar a CORT sin personalidad ni
      * sin respuesta.
      */
+    private static JSONObject personalidades(Context contexto) {
+        synchronized (CERRADURA) {
+            if (tablaPersonalidades != null || !avisoPersonalidades.isEmpty()) {
+                return tablaPersonalidades;
+            }
+            try (InputStream entrada = contexto.getAssets().open("personalidades.json")) {
+                byte[] buffer = new byte[entrada.available()];
+                int leido = 0;
+                while (leido < buffer.length) {
+                    int n = entrada.read(buffer, leido, buffer.length - leido);
+                    if (n <= 0) break;
+                    leido += n;
+                }
+                tablaPersonalidades = new JSONObject(new String(buffer, 0, leido, StandardCharsets.UTF_8));
+            } catch (IOException | org.json.JSONException roto) {
+                avisoPersonalidades = "no pude leer las personalidades (" + roto.getMessage() + ")";
+            }
+            return tablaPersonalidades;
+        }
+    }
+
+    private static JSONObject personalidad(Context contexto) {
+        JSONObject j = personalidades(contexto);
+        JSONArray lista = j == null ? null : j.optJSONArray("personalidades");
+        String id = personalidadActual(contexto);
+        if (lista != null) {
+            for (int i = 0; i < lista.length(); i++) {
+                JSONObject p = lista.optJSONObject(i);
+                if (p != null && id.equals(p.optString("id", ""))) return p;
+            }
+        }
+        return null;
+    }
+
+    public static String personalidadActual(Context contexto) {
+        String pedida = contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE)
+                .getString(CLAVE, "cercana");
+        JSONObject j = personalidades(contexto);
+        JSONArray lista = j == null ? null : j.optJSONArray("personalidades");
+        if (lista != null) {
+            for (int i = 0; i < lista.length(); i++) {
+                JSONObject p = lista.optJSONObject(i);
+                if (p != null && pedida.equals(p.optString("id", ""))) return pedida;
+            }
+        }
+        return j == null ? "cercana" : j.optString("por_defecto", "cercana");
+    }
+
+    public static boolean ponerPersonalidad(Context contexto, String id) {
+        JSONObject j = personalidades(contexto);
+        JSONArray lista = j == null ? null : j.optJSONArray("personalidades");
+        if (lista != null) {
+            for (int i = 0; i < lista.length(); i++) {
+                JSONObject p = lista.optJSONObject(i);
+                if (p != null && id != null && id.equals(p.optString("id", ""))) {
+                    return contexto.getSharedPreferences(PREFERENCIAS, Context.MODE_PRIVATE)
+                            .edit().putString(CLAVE, id).commit();
+                }
+            }
+        }
+        return false;
+    }
+
+    public static JSONArray listaPersonalidades(Context contexto) {
+        JSONObject j = personalidades(contexto);
+        JSONArray lista = j == null ? null : j.optJSONArray("personalidades");
+        JSONArray publicas = new JSONArray();
+        if (lista != null) {
+            for (int i = 0; i < lista.length(); i++) {
+                JSONObject p = lista.optJSONObject(i);
+                if (p != null) {
+                    try {
+                        publicas.put(new JSONObject().put("id", p.optString("id", ""))
+                                .put("nombre", p.optString("nombre", "")));
+                    } catch (org.json.JSONException imposible) {
+                        throw new IllegalStateException(imposible);
+                    }
+                }
+            }
+        }
+        return publicas;
+    }
+
     public static String sistema(Context contexto, String memoria) {
         JSONObject j = tabla(contexto);
         if (j == null) {
@@ -112,6 +202,11 @@ public final class Consticion {
              .append(lista(contexto, "rasgos")).append(' ')
              .append(lista(contexto, "limites")).append(' ')
              .append(texto(contexto, "formato", ""));
+        JSONObject personalidad = personalidad(contexto);
+        if (personalidad != null) {
+            junto.append(' ').append(personalidad.optString("tono", "")).append(' ')
+                 .append(lista(personalidad, "rasgos"));
+        }
         String nombre = nombre(contexto);
         if (!nombre.isEmpty()) {
             junto.append(" La dueña se llama ").append(nombre).append('.');
@@ -175,8 +270,11 @@ public final class Consticion {
         if (!avisoDeCarga(contexto).isEmpty()) {
             return avisoDeCarga(contexto);
         }
+        if (!avisoPersonalidades.isEmpty()) return avisoPersonalidades;
+        JSONObject p = personalidad(contexto);
         return "carácter: " + texto(contexto, "nombre", "CORT") + " · "
-                + turnos(contexto) + " turnos de memoria · tope "
+                + (p == null ? personalidadActual(contexto) : p.optString("nombre", personalidadActual(contexto)))
+                + " · " + turnos(contexto) + " turnos de memoria · tope "
                 + maxTokens(contexto) + " tokens · temperatura "
                 + temperatura(contexto);
     }

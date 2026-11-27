@@ -34,6 +34,8 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
     private static final float[] PASOS = {1.0f, 1.4f, 1.9f};
 
     private Voz boca;
+    private Medios medios;
+    private final Medios.AlEstado oyenteMedios = estado -> {};
     private AudioManager gestor;
     private TextView origen;
     private TextView cuerpo;
@@ -51,6 +53,8 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
         super.onCreate(guardado);
         gestor = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         boca = new Voz(this);
+        medios = Medios.compartido(this);
+        medios.vincular(boca, oyenteMedios);
         getWindow().getDecorView().setBackgroundColor(Paleta.FONDO);
 
         ScrollView desplazable = new ScrollView(this);
@@ -89,7 +93,7 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
 
             Button parar = boton("Parar");
             parar.setOnClickListener(v -> {
-                boca.callar();
+                medios.pausar("lectura pausada");
                 estado.setText("Parada. «Leer en voz alta» la retoma desde el principio.");
             });
             pantalla.addView(parar, caja(54));
@@ -167,8 +171,9 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
 
     private void di() {
         boca.ritmo(PASOS[paso]);
-        for (String trozo : trozos) {
-            boca.seguir(trozo);
+        if (!medios.hablarLectura(new ArrayList<>(trozos))) {
+            estado.setText("No pude preparar la lectura.");
+            return;
         }
         estado.setText("Leyendo " + trozos.size() + " trozos por " + Audifonos.salida(gestor)
                 + " · " + estimacion() + " s estimados (se mide en este aparato, no en el PC).");
@@ -189,10 +194,15 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
     protected void onResume() {
         super.onResume();
         vivo = true;
+        medios.vincular(boca, oyenteMedios);
         if (receptor == null) {
             receptor = new Audifonos.Receptor(this);
         }
-        registerReceiver(receptor, Audifonos.Receptor.filtro());
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receptor, Audifonos.Receptor.filtro(), Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(receptor, Audifonos.Receptor.filtro());
+        }
         if (gestor != null) {
             // una sola instancia: el registro y el retiro tienen que ser el MISMO objeto,
             // registrar uno y retirar otro deja el aviso clavado en el sistema
@@ -221,7 +231,15 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
                 // sin registro no hay retiro que hacer
             }
         }
-        boca.callar();
+        medios.pausar("lectura en segundo plano");
+        medios.desvincular(boca, oyenteMedios);
+    }
+
+    @Override
+    protected void onDestroy() {
+        medios.desvincular(boca, oyenteMedios);
+        boca.cerrar();
+        super.onDestroy();
     }
 
     @Override
@@ -231,7 +249,7 @@ public class Lectura extends android.app.Activity implements Audifonos.AlCambiar
         }
         runOnUiThread(() -> {
             if (!Audifonos.hay(gestor) && boca.hablando()) {
-                boca.callar();
+                medios.pausar("se desconectó una salida de audio");
                 estado.setText("Te quitaste los audífonos: CORT se calló en vez de leer por "
                         + "el altavoz. «Leer en voz alta» la retoma.");
             } else {

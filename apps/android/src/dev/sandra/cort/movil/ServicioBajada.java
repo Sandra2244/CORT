@@ -160,8 +160,8 @@ public class ServicioBajada extends Service {
             stopSelf();
             return START_NOT_STICKY;
         }
-        if (Bajada.de(this, ficha).esta()) {
-            avisaFinal(ficha.nombre + " ya está en el teléfono: no se bajó nada.");
+        if (Bajada.de(this, ficha).esta(ficha)) {
+            avisaFinal(ficha.nombre + " ya está verificado en el teléfono: no se bajó nada.");
             stopSelf();
             return START_NOT_STICKY;
         }

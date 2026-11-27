@@ -75,10 +75,17 @@ on:
       etiqueta:
         description: "nombre corto de esta compilación del motor (va a la auditoría y al registro; ej. motor-prueba1)"
         default: "motor-llama-b12121"
+      comite:
+        description: "commit de CORT que va a consumir este motor (vacío = el de la corrida)"
+        default: ""
   workflow_call:
     inputs:
       etiqueta:
         description: "nombre corto de la compilación, igual que en workflow_dispatch"
+        type: string
+        required: false
+      comite:
+        description: "commit de CORT que va a consumir este motor"
         type: string
         required: false
   # Y este tercer disparador, con su motivo medido el 2026-11-05: `gh workflow run
@@ -121,6 +128,8 @@ jobs:
     steps:
       - name: código
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.comite || github.sha }}
 
       - name: etiqueta de esta corrida
         # Desde `workflow_dispatch` llega por github.event.inputs; desde
@@ -465,6 +474,7 @@ jobs:
           {
             echo "auditoría del motor local (llama.cpp cruzado con NDK)"
             echo "etiqueta de build: $ETIQUETA"
+            echo "commit CORT: $(git rev-parse HEAD)"
             echo "corrida: $GITHUB_RUN_ID (número $GITHUB_RUN_NUMBER, intento $GITHUB_RUN_ATTEMPT)"
             echo "llama.cpp: $LLAMA_ETIQUETA | commit $LLAMA_COMITE"
             echo "  fuente: $LLAMA_URL"
@@ -493,7 +503,9 @@ jobs:
             echo "— nativos de libcortmotor.so (los que busca System.loadLibrary) —"
             cat /tmp/jni-simbolos.txt
           } > auditoria-motor.txt
+          sha256sum motor/*/*.so > motor-sha256.txt
           cat auditoria-motor.txt
+          cat motor-sha256.txt
 
       - name: publicar el artefacto
         uses: actions/upload-artifact@v4
@@ -507,6 +519,7 @@ jobs:
           path: |
             motor/**
             auditoria-motor.txt
+            motor-sha256.txt
           if-no-files-found: error
 
       - name: resumen

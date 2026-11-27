@@ -5,6 +5,72 @@
 - **Método:** inspección estática de CORT y cuatro proyectos de referencia. No se ejecutaron los proyectos de referencia, no se usó red para probarlos y no se probó el A16.
 - **Alcance:** identificar qué conviene conservar, qué está bloqueando la estabilidad y cómo combinar reglas, cerebro local y nube sin perder privacidad ni control.
 
+## Actualización de cierre — 2026-11-27
+
+**Candidata de release:** `cort-v0.20.0`, rama `web/cort-v0`. El detalle de esta
+actualización prevalece sobre el inventario inicial de 2026-11-24 cuando describa el
+estado actual del código.
+
+### Hasta dónde llegó la implementación
+
+| Fase | Estado real al cierre |
+|---|---|
+| 0 y 1 — P0, capacidades y centro único | Implementadas; verificación estática y JVM verde |
+| 2 — Sensores y dispositivo | Implementadas; 14/14 lecturas y 19/19 política de recursos; A16 pendiente |
+| 3 — Escucha, voz y audio focus | Implementadas; 11/11 escucha y 15/15 estados; dispositivo pendiente |
+| 4 — Medios y auriculares | Implementadas; 21/21 reglas de medios; hardware pendiente |
+| 5 — Asistente y coexistencia | Implementado el contrato Android; selección real pendiente en A16 |
+| 6 — Memoria, rutinas y alarmas | Implementadas; 130/130 comprobaciones de vida diaria; migración física pendiente |
+| 7 — Notificaciones y compartir | Implementadas; 32/32 avisos; permiso y One UI pendientes |
+| 8 — Sugerencias acotadas | Pendiente |
+| 9 — Cámara y gestos | Pendiente; la cámara actual sólo lee QR |
+| 10 — Router híbrido y cierre 1.0 | Router Android y planificador implementados; matriz conductual y A16 pendientes |
+| PC | Puente conservado; paridad, webcam/gestos e instalador Windows diferidos |
+
+La fase 6 suma 130/130 comprobaciones JVM. La migración SQLite real en un entorno
+Android sigue pendiente y no se marca como ejecutada. El total de suites JVM es 383/383.
+
+### Capacidades disponibles para la persona usuaria
+
+- Asistente digital seleccionable y overlay, sin desinstalar ni deshabilitar Gemini.
+- Voz/texto, sensores, podómetro, dispositivo, linterna, volumen, medios, auriculares,
+  memoria, rutinas, alarmas, temporizador y notificaciones allowlisted.
+- Compartir mediante el selector de Android con borrador visible; no hay envío arbitrario.
+- Motor GGUF local con cuatro descargas verificadas y política `INTENTAR` con `mmap`
+  para probar el Qwen2.5 0.5B q2_K con 500–600 MB libres.
+- Catálogo de 272 modelos Ollama como referencia; Android ejecuta GGUF, no el demonio
+  Ollama. Ocho proveedores nube con claves cifradas y consentimiento por turno.
+- Tres personalidades y planificador neuronal allowlisted de cuatro pasos; toda efecto
+  exige confirmación exacta y de un solo uso.
+
+### Evidencia y límites
+
+- `scripts/prueba_apk.py`: 337/337 antes del cierre final; el workflow la repite sobre
+  el APK y publica el resultado medido.
+- JVM: 383/383; producción Java compilada con `--release 11`.
+- Secretos, consentimiento, integridad GGUF y guardas de CI: 40/40 en local. El
+  modo POSIX `0600` se comprueba en el runner Linux, no con el modo sintético de Windows.
+- JavaScript: sintaxis verde en `cort-ui.js`, `cort-mock.js`, `cort-orbe.js` y
+  `cort-android.js` usando el runtime integrado de Qoder.
+- Certificado anterior `cort-v0.19.0`:
+  `faabef468f3ae04fdfab9659d6a051c453d6ded7b965468c9c3b85caffa31977`.
+  El workflow debe bloquear la publicación si falta la clave o esta huella cambia.
+- Compilación, alineación, motor nativo, firma y pesos finales: los demuestra la
+  corrida de Actions y los adjuntos `auditoria.txt`/`firma.txt` de la release.
+- Navegador completo y Samsung A16: **no ejecutados**. Siguen pendientes RAM ocupada,
+  tokens/s, conversaciones largas, térmica, batería, overlay, asistente, sensores,
+  notificaciones, alarmas, migración de nube y comportamiento de One UI.
+- Play Protect no puede garantizarse desde el código; la instalación externa depende
+  también de los ajustes del teléfono.
+
+### Siguiente trabajo
+
+1. Instalar la release en el A16 y registrar procedimiento, permisos y resultados.
+2. Medir el 0.5B q2_K con `mmap` en 500–600 MB libres y ajustar hilos/contexto/tokens
+   sólo con datos del aparato.
+3. Cerrar Fase 8, Fase 9 y la matriz conductual de Fase 10.
+4. Completar las pruebas de navegador y las suites PC antes de declarar 1.0.
+
 ## 1. Conclusión corta
 
 CORT no necesita copiar a JARVIS ni a Cortana. Necesita una **arquitectura común con adaptadores honestos**:
