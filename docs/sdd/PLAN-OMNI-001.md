@@ -522,9 +522,9 @@ Esta primera tarea es pequeña, reversible y no modifica micrófono, cámara, re
 | Fecha | Qué cambió | Por qué | Aprobación |
 |---|---|---|---|
 | 2026-11-26 | Se creó el plan OMNI | Convertir la visión amplia en fases pequeñas y verificables | Pendiente |
-| 2026-11-27 | Cierre intermedio `cort-v0.20.1`: fases 0–7 y router Android implementados; 8–10 y PC quedan abiertos | La usuaria autorizó publicar lo verificado y documentar el resto para continuar mañana | Autorizada por la usuaria |
+| 2026-11-27 | Cierre intermedio `cort-v0.20.2`: fases 0–7 y router Android implementados; 8–10 y PC quedan abiertos | La usuaria autorizó publicar lo verificado y documentar el resto para continuar mañana | Autorizada por la usuaria |
 
-## 19. Cierre intermedio `cort-v0.20.1`
+## 19. Cierre intermedio `cort-v0.20.2`
 
 - **Código:** fases 0–7 implementadas; catálogo Ollama, router híbrido, proveedores
   cifrados, personalidades y planificador neural allowlisted integrados.

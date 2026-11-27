@@ -287,7 +287,7 @@ fi
 javac --release 11 -classpath "$CLASSPATH" \
     -d build/obj $(find src -name '*.java')
 
-javac --release 11 -classpath build/obj -d build/pruebas \
+javac --release 11 -classpath "build/obj:$CLASSPATH" -d build/pruebas \
     tests/PuertaRamTest.java tests/SecretoTest.java tests/LimiteEscuchaTest.java \
     tests/LecturaSensorTest.java tests/EscuchaEstadoTest.java tests/ReglasMediosTest.java \
     tests/VidaDiariaTest.java tests/AvisosTest.java tests/PoliticaRecursosTest.java \

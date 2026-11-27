@@ -1102,8 +1102,9 @@ def main():
     prueba("los umbrales exactos tienen una prueba Java de comportamiento",
            prueba_ram.is_file() and "puertaPequena - 1" in lee(prueba_ram)
            and "sueloPequeno - 1" in lee(prueba_ram) and "Long.MAX_VALUE" in lee(prueba_ram))
-    prueba("el build corre la prueba RAM antes de convertir el Java a dex",
-           "tests/PuertaRamTest.java" in script
+    prueba("el build compila y corre las pruebas JVM con Android antes de dex",
+           'javac --release 11 -classpath "build/obj:$CLASSPATH" -d build/pruebas' in script
+           and "tests/PuertaRamTest.java" in script
            and 'java -cp "$PRUEBAS_CP" dev.sandra.cort.movil.PuertaRamTest' in script
            and script.index("dev.sandra.cort.movil.PuertaRamTest") < script.index('"$BT/d8"'))
     prueba("la cara nativa pregunta al GGUF antes que a la nube",

@@ -7,9 +7,11 @@
 
 ## Actualización de cierre — 2026-11-27
 
-**Candidata de release:** `cort-v0.20.1`, rama `web/cort-v0`. El detalle de esta
+**Candidata de release:** `cort-v0.20.2`, rama `web/cort-v0`. El detalle de esta
 actualización prevalece sobre el inventario inicial de 2026-11-24 cuando describa el
-estado actual del código.
+estado actual del código. Las etiquetas `cort-v0.20.0` y `cort-v0.20.1` no llegaron a
+release: la primera falló en el guarda JNI y la segunda al compilar pruebas sin
+`android.jar`; ambas correcciones están incluidas en `cort-v0.20.2`.
 
 ### Hasta dónde llegó la implementación
 
