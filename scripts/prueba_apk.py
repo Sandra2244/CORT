@@ -1115,34 +1115,31 @@ def main():
            "new Intent(this, Cerebros.class)" in lee(SRC / "MainActivity.java")
            and "new Intent(actividad, Cerebros.class)" in lee(SRC / "Cara.java"))
     flujo_apk = lee(RAIZ / ".github" / "workflows" / "apk-movil.yml")
-    prueba("el build del APK busca el artefacto del motor antes de compilar",
-           "motor-local-ndk" in flujo_apk and "actions/artifacts" in flujo_apk)
-    prueba("y si no existe, lo dice con un aviso en vez de romper la corrida",
-           'echo "art_id="' in flujo_apk)
-    prueba("la descarga va por la API del artefacto con su id y el `Location` se lee "
-           "con HEAD: `gh api -i` sigue la redirección y baja los 208 MB (medido)",
-           "curl -sSI" in flujo_apk and "/zip" in flujo_apk
-           and re.search(r"gh api[\s\S]{0,120}?/zip[\s\S]{0,40}?-i", flujo_apk) is None,
-           "sonda del 2026-11-05 contra el artefacto 13414146808: `gh api … -i` se "
-           "puso a bajar el zip completo por la tubería y había que matarlo")
-    prueba("el token de Actions NO viaja al almacén: la URL firmada se baja sin "
-           "cabecera de autorización y sin `-L`",
-           re.search(r"curl -sS --fail[^\n]*-o /tmp/motor\.zip \"\$LOC\"", flujo_apk) is not None
-           and "curl -sSL" not in flujo_apk)
-    prueba("el id entra por la salida del paso, no con `env.` dentro de `with:` "
-           "(eso dejó el APK sin motor en la corrida 42104161078)",
-           "steps.busca.outputs.art_id" in flujo_apk
-           and re.search(r"uses: actions/download-artifact", flujo_apk) is None,
-           "con `run-id: ${{ env.MOTOR_ARTIFACT }}` la acción buscó en su propia "
-           "corrida y contestó «Artifact not found»; el build salió verde pero "
-           "`lib/arm64-v8a/libcortmotor.so: no está en el APK`")
-    prueba("el id del artefacto sale del `--jq` con `first`, no de un `| head -1` "
-           "pegado al `gh` (con pipefail la señal 141 abortaría el paso)",
-           "first // empty" in flujo_apk
-           and re.search(r"LINEA=\"\$\([\s\S]{0,400}?\|\s*head", flujo_apk) is None)
-    prueba("si la descarga falla el APK se publica igual, y `colocar` lo confiesa",
-           "continue-on-error: true" in flujo_apk
-           and "la descarga del motor no trajo nada" in flujo_apk)
+    prueba("el build del APK depende del trabajo motor y lo pide para el mismo commit",
+           "needs: motor" in flujo_apk
+           and "uses: ./.github/workflows/motor-local.yml" in flujo_apk
+           and "comite: ${{ github.event.inputs.comite || github.sha }}" in flujo_apk)
+    prueba("una corrida normal no omite silenciosamente un motor fallido",
+           "needs.motor.result == 'success' || needs.motor.result == 'skipped'" in flujo_apk
+           and "continue-on-error: true" not in flujo_apk)
+    prueba("la descarga usa el artefacto motor-local-ndk de esta misma corrida",
+           "uses: actions/download-artifact@v4" in flujo_apk
+           and "name: motor-local-ndk" in flujo_apk
+           and "run-id:" not in flujo_apk)
+    prueba("el código se fija al commit pedido antes de compilar",
+           'git checkout --detach "$COMITE"' in flujo_apk
+           and "ref: ${{ inputs.comite || github.sha }}" in lee(RAIZ / ".github" / "workflows" / "motor-local.yml"))
+    prueba("el artefacto se ata al commit y todos sus hashes se verifican",
+           'grep -Fx "commit CORT: $COMITE"' in flujo_apk
+           and "sha256sum -c motor-sha256.txt" in flujo_apk)
+    prueba("la compilación normal exige el pegamento para arm64 y armeabi-v7a",
+           "for ABI in arm64-v8a armeabi-v7a; do" in flujo_apk
+           and '[ -f "$F" ]' in flujo_apk
+           and "CORT_EXIGIR_MOTOR" in flujo_apk)
+    prueba("publicar exige motor y keystore persistente, no un APK de prueba",
+           "CORT_EXIGIR_FIRMA" in flujo_apk
+           and "una release no se publica desde el APK delgado" in flujo_apk
+           and "CORT_HUELLA_ESPERADA" in flujo_apk)
     prueba("compilar es tolerante pero PUBLICAR no: si el APK no lleva el motor, "
            "la release se niega (las notas prometen el cerebro GGUF)",
            "libcortmotor.so: no está en el APK" in flujo_apk

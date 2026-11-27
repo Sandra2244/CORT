@@ -522,16 +522,17 @@ Esta primera tarea es pequeña, reversible y no modifica micrófono, cámara, re
 | Fecha | Qué cambió | Por qué | Aprobación |
 |---|---|---|---|
 | 2026-11-26 | Se creó el plan OMNI | Convertir la visión amplia en fases pequeñas y verificables | Pendiente |
-| 2026-11-27 | Cierre intermedio `cort-v0.20.0`: fases 0–7 y router Android implementados; 8–10 y PC quedan abiertos | La usuaria autorizó publicar lo verificado y documentar el resto para continuar mañana | Autorizada por la usuaria |
+| 2026-11-27 | Cierre intermedio `cort-v0.20.1`: fases 0–7 y router Android implementados; 8–10 y PC quedan abiertos | La usuaria autorizó publicar lo verificado y documentar el resto para continuar mañana | Autorizada por la usuaria |
 
-## 19. Cierre intermedio `cort-v0.20.0`
+## 19. Cierre intermedio `cort-v0.20.1`
 
 - **Código:** fases 0–7 implementadas; catálogo Ollama, router híbrido, proveedores
   cifrados, personalidades y planificador neural allowlisted integrados.
 - **Estático:** `scripts/prueba_apk.py` 337/337 antes de añadir la guarda de firma; el
   workflow repite la suite sobre el APK final.
-- **JVM:** 361/361. La migración SQLite real sigue pendiente como evidencia física,
+- **JVM:** 383/383. La migración SQLite real sigue pendiente como evidencia física,
   no como resultado inventado.
+- **Seguridad e integridad:** 40/40; la suite del APK queda 337/337 en local.
 - **JavaScript:** sintaxis verde para UI, mock, orbe y puente Android.
 - **Build:** GitHub Actions con `aapt2 → javac --release 11 → d8 → zipalign → apksigner`;
   motor nativo, oído, cara Web, alineación y certificado se comprueban antes de publicar.

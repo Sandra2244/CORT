@@ -7,7 +7,7 @@
 
 ## Actualización de cierre — 2026-11-27
 
-**Candidata de release:** `cort-v0.20.0`, rama `web/cort-v0`. El detalle de esta
+**Candidata de release:** `cort-v0.20.1`, rama `web/cort-v0`. El detalle de esta
 actualización prevalece sobre el inventario inicial de 2026-11-24 cuando describa el
 estado actual del código.
 

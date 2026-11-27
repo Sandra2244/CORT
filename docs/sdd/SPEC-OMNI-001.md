@@ -536,8 +536,9 @@ La inspección visual de los tres videos y del código de referencia aporta esto
 
 - Fases 0–7 implementadas en código. Fase 8 y Fase 9 permanecen pendientes; Fase 10
   tiene router y planificador Android, pero no cierre conductual ni 1.0.
-- `scripts/prueba_apk.py`: 337/337 antes de la guarda final de firma; suites JVM:
-  361/361; sintaxis JavaScript de UI, mock, orbe y puente: verde.
+- `scripts/prueba_apk.py`: 337/337 en local; suites JVM: 383/383; secretos,
+  consentimiento e integridad: 40/40; sintaxis JavaScript de UI, mock, orbe y puente:
+  verde.
 - El planificador neural valida JSON, allowlist, tipos, límites y firmas; ningún efecto
   se ejecuta sin confirmación exacta y de un solo uso. No expone shell, llamadas,
   mensajes, compras ni escritura autónoma de memoria.

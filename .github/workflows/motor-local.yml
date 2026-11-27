@@ -137,7 +137,8 @@ jobs:
         # para que todos los pasos vean la misma cadena.
         run: |
           set -euo pipefail
-          E="${{ github.event.inputs.etiqueta }}${{ inputs.etiqueta }}"
+          E="${{ inputs.etiqueta }}"
+          if [ -z "$E" ]; then E="${{ github.event.inputs.etiqueta }}"; fi
           if [ -z "$E" ]; then E="motor-llama-b12121"; fi
           echo "ETIQUETA=$E" >> "$GITHUB_ENV"
           echo "etiqueta de build: $E"
@@ -444,7 +445,7 @@ jobs:
           # dev.sandra.cort.movil.CerebroLocal) y con la firma JNI de un método
           # static: (JNIEnv*, jclass, ...). La suite `prueba_apk.py` cruza esta
           # lista con el archivo Java, así que mover uno sin la otra se cae.
-          NATIVOS="nativeIniciar nativeSistema nativeBackends nativeInterrumpe nativeOir nativeAbrir nativeCerrar nativeHayCerebro nativeUltimaMedida nativePreguntar nativeAjustarMuestreo"
+          NATIVOS="nativeIniciar nativeSistema nativeBackends nativeInterrumpe nativeOir nativeAbrirDescriptor nativeCerrar nativeHayCerebro nativeUltimaMedida nativePreguntar nativeAjustarMuestreo"
           : > /tmp/jni-simbolos.txt
           for ABI in arm64-v8a armeabi-v7a; do
             "$NM" -D --defined-only "motor/$ABI/libcortmotor.so" > "/tmp/nmj-$ABI.txt"
